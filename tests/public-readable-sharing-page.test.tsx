@@ -326,8 +326,10 @@ describe("the public-readable-sharing page", () => {
     expect(PAGE).toMatch(/[Nn]obody at Spideryarn reads an article before it appears/);
   });
 
-  it("says the generated text is the model's and not the author's", () => {
-    expect(PAGE).toMatch(/written by a language model/);
+  it("separates what the models write from the author's quotes they choose", () => {
+    expect(PAGE).toMatch(/written by a language model reading your text/);
+    expect(PAGE).toMatch(/They are not your words/);
+    expect(PAGE).toMatch(/The quotes are the exception: those are your own words, picked\s+out by a model/);
     /* Written as an admission that nothing beside them says so. **If a label
        ever lands in the visitor's view, this sentence has to change with it** —
        an admission left standing after the fix is a lie the other way round.
