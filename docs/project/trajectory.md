@@ -4,7 +4,7 @@ A mode for going round a piece more than once, a little deeper each time: a hand
 first time round, about a dozen the second, a larger share of the piece the third. The stops need
 not come in the paper's order — the results first, say, and then a quick tour of the methods.
 
-**Status (2026-09-28): built, and out of Experimental** — shown to every owner, still owner-only — the plan is
+**Status (2026-09-29): built, out of Experimental, and a stored route is shown to visitors** — planning one stays owner-only — the plan is
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md). This doc is the
 vision; the plan is the build.
 
@@ -77,9 +77,14 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 - **Further left in the bar**: Quotes, then Trajectory, straight after Summary (`MODES_UI` in
   [`Dock.tsx`](../../src/web/Dock.tsx)).
 - **Plan it again** rebuilds the route only (`trajectory` is forced by name). **Since 2026-09-29 it
-  is offered only in the outdated banner**; the standing button in the foot went, and a current route
-  is re-planned from Metadata's *Re-run AI processing*, which has a Trajectory row
-  ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)):
+  is offered only in the stale and profile-changed banners**; the standing button in the foot went,
+  and a current route is re-planned from Metadata's *Re-run AI processing*, which has a Trajectory
+  row ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). A route planned by an
+  older prompt over the same article (*outdated*) is not announced at all — Greg, 2026-09-29
+  (SPIDERYARN-READING2-55): *"There are probably lots of cases where the prompt will get out of
+  date, and it's not worth bugging the user about it."*
+  ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). Greg on the
+  foot's button:
 
   > In Trajectory mode, remove the "Plan it again" button. The user can do that from Metadata if they
   > really want.
@@ -304,7 +309,10 @@ chosen, is written below when it lands.
 
 - ~~**Behind the experimental switch, for now**~~ — Greg, 2026-09-28, above; **reversed the same day**:
   *"take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features."*
-  The button is in every owner's bar; visitors still get the explanatory band
+  The button is in every owner's bar. A visitor to a public article sees a route that has already
+  been planned, from the page's own payload, and cannot plan one — since 2026-09-29, when Greg found
+  the explanatory band refusing a stored route (SPIDERYARN-READING2-56,
+  [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md))
   ([experimental-features.md](experimental-features.md)).
 - **v2 is the scrapbook, not web search** — Greg, 2026-09-28, above.
 

@@ -84,8 +84,8 @@ export interface UseCitations {
    */
   ensure(): Promise<void>;
   /**
-   * The forced run — the stale and outdated banners' button. It replaces the
-   * list, keeping each work's id where its dedupe key still matches.
+   * The forced run — the stale banner's button and Metadata's row. It replaces
+   * the list, keeping each work's id where its dedupe key still matches.
    * `citations` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing it
    * does not sweep in the steps before it.
    */

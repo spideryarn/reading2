@@ -47,8 +47,8 @@ function block(i: number): Block {
 }
 
 const blocks = Array.from({ length: 6 }, (_, i) => block(i));
-/** One rung, stepping a row at a time — the simplest ladder that can move. */
-const plan: NavPlan = { ladder: [0], starts: [[0, 1, 2, 3, 4, 5]] };
+/** One level, stepping a row at a time — the simplest plan that can move. */
+const plan: NavPlan = { starts: [[0, 1, 2, 3, 4, 5]] };
 
 let container: HTMLDivElement;
 let root: Root;

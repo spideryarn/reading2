@@ -118,8 +118,9 @@ citation has no second-tap commit, because the card's action is the link it carr
 words are also the author's internal or outbound link, that link keeps its established second-tap
 jump or open.
 
-**Owner-only by construction.** The list is read in `OwnedReader`, so a visitor has no works, hence
-no marks and no card section — § Who sees it, satisfied without a check.
+**The marks are owner-only by construction.** The list they are drawn from is read in `OwnedReader`,
+so a visitor — who since 2026-09-29 sees the stored list in the band — has no marks in the prose and
+no card section.
 
 ## Find it on the web
 
@@ -174,10 +175,24 @@ shows no rows, and a capped one is counted as *the stored list*, never the artic
 experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
 behind it. [chat-tools.md](chat-tools.md) has the tool.
 
+## Making it again
+
+From the Metadata page: *Re-run AI processing* has a Citations row, since 2026-09-29, and it is the
+only redo — the panel says nothing when its list was made by an older prompt
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
+model call and no web search (that is *Find it*, per row); the list is replaced only if the run
+succeeds, and a work found again keeps its id, so a link *Find it* stored stays with it. The row is
+drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
+is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
+
 ## Who sees it
 
-Owner-only, and behind the [experimental switch](experimental-features.md). A visitor gets the
-explanatory band — the public projection its rows' URLs would pass through is not built.
+Making the list, and *Find it*, are owner-only, and behind the
+[experimental switch](experimental-features.md). **Since 2026-09-29 a visitor to a public article
+sees a stored list** in the band, from the page's own payload: each work's address re-judged by
+`publicCitationUrl` (a refused one takes the link off the row, not the row), its dedupe `key` left
+behind, and the owner's *Find it* results kept private (SPIDERYARN-READING2-56,
+[260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 
 ## Deferred
 
@@ -185,8 +200,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; a visitor's
-list. Each is in one of the two plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor. Each is in one of the two plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

@@ -443,9 +443,12 @@ export const REQUEUE_BUDGET = 2;
  * **What the number is actually rationing is spend and provider rate limits**,
  * not CPU or connections — there is no spend cap anywhere in this repo, and the
  * label and summary fan-outs each multiply by N. It is not rationing
- * correctness: two jobs never *run* on one article, which is the article's own
- * line — the predecessor rule in `claim` and `jobs_one_running_per_slug` behind
- * it (src/store/jobs.ts) — and not this one.
+ * correctness: which jobs may run on one article at once is the article's own
+ * line — the predecessor rule in `claim`, which since 2026-09-29 lets
+ * compatible mode jobs overlap and nothing else (src/store/jobs.ts,
+ * src/sharing-steps.ts) — and not this one. That change is also why one reader
+ * opening four modes can now take every slot this number allows;
+ * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md § Deferred.
  *
  * Read at call time rather than frozen at import, so a test can move it and a
  * deployment can set it without a rebuild — the rule src/store/data-root.ts

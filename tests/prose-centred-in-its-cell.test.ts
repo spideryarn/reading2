@@ -87,13 +87,12 @@ describe("the reading column is centred in its cell", () => {
   });
 
   /**
-   * **The heading that used to have to travel with the prose has no height.**
+   * **The prose heading has no height.**
    *
-   * This is what is left of that case: an assertion that the row really is
-   * collapsed, rather than that its one visible label is aligned. The three
-   * things it checks are the three ways a zero-height head silently stops being
-   * one — a padding, a border, or a label left in flow will each hold the row
-   * open, because a table cell treats `height` as a *minimum*.
+   * The row must really be collapsed. The three things this checks are the
+   * three ways a zero-height head silently stops being one — padding, a border,
+   * or a label left in flow will each hold the row open, because a table cell
+   * treats `height` as a *minimum*.
    */
   it("the column-header row has no height left to align anything in", () => {
     /* The selector was bare `thead th` until 2026-09-06, when it was scoped to
@@ -108,12 +107,12 @@ describe("the reading column is centred in its cell", () => {
     expect(head).not.toContain("border-bottom");
     // The token itself, or `height: var(--head-h)` above proves nothing.
     expect(css).toMatch(/--head-h:\s*0px/);
-    /* And the labels are out of flow, or the cell is as tall as its text
+    /* And the sole remaining label is out of flow, or the cell is as tall as its text
        whatever `height` says. `.sr-only` is the shared utility (§ screen
        readers); TableView writing something else would pass the CSS check
        above and render a 20px row. */
     const tsx = readFileSync(new URL("../src/web/TableView.tsx", import.meta.url), "utf8");
-    expect(tsx).toContain('<span className="sr-only">{columnLabel(d, geometry.leafDepth)}</span>');
+    expect(tsx.match(/<th scope="col"/g)).toHaveLength(1);
     expect(tsx).toContain('<span className="sr-only">Text verbatim</span>');
     // …and the column is still named for a screen reader, which is the whole
     // reason the text is hidden rather than deleted.

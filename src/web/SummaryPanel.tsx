@@ -411,7 +411,7 @@ function Entry({
               ref={twistRef}
               className={`summ-twist${openable ? "" : " leaf"}${showChildren ? " open" : ""}`}
               aria-expanded={openable ? showChildren : undefined}
-              aria-label={showChildren ? `Close ${entry.node.title}` : `Open ${entry.node.title}`}
+              aria-label={showChildren ? `Close ${entry.title}` : `Open ${entry.title}`}
               disabled={!openable}
               onClick={() => onToggle(entry.node.id, showChildren, beyond)}
             >
@@ -429,7 +429,7 @@ function Entry({
                   argument, and numbering it was how "Notes" became part 3.
                   src/web/tree.ts § buildSummaryTree. */}
               {!entry.supplement && <span className="summ-number">{entry.number}</span>}
-              {entry.node.title}
+              {entry.title}
             </BlockRef>
             {/* "How much is under this" — the gap their "+N hidden" badge filled
                 and our gist columns still cannot: a section holding forty
@@ -564,7 +564,7 @@ function Entry({
              button list shows, where four of them in a row are four
              indistinguishable controls. Same review. */
           aria-label={`Open the ${hidden} ${childLabel(entry.node.depth, hidden)} of ${
-            entry.node.title
+            entry.title
           }`}
           title={
             beyond
@@ -591,7 +591,7 @@ function Entry({
           aria-label={`Close the ${entry.children.length} ${childLabel(
             entry.node.depth,
             entry.children.length,
-          )} of ${entry.node.title}`}
+          )} of ${entry.title}`}
           title={`Back to the article on its own — Depth stays on ${
             DEPTH_LABELS[deep] ?? "where it is"
           }`}

@@ -94,6 +94,22 @@ describe("the two rules the stylesheet is written under", () => {
     expect(RULES).not.toMatch(/\.logo-text/);
   });
 
+  it("keeps Reading's transition inside Seam, so it closes with yarn", () => {
+    /* The letters' transition exists only while `.spya-seam` does, so they
+       snap home when the hook removes that class. `Reading` has to follow the
+       same rule: leaving its transition on the resting element makes yarn
+       snap left while Reading glides left for 300ms, briefly doubling the
+       word-gap this rule exists to preserve. */
+    const rest = RULES.match(/(?:^|\n)\.site-wordmark-rest\s*\{([^}]*)\}/)?.[1] ?? "";
+    const seam =
+      RULES.match(
+        /(?:^|\n)\.site-wordmark-host\.spya-seam \.site-wordmark-rest\s*\{([^}]*)\}/,
+      )?.[1] ?? "";
+    expect(rest).not.toMatch(/transition:/);
+    expect(seam).toMatch(/transition:\s*transform/);
+    expect(seam).toMatch(/transform:\s*translateX\(3px\)/);
+  });
+
   it("defines a @keyframes block for every animation it runs", () => {
     /* A typo in an animation *name* is the one silent no-op the registry check
        above cannot see: the class is registered, the rule parses, the class

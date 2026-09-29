@@ -35,9 +35,6 @@ import { type ArcCell, buildSummaryTree } from "../../tree.js";
 import { useColumnContext } from "../../useColumnContext.js";
 import type { Section } from "../../position.js";
 
-/** No gist columns in a mode, so nothing to measure rects for. */
-const EMPTY_DEPTHS: number[] = [];
-
 /**
  * **Which face a band gets**, from its border-box width. Pure, for the test.
  *
@@ -136,22 +133,16 @@ export function StructureBand({
   );
 
   /**
-   * Where the reader is — the same sampler the gist columns' panels use, so the
-   * two faces, and the gist columns, can never disagree about which section is
-   * under the focus line. A face change at a resize must not also move "here".
+   * Where the reader is — one sampler for both faces, so they can never
+   * disagree about which section is under the focus line. A face change at a
+   * resize must not also move "here".
    *
    * `enabled: true` because mounting is the condition — see the `useMemo`
-   * above. `depths: []` because a mode has no gist columns and this band wants
-   * none of the rects, only `focusRow`. **Section-granular**: `focusRow` is a
+   * above. **Section-granular**: `focusRow` is a
    * section's first row, never the exact block, which is why no paragraph in
    * either face is ever marked current.
    */
-  const live = useColumnContext({
-    sections,
-    depths: EMPTY_DEPTHS,
-    enabled: true,
-    layoutKey,
-  });
+  const live = useColumnContext({ sections, enabled: true, layoutKey });
 
   /**
    * **Both halves of "may we draw paragraph rows", answered here rather than in

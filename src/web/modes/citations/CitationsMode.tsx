@@ -5,19 +5,26 @@
  *
  * The shape of `modes/<feature>/` since 2026-09-06
  * (docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md),
- * with two things missing on purpose:
+ * with one thing missing on purpose:
  *
- * - **no visitor twin** — `POLICY.citations` is `owners-only` for v1, so a
- *   visitor meets `VisitorBand`'s sentence, not this (src/web/visitor.ts);
  * - **no passages** — the row's "first cited" is a jump through `onJump`, not a
  *   selection, so there is no `usePassageLifecycle` here and `selectPassages`
  *   answers `NO_FOUND` (src/web/reader/passages.ts).
+ *
+ * **And a visitor twin since 2026-09-29**, `VisitorCitationsBand`: the stored
+ * list off the public payload, with no `useCitations`, `useAutoRun` or
+ * `useStepJob` under it, so it can neither read the owner's list nor ask for
+ * one, and its rows draw no *Find it*. It was `owners-only` until a signed-out
+ * reader of a public article was refused a stored Trajectory for the cost of
+ * making one (SPIDERYARN-READING2-56,
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  *
  * docs/project/citations.md.
  */
 
 import { useQueryState } from "nuqs";
 import type { BlockId } from "../../../types.js";
+import type { PublicCitations } from "../../../public-types.js";
 import { citeBarParam, citeOrderParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useCitations, type CitationsRead } from "../../useCitations.js";
@@ -53,19 +60,39 @@ export function CitationsBand({
 }) {
   useRenderCount("CitationsBand");
   const owner = useCitations(slug, read);
+  const controls = useCitationControls();
+  return <CitationsPanel access={{ kind: "owner", owner }} {...controls} onJump={onJump} />;
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * The list came in the page's own payload, every address already re-judged at
+ * the public boundary (src/public/dto.ts § `publicCitedWork`). No
+ * `useCitations`, so no read of `/api/citations/:slug`, no job and no *Find
+ * it* — a second band rather than a flag on the first, because a hook cannot be
+ * called conditionally (src/web/reader-capability.ts; `VisitorTimelineBand` is
+ * the sibling). The order and the bar are the reader's own URL, so a visitor
+ * has them too.
+ */
+export function VisitorCitationsBand({
+  citations,
+  onJump,
+}: {
+  citations: PublicCitations;
+  onJump(id: BlockId): void;
+}) {
+  useRenderCount("VisitorCitationsBand");
+  const controls = useCitationControls();
+  return <CitationsPanel access={{ kind: "visitor", citations }} {...controls} onJump={onJump} />;
+}
+
+/** `?citeby=` and `?citebar=`, which both bands share. */
+function useCitationControls() {
   const [order, setOrder] = useQueryState("citeby", citeOrderParam);
   /* Null is "nobody has touched the bar", which the panel resolves to
      `CITATION_BAR_DEFAULT` — kept null here so the default is one number in one
      file. */
   const [bar, setBar] = useQueryState("citebar", citeBarParam);
-  return (
-    <CitationsPanel
-      owner={owner}
-      order={order}
-      onOrder={setOrder}
-      bar={bar}
-      onBar={setBar}
-      onJump={onJump}
-    />
-  );
+  return { order, onOrder: setOrder, bar, onBar: setBar };
 }

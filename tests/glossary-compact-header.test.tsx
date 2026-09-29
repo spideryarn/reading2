@@ -16,7 +16,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryAccess, GlossaryOwner } from "../src/web/GlossaryPanel.js";
 import type { TermSort } from "../src/web/params.js";
-import type { BlockId, Glossary, GlossaryEntry } from "../src/types.js";
+import type { BlockId, Glossary, GlossaryEntry, Job } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -366,5 +366,58 @@ describe("the kind of a term", () => {
     expect(kindOf("spya-term33")?.getAttribute("aria-label")).toBe("A person");
     expect(kindOf("spya-term32")).toBeNull();
     expect(kindOf("spya-term34")).toBeNull();
+  });
+});
+
+/* **An older prompt is not announced** — Greg, 2026-09-29
+   (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* And with
+   no banner, *Find more* must not stand in for it: on an outdated list the run
+   it sends replaces the list rather than appending (src/glossary.ts §
+   existingFor), so it is hidden, as Quotes hides its own. A job or a failure
+   still shows in the foot. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
+describe("an outdated glossary", () => {
+  const RUNNING: Job = {
+    id: "job-glossary",
+    ownerId: "owner" as Job["ownerId"],
+    slug: "constitution",
+    status: "running",
+    createdAt: "2026-09-29T00:00:00.000Z",
+    startedAt: "2026-09-29T00:00:01.000Z",
+    steps: [
+      {
+        name: "glossary",
+        label: "Working on glossary",
+        status: "running",
+        startedAt: "2026-09-29T00:00:01.000Z",
+      },
+    ],
+  };
+  const findMore = () =>
+    [...host.querySelectorAll("button")].some((b) => /find more/i.test(b.textContent ?? ""));
+
+  it("says nothing about it, and offers no Find more", async () => {
+    await mount(owner(glossary(null, SCORED), { outdated: true }));
+    expect(host.querySelector(".gloss-stale")).toBeNull();
+    expect(host.textContent).not.toContain("different version of the glossary");
+    expect(findMore()).toBe(false);
+  });
+
+  it("still shows a running job, and a failure, in the foot", async () => {
+    await mount(owner(glossary(null, SCORED), { outdated: true, job: RUNNING }));
+    expect(host.querySelector(".gloss-foot")?.textContent).toContain("Stop");
+    await mount(
+      owner(glossary(null, SCORED), {
+        outdated: true,
+        failed: { message: "The re-run failed visibly.", retryable: false, retry: null },
+      }),
+    );
+    expect(host.querySelector(".gloss-foot")?.textContent).toContain("The re-run failed visibly.");
+  });
+
+  it("keeps the stale banner, and a current list keeps Find more", async () => {
+    await mount(owner(glossary(null, SCORED), { stale: true }));
+    expect(host.querySelector(".gloss-stale")?.textContent).toContain("older version of the article");
+    await mount(owner(glossary(null, SCORED), {}));
+    expect(findMore()).toBe(true);
   });
 });

@@ -229,9 +229,12 @@ export interface StructureProjection {
  * two depth-2 nodes with no children, one with an empty title and a navLabel and
  * one with neither. Returning `null` for the second is what stops a blank row in
  * a list whose whole promise is "this is the shape of the document".
+ *
+ * The title is `SummaryNode.title`, the article's own number taken off, because
+ * ours is drawn beside it (tree.ts; SPIDERYARN-READING2-4Q).
  */
 function rowText(node: SummaryNode): string | null {
-  const title = node.node.title?.trim();
+  const title = node.title?.trim();
   if (title) return title;
   const nav = node.node.navLabel?.trim();
   if (nav) return nav;
@@ -342,7 +345,7 @@ function cardFor(
   /* The row is printing it; see `StructureCard`. */
   const gist = row.gist === undefined ? entry.gist : undefined;
 
-  const hasTitle = (entry.node.title ?? "").trim() !== "";
+  const hasTitle = (entry.title ?? "").trim() !== "";
   const nav = entry.node.navLabel?.trim();
   const navLabel =
     allowNavLabels && entry.gist === undefined && hasTitle && nav ? nav : undefined;
@@ -361,7 +364,7 @@ function cardFor(
            its navLabel is paragraph chrome and obeys `allowParagraphs` by this
            separate gate. Using `rowText` here would leak that label through a
            non-current part's card even while the paragraph layer is withheld. */
-        const title = c.node.title?.trim();
+        const title = c.title?.trim();
         const nav = allowNavLabels ? c.node.navLabel?.trim() : undefined;
         const text = title || nav || null;
         /* Keyed by the node's own id rather than by its words: two children of

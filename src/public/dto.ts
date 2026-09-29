@@ -58,10 +58,19 @@ import type {
   Block,
   BlockKind,
   Citation,
+  CitationPlace,
+  Citations,
+  CitedWork,
+  ClaimDebateRow,
   Comment,
+  Debate,
+  DirectDebateRow,
+  Faq,
+  FaqQuestion,
   Glossary,
   Idea,
   Ideas,
+  IdentificationSignal,
   NavLabelStatus,
   Quote,
   Quotes,
@@ -70,16 +79,25 @@ import type {
   SearchRun,
   Timeline,
   TimelineEvent,
+  Trajectory,
+  TrajectoryStop,
   TimelineOccurrence,
   Tree,
   TreeNode,
   Tweet,
   TweetThread,
 } from "../types.js";
-import { anchorFields } from "../types.js";
+import { anchorFields, identifiesOf, readStoredLean } from "../types.js";
 import type {
   PublicArticle,
   PublicBlock,
+  PublicCitations,
+  PublicCitedWork,
+  PublicClaimDebateRow,
+  PublicDebate,
+  PublicDirectDebateRow,
+  PublicFaq,
+  PublicIdentificationSignal,
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
@@ -89,6 +107,7 @@ import type {
   PublicSearchRun,
   PublicSketch,
   PublicTimeline,
+  PublicTrajectory,
   PublicTweets,
 } from "../public-types.js";
 import { publicCitationUrl, publicSourceUrl } from "../urls.js";
@@ -432,6 +451,310 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
 }
 
 /**
+ * **The Trajectory route, rebuilt stop by stop** — since 2026-09-29
+ * (SPIDERYARN-READING2-56).
+ *
+ * Four fields of a stop and `offered`, and nothing else: `profileHash` is
+ * who the route was planned for and never crosses, and the rest of the
+ * document is pipeline provenance. `cue` is optional on a stored stop (routes
+ * before `trajectory/5` have none), so it goes through `opt`.
+ * src/public-types.ts § `PublicTrajectory` is the argument for each.
+ */
+function publicTrajectory(trajectory: Trajectory): PublicTrajectory {
+  return {
+    stops: trajectory.stops.map(
+      (stop): TrajectoryStop => ({
+        quoteId: stop.quoteId,
+        depth: stop.depth,
+        role: stop.role,
+        ...opt(stop, "cue"),
+      }),
+    ),
+    offered: trajectory.offered,
+  };
+}
+
+/**
+ * **The FAQ, rebuilt question by question and passage by passage** — since
+ * 2026-09-29 (SPIDERYARN-READING2-56, plan 260929c stage 2).
+ *
+ * The question and the article's own passages, and nothing else: `dropped` is
+ * our checking's tally and the rest is pipeline provenance.
+ * src/public-types.ts § `PublicFaq` is the argument.
+ */
+function publicFaq(faq: Faq): PublicFaq {
+  return {
+    questions: faq.questions.map(
+      (q): FaqQuestion => ({
+        id: q.id,
+        question: q.question,
+        passages: q.passages.map(publicPlace),
+      }),
+    ),
+  };
+}
+
+/** One quoted place in the article — the FAQ's passage and a citation's mention share the shape. */
+function publicPlace(place: CitationPlace): CitationPlace {
+  return { blockId: place.blockId, quote: place.quote, start: place.start };
+}
+
+/**
+ * **One cited work, rebuilt field by field** — since 2026-09-29 (plan 260929c
+ * stage 3).
+ *
+ * **`url` goes through `publicCitationUrl`** (src/urls.ts), as a comment's
+ * citations do, but a refusal here drops the *link* and keeps the row: a work
+ * the piece cites is still cited without an address, where a comment's
+ * citation *is* its address. **A `web` link is dropped outright** without
+ * being judged: that rule means the owner's own *Find it* found it, and the
+ * finds are private (plan 260929c § What stays owner-only). Its `linkFrom`
+ * goes too: leaving `"web"` behind would still disclose that the owner ran
+ * Find it, so the public row returns to the pre-find `"search"` state. The
+ * stored column never holds one — the owner's read attaches finds from
+ * `citation_finds` — so this is the second of two, for the day something
+ * writes one back or hands this projection an attached owner read.
+ *
+ * `key` and `found` are not named, so they do not cross. src/public-types.ts §
+ * `PublicCitedWork` has why for each.
+ */
+function publicCitedWork(work: CitedWork): PublicCitedWork {
+  /* A named const, so the shorthand `{ url }` below ties the key to it —
+     `publicMeta`'s idiom, since `opt()` copies a field and this computes one. */
+  const ownerFound = work.linkFrom === "web";
+  const url = ownerFound ? null : publicCitationUrl(work.url);
+  const linkFrom: PublicCitedWork["linkFrom"] =
+    work.linkFrom === "web" ? "search" : work.linkFrom;
+  return {
+    id: work.id,
+    title: work.title,
+    ...opt(work, "authors"),
+    ...opt(work, "year"),
+    why: work.why,
+    ...opt(work, "relevance"),
+    ...opt(work, "influence"),
+    ...(work.reference === undefined ? {} : { reference: publicPlace(work.reference) }),
+    mentions: work.mentions.map(publicPlace),
+    citedAt: [...work.citedAt],
+    firstCited: work.firstCited,
+    citedInBody: work.citedInBody,
+    ...(url === null ? {} : { url }),
+    linkFrom,
+  };
+}
+
+/**
+ * **The Citations list** — the works, and `capped` because the panel prints it.
+ * src/public-types.ts § `PublicCitations`.
+ */
+function publicCitationList(citations: Citations): PublicCitations {
+  return {
+    citations: citations.citations.map(publicCitedWork),
+    capped: citations.capped,
+  };
+}
+
+/**
+ * **The Debate, rebuilt group by group, row by row and signal by signal** —
+ * since 2026-09-29 (SPIDERYARN-READING2-56, plan 260929c stage 4), by the
+ * contract its own plan set: 260905f § Security and § Stage 4.
+ *
+ * Three kinds of address can be on a row, and each is judged by the policy
+ * that fits what it *is*:
+ *
+ * - **The row's `url`** is a stranger's page the search returned — a citation,
+ *   so `publicCitationUrl`, as a comment's citations are judged. **A refusal
+ *   drops the whole row**, not the link: a Debate row is its source, and there
+ *   is no public row type without one (260905f § Security).
+ * - **A `linked` signal's `url`** is *the article's own address* as the page
+ *   spelled it (src/debate.ts § `linkTo`, matched against `meta.url`, which is
+ *   `final_url`). So it gets the article's own policy, `publicSourceUrl` —
+ *   what `publicMeta` publishes the masthead's address by, which also refuses
+ *   a query string, because a query on an address the owner fetched can carry
+ *   their token. `publicCitationUrl` would pass that query, and that is the
+ *   hazard: a visitor would read, in a tooltip, the address `publicMeta` took
+ *   off the masthead. A refusal takes the address off the signal; the fact
+ *   that the page links the piece stays. GPT Sol, plan review 1 (P0).
+ * - **An address inside the row's words** — `articleReferenceQuote` above all,
+ *   which is the witness that the page names the article and so is exactly
+ *   where the article's address turns up. Words cannot lose a link, so **a row
+ *   whose words contain an address this boundary refused is dropped** —
+ *   `refusedAddresses` below says which, and every string on the row is asked,
+ *   not only the witness, so the property is "a refused address appears nowhere
+ *   in the payload" rather than "not in the field we thought of".
+ *
+ * Every dropped row is counted in its group's `sourceNotPublishable`, computed
+ * **here** and never read off the artefact (260905f § What is counted, Sol's
+ * F17), and the visitor's foot line says it. The stored `counts` do not cross.
+ *
+ * Legacy rows: `lean` is read through `readStoredLean` (a row stored before
+ * 2026-09-08 has `valence`), and `identifies` through `identifiesOf` (a row
+ * stored before 2026-09-06 has none), so a visitor's row is always in the
+ * current vocabulary and never has an empty evidence list.
+ */
+function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
+  const refused = refusedAddresses(debate, finalUrl);
+  /** Does any of these strings contain an address the boundary refused? Decode
+   * percent-escaped ASCII first as well: generated prose may quote a URL in
+   * encoded form, but that does not make the capability inside it public. */
+  const carriesRefused = (texts: readonly unknown[]): boolean =>
+    texts.some((text) => {
+      if (typeof text !== "string") return false;
+      const decoded = decodePercentEscapedAscii(text);
+      return refused.some((address) => text.includes(address) || decoded.includes(address));
+    });
+
+  const direct: PublicDirectDebateRow[] = [];
+  let directWithheld = 0;
+  for (const row of debate.direct.rows) {
+    const url = publicCitationUrl(row.url);
+    const signals = identifiesOf(row);
+    if (
+      url === null ||
+      carriesRefused([row.url, row.title, row.sourceQuote, row.applies, row.limits, row.articleReferenceQuote]) ||
+      carriesRefused(signals.flatMap(signalTexts))
+    ) {
+      directWithheld += 1;
+      continue;
+    }
+    direct.push({
+      ...publicDebateRowBase(row, url),
+      articleReferenceQuote: row.articleReferenceQuote,
+      identifies: signals.map(publicSignal),
+    });
+  }
+
+  const claims: PublicClaimDebateRow[] = [];
+  let claimsWithheld = 0;
+  for (const row of debate.claims.rows) {
+    const url = publicCitationUrl(row.url);
+    if (url === null || carriesRefused([row.url, row.title, row.sourceQuote, row.applies, row.limits, row.claimQuote])) {
+      claimsWithheld += 1;
+      continue;
+    }
+    claims.push({ ...publicDebateRowBase(row, url), claimQuote: row.claimQuote, blockId: row.blockId });
+  }
+
+  return {
+    searchedAt: debate.searchedAt,
+    direct: { rows: direct, sourceNotPublishable: directWithheld },
+    claims: { rows: claims, sourceNotPublishable: claimsWithheld },
+  };
+}
+
+/**
+ * **Every address this boundary refuses to publish for this debate**, as the
+ * strings to look for in a row's words — each one whole and without its
+ * scheme, since a page's prose spells an address either way.
+ *
+ * - the article's own `final_url`, when `publicSourceUrl` refuses it — the
+ *   masthead's address, which `publicMeta` already leaves off;
+ * - every `linked` signal's address that `publicSourceUrl` refuses — the same
+ *   address, as a stranger's page spelled it;
+ * - every row `url` that `publicCitationUrl` refuses, so a credential in one
+ *   row's source cannot ride out in another row's quotation.
+ *
+ * The comparison also decodes percent-escaped ASCII, including nested escapes,
+ * before looking. That catches an encoded credential or signed query without
+ * turning malformed `%` sequences into an exception at the public boundary.
+ */
+function refusedAddresses(debate: Debate, finalUrl: string | null): string[] {
+  const out = new Set<string>();
+  const add = (address: string) => {
+    if (address === "") return;
+    out.add(address);
+    const bare = address.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+    if (bare !== "" && bare !== address) out.add(bare);
+  };
+  if (finalUrl !== null && publicSourceUrl(finalUrl) === null) add(finalUrl);
+  for (const row of debate.direct.rows) {
+    if (typeof row.url === "string" && publicCitationUrl(row.url) === null) add(row.url);
+    for (const signal of identifiesOf(row)) {
+      if (signal.kind === "linked" && publicSourceUrl(signal.url) === null) add(signal.url);
+    }
+  }
+  for (const row of debate.claims.rows) {
+    if (typeof row.url === "string" && publicCitationUrl(row.url) === null) add(row.url);
+  }
+  return [...out];
+}
+
+/** Decode URL punctuation and other ASCII bytes without throwing on malformed
+ * escapes. Repeating catches `%253A` as well as `%3A`, and every pass shortens
+ * the string so the loop necessarily terminates. */
+function decodePercentEscapedAscii(value: string): string {
+  let decoded = value;
+  for (;;) {
+    const next = decoded.replace(/%([0-7][0-9a-f])/gi, (_escape, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+    if (next === decoded) return decoded;
+    decoded = next;
+  }
+}
+
+/** The words on one signal, for `carriesRefused`. A `linked` address is judged on its own, above. */
+function signalTexts(signal: IdentificationSignal): string[] {
+  switch (signal.kind) {
+    case "linked":
+      return [];
+    case "quoted":
+      return [signal.quote];
+    case "named":
+      return [signal.witness];
+    default: {
+      const unreachable: never = signal;
+      return unreachable;
+    }
+  }
+}
+
+/**
+ * One signal, rebuilt. A `linked` address goes through `publicSourceUrl` — the
+ * article's own policy; `publicDebate` has why — and a refusal leaves the
+ * signal without it.
+ */
+function publicSignal(signal: IdentificationSignal): PublicIdentificationSignal {
+  switch (signal.kind) {
+    case "linked": {
+      const url = publicSourceUrl(signal.url);
+      return url === null ? { kind: "linked" } : { kind: "linked", url };
+    }
+    case "quoted":
+      return {
+        kind: "quoted",
+        quote: signal.quote,
+        blockId: signal.blockId,
+        coverage: signal.coverage,
+        density: signal.density,
+      };
+    case "named":
+      return { kind: "named", by: signal.by, witness: signal.witness };
+    default: {
+      const unreachable: never = signal;
+      return unreachable;
+    }
+  }
+}
+
+/** What both groups' rows carry, field by field; `url` is the one the caller already judged. */
+function publicDebateRowBase(
+  row: DirectDebateRow | ClaimDebateRow,
+  url: string,
+): Omit<PublicClaimDebateRow, "claimQuote" | "blockId"> {
+  return {
+    id: row.id,
+    url,
+    ...(typeof row.title === "string" ? { title: row.title } : {}),
+    sourceQuote: row.sourceQuote,
+    relation: row.relation,
+    lean: readStoredLean(row),
+    applies: row.applies,
+    ...(typeof row.limits === "string" ? { limits: row.limits } : {}),
+  };
+}
+
+/**
  * The owner's comments, rebuilt comment by comment and citation by citation.
  *
  * **The filtering is not here**, and that is deliberate rather than an
@@ -596,7 +919,7 @@ function publicTweets(thread: TweetThread): PublicTweets {
 /**
  * `GET /api/public/article/:slug`, assembled.
  *
- * **The four artefacts are keys of this one response, and that is Greg's
+ * **The artefacts are keys of this one response, and that is Greg's
  * decision rather than the design Sol gave.** Four sibling endpoints would each
  * have needed a route, a projection, a reader method, a client hook and a
  * tagged wire result saying whether the artefact exists; folding them in here
@@ -629,6 +952,10 @@ export function publicArticle(row: {
   quotes: Quotes | null;
   tweets: TweetThread | null;
   timeline: Timeline | null;
+  trajectory: Trajectory | null;
+  faq: Faq | null;
+  citations: Citations | null;
+  debate: Debate | null;
   comments: readonly Comment[];
   searches: readonly (SearchRun & { stale: boolean })[];
   sketch: Sketch | null;
@@ -675,6 +1002,13 @@ export function publicArticle(row: {
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+    ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
+    ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
+    ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),
+    /* The article's own address goes in with it: a direct row can carry it in
+       its witness and its `linked` signal, and it is judged there by the policy
+       `publicMeta` above applies to it. */
+    ...(row.debate !== null ? { debate: publicDebate(row.debate, row.finalUrl) } : {}),
     ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     /* **A required key, so leaving this line out is a type error** — unlike the
        artefacts above it, where an absent key is the meaning. An article with

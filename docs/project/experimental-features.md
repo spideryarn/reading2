@@ -166,7 +166,7 @@ is a column rather than something in the browser's `localStorage`.
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
 them on 2026-09-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
-out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12, Trajectory came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
+out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Trajectory came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
 cannot be added without somebody deciding which side of the line it is on.
@@ -184,7 +184,6 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
-| [Hierarchy](granularity-zoom.md) | **Not because it is unfinished.** Greg moved it on 2026-09-12, making Structure the one structural view everybody is given. Only its Dock entry points are gated — see [Hierarchy went in on 2026-09-12](#hierarchy-went-in-on-2026-09-12) for what that does and does not take with it. |
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
@@ -246,6 +245,17 @@ columns for anybody. The last view can restore it too, because that is another s
 reader with the switch off loses, while in another mode, is a button that reaches the **zoom
 columns**, because those are drawn only in Hierarchy mode. That was Greg's call, not a side effect.
 [260912e](../plans/260912e-hierarchy-behind-the-experimental-switch.md).
+
+**Hierarchy retired on 2026-09-29.** Everything above is history. Greg, from the same switch's feedback
+queue:
+
+> Remove the Hierarchy mode altogether. I think the Structure mode is better/sufficient.
+>
+> — Greg, 2026-09-29, feedback SPIDERYARN-READING2-4B
+
+The mode, its gist columns and its `?cols=` / `?text=` parameters are gone, so there is no longer a row
+for it in the table; `?mode=hierarchy` opens Structure. The tree is untouched
+([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)).
 
 The half of the old paragraph that survives is the arithmetic: because nothing here or in the tests
 counts the modes, adding a third structural mode and then retiring one needed no number changed

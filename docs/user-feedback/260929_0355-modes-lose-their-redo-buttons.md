@@ -23,6 +23,11 @@ learns that — removing its button would leave a warning that says "go somewher
 If you want those gone too, it's a small change, and FAQ and Citations would first need Metadata
 rows (today the banner is their only redo).
 
+**Answered by report 55** (SPIDERYARN-READING2-55, the same day): the *out-of-date because of an
+older prompt* banners went too, buttons and all; the stale ones (the article changed) and the
+profile-changed ones stayed —
+[260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
+
 Also left alone: first-run buttons in empty modes, Glossary's and Quotes' *Find more* (they add
 rather than redo), Claims' *Pull them again* (no Metadata equivalent — removing it would make it
 impossible), and the Criteria and Mirror reruns, which run over what the reader wrote.

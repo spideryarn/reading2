@@ -29,7 +29,6 @@ import {
   confParam,
   parseAsBit,
   parseAsBlockId,
-  parseAsDepths,
   parseAsIdList,
   refScaleParam,
   resolveMatcher,
@@ -39,7 +38,6 @@ import {
   TERM_SORTS,
   sortParam,
   nameParam,
-  textParam,
 } from "../src/web/params.js";
 import { NEVER_REMEMBERED, REMEMBERED } from "../src/web/last-view.js";
 
@@ -80,9 +78,9 @@ describe("parseAsBit", () => {
     expect(parseAsBit.parse(parseAsBit.serialize(false))).toBe(false);
   });
 
-  // `?text=0` is the spelling the app documented before any of this existed,
-  // and links using it are in the docs. It has to keep meaning what it meant.
-  it("keeps the documented text=0 spelling", () => {
+  // `0` is the spelling `?text=0` documented before any of this existed, and
+  // every boolean parameter since has kept it.
+  it("keeps the documented 0 spelling", () => {
     expect(parseAsBit.serialize(false)).toBe("0");
     expect(parseAsBit.parse("0")).toBe(false);
   });
@@ -99,7 +97,7 @@ describe("parseAsBit", () => {
  * whole design: see params.ts § spineParam and layout.ts § showSpine.
  */
 describe("spineParam", () => {
-  it("has no default, unlike text", () => {
+  it("has no default", () => {
     /* `in` rather than reading the property, because absent and
        `undefined` are different things here and only one of them is the
        design. nuqs encodes that in its types — `withDefault` is what adds
@@ -107,10 +105,9 @@ describe("spineParam", () => {
        typecheck at all, and the assertion that it was `undefined` would
        have stayed green even if a default had been given. */
     expect("defaultValue" in spineParam).toBe(false);
-    expect(textParam.defaultValue).toBe(true);
   });
 
-  it("reads and writes the same 0/1 spelling as text", () => {
+  it("reads and writes the 0/1 spelling", () => {
     expect(spineParam.parse("0")).toBe(false);
     expect(spineParam.parse("1")).toBe(true);
     expect(spineParam.serialize(false)).toBe("0");
@@ -122,43 +119,9 @@ describe("spineParam", () => {
     for (const v of ["off", "", "true", "2"]) expect(spineParam.parse(v)).toBeNull();
   });
 
-  // Hiding a whole column of the view is a deliberate act, so Back undoes it —
-  // the same call `cols` and `text` make.
+  // Hiding a whole column of the view is a deliberate act, so Back undoes it.
   it("pushes history", () => {
     expect(spineParam.history).toBe("push");
-  });
-});
-
-describe("parseAsDepths", () => {
-  it("reads and writes a plain list", () => {
-    expect(parseAsDepths.parse("0,1,2")).toEqual([0, 1, 2]);
-    expect(parseAsDepths.serialize([0, 1, 2])).toBe("0,1,2");
-  });
-
-  it("canonicalises, so the same view is always the same URL", () => {
-    expect(parseAsDepths.serialize([2, 0, 1, 2])).toBe("0,1,2");
-    expect(parseAsDepths.parse("2,0,1")).toEqual([0, 1, 2]);
-  });
-
-  // The empty set is the case that needs a spelling of its own: serialized as
-  // "" it would be indistinguishable from the parameter being absent, and
-  // absent means "automatic", which is the opposite of "the reader turned
-  // every column off".
-  it("distinguishes 'no columns' from 'not specified'", () => {
-    expect(parseAsDepths.serialize([])).toBe("none");
-    expect(parseAsDepths.parse("none")).toEqual([]);
-  });
-
-  it("rejects junk rather than half-reading it", () => {
-    for (const v of ["", "a", "0,x", "-1", "0,,1"]) {
-      expect(parseAsDepths.parse(v)).toBeNull();
-    }
-  });
-
-  it("compares by value, so re-selecting the same columns is a no-op", () => {
-    expect(parseAsDepths.eq([0, 1], [0, 1])).toBe(true);
-    expect(parseAsDepths.eq([0, 1], [0, 2])).toBe(false);
-    expect(parseAsDepths.eq([0, 1], [0])).toBe(false);
   });
 });
 
@@ -508,6 +471,17 @@ describe("search mode parameters", () => {
     // null is what `withDefault` turns into the default, so an unrecognised
     // name degrades to the article rather than to an error page.
     expect(modeParam.defaultValue).toBe(DEFAULT_MODE);
+  });
+
+  /* **A retired mode is not an unrecognised one.** `?mode=hierarchy` was on
+     real readers' bars for a month, and Greg named Structure as what replaces
+     it (SPIDERYARN-READING2-4B), so an old link opens Structure rather than the
+     bare article — src/modes.ts § RETIRED_MODES, the route `?mode=outline`
+     already took. */
+  it("opens Structure for the retired Hierarchy and Outline", () => {
+    expect(MODES).not.toContain("hierarchy");
+    expect(modeParam.parse("hierarchy")).toBe("structure");
+    expect(modeParam.parse("outline")).toBe("structure");
   });
 });
 

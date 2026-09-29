@@ -10,7 +10,7 @@ how it leaves.
 > article. Check we don't already have this. It can exclude the original PDF/HTML itself (because
 > that's easy to get otherwise). It should include the Spideryarn-ingested version of the HTML +
 > images/assets/etc. Plus include all the various input + augmentations added on the site,
-> e.g. Hierarchy, Summary, Glossary, Chats, Diagrams, Comments, etc etc. If anything is
+> e.g. Hierarchy (the tree; the mode was removed 2026-09-29), Summary, Glossary, Chats, Diagrams, Comments, etc etc. If anything is
 > particularly tricky, defer it.
 >
 > — Greg, 2026-09-01

@@ -8,7 +8,7 @@
  * > device/browser, or whatever is simplest
  *
  * Almost all of that was already built. Everything about how you are looking at
- * an article is in the query string — `?at=` the section, `?mode=`, `?cols=`,
+ * an article is in the query string — `?at=` the section, `?mode=`,
  * `?deep=` and thirty more (docs/project/url-state.md) — so this file is not
  * about representing reading state. It answers one question: **what remembers
  * the query string, and when is it replayed?**
@@ -65,7 +65,6 @@ import { onAddressChange, parseRoute } from "./router.js";
  */
 export const REMEMBERED = [
   "at", // the section you were reading
-  "cols", // which gist columns are on
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "deep", // how far down summary mode goes
@@ -98,17 +97,6 @@ export const REMEMBERED = [
  * these two lists against `params.ts`.
  */
 export const NEVER_REMEMBERED = [
-  /* **`text=0` is the one state a restore could put the reader in and not get
-     them out of**, so it moved down here on 2026-09-05, the day the `Text` pill
-     that wrote it went with the rest of the controls bar. `settleAddress`
-     rewrites an incoming `?mode=hierarchy&text=0` to `?mode=structure` for exactly
-     that reason (src/web/router.ts § `liftStrandedText`) — and a restore runs
-     *after* that rewrite, from a React effect, so a stored one would walk
-     straight past it and hand the reader the address the rewrite exists to
-     prevent. There is no writer for this parameter any more either, so what is
-     left in a browser's memory of it is a state nobody can re-create on
-     purpose. A *link* carrying `?text=0` is still honoured, on arrival, once. */
-  "text",
   /* Opens the explanation dialog and jumps the page to the passage it is
      anchored to. A dialog is something the reader did; reopening one they
      closed a week ago is a surprise, not a restoration. */
@@ -238,8 +226,8 @@ export function hasArticleState(search: string): boolean {
  * `""` when there is nothing.
  *
  * **Filtered pair by pair as text**, never through `URLSearchParams`, so what
- * comes out is byte-for-byte what the app wrote — `?cols=0,1,2` stays itself
- * rather than being reserialised to `?cols=0%2C1%2C2`. Same reason router.ts's
+ * comes out is byte-for-byte what the app wrote — a value with a comma in it
+ * stays itself rather than being reserialised with `%2C`. Same reason router.ts's
  * rewrites are textual.
  *
  * **Three modes are remembered as no mode at all** —
@@ -277,9 +265,11 @@ export function restoredHref(
      that list. When `text` moved to `NEVER_REMEMBERED` on 2026-09-05, every
      browser already holding `?mode=hierarchy&text=0` would have restored it —
      from a layout effect, *after* `settleAddress` had run — and walked straight
-     past the boot-time rewrite that exists to get a reader out of exactly that
-     state (router.ts § `liftStrandedText`). The passive save that cleans the
-     storage up happens too late to help the address they are already looking at.
+     past the boot-time rewrite that then existed to get a reader out of exactly
+     that state. The passive save that cleans the storage up happens too late
+     to help the address they are already looking at. (`text` and `cols` left
+     both lists on 2026-09-29 with the Hierarchy mode, and this is what drops
+     them from a browser that still holds them.)
 
      Here rather than in `readLastView` because this is the pure function, which
      is where this file puts its decisions so each one can be watched failing;

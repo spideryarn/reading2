@@ -39,7 +39,7 @@ import { describe, expect, it } from "vitest";
 import { readJournal } from "../scripts/migration-ledger.js";
 import { REVISION_CARRY_POLICY } from "../src/store/pg-revisions.js";
 import { NAV_LABEL_STATUSES, type NavLabelStatus } from "../src/types.js";
-import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "../src/web/nav-labels.js";
+import { paragraphLabelsReady } from "../src/web/nav-labels.js";
 
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "article_revisions_nav_label_status";
@@ -178,57 +178,5 @@ describe("what the client does with it", () => {
        state the type system forbids is reached at all — which is the state this
        is about. */
     expect(paragraphLabelsReady("arriving" as NavLabelStatus)).toBe(false);
-  });
-
-  it("leaves a way to close a withheld column that is already open", () => {
-    /* **The bug this pins, which a component test of the table could not see.**
-       `toggle` in App.tsx is the only caller of `setCols`, so replacing the pill
-       with the sentence removed the only way to *close* the leaf column as well
-       as the only way to open it. The column can already be open without the
-       pill having done it — a `?cols=` naming the leaf depth, shared or
-       bookmarked — and that reader was left with a wide column of one repeated
-       sentence and nothing to shut it with. For ever, if the status is `failed`.
-       GPT Sol's F2 on stage 1, 2026-09-06. */
-    expect(paragraphPill("pending", true)).toBe("toggle");
-    expect(paragraphPill("failed", true)).toBe("toggle");
-  });
-
-  it("still refuses to open a column onto nothing", () => {
-    /* The other half, and the case the sentence was written for: while the
-       column is shut, the pill would open it onto a run of one repeated notice.
-       That is what the notice replaces. */
-    expect(paragraphPill("pending", false)).toBe("notice");
-    expect(paragraphPill("failed", false)).toBe("notice");
-  });
-
-  it("is the ordinary pill whenever the labels are there", () => {
-    expect(paragraphPill("ready", false)).toBe("toggle");
-    expect(paragraphPill("ready", true)).toBe("toggle");
-  });
-
-  it("says nothing at all when there is nothing to say", () => {
-    /* `null` rather than an empty string, so the caller branches on presence and
-       cannot render a blank chip where a pill should be (src/web/App.tsx). */
-    expect(paragraphLabelNotice("ready")).toBeNull();
-  });
-
-  it("tells the two absences apart, without repeating anything upstream said", () => {
-    const pending = paragraphLabelNotice("pending");
-    const failed = paragraphLabelNotice("failed");
-    expect(pending).toBeTruthy();
-    expect(failed).toBeTruthy();
-    /* Two sentences, not one: *still arriving* is a thing that finishes and
-       *aren't available* is a thing that does not, and a reader who is told the
-       wrong one waits for something that is not coming. */
-    expect(pending).not.toBe(failed);
-    /* No bracketed code — these are not failures a model call returned, so they
-       follow src/job-state.ts rather than src/messages.ts. A code would invite a
-       bug report about a pipeline doing what a pipeline does.
-       docs/project/copy.md § The bracketed code. */
-    for (const line of [pending, failed]) {
-      expect(line).not.toMatch(/\[/);
-      /* And short. A sentence in a controls bar that wraps is a bar that grows. */
-      expect((line as string).length).toBeLessThan(60);
-    }
   });
 });

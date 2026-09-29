@@ -84,7 +84,7 @@
  * file's layout: a release that failed to parse simply is not there, the same
  * as a release that shipped nothing.
  */
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -98,6 +98,7 @@ import {
   type Section,
 } from "../changelog.js";
 import { GitHubMark } from "./GitHubMark.js";
+import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { CHANGELOG_LABEL } from "./router.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -715,13 +716,7 @@ export function ChangelogPage() {
           article — so there was often no "back" for it to mean. It is also the
           label the footer uses for the same destination, and one page should not
           call one address two things. */}
-      <Link
-        href="/"
-        className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-      >
-        <ArrowLeft size={13} />
-        Home
-      </Link>
+      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
 
       {/* The same string the footer, the command bar and the tab title use —
           router.ts § `CHANGELOG_LABEL`. A heading that had drifted from the

@@ -366,9 +366,10 @@ describe("the quotes' marks", () => {
  * The seventeen sibling `&&` expressions at the bottom of `Reader` became one
  * `switch (mode)` on 2026-09-06 (260906c § Stage 4b). The `never` default is
  * what makes a fifteenth mode a compile error instead of an empty band nobody
- * notices, and `plain` and `hierarchy` say `return null` in their own arms
- * rather than falling off the end — both are the point of the change rather
- * than decoration, so both get an assertion.
+ * notices, and `plain` says `return null` in its own arm rather than falling
+ * off the end — both are the point of the change rather than decoration, so
+ * both get an assertion. Hierarchy was the second band-less arm until the mode
+ * retired on 2026-09-29.
  *
  * Same honest label as the blocks above: it reads source text. The typecheck is
  * the real gate for the `never`; this is here so somebody running the suite
@@ -396,11 +397,8 @@ describe("the band dispatch", () => {
     const body = reader.slice(at, reader.indexOf("\n  return (", at));
     expect(body).toMatch(/switch \(mode\) \{/);
     expect(body).toMatch(/const unhandled: never = mode;/);
-    /* And the two modes that deliberately have no band say so in their own case
-       rather than falling through to the default. Each is asked for separately,
-       because whether they share one arm or take two is a formatting choice and
-       this is not a test about formatting. */
+    /* And the one mode that deliberately has no band says so in its own case
+       rather than falling through to the default. */
     expect(body).toMatch(/case "plain":[\s\S]{0,60}return null;/);
-    expect(body).toMatch(/case "hierarchy":[\s\S]{0,60}return null;/);
   });
 });

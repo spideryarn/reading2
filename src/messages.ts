@@ -2888,7 +2888,7 @@ export const SIGN_IN_AGAIN = "Sign in again";
  * slice 1b: *"There is a glossary for this piece, but a shared link does not
  * carry it yet"*, and *"A shared link does not carry a glossary yet"* for when
  * a second request had failed and we did not know which of the two was true.
- * A shared link carries all four artefacts now, and there is no second request
+ * A shared link carries those four artefacts now, and there is no second request
  * to fail, so both were deleted with the `VisitorGap` members that produced
  * them — src/web/visitor.ts. A sentence with no cause is one that gets shown by
  * mistake.
@@ -3661,7 +3661,8 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  */
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, every zoom level, and the reading " +
-  "aids written for it — the summaries, the glossary, the ideas, the quotes. It also carries the " +
+  "aids written for it — including the summaries, glossary, ideas, quotes, timeline, trajectory, " +
+  "FAQ, citations and Debate. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
   "part of it.";
 
@@ -4196,16 +4197,13 @@ export const NEVER_SHARED = [
  */
 export const OWNER_MODE_NOTE: Record<Mode, string> = {
   plain: "The article on its own, with no panel open.",
-  /* **"where there are gists", on all three**, because a *provisional* tree has
+  /* **"where there are gists", here and on Structure**, because a *provisional* tree has
      none: it is carved from the author's own headings while the real one is
      still being written, and `publicTree` publishes that state on purpose so a
      visitor is not shown empty cells with no way to read them
      (src/public/dto.ts § `provisional`). A flat promise of a gist per section is
      a claim about an article that has finished ingesting, and these rows are
      shown about articles that have not. GPT Sol's review, 2026-09-02. */
-  hierarchy:
-    "The nested table of contents and the zoom levels — the headings, and the model's one-line " +
-    "gist for each section where there are gists.",
   summary: "The one-line gist written for each section, down the page, where there is one.",
   glossary:
     "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
@@ -4238,19 +4236,17 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   debate:
     "What we went looking for on the open web: replies to this piece, and the argument around " +
     "the claims it makes.",
-  /* **The same three words as `hierarchy` do the work here** — "where there
-     are gists" — for the reason that row carries them: a provisional tree has
-     none, and this row is read about articles that have not finished ingesting
-     (src/public/dto.ts § `provisional`).
+  /* **"where there are gists"**, for the reason the note above `summary`
+     gives: a provisional tree has none, and this row is read about articles
+     that have not finished ingesting (src/public/dto.ts § `provisional`).
 
-     "Those same" on purpose. This mode adds no content to what an owner is
-     about to publish; it is another arrangement of the two things the
-     Hierarchy row already named, and a row implying otherwise would over-state
-     what sharing hands over. Since 2026-09-10 it is also the nested list
+     It named "those same headings and gists" until 2026-09-29, pointing at the
+     Hierarchy row above it; that mode retired into this one, so this row says
+     what the content is itself. Since 2026-09-10 it is also the nested list
      Outline used to be, which is why it names both arrangements. */
   structure:
-    "Those same headings and gists, arranged as two linked columns or, on a narrow screen, one " +
-    "nested list — where there are gists.",
+    "The headings and the model's one-line gist for each section, arranged as two linked " +
+    "columns or, on a narrow screen, one nested list — where there are gists.",
   /* "The model found", because the list is its reading — a work cited only by
      name in running text is on it only if the model noticed it — while the
      links are not the model's: each is one the article gave, or a search that
@@ -4433,6 +4429,42 @@ export function debateClaimsUnverified(pages: number): string {
  * asked for.
  */
 export const DEBATE_CLAIMS_FOLLOW = "What follows takes up what it argues.";
+
+/**
+ * **A visitor's empty search, said without the count the owner is told.**
+ *
+ * The owner's two sentences above tell *came back with nothing* from *came back
+ * with pages we could not check*, off `returnedSources` — and that count is a
+ * fact about our search, which does not cross to a shared link (src/public-
+ * types.ts § `PublicDebateGroup`). Collapsing the two into the first would say
+ * something false in the common case, so a visitor gets one sentence that is
+ * true of both. Since 2026-09-29, plan 260929c stage 4.
+ */
+export const DEBATE_RESPONSES_NONE_SHARED =
+  "The search kept no page that responds to this piece by name — either it found none, or none it " +
+  "found could be checked against the words it returned.";
+
+/** …and the same for the search about what the piece claims. */
+export const DEBATE_CLAIMS_NONE_SHARED =
+  "The search kept nobody writing about what this piece claims — either it found no one, or " +
+  "nothing it found could be checked against the words it returned.";
+
+/**
+ * **Rows the shared link leaves out, said rather than silently missing** — the
+ * visitor's foot line, one per search that lost any. The public boundary drops
+ * a row whose source address carries a password or names a private machine,
+ * and a row whose words carry an address the boundary refused (src/public/
+ * dto.ts § `publicDebate`); `n` is computed there. 260905f § What is counted:
+ * a shorter list with no sentence is the failure this exists to prevent.
+ *
+ * `search` is the panel's own name for the search, so each sentence says which.
+ */
+export function debateWithheldOnSharedLink(search: string, n: number): string {
+  return (
+    `${search} kept ${n} more ${n === 1 ? "result that is" : "results that are"} not shown on a ` +
+    `shared link, because ${n === 1 ? "it names an address" : "they name addresses"} we do not publish.`
+  );
+}
 
 /**
  * **The order means nothing, said out loud.**

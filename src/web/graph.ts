@@ -372,7 +372,7 @@ export function buildGraph(
       blockId: n.node.range[0],
       depth: n.node.depth,
       number: n.number,
-      title: n.node.title,
+      title: n.title,
       ...(n.gist !== undefined && { gist: n.gist }),
       part: e.part,
       startRow: n.startRow,

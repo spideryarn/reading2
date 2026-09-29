@@ -96,11 +96,10 @@ const PRODUCERS = {
  * mode is navigation over the tree, so every row of it is already a door into a
  * passage rather than a claim about one, and a version that lit its own rows'
  * blocks in the prose would mark the whole article. Same position as `outline`
- * and `hierarchy` for the same reason.
+ * and `hierarchy` took, before each retired into it.
  */
 const SILENT: Mode[] = [
   "plain",
-  "hierarchy",
   "chat",
   "glossary",
   "summary",

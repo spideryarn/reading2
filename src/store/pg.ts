@@ -2290,10 +2290,9 @@ export function scalarInputsQuery(
  * **Which of this revision's artefacts were written for a reader profile.**
  *
  * `profileHash` is non-null exactly when one was used — `src/profile.ts` — and
- * only five artefacts can carry it (`sketch` was the fifth, and was missing from
- * this list for two hours on the afternoon it was written: the picture is drawn
- * for a profile like every other model call here, and an owner asking what would
- * go public was told about four of them). The tree and the arc deliberately do not
+ * the exhaustive set of artefacts that can carry it is derived below from
+ * `ArtifactMap` (`sketch` was once missing from the former hand-written list
+ * for two hours). The tree and the arc deliberately do not
  * vary by profile (docs/project/reader-profile.md: a reader-specific tree is one
  * that shifts under a reader who edits their box), and `fetch`, `extract` and
  * `blocks` have no model call to personalise. So this is exhaustive over the
@@ -2324,7 +2323,7 @@ export function scalarInputsQuery(
  *
  * `"profileHash" extends keyof T` rather than `T extends { profileHash?: … }`,
  * because the first asks the question and the second only appears to. The
- * structural form does return the same five today — checked, not assumed — but
+ * structural form does return the same set today — checked, not assumed — but
  * only because TypeScript refuses a type with *no* property in common with a
  * wholly-optional target. Give the probe one property these artefacts also
  * have and it collapses: `Tree extends { profileHash?: string | null }` is
@@ -2345,7 +2344,7 @@ function personalisedSteps(revision: {
   illustrated: Illustrated | null;
   trajectory: Trajectory | null;
 }): StepName[] {
-  /* `Record`, not `Partial<Record>`: a seventh artefact gaining a `profileHash`
+  /* `Record`, not `Partial<Record>`: another artefact gaining a `profileHash`
      has to fail here, at the compiler, rather than fall off the dialog. It has
      done its job once since — `quotes` joined on 2026-08-31. */
   const carriers: Record<ProfileCarrying, { profileHash?: string | null } | null> = {
@@ -2360,12 +2359,12 @@ function personalisedSteps(revision: {
        src/illustrated.ts. */
     illustrated: revision.illustrated,
     /* The seventh: the route is ordered for the reader's own profile, and its
-       stamp says whose. Owner-only in v1, like `illustrated`, and listed for
-       the same reason — an owner is owed the fact. */
+       stamp says whose. Its stored output is public but the stamp is not, and
+       an owner about to publish is owed the fact. */
     trajectory: revision.trajectory,
   };
   /* `Object.entries` rather than indexing `carriers` by `StepName`, because
-     the record is now exactly the five that can be personalised and a
+     the record is now exactly the artefacts that can be personalised and a
      `StepName` is not a key of it — which is the point. The filter over
      `STEP_ORDER` at the end is what keeps the dialog's order the page's. */
   const personalised = new Set<string>();
@@ -2380,13 +2379,13 @@ function personalisedSteps(revision: {
  *
  * The same question `src/store/public-reader.ts` answers by reading the column:
  * `publicArticle` spreads an artefact in when it is not null and never asks
- * whether it is current. So this is `!== null` five times, deliberately, and
+ * whether it is current. So this is one `!== null` per public artefact, deliberately, and
  * **not** `stages[].done` — which is `status === "done" && isCurrent(step)` a
  * few hundred lines below, and which calls a stale glossary absent while every
  * visitor is reading it. src/types.ts § PublicArtefacts says the same thing at
  * the type.
  *
- * `Record<keyof PublicArtefacts, …>` rather than an object literal, so a sixth
+ * `Record<keyof PublicArtefacts, …>` rather than an object literal, so another
  * artefact joining the public payload is a red compiler here rather than a row
  * missing from the owner's inventory.
  */
@@ -2398,6 +2397,10 @@ export function shareableArtefacts(revision: {
   quotes: Quotes | null;
   timeline: Timeline | null;
   sketch: Sketch | null;
+  trajectory: Trajectory | null;
+  faq: Faq | null;
+  citations: Citations | null;
+  debate: Debate | null;
 }): PublicArtefacts {
   const present: Record<keyof PublicArtefacts, object | null> = {
     arc: revision.arc,
@@ -2407,6 +2410,10 @@ export function shareableArtefacts(revision: {
     quotes: revision.quotes,
     timeline: revision.timeline,
     sketch: revision.sketch,
+    trajectory: revision.trajectory,
+    faq: revision.faq,
+    citations: revision.citations,
+    debate: revision.debate,
   };
   return {
     arc: present.arc !== null,
@@ -2416,6 +2423,10 @@ export function shareableArtefacts(revision: {
     quotes: present.quotes !== null,
     timeline: present.timeline !== null,
     sketch: present.sketch !== null,
+    trajectory: present.trajectory !== null,
+    faq: present.faq !== null,
+    citations: present.citations !== null,
+    debate: present.debate !== null,
   };
 }
 
@@ -3087,7 +3098,7 @@ const rawPgArticleReader: ArticleReader = {
       /* **Free, and that is why all three are here rather than behind a second
          endpoint.** `currentRevisionQuery` selects `articles` whole — the row
          `shelfFrom` above is reading — and `REVISION_PROJECTIONS.metadata`
-         already carries all five artefacts that can hold a `profileHash`, so
+         already carries every artefact that can hold a `profileHash`, so
          this costs no query, no projection change, and no widening of
          `REVISION_READ_POLICY`.
 
@@ -3116,6 +3127,10 @@ const rawPgArticleReader: ArticleReader = {
           quotes: revision.quotes as Quotes | null,
           timeline: revision.timeline as Timeline | null,
           sketch: revision.sketch as Sketch | null,
+          trajectory: revision.trajectory as Trajectory | null,
+          faq: revision.faq as Faq | null,
+          citations: revision.citations as Citations | null,
+          debate: revision.debate as Debate | null,
         }),
       },
     };

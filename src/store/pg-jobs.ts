@@ -37,7 +37,7 @@
  *
  * ## `23505` is an answer, not an error — but never a *name*
  *
- * Four partial unique indexes in src/db/schema.ts arbitrate an article's queue,
+ * Three partial unique indexes in src/db/schema.ts arbitrate an article's queue,
  * and `enqueueOrGet` inserts against all of them with `on conflict do nothing`:
  * a conflict is an ordinary outcome, because an index doing its job is not an
  * exception.
@@ -57,12 +57,14 @@
  * more, and a `catch` that still named one of *those* would be dead code reading
  * as a live guard.
  *
- * **One name is caught, and `claimIn` says why at length.**
- * `jobs_one_running_per_slug` is the article's running mutex, and a claim that
- * violates it means *somebody else is inside this article* — which is `busy`,
- * not a 500. The read above it is what normally answers; the `catch` is there
- * for a claimant that does not take the `queue_state` lock, and it is written
- * down as unreachable-today rather than presented as a live guard.
+ * **And the third has gone the same way.** `jobs_one_running_per_slug` was the
+ * article's running mutex — one `running` row per slug — and `claimIn` caught
+ * its `23505` as `busy`, written down as unreachable. On 2026-09-29 mode jobs
+ * that make different columns started running side by side on one article, and
+ * a unique index cannot say *unless compatible*, so it was dropped and the
+ * catch with it. The rule is `blockedByAnother`'s locked read and
+ * `mayOverlap` (src/sharing-steps.ts).
+ * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md.
  */
 
 import {
@@ -82,7 +84,7 @@ import {
 } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
+import { guardDbStore, lockUnavailable } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
 import { ownedSlug } from "./owned-slug.js";
@@ -101,6 +103,7 @@ import {
 import { articles, jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
+import { mayOverlap, type JobShape } from "../sharing-steps.js";
 import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
 import {
   ACTIVE,
@@ -735,43 +738,74 @@ async function tryEnqueue(
 }
 
 /**
- * Is another job in the way on this article — **older, or already running**?
+ * Is another job in the way on this article — **older, or already running,
+ * and not one it may overlap**?
  *
- * Two conditions, and the second is not a refinement of the first.
+ * Two conditions pick the candidates, and the second is not a refinement of
+ * the first.
  *
  * **Older** is the order rule: the article's line is `(created_at, id)`, and a
  * job may not step in front of one that was asked for first.
  *
- * **Running at all** is the mutex, asked here rather than left to the index. A
- * job whose row commits *after* a newer one has already claimed the slug has no
- * predecessor — nothing on the article is older than it — so the order rule
- * alone waves it through, and its `UPDATE` then collides with
- * `jobs_one_running_per_slug`. That is a `23505` where the contract says
- * `busy`: a 500 on the reader's request, and a pump that logs a thrown
- * exception and exits. The late commit is still deliberately **not** FIFO — an
- * older row arriving late does not get to displace a job already inside the
- * article — it simply waits its turn like everything else. GPT Sol, reviewing
- * the built stage 1, finding 2; `claimIn` carries the backstop for the window
- * between this read and that write.
+ * **Running at all** is the mutex. A job whose row commits *after* a newer one
+ * has already claimed the slug has no predecessor — nothing on the article is
+ * older than it — so the order rule alone waves it through. The late commit is
+ * still deliberately **not** FIFO — an older row arriving late does not get to
+ * displace a job already inside the article — it simply waits its turn like
+ * everything else. GPT Sol, reviewing the built stage 1, finding 2.
  *
- * One statement, and the row's own `(created_at, id)` is read inside it rather
- * than passed in as a parameter. That is not tidiness: `created_at` is a
- * `timestamptz` with microsecond resolution, and a JavaScript `Date` carries
- * milliseconds — so a round trip through the caller would round this job's own
- * timestamp *down* and let it step in front of a predecessor it shares a
- * millisecond with. Two claimants would then each believe they were first.
+ * **Then each candidate is let off if the two may overlap** — `mayOverlap` in
+ * src/sharing-steps.ts, since 2026-09-29: two mode jobs that make different
+ * columns and read nothing the other makes run side by side, and anything else
+ * (an ingest, a re-extraction, `hierarchy`, `labels`, a reset, Trajectory
+ * behind the Quotes it routes through) waits exactly as before.
+ * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md. FIFO is kept
+ * for every pair that may not overlap, so a mode job newer than a queued
+ * re-extraction still waits behind it rather than jumping it.
+ *
+ * **This read is now the whole of the mechanism.** `jobs_one_running_per_slug`
+ * used to stand behind it as a unique index, and it went in the same change —
+ * a unique index cannot say *unless compatible*. What makes the read exact is
+ * that every transition into `running` takes the `queue_state` lock first
+ * (`claim`), so nothing can claim between this read and the `UPDATE`.
+ *
+ * The ordering comparison stays **in the statement**, with the row's own
+ * `(created_at, id)` read inside it rather than passed in as a parameter. That
+ * is not tidiness: `created_at` is a `timestamptz` with microsecond resolution,
+ * and a JavaScript `Date` carries milliseconds — so a round trip through the
+ * caller would round this job's own timestamp *down* and let it step in front
+ * of a predecessor it shares a millisecond with. Two claimants would then each
+ * believe they were first. Only the overlap decision, which is about steps and
+ * not about time, comes up into TypeScript.
  *
  * Row-wise `<` rather than `created_at < … or (= and id <)`, because they are
  * the same comparison and only one of them can be got wrong. `jobs_slug_order`
  * is the index it reads.
  *
- * `other.id <> mine.id` is load-bearing and was not before: the row-wise
- * comparison excluded this job from itself, and `other.status = 'running'` does
- * not.
+ * `other.id <> mine.id` is load-bearing: the row-wise comparison excluded this
+ * job from itself, and `other.status = 'running'` does not.
  */
 async function blockedByAnother(tx: Tx, id: string): Promise<boolean> {
-  const ahead = await tx.execute(sql`
-    select 1
+  const candidates = await tx.execute<{
+    id: string;
+    steps: JobStep[];
+    reset: boolean;
+    reserves_name: boolean;
+    status: string;
+    ahead: boolean;
+    my_steps: JobStep[];
+    my_reset: boolean;
+    my_reserves_name: boolean;
+  }>(sql`
+    select other.id,
+           other.steps,
+           other.reset is not null as reset,
+           other.reserves_name,
+           other.status,
+           (other.created_at, other.id) < (mine.created_at, mine.id) as ahead,
+           mine.steps as my_steps,
+           mine.reset is not null as my_reset,
+           mine.reserves_name as my_reserves_name
       from ${jobs} as other, ${jobs} as mine
      where mine.id = ${id}
        and other.slug = mine.slug
@@ -779,9 +813,19 @@ async function blockedByAnother(tx: Tx, id: string): Promise<boolean> {
        and other.status in ('queued', 'running')
        and (other.status = 'running'
             or (other.created_at, other.id) < (mine.created_at, mine.id))
-     limit 1
   `);
-  return ahead.rowCount === 1;
+  const shape = (steps: JobStep[], reset: boolean, reservesName: boolean): JobShape => ({
+    steps: steps.map((step) => step.name),
+    reset,
+    reservesName,
+  });
+  return candidates.rows.some(
+    (other) =>
+      !mayOverlap(
+        shape(other.my_steps, other.my_reset, other.my_reserves_name),
+        shape(other.steps, other.reset, other.reserves_name),
+      ),
+  );
 }
 
 /**
@@ -800,9 +844,17 @@ async function claimIn(
   attempt: string,
   leaseMs: number,
 ): Promise<ClaimOutcome> {
-    let taken: Row[];
-    try {
-      taken = await tx
+    /* **No `catch` on a constraint name here any more, and its absence is the
+       thing to notice.** Until 2026-09-29 this statement was wrapped in one that
+       turned a `23505` on `jobs_one_running_per_slug` — the article's running
+       mutex — into `busy`, written down as unreachable because every claimant
+       takes the `queue_state` lock before `blockedByAnother` and this `UPDATE`.
+       The index went when compatible mode jobs started sharing an article (a
+       unique index cannot say *unless compatible*; drizzle/20260929052845_drop_jobs_one_running_per_slug.sql),
+       and a `catch` still naming it would be dead code reading as a live guard —
+       the header of this file's argument. The locked read is the whole rule now.
+       docs/plans/260929c-modes-generate-in-parallel-on-one-article.md. */
+    const taken: Row[] = await tx
         .update(jobs)
         .set({
           status: "running",
@@ -837,36 +889,6 @@ async function claimIn(
           ),
         )
         .returning();
-    } catch (err) {
-      /* **The backstop, and it should not be reachable today.** Said plainly,
-         because the header of this file argues that a `catch` on a constraint
-         name is dead code reading as a live guard, and this is the exception it
-         is worth making. `blockedByAnother` above is a read and this is the
-         write — but every transition into `running` takes the `queue_state`
-         singleton first, so no other claimant can be between them, and the read
-         is what actually answers `busy`. What this covers is a claimant that
-         does *not* take that lock: an older build mid-deploy, a script, or the
-         next change to this function. An article's running mutex refusing a
-         second runner is an index doing its job, which the header says is an
-         answer rather than an error — so the failure mode it removes is a 500
-         on a request whose contract says *wait*.
-
-         **By name, and only this name.** The `UPDATE` can violate exactly one
-         unique index — `jobs_one_running_per_slug` is the only one of the four
-         over `status = 'running'` — so reading a name here is safe in the way
-         `enqueueOrGet` deliberately is not (src/store/db-errors.ts §
-         `violatesConstraint`). Anything else rethrows.
-
-         **No `jobs_only_one_running` branch, and its absence is still the thing
-         to notice.** That index was the whole of the *global* guarantee and a
-         `23505` here was an ordinary answer for it too; it is gone
-         (drizzle/0032_jobs_concurrency_cap.sql) and the cap is counted by the
-         caller inside the queue_state lock. */
-      if (violatesConstraint(err, "jobs_one_running_per_slug")) {
-        return { kind: "busy", why: "another job on this article is ahead of it" };
-      }
-      throw err;
-    }
     if (taken[0]) return { kind: "claimed", job: toJob(taken[0]) };
 
     /* Nothing moved, and the four reasons are four different things for the
@@ -1069,7 +1091,7 @@ const rawPgJobStore: JobStore = {
   /**
    * One insert, and the indexes are the arbitration.
    *
-   * `on conflict do nothing` over all four of them, then a read that says which
+   * `on conflict do nothing` over all three of them, then a read that says which
    * of three things is in the way — see `EnqueueOutcome`, and `tryEnqueue` for
    * why the classification is a re-read rather than the constraint name.
    */
@@ -2273,13 +2295,16 @@ function fence(id: string, attempt: string) {
  * that is a red build rather than a note — the reason src/jobs.ts selected its
  * own store in the first place. Guarding at the export satisfies both.
  *
- * **`claim` is unaffected, and that ordering is the point.** It catches its own
- * `23505` and asks `violatesConstraint` about the constraint *name* inside the
- * method, so the classification happens before the promise ever reaches this
- * wrapper. Had it been written to let the error escape and be classified by the
- * caller, this line would have silently turned every `jobs_only_one_running`
- * into a 500. GPT Sol checked that ordering, 2026-08-27; it is worth re-checking
- * before moving any error handling out of a store method.
+ * **`claim` is unaffected, and that ordering is the point.** It used to catch
+ * its own `23505` and ask `violatesConstraint` about the constraint *name*
+ * inside the method, so the classification happened before the promise ever
+ * reached this wrapper. Had it been written to let the error escape and be
+ * classified by the caller, this line would have silently turned every
+ * `jobs_only_one_running` into a 500. GPT Sol checked that ordering,
+ * 2026-08-27; it is worth re-checking before moving any error handling out of a
+ * store method. (Since 2026-09-29 `claim` catches no constraint at all — the
+ * last index it could violate, `jobs_one_running_per_slug`, is gone and its
+ * rule is the locked read in `blockedByAnother`.)
  *
  * `StaleAttemptError` crosses this boundary intact, by name, on the allowlist in
  * db-errors.ts — src/jobs.ts answers *busy* on `instanceof` and a scrubbed copy

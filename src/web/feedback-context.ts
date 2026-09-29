@@ -62,7 +62,9 @@ export interface FeedbackArticleContext {
   revisionId: string | null;
   view: ArticleView;
   mode: Mode;
-  /** How many gist columns are open — the granularity level. */
+  /** How many gist columns were open — the granularity level. Always `null`
+      since the gist columns went with the Hierarchy mode on 2026-09-29; kept so
+      the payload's shape does not change. */
   level: number | null;
   blockCount: number | null;
   /** The article's first block, from the tree's root node range. */

@@ -116,10 +116,12 @@ export interface OutlineProjection {
  * neither. Without the fallback the first draws a blank row; without the null
  * the second draws one whatever we do. Nothing errors either way.
  */
-function rowText(node: TreeNode): string | null {
-  const title = node.title?.trim();
+function rowText(entry: SummaryNode): string | null {
+  /* `SummaryNode.title`, not the node's: the article's own "3.2" taken off,
+     since ours is drawn beside it (tree.ts; SPIDERYARN-READING2-4Q). */
+  const title = entry.title?.trim();
   if (title) return title;
-  const nav = node.navLabel?.trim();
+  const nav = entry.node.navLabel?.trim();
   if (nav) return nav;
   return null;
 }
@@ -203,7 +205,7 @@ export function outlineProjection({
     level: number,
     extra: { sentence?: string; arc?: string } = {},
   ): OutlineRow | null => {
-    const text = rowText(entry.node);
+    const text = rowText(entry);
     /* No text of any kind — no row. Never a blank one: an empty line in a list
        whose whole promise is "this is the shape of the document" is a hole
        nothing reports. */

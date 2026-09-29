@@ -99,3 +99,32 @@ describe("the footer", () => {
     expect(animHost?.className).toContain("spya-anim");
   });
 });
+
+/**
+ * **The full set, not only the spider.** Greg, 2026-09-29: *"The contact page
+ * has all the lovely logo+sitename animations, but the other pages don't."*
+ * The difference was markup: `HomeLogo`'s name is ten `.logo-letter` spans and
+ * `Wordmark`'s was plain text, so `lettersDrawn` said no and only the six
+ * spider animations were offered. Each host must hold the ten letters, as the
+ * only children of their wrapper (the stagger is `:nth-child`).
+ * docs/plans/260929c-….
+ */
+describe("the letters", () => {
+  function letters(el: Element | null | undefined): Element[] {
+    return [...(el?.querySelectorAll(".logo-letter") ?? [])];
+  }
+
+  it("the top bar's host holds the ten letters of the name", () => {
+    act(() => root.render(<SiteNav here="home" signedIn={false} />));
+    const home = host.querySelector('a[aria-label="Spideryarn Reading, home"]');
+    const ls = letters(home);
+    expect(ls.map((l) => l.textContent).join("")).toBe("Spideryarn");
+    expect(ls[0]?.parentElement?.children.length).toBe(10);
+  });
+
+  it("the footer's host holds them too", () => {
+    act(() => root.render(<SiteFooter here="library" />));
+    const animHost = host.querySelector("footer .site-wordmark-host");
+    expect(letters(animHost).map((l) => l.textContent).join("")).toBe("Spideryarn");
+  });
+});

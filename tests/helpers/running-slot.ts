@@ -34,9 +34,9 @@
  * after.
  *
  * Nor is that only a `queued`-versus-`queued` problem: `jobs_one_running_per_slug`
- * covers `running` rows only, so a *queued* insert never conflicts with a running
- * holder either. Waiting on any of the four names, however carefully spelled,
- * would have caught neither.
+ * covered `running` rows only, so a *queued* insert never conflicted with a
+ * running holder either (and since 2026-09-29 that index is gone). Waiting on
+ * any of the names, however carefully spelled, would have caught neither.
  *
  * So it waits on **the thing the suites actually need — this article has no job
  * queued or running** — which is a property of the table rather than of whichever
@@ -52,7 +52,7 @@
  *
  * The look and the insert are two statements, and anything outside this test run
  * can land between them. Whichever of the queue's unique indexes then refuses is
- * contention rather than a bug, so all four are waited out. A name missing from
+ * contention rather than a bug, so all three are waited out. A name missing from
  * `CONTENDED` is a suite failing with `duplicate key` and pointing at itself.
  *
  * ## Why a lock as well as this
@@ -89,7 +89,12 @@ const ATTEMPTS = 40;
 const GAP_MS = 500;
 
 /**
- * The unique indexes that arbitrate an article's queue, all four of them.
+ * The unique indexes that arbitrate an article's queue, all three of them.
+ *
+ * `jobs_one_running_per_slug` was a fourth until 2026-09-29, when it was
+ * dropped so that compatible mode jobs could share an article. An index that no
+ * longer exists raises nothing, so it left this list — a name nothing can match
+ * would read as coverage.
  *
  * A `23505` naming one of these is another claimant getting to the row first,
  * which is an ordinary outcome and not this suite's bug. Any other duplicate key
@@ -100,7 +105,6 @@ const GAP_MS = 500;
  * for; if one is renamed there, this list is the other place it is written down.
  */
 const CONTENDED = [
-  "jobs_one_running_per_slug",
   "jobs_reserved_slug",
   "jobs_active_work",
   "jobs_active_source",

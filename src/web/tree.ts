@@ -15,6 +15,7 @@
  */
 import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 import { isSupplementNode, supplementIndex } from "../supplement.js";
+import { withoutOwnNumber } from "./heading-number.js";
 
 export interface Cell {
   node: TreeNode;
@@ -30,10 +31,6 @@ export interface Geometry {
   leafDepth: number;
   /** cells[columnIndex] → the cells in that column, in document order. */
   cells: Cell[][];
-  /** cells keyed by "depth:rowIndex" for the row where each cell starts. */
-  cellAt: Map<string, Cell>;
-  /** Root-to-leaf node ids for each row index. */
-  chains: NodeId[][];
   /**
    * Node id → the supplement node it sits under, itself included. Empty for
    * every article with no apparatus, and for every tree written before
@@ -84,8 +81,8 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
   // Columns run from 0 (one cell: the whole article) to maxDepth (the leaves).
   // Depth 0 earns a column because otherwise the coarsest thing on screen is
   // the parts list, and there is no single place that says what the piece is.
-  // The leaf column carries navLabels rather than gists, so it is only shown in
-  // outline mode — see TableView.
+  // (The columns were drawn as a table until 2026-09-29; the cells are still
+  // what the spine, Structure and the arrow keys step through.)
   /* **The ladder is the argument's, not the article's.** A supplement is depth
      one with its leaves at depth two, so an article whose body tree is only
      parts-deep gained a whole rung it does not have: an L2 gist column whose
@@ -104,7 +101,6 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
   const columnDepths = Array.from({ length: maxDepth + 1 }, (_, i) => i);
 
   const cells: Cell[][] = [];
-  const cellAt = new Map<string, Cell>();
 
   for (const depth of columnDepths) {
     const column: Cell[] = [];
@@ -128,7 +124,6 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
       if (node) {
         const cell: Cell = { node, rowSpan: end - row, continuation };
         column.push(cell);
-        cellAt.set(`${depth}:${row}`, cell);
       }
       row = end;
     }
@@ -139,8 +134,6 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     columnDepths,
     leafDepth: maxDepth,
     cells,
-    cellAt,
-    chains,
     supplementOf: apparatus,
   };
 }
@@ -205,80 +198,6 @@ export function navigableItems(
     row += cell.rowSpan;
   }
   return out;
-}
-
-/**
- * **Human label for a column — the only one there is, since 2026-09-05.**
- *
- * There were two of these. `columnPill` wore `L1`, `L2` and `Para` in the
- * controls bar and this one wore `Parts`, `Sections` and `Paragraphs` over the
- * columns themselves, and the numbers were defended on the grounds that
- * *"`Parts` and `Sections` are exactly what a depth of 1 and 2 mean here, and
- * both the column header and the tooltip say so"*. Stage 3 of
- * docs/plans/260905d-declutter-the-reading-view-top-bars.md took the header
- * row's height away, and a touch reader cannot open a tooltip — so both legs of
- * that argument went at once and the pills took the full words instead. It cost
- * roughly 90px of a row that shed well over 300.
- *
- * A depth number said where a column sits in the tree rather than what is in
- * it, which is the objection Greg raised against `L0` and `L3` on 2026-08-27
- * and which applied to the middle rungs all along.
- *
- * **`Paragraphs` is tested before the depth**, so it is right at whatever depth
- * the leaves happen to be — a two-deep article's leaves are at 2 and a
- * five-deep article's at 5, and the pill this replaced read `L{leafDepth}` and
- * so said something different on each.
- *
- * **Depth 0 kept its name and lost its column.** It read "Argument" whenever
- * the arc had been generated and "Article" otherwise, which is the `hasArc`
- * argument that went on 2026-09-05 along with the L0 column itself
- * (layout.ts § `offerableGists`). Nothing offers depth 0 now, so the branch is
- * one word again — and it is the true one: the root of the tree is the whole
- * article. Left here rather than deleted because the depth still exists in
- * every tree and `?cols=0` still parses; a label that lied would be worse than
- * one nothing currently asks for.
- */
-export function columnLabel(depth: number, leafDepth: number): string {
-  if (depth === leafDepth) return "Paragraphs";
-  switch (depth) {
-    case 0: return "Article";
-    case 1: return "Parts";
-    case 2: return "Sections";
-    default: return `Level ${depth}`;
-  }
-}
-
-/**
- * The tooltip on that pill: the column's full name, and what one of its cells
- * actually holds.
- *
- * A four-character pill can only ever be a reminder, so the sentence behind it
- * has to do the teaching — and it is the only place the reader is told what
- * separates one column from the next, which is not the depth number but the
- * *stride*: a cell per part, a cell per section, a cell per paragraph.
- *
- * Built from `columnLabel` rather than repeating it, so a column renamed there
- * is renamed here too. Note the label goes in lower-case mid-sentence, which is
- * why every one of them is a bare noun — a label carrying its own article
- * ("The argument", which is what depth 0 returned from 2026-08-26 until the
- * pills were named) made this read "the the argument column".
- */
-export function columnHint(depth: number, leafDepth: number): string {
-  return `Show or hide the ${columnLabel(depth, leafDepth).toLowerCase()} column — ${
-    columnStride(depth, leafDepth)
-  }`;
-}
-
-/** What one cell of a column covers — the half of `columnHint` that varies. */
-function columnStride(depth: number, leafDepth: number): string {
-  if (depth === leafDepth) return "one line per paragraph, beside the full text";
-  // Depth 0 is no longer offered as a column (columnLabel above); this is what
-  // it always said when the arc had not been generated, and the arc's own
-  // wording went with the column.
-  if (depth === 0) return "the whole piece in one sentence";
-  if (depth === 1) return "one sentence per part";
-  if (depth === 2) return "one sentence per section";
-  return "one sentence per group at this depth";
 }
 
 /* -------------------------------------------------------------- the arc --
@@ -468,6 +387,14 @@ export interface SummaryNode {
   node: TreeNode;
   /** "2.3" — the reader's address for this section, and its indent level. */
   number: string;
+  /**
+   * The title to draw beside `number`: `node.title` with the article's own
+   * section number taken off, so "3.2 Methods" is not drawn as "2.1 3.2
+   * Methods". Only where `number` is non-empty — the root and the apparatus
+   * wear no number of ours and keep their words. The stored tree is untouched.
+   * heading-number.ts; SPIDERYARN-READING2-4Q.
+   */
+  title: string;
   /** Row indices into `blocks`, inclusive at both ends. */
   startRow: number;
   endRow: number;
@@ -551,6 +478,7 @@ export function buildSummaryTree(
     return {
       node,
       number,
+      title: number ? withoutOwnNumber(node.title) : node.title,
       startRow,
       endRow,
       blocks: endRow - startRow + 1,

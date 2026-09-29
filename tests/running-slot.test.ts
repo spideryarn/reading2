@@ -77,8 +77,8 @@ describe("waiting out a contended job insert", () => {
   it("tries again when the insert is refused, and returns what the insert returned", async () => {
     const insert = vi
       .fn()
-      .mockRejectedValueOnce(duplicateKey("jobs_one_running_per_slug"))
-      .mockRejectedValueOnce(duplicateKey("jobs_one_running_per_slug"))
+      .mockRejectedValueOnce(duplicateKey("jobs_active_work"))
+      .mockRejectedValueOnce(duplicateKey("jobs_active_work"))
       .mockResolvedValue({ id: "spya-ok" });
 
     expect(await insertWhenSlotFree("writes", insert, FAST)).toEqual({ id: "spya-ok" });
@@ -91,12 +91,16 @@ describe("waiting out a contended job insert", () => {
    *
    * That check reads the table and then the insert runs, and anything outside
    * this test run — a dev server mid-ingest, a second `npm test` — may land in
-   * between. Whichever of the four then refuses is contention and not a bug, so
-   * all four have to be waited out; a name missing from the helper's list is a
+   * between. Whichever of the three then refuses is contention and not a bug, so
+   * all three have to be waited out; a name missing from the helper's list is a
    * suite failing with `duplicate key` and pointing at itself.
+   *
+   * There were four until 2026-09-29, when `jobs_one_running_per_slug` was
+   * dropped (compatible mode jobs now share an article, and a unique index
+   * cannot say *unless compatible*). An index that no longer exists cannot
+   * raise, so it left the list rather than staying as a name nothing can match.
    */
   it.each([
-    "jobs_one_running_per_slug",
     "jobs_reserved_slug",
     "jobs_active_work",
     "jobs_active_source",
@@ -118,7 +122,7 @@ describe("waiting out a contended job insert", () => {
     const insert = async () => {
       const id = `spya-${++n}`;
       ids.push(id);
-      if (n < 3) throw duplicateKey("jobs_one_running_per_slug");
+      if (n < 3) throw duplicateKey("jobs_active_work");
       return id;
     };
 
@@ -156,7 +160,7 @@ describe("waiting out a contended job insert", () => {
     /* Without this, deleting the `setTimeout` leaves a tight retry loop that
        hammers the database and every case above still passes. */
     vi.useFakeTimers();
-    const insert = vi.fn().mockRejectedValue(duplicateKey("jobs_one_running_per_slug"));
+    const insert = vi.fn().mockRejectedValue(duplicateKey("jobs_active_work"));
     const settled = vi.fn();
     void insertWhenSlotFree("writes", insert, {
       attempts: 3,
@@ -179,7 +183,7 @@ describe("waiting out a contended job insert", () => {
     /* Every other case here passes `FAST`, so the numbers a real caller gets
        were untested: `ATTEMPTS = 1` would have left the file green. */
     vi.useFakeTimers();
-    const insert = vi.fn().mockRejectedValue(duplicateKey("jobs_one_running_per_slug"));
+    const insert = vi.fn().mockRejectedValue(duplicateKey("jobs_active_work"));
     const caught = vi.fn();
     void insertWhenSlotFree("writes", insert, { articleIsBusy: IDLE }).catch(caught);
 
@@ -194,7 +198,7 @@ describe("waiting out a contended job insert", () => {
   });
 
   it("gives up saying a row may be wedged, because waiting cannot clear that", async () => {
-    const insert = vi.fn().mockRejectedValue(duplicateKey("jobs_one_running_per_slug"));
+    const insert = vi.fn().mockRejectedValue(duplicateKey("jobs_active_work"));
 
     await expect(insertWhenSlotFree("writes", insert, FAST)).rejects.toThrow(
       /could not start a job for "writes".*wedged/s,
@@ -314,10 +318,13 @@ describe("the wait itself, against a real database", () => {
    * contending insert succeeds and nothing waits. Watched red before the helper
    * was rewritten — the second row landed immediately, alongside the first.
    *
-   * A *running* holder still trips `jobs_one_running_per_slug`, so it is the
-   * half that goes on working through the constraint. Both are here because
-   * "which of the two does the waiting" is exactly the thing that changed, and
-   * a test naming only one of them would have been green over the other.
+   * A *running* holder is the other half. This said it "still trips
+   * `jobs_one_running_per_slug`", which was never true of a *queued* insert —
+   * that index covered `running` rows only — and since 2026-09-29 the index is
+   * gone altogether. So both halves are held by the look before the insert and
+   * by nothing else. Both are here because "which of the two does the waiting"
+   * is exactly the thing that changed, and a test naming only one of them would
+   * have been green over the other.
    */
   it.each(["queued", "running"] as const)(
     "does not insert while a %s job holds the article, and does the moment it settles",

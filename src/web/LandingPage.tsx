@@ -162,20 +162,12 @@ export function LandingPage() {
           card comes to you.
         </Showcase>
 
-        {/* Greg, 2026-08-24, the granularity-zoom brief, compressed; and
-            2026-08-25, "I also always want to be able to see the full text". */}
-        <Showcase shot={SHOTS.zoom} eyebrow="Zoom" title="Every level of detail at once.">
-          Scroll right for more detail, down to progress through the article. Scan quickly to get a
-          sense of the landscape, or burrow deeply — and the full text is always there beside it.
-        </Showcase>
-
         {/* Greg, 2025-07-14, on the highlighting feature, lightly trimmed; the
             last sentence is a product fact from docs/project/search.md. */}
         <Showcase
           shot={SHOTS.meaning}
           eyebrow="Search by meaning"
           title="Find by concepts and meaning, rather than exact match"
-          offset
         >
           Type in basically anything — a word, a phrase, a description — and it highlights the areas
           of the text that are relevant. It leaves you as the arbiter of whether something is worth

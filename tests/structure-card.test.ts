@@ -56,6 +56,7 @@ function node(opts: {
   const summary: SummaryNode = {
     node: tree,
     number: opts.number,
+    title: opts.title,
     startRow: opts.startRow,
     endRow: opts.endRow,
     blocks: opts.endRow - opts.startRow + 1,
@@ -77,6 +78,7 @@ function root(children: SummaryNode[]): SummaryNode {
       title: "A piece",
     },
     number: "",
+    title: "A piece",
     startRow: 0,
     endRow: 999,
     blocks: 1000,

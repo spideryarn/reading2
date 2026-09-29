@@ -1,7 +1,8 @@
 # Hierarchy
 
-Pipeline stage 4 — `hierarchy`, `npm run hierarchy -- <slug> [--force]`. Builds the nested structure that the Hierarchy
-sidebar and the [granularity zoom](granularity-zoom.md) view both render. Read
+Pipeline stage 4 — `hierarchy`, `npm run hierarchy -- <slug> [--force]`. Builds the nested structure that Structure,
+Summary, the Spine and the rest render. (The step keeps its name; the Hierarchy *mode* — gist columns
+beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
@@ -106,7 +107,7 @@ interface TreeNode {
   range: [BlockId, BlockId];   // inclusive; children exactly partition it
   title: string;               // 2–6 words. Internal nodes.
   gist?: string;               // ONE sentence, stage 5. Never on leaves.
-  navLabel?: string;           // leaves only — the Hierarchy row's text
+  navLabel?: string;           // leaves only — the paragraph row's text (Structure, Spine)
   summary?: string;
   sourceHeading?: string;
 }
@@ -504,7 +505,7 @@ each other, a silently dropped paragraph would be undetectable.
 **Selectivity lives in `navLabel`, not in the ranges.** A leaf that should not appear in the sidebar
 simply carries no `navLabel`. [`hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts) emits a row only for
 nodes that have a label, so an unlabelled leaf is tiled by the tree, rendered verbatim in the
-reading view, addressable by its id — and invisible in Hierarchy. Nothing is lost; nothing is
+reading view, addressable by its id — and invisible in Structure's paragraph rows. Nothing is lost; nothing is
 duplicated.
 
 **Never labelled:** any block `isStructural` says no to — `src/block-policy.ts`, which is
@@ -532,7 +533,7 @@ block `isStructural` refuses fails the tree.
 
 > [!NOTE]
 > Two of the five captions are substantial — `Figure 2` runs to 94 words and `Figure 4` to 36,
-> and both explain a diagram rather than merely name it. We accepted losing them from Hierarchy
+> and both explain a diagram rather than merely name it. We accepted losing them from the paragraph rows
 > anyway, on the grounds that a caption belongs to its image and not to the argument: a reader who
 > wants it descends to the figure. This is a deliberate trade, not an oversight, and it is a
 > reasonable thing to revisit if the sidebar feels like it is hiding content.

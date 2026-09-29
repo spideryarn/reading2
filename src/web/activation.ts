@@ -3,10 +3,10 @@
  * are in a position to know it, and read by the panel that is about to decide
  * whether to spend a model call.
  *
- * **Twelve controls start a paid run on their own**, between them arming
- * **eleven** targets — the two numbers differ because Diagram's bar button and
+ * **Fourteen controls start a paid run on their own**, between them arming
+ * **thirteen** targets — the two numbers differ because Diagram's bar button and
  * its Sketch chip are two gestures that arm the same picture. The controls: the
- * Glossary, Ideas, Quotes, Timeline, Debate, Citations and Diagram buttons in
+ * Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram buttons in
  * the bar; the Sketch and Illustrated chips inside Diagram; the Quiz half of
  * Remember; and the Claims and Candidates chips inside Referee. The bar's Tweets
  * link was one of them from 2026-09-06 to 2026-09-15, when the thread page began
@@ -246,7 +246,6 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   /* Free: no model call behind any of them, because the tree they read is
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
-  hierarchy: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   summary: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
 
@@ -420,7 +419,7 @@ export function armActivation(slug: string, target: AutoRunTarget): void {
 
 /**
  * **A press on one of the bottom bar's mode buttons**, whatever that mode turns
- * out to arm — which, for eight of the fourteen, is nothing.
+ * out to arm — which, for eight of the seventeen, is nothing.
  *
  * The `switch` is exhaustive and ends on a `never`, so a fourth variant cannot
  * be added to `ModeActivation` without a branch here. And because the table is

@@ -417,27 +417,16 @@ function propsFor(
     navLabelStatus: "ready",
   };
   const geometry = buildGeometry(article.tree, article.blocks);
-  const gistDepths = geometry.columnDepths.filter((d) => d < geometry.leafDepth);
-  const fit = fitView({
-    windowWidth: 1400,
-    gistDepths,
-    leafDepth: geometry.leafDepth,
-    showText: true,
-    chosen: null,
-  });
+  const fit = fitView({ windowWidth: 1400 });
   return {
     article,
     geometry,
-    columns: fit.columns,
     layout: fit,
-    showText: true,
     comments: [],
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
     openChat: null,
-    sections: [],
-    layoutKey: "test",
     ...over,
   };
 }

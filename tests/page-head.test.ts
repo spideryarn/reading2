@@ -571,13 +571,13 @@ describe("the one title rule, applied by both sides", () => {
        `DEFAULT_MODE` rather than the literal it used to be. This said
        `"hierarchy"` until 2026-08-31, when the default moved to `plain` and the
        assertion started failing for the right reason — the omitted mode is
-       whichever one is the default, not that particular one. Hierarchy is now
-       named like any other, which is what the second half asserts. */
+       whichever one is the default, not that particular one. Any other mode is
+       named, which is what the second half asserts. */
     expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), DEFAULT_MODE)).title).toBe(
       "A shared piece · Spideryarn",
     );
-    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "hierarchy")).title).toBe(
-      "A shared piece · Hierarchy · Spideryarn",
+    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "structure")).title).toBe(
+      "A shared piece · Structure · Spideryarn",
     );
     expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "glossary")).title).toBe(
       "A shared piece · Glossary · Spideryarn",

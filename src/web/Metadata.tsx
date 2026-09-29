@@ -253,7 +253,7 @@ import type {
   Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
-/* The ten steps this page will re-run, from a leaf rather than from
+/* The steps this page will re-run, from a leaf rather than from
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
@@ -473,7 +473,7 @@ export function Metadata({
   const [provenanceOffline, setProvenanceOffline] = useState(false);
   const [slow, setSlow] = useState(false);
   /**
-   * **On `useOrderedRead`, because ten rows below can now ask for this again.**
+   * **On `useOrderedRead`, because a dozen rows below can now ask for this again.**
    *
    * This was a bare `useEffect` with a `live` flag until 2026-09-07, which is
    * exactly right for a page that reads once and never again — and *Generate it
@@ -1241,7 +1241,7 @@ function SharingSection({
 }
 
 /**
- * **Re-run AI processing** — the ten things this page will ask for again, and,
+ * **Re-run AI processing** — the things this page will ask for again, and,
  * behind the experimental switch, starting the whole article again.
  *
  * One section since 2026-09-29, when Greg asked for *Generate it again* and
@@ -1262,7 +1262,7 @@ function SharingSection({
  *
  * The stage rows in *Technical details* answer a different question, and only
  * one of the two is a menu: that list is a **record** — all sixteen stages, when
- * each last wrote, no controls — and this is a **menu** of the ten you can ask
+ * each last wrote, no controls — and this is a **menu** of the ones you can ask
  * for. Interleaving them would put an eligibility branch inside `StageRow` and
  * rows with a button beside rows that cannot have one.
  *
@@ -1282,7 +1282,7 @@ function SharingSection({
  * § Deferred keeps the staleness half, including why *absent* and *stale* are
  * one boolean today.
  *
- * **Which ten, and why not the other six**, is `METADATA_RERUN_STEPS`
+ * **Which, and why not the rest**, is `METADATA_RERUN_STEPS`
  * (src/rerun-steps.ts) — read it there rather than restating it here.
  *
  * ## No gate, unlike Export and Archive
@@ -1295,13 +1295,13 @@ function SharingSection({
  * metadata request is still out.
  *
  * **Shut by default, and still mounted.** `keepMounted` hides the rows rather
- * than unmounting them, so the ten `useStepJob` subscriptions live for the whole
+ * than unmounting them, so every row's `useStepJob` subscription lives for the whole
  * visit, and a run that finishes while the section is shut still refreshes the
  * page — see `Section`'s `keepMounted` for what unmounting lost.
  *
- * The cost, said out loud: ten subscriptions to one shared engine
- * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so this is ten
- * store subscriptions and **not** ten polls.
+ * The cost, said out loud: one subscription per row to one shared engine
+ * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so these are store
+ * subscriptions and **not** polls.
  */
 function RerunSection({
   slug,
@@ -1314,7 +1314,7 @@ function RerunSection({
   provenance: ArticleMetadata | null;
   /**
    * **`refresh`, never `reload`** — see the read in `Metadata` above and
-   * `useOrderedRead`'s header. The same function for all ten, so a completion
+   * `useOrderedRead`'s header. The same function for every row, so a completion
    * in any row is one question asked of one reader.
    */
   onFinished: () => void;
@@ -1326,7 +1326,7 @@ function RerunSection({
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
           shipped while the placeholder it replaces did not is that a button
-          saying *regenerate this* needs no such claim. And no timing: the ten
+          saying *regenerate this* needs no such claim. And no timing: the rows
           are not one speed, so a *"takes a minute or two"* here would be wrong
           about the Sketch, which says its own wait in its own confirm. */}
       <p className="tw:mt-0 tw:mb-3 tw:text-xs tw:text-ink-faint">
@@ -1363,10 +1363,10 @@ function RerunSection({
 }
 
 /**
- * The reader-facing name of each of the ten — a noun, not the present-tense
+ * The reader-facing name of each — a noun, not the present-tense
  * label the stage rows carry.
  *
- * `Record<MetadataRerunStep, string>`, so an eleventh member of the list is a
+ * `Record<MetadataRerunStep, string>`, so a new member of the list is a
  * typecheck failure here rather than a blank row.
  */
 const RERUN_LABEL: Record<MetadataRerunStep, string> = {
@@ -1377,9 +1377,11 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   ideas: "Ideas",
   timeline: "Timeline",
   quiz: "Quiz",
+  faq: "FAQ",
   sketch: "Sketch",
   trajectory: "Trajectory",
   debate: "Debate",
+  citations: "Citations",
 };
 
 /**
@@ -1446,7 +1448,7 @@ const RERUN_CONFIRM_TRAJECTORY =
  * which is exactly how the wrong number got here.
  *
  * `src/step-order.ts` calls the step the second dearest thing in the app; on
- * **this** page it is the dearest of the ten, which is the comparison the
+ * **this** page it is the dearest of the rows, which is the comparison the
  * reader in front of it can act on, and the Sketch's row next door is what
  * makes that legible.
  *
@@ -1489,7 +1491,7 @@ const SPECIAL_RERUN_CONFIRM: Partial<Record<MetadataRerunStep, string>> = {
  * job creation, and Greg declined a per-reader spend cap on 2026-09-06 on the
  * strength of a **global** monthly cap at OpenRouter, whose failure mode is
  * every reader losing every paid feature until the month turns. So a one-click
- * repeatable paid button, on a page holding ten of them, is the wrong shape.
+ * repeatable paid button, on a page full of them, is the wrong shape.
  *
  * The pattern came from the former `Rewrite` in ./Tweets.tsx — an inline
  * confirm row, no dialog, nothing blocked, and a `busy` that survives the round
@@ -1595,7 +1597,7 @@ function RerunRow({
     if (asking) yesRef.current?.focus();
   }, [asking]);
   /**
-   * **The id the sentence is reachable by**, keyed on the step because ten of
+   * **The id the sentence is reachable by**, keyed on the step because a dozen of
    * these rows are on screen at once and a fixed id would give the reader
    * whichever row happened to be first in the document.
    */
@@ -1632,7 +1634,7 @@ function RerunRow({
          would pass whatever the list happened to be — is never the way in. The
          same argument `data-section` on this page's headings makes.
 
-         **It is not what tells the ten buttons apart**, and reading it that way
+         **It is not what tells the buttons apart**, and reading it that way
          is how the missing accessible names went unnoticed: every actionable
          control in the row now carries the mode's name in its own `aria-label`,
          and the tests assert on those. */
@@ -1671,7 +1673,7 @@ function RerunRow({
               aria-describedby={confirmId}
               /* Every actionable control in this row carries the mode's name,
                  because the name itself is a sibling `<span>` and a screen
-                 reader's button list does not read those — ten rows of *Yes,
+                 reader's button list does not read those — a dozen rows of *Yes,
                  run it* and *Cancel* otherwise. The visible words come first, so
                  saying them still matches. ⟨Sol, F11.⟩ */
               aria-label={`${busy ? "Starting…" : yes} — ${RERUN_LABEL[step]}`}

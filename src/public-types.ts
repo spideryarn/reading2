@@ -59,17 +59,24 @@ import type { SketchScene } from "./sketch-scene.js";
 import type {
   Arc,
   Citation,
+  CitationLinkFrom,
+  CitationPlace,
   BlockContext,
   BlockId,
   BlockKind,
   CommentAnchor,
+  DebateLean,
+  DebateRelation,
+  FaqQuestion,
   GlossaryKind,
   Idea,
+  IdentificationSignal,
   NavLabelStatus,
   Quote,
   QuoteDrops,
   SearchHit,
   TimelineEvent,
+  TrajectoryStop,
   Tree,
   Tweet,
 } from "./types.js";
@@ -245,7 +252,7 @@ export interface PublicArticle extends PublicArtefactSet {
 }
 
 /**
- * **The four artefacts a shared link carries, and the one rule about them:
+ * **The public artefacts a shared link carries, and the one rule about them:
  * a key that is present exists, and a key that is absent was never built.**
  *
  * Slice 1b, and the shape is Greg's decision of 2026-08-28 over GPT Sol's
@@ -289,7 +296,7 @@ export interface PublicArticle extends PublicArtefactSet {
  * rather than an intention.
  *
  * **No generator, version, slug, sourceHash, passes, generatedAt or elapsedMs**
- * on any of the four. Facts about our pipeline and its timings.
+ * on any of them. Facts about our pipeline and its timings.
  */
 export interface PublicArtefactSet {
   glossary?: PublicGlossary;
@@ -297,6 +304,10 @@ export interface PublicArtefactSet {
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
   timeline?: PublicTimeline;
+  trajectory?: PublicTrajectory;
+  faq?: PublicFaq;
+  citations?: PublicCitations;
+  debate?: PublicDebate;
   sketch?: PublicSketch;
 }
 
@@ -408,6 +419,201 @@ export interface PublicTweets {
 export interface PublicTimeline {
   /** In the order they are to be shown. **Never re-sorted by a reader.** */
   events: TimelineEvent[];
+}
+
+/**
+ * **The Trajectory route, as a visitor gets it** — since 2026-09-29, when a
+ * signed-out reader of a public article with a stored route was shown the
+ * owners-only boundary instead (SPIDERYARN-READING2-56). Reading a route costs
+ * nothing; only planning one spends, and nothing in a visitor's client can.
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+ *
+ * **The stops cross field by field** — `{ quoteId, depth, role, cue }`, all of
+ * them about the article: a quote id the payload's `quotes` resolves, a pass,
+ * and the model's one line on what to look for there.
+ *
+ * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
+ * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this
+ * route"*), so a visitor is shown it and stripping it would make that sentence
+ * true for owners only.
+ *
+ * **What does not cross**: `profileHash`, above all — it is *who the route was
+ * planned for*, a fact about a person, and the same rule keeps it off
+ * `PublicSketch`. A visitor must not learn from the payload whether the owner
+ * has a profile. Then the pipeline facts as everywhere in this file: `version`,
+ * `generator`, `slug`, `sourceHash`, `visible`, `dropped`, `generatedAt`,
+ * `elapsedMs`.
+ *
+ * The cues *may* have been shaped by the owner's profile and their *why I'm
+ * reading this*, exactly as the glossary, ideas, quotes, tweets and sketch may;
+ * `PROFILE_RULES` (src/profile.ts) forbids a sentence about the reader, and
+ * /features/public-readable-sharing tells the author so.
+ */
+export interface PublicTrajectory {
+  stops: TrajectoryStop[];
+  offered: number;
+}
+
+/**
+ * **The FAQ, as a visitor gets it** — since 2026-09-29, the second mode plan
+ * 260929c moved off `owners-only` (SPIDERYARN-READING2-56). Showing the stored
+ * questions costs nothing; only asking the model for them spends.
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+ *
+ * **The questions cross field by field** — `{ id, question, passages }`, and
+ * each passage `{ blockId, quote, start }`: the model's question and the
+ * article's own characters, all of it about the piece. No profile is in this
+ * stage at all ("No profile in v1", src/faq.ts), so there is nothing about a
+ * person to drop.
+ *
+ * **What does not cross** is the pipeline, as everywhere in this file:
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
+ * and `dropped`, the counts validation threw away, which the owner's panel
+ * prints under the list and a visitor's does not: a fact about our checking,
+ * not about the piece.
+ */
+export interface PublicFaq {
+  questions: FaqQuestion[];
+}
+
+/**
+ * **One cited work, as a visitor gets it** — `CitedWork` minus three things.
+ *
+ * - **`key` does not cross.** It is our dedupe key, and it can embed an address
+ *   (`url:…`) that never went through the check `url` goes through below.
+ * - **`found` does not cross.** It is the owner's own *Find it* — a paid search
+ *   they ran, from the per-owner `citation_finds` table — and a record of their
+ *   activity, like a glossary lookup (plan 260929c § What stays owner-only). It
+ *   is never in the stored column anyway; the owner's read attaches it.
+ * - **`url` is optional here, and required on `CitedWork`.** Every address is
+ *   re-judged by `publicCitationUrl` (src/urls.ts) at the boundary, and a
+ *   refused one takes the *link* off the row, not the row: a citation is still
+ *   a citation without an address, unlike a Debate row, which is its source.
+ *
+ * `reference` and `mentions` carry the article's own characters, sliced out of
+ * blocks the payload already carries whole, so they add nothing a visitor
+ * could not read in the prose.
+ */
+export interface PublicCitedWork {
+  id: string;
+  title: string;
+  authors?: string;
+  year?: string;
+  why: string;
+  relevance?: number;
+  influence?: number;
+  reference?: CitationPlace;
+  mentions: CitationPlace[];
+  citedAt: BlockId[];
+  firstCited: BlockId;
+  citedInBody: boolean;
+  url?: string;
+  /** The article's source rule. `web` is the owner's private Find-it result
+   * and is normalised back to `search` at the public boundary. */
+  linkFrom: Exclude<CitationLinkFrom, "web">;
+}
+
+/**
+ * **The Citations list, as a visitor gets it** — since 2026-09-29, the third
+ * mode plan 260929c moved off `owners-only` (SPIDERYARN-READING2-56).
+ *
+ * `capped` crosses for `PublicQuotes.discarded`'s reason: the panel prints it
+ * (*"This piece cites more than 80 works…"*), so a visitor is shown it. The
+ * pipeline facts do not: `version`, `generator`, `slug`, `sourceHash`,
+ * `generatedAt`, `elapsedMs`. No profile is in this stage.
+ */
+export interface PublicCitations {
+  citations: PublicCitedWork[];
+  capped: boolean;
+}
+
+/**
+ * **One way a page showed it was about this article, as a visitor gets it** —
+ * `IdentificationSignal` with one difference: a `linked` signal's `url` may be
+ * absent.
+ *
+ * That address is **the article's own**, as the stranger's page spelled it
+ * (`linkTo` in src/debate.ts matches it against the article's `meta.url`, which
+ * is `final_url`), and `describeSignal` prints it. So it is judged by the policy
+ * `publicMeta` applies to the article's own address — `publicSourceUrl`, which
+ * also refuses a query string — and a refusal takes the address off the signal
+ * and leaves the fact that the page links the piece. GPT Sol, plan review 1
+ * (P0), plan 260929c. The other two arms are rebuilt field by field.
+ */
+export type PublicIdentificationSignal =
+  | { kind: "linked"; url?: string }
+  | Extract<IdentificationSignal, { kind: "quoted" }>
+  | Extract<IdentificationSignal, { kind: "named" }>;
+
+/**
+ * What both of a visitor's Debate rows carry — the owner's row, minus nothing
+ * but provenance it never had, and with `lean` always present: a row stored
+ * before 2026-09-08 carries `valence` instead, and the boundary reads it
+ * through `readStoredLean` so a visitor never meets the old vocabulary.
+ *
+ * **`url` is required**, and that is the contract 260905f § Security set: a
+ * Debate row *is* its source, so a row whose address `publicCitationUrl`
+ * refuses does not cross at all — it is counted instead.
+ */
+interface PublicDebateRowBase {
+  id: string;
+  url: string;
+  title?: string;
+  sourceQuote: string;
+  relation: DebateRelation;
+  lean: DebateLean;
+  applies: string;
+  limits?: string;
+}
+
+/** A page about this piece, as a visitor gets it. `identifies` is never empty — the boundary reads it through `identifiesOf`. */
+export interface PublicDirectDebateRow extends PublicDebateRowBase {
+  articleReferenceQuote: string;
+  identifies: PublicIdentificationSignal[];
+}
+
+/** A page that answers a claim the piece makes, as a visitor gets it. */
+export interface PublicClaimDebateRow extends PublicDebateRowBase {
+  claimQuote: string;
+  blockId: BlockId;
+}
+
+/**
+ * One of the two searches, as a visitor gets it: its rows, and **how many
+ * rows the public boundary withheld** — computed there, never read off the
+ * artefact (260905f § What is counted, Sol's F17). The stored `counts` do not
+ * cross: `returnedSources`, `reportedRows`, `keptRows`, `omittedOverCap`, the
+ * loss reasons and `webSearches` are facts about our search and our checking,
+ * which the owner's foot lines print and a visitor's do not — the FAQ's
+ * `dropped`, one mode along.
+ */
+export interface PublicDebateGroup<Row> {
+  rows: Row[];
+  /**
+   * Rows the boundary did not publish: the source address `publicCitationUrl`
+   * refused (a credential, a private host), or a row whose text carries an
+   * address the boundary refused — the article's own, above all. The
+   * visitor's foot line says so in plain words, so a shorter list is never a
+   * silent one.
+   */
+  sourceNotPublishable: number;
+}
+
+/**
+ * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
+ * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
+ * own plan set (260905f § Security, § Stage 4). Showing a stored search costs
+ * nothing; only running one spends (two metered web searches, ~$0.27).
+ *
+ * `searchedAt` crosses **deliberately** — a shared link outlives a search, and
+ * a visitor must be able to see how old it is (260905f § `searchedAt`). The
+ * rest of the pipeline does not: `version`, `generator`, `slug`, `sourceHash`,
+ * `elapsedMs`, and every stored count. No profile is in this stage.
+ */
+export interface PublicDebate {
+  searchedAt: string;
+  direct: PublicDebateGroup<PublicDirectDebateRow>;
+  claims: PublicDebateGroup<PublicClaimDebateRow>;
 }
 
 /**
@@ -569,10 +775,10 @@ export interface PublicSearchRun {
 /**
  * **Re-exported, not declared here, and it moved on 2026-09-02.**
  *
- * The five booleans are still exactly what a visitor's page is keyed on and
+ * These booleans are still exactly what a visitor's page is keyed on and
  * every importer still reaches them through this file. What changed is that a
  * *second* reader appeared on the owner's side of the line:
- * `ArticleSharing.available` in src/types.ts carries the same five, so that the
+ * `ArticleSharing.available` in src/types.ts carries the same set, so that the
  * confirmation dialog can list what a shared link will actually carry
  * (docs/plans/260902n-the-sharing-dialog-lists-what-goes-out-and-what-stays.md).
  *
@@ -584,4 +790,3 @@ export interface PublicSearchRun {
  * type modules run one way, and they should keep doing so.
  */
 export type { PublicArtefacts } from "./types.js";
-

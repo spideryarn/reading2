@@ -1,103 +1,53 @@
 /**
- * Column context — the live half. Which item each gist column is *in* right
- * now, and where the columns are on screen. See context.ts for the pure half
- * and docs/project/column-context.md for the design.
+ * **Which section the reader is in**, sampled live at the focus line —
+ * Structure's "you are here" (StructureMode.tsx), in both faces.
+ *
+ * The name is the gist columns': this was the live half of column context,
+ * which also measured where each gist column sat on screen so a fisheye panel
+ * could be laid over it (docs/project/column-context.md). The columns went with
+ * the Hierarchy mode on 2026-09-29
+ * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md), and the
+ * rects, the pinned-column clip and the viewport heights went with them; the
+ * focus row is what outlived them.
  *
  * One rAF sampler, reads only. There are already three scroll consumers on
  * this page (the `?at=` tracker, the spine, the glide in scroll.ts), and
  * GPT's review of the plan warned that a fourth one which interleaved rect
  * reads with style writes would force layout on every frame. So: every rect
- * is read, and then — only if something changed — one state update. (A
- * progress hairline that wrote a custom property per frame lived here for an
- * afternoon; Greg found it distracting and it went, 2026-08-25.)
+ * is read, and then — only if something changed — one state update.
  *
  * The line everything here is measured against is the **focus line**, 40%
  * down the viewport — where the reader is actually looking, per the fisheye
- * sketch in granularity-zoom.md. Not the sticky line `?at=` uses: a panel
- * that centred the item under the header would describe a section the eye
- * had already left.
+ * sketch in granularity-zoom.md. Not the sticky line `?at=` uses: a view that
+ * marked the item under the header would describe a section the eye had
+ * already left.
  */
 import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
 import { rowsForBlockIds } from "./rows.js";
 
 /** Where the reader's eye is assumed to be, as a fraction of the viewport. */
-export const FOCUS_LINE = 0.4;
-
-export interface ColumnRect {
-  left: number;
-  width: number;
-  /**
-   * The header row's bottom edge on screen — where a panel over this column
-   * must start. Not a constant: the controls bar and header are sticky, so
-   * near the top of the page they sit *below* the masthead, and a panel fixed
-   * at their eventual height would paint over the masthead and hide its own
-   * first entry behind the bars.
-   */
-  top: number;
-}
+const FOCUS_LINE = 0.4;
 
 export interface LiveContext {
-  /** The row under the focus line. */
+  /** The row under the focus line — a section's first row, never finer. */
   focusRow: number;
-  /** Screen position of each gist column's header, keyed by depth. */
-  rects: Map<number, ColumnRect>;
-  /**
-   * The right edge of the pinned left column. A panel is `position: fixed` at
-   * its column's measured x, so when the page is scrolled right and a middle
-   * column slides *under* the pinned one, its panel would keep painting on top
-   * of it — the cells go under, the panel does not. Panels clip themselves to
-   * the right of this, which is what the cells underneath already do.
-   */
-  clipLeft: number;
-  /**
-   * The viewport height, so a height-only resize reaches React: the panels
-   * centre and clamp against it, and without it here a taller window left
-   * them holding the old 40% line until the next section boundary.
-   */
-  viewportH: number;
-  /**
-   * `100svh` — the **small** viewport, the one with the browser's own toolbars
-   * showing. On a phone or an iPad those toolbars collapse *as you scroll*, so
-   * `innerHeight` grows by seventy to a hundred pixels partway down a page
-   * while nothing about the layout has changed. That is fine for centring,
-   * which should follow the real viewport, and wrong for anything that decides
-   * how much text to draw: a budget read off `innerHeight` would step up
-   * mid-scroll and rewrap every landmark under the reader's eye. `svh` is
-   * defined not to move when the chrome does, which is exactly the property
-   * wanted — see `landmarkLines` in context.ts, and GPT Sol's review,
-   * 2026-08-26, which found this.
-   */
-  stableH: number;
 }
 
-const EMPTY: LiveContext = {
-  focusRow: 0,
-  rects: new Map(),
-  viewportH: 0,
-  stableH: 0,
-  clipLeft: 0,
-};
+const EMPTY: LiveContext = { focusRow: 0 };
 
 interface Options {
   sections: Section[];
-  /** The gist depths on screen, for finding their headers. */
-  depths: number[];
-  /** Nothing is measured while every mode is off. */
+  /** Nothing is measured while this is off. */
   enabled: boolean;
-  /** Re-measure when the columns change — same key as the `?at=` tracker. */
+  /** Re-measure when the layout changes — same key as the `?at=` tracker. */
   layoutKey: string;
 }
 
-export function useColumnContext({
-  sections,
-  depths,
-  enabled,
-  layoutKey,
-}: Options): LiveContext {
+export function useColumnContext({ sections, enabled, layoutKey }: Options): LiveContext {
   const [live, setLive] = useState<LiveContext>(EMPTY);
 
-  // `layoutKey` is a re-run trigger, not a value the effect reads: the columns
+  // `layoutKey` is a re-run trigger, not a value the effect reads: the layout
   // changed, so the row elements it holds are stale. Same as useReadingPosition.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger
   useEffect(() => {
@@ -106,23 +56,12 @@ export function useColumnContext({
        rows.ts, and the measurements in
        docs/plans/260905d-mode-switching-is-sluggish-on-a-very-long-article.md. */
     const rows = rowsForBlockIds(sections.map((s) => s.blockId));
-    const heads = new Map(
-      depths.map((d) => [d, document.querySelector<HTMLElement>(`thead th[data-col="${d}"]`)]),
-    );
-    const pin = document.querySelector<HTMLElement>("thead th.pin-left");
     const table = document.querySelector<HTMLElement>("table.zoom");
-
-    // A zero-width probe whose only job is to report `100svh`, which no JS
-    // property exposes. Where `svh` is not supported the declaration is
-    // dropped, the empty div is 0 tall, and the read below falls back to
-    // `innerHeight` — the failure states itself rather than returning a
-    // plausible wrong number.
-    const probe = document.createElement("div");
-    probe.setAttribute("aria-hidden", "true");
-    probe.style.cssText =
-      "position:fixed;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none";
-    document.body.appendChild(probe);
-    let last: LiveContext = EMPTY;
+    /* `live` may still name a later section from the preceding effect. The
+       first measurement of each fresh row set must therefore publish even
+       when its answer is row zero; seeding this with zero would mistake that
+       answer for an unchanged measurement and leave the stale row selected. */
+    let last: number | null = null;
     let frame = 0;
 
     const measure = () => {
@@ -132,30 +71,9 @@ export function useColumnContext({
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );
       const focusRow = sections[activeSectionIndex(tops, focusLine)]?.row ?? 0;
-
-      const rects = new Map<number, ColumnRect>();
-      for (const [d, th] of heads) {
-        if (!th) continue;
-        const r = th.getBoundingClientRect();
-        rects.set(d, { left: r.left, width: r.width, top: r.bottom });
-      }
-      const viewportH = window.innerHeight;
-      const stableH = probe.clientHeight || viewportH;
-      const clipLeft = pin?.getBoundingClientRect().right ?? 0;
-
-      const same =
-        focusRow === last.focusRow &&
-        viewportH === last.viewportH &&
-        stableH === last.stableH &&
-        clipLeft === last.clipLeft &&
-        rects.size === last.rects.size &&
-        [...rects].every(([d, r]) => {
-          const o = last.rects.get(d);
-          return o && o.left === r.left && o.width === r.width && o.top === r.top;
-        });
-      if (same) return;
-      last = { focusRow, rects, viewportH, stableH, clipLeft };
-      setLive(last);
+      if (focusRow === last) return;
+      last = focusRow;
+      setLive({ focusRow });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -164,54 +82,19 @@ export function useColumnContext({
     window.addEventListener("resize", schedule);
     // Scroll and resize are not the only ways the answer changes. A late image
     // or a font swap reflows the table under a still page: the focus line then
-    // sits in a different section and nothing tells us, so the panels keep
+    // sits in a different section and nothing tells us, so the view keeps
     // naming the old one until the reader happens to scroll. Watching the table
-    // itself catches that, and catches a column width change too — which moves
-    // every panel and used to need a window resize to be noticed.
+    // itself catches that.
     const ro = table ? new ResizeObserver(schedule) : null;
     if (table && ro) ro.observe(table);
-    /* **And the bar leaving is a third way the answer changes**, since
-       2026-09-07 — the one that is not a scroll even though a scroll caused it.
-       `--bar-bottom` falls, the sticky head moves up to meet it, and every
-       panel's `top` is that head's bottom edge.
-
-       It cannot be left to the scroll listener above. `apply()` in scroll.ts
-       and `measure()` here are both `requestAnimationFrame` callbacks in the
-       same frame, and which runs first is whichever effect registered first —
-       so half the time this would sample the pre-flip position and, for a
-       reader who **stopped scrolling on that very frame**, nothing would ever
-       sample again. That is the only case where the 180ms transient becomes a
-       resting state, and it is the case narrow-window.css § a small device
-       predicted in a comment in 2026-08-27.
-
-       A `MutationObserver` fires as a microtask after the attribute is written,
-       so the sample lands a frame later whatever the order — correct rather
-       than probable. tests/bar-motion.test.tsx mutates the attribute with no
-       scroll event at all.
-
-       **`data-bar-moving` as well as `data-bars`, and it is not a belt-and-
-       braces second copy of the same signal.** The bar can move while
-       `data-bars` stays `"hidden"`: `:root:has(.controls:focus-within,
-       .mode-band)` in shell.css puts it back for a keyboard reader tabbing the
-       pills, and takes it away again when they tab out — twice, with no
-       attribute here changing at either end. `data-bar-moving` is what
-       scroll.ts writes on *every* announced move, focus included, so it is the
-       one that covers the whole set. GPT Sol F6, 2026-09-07. */
-    const bars = new MutationObserver(schedule);
-    bars.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-bars", "data-bar-moving"],
-    });
     measure();
     return () => {
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       ro?.disconnect();
-      bars.disconnect();
-      probe.remove();
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [sections, depths, enabled, layoutKey]);
+  }, [sections, enabled, layoutKey]);
 
   return enabled ? live : EMPTY;
 }

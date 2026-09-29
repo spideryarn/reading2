@@ -84,13 +84,9 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   /* Trajectory was here for most of 2026-09-28, a new mode on an unmeasured
      prompt; Greg took it out the same day ("take Trajectory and Quotes modes
      out of Experimental features") — docs/project/experimental-features.md. */
-  /* 2026-09-12, at Greg's request (SPIDERYARN-READING2-35): Structure is the
-     structural view everybody gets, and Hierarchy's columns are for readers
-     who have asked for the extra modes. Only the Dock entry points are gated
-     — the button and the command-bar row; the tree it draws is the one
-     Structure and Summary read, and `?mode=hierarchy` still opens it.
-     docs/project/experimental-features.md. */
-  "hierarchy",
+  /* Hierarchy was here from 2026-09-12 (SPIDERYARN-READING2-35) until it
+     retired into Structure on 2026-09-29 (SPIDERYARN-READING2-4B) —
+     docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
   /* Structure was here from 2026-09-07 to 2026-09-10, hidden while Greg
      compared it with Hierarchy and Outline. It came out when it took Outline's
      list as its narrow face and Outline left the bar: Outline was on every
@@ -326,6 +322,10 @@ const NOTHING_SHARED: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
+  trajectory: false,
+  faq: false,
+  citations: false,
+  debate: false,
 };
 const EVERYTHING_SHARED: PublicArtefacts = {
   arc: true,
@@ -335,6 +335,10 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
+  trajectory: true,
+  faq: true,
+  citations: true,
+  debate: true,
 };
 
 /**

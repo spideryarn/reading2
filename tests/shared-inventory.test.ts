@@ -40,6 +40,10 @@ const NOTHING: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
+  trajectory: false,
+  faq: false,
+  citations: false,
+  debate: false,
 };
 const EVERYTHING: PublicArtefacts = {
   arc: true,
@@ -49,6 +53,10 @@ const EVERYTHING: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
+  trajectory: true,
+  faq: true,
+  citations: true,
+  debate: true,
 };
 
 const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
@@ -65,6 +73,16 @@ const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
  * `timeline` is the sixth, since 2026-09-04. It was in `OWNERS_ONLY` below
  * until then, which is the line that moved.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+ *
+ * `trajectory` is the seventh row, since 2026-09-29, by the same move: it was
+ * `owners-only` until a visitor to a public article with a stored route was
+ * refused it (SPIDERYARN-READING2-56).
+ * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+ *
+ * `debate` is the tenth, the same day (plan 260929c stage 4).
+ *
+ * `faq` and `citations` are the eighth and ninth, the same day and by the same
+ * move (plan 260929c stages 2 and 3).
  */
 const FLAG = {
   glossary: "glossary",
@@ -73,6 +91,10 @@ const FLAG = {
   arc: "arc",
   tweets: "tweets",
   timeline: "timeline",
+  trajectory: "trajectory",
+  faq: "faq",
+  citations: "citations",
+  debate: "debate",
 } as const satisfies Record<string, keyof PublicArtefacts>;
 const ROWS = Object.keys(FLAG) as (keyof typeof FLAG)[];
 
@@ -159,9 +181,9 @@ describe("the sweep over the modes", () => {
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);
   });
 
-  /* The four that cost nothing and are drawn from the payload the visitor
+  /* The ones that cost nothing and are drawn from the payload the visitor
      already holds — the whole point of the feature, so they are pinned. */
-  it.each(["hierarchy", "structure", "summary"])("always shares %s", (mode) => {
+  it.each(["structure", "summary"])("always shares %s", (mode) => {
     expect(keys(sharedInventory(NOTHING).shared)).toContain(mode);
   });
 
@@ -278,11 +300,11 @@ const WIRE_ROW = {
   meta: "provenance",
   blocks: "text",
   assets: "pictures",
-  /* The tree is three rows, because it is three things the owner recognises:
-     the nested contents, the structure (columns, or the nested list that was
-     Outline), and the gists down the page. Any one
-     of them proves the tree crosses. */
-  tree: "hierarchy",
+  /* The tree is two rows, because it is two things the owner recognises: the
+     structure (columns, or the nested list that was Outline) and the gists
+     down the page. Any one of them proves the tree crosses. It was three until
+     Hierarchy's columns were retired on 2026-09-29 (plan 260929d). */
+  tree: "structure",
   /* The arc has no mode of its own — it is the extra rung Structure's list
      face draws when there is one (Outline's, until that list became the face on
      2026-09-10). src/web/visitor.ts § structure. */
@@ -292,6 +314,18 @@ const WIRE_ROW = {
   quotes: "quotes",
   tweets: "tweets",
   timeline: "timeline",
+  /* The stored route, since 2026-09-29 — its own mode, like the timeline.
+     docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
+  trajectory: "trajectory",
+  /* The FAQ and the Citations list, the same day and the same way.
+     A cited work's address is re-judged on its way out (src/public/dto.ts §
+     `publicCitedWork`), which is invisible to this table. */
+  faq: "faq",
+  citations: "citations",
+  /* And the Debate, the same day (plan 260929c stage 4). A row the boundary
+     refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
+     which is invisible to this table too. */
+  debate: "debate",
   /* Not a mode: comments have no button in the bar and are swept by neither
      `MODES` nor `visitorGap`. Their row is the prose one that moved out of
      `NEVER_SHARED` on 2026-09-04.
@@ -338,6 +372,10 @@ describe("reading the flags off the wire", () => {
       quotes: true,
       timeline: true,
       sketch: true,
+      trajectory: true,
+      faq: true,
+      citations: true,
+      debate: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
   });
@@ -353,7 +391,7 @@ describe("reading the flags off the wire", () => {
    * typo — it compiles, and an all-true fixture accepts it. GPT Sol listed it,
    * 2026-09-02. A one-hot body is the only shape that catches a cross-wire.
    */
-  it.each(["arc", "tweets", "glossary", "ideas", "quotes"] as const)(
+  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory", "faq", "citations", "debate"] as const)(
     "reads %s from its own key and not another's",
     (key) => {
       const oneOn = { ...NOTHING, [key]: true };
@@ -364,7 +402,7 @@ describe("reading the flags off the wire", () => {
   /* **A missing key is not a `false`.** Defaulting would tell an owner their
      glossary stays private, which is the exact sentence this slice exists to
      stop being guessed at. */
-  it.each(["arc", "tweets", "glossary", "ideas", "quotes"])(
+  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory", "faq", "citations", "debate"])(
     "refuses a body with no %s, rather than defaulting it",
     (missing) => {
       const partial: Record<string, unknown> = { ...EVERYTHING };
@@ -413,6 +451,10 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
+      trajectory: null,
+      faq: null,
+      citations: null,
+      debate: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
@@ -430,6 +472,10 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
+      trajectory: null,
+      faq: null,
+      citations: null,
+      debate: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -440,6 +486,10 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
+      trajectory: null,
+      faq: null,
+      citations: null,
+      debate: null,
       glossary: null,
       ideas: null,
       quotes: null,

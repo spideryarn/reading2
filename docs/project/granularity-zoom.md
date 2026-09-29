@@ -2,6 +2,13 @@
 
 The first feature. Read [vision.md](vision.md) first — this is one concrete expression of it.
 
+> **Status, 2026-09-29.** The **tree** is live and is what Structure, Summary, Diagram and the Spine
+> draw. The **tabular view** this doc describes — the gist columns beside the prose, the Hierarchy
+> mode — was removed that day (Greg: *"Remove the Hierarchy mode altogether. I think the Structure
+> mode is better/sufficient."*, SPIDERYARN-READING2-4B); `?mode=hierarchy` opens Structure, and
+> `?cols=` / `?text=` are ignored. Sections below about the columns, their fitting and their
+> controls are history. [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).
+
 ## Intent
 
 Greg's description (2026-08-24), verbatim, because the wording carries the design:
@@ -56,12 +63,8 @@ invariant makes that literal.
 > all the way down to a paragraph level.
 
 That deeply-nested table of contents and this tree are **the same structure**, not two — see
-[architecture.md § Pipeline](architecture.md#pipeline). Hierarchy is it rendered as navigation; the
-zoom view is it rendered as text.
-
-**Since 2026-09-12 the Hierarchy button and command-bar row are behind the experimental switch** —
-the tree is not, and nor is `?mode=hierarchy`.
-[experimental-features.md § Hierarchy went in on 2026-09-12](experimental-features.md#hierarchy-went-in-on-2026-09-12).
+[architecture.md § Pipeline](architecture.md#pipeline). Structure is it rendered as navigation (the zoom
+view, as text, was the removed Hierarchy mode).
 
 The article is a flat sequence of blocks with stable ids (`spya-k3m9qt…`) — see
 [block-ids.md](block-ids.md) for the format and
@@ -468,8 +471,8 @@ to say. [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts).
 > one `<col>` per column plus one for the prose, so the extra `<td>` took the **prose** column's
 > width and the article went invisible, off the right edge of the window, with nothing thrown and
 > nothing logged. Found in a browser on 2026-09-06; the guard and its test are in
-> [`TableView.tsx`](../../src/web/TableView.tsx) § `withheldLeafCell` and
-> `tests/paragraph-labels-withheld.test.tsx`.
+> the table's `withheldLeafCell` guard and `tests/paragraph-labels-withheld.test.tsx` — both gone
+> with the columns on 2026-09-29.
 
 **This does not breach the navLabel contract** ([node shape](#node-shape)), and the distinction is
 worth being precise about. The rule is that a navLabel must never be shown *instead of* prose that
