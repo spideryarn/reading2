@@ -173,3 +173,13 @@ dependency) for pages the fetch cannot read.
   negatives; the eval will show whether it matters); F1 still open for an authorless upload, fixed
   above by requiring content agreement then. Discovery closed; the verdict line still read *rework*
   on F1 alone, and that fix goes to the code review to check.
+- Stage 1 landed (8a348fac), stage 2 (8b714537).
+- **The eval** ([260929g-…-eval.md](260929g-canonical-link-for-an-uploaded-paper-eval.md),
+  `scripts/eval-source-guess.ts`): 7 distinct uploaded papers (all the local set has), 7 billed
+  searches, $0.15. **3 links shown, 3 right, 0 wrong**; 3 missed, every one a page `readPaperText`
+  could not read (two publisher 403s, one JavaScript-built preprint page) — no rule refused a page
+  it could read. **The content branch ships**: 6 of 7 uploads have no extracted authors, so under the
+  authorless rule it is the only way they get a link, and all three right links needed it.
+  Not built, for Greg: when the found page is bot-walled, ask doi.org for the DOI's registered title
+  (free) — but that is title + identifier without author or text, the combination F1 refused.
+  The safer lever is better author extraction for PDF uploads, which is outside this report.

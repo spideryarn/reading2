@@ -154,8 +154,8 @@ export function isAnUpload(meta: Meta): boolean {
   return meta.filename !== undefined || meta.source === "pdf";
 }
 
-/** The default search: `findWorkPage` under this job's own name and model. */
-function defaultFind(work: WorkToFind, opts: { timeoutMs: number; line: ReturnType<typeof log> }): Promise<FoundWorkPage> {
+/** The default search: `findWorkPage` under this job's own name and model. Exported for scripts/eval-source-guess.ts. */
+export function defaultFind(work: WorkToFind, opts: { timeoutMs: number; line: ReturnType<typeof log> }): Promise<FoundWorkPage> {
   return findWorkPage(work, null, {
     call: (body: AiRequestBody, o: { signal: AbortSignal }): Promise<JsonCall> =>
       openRouterJson("upload-source-guess", body, o),
@@ -220,6 +220,12 @@ function looksLikeProse(text: string): boolean {
   return lower >= PROSE_LOWER_SHARE * words.length;
 }
 
+/** What the search is asked to find: the title, and the first few authors. Exported for scripts/eval-source-guess.ts. */
+export function workToFind(meta: Meta): WorkToFind {
+  const authors = (meta.authors ?? []).slice(0, PROMPT_AUTHORS).map((a) => a.name);
+  return { title: meta.title, ...(authors.length ? { authors: authors.join(", ") } : {}) };
+}
+
 /** What one search has cost so far — written as it happens, so a failure part-way still records it. */
 interface Meter {
   searches: number | null;
@@ -242,11 +248,7 @@ async function searchAndJudge(
   meter: Meter,
 ): Promise<SourceGuessOutcome> {
   const none = (why: GuessWhy): SourceGuessOutcome => ({ status: "none", why, ...meter });
-  const authors = (meta.authors ?? []).slice(0, PROMPT_AUTHORS).map((a) => a.name);
-  const found = await tools.find(
-    { title: meta.title, ...(authors.length ? { authors: authors.join(", ") } : {}) },
-    { timeoutMs: clock.remaining(), line: clock.line },
-  );
+  const found = await tools.find(workToFind(meta), { timeoutMs: clock.remaining(), line: clock.line });
   meter.searches = found.reading.searches;
   meter.model = found.model;
   const { verdict } = found.reading;
@@ -279,8 +281,8 @@ function guessOf(outcome: SourceGuessOutcome): SourceGuess {
     : { status: "none" };
 }
 
-/** The upload's identity, from the revision and the stored source's first pages. */
-async function identityOf(
+/** The upload's identity, from the revision and the stored source's first pages. Exported for scripts/eval-source-guess.ts, which must judge exactly what the route judges. */
+export async function identityOf(
   article: Article,
   source: RawSource | null,
   firstPages: NonNullable<GuessSourceDeps["firstPages"]>,
