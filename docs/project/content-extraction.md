@@ -494,7 +494,10 @@ Three changes, smallest first, and all of them measured by `evals/pdf/titles.mts
   [`src/pdf-frontmatter.ts`](../../src/pdf-frontmatter.ts). It sees the first three pages' records as
   text and answers with **ids**, never prose; the title and the byline are then built in code out of
   those records' own strings, so what reaches `meta.title` is a copy of the transcription by
-  construction. The first design had it return the title and *verify* it, and the verification could
+  construction. (The authors, since 2026-09-29, are read by a second, separate call that does write
+  text — and even there the stored value is the page's characters at the span found, not the
+  model's; see § The byline below. Asking this call for them too made it hide less furniture.) The
+  first design had it return the title and *verify* it, and the verification could
   not work: `foldLine` strips digits and punctuation, so `GPT-4: What changed?` and `GPT-5: What
   changed?` fold alike and `2024` folds to the empty string, which is a substring of everything.
 
@@ -579,6 +582,32 @@ plain sight. The reasoning is in
 [../plans/260928b-multi-author-bylines-from-citation-meta.md](../plans/260928b-multi-author-bylines-from-citation-meta.md)
 and the class in
 [../postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md](../postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md).
+
+**And `meta.authors`, the same list with affiliations**, since 2026-09-29: each author's name and the
+institutions the source declares for them — the `citation_author_institution` after each
+`citation_author` on a web page, or, for a PDF, what a small authors call copied off the front page,
+with the footnote markers cut away by rule (the `Smith1` fix). A PDF's names and affiliations are the page's
+own characters, found where the model pointed, never the model's text
+([`src/pdf-authors.ts`](../../src/pdf-authors.ts)). Stored only when it accounts for the whole
+byline, and then the byline is derived from it, so the two never disagree. The masthead and the
+Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page with no declared list
+keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
+[../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
+
+## A title from outside is plain text
+
+A page's `<title>`, a PDF's `Info.Title`, an `og:title` and a web-search result's title can all
+carry inline markup (`<i>Drosophila</i>`, `H<sub>2</sub>O`, `<jats:italic>`, MathML) or entities.
+Every surface draws a title as text, so any of that shows literally. **The rule: an outside title
+is made plain where it is constructed, by `plainTitle` in [`src/html.ts`](../../src/html.ts), and
+stored plain.** This stage applies it in `runExtract` and `runPdfExtract` before the title branches
+into `meta.title`, the page's `<h1>` and the job's title, and `metaColumns` repeats it as a backstop.
+The other roads in — search results, link previews, cited works and Referee Criteria — are listed
+in the plan, [../plans/260929e-outside-titles-become-plain-text-at-ingest.md](../plans/260929e-outside-titles-become-plain-text-at-ingest.md).
+`tests/plain-title.test.ts` feeds one marked-up title through every one of them. **A new road for a
+title belongs in that test.** `plainTitle` is not a sanitiser: its output is text, and it is
+escaped like any other text wherever it becomes markup. The class is in
+[../postmortems/260929b-outside-titles-stored-with-their-markup.md](../postmortems/260929b-outside-titles-stored-with-their-markup.md).
 
 ## What it gets wrong, and how we know
 

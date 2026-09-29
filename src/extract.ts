@@ -27,7 +27,7 @@
    `readArticle` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
-import { escapeHtml } from "./html.js";
+import { escapeHtml, plainTitle } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseMaths } from "./maths-import.js";
@@ -44,10 +44,10 @@ import {
 } from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
-import { chooseByline, metaAuthors } from "./meta-authors.js";
+import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
-import type { Meta } from "./types.js";
+import type { Author, Meta } from "./types.js";
 
 /**
  * Text going into markup, made text again.
@@ -394,7 +394,7 @@ export function readArticle(
    * Readability — src/meta-authors.ts. Kept apart from `article` so an eval
    * asking what Readability said still gets what Readability said.
    */
-  authors: string[] | null;
+  authors: Author[] | null;
   refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
@@ -435,7 +435,7 @@ function readingArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability["parse"]>;
-  authors: string[] | null;
+  authors: Author[] | null;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -1215,11 +1215,24 @@ export async function runExtract(opts: {
      page's declared author list replaces it where it has dropped somebody,
      because Readability keeps only the last of a repeated tag —
      src/meta-authors.ts. */
-  const byline = chooseByline(authors, tidyMetaText(article.byline));
+  const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
+  const declared = authorsForByline(authors, byline);
+  /* **Plain text, once, before it branches** into `meta.title`, the page's
+     `<h1>` (which stage 3 turns into a block) and the job's title. A page's
+     `<title>` or `og:title` can say `&lt;i&gt;Drosophila&lt;/i&gt;`, which
+     Readability decodes into literal tags.
+     docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+  const title = typeof article.title === "string" ? plainTitle(article.title) : article.title;
   const meta: Meta = {
     slug,
-    title: article.title ?? slug,
+    title: title ?? slug,
     ...(byline ? { byline } : {}),
+    /* The same list, structured: names and the affiliations the page declares
+       for each, for the masthead and the Metadata page to show one at a time.
+       Absent rather than `[]` when the page declares nobody, and absent when
+       the byline names people the list does not — `authorsForByline`.
+       Plan 260929d § 2. */
+    ...(declared ? { authors: declared } : {}),
     ...(article.siteName ? { siteName: article.siteName } : {}),
     ...(article.lang ? { lang: article.lang } : {}),
     /* **Spread rather than assigned**, since 2026-09-07, for the same reason
@@ -1235,7 +1248,7 @@ export async function runExtract(opts: {
   return {
     slug,
     meta,
-    extractedHtml: debugPage(article),
+    extractedHtml: debugPage({ ...article, title }),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,

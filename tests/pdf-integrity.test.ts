@@ -114,6 +114,7 @@ async function run(stub: Stub, checkpoints: MemoryCheckpoints = store(), signal?
     slug: SLUG,
     checkpoints,
     frontMatter: null,
+    authors: null,
     reader: stub.reader,
     ...(signal ? { signal } : {}),
   });
@@ -293,6 +294,7 @@ describe("structural recovery", () => {
         slug: SLUG,
         checkpoints,
         frontMatter: null,
+        authors: null,
         reader: stub.reader,
         signal: controller.signal,
         width: 1,
@@ -479,6 +481,7 @@ describe("the typed structural boundary", () => {
         articleId: "article-blank-references",
       }),
       frontMatter: null,
+      authors: null,
       reader: stub.reader,
     });
 

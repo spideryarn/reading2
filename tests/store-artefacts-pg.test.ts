@@ -1173,6 +1173,10 @@ describe("writing artefacts into a draft", () => {
         slug: SLUG,
         title: "Rewritten",
         byline: "Somebody",
+        /* Through the jsonb column and back, affiliations and all — the
+           authors-bearing round trip GPT Sol found nothing else exercised
+           (plan 260929d, code review F9). */
+        authors: [{ name: "Somebody", affiliations: ["Department of Somewhere, 1 High St"] }],
         lang: "fr",
         excerpt: "Two other sentences.",
         note: "a note",

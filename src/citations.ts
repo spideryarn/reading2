@@ -41,6 +41,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBody } from "./block-policy.js";
+import { plainTitle } from "./html.js";
 import { mintUniqueId } from "./ids.js";
 import type { Article } from "./article-input.js";
 import { stageFailure } from "./job-failure.js";
@@ -373,7 +374,9 @@ function readDraft(
   if (w.url !== undefined || w.link !== undefined || w.doi !== undefined || w.href !== undefined) {
     drops.modelUrls++;
   }
-  const title = text(w.title);
+  /* Plain, because the model copies the reference as the page had it, markup
+     and entities included. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+  const title = plainTitle(text(w.title));
   const why = text(w.why);
   if (!title || !why) {
     drops.malformed++;

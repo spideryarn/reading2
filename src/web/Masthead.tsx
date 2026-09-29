@@ -71,6 +71,7 @@ import { Link } from "./Link.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
+import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
@@ -187,14 +188,21 @@ export function Masthead({ article, slug, onRenamed }: Props) {
 
   // Only the parts of the facts line this article actually has. Joining a
   // filtered list beats a chain of `&&`s that can leave a stranded separator.
+  /* **The authors one at a time when we know who they are**, and the byline
+     string exactly as before when we do not — AuthorNames.tsx. Plan 260929d § 4. */
+  const byline: ReactNode = meta.authors ? (
+    <AuthorNames authors={meta.authors} linkToShelf={onRenamed !== undefined} />
+  ) : (
+    meta.byline
+  );
   const facts = [
-    meta.byline,
+    byline,
     meta.siteName,
     `${stats.words.toLocaleString()} words`,
     `~${stats.minutes} min`,
     `${stats.parts} parts`,
     `${stats.sections} sections`,
-  ].filter(Boolean) as string[];
+  ].filter(Boolean) as ReactNode[];
 
   return (
     <div className="masthead">

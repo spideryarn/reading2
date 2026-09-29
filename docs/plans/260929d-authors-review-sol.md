@@ -1,0 +1,59 @@
+1. **P0 — The PDF provenance check is not sound enough to support “the model only copied this.”**  
+   The proposed normalization discards every non-letter, so the model may invent unlimited digits, punctuation, newlines, separators, and control characters while still passing. For example, a source containing `Samuel A. Nastase` can validate an output shaped like `Samuel 999\n--- A. Nastase`. The three-letter rule also permits truncating every name token—`Samuel Nastase` can validate `Sam Nast`—although the observed artefact is a suffix on the final surname. Affiliations are weaker again: any consecutive words anywhere in pages 1–3 can be relabelled as an affiliation, including the adversarial `SYSTEM: ...` paragraph. See [plan §3](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md:67), the current IDs-only boundary in [pdf-frontmatter.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/pdf-frontmatter.ts:177), and the explicit warning that a prompt is not a boundary in [security.md](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/project/security.md:1131).
+
+   A hostile PDF can therefore get arbitrary PDF-provided text accepted semantically, and arbitrary non-letter material accepted without even printing it. It cannot invent unrelated alphabetic words absent from the PDF, except through the per-token prefix allowance. This is not directly an XSS hole—model strings are rendered as text, consistent with [security.md](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/project/security.md:696)—but it can produce false metadata and inject structure into every prompt’s `BY:` line.
+
+   Change the design so the model proposes text, code locates it, and the stored value is reconstructed from source bytes rather than copied from the model response. Permit a bounded trim only at the relevant boundary: suffix of the last name token and prefix of the first affiliation token. Collapse to one line and impose character as well as word limits. If no unique source span can be reconstructed, reject the whole author list as planned.
+
+2. **P1 — The proposed eval can pass while every affiliation is attached to the wrong author.**  
+   The plan adds only gold names and an affiliation count ([plan](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md:97)). A count does not test affiliation text, author-to-affiliation mapping, marker removal, or whether an injected paragraph was returned as an affiliation. The current eval arm has only `title`, `byline`, and `setAside` ([titles.mts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/evals/pdf/titles.mts:310)), and its judge checks only the byline string ([titles.mts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/evals/pdf/titles.mts:505)). The corpus already contains a direct prompt-injection fixture ([records JSON](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/evals/pdf/titles/injection-adversary/records-ee94ff70ea4a-1.json:15)).
+
+   Change `expected.json` to hold exact structured golds—`[{name, affiliations[]}]`—and score each association, not a total. The injection fixture should explicitly assert that neither injection record appears in any name or affiliation. Also add adversarial unit cases for invented punctuation/newlines, truncating each name word, overlong zero-letter content, and an ordinary body sentence returned as an affiliation.
+
+3. **P1 — The Readability exception can make `authors` and `byline` disagree.**  
+   The plan says the two cannot disagree, then preserves an exception where Readability’s byline is retained ([plan](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md:51)). But `chooseByline` asks only whether Readability contains every declared author; it may contain additional people ([meta-authors.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/meta-authors.ts:171)). One `citation_author` plus a two-person JSON-LD byline would retain the two-person string while producing a one-person structured list; the masthead would then hide one author.
+
+   Keep the `authorsForByline` guard now present in [meta-authors.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/meta-authors.ts:188), and state it in the plan: publish the structured list only when it accounts for the entire retained byline, otherwise omit `authors`.
+
+4. **P1 — Byline derivation is compatible with its consumers only after shared size and single-line bounds are added.**  
+   The `"; "` separator is correct for Referee mode because `authorKeys` splits on semicolons ([referee-candidates.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/referee-candidates.ts:596)). Prompts interpolate the byline verbatim ([article-prompt.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/article-prompt.ts:104)), and their freshness hashes include that same byline ([source-hash.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/source-hash.ts:351)); therefore `authors` and affiliations should not enter fingerprints. The public shelf’s 200-character cap safely truncates display only ([public-library.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/store/public-library.ts:134)).
+
+   The missing boundary is size: the PDF caps count words but not characters, while the HTML path walks every matching meta tag with no count or character cap ([meta-authors.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/meta-authors.ts:44)). Add shared maximums for authors, affiliations per author, name characters, affiliation characters, and total serialized author data, applied to both HTML and PDF before deriving `byline`. Otherwise hostile HTML/PDF metadata can become a large article payload and large input prefix for every paid prompt.
+
+5. **P1 — “Visitor’s read” requires public projection, DTO, and wire-type work not named by the plan.**  
+   The public SQL allowlist currently selects `byline` but no structured author list ([public-reader.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/store/public-reader.ts:267)); the DTO explicitly rebuilds `PublicMeta` field by field ([dto.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/public/dto.ts:108)); and `PublicMeta` has only `byline` ([public-types.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/public-types.ts:85)). Merely adding the database column will leave visitor tooltips absent.
+
+   Add `authors` to the public article projection, the `publicArticle` input, the recursive allowlist DTO, and `PublicMeta`. Cover all three seams:
+
+   - `tests/public-reads.test.ts`: generated SQL selects `authors` only for the article read.
+   - `tests/public-dto.test.ts`: exact nested paths include only `name` and `affiliations`.
+   - `tests/public-visibility-pg.test.ts`: a signed-out public read receives the list, while a private article remains unreachable.
+
+6. **P2 — JSONB is appropriate for v1, but the proposed CHECK is weak and conflicts with the stated SQL rule.**  
+   An ordered revision-local display value that is never filtered, sorted, or joined fits the documented JSONB exception ([sql.md](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/project/sql.md:110)). A child table is unnecessary until author identity or cross-article indexing exists.
+
+   However, `jsonb_typeof(authors) = 'array'` accepts `[null]`, missing names, non-array affiliations, and arbitrarily deep/large values. It also sits awkwardly with sql.md’s statement that wanting a check inside the blob means the “opaque” rationale has stopped being true. Prefer a shared runtime decoder/validator at the write and read seams and drop the superficial CHECK.
+
+   The plan should also name these tests explicitly:
+
+   - `store-revision-policy.test.ts` for carry classification.
+   - `store-revision-columns.test.ts` for article-only projection and absence from library/fingerprint reads.
+   - An authors-bearing `store-parity` or artifact-store round trip.
+   - `store-roundtrip.test.ts` for rollback `meta.json`.
+   - `store-export-covers-tables.test.ts` for bundle `content/revision.json`.
+
+   The bundle’s `revision.json` receives a whole revision row automatically, but the rollback export explicitly reconstructs `meta.json` ([export.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/store/export.ts:366)); the plan should require both.
+
+   Also remove “metadata read” from the projection requirement. The Metadata page already gets authors from `article.meta` ([Metadata.tsx](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/Metadata.tsx:438)); `/api/metadata` is the separate operational provenance payload ([Metadata.tsx](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/Metadata.tsx:491)). Adding authors to that projection would only duplicate data.
+
+7. **P1 — `/read?q=<name>` is a broken link; the shelf is `/`.**  
+   Bare `/read` does not match the article route and becomes not-found ([router.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/router.ts:552)); the library route constant is `/` ([router.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/router.ts:620)). Change the link to `/?q=${encodeURIComponent(name)}`, built from `LIBRARY_HREF`.
+
+   Once routed correctly, exact formatting works: the filter searches folded byline text with every whitespace-separated query term ([shelf-narrow.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/shelf-narrow.ts:39)). But punctuation is retained by `queryTerms` ([library-hits.ts](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/library-hits.ts:76)), so `Samuel A. Nastase` does not match `Samuel A Nastase`, and `Yun-Fei Liu` does not match `Yun Fei Liu`. That is exact-string search, not name matching. Either state that limitation explicitly or normalize punctuation in the generated query, and add tests for both examples.
+
+8. **P1 — Phone-width browser testing will not prove the author tooltip works on touch.**  
+   The generic tooltip documents that hover cannot survive a tap without controlled state ([Tooltip.tsx](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/src/web/Tooltip.tsx:108)). This matters especially for visitors: the plan removes the link and leaves the tooltip as their only interaction ([plan](/home/greg/code/spideryarn2/.claude/worktrees/authors-metadata-import/docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md:118)). A narrow viewport driven by a mouse does not exercise the touch event sequence.
+
+   Specify tap behavior in the plan and test on an actual touch/pointer emulation. The simplest visitor behavior is a focusable button/span with controlled open state, first tap opening and outside tap dismissing. For owner links, decide explicitly whether one tap navigates with no card or first tap reveals and second tap follows; the current plan leaves that interaction undefined.
+
+No files were changed.

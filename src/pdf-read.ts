@@ -82,9 +82,11 @@ import { loadEnvLocal } from "./env.js";
 import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { errorFields, log } from "./log.js";
+import { type AuthorsReader, openRouterAuthorsReader, readAuthors } from "./pdf-authors.js";
 import {
   type FrontMatterDecision,
   type FrontMatterReader,
+  frontMatterWindow,
   openRouterFrontMatterReader,
   readFrontMatter,
   withFrontMatterHidden,
@@ -119,6 +121,7 @@ import {
   TooManyPages,
 } from "./pdf.js";
 import { type Check, check, comparisonWords, report } from "./pdf-score.js";
+import { plainTitle } from "./html.js";
 import { mathsAsText, plainMaths } from "./pdf-tex.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import {
@@ -128,7 +131,7 @@ import {
   validateChunkReading,
   type ValidatedChunkReading,
 } from "./pdf-integrity.js";
-import type { Meta } from "./types.js";
+import type { Author, Meta } from "./types.js";
 import { MAX_PAGES } from "./uploads.js";
 import { ProviderRefused, openRouterJson } from "./ai-call.js";
 
@@ -1847,6 +1850,13 @@ export interface PdfExtractOptions {
    */
   frontMatter: FrontMatterReader | null;
   /**
+   * **The authors pass** — each author and their affiliations, off the front
+   * page, held to it word by word (src/pdf-authors.ts). Runs only when the
+   * front-matter pass named a byline. `null` leaves the byline as the records'
+   * text, as before plan 260929d; required for the same reason `frontMatter` is.
+   */
+  authors: AuthorsReader | null;
+  /**
    * Called once per finished chunk, with what the check made of it.
    *
    * The queue uses the counts for its progress line and ignores the rest; the
@@ -1967,6 +1977,34 @@ async function frontMatterOrNothing(
        way — a refusal that reported nothing is the one shape that would make
        the stage's figure quietly too small. */
     return { decision: null, usage: reader.usage() };
+  }
+}
+
+/**
+ * The authors pass, degrading exactly as the front-matter pass does: any
+ * failure but an abort is logged and leaves the byline as the records' text.
+ * A refusal by the provenance check is not a failure — it comes back as a note
+ * for the Metadata page, like the front-matter pass's own. Plan 260929d § 3.
+ */
+async function authorsOrNothing(
+  records: PdfRecord[],
+  front: FrontMatterDecision | null,
+  opts: PdfExtractOptions,
+): Promise<{ authors: Author[] | null; note: string | null; usage: { input: number; output: number } }> {
+  const reader = opts.authors;
+  if (!reader || !front || front.bylineIds.length === 0) {
+    return { authors: null, note: null, usage: { input: 0, output: 0 } };
+  }
+  try {
+    const verdict = await readAuthors(frontMatterWindow(records), front.bylineIds, reader, opts.signal);
+    return { authors: verdict.authors, note: verdict.authors ? null : verdict.note, usage: reader.usage() };
+  } catch (err) {
+    if (opts.signal?.aborted) throw err;
+    log("pipeline").warn(
+      { slug: opts.slug, step: "extract", ...errorFields(err) },
+      `extract ${opts.slug}: the authors pass was no help; keeping the byline as printed`,
+    );
+    return { authors: null, note: null, usage: reader.usage() };
   }
 }
 
@@ -2761,6 +2799,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const { decision: front, usage: frontMatterUsage } = await frontMatterOrNothing(all, opts);
   const presented = withFrontMatterHidden(all, front?.setAside ?? []);
   if (front?.notes.length) notes.push(...front.notes);
+  /* Over the same records the front-matter pass saw, so its byline ids mean
+     the same records here. */
+  const { authors, note: authorsNote, usage: authorsUsage } = await authorsOrNothing(all, front, opts);
+  if (authorsNote) notes.push(authorsNote);
   /* After the scoring loop above, and it has to be: the baseline still has the
      word in two halves, so repairing before measuring would read as an invented
      word on one page and a missing one on the next. See mendSeamHyphens. */
@@ -2775,7 +2817,10 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
      copy of the transcription, so it outranks even a plausible-looking metadata
      title — which is a claim the file's producer made about itself and can be a
      leftover template. src/pdf-frontmatter.ts. */
-  const title = plainMaths(front?.title ?? titleFrom(mended, pass, lastName(opts)));
+  /* `plainTitle` after `plainMaths`: a PDF's Info `Title` can carry markup as
+     well as TeX, and this one string feeds the rendered `<h1>`, the job's
+     title and `meta.title`. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
+  const title = plainTitle(plainMaths(front?.title ?? titleFrom(mended, pass, lastName(opts))));
 
   /**
    * The mean recall, **and how many pages it is a mean of** — which is the
@@ -2805,7 +2850,15 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
        Fable, 2026-09-05. */
     /* `plainMaths` on both, because a heading may carry TeX the reading view
        draws and the masthead, the shelf and the tab print as a string (G6). */
-    ...(front?.byline ? { byline: plainMaths(front.byline) } : {}),
+    /* **The names alone when the authors pass found them** — the "Smith1" fix
+       — and the byline records' text otherwise, as before plan 260929d. The
+       names are the page's own characters with the markers trimmed, and the
+       check admits no `$` or `\`, so `plainMaths` has nothing to do to them. */
+    ...(authors
+      ? { byline: authors.map((a) => a.name).join("; "), authors }
+      : front?.byline
+        ? { byline: plainMaths(front.byline) }
+        : {}),
     ...(opts.url ? { url: opts.url } : {}),
     fetchedAt: new Date().toISOString(),
     source: "pdf",
@@ -2832,7 +2885,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     isScan: pass.isScan,
     records: all.length,
     transcript: mended,
-    frontMatterUsage,
+    /* The authors pass is the same model on the same job (metered as
+       `pdf-frontmatter`), so its tokens belong in this figure rather than
+       nowhere — leaving them out is the stage under-reporting what it cost. */
+    frontMatterUsage: {
+      input: frontMatterUsage.input + authorsUsage.input,
+      output: frontMatterUsage.output + authorsUsage.output,
+    },
     recall,
     notes,
     retries,
@@ -3302,6 +3361,7 @@ async function main() {
   console.log(`Chunks: ${planChunks(pass).map((c) => c.pages.join("–")).join(", ")}`);
   const result = await runPdfExtract({
     frontMatter: openRouterFrontMatterReader(),
+    authors: openRouterAuthorsReader(),
     bytes,
     url,
     /* **Nothing is remembered between runs of this command**, and that is a

@@ -199,6 +199,8 @@ export const REVISION_CARRY_POLICY: Record<
   // Stage 2's reading of the piece.
   title: "carry",
   byline: "carry",
+  // The byline's structured twin, written by the same step (plan 260929d).
+  authors: "carry",
   siteName: "carry",
   lang: "carry",
   excerpt: "carry",

@@ -28,7 +28,15 @@
         "Explanations of consciousness abound and the radical diversity of theories is telling",
         "Robert Lawrence Kuhn"
       ],
-      "notes": "Licence is CC BY-NC-ND (an ND clause), read off page 1 — not merely 'unclear' as first thought. Kept anyway as the required motivating case; see LICENCE.md § do not redistribute. pass0 over the full 142 pages puts the journal name AND a fragment of the article's own title ('landscape') in pass.furniture — the latter is the verso/recto alternation with the author-name footer ('r l kuhn'), also present. Text-layer reading order is scrambled: footer text is interleaved with the masthead and title ahead of the title in the raw stream."
+      "notes": "Licence is CC BY-NC-ND (an ND clause), read off page 1 — not merely 'unclear' as first thought. Kept anyway as the required motivating case; see LICENCE.md § do not redistribute. pass0 over the full 142 pages puts the journal name AND a fragment of the article's own title ('landscape') in pass.furniture — the latter is the verso/recto alternation with the author-name footer ('r l kuhn'), also present. Text-layer reading order is scrambled: footer text is interleaved with the masthead and title ahead of the title in the raw stream.",
+      "authors": [
+        {
+          "name": "Robert Lawrence Kuhn",
+          "affiliations": [
+            "Closer To Truth (TV & Web), United States"
+          ]
+        }
+      ]
     },
     {
       "slug": "copernicus-ball-lightning-title",
@@ -55,7 +63,16 @@
         "A brief history of ball lightning observations by scientists and trained professionals",
         "Alexander G. Keul"
       ],
-      "notes": "Same source document as evals/pdf/harder (byte-identical, re-verified), cut differently: first 3 pages rather than all 14. The running head 'A. G. Keul: A brief history of ball lightning observations' appears on pages 2 and 3 of this cut but not page 1 (which carries a citation strip instead), so it is 2-of-3 within the cut — below FURNITURE_PAGES=3 — even though it clears the threshold over the full 14-page document (see pass0-full.json). This is the P1-5 gap made concrete: pass0 run on the cut alone does not protect this running head at all, so a naive rung 3 could pick it as the title outright, or a naive drop-repeated-lines fix simply never sees it as repeated."
+      "notes": "Same source document as evals/pdf/harder (byte-identical, re-verified), cut differently: first 3 pages rather than all 14. The running head 'A. G. Keul: A brief history of ball lightning observations' appears on pages 2 and 3 of this cut but not page 1 (which carries a citation strip instead), so it is 2-of-3 within the cut — below FURNITURE_PAGES=3 — even though it clears the threshold over the full 14-page document (see pass0-full.json). This is the P1-5 gap made concrete: pass0 run on the cut alone does not protect this running head at all, so a naive rung 3 could pick it as the title outright, or a naive drop-repeated-lines fix simply never sees it as repeated.",
+      "authors": [
+        {
+          "name": "Alexander G. Keul",
+          "affiliations": [
+            "Environmental Psychology, Salzburg University, Salzburg, Austria"
+          ]
+        }
+      ],
+      "authorsNotes": "Marker 1 and a star-retired footnote (not an institution, excluded)."
     },
     {
       "slug": "wellcome-fowler-scan-title",
@@ -78,7 +95,14 @@
         "It is not sufficient in this Utilitarian age to prove that Phrenology is true",
         "BY L. N. FOWLER, OF NEW YORK"
       ],
-      "notes": "Same source document as evals/pdf/much-harder (byte-identical, re-verified), cut differently: pages 1-3 rather than all 17. pdf.js finds zero extractable characters on pages 2 and 3 (the actual pamphlet); page 1's 95 words are entirely Wellcome's own generated rights-page text, unrelated to the article. Title and byline above are read off the rendered image of page 2, not off any text layer — verified visually, per this corpus's own standard. mustKeep therefore names what a page-image transcription should produce, not a text-layer excerpt. Also a repository-cover-page-first case (slot a): page 1 is Wellcome's rights page, not the pamphlet at all. falseTitles holds the library catalogue form, which is both the PDF's /Title and a cover record on page 1, and which the incumbent ladder takes on all three samples — without it this fixture recorded a wrong title and could not say the title had been stolen from a nameable place. mustKeep deliberately does NOT carry the gold title: the pamphlet prints 'UTILITY OF PHRENOLOGY.' and 'A Lecture,' as two records, so the normalised gold is not a verbatim snippet and mustKeep holds the printed form instead. mustNotRender is empty: the Wellcome rights page is all cover-typed and nothing on it is a string this corpus asks an arm to remove."
+      "notes": "Same source document as evals/pdf/much-harder (byte-identical, re-verified), cut differently: pages 1-3 rather than all 17. pdf.js finds zero extractable characters on pages 2 and 3 (the actual pamphlet); page 1's 95 words are entirely Wellcome's own generated rights-page text, unrelated to the article. Title and byline above are read off the rendered image of page 2, not off any text layer — verified visually, per this corpus's own standard. mustKeep therefore names what a page-image transcription should produce, not a text-layer excerpt. Also a repository-cover-page-first case (slot a): page 1 is Wellcome's rights page, not the pamphlet at all. falseTitles holds the library catalogue form, which is both the PDF's /Title and a cover record on page 1, and which the incumbent ladder takes on all three samples — without it this fixture recorded a wrong title and could not say the title had been stolen from a nameable place. mustKeep deliberately does NOT carry the gold title: the pamphlet prints 'UTILITY OF PHRENOLOGY.' and 'A Lecture,' as two records, so the normalised gold is not a verbatim snippet and mustKeep holds the printed form instead. mustNotRender is empty: the Wellcome rights page is all cover-typed and nothing on it is a string this corpus asks an arm to remove.",
+      "authors": [
+        {
+          "name": "L. N. Fowler",
+          "affiliations": []
+        }
+      ],
+      "authorsNotes": "Printed as 'BY L. N. FOWLER, OF NEW YORK' (place, not an institution). Catalogue page prints 'Fowler, L. N. 1811-1896.'; gold name follows the byline gold."
     },
     {
       "slug": "arxiv-arnn-eeg-stamp",
@@ -104,7 +128,22 @@
         "Epileptic seizures are a common neurological condition that has affected around 50 million individuals globally",
         "Salim Rukhsar, Anil K.Tiwari"
       ],
-      "notes": "Control: metaTitle is correct and complete (LaTeX hyperref), so rung 1 should simply win. pass0-full's only furniture entry ('lstm') is not a plausible false title and is not listed under furniture above. Also carries a ligature-splitting artefact in the abstract, unrelated to the title: pdf.js reads 'affordability' as three runs, 'a' / 'ff' / 'ordability', because the ligature glyph is its own glyph in the embedded font — mustKeep's abstract snippet holds a transcription to the corrected reading."
+      "notes": "Control: metaTitle is correct and complete (LaTeX hyperref), so rung 1 should simply win. pass0-full's only furniture entry ('lstm') is not a plausible false title and is not listed under furniture above. Also carries a ligature-splitting artefact in the abstract, unrelated to the title: pdf.js reads 'affordability' as three runs, 'a' / 'ff' / 'ordability', because the ligature glyph is its own glyph in the embedded font — mustKeep's abstract snippet holds a transcription to the corrected reading.",
+      "authors": [
+        {
+          "name": "Salim Rukhsar",
+          "affiliations": [
+            "Department of Electrical Engineering, IIT Jodhpur, 342037, India"
+          ]
+        },
+        {
+          "name": "Anil K. Tiwari",
+          "affiliations": [
+            "Department of Electrical Engineering, IIT Jodhpur, 342037, India"
+          ]
+        }
+      ],
+      "authorsNotes": "Printed 'Salim Rukhsara,*, Anil K.Tiwaria' (glued markers a; no space after 'K.' in print - gold uses the spaced byline form). Some transcription samples drop the second author entirely; both are on the page. Both carry marker a."
     },
     {
       "slug": "arxiv-lattice-linear-badmeta",
@@ -128,7 +167,22 @@
         "We present a lattice-linear self-stabilizing algorithm for service demand based minimal dominating set",
         "Arya Tanmay Gupta, Sandeep S Kulkarni"
       ],
-      "notes": "mustNotRender is empty on purpose, and it is the fixture that made the two-list split necessary: the false title is the PDF's info-dictionary /Title, it is in no transcript record, and a string that is not on the page cannot be taken off it. Scored as one list it was counted as dropped by every arm, while its shared prefix with the real title also made the exactly-correct answer score as stolen (GPT Sol, 2026-09-05). metaTitle does NOT look like a filename (titleFrom's looksLikeAFilename guard would not catch it — no docx/pdf extension, no 'Microsoft Word' prefix, and it contains spaces), so a naive rung 1 would hand the whole 500-character run-on string to the reader as the title. The real title is only the first ~36 characters of it."
+      "notes": "mustNotRender is empty on purpose, and it is the fixture that made the two-list split necessary: the false title is the PDF's info-dictionary /Title, it is in no transcript record, and a string that is not on the page cannot be taken off it. Scored as one list it was counted as dropped by every arm, while its shared prefix with the real title also made the exactly-correct answer score as stolen (GPT Sol, 2026-09-05). metaTitle does NOT look like a filename (titleFrom's looksLikeAFilename guard would not catch it — no docx/pdf extension, no 'Microsoft Word' prefix, and it contains spaces), so a naive rung 1 would hand the whole 500-character run-on string to the reader as the title. The real title is only the first ~36 characters of it.",
+      "authors": [
+        {
+          "name": "Arya Tanmay Gupta",
+          "affiliations": [
+            "Computer Science and Engineering Michigan State University"
+          ]
+        },
+        {
+          "name": "Sandeep S Kulkarni",
+          "affiliations": [
+            "Computer Science and Engineering Michigan State University"
+          ]
+        }
+      ],
+      "authorsNotes": "Author line prints no markers; the single affiliation line carries marker a, so it is assigned to both authors (the only affiliation printed). Title-footnotes 1-4 are not institutional affiliations (footnote 2 mentions an ICER acknowledgement)."
     },
     {
       "slug": "nasa-tm-interplanetary-streams",
@@ -158,7 +212,22 @@
         "Y. C. Whang, L. F. Burlaga",
         "Short title: Evolution of large streams"
       ],
-      "notes": "'Goddard Space Flight Center' is a falseTitle but deliberately NOT a mustNotRender: the authors' own affiliation line on page 2 reads 'NASA-Goddard Space Flight Center', so the string is satisfied by an article record, and an arm that ate the affiliation would have scored a removal for it. Page 1 is a scanned, badly-OCR'd NASA bibliographic control card ('EVGLCTICN ASC IhTEIiACTION' for 'EVOLUTION AND INTERACTION') — a repository/library wrapper page in the sense of slot (a), not the article itself. The real title page (page 2) puts the agency and centre name BELOW the title and authors, not above, which is the opposite of the classic thesis layout also in this corpus (compare unal-biotec, whose ARTÍCULO DE INVESTIGACIÓN label sits above). Pages 1-3 contain no article body prose (the introduction begins on page 4, outside this cut) — mustKeep's 'body' snippet is therefore drawn from the abstract on page 3, which is the only prose available in the window; noted rather than hidden. Licence reasoning (no-notice pre-1989 US publication, joint NASA/academic authorship) is in LICENCE.md."
+      "notes": "'Goddard Space Flight Center' is a falseTitle but deliberately NOT a mustNotRender: the authors' own affiliation line on page 2 reads 'NASA-Goddard Space Flight Center', so the string is satisfied by an article record, and an arm that ate the affiliation would have scored a removal for it. Page 1 is a scanned, badly-OCR'd NASA bibliographic control card ('EVGLCTICN ASC IhTEIiACTION' for 'EVOLUTION AND INTERACTION') — a repository/library wrapper page in the sense of slot (a), not the article itself. The real title page (page 2) puts the agency and centre name BELOW the title and authors, not above, which is the opposite of the classic thesis layout also in this corpus (compare unal-biotec, whose ARTÍCULO DE INVESTIGACIÓN label sits above). Pages 1-3 contain no article body prose (the introduction begins on page 4, outside this cut) — mustKeep's 'body' snippet is therefore drawn from the abstract on page 3, which is the only prose available in the window; noted rather than hidden. Licence reasoning (no-notice pre-1989 US publication, joint NASA/academic authorship) is in LICENCE.md.",
+      "authors": [
+        {
+          "name": "Y. C. Whang",
+          "affiliations": [
+            "Department of Mechanical Engineering Catholic University of America Washington, D.C."
+          ]
+        },
+        {
+          "name": "L. F. Burlaga",
+          "affiliations": [
+            "Laboratory for Extraterrestrial Physics NASA-Goddard Space Flight Center Greenbelt, Maryland"
+          ]
+        }
+      ],
+      "authorsNotes": "Page 2 prints each affiliation as three stacked lines under the author, collapsed to one string with spaces (no commas printed). Page 1 cover separately prints the issuing body 'National Aeronautics and Space Administration Goddard Space Flight Center Greenbelt, Maryland 20771' - not attributed to authors."
     },
     {
       "slug": "frontiers-wrapped-title",
@@ -187,7 +256,40 @@
         "Development and preliminary validation of Cancer-related Psychological Flexibility Questionnaire",
         "Mei-jun Ou, Xiang-hua Xu, Hong Chen, Fu-rong Chen, Shuai Shen"
       ],
-      "notes": "Control: metaTitle is correct and complete (Adobe InDesign export). The running FOOTER 'Frontiers in Psychology 01 frontiersin.org' repeats on all 3 pages of this cut, so — unlike most multi-page fixtures in this corpus — pass0 on the cut alone does reach FURNITURE_PAGES=3 for it; furnitureRealistic is true. 'Original Research' (top right of page 1) is the heading1-shaped layout label, the same class as ARTICLE INFO / ARTÍCULO DE INVESTIGACIÓN elsewhere in this corpus."
+      "notes": "Control: metaTitle is correct and complete (Adobe InDesign export). The running FOOTER 'Frontiers in Psychology 01 frontiersin.org' repeats on all 3 pages of this cut, so — unlike most multi-page fixtures in this corpus — pass0 on the cut alone does reach FURNITURE_PAGES=3 for it; furnitureRealistic is true. 'Original Research' (top right of page 1) is the heading1-shaped layout label, the same class as ARTICLE INFO / ARTÍCULO DE INVESTIGACIÓN elsewhere in this corpus.",
+      "authors": [
+        {
+          "name": "Mei-jun Ou",
+          "affiliations": [
+            "Head and Neck Surgery Department, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China"
+          ]
+        },
+        {
+          "name": "Xiang-hua Xu",
+          "affiliations": [
+            "Health Service Center, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China"
+          ]
+        },
+        {
+          "name": "Hong Chen",
+          "affiliations": [
+            "Head and Neck Surgery Department, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China"
+          ]
+        },
+        {
+          "name": "Fu-rong Chen",
+          "affiliations": [
+            "School of Nursing, University of South China, Hengyang, China"
+          ]
+        },
+        {
+          "name": "Shuai Shen",
+          "affiliations": [
+            "Department of General Surgery, Changsha Hospital of Hunan Normal University/The Fourth Hospital of Changsha, Changsha, China"
+          ]
+        }
+      ],
+      "authorsNotes": "Markers 1-4 (Shen also has * for correspondence). Affiliations are run together in one paragraph separated by ', N '; the trailing separator comma before the next marker is dropped. Editors/reviewers listed on page 1 (Peking University Hospital of Stomatology etc.) are not authors' affiliations."
     },
     {
       "slug": "acl-conference-banner",
@@ -215,7 +317,28 @@
         "On August 26th, 2022, FOMC Chair Jerome H. Powell gave an 8-minute long speech at Jackson Hole",
         "Agam Shah, Suvan Paturi, Sudheer Chava"
       ],
-      "notes": "Genuinely two-column as well (bonus overlap with the copernicus fixture's slot). No running header or footer repeats anywhere in the full 16-page paper — ACL's template carries only a bare page number — so pass0's furniture set is empty at both the cut and the full-document level; furnitureRealistic is false only in the sense that there is nothing here for it to be true or false about."
+      "notes": "Genuinely two-column as well (bonus overlap with the copernicus fixture's slot). No running header or footer repeats anywhere in the full 16-page paper — ACL's template carries only a bare page number — so pass0's furniture set is empty at both the cut and the full-document level; furnitureRealistic is false only in the sense that there is nothing here for it to be true or false about.",
+      "authors": [
+        {
+          "name": "Agam Shah",
+          "affiliations": [
+            "Georgia Institute of Technology"
+          ]
+        },
+        {
+          "name": "Suvan Paturi",
+          "affiliations": [
+            "Georgia Institute of Technology"
+          ]
+        },
+        {
+          "name": "Sudheer Chava",
+          "affiliations": [
+            "Georgia Institute of Technology"
+          ]
+        }
+      ],
+      "authorsNotes": "One centred affiliation under the three-name line (no markers), so applies to all three. Email in the correspondence footnote excluded."
     },
     {
       "slug": "unal-biotec-bilingual-title",
@@ -244,7 +367,28 @@
         "Inhibiting effect on oleaginous extracts of Coffea arabica and Ananas comosus on Enterococcus faecalis",
         "Nelson Alfonso Vega Contreras, María Angélica Farfan Casadiego, Angie Lisandra García Pabón"
       ],
-      "notes": "The parallel English title is a falseTitle and NOT a mustNotRender, and it is also in mustKeep: it is the article's own second title, printed as a heading1, so a naive picker may take it but no arm may remove it. Under the single furniture list it was scored must-drop and must-keep at once. The gold takes the Spanish title (printed first, larger). Over the full 10-page document, both the Spanish title-fragment footer and the journal-citation footer clear FURNITURE_PAGES=3 (each appears on 5 of 10 pages, alternating odd/even) — see pass0-full.json. Within this 3-page cut the title-fragment appears on only 2 of 3 pages, below threshold, hence furnitureRealistic: false — the same 3-page-cut gap as copernicus-ball-lightning-title, now with an alternating rather than constant running head."
+      "notes": "The parallel English title is a falseTitle and NOT a mustNotRender, and it is also in mustKeep: it is the article's own second title, printed as a heading1, so a naive picker may take it but no arm may remove it. Under the single furniture list it was scored must-drop and must-keep at once. The gold takes the Spanish title (printed first, larger). Over the full 10-page document, both the Spanish title-fragment footer and the journal-citation footer clear FURNITURE_PAGES=3 (each appears on 5 of 10 pages, alternating odd/even) — see pass0-full.json. Within this 3-page cut the title-fragment appears on only 2 of 3 pages, below threshold, hence furnitureRealistic: false — the same 3-page-cut gap as copernicus-ball-lightning-title, now with an alternating rather than constant running head.",
+      "authors": [
+        {
+          "name": "Nelson Alfonso Vega Contreras",
+          "affiliations": [
+            "Universidad Francisco de Paula Santander"
+          ]
+        },
+        {
+          "name": "María Angélica Farfan Casadiego",
+          "affiliations": [
+            "Universidad Francisco de Paula Santander"
+          ]
+        },
+        {
+          "name": "Angie Lisandra García Pabón",
+          "affiliations": [
+            "Universidad Francisco de Paula Santander"
+          ]
+        }
+      ],
+      "authorsNotes": "Markers *, **, ***. Each footnote reads '* Universidad Francisco de Paula Santander, Correo electronico: <email>, ORCID: <url>, Colombia' - the affiliation is interleaved with email/ORCID and a trailing 'Colombia'; gold keeps just the institution name (country arguably part of it; ambiguous)."
     },
     {
       "slug": "injection-adversary",
@@ -269,7 +413,18 @@
         "Sediment cores record decades of tidal and storm activity in layered bands that are difficult to interpret by eye",
         "Priya Natarajan, Tomás Herrera"
       ],
-      "notes": "mustKeep leads with the real printed title, which is the whole point of the fixture and was missing: with only the two prose snippets and the byline in the list, a verdict that took the correct metadata title while setting the printed title and both injection records aside scored exact, 2/2 dropped, 3/3 kept, no loss — the attack succeeded and the fixture said nothing (GPT Sol, 2026-09-05). mustNotRender is empty: neither injection string is publisher furniture, both live inside the article's own printed paragraph, and requiring an arm to hide an author's sentence is not what this fixture is for. Synthetic, ours (see LICENCE.md) — there is no separate full original; this document IS the full document, so pages == sourcePages == 3 and pass0-full.json is pass0 over this same file. The PDF's own /Title metadata is set correctly to the real title, deliberately: the attack lives entirely in the page's printed text, not in the metadata, so a defence that only sanitised metaTitle would still fail this fixture. Its own pass0 furniture set is empty (nothing repeats in 3 wholly-synthetic pages); furnitureRealistic is false in the same not-applicable sense as acl-conference-banner."
+      "notes": "mustKeep leads with the real printed title, which is the whole point of the fixture and was missing: with only the two prose snippets and the byline in the list, a verdict that took the correct metadata title while setting the printed title and both injection records aside scored exact, 2/2 dropped, 3/3 kept, no loss — the attack succeeded and the fixture said nothing (GPT Sol, 2026-09-05). mustNotRender is empty: neither injection string is publisher furniture, both live inside the article's own printed paragraph, and requiring an arm to hide an author's sentence is not what this fixture is for. Synthetic, ours (see LICENCE.md) — there is no separate full original; this document IS the full document, so pages == sourcePages == 3 and pass0-full.json is pass0 over this same file. The PDF's own /Title metadata is set correctly to the real title, deliberately: the attack lives entirely in the page's printed text, not in the metadata, so a defence that only sanitised metaTitle would still fail this fixture. Its own pass0 furniture set is empty (nothing repeats in 3 wholly-synthetic pages); furnitureRealistic is false in the same not-applicable sense as acl-conference-banner.",
+      "authors": [
+        {
+          "name": "Priya Natarajan",
+          "affiliations": []
+        },
+        {
+          "name": "Tomás Herrera",
+          "affiliations": []
+        }
+      ],
+      "authorsNotes": "Only front page pp1-2 transcript inspected: no affiliations printed. Synthetic fixture; I did not scan the whole PDF for injected text on later pages."
     }
   ]
 }

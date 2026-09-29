@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
+import { AUTHOR_LIMITS, decodeAuthors } from "../src/authors.js";
 import { runExtract } from "../src/extract.js";
 import { bylineFromAuthors, chooseByline, inNaturalOrder, metaAuthors } from "../src/meta-authors.js";
 
@@ -32,19 +33,22 @@ const page = (head: string, body = "") =>
 const docOf = (head: string) => new JSDOM(page(head)).window.document;
 const metaTag = (name: string, content: string) => `<meta name="${name}" content="${content}">`;
 
+/** Just the names, so the cases written before affiliations (260929d) read as they did. */
+const namesOf = (doc: Document) => metaAuthors(doc)?.map((a) => a.name) ?? null;
+
 describe("metaAuthors", () => {
   it("reads every citation_author, in document order", () => {
     const head = ["Nastase, Samuel A.", "Liu, Yun-Fei", "Hasson, Uri"].map((n) => metaTag("citation_author", n)).join("");
-    expect(metaAuthors(docOf(head))).toEqual(["Samuel A. Nastase", "Yun-Fei Liu", "Uri Hasson"]);
+    expect(namesOf(docOf(head))).toEqual(["Samuel A. Nastase", "Yun-Fei Liu", "Uri Hasson"]);
   });
 
   it("reads a single citation_author — arXiv's DOM fallback for one is a dateline", () => {
-    expect(metaAuthors(docOf(metaTag("citation_author", "Doe, Jane")))).toEqual(["Jane Doe"]);
+    expect(namesOf(docOf(metaTag("citation_author", "Doe, Jane")))).toEqual(["Jane Doe"]);
   });
 
   it("prefers citation_author over dc.creator when both are there", () => {
     const head = metaTag("dc.creator", "Someone Else") + metaTag("citation_author", "Jane Doe") + metaTag("citation_author", "John Smith");
-    expect(metaAuthors(docOf(head))).toEqual(["Jane Doe", "John Smith"]);
+    expect(namesOf(docOf(head))).toEqual(["Jane Doe", "John Smith"]);
   });
 
   it("reads a repeated dc.creator, in any of its spellings", () => {
@@ -53,24 +57,96 @@ describe("metaAuthors", () => {
       metaTag("dc:creator", "Smith, John") +
       metaTag("dcterms.creator", "Lovelace, Ada") +
       metaTag("dcterm:creator", "Hopper, Grace");
-    expect(metaAuthors(docOf(head))).toEqual(["Jane Doe", "John Smith", "Ada Lovelace", "Grace Hopper"]);
+    expect(namesOf(docOf(head))).toEqual(["Jane Doe", "John Smith", "Ada Lovelace", "Grace Hopper"]);
   });
 
   it("leaves a single dc.creator to Readability, which already reads one correctly", () => {
-    expect(metaAuthors(docOf(metaTag("dc.creator", "Jane Doe")))).toBeNull();
+    expect(namesOf(docOf(metaTag("dc.creator", "Jane Doe")))).toBeNull();
   });
 
   it("does not read a repeated plain author tag — a news page's is left alone", () => {
-    expect(metaAuthors(docOf(metaTag("author", "Jane Doe") + metaTag("author", "John Smith")))).toBeNull();
+    expect(namesOf(docOf(metaTag("author", "Jane Doe") + metaTag("author", "John Smith")))).toBeNull();
   });
 
   it("drops duplicates and empty values", () => {
     const head = ["Jane Doe", "", "  ", "jane doe", "John Smith"].map((n) => metaTag("citation_author", n)).join("");
-    expect(metaAuthors(docOf(head))).toEqual(["Jane Doe", "John Smith"]);
+    expect(namesOf(docOf(head))).toEqual(["Jane Doe", "John Smith"]);
   });
 
   it("returns null for a page with no author metadata", () => {
-    expect(metaAuthors(docOf(""))).toBeNull();
+    expect(namesOf(docOf(""))).toBeNull();
+  });
+});
+
+describe("metaAuthors' affiliations (plan 260929d)", () => {
+  it("gives each citation_author the institution tags that follow it, as Nature and PLOS emit them", () => {
+    const head =
+      metaTag("citation_author", "Nastase, Samuel A.") +
+      metaTag("citation_author_institution", "Princeton Neuroscience Institute, Princeton University") +
+      metaTag("citation_author", "Liu, Yun-Fei") +
+      metaTag("citation_author_institution", "Johns Hopkins University") +
+      metaTag("citation_author_affiliation", "  Second   place ") +
+      metaTag("citation_author", "Hasson, Uri");
+    expect(metaAuthors(docOf(head))).toEqual([
+      { name: "Samuel A. Nastase", affiliations: ["Princeton Neuroscience Institute, Princeton University"] },
+      { name: "Yun-Fei Liu", affiliations: ["Johns Hopkins University", "Second place"] },
+      { name: "Uri Hasson", affiliations: [] },
+    ]);
+  });
+
+  it("drops an institution that comes before any author — it belongs to nobody", () => {
+    const head = metaTag("citation_author_institution", "Orphan U") + metaTag("citation_author", "Jane Doe");
+    expect(metaAuthors(docOf(head))).toEqual([{ name: "Jane Doe", affiliations: [] }]);
+  });
+
+  it("merges a repeated author's institutions into the first, without repeats", () => {
+    const head =
+      metaTag("citation_author", "Jane Doe") +
+      metaTag("citation_author_institution", "A") +
+      metaTag("citation_author", "jane doe") +
+      metaTag("citation_author_institution", "A") +
+      metaTag("citation_author_institution", "B");
+    expect(metaAuthors(docOf(head))).toEqual([{ name: "Jane Doe", affiliations: ["A", "B"] }]);
+  });
+
+  it("keeps each affiliation beside its own author when the names are flipped", () => {
+    const head =
+      metaTag("citation_author", "Doe, Jane") +
+      metaTag("citation_author_institution", "Oxford") +
+      metaTag("citation_author", "Smith, John") +
+      metaTag("citation_author_institution", "Cambridge");
+    expect(metaAuthors(docOf(head))).toEqual([
+      { name: "Jane Doe", affiliations: ["Oxford"] },
+      { name: "John Smith", affiliations: ["Cambridge"] },
+    ]);
+  });
+
+  it("does not attach an institution to a dc.creator", () => {
+    const head =
+      metaTag("dc.creator", "Jane Doe") + metaTag("citation_author_institution", "Oxford") + metaTag("dc.creator", "John Smith");
+    expect(metaAuthors(docOf(head))).toEqual([
+      { name: "Jane Doe", affiliations: [] },
+      { name: "John Smith", affiliations: [] },
+    ]);
+  });
+});
+
+describe("decodeAuthors", () => {
+  it("accepts the stored shape and copies only its public fields", () => {
+    expect(decodeAuthors([{ name: "Jane Doe", affiliations: ["Oxford"], internal: "not part of Author" }])).toEqual([
+      { name: "Jane Doe", affiliations: ["Oxford"] },
+    ]);
+  });
+
+  it("turns malformed or over-limit JSONB into no author list", () => {
+    expect(decodeAuthors([{ name: "Jane Doe" }])).toBeNull();
+    expect(decodeAuthors([{ name: "Jane Doe", affiliations: [""] }])).toBeNull();
+    expect(decodeAuthors([{ name: "x".repeat(AUTHOR_LIMITS.maxNameChars + 1), affiliations: [] }])).toBeNull();
+    expect(
+      decodeAuthors(
+        Array.from({ length: AUTHOR_LIMITS.maxAuthors + 1 }, () => ({ name: "Jane Doe", affiliations: [] })),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -158,6 +234,34 @@ describe("runExtract on the saved publisher pages", () => {
     expect(names[0]).toBe("Samuel A. Nastase");
     expect(names[1]).toBe("Yun-Fei Liu");
     expect(names[24]).toBe("Uri Hasson");
+    /* The structured twin (plan 260929d): the same names in the same order. */
+    expect(meta.authors?.map((a) => a.name)).toEqual(names);
+  });
+
+  it("stores the affiliations beside the names, and the byline stays the names alone", async () => {
+    const head =
+      metaTag("citation_author", "Doe, Jane") +
+      metaTag("citation_author_institution", "Oxford") +
+      metaTag("citation_author", "Smith, John");
+    const { meta } = await runExtract({ html: page(head), url: "https://example.com/a", slug: "a" });
+    expect(meta.byline).toBe("Jane Doe; John Smith");
+    expect(meta.authors).toEqual([
+      { name: "Jane Doe", affiliations: ["Oxford"] },
+      { name: "John Smith", affiliations: [] },
+    ]);
+  });
+
+  it("keeps the list beside a Readability byline that names exactly those people", async () => {
+    const ld = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "ScholarlyArticle",
+      headline: "A Title",
+      author: [{ "@type": "Person", name: "Jane Doe" }, { "@type": "Person", name: "John Smith" }],
+    });
+    const head = `${metaTag("citation_author", "Jane Doe")}${metaTag("citation_author", "John Smith")}<script type="application/ld+json">${ld}</script>`;
+    const { meta } = await runExtract({ html: page(head), url: "https://example.com/b", slug: "b" });
+    expect(meta.byline).toBe("Jane Doe, John Smith");
+    expect(meta.authors?.map((a) => a.name)).toEqual(["Jane Doe", "John Smith"]);
   });
 
   it("PLOS: all 6 authors, not the first link of the author list", async () => {
@@ -200,6 +304,8 @@ describe("runExtract on the saved publisher pages", () => {
       slug: "ld",
     });
     expect(meta.byline).toBe("Jane Doe, John Smith");
+    /* And no one-name list beside a two-name byline (plan 260929d). */
+    expect(meta.authors).toBeUndefined();
   });
 
   it("a page with only a plain author tag keeps Readability's byline", async () => {

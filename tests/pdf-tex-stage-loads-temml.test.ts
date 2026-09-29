@@ -49,6 +49,7 @@ describe("the stage, with temml loaded by nothing but the stage", () => {
     };
     const result = await runPdfExtract({
       frontMatter: null,
+      authors: null,
       bytes,
       url: "https://example.test/paper.pdf",
       checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper-temml-loader" }),

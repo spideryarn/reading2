@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "authors" jsonb;--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD CONSTRAINT "article_revisions_authors_array" CHECK (jsonb_typeof("spideryarn"."article_revisions"."authors") = 'array');

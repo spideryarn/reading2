@@ -78,6 +78,7 @@ import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
 import type { Candidate } from "../shelf-terms/extract.js";
 import type {
+  Author,
   Citations,
   Arc,
   Citation,
@@ -534,6 +535,20 @@ export const articleRevisions = spideryarn.table(
     // The identity of the piece, as this extraction saw it — `Meta` in src/types.ts.
     title: text("title"),
     byline: text("byline"),
+    /**
+     * **`Meta.authors` — each author's name and affiliations, in the page's
+     * order.** JSONB rather than a column or a child table, and sql.md asks for
+     * the sentence: it is an ordered display list that only means anything on
+     * this revision, nothing filters, sorts or joins on it, and the shelf's
+     * "other articles by" search reads `byline`, which stays a column. A child
+     * table would also need copying forward by hand where a column is carried
+     * by `REVISION_CARRY_POLICY` for free. The day we want an author index
+     * across articles, that is a table. Null = we do not know the list, which
+     * is every revision written before 2026-09-29 and every page whose byline
+     * came only from Readability.
+     * docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md.
+     */
+    authors: jsonb("authors").$type<Author[]>(),
     siteName: text("site_name"),
     lang: text("lang"),
     excerpt: text("excerpt"),
@@ -1055,6 +1070,7 @@ export const articleRevisions = spideryarn.table(
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    check("article_revisions_authors_array", sql`jsonb_typeof(${t.authors}) = 'array'`),
     /**
      * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
      * same standing hazard `revision_step_runs_step` has, which has drifted

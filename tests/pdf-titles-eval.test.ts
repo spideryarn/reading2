@@ -135,6 +135,64 @@ describe("judge scores the byline", () => {
     expect(v.bylineAnswer).toBeNull();
     expect(v.bylineRight).toBe(false);
   });
+
+  it("compares names, not separators — but a marker left on a name is still wrong (plan 260929d)", () => {
+    const fixture = fixtureOf({ byline: "Ada Lovelace, Anil K. Tiwari and Grace Hopper" });
+    expect(judge(fixture, sample, "tidy", answerOf({ byline: "Ada Lovelace; Anil K.Tiwari; Grace Hopper" })).bylineRight).toBe(true);
+    expect(judge(fixture, sample, "tidy", answerOf({ byline: "Ada Lovelace1, Anil K. Tiwari2 and Grace Hopper" })).bylineRight).toBe(false);
+  });
+
+  it("uses structured names when commas inside names make the byline ambiguous", () => {
+    const fixture = fixtureOf({
+      byline: "Nastase, Samuel A., Hopper, Grace",
+      authors: [
+        { name: "Nastase, Samuel A.", affiliations: [] },
+        { name: "Hopper, Grace", affiliations: [] },
+      ],
+    });
+    const wronglySegmented = [
+      { name: "Nastase", affiliations: [] },
+      { name: "Samuel A.", affiliations: [] },
+      { name: "Hopper", affiliations: [] },
+      { name: "Grace", affiliations: [] },
+    ];
+    const v = judge(
+      fixture,
+      sample,
+      "tidy-authors",
+      answerOf({ byline: "Nastase; Samuel A.; Hopper; Grace", authors: wronglySegmented }),
+    );
+    expect(v.bylineRight).toBe(false);
+  });
+});
+
+describe("judge scores the authors per author (plan 260929d)", () => {
+  const sample = sampleOf([record("The Real Title", { type: "heading1" })]);
+  const fixture = fixtureOf({
+    authors: [
+      { name: "Ada Lovelace", affiliations: ["University of London"] },
+      { name: "Grace Hopper", affiliations: ["Yale University"] },
+    ],
+  });
+
+  it("is right when every name and every author's affiliations match", () => {
+    const v = judge(fixture, sample, "tidy", answerOf({ authors: fixture.authors ?? null }));
+    expect([v.namesRight, v.affiliationsRight]).toEqual([true, true]);
+  });
+
+  it("is wrong when the affiliations are handed to the wrong authors, though the count is right", () => {
+    const swapped = [
+      { name: "Ada Lovelace", affiliations: ["Yale University"] },
+      { name: "Grace Hopper", affiliations: ["University of London"] },
+    ];
+    const v = judge(fixture, sample, "tidy", answerOf({ authors: swapped }));
+    expect([v.namesRight, v.affiliationsRight]).toEqual([true, false]);
+  });
+
+  it("is wrong, not right-by-default, when no list was offered", () => {
+    const v = judge(fixture, sample, "tidy-prior", answerOf());
+    expect([v.namesRight, v.affiliationsRight, v.authorsAnswer]).toEqual([false, false, null]);
+  });
 });
 
 describe("judge separates a false title from a rendered string", () => {
@@ -228,6 +286,9 @@ describe("report", () => {
     exact: true,
     folded: true,
     stoleFalseTitle: false,
+    authorsAnswer: null,
+    namesRight: false,
+    affiliationsRight: false,
     bylineAnswer: null,
     bylineRight: false,
     setAside: 3,
