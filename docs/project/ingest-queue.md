@@ -927,8 +927,10 @@ a `claim` that ignored its argument, on both adapters
 
 **What the number rations is spend and provider rate limits**, not CPU, memory or connections. There
 is no spend cap anywhere in this repo, and the label and summary fan-outs each multiply by N. It does
-not ration correctness: two jobs still never *run* on one article, which is the article's own line
-below and not this one.
+not ration correctness: which jobs may run on one article at once is the article's own line below
+and not this one. Since 2026-09-29 that line lets compatible mode jobs run side by side, so one
+reader opening four modes can take every slot — left at 3 on purpose, and Greg's call
+([260929c § Deferred](../plans/260929c-modes-generate-in-parallel-on-one-article.md#deferred)).
 
 **The pump does not start on Vercel.** It cannot outlive the invocation that made it, so all it
 could produce there is a `running` row whose claimant is already frozen. The browser is the only
@@ -941,16 +943,21 @@ driver in production, which is what the advance endpoint was built for.
 like, and it simply takes longer?"* So a second, different request for one article is **created**,
 not refused, and waits.
 
-Four partial unique indexes on `jobs` arbitrate it ([`src/db/schema.ts`](../../src/db/schema.ts)),
-and they replaced one — `jobs_active_slug`, unique on `(owner_id, slug)` over `queued` and `running`
+Three partial unique indexes on `jobs` arbitrate it ([`src/db/schema.ts`](../../src/db/schema.ts)),
+and they are what is left of one — `jobs_active_slug`, unique on `(owner_id, slug)` over `queued` and `running`
 — which had been doing three jobs at once. Splitting it is what let an article hold more than one:
 
 | index | on | where | for |
 |---|---|---|---|
-| `jobs_one_running_per_slug` | `(slug)` | `status = 'running'` | the article mutex |
 | `jobs_reserved_slug` | `(slug)` | active **and** `reserves_name` | name reservation |
 | `jobs_active_work` | `(owner_id, slug, work_key)` | active **and not** `cancelling` | de-duplication |
 | `jobs_active_source` | `(owner_id, url_key)` | active **and** `reserves_name` | one mint per address |
+
+There was a fourth, `jobs_one_running_per_slug` — unique on `(slug)` where `status = 'running'`, the
+article mutex — and it was dropped on 2026-09-29
+([`drizzle/20260929052845_drop_jobs_one_running_per_slug.sql`](../../drizzle/20260929052845_drop_jobs_one_running_per_slug.sql))
+so that compatible mode jobs can share an article; a unique index cannot say *unless compatible*. See
+[§ Mode jobs share an article](#mode-jobs-share-an-article).
 
 Two more things came with them and are easy to miss. `jobs_slug_order`, a **non-unique** index on
 `(slug, created_at, id)` over the active statuses, is what the predecessor scan reads — it runs inside
@@ -959,7 +966,7 @@ account behind it. And a check constraint, `jobs_cancelling_is_running`: a `queu
 `cancelling` is a state the cancellation API cannot produce and nothing could clear, and it would sit
 outside `jobs_active_work` while still blocking its article's line for ever.
 
-**The first two are global on `slug`, not owner-scoped.** `articles.slug` is globally unique because
+**`jobs_reserved_slug` is global on `slug`, not owner-scoped**, and so is the line itself. `articles.slug` is globally unique because
 it is the URL contract, so two owners can build toward one name. De-duplication is a fact about one
 person's request; the article is not.
 
@@ -977,7 +984,7 @@ which is what keeps re-taking the
 failed attempt's name from opening the race `jobs_active_source` closes — and when the index refuses
 it, it takes the holder's job rather than inserting an unreserved row. See
 [§ A retry keeps the failed attempt's name](#a-retry-keeps-the-failed-attempts-name-and-that-is-a-decision).
-Nothing on `jobs_reserved_slug` can object to re-taking the name, because all four of these indexes
+Nothing on `jobs_reserved_slug` can object to re-taking the name, because all three of these indexes
 are partial over `queued`/`running` and the attempt being retried is terminal.
 
 **Which conflict fired is decided by re-reading, never by the constraint name.** One insert can
@@ -996,16 +1003,17 @@ together are a double-click, which de-duplication collapses into one job before 
 
 **The *"and no other running row"* half is not a refinement of the first**, and leaving it out cost a
 500. A row whose insert commits after a newer one has already claimed the slug has nothing older than
-it on the article, so an order-only rule lets it through — and its `UPDATE` then walks into
-`jobs_one_running_per_slug`, which is a unique violation where the contract says wait. On the
-filesystem store, which has no index underneath, it was worse: two jobs running on one
-`data/<slug>/`. The late commit still does not get to displace the job already inside the article; it
+it on the article, so an order-only rule lets it through — and its `UPDATE` then walked into
+`jobs_one_running_per_slug`, a unique violation where the contract says wait. On the filesystem
+store, which had no index underneath, it was worse: two jobs running on one `data/<slug>/`. With
+that index gone (2026-09-29) this half is the only thing between a late commit and a second runner
+inside the article. The late commit still does not get to displace the job already inside the article; it
 waits like everything else.
 
 **A predecessor that is stopping still blocks.** Stop on a *queued* job settles it terminal at once
 and it leaves the line by itself; Stop on a *running* one leaves it `running` with `cancelling` set
-until its claimant releases or its lease lapses, and the mutex still covers that row. The successor
-unblocks when the cancellation becomes terminal, not when Stop is pressed.
+until its claimant releases or its lease lapses, and the line still counts that row as running. The
+successor unblocks when the cancellation becomes terminal, not when Stop is pressed.
 
 **The cost, named rather than solved: an abandoned `queued` row blocks its own article's line.** It
 is not swept, and there is no `last_seen_at` — that would turn *"durable until resumed or
@@ -1026,7 +1034,47 @@ random short id means no other reader can ever come to want that name.
 `src/store/artifacts-fs.ts` (deleted 2026-09-05) keyed every artefact write, the
 `beginStep`/`finishStep` marker and `interrupted()`, on `(slug, step)` in one shared `data/<slug>/`
 directory with no job scoping, and on a laptop there was no per-job scratch to save it. Two jobs
-running at once on one article would have overwritten each other's output outright.
+running at once on one article would have overwritten each other's output outright. That store is gone, and
+what the line protects now is narrower: two jobs making the same column, one reading what the other
+is making, and the tree and blocks every mode reads changing under a mode — which is exactly where
+§ Mode jobs share an article draws it.
+
+### Mode jobs share an article
+
+> Can we run some of the AI processing in parallel? For example, if I've opened up Ideas and Quotes
+> and Drawing and Tweet-threads modes, or whatever, there aren't any dependencies between them […]
+> The only complexity I can see is for something like Trajectory mode, which should wait until any
+> of the modes that it draws on to have finished if they're running.
+>
+> — Greg, 2026-09-29
+
+**Two jobs on one article may run at once when both are *sharing jobs* and neither makes what the
+other makes or reads.** A sharing job is one whose steps are all *sharing steps* — the modes after
+`assets` in `STEP_ORDER`, each writing one `article_revisions` column of its own — and which carries
+no `reset` and reserves no name. Each step's column and the other sharing steps it reads (`illustrated`
+reads `sketch`; `trajectory` reads `quotes` and `ideas`) are one exhaustive policy in
+[`src/sharing-steps.ts`](../../src/sharing-steps.ts), and `mayOverlap` there is the rule. Everything
+else — ingest, re-extraction, `hierarchy`, `labels`, `assets`, a reset — runs alone exactly as
+before, and FIFO holds for every pair that may not overlap, so a mode job never jumps an older
+re-extraction.
+
+`blockedByAnother` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)) still picks the candidates
+in SQL — any running row, and any older active one — and lets one off only if the two may overlap.
+**The locked read is the whole of the rule now**: no index stands behind it.
+
+**The second to finish is rebased, not refused.** Each job still writes its own draft, so the second
+mode job to finish finds the article moved under it — which `publishRevisionIn` refuses, and the
+paid work would be thrown away. So at the `done` settlement a sharing job whose base moved is carried
+onto the new base first (`rebaseSharingDraftIn`,
+[`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)): a fresh draft from the current
+revision, this job's columns and run rows copied onto it, the old draft failed, and the new one
+published through the unchanged `publishRevisionIn`. **Only when the data proves it safe** —
+everything but the *other* modes' columns and run rows equal between the old base and the current
+revision — and otherwise it refuses exactly as before. The queue makes the refusal unreachable for
+queue jobs; the check is what keeps the rebase safe against anything else that publishes.
+[260929c](../plans/260929c-modes-generate-in-parallel-on-one-article.md) is the design and its
+review.
+
 ### On the filesystem, "one process" had to be made true
 
 The files adapter (`src/store/jobs-fs.ts`, deleted 2026-09-05 with the filesystem store) always said

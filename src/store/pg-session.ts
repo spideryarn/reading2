@@ -121,10 +121,13 @@ import {
   logDraftFailure,
   logNavLabelsFailed,
   logPublication,
+  logRebase,
   markNavLabelsFailedIn,
   publishRevisionIn,
   openOrBeginJobDraft,
+  rebaseSharingDraftIn,
   type PublishRevisionResult,
+  type RebaseOutcome,
 } from "./pg-revisions.js";
 import {
   checkProduct,
@@ -167,6 +170,8 @@ const NOTHING_UNCONVERTED: ReadonlySet<StepName> = new Set<StepName>();
 /** What the transaction decided that only the caller may say out loud. */
 interface Announcement {
   readonly published?: PublishRevisionResult;
+  /** Whether the draft was carried onto a newer base before publishing. */
+  readonly rebase?: RebaseOutcome;
   readonly failed?: { readonly revisionId: string; readonly reason: string; readonly changed: number | null };
   /** The published revision whose `nav_label_status` this failure moved to `failed`. */
   readonly navLabelsFailed?: string;
@@ -321,6 +326,27 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
     return { failed: { revisionId: ref.revisionId, reason, changed: failed.changed } };
   };
 
+  /**
+   * Publish this job's draft — **carried onto a newer base first, when it is a
+   * mode job and what published in the meantime was another mode's column.**
+   *
+   * 2026-09-29: compatible mode jobs now run side by side on one article
+   * (src/sharing-steps.ts), so for them a moved base is the ordinary case
+   * rather than a race, and refusing it would throw the second mode's paid
+   * work away. `rebaseSharingDraftIn` decides on the data whether carrying it
+   * is safe, and does nothing otherwise; either way `publishRevisionIn` is
+   * unchanged and still refuses a base that moved — so what it publishes is
+   * the fresh draft when there was a rebase, and this job's own otherwise, and
+   * the announcement names the revision actually published.
+   * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md § 2.
+   */
+  const publishIn = async (tx: Tx, slug: string): Promise<Announcement> => {
+    const rebase = await rebaseSharingDraftIn(tx, { slug, revisionId: ref.revisionId, job });
+    const revisionId = rebase.kind === "rebased" ? rebase.revisionId : ref.revisionId;
+    const published = await publishRevisionIn(tx, { slug, revisionId, job });
+    return { published, rebase };
+  };
+
   /** Why a draft is being thrown away, in the words the ending already has. */
   const reasonFor = (ending: JobEnding): string =>
     ending.error ?? `the job ended ${ending.status} with no message`;
@@ -457,8 +483,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          above `PgStoreSessionOptions`. The throw is still `PublishRefused`
          inside this transaction, so it still takes the publication, the step
          and the job's ending back with it. */
-      const published = await publishRevisionIn(tx, { slug, revisionId: ref.revisionId, job });
-      announce = { published };
+      announce = await publishIn(tx, slug);
     } else {
       /* **The step that was begun and never finished is marked `error` first.**
          A stage that threw, or that the reader stopped, leaves the row
@@ -558,6 +583,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
 
   /** Everything the transaction decided, said out loud now that it has committed. */
   const announce = (slug: string, what: Announcement): void => {
+    if (what.rebase) logRebase(slug, what.rebase);
     if (what.published) logPublication({ slug }, what.published);
     if (what.failed) {
       logDraftFailure(
