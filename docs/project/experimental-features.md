@@ -193,7 +193,8 @@ here, not consent; `/privacy` says we keep it. Fable argued for recording for ev
 time cannot be backfilled —
 [260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
 
-**And one control on the Metadata page: *Start this article again*** (a reset, and optionally
+**And one control on the Metadata page: *Start this article again*** — a block inside *Re-run AI
+processing* since 2026-09-29 rather than a section of its own (a reset, and optionally
 the modes made again), since 2026-09-28. It re-reads the article with today's pipeline, so a
 paragraph whose text comes out different — mostly maths in articles added before maths was drawn —
 detaches any comment on it, and pressing it with the extras ticked spends a model call per mode. That

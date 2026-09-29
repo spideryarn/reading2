@@ -315,9 +315,13 @@ describe("the Start this article again section", () => {
     await open();
     expect(card()).toBeTruthy();
     const order = sections();
-    expect(order.indexOf("Start this article again")).toBe(
-      order.indexOf("Archive this article") - 1,
+    /* Inside *Re-run AI processing* since 2026-09-29, not a section of its
+       own — docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+    expect(order).not.toContain("Start this article again");
+    expect(card()?.closest("[data-section]")?.getAttribute("data-section")).toBe(
+      "Re-run AI processing",
     );
+    expect(order.indexOf("Re-run AI processing")).toBe(order.indexOf("Archive this article") - 1);
   });
 
   it("names the extras this article has beside the checkbox, and no others", async () => {

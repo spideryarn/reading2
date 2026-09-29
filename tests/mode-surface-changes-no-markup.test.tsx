@@ -1623,7 +1623,7 @@ const IDEAS_SHAPE: BandShape = {
   className: "mode-band gloss ideas",
   label: "Ideas",
   head: true,
-  children: ["div.band-head", "div.ideas-scroll", "div.ideas-again"],
+  children: ["div.band-head", "div.ideas-scroll"],
   headChildren: ["span.gloss-count"],
 };
 
@@ -1658,7 +1658,7 @@ const TIMELINE_SHAPE: BandShape = {
   className: "mode-band gloss timeline",
   label: "Timeline",
   head: true,
-  children: ["div.band-head", "div.tl-scroll", "div.tl-again"],
+  children: ["div.band-head", "div.tl-scroll"],
   headChildren: ["span.gloss-count"],
 };
 
@@ -1694,7 +1694,6 @@ const DEBATE_SHAPE: BandShape = {
     "p.dbt-frame",
     "div.dbt-bar",
     "div.dbt-scroll",
-    "div.dbt-again",
   ],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
@@ -1720,7 +1719,7 @@ const QUIZ_SHAPE: BandShape = {
   className: "mode-band gloss quiz",
   label: "Quiz",
   head: true,
-  children: ["div.band-head", "div.quiz-one", "div.quiz-rewrite"],
+  children: ["div.band-head", "div.quiz-one"],
   headChildren: ["div.rmb-sub"],
 };
 
@@ -1743,7 +1742,7 @@ const QUIZ_NO_SUBMODE: BandShape = {
   className: "mode-band gloss quiz",
   label: "Quiz",
   head: true,
-  children: ["div.band-head", "div.quiz-one", "div.quiz-rewrite"],
+  children: ["div.band-head", "div.quiz-one"],
   headChildren: [],
 };
 
@@ -1854,7 +1853,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(GLOSSARY_VISITOR);
   });
 
-  it("draws Ideas' band with its scroller and its run-again footer", async () => {
+  it("draws Ideas' band with its scroller, and no run-again footer since plan 260929b", async () => {
     await paint(mountIdeas(IDEAS));
     expectShape(IDEAS_SHAPE);
   });
@@ -1874,7 +1873,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(QUOTES_LOADING);
   });
 
-  it("draws Timeline's band with its scroller and its run-again footer", async () => {
+  it("draws Timeline's band with its scroller, and no run-again footer since plan 260929b", async () => {
     await paint(mountTimeline(TIMELINE));
     expectShape(TIMELINE_SHAPE);
   });
@@ -1894,7 +1893,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(DEBATE_LOADING);
   });
 
-  it("draws Quiz's band with a question and its rewrite footer", async () => {
+  it("draws Quiz's band with a question, and no rewrite footer since plan 260929b", async () => {
     await paint(mountQuiz(QUIZ));
     expectShape(QUIZ_SHAPE);
   });

@@ -726,9 +726,13 @@ downstream of the earliest step named. The pipeline is a chain; invalidating a s
 comes after it, by definition. The alternative is asking every caller to remember a rule the
 pipeline already knows.
 
-### A reader can ask for nine of them again, from the Metadata page
+### A reader can ask for ten of them again, from the Metadata page
 
-`/read/<slug>/metadata` has a **Generate it again** section: one row per offered step, and pressing
+`/read/<slug>/metadata` has a **Re-run AI processing** section (called *Generate it again* until
+2026-09-29, when it absorbed *Start this article again*, went shut by default and moved above Archive —
+[260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). Since the same day it is the only
+place a mode's standing redo lives; a mode keeps only the button inside its out-of-date banner. One
+row per offered step (`METADATA_RERUN_STEPS`, [src/rerun-steps.ts](../../src/rerun-steps.ts)), and pressing
 it posts `{ slug, steps: [step], force: [step] }` — this queue, this route, nothing new. Greg asked
 for it on 2026-09-06, having just declined a library-wide backfill after a prompt change:
 

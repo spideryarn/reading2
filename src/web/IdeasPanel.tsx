@@ -185,14 +185,13 @@ export function IdeasPanel({
           )}
         </>
       }
-      /* Below the list, not above it: this is the thing you reach for after
-          reading them and disagreeing, not before. Pinned under the scroller
-          through `foot`, with the guard it had as a trailing child. */
-      foot={
-        ideas && (owner === null || owner.status === "ready") && owner && !owner.stale && !owner.outdated ? (
-          <div className="ideas-again">{run("Find them again", true)}</div>
-        ) : null
-      }
+      /* No standing redo button under the list any more. Greg, 2026-09-29
+          (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
+          have a "redo this processing" button - let's just rely on the
+          Metadata mode for that."* Metadata's *Re-run AI processing* has a row
+          for this mode; the button inside the out-of-date banner stays, as a
+          repair the page is prompting rather than a standing redo.
+          docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
     >
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}

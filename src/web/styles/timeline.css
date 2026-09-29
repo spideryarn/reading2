@@ -188,12 +188,3 @@
   line-height: 1.4;
 }
 
-/* Pinned under the scroller rather than at the end of it, like `.ideas-again`:
-   the control that spends a model call must not be something you have to
-   scroll twenty-six events to reach. */
-.tl-again {
-  margin: 0;
-  padding: 0.45rem 0.7rem;
-  border-top: 1px solid var(--rule);
-}
-

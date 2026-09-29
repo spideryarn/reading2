@@ -178,15 +178,6 @@
   line-height: 1.35;
 }
 
-/* Pinned under the scroller rather than at the end of it, the way the
-   glossary's `Foot` is: the control that regenerates these must not be
-   something you have to scroll ten ideas to reach. */
-.ideas-again {
-  margin: 0;
-  padding: 0.45rem 0.7rem;
-  border-top: 1px solid var(--rule);
-}
-
 /* ---- force: the graph picture ---- */
 
 /* Force: the link IS the relationship, and the five kinds are five different

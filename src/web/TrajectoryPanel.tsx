@@ -317,14 +317,13 @@ export function TrajectoryPanel({ owner, view }: Props) {
             {atMost && coverageNote(total, route.offered) && (
               <p className="traj-note">{coverageNote(total, route.offered)}</p>
             )}
-            {/* **Plan it again**, pinned under the list as Ideas' and
-                Timeline's are — the plan's stage 5e. It rebuilds the route
-                only: Quotes is an unforced prerequisite on the request, so the
-                server checks its currency, while `useStepJob` names only
-                Trajectory in `force`. Quotes has its own button for replacing
-                a current list. Not drawn while the outdated banner is up,
-                which offers the same press already. */}
-            {!outdatedBy(owner) && <div className="traj-again">{run("Plan it again", true)}</div>}
+            {/* No standing *Plan it again* here: Metadata's *Re-run AI
+                processing* has a Trajectory row. Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"remove the "Plan it again"
+                button … Same goes for any other modes that still have a "redo
+                this processing" button - let's just rely on the Metadata mode
+                for that."* The button inside the out-of-date banner stays: it
+                is a repair the page is prompting, not a standing redo.
+                docs/plans/260929b-one-place-to-re-run-ai-processing.md. */}
           </div>
         ) : null
       }

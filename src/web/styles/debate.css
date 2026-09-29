@@ -412,15 +412,6 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   line-height: 1.4;
 }
 
-/* Pinned under the scroller rather than at the end of it, like `.tl-again`: the
-   control that spends two web searches must not be something you have to scroll
-   twelve rows to reach. */
-.dbt-again {
-  margin: 0;
-  padding: 0.45rem 0.7rem;
-  border-top: 1px solid var(--rule);
-}
-
 /* The ⓘ card. Narrower than the prose card next door because it holds one
    quotation and a link rather than a whole footnote, and the band it hangs off
    is 288px at its narrowest (`MODE_MIN` in layout.ts). */

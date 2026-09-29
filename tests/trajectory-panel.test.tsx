@@ -655,27 +655,31 @@ describe("the panel", () => {
     expect(links.some((button) => button.textContent?.includes("Recordings made"))).toBe(false);
   });
 
-  it("offers to plan it again under a ready route, rebuilding the route only (5e)", async () => {
+  /* Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"In Trajectory mode, remove
+     the "Plan it again" button. The user can do that from Metadata if they
+     really want."* The out-of-date banner keeps its own — plan 260929b. */
+  it("offers no standing Plan it again under a current route", async () => {
+    await draw(owner(), view());
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")].filter(
+      (b) => b.textContent === "Plan it again",
+    );
+    expect(buttons).toEqual([]);
+    expect(host.querySelector(".traj-again")).toBeNull();
+  });
+
+  it("offers it once, in the outdated banner, rebuilding the route only (5e)", async () => {
     let regenerated = 0;
     let ensured = 0;
     const o = owner({
+      outdated: true,
       regenerate: async () => void regenerated++,
       ensure: async () => void ensured++,
     });
     await draw(o, view());
-    const again = [...host.querySelectorAll<HTMLButtonElement>(".traj-again button")];
+    const again = [...host.querySelectorAll<HTMLButtonElement>(".gloss-stale button")];
     expect(again.map((b) => b.textContent)).toEqual(["Plan it again"]);
     await act(async () => again[0]!.click());
     expect([regenerated, ensured]).toEqual([1, 0]);
-  });
-
-  it("does not offer it twice when the outdated banner already does", async () => {
-    await draw(owner({ outdated: true }), view());
-    const buttons = [...host.querySelectorAll<HTMLButtonElement>("button")].filter(
-      (b) => b.textContent === "Plan it again",
-    );
-    expect(buttons).toHaveLength(1);
-    expect(host.querySelector(".traj-again")).toBeNull();
   });
 
   it("marks where each stop sits in the article, the current one in the accent (5b)", async () => {
@@ -1315,6 +1319,8 @@ describe("the band, walked", () => {
   });
 
   it("plans it again with the route forced, and nothing else when the Quotes are current (5e)", async () => {
+    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
+    trajectoryBody = { ...trajectoryBody, outdated: true };
     /* Not `["quotes", "trajectory"]`: the server re-runs Quotes whose prompt
        version is merely outdated, so naming them on every press re-bought and
        replaced a reader's Quotes on a route rebuild (browser check, 2026-09-28;
@@ -1322,36 +1328,42 @@ describe("the band, walked", () => {
        reason to name them either. */
     ideasBody = IDEAS_BODY;
     await mount();
-    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
     await settled();
     expect(posted).toEqual([{ slug: "a-route", steps: ["trajectory"], force: ["trajectory"] }]);
   });
 
   it("plans it again with the Ideas found first, unforced, when there are none (stage 6)", async () => {
+    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
+    trajectoryBody = { ...trajectoryBody, outdated: true };
     await mount();
-    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
     await settled();
     expect(posted).toEqual([{ slug: "a-route", steps: ["ideas", "trajectory"], force: ["trajectory"] }]);
   });
 
   it("plans it again with stale Quotes chosen first, unforced (5e, Sol F30)", async () => {
+    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
+    trajectoryBody = { ...trajectoryBody, outdated: true };
     quotesRead = { ...QUOTES_READ, stale: true };
     ideasBody = IDEAS_BODY;
     await mount();
-    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
     await settled();
     /* Only the route is forced; `stepIsDone` decides about the Quotes. */
     expect(posted).toEqual([{ slug: "a-route", steps: ["quotes", "trajectory"], force: ["trajectory"] }]);
   });
 
   it("keeps a route press pending until the Ideas read says whether it is stale", async () => {
+    /* Outdated, so the banner — the one Plan it again left (plan 260929b) — is drawn. */
+    trajectoryBody = { ...trajectoryBody, outdated: true };
     let answerIdeas!: (response: Response) => void;
     ideasReply = new Promise<Response>((resolve) => {
       answerIdeas = resolve;
     });
     await mount();
 
-    await act(async () => host.querySelector<HTMLButtonElement>(".traj-again button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
     await settled();
     expect(posted, "must not plan against Ideas whose freshness is still unknown").toEqual([]);
 

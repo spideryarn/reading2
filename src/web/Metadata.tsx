@@ -1050,14 +1050,6 @@ export function Metadata({
           </div>
         </Section>
 
-        {/* ------------------------------------------- 7. generate it again --
-            After "Your reading" and before Export, because the page's order is
-            what the article is, then where it goes, then the reader's own work
-            on it, then the machinery — and asking for something to be generated
-            again is the reader's own work. Greg, 2026-09-06:
-            *"there should be a way to re-run any of the generated modes"*. */}
-        <RerunSection slug={slug} provenance={provenance} onFinished={refresh} />
-
         {/* -------------------------------------------------- 8. export it --
             Below sharing because both are decisions about where this article's
             data goes, and above the machinery because this one is a thing the
@@ -1082,17 +1074,21 @@ export function Metadata({
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
-        {/* ------------------------------------------ 9½. starting it again --
-            Just above Archive: it is the other act here that changes the
-            article itself rather than reading about it, and it belongs past
-            everything somebody came to read. Behind the experimental switch
-            while it earns a trial — docs/plans/260928a-reset-and-regenerate-article.md,
-            assumption 5. */}
-        <ResetSection
-          on={experimental.on}
+        {/* ------------------------------------- 9½. re-run AI processing --
+            One section for both ways of asking again — a mode at a time, or
+            the whole article — just above Archive, shut until opened. Greg,
+            2026-09-29 (SPIDERYARN-READING2-4Z): *"We have both a "Generate it
+            again" and "Start this article again". Let's somehow amalgamate
+            them … Perhaps this section should be default-collapsed … And maybe
+            position it above "Archive this article"."* It is also, since the
+            same morning, the only place a standing redo lives: the modes keep
+            only the button inside their out-of-date banner.
+            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */}
+        <RerunSection
           slug={slug}
           provenance={provenance}
           onFinished={refresh}
+          reset={experimental.on}
         />
 
         {/* ---------------------------------------------- 10. archiving it --
@@ -1217,37 +1213,14 @@ function SharingSection({
 }
 
 /**
- * **Start this article again** — the section, and the experimental gate on it.
+ * **Re-run AI processing** — the ten things this page will ask for again, and,
+ * behind the experimental switch, starting the whole article again.
  *
- * A component rather than a `{experimental.on && …}` in the page body, for
- * `SharingSection`'s reason: the body is at the edge of its complexity budget.
- * The control itself is ./ResetArticle.tsx.
- */
-function ResetSection({
-  on,
-  slug,
-  provenance,
-  onFinished,
-}: {
-  /** `useExperimental().on` — the section does not exist without it. */
-  on: boolean;
-  slug: string;
-  provenance: ArticleMetadata | null;
-  /** `refresh`, never `reload` — see `RerunSection` below. */
-  onFinished: () => void;
-}) {
-  if (!on) return null;
-  return (
-    <Section label="Start this article again">
-      <div className={`${CARD} tw:p-4`}>
-        <ResetArticle slug={slug} provenance={provenance} onFinished={onFinished} />
-      </div>
-    </Section>
-  );
-}
-
-/**
- * **The nine things this page will ask for again.**
+ * One section since 2026-09-29, when Greg asked for *Generate it again* and
+ * *Start this article again* to be amalgamated, shut by default and moved above
+ * Archive — docs/plans/260929b-one-place-to-re-run-ai-processing.md. The reset
+ * is a block inside it rather than a section of its own; ./ResetArticle.tsx is
+ * the control, unchanged.
  *
  * Greg, 2026-09-06, declining a library-wide backfill and asking for this in the
  * same breath:
@@ -1284,25 +1257,29 @@ function ResetSection({
  * **Which nine, and why not the other seven**, is `METADATA_RERUN_STEPS`
  * (src/rerun-steps.ts) — read it there rather than restating it here.
  *
- * ## No gate, unlike Export and Archive two sections down
+ * ## No gate, unlike Export and Archive
  *
  * Those two are withheld until we know there is a shelf row, because their only
  * possible outcome without one is a 404 and pressing them is how you would find
  * out. This is not that shape: a run is `POST /api/jobs`, whose refusal comes
  * back as a sentence written for a reader, and `JobProgress` is built to show
  * exactly that beside the row it belongs to. So the rows are drawn while the
- * metadata request is still out — which also keeps the nine `useStepJob`
- * subscriptions mounted for the whole visit rather than appearing under a
- * reader who has already scrolled past.
+ * metadata request is still out.
  *
- * The cost, said out loud: nine subscriptions to one shared engine
- * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so this is nine
- * store subscriptions and **not** nine polls.
+ * **Shut by default, and still mounted.** `keepMounted` hides the rows rather
+ * than unmounting them, so the ten `useStepJob` subscriptions live for the whole
+ * visit, and a run that finishes while the section is shut still refreshes the
+ * page — see `Section`'s `keepMounted` for what unmounting lost.
+ *
+ * The cost, said out loud: ten subscriptions to one shared engine
+ * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so this is ten
+ * store subscriptions and **not** ten polls.
  */
 function RerunSection({
   slug,
   provenance,
   onFinished,
+  reset,
 }: {
   slug: string;
   /** Null until the metadata request lands; the rows draw either way. */
@@ -1313,9 +1290,11 @@ function RerunSection({
    * in any row is one question asked of one reader.
    */
   onFinished: () => void;
+  /** `useExperimental().on` — the whole-article reset is drawn only with it. */
+  reset: boolean;
 }) {
   return (
-    <Section label="Generate it again">
+    <Section label="Re-run AI processing" collapsible keepMounted>
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
           shipped while the placeholder it replaces did not is that a button
@@ -1341,6 +1320,16 @@ function RerunSection({
           />
         ))}
       </div>
+      {reset && (
+        <>
+          <h3 className="tw:mt-6 tw:mb-3 tw:text-sm tw:font-medium tw:text-ink">
+            Start the whole article again
+          </h3>
+          <div className={`${CARD} tw:p-4`}>
+            <ResetArticle slug={slug} provenance={provenance} onFinished={onFinished} />
+          </div>
+        </>
+      )}
     </Section>
   );
 }
@@ -1361,6 +1350,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   timeline: "Timeline",
   quiz: "Quiz",
   sketch: "Sketch",
+  trajectory: "Trajectory",
   debate: "Debate",
 };
 
@@ -3231,12 +3221,23 @@ function Section({
   label,
   aside,
   collapsible,
+  keepMounted,
   children,
 }: {
   label: string;
   /** One line answering the section's question, on the heading row. */
   aside?: ReactNode;
   collapsible?: boolean;
+  /**
+   * **Shut hides the children rather than unmounting them.** For *Re-run AI
+   * processing*, whose rows each hold a `useStepJob` subscription: unmounted,
+   * a run that finished while the section was shut would never call
+   * `onFinished`, and reopening would not replay it — `useJobs` starts a new
+   * subscriber's cursor at the latest completion, and the fallback needs the
+   * row's own `startedId`, which went with it. GPT Sol, plan review of
+   * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
+   */
+  keepMounted?: boolean;
   children: ReactNode;
 }) {
   /* Local state, not a URL parameter, and this page's own `at` two hundred
@@ -3317,7 +3318,7 @@ function Section({
           </span>
         )}
       </h2>
-      {showing && children}
+      {keepMounted ? <div hidden={!showing}>{children}</div> : showing && children}
     </section>
   );
 }

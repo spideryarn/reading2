@@ -76,10 +76,20 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   row's dot is in the accent. A screen reader hears "about 70% of the way through".
 - **Further left in the bar**: Quotes, then Trajectory, straight after Summary (`MODES_UI` in
   [`Dock.tsx`](../../src/web/Dock.tsx)).
-- **Plan it again**, a quiet button in the foot under a ready route. It rebuilds the route only
-  (`trajectory` is forced by name), and is not drawn while the outdated banner already offers it.
-  **Stale Quotes are chosen again first**, on the automatic run and on this button, as missing ones
-  always were — unforced, so current Quotes cost nothing — and the empty state says when they will be.
+- **Plan it again** rebuilds the route only (`trajectory` is forced by name). **Since 2026-09-29 it
+  is offered only in the outdated banner**; the standing button in the foot went, and a current route
+  is re-planned from Metadata's *Re-run AI processing*, which has a Trajectory row
+  ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)):
+
+  > In Trajectory mode, remove the "Plan it again" button. The user can do that from Metadata if they
+  > really want.
+  >
+  > — Greg, 2026-09-29
+
+  **Stale Quotes are chosen again first**, on the automatic run and on the banner's button, as missing
+  ones always were — unforced, so current Quotes cost nothing — and the empty state says when they
+  will be. The Metadata row names only `trajectory`, so it never buys Quotes or Ideas, and refuses
+  in the row when there are no Quotes.
 
 Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
 `trajectory/7`:

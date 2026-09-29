@@ -533,7 +533,7 @@ function Thread({
             two of them would be one too many, and the wrong one is the one
             further from the reason. */}
         {!stale && (
-          <Rewrite
+          <RunFoot
             job={job}
             failed={failed}
             onWrite={(force) => onWrite(force)}
@@ -659,34 +659,22 @@ export function ThreadPosts({ thread }: { thread: PublicTweets }) {
 }
 
 /**
- * Write the thread again when there is nothing wrong with it.
+ * **The foot of a current thread: a run in progress, or the one that failed —
+ * and no button.**
  *
- * Theirs had this as a "Reset" button beside the title, one click, always
- * there. The plan left it out for a stated reason —
- * docs/plans/260825g-tweet-thread-page.md#what-is-still-open: *"it is a model call one
- * click away, and nothing else in the app spends money that easily"* — and then
- * the gap became its own problem, because the only way to replace a thread you
- * did not like was to change the article underneath it.
+ * This was *Rewrite*, a two-click *"Write it again"* for a thread with nothing
+ * wrong with it, until Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"Same goes
+ * for any other modes that still have a "redo this processing" button - let's
+ * just rely on the Metadata mode for that."* Metadata's *Re-run AI processing*
+ * has a Thread row, with its own confirm. The stale banner at the top keeps its
+ * button: a repair the page is prompting, not a standing redo.
+ * docs/plans/260929b-one-place-to-re-run-ai-processing.md.
  *
- * So: two clicks, not one, and at the foot of the page rather than beside the
- * title. The confirm step is the whole answer to the objection — it is not a
- * dialog, it does not block anything, and it says what the click costs before
- * you have spent it. The foot of the page is also simply where the thought
- * occurs: you have just read the last post.
- *
- * `busy` covers the gap between the click and the job appearing in the polled
- * list, which is a round trip during which `job` is still null. Without it the
- * confirm row vanishes and the plain button comes back — a press that appears
- * to have been ignored, which is the failure this whole page keeps guarding
- * against (docs/reusable/silent-success.md).
- *
- * It used to say here that it does not show the job that refused it, unlike
- * every other run button in the app. Nothing refuses a run any more — a second
- * job on one article queues
- * (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md
- * § 1g) — so there is no gap left to state.
+ * What stays is the part that was never a button: a job on this article —
+ * started from Metadata, or from the stale banner — still shows its progress and
+ * its Stop here, and a failed one still says why.
  */
-function Rewrite({
+function RunFoot({
   job,
   failed,
   onWrite,
@@ -697,9 +685,6 @@ function Rewrite({
   onWrite(force?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
-  const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
-
   if (job) {
     return (
       <span className="tw:ml-auto tw:w-full">
@@ -707,8 +692,7 @@ function Rewrite({
           job={job}
           failed={null}
           /* Unreachable here: this branch only renders with a job of our own,
-             and one article cannot have two active ones. See the header for why
-             this strip does not show a blocker at all. */
+             and one article cannot have two active ones. */
           stalled={false}
           onWrite={() => onWrite(true)}
           onCancel={onCancel}
@@ -717,49 +701,8 @@ function Rewrite({
       </span>
     );
   }
-
-  if (asking) {
-    return (
-      <span className="tw:ml-auto tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground">
-        <span>Another model call, and this one is not out of date.</span>
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            // `true`: the step's freshness check would otherwise skip a thread
-            // that is, by construction, perfectly current.
-            await onWrite(true);
-            setBusy(false);
-            setAsking(false);
-          }}
-        >
-          {busy ? "Starting…" : "Rewrite"}
-        </Button>
-        <Button type="button" variant="ghost" size="xs" disabled={busy} onClick={() => setAsking(false)}>
-          Cancel
-        </Button>
-      </span>
-    );
-  }
-
-  return (
-    <span className="tw:ml-auto tw:flex tw:items-center tw:gap-3">
-      {failed && <span className="tw:text-xs tw:text-destructive">{failed.message}</span>}
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        title="Throw this thread away and write another one"
-        onClick={() => setAsking(true)}
-      >
-        <PenLine size={12} />
-        Write it again
-      </Button>
-    </span>
-  );
+  if (!failed) return null;
+  return <span className="tw:ml-auto tw:text-xs tw:text-destructive">{failed.message}</span>;
 }
 
 /**

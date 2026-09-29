@@ -48,7 +48,7 @@ const REFUSED: StepName[] = [
 ];
 
 describe("the steps the Metadata page will re-run", () => {
-  it("is exactly the nine the plan settled, in pipeline order", () => {
+  it("is exactly the ten the plans settled, in pipeline order", () => {
     expect([...METADATA_RERUN_STEPS]).toEqual([
       "arc",
       "tweets",
@@ -58,6 +58,7 @@ describe("the steps the Metadata page will re-run", () => {
       "timeline",
       "quiz",
       "sketch",
+      "trajectory",
       "debate",
     ]);
   });

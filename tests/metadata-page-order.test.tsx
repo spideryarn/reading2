@@ -199,26 +199,29 @@ describe("what the page puts first", () => {
   });
 
   /**
-   * *Generate it again* sits with the reader's own work rather than with the
-   * machinery, which is the placement argument in
-   * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md
-   * § Where the control goes: the page reads *what the article is*, then *where
-   * it goes*, then *the reader's own work on it*, then *the machinery* — and
-   * asking for something to be generated again is the third of those.
-   *
-   * It is a section of its own and not a button on a stage row **because the
-   * stage rows are two disclosures deep**: a shut *Technical details*, then a
-   * subheading. The dimmed placeholder lived there for three days and Greg
-   * asked for the feature without mentioning it, which is the evidence he never
-   * saw it.
+   * **One section for asking again, shut, just above Archive** — Greg,
+   * 2026-09-29 (SPIDERYARN-READING2-4Z), amalgamating *Generate it again* and
+   * *Start this article again*: *"Perhaps this section should be
+   * default-collapsed … And maybe position it above "Archive this article"."*
+   * docs/plans/260929b-one-place-to-re-run-ai-processing.md. Neither old name
+   * may come back beside it.
    */
-  it("offers the re-runs with the reader's own work, above the export", async () => {
+  it("offers the re-runs in one shut section, just above Archive", async () => {
     await mount();
     const order = sections();
 
-    expect(order).toContain("Generate it again");
-    expect(order.indexOf("Your reading")).toBeLessThan(order.indexOf("Generate it again"));
-    expect(order.indexOf("Generate it again")).toBeLessThan(order.indexOf("Export"));
+    expect(order).not.toContain("Generate it again");
+    expect(order).not.toContain("Start this article again");
+    expect(order.indexOf("Re-run AI processing")).toBe(order.indexOf("Archive this article") - 1);
+    expect(sectionHeading("Re-run AI processing")?.getAttribute("aria-expanded")).toBe("false");
+    /* Shut, and still mounted: the rows' job subscriptions must outlive a
+       shut section (Section § keepMounted), so the rows are in the document
+       but inside a hidden wrapper. */
+    const firstRow = host.querySelector<HTMLElement>("[data-rerun-step]");
+    expect(firstRow, "the rows were unmounted").toBeTruthy();
+    expect(firstRow?.closest("[hidden]"), "the rows are showing while shut").toBeTruthy();
+    await act(async () => sectionHeading("Re-run AI processing")?.click());
+    expect(firstRow?.closest("[hidden]"), "opening did not show the rows").toBeNull();
   });
 
   it("puts the machinery last, above only the thing that takes the article off the shelf", async () => {
@@ -243,8 +246,11 @@ describe("what the page puts first", () => {
        order Greg asked for: *"underneath Archive"*. The pin that keeps the word
        honest is no longer this list but tests/metadata-delete-permanently.test.tsx,
        which asserts a `DELETE` goes out and what it costs. */
-    expect(order.slice(-3)).toEqual([
+    expect(order.slice(-4)).toEqual([
       "Technical details",
+      /* Since 2026-09-29: asking again sits between the machinery and the
+         endings — see the test above. */
+      "Re-run AI processing",
       "Archive this article",
       "Delete this article",
     ]);

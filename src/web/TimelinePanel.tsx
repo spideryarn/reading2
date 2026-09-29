@@ -384,37 +384,13 @@ export function TimelinePanel({
           )}
         </>
       }
-      /* Below the list: this is what you reach for after reading it and
-          disagreeing, not before. Pinned under the scroller through `foot`,
-          carrying the same guard it had as a trailing child.
-
-          **`events.length > 0` is load-bearing and was missing.** The empty
-          state below says the piece has no chronology and deliberately offers
-          no retry, because running it again would find the same nothing and
-          cost another model call — and this button rendered underneath it
-          anyway, contradicting that in the one place a reader would act on.
-          Found in a browser, 2026-08-31; invisible from the code, where "the
-          panel is ready" and "the panel has something to show" are two
-          perfectly reasonable conditions that happen to look identical here.
-
-          A *stale* empty timeline still gets a button — the banner's own.
-          Nothing-to-re-run is a statement about this article, and a stale
-          artefact is by definition about a different one.
-
-          `owner !== null` first, and it is not redundant with `run` returning
-          null: the wrapper `<div className="tl-again">` would otherwise render
-          empty for a visitor, which is a stray gap under the last row rather
-          than nothing. */
-      foot={
-        timeline &&
-        (owner === null || owner.status === "ready") &&
-        owner !== null &&
-        events.length > 0 &&
-        !owner.stale &&
-        !owner.outdated ? (
-          <div className="tl-again">{run("Read it again", true)}</div>
-        ) : null
-      }
+      /* No standing redo button under the list any more. Greg, 2026-09-29
+          (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
+          have a "redo this processing" button - let's just rely on the
+          Metadata mode for that."* Metadata's *Re-run AI processing* has a row
+          for this mode; the button inside the out-of-date banner stays, as a
+          repair the page is prompting rather than a standing redo.
+          docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
     >
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}
