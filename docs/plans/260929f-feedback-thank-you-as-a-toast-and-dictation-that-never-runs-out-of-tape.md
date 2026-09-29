@@ -3,7 +3,7 @@
 Two feedback reports from Greg (admin, so trusted input — [feedback-reports.md](../project/feedback-reports.md)),
 both about the Feedback dialog, built together because they touch the same dialog and ship together.
 
-**Status:** plan reviewed by GPT Sol (verdict *rework*), revised — 2026-09-29. Part A built. **Part B as built is § Part B, revised after review** below; the section before it is the draft that review took apart, kept for the reasoning.
+**Status:** built, on `dev`, not deployed — 2026-09-29. Plan reviewed by GPT Sol (verdict *rework*) and revised; both parts code-reviewed. **Part B as built is § Part B, revised after review** below; the section before it is the draft that review took apart, kept for the reasoning.
 
 ## The two reports
 
@@ -294,3 +294,41 @@ total, not to each part.
 - **Plan review, GPT Sol, 2026-09-29** — *rework*; R1–R10 above. R1 (P0, the toast must compare the
   box *now* with the body *that was sent*, or it erases words typed after Send) was already how the
   Part A builder had done it (`bodyRef.current !== body`).
+- **Part A code review, GPT Sol (write-capable), on `e064a04d`** — A1 (P1) a late success shut a
+  dialog the reader had reopened; A2 (P1) in that race the toast is drawn inside the open dialog's
+  top layer; A3 (P1) on a phone the toast followed the Dock's resting height rather than where it
+  is; A4 tests for StrictMode and unmount; all fixed by the reviewer in `8e523205`. A5 (P2, `send`'s
+  complexity score, pre-existing) left.
+- **Part B code review, GPT Sol (write-capable), on `cc88c6e1`** — six fixed by the reviewer in
+  `c0e83134`: B1 a flush failure on the only part read as `[mic-empty]`; B2 (P0) a retry outlived
+  Discard, a new press, a capture failure and unmount; B3 live words from a superseded recogniser
+  crossed into the next session's span; B4 every container failing asynchronously left the strip
+  listening to nothing; B5 a synchronously throwing transcriber escaped; B6 docs.
+- **Round two, GPT Sol (read-only), on `c0e83134`** — B1–B6 sound except C1 (P1): after confirmed
+  live words, a tape that could not start stopped the microphone in silence. Fixed red-first in
+  `629b1108` (says `[mic-broken]`), then a narrow check of that fix alone.
+
+## What the builder decided that the plan did not
+
+- `[mic-broken]` is a new code: a recording that breaks part-way ends the dictation and publishes
+  nothing, keeping the complete parts before the break to save. Until now a single recorder failing
+  mid-dictation went silent while the reader kept talking.
+- If the next part's recorder will not start, the old one keeps recording and the next chunk tries
+  again; it can reach `MAX_BYTES` and break, but not pass it.
+
+## Browser check (Sonnet, Playwright on the box, 2026-09-29)
+
+- **Toast:** the dialog is gone within 300 ms of Send; the toast reads the new sentence with no
+  "It is filed", sits bottom-right at 1280×800 and along the bottom with 16 px gutters at 390×844
+  (no horizontal scroll), goes by itself ~5.2 s after Send, stays while hovered, and focus is back on
+  the Feedback button. Reopening shows an empty form. `POST /api/feedback` was intercepted, so
+  nothing was filed. [desktop](260929f-shots/A-desktop-toast-visible.png) ·
+  [phone](260929f-shots/A-phone-toast-visible.png)
+- **Long dictation:** a 4 m 21 s dictation into the Feedback box (a Web Audio oscillator as the
+  microphone, `POST /api/transcribe` intercepted) went up as three WebM parts — at 120.8 s and
+  241.5 s *while still recording*, and the 20 s tail after Stop — each under 663 KB of base64. The
+  box then held `PART-1 PART-2 PART-3`, once, in order, with no error.
+  [recording](260929f-shots/B-recording-4min.png) · [after stop](260929f-shots/B-after-stop.png)
+- **Unexplained, not chased:** in a first run whose fake track was silent (the harness had not
+  resumed its `AudioContext`), one press of Stop appeared to leave a fresh recording running (timer
+  back at 0:02), and a second press ended it. Possibly a double click in the harness; unconfirmed.
