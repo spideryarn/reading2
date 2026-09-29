@@ -537,7 +537,11 @@ describe("the column at every combination of the three props", () => {
          folded away — or the "…" is drawn over a column that has room for
          everything. */
       expect(gutter.getAttribute("data-controls")).toBe(String(controls));
-      const drawn = [...gutter.children].map((el) => el.className.split(" ")[0]);
+      /* Controls only: the reading-time strip is a child and not a control, and
+         is pinned last by its own test above. */
+      const drawn = [...gutter.children]
+        .map((el) => el.className.split(" ")[0])
+        .filter((c) => c !== "blk-read");
       expect(drawn.filter((c) => c !== "blk-more")).toEqual(classes);
       /* And the dot is there for exactly the gutters that can hide something.
          The single-control case is the one that used to come out wrong: a
@@ -608,7 +612,9 @@ describe("the bookmark button", () => {
     // Greg's order for what folds away first, 260905c: permalink and chat stay.
     paint(undefined, 0, { bookmark: stored(true).fn });
     const gutter = host.querySelector(".blk-gutter") as HTMLDivElement;
-    const classes = [...gutter.children].map((el) => el.className.split(" ")[0]);
+    const classes = [...gutter.children]
+      .map((el) => el.className.split(" ")[0])
+      .filter((c) => c !== "blk-read");
     expect(classes).toEqual(["blk-permalink", "block-chat", "blk-bookmark", "blk-help", "blk-more"]);
     expect(gutter.getAttribute("data-controls")).toBe("4");
   });
