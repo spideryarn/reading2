@@ -330,9 +330,15 @@ It began as the status line Greg runs on the laptop, and now says, left to right
 
 - **which session this is** — the tmux session's name, and Claude's own `session_name` (from
   `/rename` or `--name`) after a colon when the two differ;
-- the model, the directory and the git branch;
-- **the worktree**, as `⑂ name` — Claude's `worktree.name`, else a linked git worktree, else a
-  `.claude/worktrees/<name>` path;
+- the model;
+- **one location**: the worktree as `⑂ name` — Claude's `worktree.name`, else a linked git
+  worktree, else a `.claude/worktrees/<name>` path — or, outside a worktree, the directory's own
+  name;
+- the git branch, **only when the location does not already say it**: shown in the primary checkout
+  and in a worktree on some other branch, hidden for a worktree on `worktree-<its name>` (its `*`
+  dirty marker then goes on the location). Greg, 2026-09-29: *"I don't need both the worktree
+  \*and\* the branch name \*and\* the session name."* The TUI cuts the line at the terminal's width
+  with a `…`, and the path, branch and worktree between them had pushed the context bar off the end;
 - a ten-cell bar for how much of the context window is gone — green, yellow from 70%, red from 90%.
   Auto-compaction lands around 80%, so the colour is a warning that a long session is about to lose
   its middle rather than a report that it already has;

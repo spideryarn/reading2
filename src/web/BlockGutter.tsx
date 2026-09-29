@@ -20,9 +20,10 @@
  * spent on this passage**, as a hairline down the column's text-side edge. Greg
  * asked for it by name — *"something in the vertical gutter in the text as well
  * … I don't want it to be too obtrusive"* (2026-09-12) — and it is a trace of
- * the reader's own reading, not something a model wrote. It is a pseudo-element
- * driven by a style sheet rather than anything in this component, so it takes
- * no slot and this file never re-renders for it: gutter.css § reading time,
+ * the reader's own reading, not something a model wrote. The component's last
+ * child is a real `.blk-read` span so it can own a title and hover strip; CSS
+ * positions it absolutely outside the grid, so it takes no control slot. Its
+ * line remains a pseudo-element driven by `--read`: gutter.css § reading time,
  * docs/project/reading-time.md.
  *
  * And one grammar, which is what keeps it quiet: **at rest the gutter shows
@@ -145,6 +146,15 @@ type CopyState = "idle" | "copied" | "failed";
 
 /** Long enough to read a tick, short enough not to look like a mode. */
 const SETTLE_MS = 1500;
+
+/**
+ * **Every glyph in the column, in px.** 12 until 2026-09-29, when Greg asked
+ * for them *"a bit bigger"* (SPIDERYARN-READING2-4A). The 24px target around
+ * each is unchanged, so how many fit a row — gutter.css § the column that
+ * truncates — does not move; only the ink does. One constant so the column
+ * cannot end up with two sizes in it.
+ */
+const GLYPH = 15;
 
 interface Props {
   id: BlockId;
@@ -402,15 +412,16 @@ export function BlockGutter({
   /**
    * Where the keyboard goes when the column unfolds, and where it comes back to.
    *
-   * **The "…" is the last child, and everything it reveals is above it**, so
-   * activating it and doing nothing else would leave the focus at the end of the
-   * gutter: a forward Tab walks straight out of the column and the newly drawn
-   * controls are reachable only by tabbing *backwards*. GPT Sol's second finding
-   * on the built code, 2026-09-05. So opening moves the focus to the head of the
-   * column and closing brings it back to the button that did it — which is the
-   * ordinary disclosure contract, and the reason this is an effect rather than
-   * two lines in the handlers: the elements it wants are not drawn until React
-   * has re-rendered.
+   * **The "…" is the last control and grid item, and everything it reveals is
+   * above it** — only the absolutely positioned, non-interactive reading-time
+   * strip follows it in the DOM. Activating it and doing nothing else would
+   * leave the focus at the end of the gutter: a forward Tab walks straight out
+   * of the column and the newly drawn controls are reachable only by tabbing
+   * *backwards*. GPT Sol's second finding on the built code, 2026-09-05. So
+   * opening moves the focus to the head of the column and closing brings it
+   * back to the button that did it — the ordinary disclosure contract. This is
+   * an effect rather than two lines in the handlers because the elements it
+   * wants are not drawn until React has re-rendered.
    *
    * `null` means "this open or close was not the keyboard's doing" — a press
    * outside, or a mouse — and then nothing is moved, because taking the focus
@@ -585,7 +596,7 @@ export function BlockGutter({
               : "Open your note on this paragraph"
           }
         >
-          <Bookmark size={12} aria-hidden="true" />
+          <Bookmark size={GLYPH} aria-hidden="true" />
           {comments && comments.length > 1 && (
             <span className="blk-n">{comments.length}</span>
           )}
@@ -626,11 +637,11 @@ export function BlockGutter({
         onClick={onCopy}
       >
         {copy === "copied" ? (
-          <Check size={12} aria-hidden="true" />
+          <Check size={GLYPH} aria-hidden="true" />
         ) : copy === "failed" ? (
-          <TriangleAlert size={12} aria-hidden="true" />
+          <TriangleAlert size={GLYPH} aria-hidden="true" />
         ) : (
-          <Link2 size={12} aria-hidden="true" />
+          <Link2 size={GLYPH} aria-hidden="true" />
         )}
       </a>
 
@@ -678,7 +689,7 @@ export function BlockGutter({
               : "Chat about this paragraph"
           }
         >
-          <MessageSquare size={12} aria-hidden="true" />
+          <MessageSquare size={GLYPH} aria-hidden="true" />
           {/* Every conversation anchored to this block, selections included —
               counting only the whole-block ones would make the number disagree
               with the marks sitting beside it. */}
@@ -708,10 +719,11 @@ export function BlockGutter({
           read out on focus, in a gutter where four of them go past in a row, so
           it stays to the verb.
 
-          Same `CircleHelp` at `size={12}` as the other three glyphs: stage 1
+          Same `CircleHelp` at `GLYPH` as the other three glyphs: stage 1
           grew the hit box to 24px and deliberately left the ink alone, because
           the amount of grey per row is what decides whether the gutter reads as
-          quiet. No count beside it — a conversation is a conversation, and the
+          quiet — and Greg then asked for more ink, 12px to 15px, on
+          2026-09-29 (`GLYPH`). No count beside it — a conversation is a conversation, and the
           chat button next door already carries that number. */}
       {/* **The button that makes the mark**, on a paragraph that has none yet —
           one press, no box, nothing bought. Greg, 2026-09-12: *"a sort of
@@ -751,7 +763,7 @@ export function BlockGutter({
           title="Bookmark this paragraph"
           aria-label="Bookmark this paragraph"
         >
-          <Bookmark size={12} aria-hidden="true" />
+          <Bookmark size={GLYPH} aria-hidden="true" />
         </button>
       )}
 
@@ -767,7 +779,7 @@ export function BlockGutter({
           title="Ask the AI for help with this paragraph"
           aria-label="Ask the AI for help"
         >
-          <CircleHelp size={12} aria-hidden="true" />
+          <CircleHelp size={GLYPH} aria-hidden="true" />
         </button>
       )}
 
@@ -829,9 +841,34 @@ export function BlockGutter({
           title={open ? "Close paragraph controls" : "More for this paragraph"}
           aria-label={open ? "Close paragraph controls" : "More for this paragraph"}
         >
-          {open ? <X size={12} aria-hidden="true" /> : <Ellipsis size={12} aria-hidden="true" />}
+          {open ? <X size={GLYPH} aria-hidden="true" /> : <Ellipsis size={GLYPH} aria-hidden="true" />}
         </button>
       )}
+      {/* **The reading-time hairline, and what it means on hover.** It was a
+          `::after` on this box, which nothing can hover, and Greg found it
+          without being able to find out what it was: *"Some of the blocks seem
+          to have a vertical grey line to their left. I can't figure out what
+          that means!"* (SPIDERYARN-READING2-4S, 2026-09-29). An element can
+          carry a `title`; a pseudo-element cannot.
+
+          **Last in the markup, and it has to be**: the column picks "the first
+          k controls that fit" with `:nth-child`, so anything earlier would
+          push a real control out of its slot. gutter.css § reading time
+          takes it back out of every `> *` rule.
+
+          Static text, so it re-renders nothing — the darkness still arrives as
+          `--read` from the one generated style element (reading-time.ts §
+          `gutterCss`), and so does the width: zero on a row with no reading
+          time, which is every row for a visitor or with the switch off, so
+          there is nothing to hover there. A native `title`, as every other
+          control in this column uses, for the reason given on the permalink
+          above. `aria-hidden` because the line itself is decoration; nothing
+          about reading time is announced anywhere. */}
+      <span
+        className="blk-read"
+        aria-hidden="true"
+        title="Reading time: this line gets darker the longer you spend reading here. Only you see it."
+      />
     </div>
   );
 }

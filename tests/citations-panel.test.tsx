@@ -8,7 +8,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
-import type { BlockId, Citations, CitedWork } from "../src/types.js";
+import type { BlockId, Citations, CitedWork, Job } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
 
 const {
@@ -50,6 +50,16 @@ const FAMOUS = work({ id: "spya-d5e6f7", title: "Famous", relevance: 0.3, influe
 const PASSING = work({ id: "spya-g8h9j2", title: "Passing", relevance: 0.2, influence: 0.2 });
 const UNSCORED = work({ id: "spya-k2m3n4", title: "Unscored", relevance: 0.6 });
 const WORKS = [CENTRAL, FAMOUS, PASSING, UNSCORED];
+
+const RUNNING: Job = {
+  id: "job-citations",
+  ownerId: "owner" as Job["ownerId"],
+  slug: "a-piece",
+  status: "running",
+  createdAt: "2026-09-29T00:00:00.000Z",
+  startedAt: "2026-09-29T00:00:01.000Z",
+  steps: [{ name: "citations", label: "Finding the citations", status: "running" }],
+};
 
 const titles = (ws: CitedWork[]) => ws.map((w) => w.title);
 
@@ -455,13 +465,36 @@ describe("CitationsPanel", () => {
     expect(row(FAMOUS.id).textContent ?? "").not.toContain("rel·");
   });
 
-  it("offers no re-run under a fresh list — only a stale or outdated one asks again", async () => {
+  it("offers no re-run under a fresh or outdated list — only a stale one asks again", async () => {
     /* The costly press stays out of the ordinary foot: Greg took the same
-       button out of the Glossary and Quotes. The banner still carries it. */
+       button out of the Glossary and Quotes. The stale banner still carries it;
+       an outdated list (older prompt, same article) is not announced — Greg,
+       2026-09-29 (SPIDERYARN-READING2-55), plan 260929c. */
     await draw(owner());
+    expect(host.textContent).not.toContain("Find them again");
+    await draw(owner({ outdated: true }));
+    expect(host.querySelector(".gloss-stale")).toBeNull();
+    expect(host.textContent).not.toContain("older version of the prompt");
     expect(host.textContent).not.toContain("Find them again");
     await draw(owner({ stale: true }));
     expect(host.textContent).toContain("Find them again");
+  });
+
+  it("shows a Metadata-started job and failure on an outdated list without adding a second foot", async () => {
+    await draw(owner({ outdated: true, job: RUNNING }));
+    expect(host.querySelectorAll(":scope > aside > .cite-foot")).toHaveLength(1);
+    expect(host.querySelector(".cite-foot")?.textContent).toContain("Stop");
+
+    await draw(
+      owner({
+        outdated: true,
+        failed: { message: "The citations could not be found.", retryable: false, retry: null },
+      }),
+    );
+    expect(host.querySelectorAll(":scope > aside > .cite-foot")).toHaveLength(1);
+    expect(host.querySelector(".cite-foot")?.textContent).toContain(
+      "The citations could not be found.",
+    );
   });
 
   it("says the list was capped only when the model said so", async () => {

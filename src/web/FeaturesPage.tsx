@@ -120,13 +120,16 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           {/* Greg, 2026-08-26, the diagram request, trimmed, and 2026-09-03
               for Illustrated. The five names are DIAGRAMS in src/web/diagram.ts
               and the picture is the first of them. Counted in the code: this
-              said "the other three" on the afternoon there were four. */}
+              said "the other three" on the afternoon there were four. The
+              last sentence since 2026-09-29, when the whole mode went behind
+              the switch — the same reason Hierarchy's caption above has it. */}
           <Portrait shot={SHOTS.diagram} title="Diagram.">
             Maps of the structure of the piece, with where you are marked on each. Pictured:{" "}
             <strong className="tw:text-foreground">force</strong>, the sections as dots, joined
             where they share distinctive words. The other four: <em>drift</em> and <em>trail</em>,
             one dot per paragraph placed by what it is about; <em>sketch</em>, drawn by the model;
-            and <em>illustrated</em>, that same scene painted.
+            and <em>illustrated</em>, that same scene painted. This is one of the Experimental
+            Features; signed-in readers can turn those on from the bar or their profile.
           </Portrait>
         </div>
         <div className="site-bento site-reveal tw:mt-4">

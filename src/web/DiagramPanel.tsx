@@ -211,9 +211,10 @@ interface Props {
  *
  * ## And a fourth field, which is *whether* the chip is drawn at all
  *
- * Since 2026-09-04 Diagram itself is in everybody's bar and four of these five
- * pictures are behind the experimental-features switch instead. A reader asked
- * for exactly that:
+ * From 2026-09-04 Diagram itself was in everybody's bar and four of these five
+ * pictures were behind the experimental-features switch instead; since
+ * 2026-09-29 the whole mode is behind it too (SPIDERYARN-READING2-4R), and this
+ * gate still decides the chips inside it. A reader asked for the first step:
  *
  * > The only diagram sub-mode that is good enough to show everyone is the
  * > sketch mode. The other ones should be only visible to people who have

@@ -803,16 +803,20 @@ echo "=== claude settings ==="
 # jq exits non-zero on a settings.json that is not valid JSON, and the `mv`
 # never happens, so a broken file fails the step rather than being replaced.
 # The status line under the prompt: the session's name (the tmux session, and
-# Claude's own `session_name` when it differs), model, directory, git branch,
-# the worktree (`worktree.name`, else a linked git worktree, else a
-# .claude/worktrees/<name> path), how much of the context window is gone as a
+# Claude's own `session_name` when it differs), model, ONE location -- the
+# worktree (`worktree.name`, else a linked git worktree, else a
+# .claude/worktrees/<name> path) or else the directory's own name -- the git
+# branch only when the location does not already say it (hidden for a
+# worktree on worktree-<its name>; since 2026-09-29, see the script), how much
+# of the context window is gone as a
 # ten-cell bar that turns yellow at 70% and red at 90%, and the account's usage
 # limits -- `5h 23% ↻14:00 wk 41% ↻Thu 14:00`, dim, yellow at 70, red at 90.
 # Auto-compaction lands around 80%, so the bar is the warning that a long
 # session is about to lose its middle; the limits say which account still has
 # room. Every segment is left off when its field is absent.
-# It began as the script Greg runs on the laptop; this copy
-# was synced byte for byte from the box's live one on 2026-09-24.
+# It began as the script Greg runs on the laptop; this copy was synced byte for
+# byte from the box's live one on 2026-09-24, and the live one from this on
+# 2026-09-29.
 #
 # It lives HERE, in provision.sh, rather than in its own file injected through
 # cloud-init like the credential helper. That is deliberate: provision.sh is the
@@ -855,63 +859,31 @@ fi
 
 # Extract current directory from JSON
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // ""' 2>/dev/null || echo "$(pwd)")
+[ -n "$cwd" ] || cwd=$(pwd)
 
-# Get the last 2 directory levels to match %2~ from PS1
-if [ -n "$cwd" ]; then
-    # Convert full path to last 2 levels like zsh %2~
-    if [ "$cwd" = "$HOME" ]; then
-        dir_display="~"
-    elif [[ "$cwd" == "$HOME"/* ]]; then
-        # Replace home with ~ and get last 2 levels
-        relative_path="${cwd#$HOME/}"
-        IFS='/' read -ra PATH_PARTS <<< "$relative_path"
-        num_parts=${#PATH_PARTS[@]}
-        if [ $num_parts -le 1 ]; then
-            dir_display="~/$relative_path"
-        else
-            # Take last 2 parts without ~ prefix for deeper paths
-            second_last_idx=$((num_parts - 2))
-            last_idx=$((num_parts - 1))
-            dir_display="${PATH_PARTS[$second_last_idx]}/${PATH_PARTS[$last_idx]}"
-        fi
-    else
-        # Not in home directory, get last 2 levels
-        IFS='/' read -ra PATH_PARTS <<< "$cwd"
-        num_parts=${#PATH_PARTS[@]}
-        if [ $num_parts -le 2 ]; then
-            dir_display="$cwd"
-        else
-            # Take last 2 parts
-            second_last_idx=$((num_parts - 2))
-            last_idx=$((num_parts - 1))
-            dir_display="${PATH_PARTS[$second_last_idx]}/${PATH_PARTS[$last_idx]}"
-        fi
-    fi
+# The directory by its own name only. The line has room for ONE location -- the
+# TUI cuts it at the terminal's width with a `…` -- and inside a worktree that
+# location is the worktree, not this.
+if [ "$cwd" = "$HOME" ]; then
+    dir_display="~"
 else
-    dir_display="$(basename "$(pwd)")"
+    dir_display=$(basename "$cwd")
 fi
 
-# Get git information (similar to git_prompt_info)
-git_info=""
-worktree_info=""
+# Git: the branch, whether the tree is dirty, and the worktree's name when this
+# is a linked worktree (--git-dir != --git-common-dir; the toplevel basename is
+# its name).
+branch="" dirty="" wt_name=""
 if git rev-parse --git-dir >/dev/null 2>&1; then
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
-    if [ -n "$branch" ]; then
-        # Check for uncommitted changes
-        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-            git_info="($branch*)"
-        else
-            git_info="($branch)"
-        fi
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        dirty="*"
     fi
-    # Show the worktree name when we're in a linked worktree (not the main checkout).
-    # A linked worktree has --git-dir != --git-common-dir; the toplevel basename is
-    # the worktree name.
     git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null)
     common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
     if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ]; then
         toplevel=$(git rev-parse --show-toplevel 2>/dev/null)
-        [ -n "$toplevel" ] && worktree_info="⑂ $(basename "$toplevel")"
+        [ -n "$toplevel" ] && wt_name=$(basename "$toplevel")
     fi
 fi
 
@@ -950,10 +922,28 @@ elif [ -n "$tmux_name" ]; then
     session_info="$tmux_name"
 fi
 # Claude's own worktree name wins; the git check above covers worktrees made by hand.
-[ -n "$json_worktree" ] && worktree_info="⑂ $json_worktree"
-if [ -z "$worktree_info" ] && [[ "$cwd" == */.claude/worktrees/* ]]; then
-    wt="${cwd#*/.claude/worktrees/}"; worktree_info="⑂ ${wt%%/*}"
+[ -n "$json_worktree" ] && wt_name="$json_worktree"
+if [ -z "$wt_name" ] && [[ "$cwd" == */.claude/worktrees/* ]]; then
+    wt="${cwd#*/.claude/worktrees/}"; wt_name="${wt%%/*}"
 fi
+
+# ONE location -- the worktree, else the directory -- and the branch only when
+# it says something the location does not. Greg, 2026-09-29: "I don't need both
+# the worktree *and* the branch name *and* the session name." EnterWorktree names
+# the branch worktree-<name>, so there it is noise; in the primary checkout, or
+# a worktree on some other branch, it is the thing you wanted to know. When the
+# branch is hidden its dirty marker moves onto the location rather than vanish.
+if [ -n "$wt_name" ]; then
+    location=$(printf "\033[1;36m⑂ %s\033[0m" "$wt_name")
+    if [ "$branch" = "worktree-$wt_name" ] || [ "$branch" = "$wt_name" ]; then
+        branch=""
+        location="$location$dirty"
+    fi
+else
+    location=$(printf "\033[1;32m%s\033[0m" "$dir_display")
+fi
+git_info=""
+[ -n "$branch" ] && git_info="($branch$dirty)"
 
 # One rate-limit segment: "5h 23% ↻14:00", coloured like the context bar.
 rl_segment() { # label pct resets_at date-format
@@ -999,12 +989,10 @@ if command -v jq >/dev/null 2>&1; then
     fi
 fi
 
-# Create status line matching PS1 format but with model + context info
-# Format: [Model] directory git_info · <context bar> NN%
+# Format: session [Model] location (branch) · <context bar> NN% · 5h NN% wk NN%
 # Use printf with ANSI colors (will be dimmed by terminal)
-line=$(printf "\033[1;32m[%s]\033[0m \033[1;32m%s\033[0m" "$model" "$dir_display")
+line="$(printf "\033[1;32m[%s]\033[0m" "$model") $location"
 [ -n "$git_info" ] && line="$line $git_info"
-[ -n "$worktree_info" ] && line="$line $(printf "\033[1;36m%s\033[0m" "$worktree_info")"
 [ -n "$context_info" ] && line="$line$context_info"
 [ -n "$limits_info" ] && line="$line $(printf "\033[2m·\033[0m") $limits_info"
 [ -n "$session_info" ] && line="$(printf "\033[1;35m%s\033[0m" "$session_info") $line"

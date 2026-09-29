@@ -726,7 +726,7 @@ downstream of the earliest step named. The pipeline is a chain; invalidating a s
 comes after it, by definition. The alternative is asking every caller to remember a rule the
 pipeline already knows.
 
-### A reader can ask for ten of them again, from the Metadata page
+### A reader can ask for them again, from the Metadata page
 
 `/read/<slug>/metadata` has a **Re-run AI processing** section (called *Generate it again* until
 2026-09-29, when it absorbed *Start this article again*, went shut by default and moved above Archive —
@@ -743,7 +743,7 @@ for it on 2026-09-06, having just declined a library-wide backfill after a promp
 Three things about it are worth knowing here rather than in the component, because they are facts
 about *this* queue.
 
-**It is nine steps and not sixteen, and the list is explicit** —
+**It is some of the steps and not all, and the list is explicit** —
 [`src/rerun-steps.ts`](../../src/rerun-steps.ts), which carries the reasoning per step. Every member
 is in `FORCE_ONLY_WHEN_NAMED`, so `cascadeForce` cannot sweep anything in behind the press; but
 membership of that set is *not* what qualifies a step for the button, and deriving the list from it

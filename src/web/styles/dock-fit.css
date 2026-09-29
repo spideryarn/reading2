@@ -3,13 +3,13 @@
    narrows. The rest of the dock is dock.css, six files earlier. */
 
 /* ------------------------------------------------------- the mode switch --
-   The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
-   as one control rather than three buttons that happen to be adjacent. See
-   DockModes in Dock.tsx, and docs/plans/260826a-chat-mode.md for what a mode is.
+   The things the middle band can be, drawn as one control rather than a row of
+   buttons that happen to be adjacent. `MODES_UI` in Dock.tsx owns the current
+   list and order; docs/plans/260826a-chat-mode.md says what a mode is.
 
    The grouping is the entire visual job here. Exactly one of these is on at any
-   moment, and three separate-looking buttons where only one ever lights up
-   reads as three toggles you could turn on together. A hairline box around them
+   moment, and separate-looking buttons where only one ever lights up read as
+   toggles you could turn on together. A hairline box around them
    says "one of these", which is what the markup already promises a screen
    reader via `role="radiogroup"` — this is the sighted half of the same claim. */
 .dock-modes {
@@ -44,10 +44,32 @@
   overflow: hidden;
 }
 
-/* Hairlines BETWEEN the buttons, never on the ends — `+` puts a left border on
-   every button after the first, which is exactly the n-1 rules a segmented
-   control needs and stays right when a fourth mode is added. */
-.dock-modes .dock-btn + .dock-btn { border-left: 1px solid var(--rule); }
+/* ------------------------------------------------- lines between runs --
+   **A hairline between runs of related modes, and none inside a run.** Greg,
+   2026-09-29: *"Add subtle vertical separator lines between groups of related
+   modes"* (SPIDERYARN-READING2-4E). Until then there was a hairline between
+   every pair of buttons, so a line between groups could only have been made
+   louder than the ones already there; taking the ones inside a group away
+   says the same thing more quietly. The frame still says "one of these", and
+   the selected button's fill still says which.
+
+   `dock-group-start` is on the first *drawn* button of each run except the first
+   — `groupStarts` in Dock.tsx, computed from the visible list, so a run the
+   switch has hidden leaves no stray line. In the segmented control the rule
+   replaces an internal adjoining border; in the loose-link form it adds 1px.
+   Both are included in the normal post-render width measurement. Visible-mode
+   identity already participates in the fit signature, so no separate group
+   signature is needed.
+
+   The loose links on the metadata and tweets pages get the same rule at the
+   same places, so both faces of the bar group alike.
+   `--rule-strong`, the frame's own colour, on both faces. The old
+   between-buttons `--rule` was tried first, for *subtle*, and measured in a
+   browser it is oklch 0.27 on a bar of 0.26 — invisible, even zoomed 2x
+   (2026-09-29). One hairline in the frame's colour, a few per bar, is as quiet
+   as a line can be and still be seen. */
+.dock-modes .dock-btn.dock-group-start { border-left: 1px solid var(--rule-strong); }
+.dock-mode.dock-group-start { border-left: 1px solid var(--rule-strong); }
 
 .dock-modes .dock-btn {
   /* The inset top-border marker belongs to the bar's *other* buttons, where it
@@ -269,5 +291,3 @@
    about the rung that hides the mode labels, which is this one. Rung 1 hides no
    mode label, so there is nothing there for this rule to put back. */
 .dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
-
-
