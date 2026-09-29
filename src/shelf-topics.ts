@@ -175,7 +175,16 @@ export async function shelfTopics(
     return { response, refresh: null };
   }
 
-  const claimId = await deps.store.claimScores(scope, hash, SCORE_CLAIM_LEASE_MS);
+  /* Guarded like the read above: a claim that throws — the table not there yet
+     because production got this code before its migration, or a database
+     hiccup — leaves the answer standing and asks for nothing. */
+  let claimId: string | null;
+  try {
+    claimId = await deps.store.claimScores(scope, hash, SCORE_CLAIM_LEASE_MS);
+  } catch (err) {
+    logger.error({ ...errorFields(err), scope }, "shelf topic scores could not be claimed");
+    return { response, refresh: null };
+  }
   if (!claimId) {
     /* Two requests can both read before either claim exists. The loser learns
        only `null` from the atomic claim, so re-read once: a live claim (or a

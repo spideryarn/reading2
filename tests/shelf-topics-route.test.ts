@@ -416,6 +416,22 @@ describe("GET /api/library/terms with a model", () => {
     await clearBackoff();
   });
 
+  it("still answers with the program's list when the score table cannot be written — a deploy ahead of its migration", async () => {
+    /* Production gets this code before Greg applies the migration, and a
+       missing table throws on the claim. The reader's topics must not become
+       a 500 because a cache table is absent. */
+    await rename(ids[5] ?? "", "Article five, renamed");
+    const base = defaultShelfTopicsDeps();
+    const store = Object.create(base.store) as typeof base.store;
+    store.claimScores = async () => {
+      throw new Error('relation "spideryarn.shelf_topic_scores" does not exist');
+    };
+    const answer = await runAsOwner(OWNER, () => shelfTopics(false, { ...base, store }));
+    expect(answer.response.terms.length).toBeGreaterThan(0);
+    expect(answer.refresh).toBeNull();
+    expect(calls).toBe(0);
+  });
+
   it("claims nothing while articles are still unread", async () => {
     await rename(ids[6] ?? "", "Article six, renamed");
     /* A new article with no phrase run, and a fill budget of zero: one
