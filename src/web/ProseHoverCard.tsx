@@ -73,6 +73,7 @@ import { useJobs } from "./useJobs.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
+import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import {
   isBackLink,
   noteMarkerAt,
@@ -1709,9 +1710,7 @@ function TermCard({ entry, onOpen }: { entry: GlossaryEntry; onOpen(): void }) {
     <div className="prose-card-body">
       <p className="prose-card-head">
         <span className="prose-card-name">{entry.name}</span>
-        {entry.kind !== "term" && entry.kind !== "other" && (
-          <span className="gloss-kind">{entry.kind}</span>
-        )}
+        <GlossaryKindIcon kind={entry.kind} />
       </p>
 
       {prose.legacy ? (

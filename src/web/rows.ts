@@ -84,3 +84,19 @@ export function rowsForBlockIds(blockIds: readonly string[]): (HTMLElement | nul
   }
   return blockIds.map((id) => byId.get(id) ?? null);
 }
+
+/**
+ * **Every fragment of the passage `key` in this cell** — a quote split across
+ * an `<em>` is several marks. Moved here from flash.ts (plan 260929a, GPT Sol
+ * F3) so the flash and the centring scroll (scroll.ts § `aimAt`) find a
+ * passage by one rule.
+ *
+ * `data-hit` is a space-separated list, because one generated `<mark>` can
+ * carry several hits, and a key is `quote:block:n` — so split and compare
+ * rather than build a `~=` selector that would need escaping.
+ */
+export function passageMarks(cell: ParentNode, key: string): HTMLElement[] {
+  return [...cell.querySelectorAll<HTMLElement>("mark.hit[data-hit]")].filter((m) =>
+    (m.dataset.hit ?? "").split(" ").includes(key),
+  );
+}

@@ -345,12 +345,6 @@ td.text.note-open {
 /* The browser's own clear affordance is kept here, unlike the search band's —
    there is no Escape handler on this box, so removing it would leave a reader
    with a full field and no one-press way to empty it. */
-.gloss-ask-hint {
-  margin: 0.3rem 0 0;
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.35;
-}
 /* The refusal and the way out of it, on their own lines: the sentence is three
    or four lines in an 18rem band, and a button beside it would be unreadable. */
 .gloss-ask-failed { margin-top: 0.35rem; }

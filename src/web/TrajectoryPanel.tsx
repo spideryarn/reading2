@@ -40,10 +40,10 @@
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, RotateCw, Route, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw, RotateCw, Route, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UseTrajectory } from "./useTrajectory.js";
-import type { TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
+import type { DoorView, TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -108,17 +108,20 @@ function rowWords(row: TrajectoryRow): { shown: string; whole: string | null } |
 }
 
 /**
- * **Where the stop sits in the article** — a thin track with a dot on it, the
- * same width on every row, so down the list the dots zig-zag when the route
- * jumps from the results back to the methods. A hint, not a chart: drawn for
- * the eye only, and said in words for a screen reader. The plan's stage 5b.
+ * **Where the stop sits in the article** — a short vertical hairline under the
+ * row's number, with a dot on it: the top of the line is the start of the
+ * article, the bottom its end, the way the spine draws it. A hint, not a chart:
+ * drawn for the eye only, and said in words for a screen reader. The plan's
+ * stage 5b; vertical, in the number's column, since plan 260929a § 4 — it was
+ * a horizontal track in a column of its own, about 53px of a band that can be
+ * 280px wide (Greg, SPIDERYARN-READING2-4D).
  */
 function StopPosition({ at, current }: { at: number; current: boolean }) {
   const pct = Math.round(Math.min(1, Math.max(0, at)) * 100);
   return (
     <>
       <span className="traj-pos" aria-hidden="true">
-        <span className={`traj-pos-dot${current ? " on" : ""}`} style={{ left: `${pct}%` }} />
+        <span className={`traj-pos-dot${current ? " on" : ""}`} style={{ top: `${pct}%` }} />
       </span>
       <span className="traj-pos-said sr-only">about {pct}% of the way through</span>
     </>
@@ -208,11 +211,15 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
   return (
     <div className="traj-head">
       <div className="traj-stepper">
+        {/* Enabled on stop 1 too, where it goes to stop 1's passage again —
+            ← does the same (SPIDERYARN-READING2-4K), and the keys may not do
+            more than the buttons. */}
         <button
           type="button"
           className="traj-arrow"
-          aria-label="Previous stop"
-          disabled={view.position <= 1}
+          aria-label={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
+          title={view.position <= 1 ? "Back to stop 1" : undefined}
+          disabled={view.position < 1}
           onClick={() => view.onStep(-1)}
         >
           <ChevronLeft size={20} />
@@ -374,7 +381,10 @@ export function TrajectoryPanel({ owner, view }: Props) {
                         disabled={row.missing}
                         onClick={() => view.onRow(row.quoteId)}
                       >
-                        <span className="traj-n">{row.n}</span>
+                        <span className="traj-n">
+                          {row.n}
+                          {row.position !== null && <StopPosition at={row.position} current={row.current} />}
+                        </span>
                         <span className="traj-what">
                           {/* A repeated section is said, not drawn: a ditto mark
                               beside a quotation reads as another quotation mark,
@@ -387,7 +397,6 @@ export function TrajectoryPanel({ owner, view }: Props) {
                           {words && <span className="traj-words">“{words.shown}”</span>}
                           {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
                         </span>
-                        {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                       </button>
                     );
                     return (
@@ -542,9 +551,12 @@ function StopCardView({
 }
 
 /**
- * **The door after the current stop's block** — "Next stop ›", or at the end
- * of a pass "Go round again — More ›". It is there because on an iPad the
- * reader's eyes and thumb are in the prose after reading a stop, and on a
+ * **The door after the current stop's block** — "Next stop ›" mid-pass, and at
+ * the end of a pass two buttons: *Go round again* (stop 1 of this pass) and
+ * *More detail ›* (stop 1 of the next deeper pass, when there is one). It was
+ * one button, "Go round again — More ›", until Greg found it confusing
+ * (SPIDERYARN-READING2-4N, plan 260929a § 2). It is there because on an iPad
+ * the reader's eyes and thumb are in the prose after reading a stop, and on a
  * narrow window the band has stepped aside altogether (F4).
  *
  * Drawn by `TableView` after the block's prose, outside `.prose`, on the path
@@ -552,22 +564,20 @@ function StopCardView({
  * shifts no comment anchor.
  */
 export function TrajectoryDoor({
-  label,
-  cue,
-  onPress,
+  door,
+  onNext,
+  onAgain,
+  onDeeper,
   onRoute,
 }: {
-  label: string | null;
-  /**
-   * The cue of the stop the door leads to, drawn small and muted under it, so
-   * the door says where it goes. `null` for none, or an old route.
-   */
-  cue: string | null;
-  onPress(): void;
+  door: DoorView | null;
+  onNext(): void;
+  onAgain(): void;
+  onDeeper(): void;
   /** Bring the band back — offered only while it has stepped aside. */
   onRoute: (() => void) | null;
 }) {
-  if (label === null && onRoute === null) return null;
+  if (door === null && onRoute === null) return null;
   return (
     <div className="traj-door">
       <div className="traj-door-row">
@@ -577,13 +587,39 @@ export function TrajectoryDoor({
             All stops
           </button>
         )}
-        {label && (
-          <button type="button" className="traj-door-btn" onClick={onPress}>
-            {label}
+        {door?.kind === "next" && (
+          <button type="button" className="traj-door-btn" onClick={onNext}>
+            Next stop ›
           </button>
         )}
+        {door?.kind === "end" && (
+          <>
+            <button type="button" className={`traj-door-btn${door.deeper ? " quiet" : ""}`} onClick={onAgain}>
+              <RotateCcw size={14} />
+              Go round again
+            </button>
+            {door.deeper && (
+              <button
+                type="button"
+                className="traj-door-btn"
+                title={`Go round at ${door.deeper}, with more stops between these`}
+                onClick={onDeeper}
+              >
+                More detail ›
+              </button>
+            )}
+          </>
+        )}
       </div>
-      {label && cue && <p className="traj-door-cue">{cue}</p>}
+      {/* Where the door leads: the next stop's cue, small and muted — or, at
+          the end of a pass, which pass has ended, since two doors lead to two
+          different places. */}
+      {door?.kind === "next" && door.cue && <p className="traj-door-cue">{door.cue}</p>}
+      {door?.kind === "end" && (
+        <p className="traj-door-cue">
+          End of {door.pass} — {door.count} {door.count === 1 ? "stop" : "stops"}.
+        </p>
+      )}
     </div>
   );
 }

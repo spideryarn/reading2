@@ -11,7 +11,7 @@
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
  */
-import { blockRow } from "./rows.js";
+import { blockRow, passageMarks } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
 
 /**
@@ -488,9 +488,20 @@ export function watchBarVisibility(): () => void {
     // A jump we started is not the reader scrolling, and chrome that answers to
     // it would move the ground under a destination already calculated. See
     // `markOurScroll`.
-    if (performance.now() < quietUntil) {
+    if (
+      performance.now() < quietUntil &&
+      ourScrollY !== null &&
+      Math.abs(window.scrollY - ourScrollY) < 0.5
+    ) {
       from = window.scrollY;
       return;
+    }
+    /* A different pixel inside the quiet window is the reader taking over,
+       not our delayed scroll event. Let the bar answer this movement and end
+       the window now rather than deafening it for the remaining 150ms. */
+    if (performance.now() < quietUntil) {
+      quietUntil = 0;
+      ourScrollY = null;
     }
     const next = stepBar(hidden, window.scrollY, from);
     from = next.from;
@@ -614,8 +625,16 @@ let aiming: number | null = null;
  * impossible rather than unlikely.
  */
 let quietUntil = 0;
+/** The last pixel one of this module's `scrollTo` calls actually reached. */
+let ourScrollY: number | null = null;
 function markOurScroll(ms = SCROLL_MS + 150) {
   quietUntil = performance.now() + ms;
+}
+
+/** Move the page and remember the browser's clamped/rounded answer. */
+function moveWindow(top: number): void {
+  window.scrollTo({ top, behavior: "auto" });
+  ourScrollY = window.scrollY;
 }
 
 /**
@@ -639,7 +658,16 @@ function cancel(outcome: ScrollOutcome = "cancelled") {
      which is exactly the gesture most likely to be them reaching for the chrome
      this suppresses. Cheap to get wrong, invisible when wrong: the bar would
      merely feel unresponsive now and then. Raised by GPT Sol, 2026-08-27. */
-  quietUntil = 0;
+  /* …but a glide's own last frame is not the reader taking over, and its
+     scroll event is still to come: keep the window it opened, which ends
+     150ms later on its own, so that event is not read as the reader scrolling
+     away from the arrival it has just made (`anchor`, plan 260929a). */
+  if (outcome !== "settled") {
+    quietUntil = 0;
+    ourScrollY = null;
+  }
+  /* Any movement at all ends a centred arrival's hold on the position. */
+  clearArrivalAnchor();
   if (frame) cancelAnimationFrame(frame);
   frame = 0;
   aiming = null;
@@ -683,12 +711,19 @@ function glide(
   done?: (outcome: ScrollOutcome) => void,
   ms: number = SCROLL_MS,
   finish: () => "settled" | "missing" = () => "settled",
+  /** The first answer was measured without what it is aiming at — `aimAt`. */
+  provisional: () => boolean = () => false,
 ) {
   cancel();
   const from = window.scrollY;
   const first = aim();
-  // Already there is a landing: the reader is looking at the row right now.
-  if (Math.abs(first - from) < 1) return done?.("settled");
+  // Already there is a landing: the reader is looking at the row right now —
+  // unless that answer is provisional, and then the corrective frame of the
+  // instant path below is what decides (plan 260929a, Sol F2).
+  if (Math.abs(first - from) < 1) {
+    if (!provisional()) return done?.("settled");
+    ms = 0;
+  }
   // AFTER the early return, not before it: a jump to where we already are moves
   // nothing, and opening the quiet window for it would deafen the bar to a third
   // of a second of the reader's own scrolling for no reason at all.
@@ -698,7 +733,7 @@ function glide(
      concerned (`glideTarget`, `scrollByScreen`): the re-check only corrects. */
   aiming = ms > 0 ? first : null;
   landing = done ?? null;
-  if (ms === 0) window.scrollTo({ top: first, behavior: "auto" });
+  if (ms === 0) moveWindow(first);
 
   // The browser's own smooth scroll gives up the moment you touch the wheel.
   // Ours has to be told, or we would drag the reader back to a destination they
@@ -759,7 +794,7 @@ function glide(
        for every listener on the page. */
     // `top` only: omitting `left` keeps the horizontal position, which matters
     // because a deep tree scrolls the table sideways (layout.ts § overflowing).
-    if (Math.abs(top - window.scrollY) >= 0.5) window.scrollTo({ top, behavior: "auto" });
+    if (Math.abs(top - window.scrollY) >= 0.5) moveWindow(top);
     if (t < 1) frame = requestAnimationFrame(tick);
     else cancel(finish());
   };
@@ -789,7 +824,7 @@ export function reducedMotion(): boolean {
 export function scrollToTop() {
   cancel();
   markOurScroll(150); // instant, so only the event it fires needs covering
-  window.scrollTo({ top: 0, behavior: "auto" });
+  moveWindow(0);
 }
 
 /**
@@ -814,10 +849,121 @@ export function scrollToTop() {
  */
 export type ScrollOutcome = "settled" | "cancelled" | "missing";
 
+/**
+ * **Where the destination sits once it has arrived.**
+ *
+ * - `top` — its top just under the bars. Every step and every restore: ↑ / ↓,
+ *   swipes, `?at=` on load or Back, the re-flow re-anchor. A stride reads down
+ *   the page, and a restored position is a top-of-section fact.
+ * - `centre` — in the middle of the free area, so the reader sees what comes
+ *   before and after it. Every **jump**: `beginJump` (every block link, in every
+ *   mode) and Trajectory's arrivals. Greg, 2026-09-29 (SPIDERYARN-READING2-4M):
+ *   *"the linked-to block should be vertically-centred on the page so it's easy
+ *   to see its context."* Something taller than the free area is not centred —
+ *   its middle would be on screen and its start hidden, the very reason this
+ *   file stopped using `scrollIntoView({ block: "center" })` — and goes to the
+ *   top instead. docs/plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md § 3.
+ */
+export type ScrollAlign = "top" | "centre";
+
+export interface ScrollHow {
+  align?: ScrollAlign;
+  /**
+   * A passage inside the block — the key annotate.ts writes into its marks'
+   * `data-hit`. When its marks are drawn, *they* are what is centred rather
+   * than the whole row, so a quote at the foot of a long paragraph is centred
+   * even when the paragraph is too tall to be. Only with `centre`.
+   */
+  passage?: string | undefined;
+}
+
+/**
+ * **The page offset that puts a thing where `align` says** — the arithmetic,
+ * pure and pinned in tests/scroll.test.ts.
+ *
+ * `top` and `height` are the thing's, in document coordinates; `bar` and
+ * `dock` the obstructions at the top and bottom of the viewport; `max` the
+ * furthest the page can scroll. Centred when it fits between them, else its
+ * top under the bar; clamped to the page either way.
+ */
+export function alignedOffset(o: {
+  top: number;
+  height: number;
+  bar: number;
+  dock: number;
+  viewportH: number;
+  max: number;
+  align: ScrollAlign;
+}): number {
+  const free = o.viewportH - o.bar - o.dock;
+  const slack = o.align === "centre" && o.height < free ? (free - o.height) / 2 : 0;
+  return Math.max(0, Math.min(o.top - o.bar - slack, Math.max(0, o.max)));
+}
+
+/**
+ * **The arrival that owns "where the reader is"** until something else moves
+ * the page — plan 260929a, GPT Sol F1.
+ *
+ * Everything that asks where the reader is measures at the reading line, just
+ * under the bars: the `?at=` spy, the next jump's origin (the "Back to …"
+ * chip), `beginJump`'s "already there", ↑ / ↓, and `whereIsBlock`. A centred
+ * block's top sits *below* that line, so every one of them would name the
+ * block above it — `?at=` rewritten to the previous section, a chip that
+ * returns one paragraph short, a second press on the same link jumping again.
+ * So when a centred movement settles it leaves this anchor, and those callers
+ * answer with it while it lasts.
+ *
+ * It lasts until the next movement of any kind — `cancel`, which every glide
+ * runs first and which a wheel or touch mid-glide also runs — or a scroll
+ * event outside our own quiet window. Inside that window, the glide's delayed
+ * event keeps the same pixel and a reader's movement does not, so the pixel
+ * decides. A re-flow that makes the browser scroll ends it too, and then the
+ * reading line answers again, which is the old behaviour rather than a wrong
+ * one.
+ */
+let anchor: { id: string; passage: string | undefined } | null = null;
+let anchorY = 0;
+let anchorListening = false;
+
+function onScrollWhileAnchored(): void {
+  /* The glide's delayed event reports the pixel it just reached. A reader can
+     scroll during that same 150ms window, though, and a different pixel is the
+     distinction the clock alone cannot make (plan 260929a code review, F1). */
+  if (performance.now() < quietUntil && Math.abs(window.scrollY - anchorY) < 0.5) return;
+  clearArrivalAnchor();
+}
+
+/** End a centred arrival without implying that a glide is in flight. */
+export function clearArrivalAnchor(): void {
+  anchor = null;
+  if (anchorListening) {
+    window.removeEventListener("scroll", onScrollWhileAnchored);
+    anchorListening = false;
+  }
+}
+
+function holdAnchor(id: string, passage: string | undefined): void {
+  anchor = { id, passage };
+  anchorY = window.scrollY;
+  if (anchorListening) return;
+  window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
+  anchorListening = true;
+}
+
+/** The centred arrival the reader is standing on, or `null` — see `anchor`. */
+export function arrivalAnchor(): { id: string; passage: string | undefined } | null {
+  /* A re-extraction or page change can remove the row without moving the
+     viewport. Never let module state make position readers name a block that
+     the current article no longer draws. */
+  if (anchor !== null && blockRow(anchor.id) === null) clearArrivalAnchor();
+  return anchor;
+}
+
 export function scrollToBlock(
   id: string,
   behavior: ScrollBehavior = "smooth",
   done?: (outcome: ScrollOutcome) => void,
+  how: ScrollHow = {},
 ) {
   const row = blockRow(id);
   /* A request that cannot move is still a newer request. Letting the old glide
@@ -828,12 +974,20 @@ export function scrollToBlock(
     cancel();
     return done?.("missing");
   }
-  const aim = aimAt(id, row);
+  const align = how.align ?? "top";
+  const aim = aimAt(id, row, align, align === "centre" ? how.passage : undefined);
   glide(
     aim.read,
-    done,
+    /* The anchor is left *after* `cancel` has run for the last frame (it
+       clears it), and before the caller hears — so a caller that asks where
+       the reader is from inside `done` gets the arrival. */
+    (outcome) => {
+      if (outcome === "settled" && align === "centre") holdAnchor(id, how.passage);
+      done?.(outcome);
+    },
     behavior === "smooth" && !reducedMotion() ? SCROLL_MS : 0,
     aim.finish,
+    aim.provisional,
   );
 }
 
@@ -849,14 +1003,25 @@ export function scrollToBlock(
  * gone altogether keeps the last answer rather than aiming at a detached
  * node's zero rectangle, but reports `missing` rather than claiming that stale
  * pixel was an arrival.
+ *
+ * **Centred** (`ScrollAlign`), the thing measured is the passage's marks when
+ * a passage was named and they are drawn — every fragment, unioned, found by
+ * the same token rule the flash uses (rows.ts § `passageMarks`, Sol F3) — and
+ * the row otherwise. Until they are found the aim is `provisional`: the marks
+ * of a Trajectory stop are published by the render the click starts, after
+ * the click has asked for the scroll, so `glide` must not settle on a first
+ * answer measured without them (Sol F2).
  */
 function aimAt(
   id: string,
   first: HTMLElement,
-): { read: () => number; finish: () => "settled" | "missing" } {
+  align: ScrollAlign = "top",
+  passage?: string,
+): { read: () => number; finish: () => "settled" | "missing"; provisional: () => boolean } {
   let row = first;
   let last: number | null = null;
   let present = true;
+  let found = passage === undefined;
   return {
     read: () => {
       if (!row.isConnected) {
@@ -868,12 +1033,30 @@ function aimAt(
         row = again;
       }
       present = true;
-      const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      last = Math.max(0, Math.min(top, max));
+      let rect: { top: number; height: number } = row.getBoundingClientRect();
+      if (passage !== undefined) {
+        const cell = row.querySelector("td.text");
+        const marks = cell ? passageMarks(cell, passage) : [];
+        found = marks.length > 0;
+        if (found) {
+          const rects = marks.map((m) => m.getBoundingClientRect());
+          const top = Math.min(...rects.map((r) => r.top));
+          rect = { top, height: Math.max(...rects.map((r) => r.bottom)) - top };
+        }
+      }
+      last = alignedOffset({
+        top: rect.top + window.scrollY,
+        height: rect.height,
+        bar: stickyDestination(),
+        dock: align === "centre" ? dockOffset() : 0,
+        viewportH: window.innerHeight,
+        max: document.documentElement.scrollHeight - window.innerHeight,
+        align,
+      });
       return last;
     },
     finish: () => (present ? "settled" : "missing"),
+    provisional: () => !found,
   };
 }
 
@@ -942,7 +1125,7 @@ export function scrollByScreen(dir: -1 | 1) {
   if (reducedMotion()) {
     cancel();
     markOurScroll(150); // instant, so only the event it fires needs covering
-    window.scrollTo({ top: target, behavior: "auto" });
+    moveWindow(target);
   } else glide(() => target);
 }
 
@@ -1000,6 +1183,9 @@ export function arrivalTarget(
 export function isBlockOnScreen(id: string): boolean {
   const row = blockRow(id);
   if (!row) return false;
+  /* A centred arrival is on screen by construction; a large one may reach the
+     bottom margin, which would call it away (Sol F1). */
+  if (anchor?.id === id) return true;
   const { top, bottom } = row.getBoundingClientRect();
   const margin = window.innerHeight * 0.1;
   return top >= stickyOffset() && bottom <= window.innerHeight - margin;
@@ -1026,9 +1212,27 @@ export function isBlockOnScreen(id: string): boolean {
  */
 export type Whereabouts = "nowhere" | "here" | "away";
 
+/**
+ * **Whether a passage inside a block is comfortably in view** — `beginJump`'s
+ * "already there" for a jump that names a quote (plan 260929a, Sol F2). The
+ * block can be under the reading line with the quote a screen further down,
+ * so the block's answer is not the passage's. `false` when its marks are not
+ * drawn: nothing says it is there, so the jump goes ahead.
+ */
+export function isPassageOnScreen(id: string, passage: string): boolean {
+  const cell = blockRow(id)?.querySelector("td.text");
+  const marks = cell ? passageMarks(cell, passage) : [];
+  if (marks.length === 0) return false;
+  const rects = marks.map((m) => m.getBoundingClientRect());
+  const top = Math.min(...rects.map((r) => r.top));
+  const bottom = Math.max(...rects.map((r) => r.bottom));
+  return top >= stickyOffset() && bottom <= window.innerHeight - window.innerHeight * 0.1;
+}
+
 export function whereIsBlock(id: string): Whereabouts {
   const row = blockRow(id);
   if (!row) return "nowhere";
+  if (anchor?.id === id) return "here"; // § `anchor`
   const { top, bottom } = row.getBoundingClientRect();
   const line = stickyOffset();
   const margin = window.innerHeight * 0.1;
@@ -1052,5 +1256,8 @@ export function whereIsBlock(id: string): Whereabouts {
  * the reader has not taken over, and nothing here is starting a new movement.
  */
 export function abandonScroll(): void {
-  cancel();
+  /* "Already here" callers use this to stop an older glide. With no glide,
+     cancelling would only discard a centred arrival even though the page did
+     not move — notably when the comment dialog opens on that same block. */
+  if (frame !== 0) cancel();
 }

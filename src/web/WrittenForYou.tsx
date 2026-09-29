@@ -42,9 +42,27 @@
  * pointed at, and until 2026-08-30 it answered it with a link nobody could
  * click — see ProfilePanel.tsx for the measurement.
  *
+ * ## `compact`: an icon without words, in Glossary only (2026-09-29)
+ *
+ * > Perhaps hide "written for you" as a tooltip on something or just an icon.
+ * >
+ * > — Greg, 2026-09-29, `[SPIDERYARN-READING2-4G]`
+ *
+ * **Glossary only**, because the phone-space argument was made about Glossary,
+ * and because an icon alone says less than the words: *older profile* is a
+ * fact a reader would otherwise have to guess from a colour. GPT Sol's review
+ * of the plan made that point and it holds, so Quotes, Ideas and Tweets keep
+ * their words. The two states stay apart without them — `UserRound` for
+ * *written for you*, `UserRoundPen` in the warmer `.changed` colour for the
+ * other — and **the panel says which one it is, in words, at its top**
+ * (`note`), because the panel is where a compact badge's reader goes to find
+ * out, and until now it only described the profile as it is today. There is
+ * still no hover `title`: ProfilePanel.tsx says why.
+ * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+ *
  * docs/project/reader-profile.md.
  */
-import { UserRound } from "lucide-react";
+import { UserRound, UserRoundPen } from "lucide-react";
 import { ProfilePanel } from "./ProfilePanel.js";
 
 /**
@@ -69,20 +87,31 @@ export interface ProfileState {
  * common case and is not a state worth a line of interface. Absence here means
  * "this is the ordinary thing", exactly as an unbadged glossary entry does.
  */
-export function WrittenForYou({ written, changed, slug }: ProfileState & { slug: string }) {
+export function WrittenForYou({
+  written,
+  changed,
+  slug,
+  compact = false,
+}: ProfileState & { slug: string; compact?: boolean }) {
   if (!written) return null;
+  const Icon = compact && changed ? UserRoundPen : UserRound;
   return (
     <ProfilePanel
       slug={slug}
-      className={`prof-badge${changed ? " changed" : ""}`}
+      className={`prof-badge${changed ? " changed" : ""}${compact ? " icon-only" : ""}`}
       label={
         changed
           ? "Written for a profile you have changed since — see what it says now"
           : "Written for your profile — see what it says"
       }
+      note={
+        changed
+          ? "This was written for your profile as it was before you last changed it."
+          : "This was written for your profile."
+      }
     >
-      <UserRound size={11} />
-      {changed ? "older profile" : "written for you"}
+      <Icon size={compact ? 13 : 11} />
+      {!compact && (changed ? "older profile" : "written for you")}
     </ProfilePanel>
   );
 }

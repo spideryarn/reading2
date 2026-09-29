@@ -482,6 +482,32 @@ stepping, Back, the return chip and a pasted link do not flash. Under a band tha
 it waits until the prose is exposed; with the prose column off there is nothing to flash.
 [260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md).
 
+#### A jump lands centred, and holds the position until you move
+
+> In the Trajectory mode (and anywhere else that a block-link triggers a jump to the appropriate
+> place in the text), perhaps the linked-to block should be vertically-centred on the page so it's
+> easy to see its context.
+>
+> — Greg, 2026-09-29 (SPIDERYARN-READING2-4M)
+
+Since 2026-09-29 every `beginJump` — so every block link in every mode — and every Trajectory
+arrival puts what it was sent to **in the middle of the free area** between the bars and the dock,
+rather than its top just under the bars. What it was sent to is the passage when the jump names one
+and its marks are drawn (a Trajectory stop, a quote), and the block otherwise. Something taller than
+the free area goes to the top as before: centring a long paragraph shows its middle and hides its
+start. Stepping (↑ / ↓, swipes, the comment dialog's ‹ ›), restoring `?at=` (a load, Back, the
+chip) and the re-flow re-anchor stay top-aligned — a stride reads down the page, and a restored
+position is a top-of-section fact. `ScrollAlign` in [`scroll.ts`](../../src/web/scroll.ts).
+
+**A centred arrival is where the reader is until something else moves the page.** Everything that
+asks "where is the reader" — the spy that writes `?at=`, the next jump's origin (so the chip),
+`beginJump`'s "already there", ↑ / ↓, `whereIsBlock` — measures at the reading line just under the
+bars, and a centred block's top sits below it, so every one of them would otherwise name the block
+*above*. `scroll.ts` keeps one *arrival anchor*, set when a centred movement settles and cleared by
+the next movement of any kind or by the reader scrolling; those callers answer with it while it
+holds. [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
+§ After the plan review, F1.
+
 ### Debounced, not throttled
 
 Greg's suggestion, and the right one. Mid-flick the URL is of no use to anybody, so there is nothing

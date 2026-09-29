@@ -39,11 +39,23 @@
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
-.gloss-sort-label {
-  margin-right: 0.15rem;
-  color: var(--ink-faint);
-  font-size: 0.83rem;
-  text-transform: lowercase;
+/* The buttons, as the named group; the trailing slot sits beside it rather
+   than in it (GlossaryPanel.tsx § SortBar). */
+.gloss-sort-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+/* The count and the profile badge, at the far end of the sort row since
+   2026-09-29, when the head row they used to sit in went (GlossaryPanel.tsx).
+   `margin-left: auto` pushes them right, and they wrap as one piece. */
+.gloss-sort-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
 }
 .gloss-sort-btn {
   padding: 0.1rem 0.4rem;
@@ -300,11 +312,15 @@
   font-weight: 600;
 }
 .gloss-term.on .gloss-name { color: var(--highlight-ink); }
+/* An icon since 2026-09-29, where the kind's word used to be —
+   src/web/GlossaryKindIcon.tsx. Faint, because it is a hint about the term and
+   not part of its name; `flex-shrink: 0` so a long name wraps before it goes. */
 .gloss-kind {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
   color: var(--ink-faint);
-  font-size: 0.79rem;
-  text-transform: lowercase;
-  letter-spacing: 0.02em;
+  cursor: help;
 }
 /* Pushed right, and monospaced, because a column of numbers you are ordered by
    should line up. Only present when the list IS ordered by them — one number
