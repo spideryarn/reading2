@@ -1036,6 +1036,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         if (session.current !== s || s.finished) return;
         s.tape?.cancel();
         s.tape = null;
+        /* With live words already in the box, `finish` says nothing (its
+           `[mic-no-tape]` is for an empty one) — and the microphone would stop
+           mid-sentence in silence, leaving rough words that look authoritative.
+           GPT Sol's round-two review, C1. */
+        if (s.confirmed > 0) setError(TAPE_BROKE);
         stopRef.current();
       },
     };

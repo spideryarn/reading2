@@ -499,6 +499,29 @@ describe.each<Path>(["recogniser", "no recogniser"])("a long dictation, %s", (pa
     h.unmount();
   });
 
+  /* Sol's round-two C1: with live words already confirmed, the microphone
+     used to stop mid-sentence and say nothing at all. */
+  it("says so when every container refuses after live words were confirmed", async () => {
+    if (path !== "recogniser") return;
+    const h = drive();
+    await press(h, path);
+    act(() =>
+      recognition().onresult?.({
+        resultIndex: 0,
+        results: [{ isFinal: true, 0: { transcript: "rough words" } }],
+      }),
+    );
+    act(() => recorder().fail());
+    act(() => recorder().fail());
+    await settle();
+    act(() => recognition().onend?.());
+    await settle();
+    expect(h.get().armed).toBe(false);
+    expect(h.get().error).toContain("[mic-broken]");
+    expect(calls).toHaveLength(0);
+    h.unmount();
+  });
+
   /* ------------------------------------------- the cancellation table --- */
 
   it("the ceiling ends it like Stop: uploads kept, the tail sent, one transcript", async () => {
