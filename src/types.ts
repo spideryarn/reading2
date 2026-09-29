@@ -3755,6 +3755,13 @@ export interface CitedWork {
    * result's own, not the model's. Absent on every other row.
    */
   found?: CitationFound;
+  /**
+   * **What *Look it up* read from a search extract for this work** — attached
+   * at read time from `citation_finds` on any row, whatever its link, and only
+   * while its context fingerprint matches this list (src/citation-lookup.ts).
+   * Owner-only: never crosses the public boundary.
+   */
+  lookup?: CitationLookup;
 }
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
@@ -3771,18 +3778,93 @@ export interface CitationFound {
 
 /** One stored find: the page's address, plus what the row shows about it. */
 export interface CitationFind extends CitationFound {
-  /** The search result's own URL — one of the call's annotations, never the model's. */
+  /**
+   * The search result's own URL — one of the call's annotations, never the
+   * model's. **On a row the article linked, this is only the page whose
+   * extract was read**, and is never drawn as the row's link (`attachFinds`).
+   */
   url: string;
+  /** What the lookup read from that result's extract. Absent on finds made before it existed. */
+  lookup?: CitationLookup;
 }
 
 /**
+ * **The AI's reading of one search extract against what the article uses the
+ * work for.** Three verdicts and no "does not support": an extract that does
+ * not show a thing says nothing about the full paper (plan 260929g, Sol P-1).
+ */
+export type CitationSupport = "supports" | "partly" | "not-in-extract";
+
+/**
+ * Which of the things a lookup can have found (plan 260929g R-2):
+ *
+ * - `assessed` — a result that is this work, with an extract, read.
+ * - `no-extract` — a result that is this work, but the search gave no extract
+ *   of it. **Never shown as `not-in-extract`**: nothing was read.
+ * - `not-identified` — the result passed *Find it*'s looser title rule, so a
+ *   searched row may still link to it, but not the stricter rule for reading
+ *   it as this work (R-1). Nothing from it is shown.
+ * - `unreadable` — the result was this work but the model's reading of it was
+ *   malformed, and was dropped whole (R-5).
+ *
+ * *No matching result at all* is not a state: it stores nothing, and is a
+ * notice after the press.
+ */
+export type CitationLookupState = "assessed" | "no-extract" | "not-identified" | "unreadable";
+
+interface CitationLookupBase {
+  /** The result's host, without `www.` — *from arxiv.org*. */
+  host: string;
+  /** Billed searches the call reported; `null` when the provider did not say. */
+  searches: number | null;
+  model: string;
+  /** ISO 8601. */
+  at: string;
+  /**
+   * R-4: over every capped string sent, the identity rule, the prompt version
+   * and the model. A stored lookup is attached only while it equals the
+   * current list's (src/citation-lookup.ts § `lookupContextHash`).
+   */
+  contextHash: string;
+  /** R-4: over the result's URL, title and extract. Provenance only. */
+  evidenceHash: string;
+}
+
+/**
+ * **What *Look it up* read about one cited work** — private to the owner,
+ * attached to every kind of row, and independent of the row's link.
+ * src/citation-lookup.ts has every rule; each quote is the search extract's
+ * own characters, checked to be in it, and the verdict and `paperDoes.says`
+ * are the AI's reading of that extract, never the paper's words.
+ */
+export type CitationLookup =
+  | (CitationLookupBase & { state: Exclude<CitationLookupState, "assessed"> })
+  | (CitationLookupBase & {
+      state: "assessed";
+      /** Words in the extract that was read — *about 310 words*. */
+      excerptWords: number;
+      /** `supports` and `partly` always carry a quote from the extract that shows it. */
+      verdict:
+        | { support: Exclude<CitationSupport, "not-in-extract">; quote: string }
+        | { support: "not-in-extract" };
+      /** One sentence on what the work does, only with a quote from the extract that shows it. */
+      paperDoes?: { says: string; quote: string };
+    });
+
+/**
  * `POST /api/citations/:slug/:id/find`. **Two outcomes, and neither is an
- * error**: a page that matched and was kept (the work comes back upgraded to
- * `linkFrom: "web"`), or nothing that matched — stored nowhere, and the row's
- * Scholar search stays. A failed call is an HTTP error, not a third outcome.
+ * error**: a page that matched and was kept, or nothing that matched — stored
+ * nowhere, and the row stays as it was. A failed call is an HTTP error, not a
+ * third outcome.
+ *
+ * On `found`, **the link and the lookup are separate** (plan 260929g R-3):
+ * `work` is the row's link half — upgraded to `linkFrom: "web"` only when it
+ * was a searched row (`search`, or `web` found before), and otherwise exactly
+ * the row as it was, its `url` and `linkFrom` untouched. `lookup` is what was
+ * read, for any row. `work` carries no `lookup` of its own.
  */
 export type FindCitationResponse =
-  | { outcome: "found"; work: CitedWork }
+  | { outcome: "found"; work: CitedWork; lookup: CitationLookup }
   | { outcome: "no-match"; message: string };
 
 /**

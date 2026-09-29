@@ -93,3 +93,42 @@
   font-size: 0.77rem;
   line-height: 1.35;
 }
+
+/* ---- after *Look it up* ----------------------------------------------------
+   Under an assessed row (CitationsPanel.tsx § LookupReading): the verdict, each
+   quote from the search extract, and what the work does. Quiet, like the lines
+   around it — the row is still the article's citation first. The quotes wear
+   Debate's solid rule down the left (debate.css § `.dbt-quote`), the mark this
+   app already uses for "these are not our words", with the caption under them
+   saying whose words they are. Margins are reset explicitly: `figure` and
+   `blockquote` carry 40px of browser indent, which at 288px would take a
+   seventh of the band. */
+.cite-lookup { margin: 0.25rem 0 0; }
+.cite-verdict,
+.cite-does {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.cite-lookup-label {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+}
+.cite-quote { margin: 0.25rem 0 0; }
+.cite-quote blockquote {
+  margin: 0;
+  padding: 0 0 0 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.cite-quote figcaption {
+  margin: 0.1rem 0 0 0.55rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}

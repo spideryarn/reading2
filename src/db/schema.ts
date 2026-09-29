@@ -3650,6 +3650,30 @@ export const citationFinds = spideryarn.table(
     searches: integer("searches"),
     model: text("model").notNull(),
     foundAt: timestamp("found_at", { withTimezone: true }).notNull(),
+    /*
+     * **What *Look it up* read from the result's search extract** —
+     * docs/plans/260929g-check-a-cited-paper-supports-the-claim.md,
+     * src/citation-lookup.ts. All null on a find made before it existed, and
+     * the CHECKs below hold the shape `CitationLookup` has in src/types.ts, so
+     * no writer can store a verdict without its quote or a reading without
+     * its fingerprint. On a row the article linked, `url` above is the page
+     * whose extract was read and is never the row's link.
+     */
+    /** `CitationLookupState`: assessed, no-extract, not-identified, unreadable. */
+    lookupState: text("lookup_state"),
+    /** `CitationSupport`, only when assessed. */
+    lookupSupport: text("lookup_support"),
+    /** The extract's own words showing `supports`/`partly` — never the model's typing. */
+    lookupSupportQuote: text("lookup_support_quote"),
+    /** The AI's one sentence on what the work does, only with its quote. */
+    lookupPaperDoes: text("lookup_paper_does"),
+    lookupPaperDoesQuote: text("lookup_paper_does_quote"),
+    /** Words in the extract that was read. */
+    lookupExcerptWords: integer("lookup_excerpt_words"),
+    /** R-4: recomputed at read time; a lookup attaches only while it matches. */
+    lookupContextHash: text("lookup_context_hash"),
+    /** R-4: the result's URL, title and extract. Provenance only. */
+    lookupEvidenceHash: text("lookup_evidence_hash"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -3659,6 +3683,38 @@ export const citationFinds = spideryarn.table(
     ),
     check("citation_finds_searches", sql`${t.searches} is null or ${t.searches} >= 0`),
     check("citation_finds_url_scheme", sql`${t.url} ~ '^https?://'`),
+    check(
+      "citation_finds_lookup_state",
+      sql`${t.lookupState} is null or ${t.lookupState} in ('assessed', 'no-extract', 'not-identified', 'unreadable')`,
+    ),
+    check(
+      "citation_finds_lookup_support",
+      sql`${t.lookupSupport} is null or ${t.lookupSupport} in ('supports', 'partly', 'not-in-extract')`,
+    ),
+    /* A lookup always carries both fingerprints; no lookup carries neither. */
+    check(
+      "citation_finds_lookup_hashes",
+      sql`(${t.lookupState} is null) = (${t.lookupContextHash} is null) and (${t.lookupState} is null) = (${t.lookupEvidenceHash} is null)`,
+    ),
+    /* A verdict and an extract size exactly when assessed. */
+    check(
+      "citation_finds_lookup_assessed",
+      sql`(${t.lookupState} is not distinct from 'assessed') = (${t.lookupSupport} is not null) and (${t.lookupState} is not distinct from 'assessed') = (${t.lookupExcerptWords} is not null)`,
+    ),
+    /* `supports` and `partly` exactly when there is a quote showing it. */
+    check(
+      "citation_finds_lookup_support_quote",
+      sql`coalesce(${t.lookupSupport} in ('supports', 'partly'), false) = (${t.lookupSupportQuote} is not null)`,
+    ),
+    /* `paperDoes` only with its quote, and only on an assessed lookup. */
+    check(
+      "citation_finds_lookup_paper_does",
+      sql`(${t.lookupPaperDoes} is null) = (${t.lookupPaperDoesQuote} is null) and (${t.lookupPaperDoes} is null or ${t.lookupSupport} is not null)`,
+    ),
+    check(
+      "citation_finds_lookup_lengths",
+      sql`coalesce(char_length(${t.lookupPaperDoes}), 0) <= 240 and coalesce(char_length(${t.lookupSupportQuote}), 0) <= 400 and coalesce(char_length(${t.lookupPaperDoesQuote}), 0) <= 400 and coalesce(${t.lookupExcerptWords}, 0) >= 0`,
+    ),
   ],
 );
 

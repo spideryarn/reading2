@@ -339,6 +339,9 @@ const READING_TIME_SENTINEL = "2718.281828";
  * must therefore carry a well-formed one — and for `reading_time`, which has
  * no string column that is not a block id, and so carries an unlikely number.
  */
+/** A second sentinel, in `citation_finds`' lookup columns — the ones `export.ts` lists by hand. */
+const LOOKUP_SENTINEL = "sentinel-3f9c1e-citation-finds-lookup quote";
+
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
@@ -490,6 +493,16 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         searches: 1,
         model: "test",
         foundAt: new Date(),
+        /* A whole lookup (plan 260929g R-6), so the column check below sees
+           each one set and the rollback's hand-written list is held to them. */
+        lookupState: "assessed",
+        lookupSupport: "supports",
+        lookupSupportQuote: LOOKUP_SENTINEL,
+        lookupPaperDoes: "It does a thing.",
+        lookupPaperDoesQuote: "a quote from the search extract of the page",
+        lookupExcerptWords: 310,
+        lookupContextHash: "0123456789abcdef",
+        lookupEvidenceHash: "fedcba9876543210",
       });
     },
     /* On the block `beforeAll` gave an identity row: the composite foreign key
@@ -825,6 +838,21 @@ describe("what the record calls exported, both exports were watched writing", ()
       }
     });
   }
+
+  /* The rollback enumerates `citation_finds`' fields by hand, so a new column is
+     invisible to it until somebody adds it there — the title sentinel above
+     would still pass. Plan 260929g R-6. */
+  it("carries a find's lookup into both outputs", async () => {
+    const rollback = await readFile(path.join(out, SLUG, "citation-finds.json"), "utf8");
+    const bundle = bundled.get(ARTICLE_TABLE_COVERAGE.citation_finds.bundle.exported
+      ? ARTICLE_TABLE_COVERAGE.citation_finds.bundle.into
+      : "");
+    for (const text of [rollback, bundle]) {
+      expect(text).toContain(LOOKUP_SENTINEL);
+      expect(text).toContain("fedcba9876543210");
+      expect(text).toContain('"assessed"');
+    }
+  });
 
   it("has a column list and a row-finder for every table the bundle exports", () => {
     /* The typed `Record<BundledTable, …>` above says this at compile time, and

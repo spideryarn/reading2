@@ -5051,12 +5051,13 @@ export const CITATION_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was kept. The Scholar search is still there.";
 
 /**
- * The row already has a link — one the article gave, or a page found before.
- * The panel never offers *Find it* on such a row, so this is a stale tab or a
- * hand-made request, and asking again gets the same answer.
+ * `CITATION_NO_MATCH` for a row the article gave a link for — looked up for
+ * what its search extract says (plan 260929g R-3). The link stays whatever
+ * happens, so this says that rather than pointing at a Scholar search the row
+ * does not have.
  */
-export const CITATION_ALREADY_LINKED =
-  "This work already has a link, so there is nothing to look for. Reload to see it.";
+export const CITATION_LOOKUP_NO_MATCH =
+  "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
 /**
  * *Find it* refused by its allowance (src/citation-find.ts § `FIND_RATE_POLICY`)

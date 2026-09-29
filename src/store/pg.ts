@@ -82,8 +82,11 @@ import {
   isStale as debateIsStale,
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
+import { lookupContext, lookupContextHash } from "../citation-lookup.js";
+import { lookupFromRow } from "./citation-lookup-row.js";
 import {
   attachFinds,
+  attachLookups,
   inputFingerprint as citationsFingerprint,
   isStale as citationsAreStale,
   PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
@@ -131,6 +134,7 @@ import type {
   StageState,
   Block,
   Citations,
+  CitationFind,
   CitationsFound,
   Debate,
   DebateFound,
@@ -3557,22 +3561,36 @@ const rawPgArticleReader: ArticleReader = {
       blockHashInputs(found.revision.id),
       getDb().select().from(citationFinds).where(eq(citationFinds.articleId, found.article.id)),
     ]);
-    const finds = new Map(
-      stored.map((row) => [
-        row.entryId,
-        {
-          url: row.url,
-          ...(row.title ? { title: row.title } : {}),
-          host: row.host,
-          searches: row.searches,
-          model: row.model,
-          at: row.foundAt.toISOString(),
-        },
-      ]),
+    const finds = new Map<string, CitationFind>(
+      stored.map((row) => {
+        const lookup = lookupFromRow(row);
+        return [
+          row.entryId,
+          {
+            url: row.url,
+            ...(row.title ? { title: row.title } : {}),
+            host: row.host,
+            searches: row.searches,
+            model: row.model,
+            at: row.foundAt.toISOString(),
+            ...(lookup ? { lookup } : {}),
+          },
+        ];
+      }),
+    );
+    /* **A lookup attaches only to the list it was made against** (plan
+       260929g R-4): its fingerprint is recomputed here from the row as the
+       artefact now has it and this revision's block texts — the same
+       `lookupContext` the call built its prompt from. Before `attachFinds`, so
+       the row it sees is the artefact's, not the upgraded one. */
+    const text = new Map(blocks.map((b) => [b.id as string, b.text]));
+    const model = modelFor("citations-find");
+    const withLookups = attachLookups(citations, finds, (work) =>
+      lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
     );
     const tree = found.revision.tree as Tree | null;
     return {
-      citations: attachFinds(citations, finds),
+      citations: attachFinds(withLookups, finds),
       /* Judged on the artefact as stored — `sourceHash` is the article's, and
          a find changes nothing about which article the list describes. */
       stale:

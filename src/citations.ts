@@ -680,6 +680,33 @@ export function attachFinds(citations: Citations, finds: ReadonlyMap<string, Cit
   return changed ? { ...citations, citations: works } : citations;
 }
 
+/**
+ * **Put each stored lookup onto its row, whatever the row's link** — plan
+ * 260929g R-3. Separate from `attachFinds` so that link selection stays its
+ * own rule: this touches only `lookup`, never `url`, `linkFrom` or `found`.
+ *
+ * A lookup attaches **only while its context fingerprint matches the row as
+ * the list now has it** (R-4): `contextHashOf` recomputes it from the current
+ * list and the article's blocks (src/citation-lookup.ts §
+ * `lookupContextHash`). A list made again with a different `why`, passage or
+ * reference drops the reading; the found link, if any, stays.
+ */
+export function attachLookups(
+  citations: Citations,
+  finds: ReadonlyMap<string, CitationFind>,
+  contextHashOf: (work: CitedWork) => string,
+): Citations {
+  if (finds.size === 0) return citations;
+  let changed = false;
+  const works = citations.citations.map((work) => {
+    const lookup = finds.get(work.id)?.lookup;
+    if (!lookup || lookup.contextHash !== contextHashOf(work)) return work;
+    changed = true;
+    return { ...work, lookup };
+  });
+  return changed ? { ...citations, citations: works } : citations;
+}
+
 /** Anchor text that says nothing about which work it is. */
 const GENERIC = new Set(
   "here this link paper source article study post report pdf website site see read more".split(" "),

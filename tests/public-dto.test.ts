@@ -1054,6 +1054,20 @@ describe("the artefacts a shared link carries", () => {
         url: "https://doi.org/10.1/abc",
         linkFrom: "doi",
         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
+        /* The owner's *Look it up* (plan 260929g R-6): every field set, each
+           string a sentinel that must not reach the wire. */
+        lookup: {
+          state: "assessed",
+          host: "lookup-host.example",
+          searches: 1,
+          model: "m",
+          at: "2026-09-29T10:00:00.000Z",
+          contextHash: "ctxhashsentinel0",
+          evidenceHash: "evihashsentinel0",
+          excerptWords: 310,
+          verdict: { support: "supports", quote: "lookup support quote sentinel from the extract" },
+          paperDoes: { says: "lookup paper does sentinel", quote: "lookup paper does quote sentinel from the extract" },
+        },
       },
       {
         id: "w-cred",
@@ -1621,6 +1635,30 @@ describe("the artefacts a shared link carries", () => {
     expect(json).not.toContain("found.example");
     expect(json).not.toContain('"key"');
     expect(built.citations?.capped).toBe(true);
+  });
+
+  /**
+   * **The owner's lookup never crosses** (plan 260929g R-6): the reading, its
+   * quotes, its state, the page whose extract was read and the fingerprints
+   * are all the owner's paid activity. Checked on the whole payload, not only
+   * the citations key, so a lookup copied anywhere else would be caught too.
+   */
+  it("carries no part of a cited work's lookup, anywhere", () => {
+    const json = JSON.stringify(built);
+    for (const sentinel of [
+      '"lookup"',
+      "lookup-host.example",
+      "ctxhashsentinel0",
+      "evihashsentinel0",
+      "lookup support quote sentinel",
+      "lookup paper does sentinel",
+      "lookup paper does quote sentinel",
+      '"excerptWords"',
+      '"verdict"',
+    ]) {
+      expect(json, sentinel).not.toContain(sentinel);
+    }
+    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("lookup");
   });
 
   /**

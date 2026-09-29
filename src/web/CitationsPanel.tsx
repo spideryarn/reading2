@@ -34,7 +34,7 @@
  */
 import { ScoreBars } from "./ScoreBars.js";
 import { BookText, ExternalLink, RotateCcw, Search, TriangleAlert } from "lucide-react";
-import { MAX_CITATIONS, type BlockId, type CitedWork } from "../types.js";
+import { MAX_CITATIONS, type BlockId, type CitationLookup, type CitationSupport, type CitedWork } from "../types.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
@@ -58,6 +58,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
   /** The owner may have a private Find-it row; a public row cannot. */
   linkFrom: CitedWork["linkFrom"];
   found?: CitedWork["found"];
+  /** The owner's *Look it up* reading (plan 260929g). A public row cannot carry one. */
+  lookup?: CitedWork["lookup"];
 };
 
 /* ------------------------------------------------------------- the scores -- */
@@ -289,8 +291,52 @@ export const CITE_NOT_READ = "We have not read this work, only the article that 
  */
 export const CITE_PAGE_FOUND = "We found a web page matching its title, but have not read the work itself.";
 
-/** Which of the two a row says. Total over `linkFrom`, as `sourceOf` is. */
-export function readNoteOf(work: Pick<ShownWork, "linkFrom">): string {
+/* After *Look it up* (plan 260929g stage 2): one line per stored state, each
+   saying what was read and from where. **Never "from the paper", never
+   "verified", never "confirmed"** — what code checked is that a search result
+   passed the identity rule and that each quote is in its extract, and a result
+   passing that rule can still be somebody else's page about the work (R-1). */
+
+/** `assessed`: an extract was read — the extract, not the work. */
+export function citeReadAssessed(words: number, host: string): string {
+  return `We have not read the work itself, only a search engine's extract of a page matching it (${words} ${words === 1 ? "word" : "words"}, from ${host}).`;
+}
+/** `no-extract`: a page, and nothing of it to read. Never drawn as `not-in-extract`. */
+export function citeReadNoExtract(host: string): string {
+  return `A page matching it was found (${host}), but the search gave no extract to read, so we have read nothing of the work.`;
+}
+/** `not-identified`: the page may still be the row's link, but it is not read as this work. */
+export function citeReadNotIdentified(host: string): string {
+  return `A page was found (${host}), but we could not tell it is this work, so we have read nothing of it.`;
+}
+/** `unreadable`: the AI's reading of the extract was malformed and thrown away whole. */
+export function citeReadUnreadable(host: string): string {
+  return `A page matching it was found (${host}), but the AI's reading of it came back garbled and was thrown away, so nothing here comes from the work.`;
+}
+
+/**
+ * **Which line a row says.** A lookup, when there is one, says what it read;
+ * otherwise `linkFrom` decides between the two stage-1 lines. Total over both
+ * unions, as `sourceOf` is. The band and the hover card both call this.
+ */
+export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup">): string {
+  const lookup = work.lookup;
+  if (lookup !== undefined) {
+    switch (lookup.state) {
+      case "assessed":
+        return citeReadAssessed(lookup.excerptWords, lookup.host);
+      case "no-extract":
+        return citeReadNoExtract(lookup.host);
+      case "not-identified":
+        return citeReadNotIdentified(lookup.host);
+      case "unreadable":
+        return citeReadUnreadable(lookup.host);
+      default: {
+        const unhandled: never = lookup;
+        return unhandled;
+      }
+    }
+  }
   switch (work.linkFrom) {
     case "web":
       return CITE_PAGE_FOUND;
@@ -304,6 +350,43 @@ export function readNoteOf(work: Pick<ShownWork, "linkFrom">): string {
       return unhandled;
     }
   }
+}
+
+/**
+ * The label on the verdict: **the AI's reading**, and of the extract, so
+ * neither the verdict nor its absence reads as a fact about the work.
+ */
+export const CITE_VERDICT_LABEL = "the AI's reading of that extract";
+/** The caption on every quote a lookup kept: the extract's characters, located by code. */
+export const CITE_QUOTE_LABEL = "from the search extract";
+/** The label on `paperDoes.says` — the AI's sentence, shown only beside the quote that bears it out. */
+export const CITE_DOES_LABEL = "what the work does, in the AI's reading of that extract";
+
+/**
+ * **The verdict in words.** Three, and none of them "does not support": an
+ * extract that does not show a thing says nothing about the full work
+ * (plan 260929g, Sol P-1), so `not-in-extract` says so and leaves it open.
+ */
+export function verdictText(support: CitationSupport): string {
+  switch (support) {
+    case "supports":
+      return "supports what the article uses it for";
+    case "partly":
+      return "partly supports what the article uses it for";
+    case "not-in-extract":
+      return "the extract doesn't show what the article uses it for — the full work may";
+    default: {
+      const unhandled: never = support;
+      return unhandled;
+    }
+  }
+}
+
+/** The assessed arm of a lookup, which is the only one with anything to show under the line. */
+export type AssessedLookup = Extract<CitationLookup, { state: "assessed" }>;
+
+export function assessedOf(work: Pick<ShownWork, "lookup">): AssessedLookup | null {
+  return work.lookup?.state === "assessed" ? work.lookup : null;
 }
 
 /* -------------------------------------------------------------- the panel -- */
@@ -454,7 +537,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
                     work={work}
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
                     onJump={onJump}
-                    /* The owner's alone: a visitor's row draws no *Find it*. */
+                    /* The owner's alone: a visitor's row draws no *Look it up*. */
                     find={
                       owner === null
                         ? null
@@ -598,11 +681,11 @@ function BarSlider({
 
 /* ------------------------------------------------------------------ a row -- */
 
-/** A row's *Find it* — the owner's alone, so `null` on a visitor's row. */
+/** A row's *Look it up* (was *Find it*) — the owner's alone, so `null` on a visitor's row. */
 interface RowFind {
-  /** The work whose *Find it* is running anywhere in the list, or null. */
+  /** The work whose *Look it up* is running anywhere in the list, or null. */
   finding: string | null;
-  /** What this row's last *Find it* said, when it found nothing or failed. */
+  /** What this row's last *Look it up* said, when it found nothing or failed. */
   note: FindNote | null;
   onFind(id: string): Promise<void>;
 }
@@ -630,6 +713,8 @@ function WorkRow({
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
+  /* A row already looked up offers the same press again, and says so. */
+  const lookLabel = work.lookup === undefined ? "Look it up" : "Look it up again";
 
   return (
     <li
@@ -659,6 +744,7 @@ function WorkRow({
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
       </p>
       <p className="cite-read">{readNoteOf(work)}</p>
+      <LookupReading work={work} />
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
         {source === null ? null : source.kind === "address" ? (
@@ -676,18 +762,20 @@ function WorkRow({
             search Scholar ↗
           </a>
         )}
-        {/* Stage 3, on a searched row only. Held closed while any row's find
-            runs, not just this one — each is a paid search, and a list that
-            fires five because five were clicked spends money on a mis-click
-            (GlossaryPanel.tsx § Check the web makes the same call). */}
-        {find !== null && source?.kind === "search" && (
+        {/* *Look it up*, on every owner row since plan 260929g stage 2 (R-3) —
+            it was *Find it*, on searched rows only, until then. Held closed
+            while any row's lookup runs, not just this one — each is a paid
+            search, and a list that fires five because five were clicked spends
+            money on a mis-click (GlossaryPanel.tsx § Check the web makes the
+            same call). */}
+        {find !== null && (
           <Tooltip
             placement="bottom"
             keepSide
             className="tip-soon"
             content={
               <ControlTip
-                head="Find it on the web"
+                head={lookLabel}
                 /* **What the button does not promise is the half 3K asked for**,
                    and each clause below is bounded by what the code actually
                    checks rather than by what the sentence wants to say:
@@ -703,11 +791,19 @@ function WorkRow({
                      matches the title" is what is actually tested for.
                    — not a fixed price, because the attached search is variable
                      work. */
-                /* — not "a real link", and nothing about reading it. A title
-                     match is not a check that the page is the work (plan
-                     260929g R-1), and the row says so after a find. */
-                what="Searches the web for this work, and replaces the Scholar search on this row with a link to a result that clearly matches its title. It does not read the work."
-                how="It costs money: a paid web provider, and a few seconds. A press that finds nothing stores nothing — the Scholar search stays, and pressing again just spends again. Only rows the article gave no link for offer it."
+                /* — not "a real link", and not "reads the paper". What it
+                     reads is the search result's **extract** (usually the
+                     abstract), never the full work, and a result passing the
+                     identity rule can still be somebody else's page about it
+                     (plan 260929g R-1). "only where code found those exact
+                     words" is `verifyQuote` (src/citation-lookup.ts): a quote
+                     not in the extract is dropped, and a verdict without one
+                     falls back to not-in-extract.
+                   — "a link the article gave never changes" is R-3:
+                     `attachFinds` upgrades only searched rows, and the client
+                     patch (useCitations.ts § applyFound) does the same. */
+                what="Searches the web for this work. If a result clearly matches it, the AI reads that result's search extract — usually its abstract, not the full work — against what the article uses it for, and shows a passage only where code found those exact words in the extract."
+                how="It costs money: a paid web provider, and a few seconds. On a row with only a Scholar search, the matching result also becomes its link; a link the article gave never changes. A press that finds no match stores nothing, and pressing again just spends again."
               />
             }
           >
@@ -735,7 +831,7 @@ function WorkRow({
               }}
             >
               <Search size={11} aria-hidden="true" />
-              {finding === work.id ? "Looking…" : "Find it"}
+              {finding === work.id ? "Looking…" : lookLabel}
             </button>
           </Tooltip>
         )}
@@ -750,5 +846,49 @@ function WorkRow({
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * **What an assessed lookup shows under the row's line**, and nothing for any
+ * other state — those read nothing, and the line above already says so.
+ *
+ * Three things, each labelled for what it is: the verdict, as *the AI's
+ * reading of that extract*; each quote, as *from the search extract* (the
+ * extract's own characters, located by code — src/citation-lookup.ts §
+ * `verifyQuote`); and `paperDoes.says`, the AI's sentence, only beside the
+ * quote that bears it out. Quotes are `<blockquote>`s drawn as text, with
+ * Debate's rule down the left (debate.css § `.dbt-quote`): a slice of a
+ * stranger's page, which may never become markup.
+ */
+function LookupReading({ work }: { work: ShownWork }) {
+  const lookup = assessedOf(work);
+  if (lookup === null) return null;
+  const { verdict, paperDoes } = lookup;
+  return (
+    <div className="cite-lookup">
+      <p className="cite-verdict">
+        <span className="cite-lookup-label">{CITE_VERDICT_LABEL}:</span>{" "}
+        <span className="cite-verdict-text">{verdictText(verdict.support)}</span>
+      </p>
+      {verdict.support !== "not-in-extract" && <ExtractQuote quote={verdict.quote} />}
+      {paperDoes && (
+        <>
+          <p className="cite-does">
+            <span className="cite-lookup-label">{CITE_DOES_LABEL}:</span> {paperDoes.says}
+          </p>
+          <ExtractQuote quote={paperDoes.quote} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ExtractQuote({ quote }: { quote: string }) {
+  return (
+    <figure className="cite-quote">
+      <blockquote>“{quote}”</blockquote>
+      <figcaption>{CITE_QUOTE_LABEL}</figcaption>
+    </figure>
   );
 }

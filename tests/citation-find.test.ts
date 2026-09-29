@@ -21,11 +21,15 @@ import {
   MAX_TOTAL_RESULTS,
   findRequest,
   findWorkPage,
+  LOOKUP_ANSWER_TOKENS,
+  LOOKUP_SYSTEM,
+  lookupPrompt,
   makeFindCitation,
   readFind,
 } from "../src/citation-find.js";
+import { lookupContext } from "../src/citation-lookup.js";
 import { attachFinds, pageNamesTitle } from "../src/citations.js";
-import { CITATION_ALREADY_LINKED, CITATION_NO_MATCH, providerHttpFailure } from "../src/messages.js";
+import { CITATION_LOOKUP_NO_MATCH, CITATION_NO_MATCH, providerHttpFailure } from "../src/messages.js";
 import type { AllowanceTaken, RatePolicy } from "../src/store/contracts.js";
 import type { Article, CitationFind, Citations, CitationsFound, CitedWork, BlockId } from "../src/types.js";
 
@@ -103,6 +107,24 @@ function answer(opts: {
 }
 
 const THE_PAPER = { url: PAPER, title: PAPER_TITLE, content: `Abstract. We study empirical ${TITLE.toLowerCase()} …` };
+/* A result with an extract that names the first author and the year — enough
+   for R-1's stricter identity rule, where `THE_PAPER` is enough only for the
+   link. */
+const EXTRACT =
+  "Jared Kaplan, Sam McCandlish (2020). We study empirical scaling laws for language model performance. " +
+  "The loss scales as a power-law with model size, dataset size, and compute.";
+const NAMED_PAPER = { url: PAPER, title: PAPER_TITLE, content: EXTRACT };
+const DOI_PAGE = { url: "https://publisher.example/doi/10.1000/x", title: TITLE, content: EXTRACT };
+const SUPPORT_QUOTE = "The loss scales as a power-law with model size";
+const DOES_QUOTE = "We study empirical scaling laws for language model performance";
+const JUDGED = {
+  url: DOI_PAGE.url,
+  paperDoes: "It measures how a language model's loss falls as the model grows.",
+  paperDoesQuote: DOES_QUOTE,
+  support: "supports",
+  supportQuote: SUPPORT_QUOTE,
+};
+
 const A_REVIEW = {
   url: "https://blog.example/why-scale-matters",
   title: "Why scale matters: a reading list",
@@ -178,12 +200,17 @@ describe("the allowance — every press is billed, so presses are bounded (Sol F
     expect(finished).toEqual([]);
   });
 
-  it("spends no allowance on a 404 or a 409 — the checks come first", async () => {
+  it("spends no allowance on a 404 — the check comes first", async () => {
+    const { findCitation, taken } = harness(answer({ results: [THE_PAPER] }), [work()]);
+    await expect(findCitation("a-piece", "spya-n2t3h4")).rejects.toMatchObject({ status: 404 });
+    expect(taken).toEqual([]);
+  });
+
+  it("takes the same bucket for a row the article linked — a lookup is the same billed press", async () => {
     const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
     const { findCitation, taken } = harness(answer({ results: [THE_PAPER] }), [work(), linked]);
-    await expect(findCitation("a-piece", "spya-n2t3h4")).rejects.toMatchObject({ status: 404 });
-    await expect(findCitation("a-piece", LINKED_ID)).rejects.toMatchObject({ status: 409 });
-    expect(taken).toEqual([]);
+    await findCitation("a-piece", LINKED_ID);
+    expect(taken.map((t) => t.bucket)).toEqual(["citation-find"]);
   });
 });
 
@@ -284,6 +311,17 @@ describe("findCitation — what is stored", () => {
 
     const result = await findCitation("a-piece", WORK_ID);
 
+    /* The result names neither the first author nor the year, so the link is
+       kept (Find it's rule) but nothing is read from it (R-1's stricter one). */
+    const lookup = {
+      state: "not-identified",
+      host: "arxiv.org",
+      searches: 1,
+      model: "anthropic/claude-sonnet-5",
+      at: "2026-09-12T10:00:00.000Z",
+      contextHash: expect.stringMatching(/^[0-9a-f]{16}$/),
+      evidenceHash: expect.stringMatching(/^[0-9a-f]{16}$/),
+    };
     expect(saved).toHaveLength(1);
     expect(saved[0]?.find).toEqual({
       url: PAPER,
@@ -292,6 +330,7 @@ describe("findCitation — what is stored", () => {
       searches: 1,
       model: "anthropic/claude-sonnet-5",
       at: "2026-09-12T10:00:00.000Z",
+      lookup,
     });
     expect(result).toEqual({
       outcome: "found",
@@ -307,6 +346,7 @@ describe("findCitation — what is stored", () => {
           at: "2026-09-12T10:00:00.000Z",
         },
       },
+      lookup,
     });
   });
 
@@ -338,14 +378,77 @@ describe("findCitation — what is stored", () => {
     expect(sent).toEqual([]);
   });
 
-  it("is a 409 on a row whose link the article gave, and spends nothing", async () => {
+  /* Until plan 260929g this was a 409 (`CITATION_ALREADY_LINKED`): Find it
+     was only for searched rows. Look it up is offered on every row (R-3), so
+     the refusal is gone on purpose and these tests pin what replaced it. */
+  it("looks up a row the article linked, and hands back its link unchanged", async () => {
     const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
-    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }), [work(), linked]);
-    await expect(findCitation("a-piece", LINKED_ID)).rejects.toMatchObject({
-      status: 409,
-      message: CITATION_ALREADY_LINKED,
+    const { findCitation, sent, saved } = harness(
+      answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }),
+      [work(), linked],
+    );
+    const result = await findCitation("a-piece", LINKED_ID);
+    expect(sent).toHaveLength(1);
+    expect(result).toMatchObject({ outcome: "found", work: linked });
+    if (result.outcome !== "found") throw new Error("unreachable");
+    expect(result.work.url).toBe("https://doi.org/10.1000/x");
+    expect(result.work.linkFrom).toBe("doi");
+    expect(result.work.found).toBeUndefined();
+    expect(result.work).not.toHaveProperty("lookup");
+    expect(result.lookup).toMatchObject({
+      state: "assessed",
+      host: "publisher.example",
+      verdict: { support: "supports", quote: SUPPORT_QUOTE },
+      paperDoes: { says: JUDGED.paperDoes, quote: DOES_QUOTE },
     });
-    expect(sent).toEqual([]);
+    /* Stored for its lookup only: the page whose extract was read. */
+    expect(saved[0]?.find).toMatchObject({ url: DOI_PAGE.url, lookup: { state: "assessed" } });
+  });
+
+  it("keeps no judgement on a DOI row whose result URL does not carry that DOI", async () => {
+    const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/other", linkFrom: "doi" });
+    const { findCitation } = harness(answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }), [linked]);
+    const result = await findCitation("a-piece", LINKED_ID);
+    expect(result).toMatchObject({ outcome: "found", work: linked, lookup: { state: "not-identified" } });
+    expect(JSON.stringify(result)).not.toContain(SUPPORT_QUOTE);
+  });
+
+  it("says the article's link is still there when a linked row matches nothing", async () => {
+    const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
+    const { findCitation, saved } = harness(answer({ content: '{"url": null}', results: [DOI_PAGE] }), [linked]);
+    expect(await findCitation("a-piece", LINKED_ID)).toEqual({ outcome: "no-match", message: CITATION_LOOKUP_NO_MATCH });
+    expect(saved).toEqual([]);
+  });
+
+  it("reads a searched row's extract too, and upgrades its link as before", async () => {
+    const { findCitation } = harness(answer({ content: JSON.stringify({ ...JUDGED, url: PAPER }), results: [NAMED_PAPER] }));
+    const result = await findCitation("a-piece", WORK_ID);
+    expect(result).toMatchObject({
+      outcome: "found",
+      work: { url: PAPER, linkFrom: "web" },
+      lookup: { state: "assessed", verdict: { support: "supports", quote: SUPPORT_QUOTE } },
+    });
+  });
+
+  it("keeps the URL pick when the reading is malformed", async () => {
+    const { findCitation } = harness(
+      answer({ content: JSON.stringify({ ...JUDGED, url: PAPER, support: "yes" }), results: [NAMED_PAPER] }),
+    );
+    expect(await findCitation("a-piece", WORK_ID)).toMatchObject({
+      outcome: "found",
+      work: { url: PAPER, linkFrom: "web" },
+      lookup: { state: "unreadable" },
+    });
+  });
+
+  it("replaces a found row's link on a second press, and drops the earlier lookup from the row", async () => {
+    const earlier = { state: "no-extract", host: "x.org", searches: 1, model: "m", at: "t", contextHash: "c", evidenceHash: "e" } as const;
+    const found = work({ url: "https://x.org/old", linkFrom: "web", lookup: earlier });
+    const { findCitation } = harness(answer({ content: JSON.stringify({ ...JUDGED, url: PAPER }), results: [NAMED_PAPER] }), [found]);
+    const result = await findCitation("a-piece", WORK_ID);
+    expect(result).toMatchObject({ outcome: "found", work: { url: PAPER, linkFrom: "web" }, lookup: { state: "assessed" } });
+    if (result.outcome !== "found") throw new Error("unreachable");
+    expect(result.work).not.toHaveProperty("lookup");
   });
 
   it("passes a stranger's 404 through before any call — ownership is the read", async () => {
@@ -428,6 +531,36 @@ describe("the request — the only bounds on spend that exist", () => {
     await findCitation("a-piece", WORK_ID);
     const user = (sent[0]?.messages as { content: string }[] | undefined)?.[1]?.content ?? "";
     expect(user).toContain("The article's reference entry: Kaplan et al. (2020)");
+  });
+
+  it("Look it up sends its own prompt, the why and the citing passage, with the same search bounds", async () => {
+    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }));
+    await findCitation("a-piece", WORK_ID);
+    const body = sent[0]!;
+    const messages = body.messages as { role: string; content: string }[];
+    expect(messages[0]?.content).toBe(LOOKUP_SYSTEM);
+    expect(LOOKUP_SYSTEM).toMatch(/ONE web search/);
+    expect(LOOKUP_SYSTEM).toMatch(/not instructions/);
+    expect(body.max_tokens).toBe(LOOKUP_ANSWER_TOKENS);
+    expect(body.tools).toEqual(findRequest(work(), null, "m").tools);
+    const user = messages[1]?.content ?? "";
+    expect(user).toContain(`What the article uses it for: ${work().why}`);
+    expect(user).toContain("The article's passage that cites it: The curves in Kaplan et al. suggest more.");
+    expect(user).toBe(
+      lookupPrompt(lookupContext(work(), (id) => ARTICLE.blocks.find((b) => b.id === id)?.text)),
+    );
+  });
+
+  it("findWorkPage still sends Find it's prompt and nothing of an article", async () => {
+    const sent: AiRequestBody[] = [];
+    await findWorkPage({ title: TITLE }, null, {
+      model: "a-model",
+      call: async (body) => {
+        sent.push(body);
+        return { json: answer({ results: [THE_PAPER] }) } as JsonCall;
+      },
+    });
+    expect((sent[0]?.messages as { content: string }[] | undefined)?.[0]?.content).toBe(FIND_SYSTEM);
   });
 });
 

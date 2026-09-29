@@ -86,13 +86,80 @@ function providerNames(url: string): void {
   }) as unknown as typeof fetch;
 }
 
+const SUPPORT_QUOTE = "The loss scales as a power-law with model size";
+const DOES_QUOTE = "We study empirical scaling laws for language model performance";
+
+/**
+ * The provider names the DOI row's publisher page and reads its extract — an
+ * extract that names the first author and the year, and holds both quotes.
+ */
+function providerJudges(): void {
+  const page = "https://publisher.example/doi/10.1000/given";
+  globalThis.fetch = ((_url: string) => {
+    providerCalls += 1;
+    const body = {
+      model: "anthropic/claude-sonnet-5",
+      choices: [
+        {
+          finish_reason: "stop",
+          message: {
+            content: JSON.stringify({
+              url: page,
+              paperDoes: "It measures how a language model's loss falls as the model grows.",
+              paperDoesQuote: DOES_QUOTE,
+              support: "supports",
+              supportQuote: SUPPORT_QUOTE,
+            }),
+            annotations: [
+              {
+                type: "url_citation",
+                url_citation: {
+                  url: page,
+                  title: TITLE,
+                  content: `Kaplan (2020). ${DOES_QUOTE}. ${SUPPORT_QUOTE}, dataset size and compute.`,
+                },
+              },
+            ],
+          },
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 5, server_tool_use: { web_search_requests: 1 } },
+    };
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    } as unknown as Response);
+  }) as unknown as typeof fetch;
+}
+
+const WHY = "The curve the piece extrapolates from.";
+
+/** Rewrite one row's `why` in the stored list — what a list made again does. */
+async function setWhy(id: string, why: string): Promise<void> {
+  const db = getDb();
+  const [row] = await db
+    .select({ revision: articles.currentRevisionId })
+    .from(articles)
+    .where(eq(articles.id, article?.articleId ?? ""));
+  if (!row?.revision) throw new Error("the scratch article has no current revision");
+  const [rev] = await db
+    .select({ citations: articleRevisions.citations })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, row.revision));
+  const citations = rev?.citations as Citations;
+  const next = { ...citations, citations: citations.citations.map((w) => (w.id === id ? { ...w, why } : w)) };
+  await db.update(articleRevisions).set({ citations: next }).where(eq(articleRevisions.id, row.revision));
+}
+
 function work(over: Partial<CitedWork> & Pick<CitedWork, "id">, at: BlockId): CitedWork {
   return {
     key: `work:${over.id}`,
     title: TITLE,
     authors: "Kaplan, J.",
     year: "2020",
-    why: "The curve the piece extrapolates from.",
+    why: WHY,
     mentions: [],
     citedAt: [at],
     firstCited: at,
@@ -227,10 +294,41 @@ describe("POST /api/citations/:slug/:id/find", () => {
     expect((await listed(GIVEN))?.found).toBeUndefined();
   });
 
-  it("refuses a row whose link the article gave, with a 409 and no call", async () => {
+  /* Until plan 260929g this was a 409 with no call: Find it was only for
+     searched rows. Look it up is offered on every row (R-3), so these pin what
+     replaced the refusal — and that the article's link still always wins. */
+  it("looks up a row the article linked: the reading is read back, and its DOI link stays", async () => {
+    providerJudges();
     const got = await find(GIVEN);
-    expect(got.status).toBe(409);
-    expect(providerCalls).toBe(0);
+    expect(got.status).toBe(200);
+    expect(providerCalls).toBe(1);
+    const answer = got.body as FindCitationResponse;
+    expect(answer).toMatchObject({
+      outcome: "found",
+      work: { id: GIVEN, url: "https://doi.org/10.1000/given", linkFrom: "doi" },
+      lookup: { state: "assessed", host: "publisher.example", verdict: { support: "supports", quote: SUPPORT_QUOTE } },
+    });
+
+    const entry = await listed(GIVEN);
+    expect(entry).toMatchObject({ url: "https://doi.org/10.1000/given", linkFrom: "doi" });
+    expect(entry?.found).toBeUndefined();
+    expect(entry?.lookup).toMatchObject({
+      state: "assessed",
+      verdict: { support: "supports", quote: SUPPORT_QUOTE },
+      paperDoes: { quote: DOES_QUOTE },
+    });
+  });
+
+  it("drops the reading, and keeps the link, when the list is made again with a different why", async () => {
+    await setWhy(GIVEN, "A different use of the same work, from a list made again.");
+    try {
+      const entry = await listed(GIVEN);
+      expect(entry).toMatchObject({ url: "https://doi.org/10.1000/given", linkFrom: "doi" });
+      expect(entry?.lookup).toBeUndefined();
+    } finally {
+      await setWhy(GIVEN, WHY);
+    }
+    expect((await listed(GIVEN))?.lookup?.state).toBe("assessed");
   });
 
   it("is a 404 for an entry id the list does not have, with no call", async () => {

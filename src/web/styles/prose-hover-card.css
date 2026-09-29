@@ -386,3 +386,29 @@
   font-size: 0.76rem;
   line-height: 1.35;
 }
+
+/* After *Look it up* (ProseHoverCard.tsx § CiteCardReading): the verdict under
+   its label, and one quote from the search extract with the band's rule down
+   the left and its caption beneath. `figure` and `blockquote` lose their
+   browser indent, which a 21rem card cannot spare. Plan 260929g stage 2. */
+.prose-card-cite-does { margin-top: 0.2rem; }
+.prose-card-cite-does-label {
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+}
+.prose-card-cite-quote { margin: 0.3rem 0 0; }
+.prose-card-cite-quote blockquote {
+  margin: 0;
+  padding: 0 0 0 0.5rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.prose-card-cite-quote figcaption {
+  margin: 0.1rem 0 0 0.5rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}

@@ -13,8 +13,9 @@
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
  * file is only the parse, the 404 branch and the verbs.
  *
- * The third verb is **`find`**, stage 3's *Find it on the web*: one POST for one
- * searched row, `POST /api/citations/:slug/:id/find` (src/citation-find.ts).
+ * The third verb is **`find`**, stage 3's *Find it on the web*, *Look it up*
+ * since plan 260929g: one POST for one row (any row, since that plan),
+ * `POST /api/citations/:slug/:id/find` (src/citation-find.ts).
  * Not a job — a reader-triggered call answering in seconds, like the glossary's
  * *Check the web* — and **one at a time**, so a second press cannot start a
  * second paid search while the first is out.
@@ -39,7 +40,14 @@
  * docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Citations, CitationsResponse, CitedWork, FindCitationResponse, Job } from "../types.js";
+import type {
+  CitationLookup,
+  Citations,
+  CitationsResponse,
+  CitedWork,
+  FindCitationResponse,
+  Job,
+} from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -96,9 +104,10 @@ export interface UseCitations {
   /** What the last *Find it* that found nothing, or failed, said — and on which row. */
   findNote: FindNote | null;
   /**
-   * **Look for one searched work's own page on the web.** A found page is
-   * patched onto that row — its link fields only — and is stored on the
-   * server, so a reload shows it too. src/citation-find.ts.
+   * ***Look it up*** — any row since plan 260929g stage 2. What came back is
+   * patched onto that row: its link fields, only on a searched row, and its
+   * `lookup`, only while the row is still the one that was asked about. Both
+   * are stored on the server, so a reload shows them too. src/citation-find.ts.
    */
   find(id: string): Promise<void>;
 }
@@ -185,8 +194,51 @@ export interface CitationsRead {
    * and erase the patch. `applyFound` arms one trailing repair only in that
    * case, through `useOrderedRead.armRefresh`; it does not add an unconditional
    * post-find GET.
+   *
+   * ## And the lookup, on its own rule (plan 260929g stage 2)
+   *
+   * *Look it up* answers with the link half and the `lookup` separately, and
+   * they are patched separately (R-3). The link keeps the rule above, widened
+   * only to a row that is already `web` — a find of ours, which the server's
+   * `attachFinds` would redraw with the new page too. The lookup goes onto the
+   * row **whatever its link**, but only while `lookupSubjectOf` still says
+   * what it said when the press began: the server attaches a stored reading
+   * only while its context fingerprint matches the current list
+   * (`attachLookups`), and a re-run landing inside the press can change the
+   * `why` it was judged against, or give the row a DOI and so a different
+   * identity rule. tests/citations-find-late-reply.test.tsx.
    */
-  applyFound(id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">): void;
+  applyFound(id: string, found: FoundPatch): void;
+}
+
+/** What one *Look it up* answer patches, split as the server split it. */
+export interface FoundPatch {
+  link: Pick<CitedWork, "url" | "linkFrom" | "found">;
+  lookup: CitationLookup;
+  /** `lookupSubjectOf` the row as it was when the press began; `null` if it was not in the list. */
+  subject: string | null;
+}
+
+/**
+ * **The client's mirror of what the server fingerprints about a row**
+ * (src/citation-lookup.ts § `lookupContext`, `anchorOf`) — the fields the row
+ * itself carries: title, authors, year, `why`, which blocks the reference and
+ * the citing passage come from, and the DOI or arXiv id the identity rule
+ * turns on. The block *texts* are not on the row; a change there makes the
+ * whole list stale, and the next read drops the reading server-side anyway.
+ * Not imported from the server module, which hashes with `node:crypto`.
+ */
+export function lookupSubjectOf(work: CitedWork): string {
+  const anchor = work.linkFrom === "doi" || work.linkFrom === "arxiv" ? work.url : null;
+  return JSON.stringify([
+    work.title,
+    work.authors ?? null,
+    work.year ?? null,
+    work.why,
+    work.reference?.blockId ?? null,
+    work.mentions[0]?.blockId ?? work.citedAt[0] ?? null,
+    anchor,
+  ]);
 }
 
 export function useCitationsRead(slug: string): CitationsRead {
@@ -247,7 +299,7 @@ export function useCitationsRead(slug: string): CitationsRead {
   }, [reload]);
 
   const applyFound = useCallback(
-    (id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">) => {
+    (id: string, found: FoundPatch) => {
       /* The POST has already stored this link, but a GET that began before it
          may still be carrying the old searched row. Let that request land — it
          may also carry newly regenerated works — then repair its stale snapshot
@@ -258,11 +310,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         current
           ? {
               ...current,
-              citations: current.citations.map((w) =>
-                w.id === id && w.linkFrom === "search"
-                  ? { ...w, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) }
-                  : w,
-              ),
+              citations: current.citations.map((w) => (w.id === id ? patchFound(w, found) : w)),
             }
           : current,
       );
@@ -271,6 +319,21 @@ export function useCitationsRead(slug: string): CitationsRead {
   );
 
   return { status, citations, stale, outdated, error, reload, refresh, applyFound };
+}
+
+/** One row, with whichever of the two halves of a *Look it up* answer it may take. `applyFound` has the rules. */
+function patchFound(w: CitedWork, { link, lookup, subject }: FoundPatch): CitedWork {
+  /* Read before the link patch: `web` and `search` share one anchor (none), so
+     the order would not change the answer, but the subject is about the row
+     as the list has it. */
+  const sameSubject = subject !== null && lookupSubjectOf(w) === subject;
+  /* A link the article gave always wins; only our own rows move. */
+  const relink = (w.linkFrom === "search" || w.linkFrom === "web") && link.linkFrom === "web";
+  if (!relink && !sameSubject) return w;
+  const linked = relink
+    ? { url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) }
+    : {};
+  return { ...w, ...linked, ...(sameSubject ? { lookup } : {}) };
 }
 
 /**
@@ -290,6 +353,10 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
      to another article must not patch that article's list. */
   const slugNow = useRef(slug);
   slugNow.current = slug;
+  /* The list as it is now, so a press can remember which row it asked about
+     without `find` being remade on every read. */
+  const citationsNow = useRef(citations);
+  citationsNow.current = citations;
 
   /**
    * Revalidate on mount, behind whatever is on screen.
@@ -323,6 +390,8 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
       if (findLive.current) return;
       findLive.current = true;
       const asked = slug;
+      const row = citationsNow.current?.citations.find((w) => w.id === id);
+      const subject = row ? lookupSubjectOf(row) : null;
       setFinding(id);
       setFindNote(null);
       try {
@@ -330,8 +399,9 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
           `/api/citations/${encodeURIComponent(asked)}/${encodeURIComponent(id)}/find`,
           { method: "POST" },
         );
-        /* The 404, the 409 and every failed call are JSON errors, and
-           `readJson` throws their sentence. */
+        /* The 404 and every failed call are JSON errors, and `readJson`
+           throws their sentence. (The 409 for a linked row went in plan
+           260929g: every row may be looked up.) */
         const answer = await readJson<FindCitationResponse>(res);
         if (slugNow.current !== asked) return;
         if (answer.outcome === "no-match") {
@@ -340,11 +410,12 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
         }
         /* The patch itself is `CitationsRead.applyFound`, up in the read half,
            because that is where the list lives since 2026-09-16 — and its
-           docstring carries the two rules that used to be written here: the
-           link fields only, and only a row that is still a search. The POST
-           stays down here, which is the whole point of the split. */
+           docstring carries the rules that used to be written here: the link
+           fields only, only on a row that is still ours to link, and the
+           lookup only on the row that was asked about. The POST stays down
+           here, which is the whole point of the split. */
         const { url, linkFrom, found } = answer.work;
-        applyFound(id, { url, linkFrom, ...(found ? { found } : {}) });
+        applyFound(id, { link: { url, linkFrom, ...(found ? { found } : {}) }, lookup: answer.lookup, subject });
       } catch (err) {
         if (slugNow.current !== asked) return;
         setFindNote({ id, kind: "failed", message: (err as Error).message });

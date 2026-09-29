@@ -10,14 +10,16 @@
  *
  * ## What may be logged from this file
  *
- * Nothing, and nothing is. The URL and the title are what somebody's article
- * cites, and src/citation-find.ts logs the host and the counts only.
+ * Nothing, and nothing is. The URL, the title and the lookup's quotes are what
+ * somebody's article cites, and src/citation-find.ts logs the host and the
+ * counts only.
  */
 
 import { getDb } from "../db/client.js";
 import { citationFinds } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import type { CitationFind } from "../types.js";
+import { lookupColumns } from "./citation-lookup-row.js";
 import type { CitationFindStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { articleIdForOwned } from "./pg.js";
@@ -34,6 +36,9 @@ const rawPgCitationFindStore: CitationFindStore = {
       searches: find.searches,
       model: find.model,
       foundAt: new Date(find.at),
+      /* Every lookup column, nulls included, so a new find never keeps an
+         old find's reading. */
+      ...lookupColumns(find.lookup),
     };
     await getDb()
       .insert(citationFinds)

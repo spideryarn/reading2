@@ -61,7 +61,16 @@ import { entryProse } from "./GlossaryPanel.js";
    decides whether a row has an address or only a search, and it is total over
    `linkFrom` — so importing it is what stops this card and the band teaching a
    reader two different rules about the same work. See `CiteCard`. */
-import { CITE_WHY_LABEL, readNoteOf, sourceOf } from "./CitationsPanel.js";
+import {
+  assessedOf,
+  CITE_DOES_LABEL,
+  CITE_QUOTE_LABEL,
+  CITE_VERDICT_LABEL,
+  CITE_WHY_LABEL,
+  readNoteOf,
+  sourceOf,
+  verdictText,
+} from "./CitationsPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
@@ -1612,7 +1621,8 @@ function clip(text: string, max: number): string {
  * - **The two score bars.** Glossary parity: the card says what a thing means,
  *   the band says what we scored it. A relevance bar in a hover panel is a
  *   number with nothing to compare it against.
- * - **Find it on the web.** It is billed, rate-limited and owner-only, and a
+ * - **Look it up** (was *Find it on the web*). Its result is here
+ *   (`CiteCardReading`); the press is not. It is billed, rate-limited and owner-only, and a
  *   surface that opens because a pointer rested somewhere is the wrong place for
  *   a press that spends money.
  * - **A foot button into Citations mode.** It would need `?cite=` and a
@@ -1674,6 +1684,7 @@ function CiteCard({ work }: { work: CitedWork }) {
             CitationsPanel.tsx § what we have and have not read. */}
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
+      <CiteCardReading work={work} />
 
       <p className="prose-card-foot">
         {source.kind === "address" ? (
@@ -1703,6 +1714,43 @@ function CiteCard({ work }: { work: CitedWork }) {
             : "only in the references"}
         </span>
       </p>
+    </div>
+  );
+}
+
+/**
+ * **After *Look it up*, the short version of the band's reading** — plan
+ * 260929g stage 2, Greg's *"in the tool tip"*. The verdict, labelled as the
+ * AI's reading of the extract, and **one** quote labelled as the extract's:
+ * the verdict's own when it has one, otherwise `paperDoes` with the sentence it
+ * bears out. The labels and the verdict's words are the band's
+ * (CitationsPanel.tsx), so the two surfaces cannot say it differently. Nothing
+ * for a lookup that read nothing: the line above already says so. No button —
+ * see `CiteCard` § What is deliberately not here.
+ */
+function CiteCardReading({ work }: { work: CitedWork }) {
+  const lookup = assessedOf(work);
+  if (lookup === null) return null;
+  const { verdict, paperDoes } = lookup;
+  const quote = verdict.support !== "not-in-extract" ? verdict.quote : (paperDoes?.quote ?? null);
+  return (
+    <div className="prose-card-part prose-card-cite-reading">
+      <div className="prose-card-cite-verdict">
+        <p className="prose-card-label">{CITE_VERDICT_LABEL}</p>
+        <p className="prose-card-text prose-card-cite-verdict-text">{verdictText(verdict.support)}</p>
+      </div>
+      {verdict.support === "not-in-extract" && paperDoes && (
+        <p className="prose-card-text prose-card-cite-does">
+          <span className="prose-card-cite-does-label">{CITE_DOES_LABEL}:</span> {paperDoes.says}
+        </p>
+      )}
+      {quote !== null && (
+        /* Text, never markup: a slice of a stranger's page. */
+        <figure className="prose-card-cite-quote">
+          <blockquote>“{quote}”</blockquote>
+          <figcaption>{CITE_QUOTE_LABEL}</figcaption>
+        </figure>
+      )}
     </div>
   );
 }

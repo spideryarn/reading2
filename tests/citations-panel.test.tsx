@@ -15,18 +15,26 @@ const {
   CAPPED_NOTE,
   CITATIONS_NONE,
   CITE_NOT_READ,
+  CITE_DOES_LABEL,
   CITE_PAGE_FOUND,
+  CITE_QUOTE_LABEL,
+  CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
   CITATION_BAR_DEFAULT,
   CitationsPanel,
   INFLUENCE_NOTE,
   canPrioritise,
+  citeReadAssessed,
+  citeReadNoExtract,
+  citeReadNotIdentified,
+  citeReadUnreadable,
   effectiveOrder,
   orderWorks,
   priorityOf,
   readNoteOf,
   scoresOf,
   sourceOf,
+  verdictText,
 } = await import("../src/web/CitationsPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. docs/project/block-ids.md. */
@@ -632,7 +640,10 @@ describe("what a row says we have read", () => {
     expect(row("spya-v2w3x4").querySelector(".cite-find")).toBeNull();
   });
 
-  it("the Find it card claims no check that the page is the work", async () => {
+  /* Stage 1 pinned "does not read the work" here. Since stage 2 the press reads
+     a search extract, so the card says that instead — and still never that it
+     read the full work, or checked the page is the work. */
+  it("the Look it up card, on a searched row, claims no check that the page is the work", async () => {
     const searched = work({
       id: "spya-e2f3g4",
       title: "Searched",
@@ -645,7 +656,153 @@ describe("what a row says we have read", () => {
     const card = await cardFor(findButton(searched.id));
     const copy = `${card.head} ${card.body}`;
     expect(copy).not.toMatch(/verif|confirm|real link/i);
-    expect(copy).toMatch(/title/i);
-    expect(copy, "the card no longer says a find does not read the work").toMatch(/(does )?not read/i);
+    expect(copy, "the card no longer says a searched row gains a link").toMatch(/scholar search/i);
+    expect(copy, "the card no longer says it does not read the full work").toMatch(/not the full work/i);
+  });
+});
+
+/* ---------------------------------------------------- after Look it up --
+   Plan 260929g stage 2. A lookup reads one search result's extract — never the
+   work — so every state's line says what was read and from where, the verdict
+   is labelled as the AI's reading of that extract, each quote is labelled as
+   the extract's, and no wording ever says the work does not support the
+   claim. Asserted on the elements, not the row's text, which the sr-only
+   tooltip spans also feed. */
+
+const LOOKUP_BASE = {
+  host: "arxiv.org",
+  searches: 1,
+  model: "test",
+  at: "2026-09-29T09:00:00.000Z",
+  contextHash: "ctx",
+  evidenceHash: "ev",
+};
+
+const SUPPORT_QUOTE = "we find that loss scales as a power law with model size";
+const DOES_QUOTE = "we study empirical scaling laws for language model performance";
+
+const ASSESSED: NonNullable<CitedWork["lookup"]> = {
+  ...LOOKUP_BASE,
+  state: "assessed",
+  excerptWords: 310,
+  verdict: { support: "supports", quote: SUPPORT_QUOTE },
+  paperDoes: { says: "It measures how loss falls as models grow.", quote: DOES_QUOTE },
+};
+
+const NOT_IN_EXTRACT: NonNullable<CitedWork["lookup"]> = {
+  ...LOOKUP_BASE,
+  state: "assessed",
+  excerptWords: 120,
+  verdict: { support: "not-in-extract" },
+};
+
+/** A row the article linked by DOI, looked up anyway. */
+const LOOKED = work({ id: "spya-r2s3t4", title: "Looked", relevance: 0.9, influence: 0.9, lookup: ASSESSED });
+
+describe("what a row says after Look it up", () => {
+  it("says one line for each state, naming the host, and never that it read the work", () => {
+    const cases: [NonNullable<CitedWork["lookup"]>, string][] = [
+      [ASSESSED, citeReadAssessed(310, "arxiv.org")],
+      [{ ...LOOKUP_BASE, state: "no-extract" }, citeReadNoExtract("arxiv.org")],
+      [{ ...LOOKUP_BASE, state: "not-identified" }, citeReadNotIdentified("arxiv.org")],
+      [{ ...LOOKUP_BASE, state: "unreadable" }, citeReadUnreadable("arxiv.org")],
+    ];
+    for (const [lookup, line] of cases) {
+      const said = readNoteOf({ linkFrom: "doi", lookup });
+      expect(said).toBe(line);
+      expect(said).toContain("arxiv.org");
+      expect(said).not.toMatch(/verif|confirmed|from the paper|does not support/i);
+    }
+    expect(citeReadAssessed(310, "arxiv.org")).toMatch(/not read the work itself/);
+    expect(citeReadAssessed(310, "arxiv.org")).toContain("310 words");
+    for (const [, line] of cases.slice(1)) expect(line).toMatch(/nothing/);
+    /* No lookup: stage 1's two lines, unchanged. */
+    expect(readNoteOf({ linkFrom: "doi" })).toBe(CITE_NOT_READ);
+    expect(readNoteOf({ linkFrom: "web" })).toBe(CITE_PAGE_FOUND);
+  });
+
+  it("draws an assessed row's verdict and quotes, each labelled as the extract's and the AI's", async () => {
+    await draw(owner({ citations: artefact([LOOKED, CENTRAL]) }));
+    const r = row(LOOKED.id);
+    expect(r.querySelector(".cite-read")?.textContent).toBe(citeReadAssessed(310, "arxiv.org"));
+
+    const verdict = r.querySelector(".cite-verdict");
+    expect(verdict?.querySelector(".cite-lookup-label")?.textContent).toContain(CITE_VERDICT_LABEL);
+    expect(verdict?.querySelector(".cite-verdict-text")?.textContent).toBe(verdictText("supports"));
+    expect(CITE_VERDICT_LABEL).toMatch(/AI's reading/);
+
+    const quotes = [...r.querySelectorAll(".cite-quote")];
+    expect(quotes).toHaveLength(2);
+    expect(quotes[0]?.querySelector("blockquote")?.textContent).toContain(SUPPORT_QUOTE);
+    expect(quotes[1]?.querySelector("blockquote")?.textContent).toContain(DOES_QUOTE);
+    for (const q of quotes) expect(q.querySelector("figcaption")?.textContent).toBe(CITE_QUOTE_LABEL);
+
+    const does = r.querySelector(".cite-does");
+    expect(does?.querySelector(".cite-lookup-label")?.textContent).toContain(CITE_DOES_LABEL);
+    expect(does?.textContent).toContain("It measures how loss falls as models grow.");
+
+    /* A row with no lookup draws none of it. */
+    expect(row(CENTRAL.id).querySelector(".cite-lookup")).toBeNull();
+    /* No wording anywhere in the reading claims more than the extract. */
+    const reading = r.querySelector(".cite-lookup")?.textContent ?? "";
+    expect(reading).not.toMatch(/verified|confirmed|from the paper/i);
+  });
+
+  it("never reads not-in-extract as the work not supporting it", async () => {
+    const quiet = work({ id: "spya-u2v3w4", title: "Quiet", relevance: 0.9, influence: 0.9, lookup: NOT_IN_EXTRACT });
+    await draw(owner({ citations: artefact([quiet]) }));
+    const r = row(quiet.id);
+    const said = r.querySelector(".cite-verdict-text")?.textContent ?? "";
+    expect(said).toBe(verdictText("not-in-extract"));
+    expect(said).toMatch(/extract/);
+    expect(said).toMatch(/full work may/);
+    for (const s of ["supports", "partly", "not-in-extract"] as const) {
+      expect(verdictText(s)).not.toMatch(/does not support|doesn't support|unsupported|contradict/i);
+    }
+    /* No quote to show, and none is invented. */
+    expect(r.querySelector(".cite-quote")).toBeNull();
+  });
+
+  it("shows nothing under the line for a state that read nothing", async () => {
+    const none = work({
+      id: "spya-x2y3z4",
+      title: "None read",
+      relevance: 0.9,
+      influence: 0.9,
+      lookup: { ...LOOKUP_BASE, state: "no-extract" },
+    });
+    await draw(owner({ citations: artefact([none]) }));
+    const r = row(none.id);
+    expect(r.querySelector(".cite-read")?.textContent).toBe(citeReadNoExtract("arxiv.org"));
+    expect(r.querySelector(".cite-lookup")).toBeNull();
+  });
+
+  it("offers Look it up on a row the article linked, and again on one already looked up", async () => {
+    const pressed: string[] = [];
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, LOOKED]),
+        find: async (id) => {
+          pressed.push(id);
+        },
+      }),
+    );
+    const button = findButton(CENTRAL.id);
+    expect(button.textContent).toBe("Look it up");
+    expect(findButton(LOOKED.id).textContent).toBe("Look it up again");
+    await act(async () => button.click());
+    expect(pressed).toEqual([CENTRAL.id]);
+  });
+
+  it("the Look it up card says it reads an extract, not the work, and that a given link stays", async () => {
+    await draw(owner({ citations: artefact([CENTRAL]) }));
+    const card = await cardFor(findButton(CENTRAL.id));
+    expect(card.head).toBe("Look it up");
+    expect(earnsItsHover(card), "the Look it up card does not earn its hover").toBeNull();
+    const copy = `${card.head} ${card.body}`;
+    expect(copy).toMatch(/extract/i);
+    expect(copy).toMatch(/not the full work/i);
+    expect(copy).toMatch(/link the article gave never changes/i);
+    expect(copy).not.toMatch(/verif|confirm|real link|from the paper/i);
   });
 });
