@@ -405,7 +405,24 @@ C3–C8 correct and complete. Two P1s in the round-1 fixes, both fixed here red-
   and an unjudged one still drawn it said *"All 2 answers … are hidden"* over a visible answer. The
   note now counts every row the bar governs; only the *N of M judged* narrows.
 
-Discovery closed after this round; the two fixes had a narrowly scoped check of their own (below).
+Discovery closed after this round. The two fixes (`7eb20273`) had a narrowly scoped, read-only
+check of their own: **R1 closed, R2 closed, no new defect**, 2 files / 132 tests green in the
+reviewer's sandbox.
+
+## The full suite, once
+
+On the tree merged with `origin/dev` (`45158b23`), 2026-09-30: 1212 files green, 6 red, 1 skipped.
+Re-run alone: `every-mode-draws-its-surface` was this change — it asserted the `applies` paragraph,
+which now sits closed behind `more` — and asserts the row's title instead (51/51). `live-mic-lock`
+and `fleet-overseer-badge` pass alone (contention). `cold-start-lazy-imports`, `pdf-bundle-trace`
+and the two fleet route tests stop on a missing build (`api-dist/`, the fleet client) — the known
+fresh-worktree reds, nothing to do with Debate.
+
+## Landed
+
+Pushed to `dev` — the commit is in the note and in `git log`. Not deployed (the Overseer deploys).
+To see it on the reported article, re-run Debate from Metadata after a deploy: its stored search
+predates `bears`, so until then it opens in *by claim*.
 
 ## Deferred: authors and year from a lookup
 
