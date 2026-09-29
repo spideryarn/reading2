@@ -16,7 +16,7 @@ because this session had no Sentry access.
 Greg clarified the same afternoon, through the Overseer: *"re 5G I was specifically thinking about
 Citations mode. I was basically thinking of ways to tweak that prompt/UI"*.
 
-**Ending: Shipped** once it is pushed to `dev`. It is not deployed. Resolve 5G; the next feedback sweep
+**Ending: Shipped.** It is on `dev` (c2d63f06) and not deployed. Resolve 5G; the next feedback sweep
 does the Sentry status write.
 
 What we did:

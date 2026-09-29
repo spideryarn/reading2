@@ -1,6 +1,6 @@
 # Citations: say whether we saw the cited paper, and quote it when we did
 
-Status: **re-scoped 2026-09-29 on Greg's clarification; stages 1–3 built; waiting on a push credential.** Feedback report
+Status: **re-scoped 2026-09-29 on Greg's clarification; shipped to dev 2026-09-29 (c2d63f06); the full-paper stage is proposed, not built.** Feedback report
 SPIDERYARN-READING2-5G (`spya-emvua7`), Greg, dictated:
 
 > Okay, so when in citations mode, like the questions that we might want to ask, what were they? You
