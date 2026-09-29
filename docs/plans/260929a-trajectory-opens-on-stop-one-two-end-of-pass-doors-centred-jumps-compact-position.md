@@ -259,3 +259,17 @@ was checked against the code and each is accepted.
   deferred address write, so **the opening is armed in the Dock's `onMode` instead** — the one door
   a press comes through, Dock and command bar alike, which Back and Forward never call; and the
   anchor is cleared on a mode switch, a re-flow, and a vanished row.
+- 2026-09-29: browser check (Playwright, a Sonnet subagent, on `entropy-24-00930-spya-pywwkq`), desktop
+  1400×900 and phone 390×844 — all five points pass. Opening Trajectory from Plain jumped to stop 1
+  with its paragraph's middle at 444px of an 860px free area, flashed, and drew *↩ back to the
+  beginning*; the first Back returned with Trajectory open, the second left it, and Forward into
+  Trajectory did not jump. ← on stop 1 came back to the same place. Both doors, *End of Gist — 4
+  stops.*, and *Go round again* alone at the end of Most. Row presses, → and three glossary block
+  links landed centred (midpoints 430–444px). The vertical marks sit in the number column; the text
+  column starts where it did. Not checked: an Ideas link, and a block taller than the window.
+  Forward onto a pushed `?at=` entry lands top-aligned — a restore, as § 3 intends. Screenshots:
+  [open, centred, with the chip](260929a-shot-desktop-open-centred-back-chip.png) ·
+  [the stop list, vertical marks](260929a-shot-desktop-stop-list-vertical-marks.png) ·
+  [two doors at the end of Gist](260929a-shot-desktop-end-of-pass-two-doors.png) ·
+  [phone, after opening](260929a-shot-phone-after-open.png) ·
+  [phone, a stop chosen, band aside](260929a-shot-phone-stop-chosen-band-aside.png).
