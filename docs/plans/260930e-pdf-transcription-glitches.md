@@ -1,6 +1,6 @@
 # PDF transcription glitches: paragraphs cut by a figure or a footer, and bylines that fail whole
 
-**Status: stages 1 and 2 built, plan-reviewed and revised; code review to follow. Stage 3 deferred to Greg.** From feedback
+**Status: stages 1 and 2 shipped to `dev` (plan and code reviewed by GPT Sol). Stage 3 and the rest of § Deferred are Greg's.** From feedback
 SPIDERYARN-READING2-69 ([the note](../user-feedback/260930_0850-pdf-transcription-glitches.md)).
 
 > I think you now have access to the production database. So have a look at some of the articles
@@ -256,6 +256,15 @@ against that code and all eight held.
 | F7 | The authors note is not persisted or shown | Claim removed; the consequences written down in Stage 2 |
 | F8 | Re-import is not free | Claim corrected |
 
-## Review
+## The code review, and what was done with it
 
-- Code: GPT Sol — to follow.
+GPT Sol, write-enabled, 2026-09-30 —
+[260930e-pdf-transcription-glitches-code-review-sol.md](260930e-pdf-transcription-glitches-code-review-sol.md).
+Verdict *"ready after three fixes"*, which it made, each with a test red first; read and kept.
+
+| | Finding | Done |
+|---|---|---|
+| C1 | **Ours, from F6.** With the targets computed before mending, a one-word continuation the mend empties (`or` + `ange` + `sphere of 15 cm.`) broke the chain, and the third piece became a paragraph of its own | `renderHtml` gives an emptied record its target's block, so the chain carries through it |
+| C2 | The names-only arm could drop authors printed after the last name the model gave (`Mei-jun Ou` of five) | Names-only only when nothing but markers and glue follows the last verified name; otherwise the byline as printed |
+| C3 | `ENDS_A_SENTENCE` missed non-Latin sentence ends (`。`) | `\p{Sentence_Terminal}` and any closing punctuation |
+| C4 | **Pre-existing, not changed:** the ordinary author list has the same trailing-author gap C2 closed for the new arm — `[Mei-jun Ou]` against a two-name byline stores one author. Trailing words cannot be told from an affiliation fused onto the byline record, which is the stacked-byline question deferred above | For Greg, with the stacked-byline work |

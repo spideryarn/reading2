@@ -293,6 +293,15 @@ export function verifyAuthors(
     out.push({ name, affiliations });
   }
   if (affiliationFailed !== null) {
+    /* The ordinary list historically cannot distinguish a trailing omitted
+       person from an affiliation fused onto the byline record. Names-only is
+       a new fallback, though, and must not turn that known ambiguity into a
+       regression that drops printed credit: use it only when markers and glue
+       are all that remain after the last verified name. */
+    const trailing = byline.slice(nextNameWord);
+    if (trailing.some((w) => !BETWEEN_NAMES.test(w.folded))) {
+      return refuse(`left unaccounted words after author ${answer.length}`);
+    }
     return {
       authors: null,
       names: out.map((a) => a.name),
@@ -304,7 +313,8 @@ export function verifyAuthors(
 
 /**
  * One author's affiliations, found on the page and pushed onto `into` — or why
- * not, in the words the Metadata page's note ends with.
+ * not, in the words the stage note ends with. The note reaches the log and is
+ * not persisted (260930e § Stage 2).
  */
 function affiliationsFor(
   proposed: readonly string[],

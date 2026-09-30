@@ -1452,8 +1452,8 @@ const FLOATS_AND_FURNITURE: ReadonlySet<RecordType> = new Set<RecordType>([
   ...PAGE_FURNITURE,
 ]);
 
-/** A sentence's end, allowing a closing quote or bracket and a footnote marker after it (`limits³.`, `problems.4, 5`). */
-const ENDS_A_SENTENCE = /[.?!…][\p{Pf}"')\]]*[\p{N}\s,*∗†‡]*$/u;
+/** A sentence's end in any script, allowing closing punctuation and a footnote marker after it (`limits³.`, `problems.4, 5`). */
+const ENDS_A_SENTENCE = /(?:\p{Sentence_Terminal}|…)[\p{Pe}\p{Pf}"']*[\p{N}\s,*∗†‡]*$/u;
 
 /**
  * May `record` carry on from `last`, with `between` printed in the middle?
@@ -1789,10 +1789,17 @@ export function renderHtml(
   const blockOf = new Map<number, number>();
   for (const [i, record] of records.entries()) {
     if (!RENDERED.has(record.type)) continue;
-    const text = record.text.trim();
-    if (!text) continue;
     const target = targets[i];
     const into = target === null || target === undefined ? undefined : blockOf.get(target);
+    const text = record.text.trim();
+    if (!text) {
+      /* A seam repair can consume a one-word continuation. Keep its place in
+         the precomputed target chain so the following piece still reaches the
+         block (`or` + `ange` + `sphere …`), exactly as it did when rendering
+         recomputed its cursor after mending. */
+      if (into !== undefined) blockOf.set(i, into);
+      continue;
+    }
     if (into !== undefined) {
       /* Join, with a space — the model was told to mend hyphenation itself, so
          what arrives here is two halves of a sentence, not two halves of a word. */
@@ -2135,8 +2142,9 @@ async function frontMatterOrNothing(
 /**
  * The authors pass, degrading exactly as the front-matter pass does: any
  * failure but an abort is logged and leaves the byline as the records' text.
- * A refusal by the provenance check is not a failure — it comes back as a note
- * for the Metadata page, like the front-matter pass's own. Plan 260929d § 3.
+ * A refusal by the provenance check is not a failure — it comes back as a stage
+ * note, like the front-matter pass's own. Those notes reach the log and are not
+ * persisted. Plans 260929d § 3 and 260930e § Stage 2.
  */
 async function authorsOrNothing(
   records: PdfRecord[],

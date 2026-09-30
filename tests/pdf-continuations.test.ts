@@ -241,4 +241,17 @@ describe("back past a figure or table printed mid-paragraph", () => {
     ];
     expect(continuationTargets(records)).toEqual([null, null, null, null]);
   });
+
+  it("recognises Unicode sentence endings and closing brackets as finished", () => {
+    /* `continues` can be internally inconsistent around a float, so the
+       predecessor's punctuation is the safety check. Japanese full stop and
+       corner bracket are the same visible evidence as `.\u201d`; treating them as
+       unfinished glues two complete paragraphs together. */
+    const records = [
+      r(7, "paragraph", "対照分析は完了した。】"),
+      r(7, "figure", "図2. パターン類似性。"),
+      r(7, "paragraph", "次の分析では、より大きな標本を用いた。", true),
+    ];
+    expect(continuationTargets(records)).toEqual([null, null, null]);
+  });
 });

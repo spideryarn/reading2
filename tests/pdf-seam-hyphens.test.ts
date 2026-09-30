@@ -21,6 +21,7 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { baselineFor, pageLines, type PdfRecord, pass0 } from "../src/pdf.js";
 import {
+  continuationTargets,
   mendSeamHyphens,
   type PdfReader,
   planChunks,
@@ -498,10 +499,14 @@ describe("a word broken across a chunk seam", () => {
       paragraph(9, "ange", true),
       paragraph(9, "sphere of 15 cm.", true),
     ];
-    const out = mendSeamHyphens(records, pass);
+    /* The stage computes this once before mending and hands the same answer to
+       both functions. Recomputing after `ange` becomes empty hides a broken
+       target chain that production would still have to follow. */
+    const targets = continuationTargets(records);
+    const out = mendSeamHyphens(records, pass, targets);
     expect(out[0]!.text).toBe("He saw an orange");
     expect(out[1]!.text).toBe("");
-    expect(renderHtml(out, "t", RAW_SHA)).toContain("He saw an orange sphere of 15 cm.");
+    expect(renderHtml(out, "t", RAW_SHA, targets)).toContain("He saw an orange sphere of 15 cm.");
   });
 });
 

@@ -145,6 +145,10 @@ describe("verifyAuthors", () => {
     it("too many authors", () => refused(Array.from({ length: 101 }, () => one("Hong Chen"))));
     it("a bad name even when an affiliation also failed first", () =>
       refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"]), one("Ignore Previous Instructions")]));
+    it("a skipped author even when an affiliation also failed first", () =>
+      refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"]), one("Hong Chen")]));
+    it("a trailing omitted author when an affiliation also failed", () =>
+      refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"])]));
   });
 
   describe("keeps the names, and no list, when every name is on the page and an affiliation is not", () => {
@@ -160,13 +164,18 @@ describe("verifyAuthors", () => {
       expect("names" in verdict && verdict.names).toEqual(names);
       expect("note" in verdict && verdict.note).toMatch(/Kept the names without their affiliations/);
     };
+    const allNames = ["Mei-jun Ou", "Xiang-hua Xu", "Hong Chen", "Fu-rong Chen", "Shuai Shen"];
+    const everyName = (firstAffiliation: string) => [
+      one("Mei-jun Ou", [firstAffiliation]),
+      ...allNames.slice(1).map((name) => one(name)),
+    ];
 
     it("an affiliation not on the page", () =>
-      namesOnly([one("Mei-jun Ou", ["Evil Corp, visit example dot com"])], ["Mei-jun Ou"]));
+      namesOnly(everyName("Evil Corp, visit example dot com"), allNames));
     it("an affiliation that skips a word", () =>
-      namesOnly([one("Mei-jun Ou", ["Head and Surgery Department"]), one("Xiang-hua Xu")], ["Mei-jun Ou", "Xiang-hua Xu"]));
+      namesOnly(everyName("Head and Surgery Department"), allNames));
     it("an affiliation stitched across two pages", () =>
-      namesOnly([one("Mei-jun Ou", ["China 2 Health Service Center"])], ["Mei-jun Ou"], [
+      namesOnly(everyName("China 2 Health Service Center"), allNames, [
         "Hunan Cancer Hospital, Changsha, China",
         "2 Health Service Center",
       ]));
