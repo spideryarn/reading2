@@ -1,7 +1,7 @@
 # The quiz asks only about what you have read, and says how much that is
 
 **[SPIDERYARN-READING2-61](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-61)** · reported
-2026-09-30 00:37 UTC · kind: suggestion · from an admin (Greg) · *shipped*
+2026-09-30 00:37 UTC · kind: suggestion · from an admin (Greg) · *shipped* · Sentry resolved by the building session, 2026-09-30
 
 Build `6d09e3cc`, article `dongetal25-spya-vfmvmm`, in Quiz.
 
