@@ -35,7 +35,8 @@ export type WholeColumn =
   | "sketch"
   | "illustrated"
   | "debate"
-  | "citations";
+  | "citations"
+  | "crossrefs";
 
 /**
  * Where one `(step, kind)` lives in Postgres.
@@ -130,6 +131,7 @@ export const STORAGE: {
   illustrated: { illustrated: { at: "column", column: "illustrated" } },
   debate: { debate: { at: "column", column: "debate" } },
   citations: { citations: { at: "column", column: "citations" } },
+  crossrefs: { crossrefs: { at: "column", column: "crossrefs" } },
 };
 
 /** The site for one `(step, kind)`, or a clear error rather than `undefined`. */

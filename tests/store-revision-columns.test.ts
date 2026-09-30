@@ -257,6 +257,10 @@ const READS = [
      `quiz`: it sends `articleWithIds` over the body and the skeleton.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
+     like `faq`: its article head carries the cited metadata fields.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  "crossrefs",
   /* Added 2026-09-28 with the `trajectory` stage. Its own column and the
      `quotes` column — the second read to take another artefact's column, after
      `illustrated` — and **no fingerprint columns**, because the route never

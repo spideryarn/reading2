@@ -24,6 +24,12 @@
  *
  * It looks like every other card because it is drawn with `Tooltip`'s classes
  * (`.tooltip-anchor`, `.tooltip`, the arrow) and its delays.
+ *
+ * **And a cross-reference mark in the prose** (`mark.xref[data-xref]`, since
+ * 2026-09-30) gets the same card, with its target found through the
+ * `resolveXref` the provider is handed rather than an attribute on the mark —
+ * xref.ts, and
+ * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
  */
 import {
   FloatingArrow,
@@ -40,6 +46,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
 import type { Section } from "./position.js";
+import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
 
 /** What a card says about one block. */
 export interface BlockLinkEntry {
@@ -91,27 +98,58 @@ export function useBlockLinks(): BlockLinkIndex | null {
  * Mounted once by Reader around the whole reading view. Portalled panels (the
  * chat dialog) are still inside it: context follows the React tree, not the DOM.
  */
-export function BlockLinkProvider({ index, children }: { index: BlockLinkIndex; children: ReactNode }) {
+export function BlockLinkProvider({
+  index,
+  resolveXref,
+  children,
+}: {
+  index: BlockLinkIndex;
+  /**
+   * **Where a cross-reference mark in the prose goes**, or null when the mark
+   * is not one of ours — `xrefTarget` bound to the owner's links (xref.ts).
+   * Absent outside the reading view and for a visitor, and then every
+   * `mark.xref` gets no card at all.
+   *
+   * A resolver rather than a `data-block-link` on the mark, deliberately
+   * (docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
+   * § The card): the target comes from the artefact through a nonce the
+   * article cannot know, never from an attribute it could have written.
+   */
+  resolveXref?: XrefResolver | undefined;
+  children: ReactNode;
+}) {
   return (
     <BlockLinkContext.Provider value={index}>
       {children}
-      <BlockLinkCard index={index} />
+      <BlockLinkCard index={index} resolveXref={resolveXref} />
     </BlockLinkContext.Provider>
   );
 }
 
 /** `Tooltip.tsx`'s delays, so this card feels like every other one. */
 const DELAY = { open: 240, close: 90 } as const;
-const SELECTOR = "[data-block-link]";
+/* A block link, or a cross-reference mark in the prose. The second is only a
+   candidate: `contentFor` asks the resolver, which checks the nonce, and a
+   forged one gets no card. */
+const SELECTOR = `[data-block-link], ${XREF_SELECTOR}`;
 
 /** What the card draws for one link, or null when it would have nothing to say. */
-function contentFor(el: HTMLElement, index: BlockLinkIndex): ReactNode | null {
-  const id = el.getAttribute("data-block-link");
+function contentFor(
+  el: HTMLElement,
+  index: BlockLinkIndex,
+  resolveXref: XrefResolver | undefined,
+): ReactNode | null {
+  /* A cross-reference's target comes from the resolver and only from there —
+     never `data-block-link`, `data-block-missing` or `data-block-preview` off
+     the mark, all three of which an article can still write today. */
+  const xref = el.matches(XREF_SELECTOR);
+  const id = xref ? (resolveXref?.(el) ?? null) : el.getAttribute("data-block-link");
   if (id === null) return null;
-  if (el.hasAttribute("data-block-missing")) return <p className="tip-cite-empty">{MISSING_BLOCK}</p>;
+  if (!xref && el.hasAttribute("data-block-missing"))
+    return <p className="tip-cite-empty">{MISSING_BLOCK}</p>;
   const entry = index.get(id as BlockId);
   if (!entry) return null;
-  const preview = el.getAttribute("data-block-preview") !== "off";
+  const preview = xref || el.getAttribute("data-block-preview") !== "off";
   const shown = snippet(entry.text);
   /* By subtraction (tooltips.md): a link whose own words already name its
      section — a summary entry's title — is not told the section again. */
@@ -145,13 +183,21 @@ function focusVisible(el: Element): boolean {
   }
 }
 
-function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
+function BlockLinkCard({
+  index,
+  resolveXref,
+}: {
+  index: BlockLinkIndex;
+  resolveXref: XrefResolver | undefined;
+}) {
   const [shown, setShown] = useState<{ el: HTMLElement; content: ReactNode } | null>(null);
   const cardId = useId();
   const arrowRef = useRef<SVGSVGElement>(null);
   const currentRef = useRef<HTMLElement | null>(null);
   const indexRef = useRef(index);
   indexRef.current = index;
+  const resolveRef = useRef(resolveXref);
+  resolveRef.current = resolveXref;
 
   const { refs, floatingStyles, context, isPositioned } = useFloating({
     open: shown !== null,
@@ -206,18 +252,19 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
   /* A new article/index can change the words under an anchor even if React
      preserves that node. Refresh the open card from the new source; the real
      Reader keeps this map stable across position renders, so this runs only
-     when its source changes. */
+     when its source changes. The cross-references are a source too: a mark
+     whose links were replaced may now resolve elsewhere, or nowhere. */
   useEffect(() => {
     const el = currentRef.current;
     if (!el) return;
-    const content = contentFor(el, index);
+    const content = contentFor(el, index, resolveXref);
     if (content === null) {
       currentRef.current = null;
       setShown(null);
     } else {
       setShown({ el, content });
     }
-  }, [index]);
+  }, [index, resolveXref]);
 
   /* Delegated on the document: the links are in every panel and come and go
      with them, and one listener pair costs the same however many there are.
@@ -241,7 +288,7 @@ function BlockLinkCard({ index }: { index: BlockLinkIndex }) {
     const show = (el: HTMLElement) => {
       pending = null;
       if (!el.isConnected) return shut();
-      const content = contentFor(el, indexRef.current);
+      const content = contentFor(el, indexRef.current, resolveRef.current);
       if (content === null) return shut();
       currentRef.current = el;
       // Before the state, so the reference exists when the panel mounts.

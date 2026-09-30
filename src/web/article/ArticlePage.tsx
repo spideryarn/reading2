@@ -29,6 +29,7 @@ import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
 import { useQuotesRead } from "../useQuotes.js";
 import { useCitationsRead } from "../useCitations.js";
+import { useCrossrefs } from "../useCrossrefs.js";
 import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
@@ -468,6 +469,13 @@ function OwnedReader({
    */
   const citations = useCitationsRead(slug);
   /**
+   * **The cross-references**, drawn in the prose in every mode — here, and
+   * unconditional, for the citations' reason. Owner-only by being here:
+   * `VisitorArticle` has no such call, and there is no public twin of the
+   * route. src/web/useCrossrefs.ts.
+   */
+  const crossrefs = useCrossrefs(slug);
+  /**
    * **The arc, and the request for one if there is none.** Here rather than in
    * `Reader` for the same reason the three above are: it can POST, and the
    * acceptance test for public reading is that a signed-out browser issues no
@@ -502,7 +510,17 @@ function OwnedReader({
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "owner", comments, chatAnchors, glossary, quotes, citations, arc, readingTime }}
+      capability={{
+        kind: "owner",
+        comments,
+        chatAnchors,
+        glossary,
+        quotes,
+        citations,
+        crossrefs,
+        arc,
+        readingTime,
+      }}
       onRenamed={onRenamed}
     />
   );

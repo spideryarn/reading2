@@ -107,6 +107,16 @@ export const METADATA_RERUN_STEPS = [
   "trajectory",
   "debate",
   "citations",
+  /* **Joined on 2026-09-30 with the step**, the one way to make cross-references
+     for an article already on the shelf (the after-import box covers new ones).
+     The three answers: **one** metered call a press — a single
+     `streamMessage`, no tools (`generateCrossrefs`); **no prerequisite** beyond
+     the article itself; and **safe to publish over a good list**,
+     draft-then-publish — an answer that validation empties throws and writes
+     nothing (`buildCrossrefs`), and only the model's own empty list is kept, as
+     a real answer. Not a mode, so no switch hides it.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  "crossrefs",
 ] as const satisfies readonly StepName[];
 
 /** One of the list. */

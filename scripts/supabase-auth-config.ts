@@ -4,10 +4,13 @@
  *     npx tsx scripts/supabase-auth-config.ts show
  *     npx tsx scripts/supabase-auth-config.ts apply [--dry-run]
  *     npx tsx scripts/supabase-auth-config.ts smtp [--dry-run]
+ *     npx tsx scripts/supabase-auth-config.ts templates [--dry-run]
  *
  * `apply` writes the Google sign-in settings; `smtp` writes the outgoing-mail
- * settings (Resend, since 2026-09-29 — docs/project/email.md). They are
- * separate commands so that fixing one never re-sends the other's secret.
+ * settings (Resend, since 2026-09-29 — docs/project/email.md); `templates`
+ * writes the subject and HTML of the two auth emails in scope, read from
+ * supabase/config.toml and supabase/templates/ (since 2026-09-30). They are
+ * separate commands so that fixing one never re-sends another's secret.
  *
  * Written on 2026-08-27, when "Continue with Google" on www.spideryarn.com
  * returned `{"msg":"Unsupported provider: provider is not enabled"}` — the
@@ -34,7 +37,7 @@
  *
  * ## The field names were read, not remembered
  *
- * Every key written below — the Google, SMTP and email-rate-limit fields —
+ * Every key written below — the Google, SMTP, email-rate-limit and template fields —
  * comes from the live OpenAPI document at
  * https://api.supabase.com/api/v1-json, schema `UpdateAuthConfigBody`. That
  * matters because the API takes a partial object and **ignores keys it does not
@@ -78,6 +81,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { parse as parseToml } from "smol-toml";
 
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
@@ -156,7 +161,95 @@ const WATCHED = [
   "smtp_admin_email",
   "smtp_sender_name",
   "rate_limit_email_sent",
+  "mailer_subjects_confirmation",
+  "mailer_templates_confirmation_content",
+  "mailer_subjects_recovery",
+  "mailer_templates_recovery_content",
 ] as const;
+
+/**
+ * The auth emails with our own words, as GoTrue names them. Only the two the
+ * work covers: a sign-up confirmation and a password recovery. Adding one is
+ * a line here, a section in supabase/config.toml and a file in
+ * supabase/templates/. docs/plans/260930h-auth-emails-in-spideryarn-s-voice.md.
+ */
+export const EMAIL_TEMPLATES = ["confirmation", "recovery"] as const;
+
+/**
+ * The fields `templates` writes, built from supabase/config.toml.
+ *
+ * **config.toml is the one home for the subject lines**, and the local stack
+ * reads the same sections, so what production sends and what the local mail
+ * catcher shows cannot drift apart. `content_path` there is relative to the
+ * repo root (the Supabase CLI's convention), so it is resolved against `root`.
+ *
+ * Refuses a missing section, subject or file, a path other than
+ * `supabase/templates/<name>.html`, any template action other than the one
+ * `{{ .ConfirmationURL }}` action link, or any link other than that action and
+ * the hello@ mailto link. A PATCH of `""` would quietly put Supabase's default
+ * back, and a swapped path would send the wrong email under the right subject.
+ */
+export function templatesBody(
+  configToml: string,
+  root: string,
+  read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+): Record<string, string> {
+  const config = parseToml(configToml) as {
+    auth?: { email?: { template?: Record<string, { subject?: unknown; content_path?: unknown }> } };
+  };
+  const sections = config.auth?.email?.template ?? {};
+  const body: Record<string, string> = {};
+  for (const name of EMAIL_TEMPLATES) {
+    const section = sections[name];
+    const subject = section?.subject;
+    const contentPath = section?.content_path;
+    if (typeof subject !== "string" || subject.trim() === "") {
+      throw new Error(`supabase/config.toml has no subject for [auth.email.template.${name}].`);
+    }
+    if (subject !== subject.trim()) {
+      throw new Error(`[auth.email.template.${name}] subject has leading or trailing whitespace.`);
+    }
+    if (typeof contentPath !== "string" || contentPath === "") {
+      throw new Error(`supabase/config.toml has no content_path for [auth.email.template.${name}].`);
+    }
+    const expected = `supabase/templates/${name}.html`;
+    if (path.relative(root, path.resolve(root, contentPath)) !== expected) {
+      throw new Error(`[auth.email.template.${name}] content_path must be ${expected}, not ${contentPath}.`);
+    }
+    const html = read(path.resolve(root, contentPath));
+    /* The rendered link itself, not the variable anywhere: a comment that
+       mentions it — or holds a whole disabled anchor — must not pass with the
+       working button deleted. Go-template actions are still checked against
+       the unstripped source below because Go evaluates them inside comments. */
+    const withoutComments = html.replace(/<!--[\s\S]*?-->/g, "");
+    const hrefs = [
+      ...withoutComments.matchAll(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi),
+    ].map(
+      (match) => match[1] ?? match[2] ?? match[3],
+    );
+    if (hrefs.filter((href) => href === "{{ .ConfirmationURL }}").length !== 1) {
+      throw new Error(`${contentPath} needs exactly one href="{{ .ConfirmationURL }}", its button.`);
+    }
+    if (
+      hrefs.length !== 2 ||
+      hrefs.filter((href) => href === "mailto:hello@spideryarn.com").length !== 1
+    ) {
+      throw new Error(`${contentPath} must have one action link and one hello@ mailto link, no others.`);
+    }
+    const actions = html.match(/\{\{[\s\S]*?\}\}/g) ?? [];
+    const outsideActions = html.replace(/\{\{[\s\S]*?\}\}/g, "");
+    if (
+      actions.length !== 1 ||
+      actions[0] !== "{{ .ConfirmationURL }}" ||
+      /\{\{|\}\}/.test(outsideActions)
+    ) {
+      throw new Error(`${contentPath} may contain only Go-template action {{ .ConfirmationURL }}.`);
+    }
+    body[`mailer_subjects_${name}`] = subject;
+    body[`mailer_templates_${name}_content`] = html;
+  }
+  return body;
+}
 
 /**
  * Outgoing auth mail — confirmations, password resets, magic links — through
@@ -276,6 +369,9 @@ function display(key: string, value: unknown): string {
     const id = String(value);
     return `${id.slice(0, 12)}… (${id.length} chars)`;
   }
+  if (key.startsWith("mailer_templates_")) {
+    return `<${String(value).length} chars of HTML>`;
+  }
   if (key === "uri_allow_list") {
     const entries = String(value).split(",").filter(Boolean);
     return entries.length === 0 ? "<empty>" : `\n      ${entries.join("\n      ")}`;
@@ -324,11 +420,19 @@ function smtpBody(): Record<string, unknown> {
   return { ...SMTP, smtp_pass: key };
 }
 
+function fileTemplatesBody(): Record<string, string> {
+  try {
+    return templatesBody(readFileSync(path.join(ROOT, "supabase", "config.toml"), "utf8"), ROOT);
+  } catch (error) {
+    die(error instanceof Error ? error.message : String(error));
+  }
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   const dryRun = process.argv.includes("--dry-run");
-  if (command !== "show" && command !== "apply" && command !== "smtp") {
-    die("Usage: npx tsx scripts/supabase-auth-config.ts <show|apply|smtp> [--dry-run]");
+  if (command !== "show" && command !== "apply" && command !== "smtp" && command !== "templates") {
+    die("Usage: npx tsx scripts/supabase-auth-config.ts <show|apply|smtp|templates> [--dry-run]");
   }
 
   const token = process.env.SUPABASE_ACCESS_TOKEN;
@@ -355,7 +459,12 @@ async function main(): Promise<void> {
 
   if (command === "show") return;
 
-  const body = command === "smtp" ? smtpBody() : googleBody();
+  const body =
+    command === "smtp"
+      ? smtpBody()
+      : command === "templates"
+        ? fileTemplatesBody()
+        : googleBody();
 
   console.log("\nwriting:");
   for (const [key, value] of Object.entries(body)) {
@@ -419,20 +528,25 @@ async function main(): Promise<void> {
 
   if (wrong.length > 0) {
     console.error(
-      `\n${wrong.length} setting(s) did not take: ${wrong.map(([k]) => k).join(", ")}\n` +
-        "The API accepts unknown keys silently — check the names against\n" +
+      `\n${wrong.length} setting(s) did not read back exactly as sent: ${wrong.map(([k]) => k).join(", ")}\n` +
+        "The API accepts unknown keys silently, and any server-side normalization would also\n" +
+        "appear here. Inspect the read-back above before retrying; check field names against\n" +
         "https://api.supabase.com/api/v1-json (schema UpdateAuthConfigBody).",
     );
     process.exit(1);
   }
 
+  const hasSecret = Object.keys(body).some(isSecret);
   console.log(
-    `\nAll ${Object.keys(body).length} settings read back as written — the secret by presence only.`,
+    `\nAll ${Object.keys(body).length} settings read back as written${hasSecret ? " — secrets by presence only" : ""}.`,
   );
   console.log(
     command === "smtp"
       ? "Now send a real one: request a password reset, and look for it in Resend's Emails log."
-      : "Now: ./scripts/check-remote-auth.sh   (google must flip to ON)",
+      : command === "templates"
+        ? "Now send both real emails: sign up with a fresh address and request a recovery, then\n" +
+          "check both subjects and buttons in the inbox (and Resend's Emails log)."
+        : "Now: ./scripts/check-remote-auth.sh   (google must flip to ON)",
   );
 }
 

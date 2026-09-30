@@ -104,14 +104,20 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
   };
 });
 
-const { autoModeRequests, writeAutoModes } = await import("../src/web/auto-modes.js");
+const { autoModePosts, writeAutoModes } = await import("../src/web/auto-modes.js");
 const { AddPage } = await import("../src/web/AddPage.js");
 
 const SLUG = "a-paper";
 const UPLOAD_ID = "up-1";
 const URL_SOURCE = { kind: "url", url: "https://example.com/a-paper" } as const;
 const UPLOAD_SOURCE = { kind: "upload", uploadId: UPLOAD_ID } as const;
-const EXPECTED_RUNS = () => autoModeRequests().map((steps) => `run:${steps.join(",")}`);
+/* The order the page posts in — `autoModePosts`, which `queueAutoModes` reads
+   (tests/auto-modes.test.tsx pins that order independently). Not
+   `autoModeRequests()`'s order since `crossrefs` joined (260930f). */
+const EXPECTED_RUNS = () => {
+  const { together, after } = autoModePosts();
+  return [...together, ...after].map((steps) => `run:${steps.join(",")}`);
+};
 
 const makeJob = (id: string, status: Job["status"], slug = SLUG): Job =>
   ({ id, slug, status, steps: [] }) as unknown as Job;

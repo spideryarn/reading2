@@ -205,7 +205,7 @@ that rule; [keyboard.md](keyboard.md) and [icons.md](icons.md) point here.
 The key is a fact a reader cannot guess by pressing the button, so keep it in the card's prose where
 it reads naturally. Trajectory says *While reading, press ←.* on ‹ › and on its door's *Next stop ›*;
 Chat says *Enter to send* and *Shift+Enter for a new line*; Metadata says *⌘Enter / Ctrl-Enter opens
-it from the article*; and Commands names *⌘K / Ctrl-K*. There is no `keys` prop yet: these cards
+it from the article*; Commands names *⌘K / Ctrl-K*; and Quiz says *Previous question (←)*. There is no `keys` prop yet: these cards
 keep the keys in sentences, which read better here than a keycap row
 ([260930h](../plans/260930h-trajectory-info-button-on-the-controls-row-and-shortcut-keys-in-tooltips.md)).
 

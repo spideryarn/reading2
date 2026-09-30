@@ -248,6 +248,9 @@ doc and changes only with Greg's approval of the wording
   been reproduced off the device**: Chromium and WebKit both draw it. The suspects, and the five
   Web Inspector checks that would settle it, are in
   [260912c](../plans/260912c-send-button-icon-and-primary-style.md#what-gpt-sol-added-to-the-diagnosis).
+- [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx) — the quiz's step row as `ChevronLeft`,
+  `ChevronRight` and `List`, each in a tooltip; the Recall | Quiz switch beside it kept its words,
+  and [quiz.md § On screen](quiz.md) says why (SPIDERYARN-READING2-71).
 
 ## See also
 
