@@ -1,0 +1,808 @@
+diff --git a/docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md b/docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
+index eba24a16..d4cbf7b9 100644
+--- a/docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
++++ b/docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
+@@ -241,6 +241,12 @@ lists both files, and an unattended run does not edit a defence.
+    **`data-block-link`, `data-block-preview` and `data-block-missing` are not forbidden today**.
+    So an article can already forge a genuine block-preview card on words it chooses. That gap
+    predates this plan, and v1 does not widen it. The same edit should close it.
++
++   **Done 2026-10-01, and done more widely than written here.** Greg approved it, and asked for the
++   class of bug to be closed rather than these names added. The sanitiser now keeps only the
++   `data-*` attributes and classes it declares, so the `xref` mark, the three block-link attributes
++   and every later marking are dropped from imported markup without anyone having to list them.
++   See [261001a](261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md).
+ 2. **Let visitors see cross-refs** (`src/public/dto.ts`, the allowlist). This means a `crossrefs`
+    key in `PUBLIC_PROJECTIONS`, the DTO and the visitor capability, omitted when stale, plus a test
+    that an anonymous request cannot tell a private slug from an absent one. Until then, a visitor
+diff --git a/docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md b/docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md
+new file mode 100644
+index 00000000..df4cced7
+--- /dev/null
++++ b/docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md
+@@ -0,0 +1,174 @@
++# An article's markup keeps only the `data-*` attributes and classes we allow
++
++Follow-up to SPIDERYARN-READING2-5Z (cross-reference links), closing Sol's P0 from
++[260930f code review 2, D3](260930f-cross-reference-links-code-review-2-sol.md). The open item was
++[260930f § Left for Greg](260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md#left-for-greg-two-defence-edits),
++item 1. Item 2, showing cross-references to visitors, is not part of this plan.
++
++> Yes to the filter fix (or any other fix that feels clean, general, robust, clean)
++>
++> — Greg, 2026-10-01, relayed by the Overseer
++
++## The problem, and why it is a class of problem
++
++The reading view marks the prose with its own attributes and classes: a comment, a glossary term, a
++quote stroke, a citation, a block link, a cross-reference. Then it trusts them. `BlockLinkCard` opens
++a real preview card on anything matching `[data-block-link]`, and `Reader.tsx` treats a click inside
++`.mode-band` as a click in the mode band.
++
++The sanitiser (`src/sanitize-policy.ts`) is the only thing between a stranger's HTML and those
++readers, and **it works from a denylist**. It keeps every `data-*` attribute and every class except
++the ones someone remembered to list. Each new marking must therefore be added to that list by hand.
++The file's own history records the cost: versions 2 to 7 are six additions, and four of them were
++caught by a reviewer rather than by the change that needed them. 5Z is the fifth:
++`data-block-link`, `data-block-preview`, `data-block-missing`, `data-xref` and the `xref` class are
++all unlisted, so an imported article can put our preview card on words we never linked.
++
++The hole is wider than those five names. App chrome classes appear in click handlers too, and none
++of them is reserved: `.mode-band`, `.blk-permalink`, `.gloss-list`, `.dock`. A denylist cannot keep
++up with them, because nothing tells whoever adds a class to `Reader.tsx` that the sanitiser exists.
++
++## What we are doing: turn both lists round
++
++An imported article may keep only **the `data-*` attributes and classes we name**. Everything the
++app adds afterwards is outside that list by construction, so it cannot be forged, and a new feature
++has nothing to remember.
++
++1. **`data-*` attributes.** Set DOMPurify's own `ALLOW_DATA_ATTR: false`, and put the survivors in
++   one declared list, `ARTICLE_DATA_ATTRS`, added through `ADD_ATTR`. It has two parts:
++   - **The pipeline's own namespace**: every value of `RESERVED_ATTRS` (`src/reserved.ts`, the
++     `data-spya-*` family). Stage 2 writes these for stage 3. Stage 3 stamps `wasId`/`wasName`
++     *before* its sanitise and reads them straight after. The reading view reads the note and PDF
++     figure stamps. Each one is already scrubbed from a stranger's markup on import by
++     `scrubReserved`, under reserved.ts's own rule. Importing the constants keeps that file the only
++     place that names one.
++   - **Two publisher facts the pipeline reads**: `data-url-original` and `data-href-mobile`, gwern's
++     real addresses behind an archive link, which `src/citations.ts` reads off the stored block HTML.
++     Stage 3 wrote that HTML through this sanitiser, so dropping the pair would lose it on the next
++     re-run. No client code reads either one.
++2. **Classes.** A hook keeps a class token only if it is declared:
++   - on any element: `ARTICLE_CLASSES = ["pdf-uncertain"]`, the one class our PDF renderer writes;
++   - on a MathML element only: `TEMML_CLASSES`, the class names Temml's own stylesheet
++     (`temml/dist/Temml-Local.css`) gives a meaning to. The reading view renders TeX with Temml
++     (`src/web/maths.ts`) and then sends that output through this same sanitiser. Temml runs with
++     `trust: false`, so a formula cannot choose its own classes, only Temml's vocabulary.
++
++   Every other class token goes, and an emptied `class` attribute goes with it. The old seven-name
++   strip (`cmt`, `chat`, `term`, `hit`, `cite`, `zoomable`, `zoom-btn`) is replaced by the new rule,
++   which covers all seven.
++3. **The per-name `FORBID_ATTR` entries for our annotation attributes stay.** They cost nothing, and
++   the file already argues that un-forbidding a name is how a hole reopens. They become belt to the
++   new braces, and a comment says so.
++4. **`SANITIZER_VERSION` 7 → 8.** The policy is stricter, which is the rule for a bump.
++
++### Evidence that nothing real is lost
++
++A read-only survey of production (`Target: aws-0-eu-west-2.pooler.supabase.com:6543`, inside
++`begin read only` … `rollback`) covered 101,526 stored blocks:
++
++- **Classes:** one token in the entire corpus, `pdf-uncertain` (123 blocks). Readability's
++  `keepClasses: false` has always stripped publisher classes, so turning the class list round
++  loses nothing stored.
++- **`data-*`:** 32 names. They are `data-spya-*` (ours) plus publisher tracking and metadata:
++  `data-track*`, `data-test`, `data-doi`, `data-link-icon*`, `data-ga-action`, `data-url-*` and so
++  on. `src/` reads only three of them after sanitising: `data-url-original` and `data-href-mobile`
++  (citations) and the `data-spya-*` family. `data-track-action` (`furniture.ts`),
++  `data-component-name` (`notes.ts`) and `data-callout` (`callouts.ts`) are read in stage 2, on the
++  raw document, *before* any sanitise.
++- The local corpus (50,045 blocks) adds Wikipedia's `data-mw*` and image-size attributes. Nothing
++  reads those either.
++
++### Do articles already in production carry forged markings?
++
++**No.** The same read-only survey searched for every client-owned marking attribute (`data-block-*`,
++`data-xref`, `data-comment`, `data-term`, `data-hit`, `data-quote*`, `data-cite`, `data-wash`,
++`data-dir`, `data-*-open`, …) and every reserved class, including `xref` and `block-ref*`. Both
++searches found **0 rows**. A control query with the same pattern shape over a name we know is
++present was run alongside, so the zero is a real zero; its result is under § As built.
++
++**No re-sanitising job is needed in any case.** Every path that *renders* an article applies the
++policy on read. That covers the browser pass (`sanitizeArticle` at ingress,
++`src/web/article/access.ts`) and the render-facing server loads (`src/store/pg.ts`,
++`src/store/public-reader.ts`, which call `sanitizeStoredBlocks` with no stamp). So the fix reaches
++every reader of every stored article the moment it is deployed.
++
++Not every read re-sanitises, though (Sol, plan review, finding 3): pipeline artefact reads
++(`src/store/artifacts-pg.ts`), publication validation (`src/store/pg-revisions.ts`) and the faithful
++export bundle (`src/store/export-bundle.ts`) take `revision_blocks.html` raw. They go on seeing
++publisher `data-track*` noise until that article's next stage-3 run. None of them renders it or
++keys anything off it, and the survey found no forged markings for them to carry. It is not worth a
++write to production.
++
++## The tests
++
++The tests are written first and must be seen red.
++
++1. **Each 5Z forgery is stripped**: `<a data-block-link="spya-…" data-block-preview="on"
++   data-block-missing>` and `<mark class="xref" data-xref="…">` come out bare. Red today.
++2. **Chrome classes are stripped**: `class="mode-band"`, `class="blk-permalink"`. Red today.
++3. **The collision tests.** Because the rule fails closed, a *new* marking is stripped with no
++   edit anywhere, so no test needs to go red for it. What can still go wrong is a collision: the
++   app keying something off a name an article is allowed to keep. The first draft of this item
++   overclaimed here, and Sol corrected it (plan review, finding 1). The tests scan `src/` (not
++   tests) for every `data-…` literal, and `src/web` for every class in five spellings: stylesheet
++   selectors, `closest`/`matches`/`querySelector` arguments, `*SELECTOR*` constants, `className`
++   literals and `classList` calls. They put each one through the real `sanitizeHtml` on a
++   `<span>`, a `<p>` and a MathML `<mi>`, and assert that whatever survives is declared. They also
++   assert that the only surviving `data-*` names the browser reads are the four `data-spya-*`
++   stamps, and that the only class we share with Temml is `tml-display`. The failure message names
++   the file.
++4. **`TEMML_CLASSES` is pinned to Temml's stylesheet.** The test parses the class selectors out of
++   `Temml-Local.css` and asserts the two sets are equal. After a Temml upgrade this goes red rather
++   than letting maths lose a class without anyone noticing.
++5. **Maths survives.** A battery of TeX (fractions, `aligned`, `\cancel`, `\vec`, `\overline`,
++   `\boxed`, tags) goes through the real Temml renderer and the sanitiser, and every class survives.
++6. **What must be kept, is kept**: every `RESERVED_ATTRS` value, `data-url-original`,
++   `data-href-mobile`, `pdf-uncertain`, and a block id.
++7. The existing suites: `tests/sanitize*.test.ts`, the maths tests, `tests/reserved.test.ts`,
++   citations, notes, callouts and blocks.
++
++## Which defence this touches
++
++The DOMPurify policy in `src/sanitize-policy.ts`, a row in
++[security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live),
++touched with Greg's approval (above). Nothing else in that table is touched. The map's row and
++security.md's description of the policy are updated to say it is now an allowlist for `data-*` and
++classes.
++
++## What was passed over
++
++- **Add the five missing names to the two lists.** This is the smallest edit and it closes 5Z.
++  Stage 3 already picked it as the one-line fix. It is also the seventh episode of the same bug,
++  and it leaves the chrome classes open. Greg asked for the class of bug to be closed, not this
++  instance of it.
++- **Move every app marking into one `data-sy-*` namespace and strip the prefix.** This is general,
++  but it renames around twenty attributes and seven classes across CSS, TSX and tests. A class
++  cannot carry a `data-` prefix, so classes would still need their own rule. It also still fails
++  open for anything added outside the namespace. The allowlist fails closed and renames nothing.
++- **A class allowlist with no MathML exception.** Temml's vocabulary is about sixty names
++  (`mord`, `chr-*`, `wbk-*`, `ff-squash`, the strikes). Keeping it on every element would let an
++  article carry `class="upstrike"` on a paragraph. Scoping it to MathML elements costs one
++  namespace check.
++- **Strip the class attribute entirely outside `<math>`.** Simpler still, but it would drop
++  `pdf-uncertain`, which our own PDF renderer writes and `shell.css` styles.
++
++## Not in scope
++
++- The public DTO for cross-references (260930f item 2).
++- `id`, `href="#…"` and `aria-*`. Block ids are the contract in
++  [block-ids.md](../project/block-ids.md). An article's own fragment links are real content, and
++  `aria-*` is not something our handlers key on.
++- `RISKY_ROOT_ATTR`, which applies to `<body>` in stage 3. Its attributes are never serialised into
++  a block.
++
++## Stages
++
++1. This plan, reviewed by GPT Sol (`--sandbox review`).
++2. Tests red → policy edit → green; `npm test`, `npm run typecheck`, lint on touched files. GPT Sol
++   code review (`--sandbox workspace-write`). Commit, push to `dev`.
++3. Docs: security.md/security-map.md lines, the 5Z feedback note, awaiting-approval.md, 260930f's
++   § Left for Greg.
++
++## As built
++
++(filled in after stage 2)
+diff --git a/docs/project/security.md b/docs/project/security.md
+index fa9ac846..08dd3674 100644
+--- a/docs/project/security.md
++++ b/docs/project/security.md
+@@ -168,9 +168,22 @@ its own jsdom and pins the version, which is a footgun, not a feature, when you
+ 
+ ### What survives, and what doesn't
+ 
+-Kept, because the reading view needs them: `id` (see below), ordinary `data-*`, prose markup, the
+-structures the block splitter looks for (`figure`, `figcaption`, `blockquote`, `pre`, `li`, `table`),
+-and inline `<svg>`.
++Kept, because the reading view needs them: `id` (see below), prose markup, the structures the block
++splitter looks for (`figure`, `figcaption`, `blockquote`, `pre`, `li`, `table`), and inline `<svg>`.
++
++**`data-*` attributes and classes are an allowlist**, since 2026-10-01. An article keeps only the
++`data-*` names in `ARTICLE_DATA_ATTRS`: our own `data-spya-*` pipeline namespace
++([`src/reserved.ts`](../../src/reserved.ts)) and the two gwern addresses citations read. It keeps
++only the classes in `ARTICLE_CLASSES` (`pdf-uncertain`), plus Temml's vocabulary on MathML elements.
++Everything else goes, so every marking the reading view adds after the sanitiser is unforgeable,
++including markings that have not been written yet. The one exception is `pdf-uncertain` itself: it
++is presentational, no handler trusts it, and it is accepted on purpose (the comment on
++`ARTICLE_CLASSES` says when that would stop being true). Before that date the policy was a denylist, and
++each new marking had to be added to it by hand. Six versions of the policy were exactly that, and
++the seventh omission was a forgeable preview card
++([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md),
++SPIDERYARN-READING2-5Z). `tests/sanitize-allowlist.test.ts` scans `src/` for every `data-…` name and
++class the app uses, and fails if one survives without being declared.
+ 
+ Removed:
+ 
+@@ -185,7 +198,9 @@ Removed:
+   `<svg style="position:fixed;inset:0;width:100vw;height:100vh">` covers the whole reading view and
+   takes the clicks. Prose gets its looks from our own stylesheets
+   ([design-css-overview.md](design-css-overview.md)), so nothing of value is lost.
+-- **the annotation attributes the client owns** — `data-comment`, `data-mark-end`, `data-open`,
++- **the annotation attributes the client owns**, which the allowlist above now covers. They are
++  still forbidden by name as a second line, and the rest of this item is their history:
++  `data-comment`, `data-mark-end`, `data-open`,
+   `data-term`, and the `cmt` and `term` classes. [`annotateHtml`](../../src/web/annotate.ts) adds
+   these *after* sanitising and the reading view treats them as its own, so an article shipping
+   `<mark class="cmt" data-comment="…">` in its source would draw a fake comment in someone else's
+diff --git a/src/sanitize-policy.ts b/src/sanitize-policy.ts
+index 9c3ff5db..cc57d09a 100644
+--- a/src/sanitize-policy.ts
++++ b/src/sanitize-policy.ts
+@@ -22,6 +22,81 @@
+  */
+ 
+ import type { Config, DOMPurify } from "dompurify";
++import { RESERVED_ATTRS } from "./reserved.js";
++
++/**
++ * **The only `data-*` attributes an article keeps.** Every other one is dropped
++ * (`ALLOW_DATA_ATTR: false` below) — which is what makes every marking the
++ * reading view adds afterwards unforgeable, including the ones nobody has
++ * written yet.
++ *
++ * Two families, and a third would need an argument:
++ *
++ * - **the pipeline's own `data-spya-*` namespace** (src/reserved.ts). Stage 2
++ *   writes it for stage 3, stage 3 stamps `wasId`/`wasName` *before* its own
++ *   sanitise and reads them straight after, and the reading view reads the note
++ *   and PDF figure stamps. Every one is scrubbed from a stranger's markup on the
++ *   way in (`scrubReserved`), which is reserved.ts's rule, not this file's.
++ * - **two addresses a publisher wrote**: gwern's `data-url-original` and
++ *   `data-href-mobile`, the real link behind an archive copy, which
++ *   src/citations.ts reads off the sanitised block. Nothing in the browser reads
++ *   either.
++ *
++ * Adding a name here is the one way to let an article carry it, so
++ * tests/sanitize-allowlist.test.ts pins this list exactly and fails if any
++ * `data-…` spelled in `src/` survives without being on it.
++ */
++export const ARTICLE_DATA_ATTRS: readonly string[] = [
++  ...Object.values(RESERVED_ATTRS),
++  "data-url-original",
++  "data-href-mobile",
++];
++
++/**
++ * **The only classes an article keeps on an HTML element**: the one our PDF
++ * renderer writes (src/pdf-read.ts, styled in shell.css). Readability's
++ * `keepClasses: false` has always stripped a publisher's, and a production
++ * survey on 2026-10-01 found this token and no other in 101,526 stored blocks.
++ *
++ * **It is the one marking of ours an article can still forge, and that is
++ * accepted rather than overlooked** (GPT Sol, plan review, finding 2). It paints a
++ * paragraph as one the PDF reader was unsure of: presentational, trusted by no
++ * handler, and stripped on the web path by Readability before we ever see it.
++ * Moving it into a scrubbed `data-spya-*` stamp would close it, at the cost of
++ * rewriting the 123 blocks that carry it. If anything ever *acts* on it, do that.
++ */
++export const ARTICLE_CLASSES: readonly string[] = ["pdf-uncertain"];
++
++/**
++ * **The classes kept on a MathML element**: the vocabulary Temml's own
++ * stylesheet (`temml/dist/Temml-Local.css`, loaded by src/web/maths.ts) gives a
++ * meaning to. The reading view draws TeX with Temml and sends the result back
++ * through this policy, so without these every formula would lose its layout.
++ *
++ * MathML only, so an article cannot put `upstrike` on a paragraph; and safe
++ * there because Temml runs with `trust: false` (src/maths-tex.ts), so a formula
++ * cannot name a class of its own. Temml writes a few more (`mord`, `tml-tag`,
++ * `tml-tageqn`) that nothing styles; they go, and no pixel changes.
++ *
++ * A copy of a vendor's list, which rots silently — except that
++ * tests/sanitize-allowlist.test.ts compares it with the stylesheet on every run,
++ * so a Temml upgrade that adds a class goes red rather than quiet.
++ */
++export const TEMML_CLASSES: readonly string[] = [
++  "actuarial", "chr-lrg", "chr-lrg-vec", "chr-med", "chr-med-vec", "chr-sml", "chr-sml-vec",
++  "circle-pad", "downstrike", "ff-narrow", "ff-nudge-left", "ff-squash", "longdiv-arc",
++  "longdiv-top", "mathcal", "mathscr", "menclose", "phasor-angle", "phasor-bottom", "sout",
++  "special-fraction", "textcircle", "tml-cancel", "tml-cancelto", "tml-display", "tml-eqn",
++  "tml-fbox", "tml-hat-1", "tml-hat-2", "tml-hat-3", "tml-hat-4", "tml-jot", "tml-left",
++  "tml-lrg-pad", "tml-med-pad", "tml-overline", "tml-prime", "tml-right", "tml-shift-left",
++  "tml-small", "tml-sml-pad", "tml-tilde-2", "tml-tilde-3", "tml-tilde-4", "tml-underline",
++  "tml-vec", "tml-xcancel", "upstrike", "wbk-acc", "wbk-lrg", "wbk-lrg-acc", "wbk-lrg-vec",
++  "wbk-med", "wbk-med-acc", "wbk-med-vec", "wbk-sml", "wbk-sml-acc", "wbk-sml-vec",
++];
++
++const MATHML_NS = "http://www.w3.org/1998/Math/MathML";
++const HTML_CLASSES: ReadonlySet<string> = new Set(ARTICLE_CLASSES);
++const MATHML_CLASSES: ReadonlySet<string> = new Set([...ARTICLE_CLASSES, ...TEMML_CLASSES]);
+ 
+ /**
+  * Which version of the policy below an artefact on disk was cleaned with.
+@@ -52,7 +127,7 @@ import type { Config, DOMPurify } from "dompurify";
+  * against a policy, and this names the policy. Tying it to the dependency would
+  * re-sanitise every article in the library on every patch release, for nothing.
+  */
+-export const SANITIZER_VERSION = 7;
++export const SANITIZER_VERSION = 8;
+ /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
+    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
+    policy that has never seen this rule and has to be re-cleaned on next read —
+@@ -106,7 +181,21 @@ export const SANITIZER_VERSION = 7;
+    remembered, and one of {the reserved class, this number} is not. If a sixth
+    `MarkKind` is ever added, do all three in one edit and read this paragraph
+    first. GPT Sol, 2026-09-16, reviewing
+-   docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md. */
++   docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md.
++
++   7 → 8 on 2026-10-01: **the lists are turned round.** An article now keeps
++   only the `data-*` attributes in `ARTICLE_DATA_ATTRS` and the classes in
++   `ARTICLE_CLASSES` (plus Temml's on MathML), and every other one goes. The
++   paragraph above predicted the next episode, and it came: cross-references
++   (SPIDERYARN-READING2-5Z) added `data-xref` and the `xref` class, and
++   `data-block-link` / `-preview` / `-missing` had never been listed at all, so
++   an article could open our preview card on words we never linked — GPT Sol's
++   P0, 260930f code review 2, D3. The chrome classes click handlers look for
++   (`mode-band`, `blk-permalink`, …) had never been listed either. Instead of a
++   seventh name, the rule now fails closed. A new marking needs no edit here,
++   and tests/sanitize-allowlist.test.ts scans `src/` to prove it. Stricter,
++   so bumped. Greg approved the defence edit, 2026-10-01;
++   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md. */
+ 
+ /**
+  * Video embeds, by exact origin and path prefix.
+@@ -206,12 +295,17 @@ const EMBED_ATTRS: ReadonlyArray<readonly [string, string]> = [
+  */
+ export const ARTICLE_CONFIG: Config = {
+   ADD_TAGS: ["iframe"],
++  /* **Every `data-*` goes unless it is named below** — see `ARTICLE_DATA_ATTRS`.
++     DOMPurify's own switch, so the rule is the library's rather than a hook of
++     ours, and `ADD_ATTR` is its documented way back in for the named ones. */
++  ALLOW_DATA_ATTR: false,
+   // Every attribute the embed hook sets must be listed here, or DOMPurify
+   // strips it on the *next* pass and the hook re-appends it in a different
+   // position — output that converges only after two runs. `referrerpolicy` was
+   // missing and did exactly that.
+   ADD_ATTR: [
+     "allowfullscreen", "frameborder", "loading", "sandbox", "allow", "referrerpolicy",
++    ...ARTICLE_DATA_ATTRS,
+   ],
+   FORBID_TAGS: [
+     "form", "input", "button", "select", "textarea", "option", "label", "style",
+@@ -223,9 +317,18 @@ export const ARTICLE_CONFIG: Config = {
+     // origin, which is exactly what the sandbox reasoning below assumes cannot
+     // happen.
+     "srcdoc",
+-    /* The annotation attributes the client owns — see the note above. Every one
+-       `annotateHtml` can write has to be here, or an article ships its own and
+-       draws a mark nobody made.
++    /* The annotation attributes the client owns — see the note above.
++
++       **Since 2026-10-01 these are belt, not braces**: `ALLOW_DATA_ATTR: false`
++       above drops every one of them already, and every marking added later
++       with them. They stay because un-forbidding a name is how a hole reopens,
++       and because a later widening of `ARTICLE_DATA_ATTRS` would then still
++       have to get past this list. Do not extend it for a new marking; there is
++       nothing to extend.
++
++       What follows is the history of the list, kept for its reasons. Every
++       one `annotateHtml` can write had to be here, or an article shipped its
++       own and drew a mark nobody made.
+ 
+        `data-chat` and `data-chat-end` were missing until 2026-08-26: chat marks
+        are clickable, so a forged one was a link in someone else's document to a
+@@ -624,8 +727,19 @@ export function installArticlePolicy(purify: DOMPurify): void {
+        draws the mark — `mark.cite` in annotations.css hangs the underline off
+        nothing else — which is exactly the argument the `term` entry above
+        makes. */
+-    for (const own of ["cmt", "chat", "term", "hit", "cite", "zoomable", "zoom-btn"]) {
+-      if (el.classList?.contains(own)) el.classList.remove(own);
++    /* **Since 2026-10-01 the list above is gone, and the rule is the other way
++       round: a class stays only if it is declared** — `ARTICLE_CLASSES`, and on
++       a MathML element Temml's vocabulary too. Every name the history above
++       argues for is covered, and so is every class the app has not invented
++       yet: the `xref` mark (SPIDERYARN-READING2-5Z) and the chrome classes click
++       handlers ask `closest()` about — `mode-band`, `blk-permalink` — which no
++       version of the list ever had.
++
++       By namespace, not by tag name: `<mi>` is only MathML inside `<math>`, and
++       the namespace is what both parsers agree on. */
++    const kept = el.namespaceURI === MATHML_NS ? MATHML_CLASSES : HTML_CLASSES;
++    for (const c of Array.from(el.classList ?? [])) {
++      if (!kept.has(c)) el.classList.remove(c);
+     }
+     if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");
+ 
+diff --git a/src/web/BlockLinkCard.tsx b/src/web/BlockLinkCard.tsx
+index 2c15f3bb..60a901b6 100644
+--- a/src/web/BlockLinkCard.tsx
++++ b/src/web/BlockLinkCard.tsx
+@@ -141,7 +141,9 @@ function contentFor(
+ ): ReactNode | null {
+   /* A cross-reference's target comes from the resolver and only from there —
+      never `data-block-link`, `data-block-missing` or `data-block-preview` off
+-     the mark, all three of which an article can still write today. */
++     the mark. Since 2026-10-01 the sanitiser drops all three from an
++     article's own markup (src/sanitize-policy.ts § `ARTICLE_DATA_ATTRS`); the
++     resolver is the second line. */
+   const xref = el.matches(XREF_SELECTOR);
+   const id = xref ? (resolveXref?.(el) ?? null) : el.getAttribute("data-block-link");
+   if (id === null) return null;
+diff --git a/src/web/xref.ts b/src/web/xref.ts
+index 8ad23851..0e9a5da1 100644
+--- a/src/web/xref.ts
++++ b/src/web/xref.ts
+@@ -9,11 +9,12 @@
+  *
+  * ## Why a nonce, and why the target never comes from the DOM
+  *
+- * An article's own HTML can carry any class and any `data-*` attribute the
+- * sanitiser does not forbid, and `data-xref` is not forbidden yet — reserving
+- * it at ingress is a defence edit left for Greg (the plan's § Left for Greg).
+- * So the DOM cannot be trusted to say either *this is a cross-reference* or
+- * *it goes there*. The nonce answers the first: it is random per page load,
++ * Since 2026-10-01 the sanitiser drops every `data-*` and class an article
++ * brings except the few it declares, so a stored `mark.xref[data-xref]` cannot
++ * arrive from the source any more (src/sanitize-policy.ts, 261001a). This module
++ * does not lean on that. It stays the second line, on the argument that the DOM
++ * should not be trusted to say either *this is a cross-reference* or *it goes
++ * there*. The nonce answers the first: it is random per page load,
+  * lives only in this module, and is never stored or sent anywhere, so markup
+  * written before this page loaded cannot know it. The artefact answers the
+  * second: `to` is read from the links array by index, never from an attribute.
+diff --git a/tests/sanitize-allowlist.test.ts b/tests/sanitize-allowlist.test.ts
+new file mode 100644
+index 00000000..4cf425b8
+--- /dev/null
++++ b/tests/sanitize-allowlist.test.ts
+@@ -0,0 +1,284 @@
++/**
++ * **An article keeps only the `data-*` attributes and classes we name** — the
++ * rule in src/sanitize-policy.ts since 2026-10-01, and the reason it exists.
++ *
++ * Until then the policy was a denylist: every annotation attribute and class the
++ * reading view trusts had to be added to it by hand, and six versions of the
++ * policy were exactly that, four of them caught by a reviewer rather than by the
++ * change that needed them. SPIDERYARN-READING2-5Z was the next: `data-block-link`
++ * and the `xref` mark were not listed, so an imported article could open our
++ * preview card on words we never linked (GPT Sol, 260930f code review 2, D3).
++ *
++ * **What the tests below can and cannot catch**, said plainly because the first
++ * draft of this header overclaimed (GPT Sol, plan review, finding 1). The rule
++ * fails closed, so a *new* marking is stripped with no edit anywhere, and these
++ * tests stay green for it: that is the point, not a gap. What can still go
++ * wrong is a **collision**: the app starting to key something off a name an
++ * article is *allowed* to keep. So the tests scan the source for every `data-…`
++ * name and every class the app uses, put each on an element, and ask the real
++ * sanitiser whether it survives. Anything that survives must be on a declared
++ * list, and the browser may read only the pipeline's own `data-spya-*` names
++ * among the survivors. A collision goes red the day it is written.
++ *
++ * docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md
++ */
++import { globSync, readFileSync } from "node:fs";
++import path from "node:path";
++import temml from "temml";
++import { describe, expect, it } from "vitest";
++import { temmlRenderer } from "../src/maths-tex.js";
++import { RESERVED_ATTRS } from "../src/reserved.js";
++import { sanitizeHtml } from "../src/sanitize.js";
++import {
++  ARTICLE_CLASSES,
++  ARTICLE_DATA_ATTRS,
++  TEMML_CLASSES,
++} from "../src/sanitize-policy.js";
++
++const ROOT = path.resolve(import.meta.dirname, "..");
++const MATHML = `xmlns="http://www.w3.org/1998/Math/MathML"`;
++
++/** Source files, never tests: a test naming a forged attribute is not a marking. */
++function sourceFiles(pattern: string): string[] {
++  return globSync(pattern, { cwd: ROOT }).filter((f) => !/\.test\.tsx?$/.test(f));
++}
++
++/** Every `data-…` name spelled anywhere under `glob`, with the first file that spells it. */
++function dataNamesInSource(glob = "src/**/*.{ts,tsx,css}"): Map<string, string> {
++  const found = new Map<string, string>();
++  for (const file of sourceFiles(glob)) {
++    const text = readFileSync(path.join(ROOT, file), "utf8");
++    for (const m of text.matchAll(/\bdata-[a-z][a-z0-9]*(?:-[a-z0-9]+)*/g)) {
++      if (!found.has(m[0])) found.set(m[0], file);
++    }
++  }
++  return found;
++}
++
++/**
++ * The class names in the preludes of a stylesheet — the text before each `{`,
++ * so a `url(…)` or a number inside a declaration is never read as a class.
++ */
++function classSelectors(css: string): Set<string> {
++  const out = new Set<string>();
++  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
++  for (const m of bare.matchAll(/([^{};]+)\{/g)) {
++    const prelude = m[1] ?? "";
++    if (prelude.trim().startsWith("@")) continue; // @media, @font-face, @layer
++    for (const c of prelude.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)) if (c[1]) out.add(c[1]);
++  }
++  return out;
++}
++
++/**
++ * Every class the app keys anything off or writes, with the first file that
++ * does. Five spellings, because a scanner that reads one misses the others —
++ * `XREF_SELECTOR` is a constant, not a `closest()` argument, and the first
++ * version found it only because the stylesheet also names it:
++ *
++ *  - class selectors in our own stylesheets;
++ *  - selectors handed to `closest`, `matches` or `querySelector(All)`;
++ *  - string constants whose name ends in `SELECTOR`;
++ *  - `className` string and template literals (their static tokens);
++ *  - `classList.add/remove/toggle/contains("…")`.
++ */
++function appClasses(): Map<string, string> {
++  const found = new Map<string, string>();
++  const add = (c: string | undefined, file: string) => {
++    if (c && /^-?[a-zA-Z_][\w-]*$/.test(c) && !found.has(c)) found.set(c, file);
++  };
++  const selectorClasses = (sel: string, file: string) => {
++    for (const c of sel.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)) add(c[1], file);
++  };
++  for (const file of sourceFiles("src/web/**/*.css")) {
++    for (const c of classSelectors(readFileSync(path.join(ROOT, file), "utf8"))) add(c, file);
++  }
++  for (const file of sourceFiles("src/web/**/*.{ts,tsx}")) {
++    const text = readFileSync(path.join(ROOT, file), "utf8");
++    for (const m of text.matchAll(/(?:closest|matches|querySelector(?:All)?)\(\s*(["'`])([^"'`]*)\1/g)) {
++      selectorClasses(m[2] ?? "", file);
++    }
++    for (const m of text.matchAll(/[A-Z_]*SELECTOR[A-Z_]*\s*(?::[^=]+)?=\s*(["'`])([^"'`]*)\1/g)) {
++      selectorClasses(m[2] ?? "", file);
++    }
++    for (const m of text.matchAll(/className(?:=\{?|:\s*)(["'`])([^"'`]*)\1/g)) {
++      for (const tok of (m[2] ?? "").replace(/\$\{[^}]*\}/g, " ").split(/\s+/)) add(tok, file);
++    }
++    for (const m of text.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*(["'`])([^"'`]*)\1/g)) {
++      add(m[2], file);
++    }
++  }
++  return found;
++}
++
++describe("the 5Z forgeries", () => {
++  it("strips a forged block link, which opened our preview card on the publisher's words", () => {
++    const out = sanitizeHtml(
++      `<p><a href="#x" data-block-link="spya-k3m9qt" data-block-preview="on">a</a>` +
++        `<span data-block-link="spya-k3m9qt" data-block-missing="">b</span></p>`,
++    );
++    expect(out).toBe(`<p><a href="#x">a</a><span>b</span></p>`);
++  });
++
++  it("strips a forged cross-reference mark, attribute and class both", () => {
++    expect(sanitizeHtml(`<p><mark class="xref" data-xref="n0-1">c</mark></p>`)).toBe(
++      "<p><mark>c</mark></p>",
++    );
++  });
++
++  it("strips the app's chrome classes, which click handlers look for with closest()", () => {
++    /* `Reader.tsx` asks `closest(".mode-band")` and TermJump asks
++       `matches(".blk-permalink, …")`. Neither was ever on the old list. */
++    expect(sanitizeHtml(`<p class="mode-band"><span class="blk-permalink gloss-list">d</span></p>`)).toBe(
++      "<p><span>d</span></p>",
++    );
++  });
++
++  it("strips an app class from a MathML element too", () => {
++    const out = sanitizeHtml(`<math ${MATHML}><mi class="mode-band xref tml-left">x</mi></math>`);
++    expect(out).toContain(`<mi class="tml-left">`);
++    expect(out).not.toContain("mode-band");
++    expect(out).not.toContain("xref");
++  });
++
++  it("does not let Temml's vocabulary onto an HTML element", () => {
++    expect(sanitizeHtml(`<p class="upstrike tml-display">e</p>`)).toBe("<p>e</p>");
++  });
++});
++
++describe("what the article must keep", () => {
++  it("keeps every attribute of the pipeline's own data-spya-* namespace", () => {
++    for (const attr of Object.values(RESERVED_ATTRS)) {
++      expect(sanitizeHtml(`<p ${attr}="v">x</p>`), attr).toBe(`<p ${attr}="v">x</p>`);
++    }
++  });
++
++  it("keeps the two addresses gwern writes behind an archive link, which citations read", () => {
++    const html = `<p><a href="https://gwern.net/doc/x.pdf" data-url-original="https://arxiv.org/abs/1706.03762" data-href-mobile="https://m.example/x">t</a></p>`;
++    expect(sanitizeHtml(html)).toBe(html);
++  });
++
++  it("keeps the class our PDF renderer writes", () => {
++    expect(sanitizeHtml(`<p class="pdf-uncertain">f</p>`)).toBe(`<p class="pdf-uncertain">f</p>`);
++  });
++
++  it("keeps a block id, which is not a data-* attribute and never was", () => {
++    expect(sanitizeHtml(`<p id="spya-k3m9qt">g</p>`)).toBe(`<p id="spya-k3m9qt">g</p>`);
++  });
++
++  it("declares only the pipeline namespace and the two publisher addresses", () => {
++    expect([...ARTICLE_DATA_ATTRS].sort()).toEqual(
++      [...Object.values(RESERVED_ATTRS), "data-href-mobile", "data-url-original"].sort(),
++    );
++    expect([...ARTICLE_CLASSES]).toEqual(["pdf-uncertain"]);
++  });
++});
++
++describe("completeness: no marking the app uses survives unless it is declared", () => {
++  const dataNames = dataNamesInSource();
++  const classes = appClasses();
++
++  it("has something to check — a scanner that finds nothing passes everything", () => {
++    for (const name of ["data-block-link", "data-xref", "data-comment", "data-cite"]) {
++      expect(dataNames.has(name), name).toBe(true);
++    }
++    for (const c of ["xref", "cite", "term", "mode-band", "blk-permalink"]) {
++      expect(classes.has(c), c).toBe(true);
++    }
++    expect(dataNames.size).toBeGreaterThan(80);
++    expect(classes.size).toBeGreaterThan(300);
++  });
++
++  it("strips every data-* name spelled in src/ unless ARTICLE_DATA_ATTRS declares it", () => {
++    const survivors: string[] = [];
++    for (const [name, file] of dataNames) {
++      const kept = sanitizeHtml(`<span ${name}="v">x</span>`).includes(name);
++      if (kept !== ARTICLE_DATA_ATTRS.includes(name)) survivors.push(`${name} (${file})`);
++    }
++    expect(survivors).toEqual([]);
++  });
++
++  it("lets the browser read no surviving data-* name but the pipeline's own stamps", () => {
++    /* The collision this rule can still suffer (Sol, plan review, finding 1):
++       the reading view starting to trust a name an article is allowed to keep.
++       `data-url-original` in src/web would be exactly that — a publisher's
++       attribute with our meaning on it — and goes red here. The four below are
++       ours, and scrubbed from a stranger's markup on the way in
++       (src/reserved.ts). */
++    const web = dataNamesInSource("src/web/**/*.{ts,tsx,css}");
++    const trusted = [...web.keys()].filter((n) => ARTICLE_DATA_ATTRS.includes(n)).sort();
++    expect(trusted).toEqual([
++      "data-spya-note",
++      "data-spya-note-back",
++      "data-spya-note-ref",
++      "data-spya-pdf-figure",
++    ]);
++  });
++
++  it("strips every class the app uses from an HTML element unless ARTICLE_CLASSES declares it", () => {
++    const survivors: string[] = [];
++    for (const [c, file] of classes) {
++      const kept = sanitizeHtml(`<p class="${c}">x</p>`).includes("class=");
++      if (kept !== ARTICLE_CLASSES.includes(c)) survivors.push(`${c} (${file})`);
++    }
++    expect(survivors).toEqual([]);
++  });
++
++  it("strips every class the app uses from a MathML element unless Temml owns it", () => {
++    const survivors: string[] = [];
++    for (const [c, file] of classes) {
++      const kept = sanitizeHtml(`<math ${MATHML}><mi class="${c}">x</mi></math>`).includes("class=");
++      const declared = TEMML_CLASSES.includes(c) || ARTICLE_CLASSES.includes(c);
++      if (kept !== declared) survivors.push(`${c} (${file})`);
++    }
++    expect(survivors).toEqual([]);
++  });
++
++  it("uses no Temml class name for anything of its own but Temml's display maths", () => {
++    /* A class of ours that shared a name with Temml's would survive on a MathML
++       element. Today the only overlap is our own rule *for* Temml's output
++       (`.prose math.tml-display`, prose.css). A new one goes red here. */
++    expect([...classes.keys()].filter((c) => TEMML_CLASSES.includes(c))).toEqual(["tml-display"]);
++  });
++});
++
++describe("Temml's vocabulary, pinned to the stylesheet that gives it meaning", () => {
++  it("TEMML_CLASSES is exactly the class selectors in Temml-Local.css", () => {
++    /* A Temml upgrade that adds a class turns this red, rather than letting
++       maths quietly lose a style once the sanitiser strips it. */
++    const css = readFileSync(path.join(ROOT, "node_modules/temml/dist/Temml-Local.css"), "utf8");
++    expect([...TEMML_CLASSES].sort()).toEqual([...classSelectors(css)].sort());
++  });
++
++  it("keeps every class Temml draws that its stylesheet styles, through the real renderer", () => {
++    /* Not *every* class Temml writes: `mord`, `tml-tag`, `tml-tageqn` and a few
++       more are hooks for Temml's own `postProcess` and for Firefox, which we do
++       not call and whose rules are not in Temml-Local.css. Unstyled, they draw
++       nothing, so dropping them changes no pixel. */
++    const render = temmlRenderer(temml);
++    const battery = [
++      "\\frac{a}{b}",
++      "\\sqrt{x^2}",
++      "\\begin{aligned} a&=b\\\\ c&=d\\end{aligned}",
++      "\\cancel{z}\\bcancel{y}\\xcancel{w}\\sout{v}",
++      "\\vec{v}\\widehat{abc}\\widetilde{xyz}\\overline{ab}\\underline{cd}",
++      "\\boxed{x}\\fbox{y}\\phase{30^\\circ}\\longdiv{5}\\angl{n}",
++      "\\mathcal{A}\\mathscr{B}\\textcircled{c}",
++      "\\begin{equation}x\\tag{1}\\end{equation}",
++      "a'\\;b\\,c\\quad d",
++    ];
++    let seen = 0;
++    for (const tex of battery) {
++      const html = render(tex, true);
++      if (html === null) continue;
++      const styled = (s: string) =>
++        [...s.matchAll(/class="([^"]*)"/g)]
++          .map((m) => (m[1] ?? "").split(/\s+/).filter((c) => TEMML_CLASSES.includes(c)).join(" "))
++          .filter((c) => c !== "")
++          .join("|");
++      seen += styled(html) === "" ? 0 : 1;
++      expect(styled(sanitizeHtml(html)), tex).toBe(styled(html));
++    }
++    expect(seen).toBeGreaterThan(5);
++  });
++});
+diff --git a/tests/sanitize-client.test.ts b/tests/sanitize-client.test.ts
+index 95c97789..4fdc262c 100644
+--- a/tests/sanitize-client.test.ts
++++ b/tests/sanitize-client.test.ts
+@@ -44,6 +44,15 @@ const CORPUS: Array<[string, string]> = [
+   ["prose", `<p>An <em>em</em>, a <a href="https://e.com/a">link</a>, <code>c</code>.</p>`],
+   ["nested list", `<ul><li>one<ul><li>nested</li></ul></li></ul>`],
+   ["figure", `<figure><img src="/d.png" alt="d"><figcaption>Fig 1</figcaption></figure>`],
++  /* The allowlist of 2026-10-01 (src/sanitize-policy.ts § `ARTICLE_DATA_ATTRS`)
++     in each namespace, so the two bindings are seen to agree on it — including
++     an HTML integration point inside MathML, where the namespace switches back. */
++  ["forged block link", `<p><a href="#x" data-block-link="spya-k3m9qt" class="xref">a</a></p>`],
++  ["svg marking", `<svg><g class="xref" data-xref="n-1"><text>x</text></g></svg>`],
++  [
++    "mathml marking",
++    `<math><mi class="mode-band tml-left" data-block-link="x">x</mi><mtext><span class="xref tml-left" data-xref="1">y</span></mtext></math>`,
++  ],
+ ];
+ 
+ describe("the browser pass applies the policy", () => {
+diff --git a/tests/sanitize.test.ts b/tests/sanitize.test.ts
+index 0769f3b6..175682d6 100644
+--- a/tests/sanitize.test.ts
++++ b/tests/sanitize.test.ts
+@@ -57,12 +57,15 @@ describe("sanitizeHtml — what must survive", () => {
+     expect(out).toContain(`id="spya-k3m9qt"`);
+   });
+ 
+-  it("keeps ordinary data-* attributes", () => {
+-    // Not the annotation ones — those are reserved to the client and stripped
+-    // from source markup; see "does not let an article forge a comment mark".
++  it("drops a publisher's own data-* attributes", () => {
++    /* This said "keeps" until 2026-10-01. Since then an article keeps only the
++       `data-*` names `ARTICLE_DATA_ATTRS` declares (src/sanitize-policy.ts), so
++       that no marking the reading view adds can be forged by one —
++       docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md.
++       Nothing read these: the production survey there found 32 names, all
++       publisher tracking and metadata apart from our own. */
+     const out = sanitizeHtml(`<p data-footnote="3" data-lang="fr">x</p>`);
+-    expect(out).toContain("data-footnote");
+-    expect(out).toContain("data-lang");
++    expect(out).toBe("<p>x</p>");
+   });
+ 
+   it("keeps ordinary prose markup", () => {
+@@ -374,10 +377,13 @@ describe("things the first draft got wrong", () => {
+     expect(out).toContain("forged"); // the words are still the author's
+   });
+ 
+-  it("keeps a non-reserved class beside the stripped one", () => {
+-    const out = sanitizeHtml(`<p class="cmt lede">x</p>`);
+-    expect(out).toContain("lede");
+-    expect(out).not.toMatch(/\bcmt\b/);
++  it("keeps a declared class beside a stripped one, and nothing else", () => {
++    /* Said "keeps a non-reserved class" until 2026-10-01, when classes became an
++       allowlist (src/sanitize-policy.ts § `ARTICLE_CLASSES`): a publisher's
++       `lede` goes now too. Readability had already stripped it on every real
++       import. */
++    const out = sanitizeHtml(`<p class="cmt pdf-uncertain lede">x</p>`);
++    expect(out).toBe(`<p class="pdf-uncertain">x</p>`);
+   });
+ 
+   it("strips srcdoc, which would put the frame in our own origin", () => {
