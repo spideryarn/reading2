@@ -113,6 +113,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/spend-declarations.ts": "names a model call inside a string, and makes none",
   "scripts/spike-book-structure.ts": "a one-off spike that sends production's own hierarchy prompt",
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
+  "scripts/probes/260930d-quote-stop-repro.ts":
+    "a one-off reproduction; it sends production's own INVESTIGATE_SYSTEM, which carries plainWords(\"explain\")",
   "scripts/probes/260930a-investigate-probe.ts":
     "a one-off probe; its prompt, in scripts/probes/260930a-investigate-prompt.ts, carries plainWords(\"explain\")",
   "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",

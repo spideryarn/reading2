@@ -582,6 +582,31 @@ describe("the Postgres shelf and library search", () => {
       expect((await pgArticleReader.listArticles()).some((a) => a.slug === SLUG)).toBe(true);
     });
 
+    it("searches an archived article's text when asked to, and says it is archived", async () => {
+      /* The shelf's "Include archived" chip reaches the passage search too.
+         Without this, an archived article whose byline and site name are empty
+         could be found by no half of the search box, chip or no chip —
+         SPIDERYARN-READING2-72, plan 260930d. */
+      const hitsWith = async (includeArchived: boolean) =>
+        (await pgLibrarySearch.searchLibrary(RARE, 20, { includeArchived })).hits.filter(
+          (h) => h.slug === SLUG,
+        );
+
+      const active = await hitsWith(true);
+      expect(active.length).toBeGreaterThan(0);
+      expect(active.every((h) => h.archived === false)).toBe(true);
+
+      await pgShelfStore.patch(SLUG, { archived: true });
+      try {
+        expect(await hitsWith(false)).toEqual([]);
+        const archived = await hitsWith(true);
+        expect(archived.length).toBe(active.length);
+        expect(archived.every((h) => h.archived === true)).toBe(true);
+      } finally {
+        await pgShelfStore.patch(SLUG, { archived: false });
+      }
+    });
+
     /* ---- ported from tests/shelf.test.ts, 2026-09-05 ----------------------
        `patchShelf` on the filesystem side held the title cap, the three
        blank-clears-it rules and every claim about `purpose`, and every one of

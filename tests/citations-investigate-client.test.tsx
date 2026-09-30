@@ -74,6 +74,8 @@ let reply: "stream" | { status: number; error: string } = "stream";
 let push: ((event: string, data: unknown) => void) | null = null;
 let end: (() => void) | null = null;
 let breakStream: ((error: Error) => void) | null = null;
+/** Make citation re-reads fail without affecting the already-open SSE. */
+let getFailure: Error | null = null;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -97,6 +99,7 @@ vi.mock("../src/web/lib/api.js", () => ({
     }
     if (input === `/api/citations/${SLUG}`) {
       gets++;
+      if (getFailure) throw getFailure;
       return json({ citations: artefact(listed), stale: false, outdated: false });
     }
     throw new Error(`the test made an unexpected request: ${input}`);
@@ -146,6 +149,7 @@ beforeEach(() => {
   push = null;
   end = null;
   breakStream = null;
+  getFailure = null;
   hook = null;
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -242,6 +246,8 @@ describe("investigate", () => {
       id: ID,
       message: "This answer tried to quote a source directly. [cite-quoted]",
       previousAt: previous.at,
+      previousLookupAt: null,
+      lookupKept: false,
     });
     expect(gets, "an error was trusted to mean nothing was kept").toBe(before + 1);
     expect(row()?.investigation).toEqual(previous);
@@ -315,6 +321,208 @@ describe("investigate", () => {
     });
     await flush();
     expect(posts).toBe(1);
+  });
+
+  /* ---------------------------------------------- plan 260930d: the first step -- */
+
+  it("follows the stage frames: finding, then reading", async () => {
+    await open();
+    await act(async () => {
+      void hook?.investigate(ID);
+    });
+    await flush();
+    expect(hook?.investigateStage).toBeNull();
+    await act(async () => push?.("stage", { stage: "finding" }));
+    await flush();
+    expect(hook?.investigateStage).toBe("finding");
+    await act(async () => push?.("stage", { stage: "reading" }));
+    await flush();
+    expect(hook?.investigateStage).toBe("reading");
+    await act(async () => push?.("stage", { stage: "anything else" }));
+    await flush();
+    expect(hook?.investigateStage, "an unknown stage was taken").toBe("reading");
+  });
+
+  it("a no-match lookup is a quiet note on the row, and the reading goes on", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    const before = gets;
+    await act(async () => push?.("lookup", { outcome: "no-match", message: "No page matched." }));
+    await flush();
+    expect(hook?.findNote).toEqual({ id: ID, kind: "no-match", message: "No page matched." });
+    expect(gets, "a no-match stored nothing, so there is nothing to re-read").toBe(before);
+    const kept = investigation("2026-09-30T10:00:00.000Z");
+    listed = { ...WORK, investigation: kept };
+    await act(async () => {
+      push?.("done", { investigation: kept });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(row()?.investigation).toEqual(kept);
+  });
+
+  it("a found lookup is re-read at once, and survives a reading that fails after it (P-4)", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    const before = gets;
+    const { lookup: _none, ...bare } = WORK;
+    await act(async () =>
+      push?.("lookup", {
+        outcome: "found",
+        work: bare,
+        lookup: {
+          state: "assessed",
+          host: "doi.org",
+          searches: 1,
+          model: "m",
+          at: "x",
+          contextHash: "c",
+          evidenceHash: "e",
+          excerptWords: 10,
+          verdict: { support: "not-in-extract" },
+        },
+      }),
+    );
+    await flush();
+    expect(gets, "the lookup was not re-read, so the server never attached it").toBe(before + 1);
+    await act(async () => {
+      push?.("error", { error: "The answer stopped. [cite-unfinished]" });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(hook?.investigateFailed).toMatchObject({ id: ID, lookupKept: true, previousAt: null });
+  });
+
+  it("does not leave an older lookup or investigation attached when the lookup re-read fails", async () => {
+    const previous = investigation("2026-09-29T10:00:00.000Z");
+    const oldLookup = {
+      state: "assessed" as const,
+      host: "old.example",
+      searches: 1,
+      model: "m",
+      at: "old",
+      contextHash: "old-context",
+      evidenceHash: "old-evidence",
+      excerptWords: 10,
+      verdict: { support: "not-in-extract" as const },
+    };
+    listed = { ...WORK, lookup: oldLookup, investigation: previous };
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+
+    getFailure = new Error("the re-read failed");
+    const { lookup: _old, investigation: _previous, ...bare } = listed;
+    await act(async () =>
+      push?.("lookup", {
+        outcome: "found",
+        work: bare,
+        lookup: { ...oldLookup, host: "new.example", at: "new", evidenceHash: "new-evidence" },
+      }),
+    );
+    await flush();
+    expect(row()?.lookup, "the older verdict remained while its replacement could not be checked").toBeUndefined();
+    expect(row()?.investigation, "the earlier investigation was shown without a successful re-read").toBeUndefined();
+
+    await act(async () => {
+      push?.("error", { error: "The longer investigation failed." });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(hook?.investigateFailed).toMatchObject({
+      previousAt: previous.at,
+      previousLookupAt: oldLookup.at,
+      lookupKept: true,
+    });
+    expect(row()?.investigation).toBeUndefined();
+  });
+
+  it("hides older derived fields when a replacement lookup frame is lost and the failure re-read fails", async () => {
+    const previous = investigation("2026-09-29T10:00:00.000Z");
+    const oldLookup = {
+      state: "assessed" as const,
+      host: "old.example",
+      searches: 1,
+      model: "m",
+      at: "old",
+      contextHash: "old-context",
+      evidenceHash: "old-evidence",
+      excerptWords: 10,
+      verdict: { support: "not-in-extract" as const },
+    };
+    listed = { ...WORK, lookup: oldLookup, investigation: previous };
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+
+    await act(async () => push?.("stage", { stage: "finding" }));
+    await flush();
+    expect(row()?.lookup, "a verdict that the in-flight lookup can replace remained visible").toBeUndefined();
+    expect(row()?.investigation, "an answer derived from that verdict remained visible").toBeUndefined();
+
+    listed = {
+      ...WORK,
+      lookup: { ...oldLookup, host: "new.example", at: "new", evidenceHash: "new-evidence" },
+    };
+    getFailure = new Error("the re-read failed");
+    await act(async () => {
+      push?.("error", { error: "The stream lost the lookup frame." });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(row()?.lookup).toBeUndefined();
+    expect(row()?.investigation).toBeUndefined();
+    expect(hook?.investigateFailed).toMatchObject({
+      previousAt: previous.at,
+      previousLookupAt: oldLookup.at,
+      lookupKept: false,
+    });
+  });
+
+  it("a failure with no lookup landed does not say the quick check was kept", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    await act(async () => {
+      push?.("stage", { stage: "finding" });
+      push?.("error", { error: "The quick check failed. [cite-lookup-failed]" });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(hook?.investigateFailed).toMatchObject({ id: ID, lookupKept: false });
+    expect(hook?.investigateStage).toBeNull();
   });
 
   it("leaving aborts the fetch — the server finishes and stores it regardless", async () => {

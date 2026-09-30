@@ -90,6 +90,7 @@ function entry(over: Partial<LibraryEntry> & { slug: string }): LibraryEntry {
     sections: 9,
     comments: 0,
     opens: 0,
+    sourceReusable: true,
     has: { arc: false, tweets: false, glossary: false },
     ...over,
   };
@@ -666,9 +667,13 @@ describe("a body saved by an older deployment", () => {
       lastOpenedAt: "2026-08-29T09:00:00.000Z",
       fixture: true,
       visibility: "public",
+      sourceReusable: false,
     });
     expect(shelfFromCachedBody({ articles: [rich] })).toEqual([rich]);
     expect(shelfFromCachedBody({ articles: [{ ...rich, visibility: "private" }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, lastOpenedAt: 17 }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...rich, sourceReusable: "yes" }] })).toBeNull();
+    const { sourceReusable: _missing, ...old } = rich;
+    expect(shelfFromCachedBody({ articles: [old] })).toBeNull();
   });
 });

@@ -1,0 +1,15 @@
+ ✓  unit  tests/public-dto.test.ts (53 tests) 69ms
+ ✓  unit  tests/authenticated-api-route-contract.test.ts (356 tests) 357ms
+ ✓  private-postgres  tests/citation-investigate-route.test.ts (7 tests) 2438ms
+     ✓ streams, writes `done` only once stored, and a fresh read has it on the row  1286ms
+ ✓  private-postgres  tests/citation-find-route.test.ts (7 tests) 2194ms
+     ✓ keeps the search result's page, and a fresh read shows it on the entry  1269ms
+ ✓  private-postgres  tests/store-export-covers-tables.test.ts (14 tests) 1138ms
+
+ Test Files  5 passed (5)
+      Tests  437 passed (437)
+   Start at  07:36:38
+   Duration  35.86s (transform 12.95s, setup 1.10s, import 22.71s, tests 6.20s, environment 1ms)
+
+  [private lane] dropped spideryarn_test_260930063639_e050010b35794264b409a73152cfb9f2
+EXIT=0

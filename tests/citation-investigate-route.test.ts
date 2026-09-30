@@ -32,6 +32,7 @@ import type {
   Citations,
   CitationsResponse,
   CitedWork,
+  FindCitationResponse,
   InvestigateCitationDone,
 } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -65,10 +66,55 @@ const chunk = (data: unknown) => new TextEncoder().encode(`data: ${JSON.stringif
  * A streamed provider: `first`, then — once `finish` is called — `rest`, one
  * annotation with an extract, the finish, the usage and `[DONE]`.
  */
-function provider(first: string) {
+/**
+ * **The first step's answer** (plan 260930d): a non-streamed completion, as
+ * `openRouterJson` reads it. The default names no result — a no-match, so the
+ * press goes on unconfirmed and stores no find.
+ */
+const NO_MATCH_LOOKUP = {
+  choices: [{ finish_reason: "stop", message: { content: '{"url": null}', annotations: [] } }],
+  usage: { server_tool_use: { web_search_requests: 1 } },
+};
+/** A lookup that identifies the arXiv page (its URL carries the row's id) and verifies a quote in its extract. */
+const FOUND_LOOKUP = {
+  choices: [
+    {
+      finish_reason: "stop",
+      message: {
+        content: JSON.stringify({
+          url: "https://arxiv.org/abs/2001.08361",
+          paperDoes: null,
+          paperDoesQuote: null,
+          support: "supports",
+          supportQuote: "We study empirical scaling laws for language model performance",
+        }),
+        annotations: [
+          {
+            type: "url_citation",
+            url_citation: { url: "https://arxiv.org/abs/2001.08361", title: TITLE, content: EXTRACT },
+          },
+        ],
+      },
+    },
+  ],
+  usage: { server_tool_use: { web_search_requests: 1 } },
+};
+
+function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
   let calls = 0;
+  let lookups = 0;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
-  globalThis.fetch = ((_url: string) => {
+  globalThis.fetch = ((_url: string, init?: { body?: string }) => {
+    /* The lookup is the one call that does not stream. */
+    if (!(init?.body ?? "").includes('"stream":true')) {
+      lookups += 1;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () => JSON.stringify(lookup),
+      } as unknown as Response);
+    }
     calls += 1;
     return Promise.resolve({
       ok: true,
@@ -84,6 +130,7 @@ function provider(first: string) {
   }) as unknown as typeof fetch;
   return {
     calls: () => calls,
+    lookups: () => lookups,
     finish(rest: string) {
       controller?.enqueue(
         chunk({
@@ -334,5 +381,41 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
     await expect(runAsOwner(EVAL_OWNER_ID, () => investigateCitation(SLUG, WORK, null))).rejects.toMatchObject({
       status: 404,
     });
+  });
+
+  /* Plan 260930d. Last, because it stores a find: the rows after it would
+     skip the first step. */
+  it("looks the work up first, streams stage and lookup frames, and reads with the page it stored", async () => {
+    const stub = provider("Does it back the claim?\n", FOUND_LOOKUP);
+    const call = serve("POST", investigateUrl());
+    const handled = handleApi(call.req, call.res, acceptAny);
+    await until(() => call.body().includes("event: delta"));
+    stub.finish("The abstract on arxiv.org says it does.");
+    await handled;
+
+    const names = frames(call.body()).map((f) => (f.name === "stage" ? `stage:${(f.data as { stage: string }).stage}` : f.name));
+    expect(names.filter((n) => n !== "delta")).toEqual(["stage:finding", "lookup", "stage:reading", "done"]);
+    const lookup = frames(call.body()).find((f) => f.name === "lookup")?.data as FindCitationResponse;
+    expect(lookup.outcome).toBe("found");
+    expect(lookup.outcome === "found" ? lookup.lookup.state : null).toBe("assessed");
+    expect(stub.lookups()).toBe(1);
+    expect(stub.calls()).toBe(1);
+
+    const done = terminals(call.body())[0]?.data as InvestigateCitationDone;
+    /* The re-read found the stored page, so this answer's own extracts credit it. */
+    expect(done.investigation.matchedHost).toBe("arxiv.org");
+    const row = await listed();
+    expect(row?.lookup).toEqual(lookup.outcome === "found" ? lookup.lookup : undefined);
+    expect(row?.investigation).toEqual(done.investigation);
+
+    /* A second press skips the first step: the row now has a current assessed lookup. */
+    const again = provider("It does.\n", FOUND_LOOKUP);
+    const second = serve("POST", investigateUrl());
+    const secondHandled = handleApi(second.req, second.res, acceptAny);
+    await until(() => second.body().includes("event: delta"));
+    again.finish("Still.");
+    await secondHandled;
+    expect(again.lookups()).toBe(0);
+    expect(frames(second.body()).some((f) => f.name === "lookup")).toBe(false);
   });
 });

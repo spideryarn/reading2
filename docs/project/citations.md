@@ -140,7 +140,18 @@ no card section.
 
 ## Look it up on the web
 
-Every owner row offers **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
+**Since 2026-09-30 there is no *Look it up* button: it is the first step of *Investigate*'s one
+press** (§ [Investigate](#investigate-a-closer-look-at-one-work-on-demand)), asked for through the
+Feedback button (SPIDERYARN-READING2-75):
+
+> In Citations mode, can we amalgamate "Look it up" and "Investigate" buttons to get the best of
+> both worlds?
+
+Everything below still describes that step — the call, its identity rule, its checked quotes, its
+store — and `POST …/find` still answers it on its own for a tab opened before the change. Where this
+section says *Look it up*, read *the quick check*.
+
+Every owner row offered **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
 it*, offered only on a row with no link, until 2026-09-29, when it also began reading what it
 finds (§ [It reads the search extract](#it-reads-the-search-extract-never-the-work)). **It explains itself in a `ControlTip` rather than a `title`** since
 2026-09-16, asked for through the Feedback button (SPIDERYARN-READING2-3K): *"make it clearer what
@@ -238,7 +249,15 @@ Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), fo
 > deeper dive, i.e. don't do it automatically for every single paper every time we run Citations
 > mode.
 
-Every owner row has **Investigate** beside *Look it up*. One press is one streamed answer, written
+Every owner row has **Investigate**, the one button since 2026-09-30
+([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)). A press
+first runs *Look it up*'s quick check — unless the row already has a current reading that checked
+out — so code, not the model, decides which search result is the work, and the row's link and
+checked quote land first. A provider failure there stops the press before the larger call is paid
+for; finding nothing does not, and the reading goes on unconfirmed. The row and the article are
+then read again, and the reading is written from that. The quick check can land while the reading
+fails, and the row says so. One allowance covers both calls: one at a time, 8 an hour and 20 a day
+per reader, 55 a day across everyone. Then, as before, one streamed answer, written
 from a few web searches and kept on the row: *does it back the claim*, *how else it bears on this
 article*, and *for you* when the reader has written a profile or *why you're reading this one*.
 Nothing runs for every row. The design, its two plan reviews, the probe and the code reviews are
@@ -254,9 +273,18 @@ cleared ([`investigate-quote-guard.ts`](../../src/investigate-quote-guard.ts)).
 **What was read is said by code, from what the search returned**: how many results came back with
 an extract, their hosts, and the longest extract in words. It does not say "we did not read the
 paper": the probe found an extract that was most of a PDF. It says *we did not fetch any page
-ourselves; an extract may be an abstract or part of a paper's text*. It names *Look it up*'s
-match only when that page is among this answer's own results. Otherwise it says *we could not confirm
-that any result is this work itself*, and the prompt forbids describing a look-alike as the work.
+ourselves; an extract may be an abstract or part of a paper's text*. Then one identity line, in
+one of three forms: a result is *the page an earlier quick check matched to the work*; an earlier
+quick check *matched a page this search did not return an extract from*; or *we could not confirm
+that any result is this work itself* — and the prompt forbids describing a look-alike as the work.
+"Earlier" is deliberate: the match may come from this press's quick check or a previous one
+(260930d, the C-2 ruling).
+
+**The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
+words and the work's title led the model to quote its own phrases, the paper's terms and result
+titles too, and four of five real calls were stopped by the guard; with none allowed, seven of
+seven finished (260930d). The guard still lets through a span it finds in the article or a checked
+quote, so a harmless lapse does not stop an answer.
 
 **Kept, private, and hidden when out of date.** One row per work in `citation_investigations`,
 replaced by a second press. It is attached to an owner row only while its fingerprint matches.
@@ -266,8 +294,9 @@ never reaches a visitor, and it is in all three exports. A failed *Investigate a
 earlier answer in place, and the row says so.
 
 **Bounded** by its own allowance bucket, `citation-investigate`: one at a time, 8 an hour and 20 a
-day per reader, and 60 a day across everyone. These numbers come from the probe: $0.12 a press on
-average and $0.15 at worst, budgeted at $0.30 against a $20-a-day ceiling. Exa is pinned, with 8
+day per reader, and 55 a day across everyone. These numbers come from the probe: $0.12 a press on
+average and $0.15 at worst, budgeted at $0.30, plus the quick check's ~3¢ since the two were merged
+and a 3,000-token answer ceiling — 55 × about $0.345 is about $19, under a $20-a-day ceiling. Exa is pinned, with 8
 results of at most 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)).
 It is the `citation-investigate` job on the gateway.
 

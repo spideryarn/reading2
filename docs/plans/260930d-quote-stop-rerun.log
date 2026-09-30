@@ -1,0 +1,182 @@
+{"level":"info","time":"2026-09-30T07:57:10.158Z","service":"spideryarn","env":"development","component":"store","msg":"serving article reads from Postgres"}
+{"level":"debug","time":"2026-09-30T07:57:10.161Z","service":"spideryarn","env":"development","component":"store","local":true,"ssl":"disabled","max":5,"msg":"database pool created"}
+
+==================== scaling-hypothesis:spya-cxq887 ====================
+title:     "Hernandez & Brown 2020"
+authors:   "Hernandez & Brown"
+year:      "2020"
+reference: "eg. a narrow context window severely limits it"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Hernandez%20%26%20Brown%202020%22%20Hernandez
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.1308
+result titles (evidence):
+  - "Measuring the Algorithmic Efficiency of Neural Networks"  <https://arxiv.org/abs/2005.04305>
+  - "Measuring the Algorithmic Efficiency of Neural Networks"  <https://cdn.openai.com/papers/ai_and_efficiency.pdf>
+  - "Measuring the Algorithmic Efficiency of Neural Networks"  <https://arxiv.org/pdf/2005.04305>
+  - "openai/ai-and-efficiency"  <https://github.com/openai/ai-and-efficiency>
+  - "ai-and-efficiency/README.md at master"  <https://github.com/openai/ai-and-efficiency/blob/master/README.md>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+
+The article uses this work to support the idea that costs for reaching a given level of performance keep halving over time, a claim it applies specifically to GPT-3 to argue that even an expensive model will get cheaper as algorithms improve. The abstract on arxiv.org and the matching paper on the OpenAI site say that the compute needed to train a classifier to match AlexNet on ImageNet fell by a factor of 44 between 2012 and 2019, an efficiency doubling roughly every 16 months over that stretch, and that this rate of improvement actually outpaced Moore's law style hardware gains over the same years. A details page from the same project gives similar doubling times for other tasks, such as machine translation, image classification, and game-playing systems like AlphaGo Zero and OpenAI Five, some closer to four to six months. So the specific number the article leans on, costs halving roughly every 16 months, matches what these pages report, though it comes from image-recognition benchmarks rather than from language models like GPT-3 itself.
+
+How else it bears on this article
+
+Beyond that one number, the work is a broader attempt to measure something usually treated as fuzzy, how much better algorithms get over time, separately from bigger chips or bigger training runs. That fits the article's larger argument that raw scale is not the only force at work and that efficiency keeps compounding on top of it, making both bigger and cheaper models likely. Since its measurements come from vision and game-playing systems rather than large text models, applying its doubling-time estimate to GPT-3 style language models, as the article does more than once, stretches the work a step beyond what it directly measured.
+----- end raw -----
+spent so far $0.1308
+
+==================== scaling-hypothesis:spya-cxq887 ====================
+title:     "Hernandez & Brown 2020"
+authors:   "Hernandez & Brown"
+year:      "2020"
+reference: "eg. a narrow context window severely limits it"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Hernandez%20%26%20Brown%202020%22%20Hernandez
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.0399
+result titles (evidence):
+  - "Measuring the Algorithmic Efficiency of Neural Networks"  <https://arxiv.org/abs/2005.04305>
+  - "Measuring the Algorithmic Efficiency of Neural Networks"  <https://cdn.openai.com/papers/ai_and_efficiency.pdf>
+  - "Measuring the Algorithmic Efficiency of Neural Networks"  <https://arxiv.org/pdf/2005.04305>
+  - "openai/ai-and-efficiency"  <https://github.com/openai/ai-and-efficiency>
+  - "ai-and-efficiency/README.md at master"  <https://github.com/openai/ai-and-efficiency/blob/master/README.md>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+The article uses this work to support the idea that algorithmic efficiency gains halve compute costs over time, cited in a footnote about how GPT-3 uses no exotic efficiency tricks. The abstract on arxiv.org backs exactly this: it reports that the computing power needed to train a neural network to a fixed benchmark, matching AlexNet-level performance on the ImageNet image-recognition task, fell by a factor of 44 between 2012 and 2019, meaning the same result got about twice as cheap roughly every 16 months over that seven-year stretch. It also notes this pace beat the classic Moore's law rate of hardware improvement over the same years (about 11 times cheaper from chips alone). Elsewhere in the article, the same halving-time figure is used directly to project how GPT-3-level performance might get cheaper by 2021 and beyond, which matches what the abstract describes almost exactly.
+
+How else it bears on this article
+Beyond that one number, the paper's broader argument is that progress in AI comes from two multiplying forces, better hardware and better algorithms, and that both need to be tracked together rather than treating compute alone as the whole story. A page on github.com tied to the same work lists further examples beyond image recognition, including translation models and game-playing systems such as AlphaGo Zero to AlphaZero and OpenAI Five to its retrained Rerun version, each showing large drops in the compute needed to match earlier performance. This fits the article's own repeated point that raw scale is not the only lever: once a capability exists, cheaper and more efficient ways of reaching it tend to follow, which is exactly the pattern the article leans on when arguing that GPT-3's brute-force approach will likely get both cheaper and more refined with time.
+----- end raw -----
+spent so far $0.1707
+
+==================== scaling-hypothesis:spya-cxq887 ====================
+title:     "Hernandez & Brown 2020"
+authors:   "Hernandez & Brown"
+year:      "2020"
+reference: "eg. a narrow context window severely limits it"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Hernandez%20%26%20Brown%202020%22%20Hernandez
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.0389
+result titles (evidence):
+  - "AI and efficiency"  <https://openai.com/index/ai-and-efficiency/>
+  - "README.md at master · openai/ai-and-efficiency"  <https://github.com/openai/ai-and-efficiency/blob/master/README.md>
+  - "OpenAI Finds Machine Learning Efficiency Is Outpacing Moore’s Law"  <https://singularityhub.com/2020/05/17/openai-finds-machine-learning-efficiency-is-outpacing-moores-law/>
+  - "AI and efficiency - Open IA"  <https://open-ia.org/ai-and-efficiency/>
+  - "\"AI and Efficiency\", OA (44✕ improvement in CNNs since 2012) - LessWrong 2.0 viewer"  <https://www.greaterwrong.com/posts/MPXqewDipXHY3j7we/ai-and-efficiency-oa-44-improvement-in-cnns-since-2012>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+
+The article uses this work to support the idea that costs will fall over time thanks to algorithmic efficiency gains, citing an estimate that a fixed level of performance halves in cost roughly every 16 months. A page on openai.com, describing the analysis by Danny Hernandez and Tom Brown, matches this closely: it reports that the compute needed to train a neural network to a fixed benchmark performance (matching AlexNet on ImageNet classification) fell by half roughly every 16 months, a much faster rate than ordinary hardware improvement (Moore's law) alone would give. A copy of the same material on a GitHub repository and a short summary on singularityhub.com describe the same doubling-time figure, and a post on the discussion site LessWrong (greaterwrong.com) also relays the same 16-month doubling and the comparison against the slower gains expected from hardware alone. This lines up with how the article uses the figure elsewhere, to argue that GPT-3-level results will get cheaper to reach over time even without new hardware.
+
+How else it bears on this article
+
+The work goes further than a single number: it tracks efficiency gains not just for image recognition but, more briefly, for translation, the board game Go, and the video game Dota 2, finding even faster efficiency gains over shorter stretches of time in some of those areas. It also proposes tracking these efficiency records publicly going forward, much as speed records are tracked for other technologies. This supports the article's broader argument that both compute and the algorithms that use it are advancing quickly, and that expensive results like GPT-3 should be expected to become cheaper and more replicable, reinforcing the article's point that a lack of money is not really what stops other organizations from attempting similar scaling.
+----- end raw -----
+spent so far $0.2096
+
+==================== scaling-hypothesis:spya-x70954 ====================
+title:     "Clune 2019 (AI-GAs)"
+authors:   "Clune"
+year:      "2019"
+reference: "Clune 2019"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Clune%202019%20(AI-GAs)%22%20Clune
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.1289
+result titles (evidence):
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for ..."  <https://arxiv.org/abs/1905.10985>
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for producing general artificial intelligence"  <https://arxiv.org/pdf/1905.10985v2.pdf>
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for producing general artificial intelligence"  <https://doi.org/10.48550/arxiv.1905.10985>
+  - "NeurIPS How Meta-Learning Could Help Us Accomplish Our Grandest AI Ambitions, and Early, Exotic Steps in that Direction"  <https://neurips.cc/virtual/2019/14948>
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for ..."  <https://www.researchgate.net/publication/333419032_AI-GAs_AI-generating_algorithms_an_alternate_paradigm_for_producing_general_artificial_intelligence>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+
+The passage cites this work as a footnote alongside other papers on implicit meta-learning, immediately after describing GPT-3's attention mechanism as having learned to learn from varied training data. The abstract on arxiv.org describes a paper proposing AI-generating algorithms, or AI-GAs, a plan for reaching general intelligence built on meta-learning: automatically learning better neural network designs, automatically learning the learning rules themselves, and automatically generating training environments rich enough to force learning. It argues that hand-built approaches to AI will eventually be replaced by these learned, automated ones, much as has happened elsewhere in machine learning. This matches the footnote's role as a pointer to the broader meta-learning literature rather than a direct source for the specific claim about GPT-3's attention acting as fast weights; the search results do not show the paper making any claim about GPT-3 specifically, since GPT-3 had not yet been released when this piece appeared.
+
+How else it bears on this article
+
+Beyond the single footnote, the paper's argument lines up closely with the article's larger case: that scaling up learned components, rather than hand-designing them piece by piece, is the more promising route to general intelligence. A talk summary on neurips.cc, describing the same author's related presentation, lays out the same three-part plan of learning architectures, learning the learning algorithm, and automatically generating training environments, and frames it explicitly as an all-in bet on meta-learning. That framing sits comfortably beside the article's account of GPT-3 stumbling into meta-learning as a byproduct of scale, though the paper itself is a forward-looking research proposal about how to deliberately pursue such automation, rather than an analysis of any single large language model.
+----- end raw -----
+spent so far $0.3385
+
+==================== scaling-hypothesis:spya-x70954 ====================
+title:     "Clune 2019 (AI-GAs)"
+authors:   "Clune"
+year:      "2019"
+reference: "Clune 2019"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Clune%202019%20(AI-GAs)%22%20Clune
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.0380
+result titles (evidence):
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for ..."  <https://arxiv.org/abs/1905.10985>
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for producing general artificial intelligence"  <https://arxiv.org/pdf/1905.10985v2.pdf>
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for producing general artificial intelligence"  <https://doi.org/10.48550/arxiv.1905.10985>
+  - "NeurIPS How Meta-Learning Could Help Us Accomplish Our Grandest AI Ambitions, and Early, Exotic Steps in that Direction"  <https://neurips.cc/virtual/2019/14948>
+  - "AI-GAs: AI-generating algorithms, an alternate paradigm for ..."  <https://www.researchgate.net/publication/333419032_AI-GAs_AI-generating_algorithms_an_alternate_paradigm_for_producing_general_artificial_intelligence>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+The article footnotes this work simply as further reading on implicit meta-learning, alongside a list of other papers, rather than resting a specific claim on it. Against that modest use, the abstract on arxiv.org (and matching pages describing the same 2019 paper by Jeff Clune) does support the general theme: it argues that machine learning is moving from hand-designed pipelines toward learned ones, and proposes deliberately building AI-generating algorithms whose architectures, learning rules, and training environments are all themselves learned rather than engineered. That is squarely about meta-learning as a route to general intelligence, so it backs the passage's use of it as background on learning-to-learn, though the search results do not show it discussing GPT-3 specifically, since the paper predates GPT-3's release.
+
+How else it bears on this article
+Beyond the citation point, the abstract on arxiv.org lays out three pillars the paper says are needed for an AI-generating algorithm: learning the architecture itself, learning the learning algorithm itself, and automatically generating a rich sequence of training environments. A page on neurips.cc summarizing a related talk by the same author describes concrete early projects toward each pillar, including a system for generating training data for networks, neuromodulated plasticity methods, and an open-ended environment generator called POET. This fits the article's larger argument that scale and richer, more varied training conditions cause meta-learning and general capability to emerge on their own, without hand-built structure, which is the same wager the article makes about GPT-3 learning to learn purely from being trained on a big varied text corpus. Where the two differ is emphasis: the article credits raw scale and data diversity within one architecture, while this work argues for deliberately automating and evolving the learning process and environments themselves as a separate, complementary strategy for reaching general AI.
+----- end raw -----
+spent so far $0.3765
+
+==================== scaling-hypothesis:spya-s4u5y7 ====================
+title:     "Schmidhuber 2015/2018 on meta-learning"
+authors:   "Schmidhuber"
+year:      null
+reference: "Schmidhuber 2015/2018"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Schmidhuber%202015%2F2018%20on%20meta-learning%22%20Schmidhuber
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.1502
+result titles (evidence):
+  - "Deep learning in neural networks: An overview"  <https://faculty.sites.iastate.edu/tesfatsi/archive/tesfatsi/DeepLearningInNeuralNetworksOverview.JSchmidhuber2015.pdf>
+  - "Deep Learning in Neural Networks: An Overview Technical Report IDSIA-03-14 / arXiv:1404.7828 v4 [cs.NE] (88 pages, 888 references)"  <https://arxiv.org/html/1404.7828v4>
+  - "Deep Learning in Neural Networks: An Overview"  <https://people.idsia.ch/%7ejuergen/deep-learning-overview.html>
+  - "Meta-Learning in Neural Networks: A Survey"  <https://www.computer.org/csdl/journal/tp/2022/09/09428530/1twaJR3AcJW>
+  - "Evolutionary principles in self-referential learning, or on learning how to learn: The meta-meta-... hook"  <https://exa.ai/library/publication/ghsqjgypk36>
+  - "Recursive Self-Improvement (RSI) Since 1987"  <https://people.idsia.ch/%7Ejuergen/recursive-self-improvement.html>
+  - "One Big Net For Everything"  <https://www.emergentmind.com/papers/1802.08864>
+  - "Continual Lifelong Meta-Learning & Artificial Curiosity"  <https://people.idsia.ch/~juergen/continual2018.pdf>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+The article lists this as one of several background readings on meta-learning, not a source for a specific quantitative or empirical claim about GPT-3 itself. Search results turn up two Schmidhuber items that match the given years: a 2015 piece in the journal Neural Networks (also posted as a preprint), which the Neural Networks abstract describes as a historical survey of deep learning covering supervised, unsupervised, and reinforcement learning as well as evolutionary computation and methods for searching for compact programs that encode large networks; and a 2018 preprint called One Big Net For Everything, whose summary on emergentmind describes a single recurrent network trained by a mix of methods (reinforcement learning, evolution, supervised and unsupervised learning) that keeps learning new skills without forgetting old ones, explicitly framed by its author as an exercise in learning to think and related meta-learning ideas from earlier work. Since the article only points to these as further reading rather than resting a specific factual claim on them, there is nothing here to check for correctness one way or the other.
+
+How else it bears on this article
+Both pieces sit comfortably alongside the article's larger argument. The 2015 survey traces, across decades, exactly the kind of connectionist lineage the article invokes when it credits a handful of long-standing scale believers, and its attention to compact program search and Occam's-razor-style reasoning about simplicity echoes the article's own account of why bigger models generalize better. The 2018 work goes further than the article's cautious speculation about future scaled-up systems, describing an actual attempt at one network trained across many kinds of learning to accumulate and reuse skills, which parallels the article's talk of a future bidirectional, multimodal, task-general model. Where the two diverge is emphasis: Schmidhuber's writing stresses self-referential, self-modifying learning algorithms and a long personal research program going back to the 1990s, while the article is more focused on brute-force scale of ordinary architectures as the driver, treating meta-learning as an emergent side effect rather than an explicitly engineered mechanism.
+----- end raw -----
+spent so far $0.5267
+
+==================== scaling-hypothesis:spya-s4u5y7 ====================
+title:     "Schmidhuber 2015/2018 on meta-learning"
+authors:   "Schmidhuber"
+year:      null
+reference: "Schmidhuber 2015/2018"
+linkFrom:  search  url: https://scholar.google.com/scholar?q=%22Schmidhuber%202015%2F2018%20on%20meta-learning%22%20Schmidhuber
+lookup:    none  matched: null
+model: anthropic/claude-sonnet-5  finish: stop  cost: $0.0567
+result titles (evidence):
+  - "Metalearning and Recursive Self-Improvement (RSI) since 1987"  <https://people.idsia.ch/~juergen/metalearning.html>
+  - "Learning to Learn Neural Networks"  <https://arxiv.org/pdf/1610.06072>
+  - "Meta-Learning in Neural Networks: A Survey"  <https://www.computer.org/csdl/journal/tp/2022/09/09428530/1twaJR3AcJW>
+  - "Learning how to Learn Learning Algorithms: Recursive Self-Improvement"  <https://people.idsia.ch/~juergen/rsi2016white.pdf>
+  - "Recursive Self-Improvement (RSI) Since 1987"  <https://people.idsia.ch/%7Ejuergen/recursive-self-improvement.html>
+  - "Continual Lifelong Meta-Learning & Artificial Curiosity"  <https://people.idsia.ch/~juergen/continual2018.pdf>
+  - "Metalearning with Hebbian Fast Weights"  <https://arxiv.org/pdf/1807.05076v1.pdf>
+NOT STOPPED
+----- raw model text -----
+Does it back the claim?
+The passage uses this citation only as one of several background readings alongside other authors on the topic of implicit meta-learning, the idea that a network's attention or memory mechanism can act as fast weights that let it learn new tasks from examples rather than fixed rules. A page on people.idsia.ch describing Schmidhuber's own research thread on metalearning and recursive self-improvement lays out exactly this idea: a slow network can learn, by gradient descent, to control and rewrite the fast-changing weights of a network (its own or another one), so that the network's connections become a kind of program that can be edited at run time, which is what he means by learning to learn. A related slide set from the same site, on continual lifelong meta-learning, traces this fast-weight idea back to Schmidhuber's early 1990s papers and forward to later work, which fits the two years given in the article's shorthand citation. Since the article only points to this work as further reading rather than resting a specific factual claim on it, there is nothing here to confirm or contradict beyond noting that the general subject matches.
+
+How else it bears on this article
+The material describes decades of work by Schmidhuber building neural networks whose weights can be treated as modifiable programs, with one network learning to rewrite another's parameters, and RNNs that can inspect and adjust their own learning rules. This is a much more deliberate, hand-engineered route to meta-learning than the one the article is describing in GPT-3, where the capacity to learn new tasks from a few examples emerges unplanned from scaling up ordinary next-word prediction. So the cited work sits somewhat in tension with the article's larger point: it treats learning-to-learn as something achieved by specific self-referential architectures, while the article's argument is that sheer scale can produce similar behavior without any such special design.
+----- end raw -----
+spent so far $0.5835
+EXIT=0

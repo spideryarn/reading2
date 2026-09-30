@@ -316,6 +316,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "cite-no-extract": "retry",
   "cite-unfinished": "retry",
   "cite-investigate-resting": "blocked",
+  "cite-lookup-failed": "retry",
+  "cite-gone": "blocked",
   "guess-resting": "blocked",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
@@ -5156,13 +5158,38 @@ export const CITATION_INVESTIGATE_UNFINISHED: ReaderFacingFailure = {
 export const CITATION_INVESTIGATE_BUSY =
   "Another Investigate is still running. Wait for it to finish, then try this one.";
 export const CITATION_INVESTIGATE_LIMITED =
-  "You have investigated a lot of works recently. Try again in a while — Look it up is still there.";
+  "You have investigated a lot of works recently. Try again in a while — the row's link is still there.";
 /** The 503 of the three, so it carries a code, as `CITATION_FIND_RESTING` does. */
 export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
   kind: "blocked",
   message:
     "Investigate has done as many as it can for today, so asking again today will get the same " +
-    "answer. Try again tomorrow — Look it up is still there. [cite-investigate-resting]",
+    "answer. Try again tomorrow — the row's link is still there. [cite-investigate-resting]",
+};
+
+/**
+ * **The first step's call failed** (plan 260930d P-5): the quick check that
+ * looks for the work's own page was refused, timed out, could not be read, or
+ * never reached the provider. The press stops there, so the longer call is
+ * never made and nothing more is paid for.
+ */
+export const CITATION_INVESTIGATE_LOOKUP_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The quick check that looks for this work's own page failed, so the longer investigation " +
+    "was not started and nothing more was spent. Trying again starts over. [cite-lookup-failed]",
+};
+
+/**
+ * The list was made again while the first step ran, and this work is no
+ * longer on it (plan 260930d P-3). The quick check, if it found a page, is
+ * kept; nothing more was spent.
+ */
+export const CITATION_INVESTIGATE_GONE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The list of citations was made again while this ran, and this work is no longer on it, so " +
+    "the longer investigation was not started, and pressing again here will not help. [cite-gone]",
 };
 
 /* ------------------------------------ an upload looking for its own page --
