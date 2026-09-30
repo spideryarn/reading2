@@ -63,7 +63,9 @@ import { entryProse } from "./GlossaryPanel.js";
    reader two different rules about the same work. See `CiteCard`. */
 import {
   assessedOf,
+  byLineOf,
   CITE_DOES_LABEL,
+  CITE_ENTRY_NOTE,
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
@@ -1651,7 +1653,7 @@ function clip(text: string, max: number): string {
  */
 function CiteCard({ work }: { work: CitedWork }) {
   const source = sourceOf(work);
-  const by = [work.authors, work.year].filter(Boolean).join(" · ");
+  const by = byLineOf(work);
   const where = work.citedAt.length;
 
   return (
@@ -1687,6 +1689,15 @@ function CiteCard({ work }: { work: CitedWork }) {
         )}
       </p>
       {by && <p className="prose-card-text prose-card-cite-by">{by}</p>}
+      {/* The entry as the article gives it — journal, conference, volume
+          (SPIDERYARN-READING2-6K, plan 260930i). Here in full rather than in a
+          tooltip: a card is what a finger gets, and it has the room. */}
+      {work.entry && (
+        <div className="prose-card-part prose-card-cite-entry">
+          <p className="prose-card-text cite-entry">{work.entry}</p>
+          <p className="prose-card-cite-read">{CITE_ENTRY_NOTE}</p>
+        </div>
+      )}
 
       <div className="prose-card-part prose-card-part-why">
         <p className="prose-card-label">{CITE_WHY_LABEL}</p>

@@ -68,6 +68,7 @@ import type {
   DebateLean,
   DebateRelation,
   FaqQuestion,
+  SimpleParagraph,
   GlossaryKind,
   Idea,
   IdentificationSignal,
@@ -306,6 +307,7 @@ export interface PublicArtefactSet {
   timeline?: PublicTimeline;
   trajectory?: PublicTrajectory;
   faq?: PublicFaq;
+  simpleSummary?: PublicSimpleSummary;
   citations?: PublicCitations;
   debate?: PublicDebate;
   sketch?: PublicSketch;
@@ -474,6 +476,24 @@ export interface PublicTrajectory {
  */
 export interface PublicFaq {
   questions: FaqQuestion[];
+}
+
+/**
+ * **Simple, as a visitor gets it** — Summary's plain-words sub-mode, from the
+ * day it was built (docs/plans/260930i-simple-summaries-eli15-sub-mode.md).
+ * Generated output, so readable by a visitor by default
+ * (docs/project/new-mode.md § The artefact): showing the stored paragraphs
+ * costs nothing, and only making them spends.
+ *
+ * **The paragraphs cross field by field** — `{ text, ids }`: the model's plain
+ * words about the piece and the block ids of passages the payload already
+ * carries whole. No profile is in this stage.
+ *
+ * **What does not cross** is the pipeline, as everywhere in this file:
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs`.
+ */
+export interface PublicSimpleSummary {
+  paragraphs: SimpleParagraph[];
 }
 
 /**

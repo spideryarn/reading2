@@ -159,10 +159,13 @@ export interface Attempt {
    * **Whether they got it right — and it is never rendered.**
    *
    * The walk reads this to decide whether the next step carries its premise
-   * (src/web/quiz-ladder.ts). `QuizPanel` must not print it, hint at it, or change
-   * a word of copy because of it: docs/project/quiz.md is explicit that quoting
-   * a difficulty at a reader hands them a token with nothing behind it, and a
-   * verdict is worse — it is the grade the whole marking prompt refuses to give.
+   * (src/web/quiz-ladder.ts), and "Where to look again" to decide which sections
+   * it names (src/web/quiz-sections.ts). It may select scaffolding and
+   * navigation like that; `QuizPanel` must never print the word, a count or a
+   * score, or change a line of copy to say how the reader did:
+   * docs/project/quiz.md is explicit that quoting a difficulty at a reader
+   * hands them a token with nothing behind it, and a verdict is worse — it is
+   * the grade the whole marking prompt refuses to give.
    *
    * Absent far more often than not: no verdict when the classifier failed or
    * timed out, when the question was ill-posed, or on any attempt that did not
@@ -234,14 +237,35 @@ export interface UseQuiz {
   clearAttempt(): void;
 }
 
-export function useQuiz(slug: string): UseQuiz {
+/**
+ * **The opening quiz read, and nothing else** — the GET, its ordering, and the
+ * four facts the prose needs. Since 2026-09-30 the questions are drawn in the
+ * prose in **every** mode (SPIDERYARN-READING2-6V), so this runs in
+ * `OwnedReader` (ArticlePage.tsx) and the band layers `useQuiz` on top of it —
+ * the split `useQuotesRead` / `useQuotes` made for the same reason. No job
+ * subscription and no activation up here, for the reasons `QuotesRead` gives:
+ * a reader who never opens Quiz must not hold the job engine to its idle
+ * cadence, nor be able to spend a press after leaving the band.
+ * docs/plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md.
+ */
+export interface QuizRead {
+  status: QuizStatus;
+  quiz: Quiz | null;
+  stale: boolean;
+  outdated: boolean;
+  error: string | null;
+  /** Read again, joining a read in flight. `OrderedRead.reload`. */
+  reload(): Promise<void>;
+  /** Read again because a job has just written a new batch. `OrderedRead.refresh`. */
+  refresh(): Promise<void>;
+}
+
+export function useQuizRead(slug: string): QuizRead {
   const [status, setStatus] = useState<QuizStatus>("loading");
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState<Attempt | null>(null);
-  const [answered, setAnswered] = useState<Set<QuizQuestionId>>(() => new Set());
 
   /**
    * The read itself — the parse, the 404 branch and the error copy, which are
@@ -291,9 +315,42 @@ export function useQuiz(slug: string): UseQuiz {
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
 
+  /* The opening read. Everything after it goes through `reload`, which does not
+     return `status` to `loading` — including the band's own mount effect in
+     `useQuiz`, which joins this request rather than making a second. */
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  return { status, quiz, stale, outdated, error, reload, refresh };
+}
+
+/**
+ * The band's half: the job, the verbs and the marks. `read` comes from
+ * `useQuizRead` in `OwnedReader` — see `QuizRead` for why the fetch moved up.
+ */
+export function useQuiz(slug: string, read: QuizRead): UseQuiz {
+  const { status, quiz, stale, outdated, error, reload, refresh } = read;
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  const [answered, setAnswered] = useState<Set<QuizQuestionId>>(() => new Set());
+
+  /* **Revalidate on mount, behind whatever is on screen** — `useQuotes`' reason:
+     `useStepJob`'s first poll is a baseline and does not announce a job that had
+     already finished, so a batch written in another tab while the band was
+     closed has nothing else to bring it in. `reload` joins a read in flight and
+     never returns `status` to `loading`. */
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  /* **The ticks go with the batch.** A replacement batch can reuse question ids
+     with new meanings, so a tick kept across it would call a question answered
+     that nobody has answered. GPT Sol's plan review, 260930i finding 6. */
+  const batchId = quiz?.batchId;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new batch
+  useEffect(() => {
+    setAnswered(new Set());
+  }, [batchId]);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,

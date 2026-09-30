@@ -78,6 +78,11 @@ import {
   PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
 } from "../crossrefs.js";
 import {
+  inputFingerprint as simpleFingerprint,
+  isStale as simpleIsStale,
+  SIMPLE_VERSION,
+} from "../simple-summary.js";
+import {
   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
   trajectoryInput,
   trajectoryInputHash,
@@ -158,6 +163,8 @@ import type {
   FaqFound,
   Crossrefs,
   CrossrefsFound,
+  SimpleSummary,
+  SimpleSummaryFound,
   Trajectory,
   TrajectoryFound,
   Glossary,
@@ -183,6 +190,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
+import { isSimpleParagraphs } from "../types.js";
 import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
@@ -500,6 +508,7 @@ type RevisionReader =
   | "faq"
   | "trajectory"
   | "crossrefs"
+  | "simpleSummary"
   | "arc"
   /**
    * **The image manifest on its own**, for the route that serves one asset's
@@ -546,7 +555,7 @@ const REVISION_READ_POLICY: Record<
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
-    trajectory: "value", crossrefs: "value",
+    trajectory: "value", crossrefs: "value", simpleSummary: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -594,6 +603,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
+    /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+    simpleSummary: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -615,6 +626,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
+    /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+    simpleSummary: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -636,6 +649,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
+    /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+    simpleSummary: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -696,6 +711,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
+    /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+    simpleSummary: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -748,6 +765,10 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
+    /* Not for a skeleton — its user message is a constant — but for the
+       fallback head title (`fallbackHeadTitle(tree)`) its fingerprint prints
+       when there is no metadata. */
+    simpleSummary: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
        outline like its five neighbours — and this line had not caught up.
@@ -884,6 +905,12 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. */
   crossrefs: { metadata: "value", crossrefs: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `faq` makes. `isCurrent` needs the column for its arm. And the public
+     read, in src/store/public-reader.ts: generated output is readable by a
+     visitor by default (docs/project/new-mode.md § The artefact).
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  simpleSummary: { metadata: "value", simpleSummary: "value" },
 
   /* **Read by nobody through here.** The two HTML columns are the whole article
      again, and they are pipeline artefacts reached through
@@ -1173,6 +1200,8 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
+    /* For `isCurrent`'s arm, as `debate` above. */
+    simpleSummary: articleRevisions.simpleSummary,
     /* For `isCurrent`'s arm, and a seventh artefact that can carry a
        `profileHash` — `personalisedSteps` must be exhaustive. */
     trajectory: articleRevisions.trajectory,
@@ -1260,6 +1289,13 @@ export const REVISION_PROJECTIONS = {
   crossrefs: {
     id: articleRevisions.id,
     crossrefs: articleRevisions.crossrefs,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited head and the tree (for the fallback title) its own
+     exact-request fingerprint needs — `crossrefs`' shape. */
+  simpleSummary: {
+    id: articleRevisions.id,
+    simpleSummary: articleRevisions.simpleSummary,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /**
@@ -1776,6 +1812,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   faq: ["article_revisions.faq"],
   trajectory: ["article_revisions.trajectory"],
   crossrefs: ["article_revisions.crossrefs"],
+  simple: ["article_revisions.simple_summary"],
 };
 
 /**
@@ -2509,12 +2546,14 @@ function personalisedSteps(revision: {
  * **Which artefacts a shared link would carry** — presence, and nothing else.
  *
  * The same question `src/store/public-reader.ts` answers by reading the column:
- * `publicArticle` spreads an artefact in when it is not null and never asks
- * whether it is current. So this is one `!== null` per public artefact, deliberately, and
+ * `publicArticle` ordinarily spreads an artefact in when it is not null and
+ * never asks whether it is current. So this is presence, deliberately, and
  * **not** `stages[].done` — which is `status === "done" && isCurrent(step)` a
  * few hundred lines below, and which calls a stale glossary absent while every
- * visitor is reading it. src/types.ts § PublicArtefacts says the same thing at
- * the type.
+ * visitor is reading it. Simple is the one stronger boundary: its public DTO
+ * refuses malformed paragraphs, so this inventory applies the same shared
+ * validator before promising that a visitor receives it. src/types.ts §
+ * PublicArtefacts says the same thing at the type.
  *
  * `Record<keyof PublicArtefacts, …>` rather than an object literal, so another
  * artefact joining the public payload is a red compiler here rather than a row
@@ -2530,6 +2569,7 @@ export function shareableArtefacts(revision: {
   sketch: Sketch | null;
   trajectory: Trajectory | null;
   faq: Faq | null;
+  simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
 }): PublicArtefacts {
@@ -2543,6 +2583,13 @@ export function shareableArtefacts(revision: {
     sketch: revision.sketch,
     trajectory: revision.trajectory,
     faq: revision.faq,
+    /* Public DTOs omit an unusable Simple rather than publishing an empty or
+       malformed band. The owner's inventory must answer the same question or
+       it promises that a shared link contains something the link withholds. */
+    simpleSummary:
+      revision.simpleSummary && isSimpleParagraphs(revision.simpleSummary.paragraphs)
+        ? revision.simpleSummary
+        : null,
     citations: revision.citations,
     debate: revision.debate,
   };
@@ -2556,6 +2603,7 @@ export function shareableArtefacts(revision: {
     sketch: present.sketch !== null,
     trajectory: present.trajectory !== null,
     faq: present.faq !== null,
+    simpleSummary: present.simpleSummary !== null,
     citations: present.citations !== null,
     debate: present.debate !== null,
   };
@@ -3146,6 +3194,23 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* The same stamp shape as `crossrefs`, over its own exact request. */
+        case "simple": {
+          const simple = revision.simpleSummary as SimpleSummary | null;
+          if (!simple || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: simple.sourceHash,
+              promptVersion: simple.version,
+              model: simple.generator,
+            },
+            {
+              inputHash: simpleFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: SIMPLE_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         /* **Judged against what its prompt renders, not the article** — the
            route's `sourceHash` is `trajectoryInputHash` over the `quotes` and
            `ideas` columns beside it and the tree, the same value
@@ -3299,6 +3364,7 @@ const rawPgArticleReader: ArticleReader = {
           sketch: revision.sketch as Sketch | null,
           trajectory: revision.trajectory as Trajectory | null,
           faq: revision.faq as Faq | null,
+          simpleSummary: revision.simpleSummary as SimpleSummary | null,
           citations: revision.citations as Citations | null,
           debate: revision.debate as Debate | null,
         }),
@@ -3615,6 +3681,41 @@ const rawPgArticleReader: ArticleReader = {
         !tree ||
         crossrefsIsStale(crossrefs, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: crossrefs.version !== CROSSREFS_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * Simple on its own — the Postgres half of `loadSimpleSummary`.
+   *
+   * The cited head and the tree (for the fallback title) its exact-request
+   * fingerprint needs. **A 404 is the ordinary case**: the step is off
+   * `DEFAULT_INGEST_STEPS` and runs on a press. `stale` (the article moved) is
+   * shown; `outdated` (an older prompt) is not announced — new-mode.md.
+   * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+   */
+  async loadSimpleSummary(slug: string): Promise<SimpleSummaryFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "simpleSummary");
+    if (!found) throw notFound(slug);
+    const simpleSummary = found.revision.simpleSummary as SimpleSummary | null;
+    if (!simpleSummary || !isSimpleParagraphs(simpleSummary.paragraphs)) {
+      throw Object.assign(
+        new Error(
+          `No plain-words summary for "${slug}" yet. Write one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["simple"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      simpleSummary,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale:
+        !tree ||
+        simpleIsStale(simpleSummary, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: simpleSummary.version !== SIMPLE_VERSION,
     };
   },
 

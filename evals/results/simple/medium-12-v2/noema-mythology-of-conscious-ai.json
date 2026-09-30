@@ -1,0 +1,54 @@
+{
+  "arm": "medium-12-v2",
+  "effort": "medium",
+  "pitch": 12,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:44.011Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "wallMs": 8191,
+  "costUsd": 0.044714,
+  "tokens": {
+    "input": 18982,
+    "output": 675,
+    "reasoning": 160
+  },
+  "ok": true,
+  "words": 198,
+  "paragraphs": [
+    {
+      "text": "This essay by a neuroscientist asks a big question: could artificial intelligence (AI) ever truly be conscious, meaning there is something it feels like to be that machine? It looks at why so many people, including top AI experts, now think machine consciousness might already be here or coming soon.",
+      "ids": [
+        "spya-tgnssb",
+        "spya-gjy45p",
+        "spya-epw4h3"
+      ]
+    },
+    {
+      "text": "The author says this question matters a lot. If AI really became conscious, it could suffer and might deserve rights, which would make it hard to control or switch off. But even if AI only seems conscious without truly being so, treating it as if it feels things (or coldly ignoring it) can warp our ethics and hurt our own minds.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-yverz7"
+      ]
+    },
+    {
+      "text": "The author argues intelligence, meaning the ability to do clever things, is not the same as consciousness, meaning the ability to actually feel or experience. He questions the popular assumption that running the right computer program is enough to create consciousness, pointing out that brains are messy, living, biological things, unlike computers, and that simulating a mind is not the same as truly creating one. His conclusion: real conscious AI looks very unlikely with today's technology, but AI that merely seems conscious is already a serious problem.",
+      "ids": [
+        "spya-nj888h",
+        "spya-cv97j7",
+        "spya-cqh2pq"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

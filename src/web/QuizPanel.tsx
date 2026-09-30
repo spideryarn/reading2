@@ -81,10 +81,12 @@
  * and leaves the new batch's Answer button enabled and inert.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, List, MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, MessageCircleQuestionMark, RotateCcw, TriangleAlert } from "lucide-react";
 import type { BlockId, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
 import { showPremise } from "./quiz-ladder.js";
+import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./quiz-sections.js";
+import type { Section } from "./position.js";
 import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
 import type { RememberView } from "./params.js";
@@ -100,6 +102,31 @@ import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
 import { useRenderCount } from "./perf.js";
+
+/**
+ * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
+ * (SPIDERYARN-READING2-6V; QuizInProse.tsx). In memory, owned by `Reader` and
+ * cleared once taken, the way chat's `ChatHandoff` is: which question is open
+ * stays out of the URL (docs/project/quiz.md § On screen).
+ *
+ * **It names its batch**, because a replacement batch can reuse a question id
+ * with a new meaning — the reason every mark binds to `batchId`. An arrival from
+ * another batch is taken and ignored. GPT Sol's plan review, 260930i finding 1.
+ */
+export interface QuizArrival {
+  readonly batchId: string;
+  readonly questionId: QuizQuestionId;
+}
+
+/**
+ * **The reading view's sections, for "Where to look again"** — the same
+ * `Section` list the spine and `?at=` use, and each block's row to find one by.
+ * docs/plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md.
+ */
+export interface QuizSections {
+  sections: readonly Section[];
+  rowOf: ReadonlyMap<BlockId, number>;
+}
 
 /** "3 questions", "1 question". */
 function questionCount(n: number): string {
@@ -190,13 +217,25 @@ export function RememberSubModeToggle({
 
 export function QuizPanel({
   owner,
+  arrival,
+  onArrivalTaken,
   subMode,
   blocks,
   readSoFar,
+  sections,
   onJump,
   onArrowKeys,
 }: {
   owner: UseQuiz;
+  /** A question pressed in the prose, to go to — `QuizArrival`. */
+  arrival?: QuizArrival | null | undefined;
+  /** Tells the owner of `arrival` it has been dealt with, so it can clear it. */
+  onArrivalTaken?: ((taken: QuizArrival) => void) | undefined;
+  /**
+   * The article's sections, for "Where to look again". Absent in a test that
+   * is not about it, and then the block is not drawn.
+   */
+  sections?: QuizSections | undefined;
   /**
    * The reader's reading so far — src/web/read-filter.ts. **Absent means
    * reading time is off**, and then there is no tick-box and every question is
@@ -256,7 +295,9 @@ export function QuizPanel({
    * by the time step 5 is on screen step 4's attempt is gone, and so is the
    * verdict it carried. **Never rendered, logged or stored**, for the reason
    * `Attempt.verdict` in useQuiz.ts gives: it is the grade the marking prompt
-   * refuses to give, and it exists only to decide whether a premise is shown.
+   * refuses to give. It may select scaffolding and navigation — whether a
+   * premise is shown, and which sections "Where to look again" names — but the
+   * word itself, a count or a score never reaches the page.
    */
   const [verdicts, setVerdicts] = useState<ReadonlyMap<QuizQuestionId, QuizVerdict>>(
     () => new Map(),
@@ -368,6 +409,54 @@ export function QuizPanel({
       setShowAnswer(false);
     }
   }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId]);
+
+  /**
+   * **Land on a question pressed in the prose** — `QuizArrival`.
+   *
+   * **Declared after the batch reset and the filter effect, on purpose**: all
+   * three can run in one commit — the band mounting with an arrival, or a new
+   * batch — and the last `setAt` is the one that lands. It is idempotent, so
+   * StrictMode running it twice lands in the same place; only the hand-back is
+   * repeated, and the owner clears an arrival only if it is still the one it
+   * was handed. GPT Sol's plan review, 260930i finding 2.
+   *
+   * - **Another batch's arrival is taken and ignored** — finding 1.
+   * - **The question already open is not moved to**, `pick`'s rule: `move`
+   *   aborts a mark in flight and drops the draft (finding 3). Its index is
+   *   still written last, though: the filter effect just above can be trying to
+   *   move off this unread question in the same commit. Writing the requested
+   *   index again lets the arrival win without clearing the attempt.
+   * - **The tick-box gives way.** The reader asked for this question by name, so
+   *   if *Only what I've read* would hide it — or the reading levels are still
+   *   loading, while the walk waits — it is turned off, visibly, rather than
+   *   the walk landing somewhere else.
+   * - A jump is not an arrival by Next, so the step shows its premise.
+   */
+  const arrivalBatch = useRef(quiz?.batchId);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs for a new arrival or a new batch; `move` is recreated every render and the rest is read as it stands
+  useEffect(() => {
+    const sameBatch = arrivalBatch.current === quiz?.batchId;
+    arrivalBatch.current = quiz?.batchId;
+    if (!arrival || !quiz) return;
+    if (arrival.batchId === quiz.batchId) {
+      const to = questions.findIndex((q) => q.id === arrival.questionId);
+      if (to >= 0) {
+        if (filtering && (waitingForReading || included[to] === false)) setOnlyRead(false);
+        if (sameBatch && to === at) {
+          /* Last writer wins over the filter effect above. This is intentionally
+             not `move`: staying on one question must preserve its live mark and
+             draft. It is still a jump, so it no longer counts as arriving by
+             Next and its premise is shown. */
+          setAt(to);
+          setArrivedByNext(false);
+        } else {
+          move(to, false);
+        }
+        setListing(false);
+      }
+    }
+    onArrivalTaken?.(arrival);
+  }, [arrival, quiz?.batchId]);
 
   /** Undefined while the step at `at` is filtered out — see the effect above. */
   const question: QuizQuestion | undefined =
@@ -635,6 +724,25 @@ export function QuizPanel({
     }
     move(to, false);
     setListing(false);
+  };
+
+  /**
+   * **Where to look again** — the sections whose answers this visit were
+   * judged wrong, weakest first (src/web/quiz-sections.ts), each with the way
+   * back into the prose and, where one can be landed on, the way back to its
+   * first missed question. That second half is the steer: the path is never
+   * reordered, so the quiz is steered towards a weak section by offering its
+   * question again, through `pick` — a jump, so the step shows its premise,
+   * and a pick of the question already open does nothing (GPT Sol's F2 on the
+   * plan). Only questions 61's filter lets the reader land on are offered.
+   */
+  const lookAgain = useMemo(
+    () => (sections ? weakSections(sectionTally(questions, verdicts, sections.sections, sections.rowOf)) : []),
+    [sections, questions, verdicts],
+  );
+  const landable = (id: QuizQuestionId) => {
+    const i = questions.findIndex((q) => q.id === id);
+    return i >= 0 && included[i] === true;
   };
 
   const submit = () => {
@@ -919,12 +1027,75 @@ export function QuizPanel({
                     )}
                   </>
                 )}
+
+                {lookAgain.length > 0 && (
+                  <LookAgain
+                    rows={lookAgain}
+                    retryOf={(row) => {
+                      const id = firstWrongIn(row, verdicts, landable);
+                      return id === question.id ? undefined : id;
+                    }}
+                    onRead={onJump}
+                    onRetry={pick}
+                  />
+                )}
               </div>
             </TooltipGroup>
           )}
         </>
       )}
     </ModeSurface>
+  );
+}
+
+/**
+ * **"Where to look again"** — places, never a verdict.
+ *
+ * Names sections and nothing else: no count, no score, no "you got", which is
+ * the line docs/project/remember-mode.md § The prompt is the feature draws for
+ * the marks, and this block inherits it. The section's name jumps the prose to
+ * its first block, which is the (re-)read Greg asked for; the icon beside it
+ * goes back to its first missed question, drawn only when there is one the
+ * reader can land on that is not already open.
+ */
+function LookAgain({
+  rows,
+  retryOf,
+  onRead,
+  onRetry,
+}: {
+  rows: readonly SectionTally[];
+  retryOf(row: SectionTally): QuizQuestionId | undefined;
+  onRead(id: BlockId): void;
+  onRetry(id: QuizQuestionId): void;
+}) {
+  return (
+    <div className="quiz-look-again">
+      <p className="quiz-look-again-head">Where to look again</p>
+      <ul>
+        {rows.map((row) => {
+          const retry = retryOf(row);
+          return (
+            <li key={row.section.blockId}>
+              <button type="button" className="quiz-look-again-section" onClick={() => onRead(row.section.blockId)}>
+                {row.section.title}
+              </button>
+              {retry !== undefined && (
+                <Tooltip content={<p>Back to its question</p>} placement="top">
+                  <IconButton
+                    label={`Back to a question on ${row.section.title}`}
+                    titled={false}
+                    onClick={() => onRetry(retry)}
+                  >
+                    <RotateCcw />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

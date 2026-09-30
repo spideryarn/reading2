@@ -70,6 +70,9 @@ type StepAutoRunTarget = StepTarget<
   | "tweets"
   /* The second half of Remember: the questions the piece asks you back. */
   | "quiz"
+  /* Summary's plain-words sub-mode, armed by its Simple chip —
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  | "simple"
 >;
 
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */

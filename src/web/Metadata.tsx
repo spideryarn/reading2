@@ -380,6 +380,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      what a cross-reference does is take you to another block of the piece.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   crossrefs: CornerDownRight,
+  /* Summary's own glyph (Dock.tsx): Simple is a sub-mode of Summary.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  simple: Layers,
 };
 
 /*
@@ -1448,6 +1451,8 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   citations: "Citations",
   /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
   crossrefs: "Cross-references",
+  /* A sub-mode of Summary, named as its chip is. */
+  simple: "Simple summary",
 };
 
 /**

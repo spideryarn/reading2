@@ -466,6 +466,9 @@ function reply(url: string, method: string): Response {
      requests happen, in what order* — depend on an exception path. The read is
      mounted for every owner since 2026-09-08 (see `READING_VIEW`). */
   if (url.startsWith("/api/quotes/")) return new Response(null, { status: 404 });
+  /* The same, for the quiz: `useQuizRead` is mounted for every owner since
+     2026-09-30 (see `READING_VIEW`), and 404 is the ordinary answer. */
+  if (url.startsWith("/api/quiz/")) return new Response(null, { status: 404 });
   /* **Nobody has built this one**, for the owner control at the foot of this
      file: pressing a mode whose artefact is missing is what starts a job, and
      with every artefact answered `{}` there is no such mode on the page. */
@@ -738,6 +741,13 @@ const ARRIVAL: Shape[] = [
  * read them (src/web/useCrossrefs.ts). One cheap GET per owned article view,
  * and no model call; once, through `useOrderedRead`, like its neighbours.
  * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+ *
+ * **`/api/quiz/` is the seventh, also new on 2026-09-30**, for the quotes'
+ * reason: an owner's quiz questions are drawn in the prose in every mode
+ * (SPIDERYARN-READING2-6V), so the opening read moved up from the Quiz band to
+ * `OwnedReader`, and the band's own mount `reload()` joins it. One cheap GET
+ * per owned article view, no model call, and no job subscription up there.
+ * docs/plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md.
  */
 const READING_VIEW: Shape[] = [
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
@@ -745,6 +755,7 @@ const READING_VIEW: Shape[] = [
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
   GET(`/api/citations/${SLUG}`),
+  GET(`/api/quiz/${SLUG}`),
   GET(`/api/crossrefs/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
@@ -788,6 +799,7 @@ const CHAT: Shape[] = [
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
   GET(`/api/citations/${SLUG}`),
+  GET(`/api/quiz/${SLUG}`),
   GET(`/api/crossrefs/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/chat/${SLUG}`),

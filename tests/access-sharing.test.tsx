@@ -93,6 +93,7 @@ const AVAILABLE: PublicArtefacts = {
   sketch: true,
   trajectory: true,
   faq: true,
+  simpleSummary: true,
   citations: true,
   debate: true,
 };

@@ -1,0 +1,54 @@
+{
+  "arm": "medium-12",
+  "effort": "medium",
+  "pitch": 12,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T15:00:33.598Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "wallMs": 12855,
+  "costUsd": 0.045026,
+  "tokens": {
+    "input": 18943,
+    "output": 714,
+    "reasoning": 171
+  },
+  "ok": true,
+  "words": 208,
+  "paragraphs": [
+    {
+      "text": "This essay by a neuroscientist asks a big question: could artificial intelligence, like chatbots, ever actually be conscious — meaning there is something it feels like to be them, the way there is something it feels like to be you? He argues that most claims that AI is already conscious, or soon will be, rest on shaky thinking.",
+      "ids": [
+        "spya-tgnssb",
+        "spya-gjy45p",
+        "spya-j0a9rq"
+      ]
+    },
+    {
+      "text": "This matters because conscious things deserve moral concern and could suffer, so wrongly building or wrongly ignoring conscious machines would both be serious mistakes. It also matters because if we start believing machines feel things when they don't, it can warp how we treat real feelings, including our own.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-sge6a2"
+      ]
+    },
+    {
+      "text": "The author separates being smart (intelligence) from being able to feel (consciousness) — they are not the same thing, even though humans have both. He argues brains are not really like computers running programs, so making a machine \"think\" the way software runs may not create real experience. He also suggests being alive, not just processing information, might be necessary for consciousness, and that simulating a brain is not the same as actually building one. His conclusion: real conscious AI is unlikely with today's computers, but AI that merely seems conscious is already a serious problem we must think carefully about.",
+      "ids": [
+        "spya-nj888h",
+        "spya-a8jgf4",
+        "spya-hj5y6s"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  }
+}

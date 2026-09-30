@@ -25,8 +25,8 @@ import { useQueryState, useQueryStates } from "nuqs";
 import type { BlockId, ChatThread, RememberStance, ThreadKind } from "../../../types.js";
 import { currentAt, rememberParam, threadParam, type Mode } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
-import { QuizPanel, RememberSubModeToggle } from "../../QuizPanel.js";
-import { useQuiz } from "../../useQuiz.js";
+import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
+import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
 import { useLiveConversation } from "../../live/useLiveConversation.js";
@@ -81,14 +81,25 @@ import { ChatPanel } from "../../ChatPanel.js";
  */
 export function RememberBand({
   slug,
+  quizRead,
+  quizArrival,
+  onQuizArrivalTaken,
   blocks,
   readSoFar,
+  sections,
   onJump,
   onMode,
   onQuizKeys,
 }: {
   slug: string;
+  /** The opening quiz read, shared with the prose. `useQuizRead` in `OwnedReader`. */
+  quizRead: QuizRead;
+  /** A question pressed in the prose, to open at — `QuizPanel`'s `arrival`. */
+  quizArrival?: QuizArrival | null | undefined;
+  onQuizArrivalTaken?: ((taken: QuizArrival) => void) | undefined;
   blocks: Map<string, string>;
+  /** The tree and block positions, for the quiz's "Where to look again" — `QuizPanel`'s `sections`. */
+  sections: QuizSections;
   /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
@@ -133,9 +144,13 @@ export function RememberBand({
     return (
       <QuizSubBand
         slug={slug}
+        read={quizRead}
+        arrival={quizArrival}
+        onArrivalTaken={onQuizArrivalTaken}
         subMode={toggle}
         blocks={blocks}
         readSoFar={readSoFar}
+        sections={sections}
         onJump={onJump}
         onArrowKeys={onQuizKeys}
       />
@@ -169,27 +184,38 @@ export function RememberBand({
  */
 function QuizSubBand({
   slug,
+  read,
+  arrival,
+  onArrivalTaken,
   subMode,
   blocks,
   readSoFar,
+  sections,
   onJump,
   onArrowKeys,
 }: {
   slug: string;
+  read: QuizRead;
+  arrival?: QuizArrival | null | undefined;
+  onArrivalTaken?: ((taken: QuizArrival) => void) | undefined;
   subMode: React.ReactNode;
   blocks: Map<string, string>;
   readSoFar?: ReadSoFar | undefined;
+  sections: QuizSections;
   onJump(id: BlockId): void;
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("QuizSubBand");
-  const owner = useQuiz(slug);
+  const owner = useQuiz(slug, read);
   return (
     <QuizPanel
       owner={owner}
+      arrival={arrival}
+      onArrivalTaken={onArrivalTaken}
       subMode={subMode}
       blocks={blocks}
       readSoFar={readSoFar}
+      sections={sections}
       onJump={onJump}
       onArrowKeys={onArrowKeys}
     />

@@ -1,0 +1,59 @@
+{
+  "arm": "medium-15",
+  "effort": "medium",
+  "pitch": 15,
+  "slug": "cargocult-spya-rz663q",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T14:59:42.283Z",
+  "bodyWords": 3822,
+  "bodyBlocks": 41,
+  "wallMs": 10011,
+  "costUsd": 0.023076,
+  "tokens": {
+    "input": 8228,
+    "output": 662,
+    "reasoning": 11
+  },
+  "ok": true,
+  "words": 271,
+  "paragraphs": [
+    {
+      "text": "This is a 1974 graduation speech by physicist Richard Feynman, about how easy it is for scientists to fool themselves. He calls bad science that just copies the outward form of real science, without the substance that makes it work, \"Cargo Cult Science\" — named after islanders who built fake runways and control towers hoping planes would land, because they copied the look of what they'd seen without the thing that actually made it work.",
+      "ids": [
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "text": "Feynman says this matters because fields like education research and criminal justice keep using methods that never actually improve results, yet are treated as scientific — and ordinary people with common sense get talked out of their own good judgment by this fake authority.",
+      "ids": [
+        "spya-re4634",
+        "spya-g2cwvy"
+      ]
+    },
+    {
+      "text": "His main idea is scientific integrity: when you report an experiment, you must also report everything that might prove you wrong, not just the evidence that supports you. He gives examples, like scientists who kept measuring the electron's charge close to an old, slightly wrong number for years because they subconsciously threw out results that seemed too different, and only trusted ones close to the expected answer.",
+      "ids": [
+        "spya-rxj5wa",
+        "spya-s9msxy",
+        "spya-uj9v2h"
+      ]
+    },
+    {
+      "text": "He also praises a rat experiment where the researcher carefully removed every possible clue (smell, sound, sight) to make sure the rats were learning what he intended, calling it a model of careful science — even though later researchers ignored his methods anyway. Feynman ends by saying the first rule is not to fool yourself, since you are the easiest person to fool, and he wishes his listeners the freedom to keep this kind of honesty even when institutions or money pressure them not to.",
+      "ids": [
+        "spya-npdc6n",
+        "spya-yzzxkw",
+        "spya-wye8g6"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

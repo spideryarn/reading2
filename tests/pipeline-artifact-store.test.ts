@@ -115,6 +115,10 @@ import {
   inputFingerprint as crossrefsFingerprint,
   PROMPT_VERSION as CROSSREFS_VERSION,
 } from "../src/crossrefs.js";
+import {
+  inputFingerprint as simpleFingerprint,
+  SIMPLE_VERSION,
+} from "../src/simple-summary.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import {
   emptyDrops as emptyTrajectoryDrops,
@@ -253,6 +257,8 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 /* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
 const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);
+/* `simple` fingerprints the exact article string it sends, through its own module. */
+const SIMPLE_SOURCE_HASH = simpleFingerprint(BLOCKS, TREE, META);
 /* `tweets` joined these on 2026-09-29: `tweets/5` sends `articleWithIds` so
    each post can name its passages, and its fingerprint moved with the head
    (src/tweets.ts § `inputFingerprint`; plan 260929f). Through its own module,
@@ -641,6 +647,20 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     dropped: emptyCrossrefsDropped(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
+  });
+  /* Two paragraphs on the first block — the fewest the step writes. The store
+     checks the shape, not the ids; `buildSimpleSummary` checks those. */
+  store.plant(SLUG, "simple", "simple", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: SIMPLE_SOURCE_HASH,
+    version: SIMPLE_VERSION,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+    paragraphs: [
+      { text: "What it is about.", ids: [BLOCKS[0]!.id] },
+      { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
+    ],
   });
   /* **A route over the one quote planted above**, and its `sourceHash` is the
      route's input hash rather than any article fingerprint — the quote, the

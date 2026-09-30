@@ -30,6 +30,7 @@ Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation,
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),
 [`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) (whether a step's premise is shown, and it never sorts),
 [`src/web/read-filter.ts`](../../src/web/read-filter.ts) (which questions are about what you have read),
+[`src/web/quiz-sections.ts`](../../src/web/quiz-sections.ts) (the answers counted by section, and which to look at again),
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) (whether they got it right, asked in private),
 [`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
@@ -43,7 +44,8 @@ Tests: [`quiz.test.ts`](../../tests/quiz.test.ts),
 [`quiz-mark-stream.test.tsx`](../../tests/quiz-mark-stream.test.tsx),
 [`quiz-step-registration.test.ts`](../../tests/quiz-step-registration.test.ts),
 [`quiz-ladder.test.ts`](../../tests/quiz-ladder.test.ts),
-[`quiz-verdict.test.ts`](../../tests/quiz-verdict.test.ts).
+[`quiz-verdict.test.ts`](../../tests/quiz-verdict.test.ts),
+[`quiz-sections.test.ts`](../../tests/quiz-sections.test.ts).
 Eval: [`evals/quiz.ts`](../../evals/quiz.ts) — **read this before editing either prompt.**
 The plan, the spike and two cross-family reviews:
 [260831al](../plans/260831al-review-quiz-sub-mode.md) and
@@ -132,8 +134,10 @@ list again), and the plan names the trigger for doing more.
 The mark [may not say how the reader did](#what-a-mark-says-and-what-it-may-not), and the walk has
 to know. So the judgement is made by a **separate, small call that reads the finished mark** —
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) — and its one-word answer rides the terminal `done`
-frame. It is never rendered, never logged and never stored; the panel holds it in React state for
-the length of the visit.
+frame. The word is never rendered, never logged and never stored; the panel holds it in React state
+for the length of the visit. It may choose scaffolding and navigation — whether a premise is shown,
+and which sections [Where to look again](#where-to-look-again) names — but never a count, a score or
+a line of copy about how the reader did.
 
 **`QUIZ_MARK_SYSTEM` is deliberately untouched by this.** The obvious design was to have the marking
 prompt emit a hidden verdict of its own, one call instead of two; it was rejected because that prompt
@@ -288,6 +292,39 @@ carries on its own (GPT Sol's plan review; Greg's *"maybe remember mode as well"
   `useQuiz`'s one live request, and without the clear the new batch's Answer button is enabled and
   does nothing.
 
+## In the prose, in every mode
+
+Greg, 2026-09-30 (SPIDERYARN-READING2-6V):
+
+> Actually, let's just go one step further and say if you've generated quiz questions, it should
+> always show them in situ in the text, whether you're in quiz mode or not.
+
+So once an owner has questions, each one is also a muted line in the prose, after the block holding
+its **last** evidence passage — only there has the reader met all of what it asks about. Pressing it
+opens Quiz at that question. The design pass (two product-manager agents, screenshots of six
+options), the choice and what was deferred are
+[260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
+
+- **The question's words only, never its premise** — the list's rule, for the list's reason.
+- **Pressing it is a jump**, so the band shows the premise; it goes through
+  `?mode=remember&remember=quiz` with `thread` cleared, one pushed entry, and an in-memory
+  `QuizArrival` that names its batch ([`QuizPanel.tsx`](../../src/web/QuizPanel.tsx)). Pressing the
+  question already open does nothing, since `move` would abort its mark; if *Only what I've read*
+  would hide it, the tick-box turns itself off. It arms nothing and buys nothing — a line exists only
+  because a quiz does.
+- **Not drawn for a stale quiz**, whose passages may no longer be the prose; drawn for an outdated
+  one. Not drawn for a visitor: the public payload has no quiz.
+- **Shown whether or not you have read the passage.** The reading levels move every minute and would
+  re-render the whole article through `memo(TableView)`; a question before its passage is a
+  pre-question, not a giveaway.
+- **Answering stays in the band.** Answering in the prose would put a second copy of the answer box,
+  the mark binding and the premise rule in `TableView`'s path — the plan's *Deferred* says what would
+  change that.
+- The read moved up for it: `useQuizRead` in `OwnedReader`, `useQuiz(slug, read)` in the band — the
+  Quotes split — so *Write them again* moves the lines too.
+  [`quiz-anchors.ts`](../../src/web/quiz-anchors.ts), [`QuizInProse.tsx`](../../src/web/QuizInProse.tsx),
+  `TableView`'s `quizAfter`.
+
 ## Only what you have read
 
 Greg, 2026-09-30 (SPIDERYARN-READING2-61):
@@ -359,18 +396,45 @@ instructions now include the conditional goal rules on every call. The plan and 
 - **Visitors never see a quiz** (it is not in the public page's modes), which is why one batch per
   article can be the owner's. If that changes, visitors get a generic batch then.
 
+## Where to look again
+
+Greg, 2026-09-30 (SPIDERYARN-READING2-6R):
+
+> Score each quiz answer against the article's blocks, giving a rough per-section picture of what the
+> reader has got. That could steer your adaptive quiz (spya-jc2ub9) towards the sections they're
+> weakest on, not just adjust its difficulty. And somehow indicate to the reader which sections to
+> (re-)read next.
+
+**A join, not a model call.** Each verdict is counted against the sections its question's evidence
+blocks are in — the reading view's own Sections (`buildSections`, the level one above the leaves),
+so the names are the ones on the spine. Once an answer this visit has been judged wrong, a block
+under the step row names up to three sections, weakest first (the largest share of judged answers
+wrong). Each name jumps the prose there — the (re-)read — and an icon beside it goes back to that
+section's first missed question — the steer. The plan and GPT Sol's review are
+[260930i](../plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md).
+
+- **It names places and says nothing about the reader**: no count, no fraction, no "you got". No
+  verdict counts as neither, so a skip or a failed classifier never puts a section on the list.
+- **The path is still never reordered.** The steer is a jump back through `pick`, so the step shows
+  its premise, a jump to the question already open does nothing, and only questions the reading
+  filter lets the reader land on are offered.
+- **Per visit, like the verdicts it is made of**: nothing stored, logged or sent, so the privacy page
+  did not change. A stored per-section picture, new questions aimed at a weak section, and a
+  "read these next" list of unread sections are deferred, with the reasons, in the plan.
+
 ## What is deliberately not here
 
 - **Attempts are not stored.** A reload starts fresh. `batchId` is the shape that keeps the door
   open; nothing else about v1 assumes statelessness. **The adaptive walk did not change this**: the
-  path, the position in it and the hidden verdict are React state and die with the attempt, and the
-  verdict is not written to a log either — a per-answer right/wrong on a log line is a stored grade
-  wearing a different hat, and [privacy.md](privacy.md) makes a public promise about it.
+  path, the position in it and the hidden verdict map are React state and die with the visit (the
+  verdict map also resets on a new batch). The verdict is not written to a log either — a per-answer
+  right/wrong on a log line is a stored grade wearing a different hat, and
+  [privacy.md](privacy.md) makes a public promise about it.
 - **No reader profile in the stamp**, so no `profileChanged` on the response, although the prompt
   reads the profile since 2026-09-30 (above). Adding one later needs no migration — it would be a
   field on the JSON.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,
-  above.
+  above. (The lines in the prose are placed by passage, but the band still walks the whole path.)
 - **No spoken quizzing.** Greg asked for it — *"ideally this would work well with Live Dialogue
   mode"* — and then chose to defer it whole rather than half-build it. The reasoning, and the three
   shapes it could take, are in [the plan § Spoken

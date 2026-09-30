@@ -208,6 +208,45 @@
   margin-top: 0.9rem;
 }
 
+/* "Where to look again" — section names that jump the prose, each with an
+   optional way back to its missed question. Quiet, like the premise: it names
+   places, it does not report on the reader. docs/plans/260930i. */
+.quiz-look-again {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--rule);
+}
+.quiz-look-again-head {
+  margin: 0 0 0.3rem;
+  font-size: 0.79rem;
+  color: var(--ink-faint);
+}
+.quiz-look-again ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.quiz-look-again li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+}
+.quiz-look-again-section {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 0.2em;
+  padding: 0.2rem 0;
+  cursor: pointer;
+}
+.quiz-look-again-section:hover { text-decoration-color: currentColor; }
+
 /* The whole ordered batch. `list-style: none` and no numbers of our own: the
    band already says "Question 3 of 12" above, and a second numbering that has
    to agree with it is a second source of truth. The tick column is a fixed
@@ -261,3 +300,54 @@
   border-top: 1px solid var(--rule);
 }
 
+
+/* --------------------------------------------------------- in the prose --
+   The quiz's questions after the passage each is about (QuizInProse.tsx,
+   SPIDERYARN-READING2-6V). A sibling after `.prose` inside `td.text`, like
+   `.figure-note`: apparatus in the UI face, small, muted and italic, so it
+   reads as a note in the margin and cannot be taken for the author's words.
+   The whole line is the button — a real target on touch, no hover needed. */
+/* **On the prose's own measure and axis**, not the cell's: `.prose` is a
+   centred 65ch box inside a wider cell whenever a band is open (prose.css §
+   `.prose`), so a line drawn against the cell hung 36px left of the text, under
+   the gutter's icons — the 260930i browser check. The same `max-width` and
+   `margin-inline: auto`, and the reading face, size **and weight** so that `ch`
+   means the same width here as there — Geist is variable and its weight axis
+   moves the zero's advance, which was the last 2.8px at 1280 (gutter.css says
+   the same of the gutter). The button sets its own type, weight included. */
+td.text .quiz-in-prose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-width: clamp(45ch, 90vw, var(--reading-measure));
+  margin: 0.35rem auto 0.1rem;
+  font-family: var(--font-reading);
+  font-size: var(--reading-size);
+  font-weight: var(--reading-weight);
+  user-select: none;
+}
+td.text .quiz-in-prose-q {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0.15rem 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-faint);
+  text-align: left;
+  cursor: pointer;
+}
+td.text .quiz-in-prose-q:hover,
+td.text .quiz-in-prose-q:focus-visible { color: var(--ink); }
+td.text .quiz-in-prose-icon {
+  flex: none;
+  position: relative;
+  top: 0.15em;
+}

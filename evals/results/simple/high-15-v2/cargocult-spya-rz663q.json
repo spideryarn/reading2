@@ -1,0 +1,62 @@
+{
+  "arm": "high-15-v2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "cargocult-spya-rz663q",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:43.017Z",
+  "bodyWords": 3822,
+  "bodyBlocks": 41,
+  "wallMs": 12128,
+  "costUsd": 0.025734,
+  "tokens": {
+    "input": 8267,
+    "output": 920,
+    "reasoning": 204
+  },
+  "ok": true,
+  "words": 277,
+  "paragraphs": [
+    {
+      "text": "This is a 1974 graduation speech by physicist Richard Feynman. It is about telling real science apart from fake science that only looks like the real thing. He calls the fake kind \"Cargo Cult Science,\" after islanders who built fake airports hoping planes would land, copying the look of an airport without understanding what actually makes planes come.",
+      "ids": [
+        "spya-f6b5fs",
+        "spya-wv9g0v",
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "text": "Feynman says this matters because many people believe in things like UFOs, ESP, and key-bending psychics, even though none of it holds up when tested. Worse, some fields that call themselves scientific, like certain teaching methods or ways of handling criminals, keep being used even though they do not seem to actually work. He worries this pseudoscience makes ordinary people doubt their own good sense.",
+      "ids": [
+        "spya-bcgpc3",
+        "spya-aww976",
+        "spya-re4634"
+      ]
+    },
+    {
+      "text": "His key idea is scientific integrity: leaning over backwards to be honest, even about things that hurt your own case. That means reporting anything that might prove you wrong, not just the evidence that supports you, and publishing results whichever way they turn out. He points out that even real scientists have fooled themselves this way, like early measurements of an electron's charge that stayed wrong for years because people didn't trust results too different from the first one.",
+      "ids": [
+        "spya-afgs74",
+        "spya-rxj5wa",
+        "spya-jk7mj4"
+      ]
+    },
+    {
+      "text": "He also gives an example of good science: a researcher named Young who carefully tested every possible clue a rat might use to find food, until he ruled them all out one by one. Feynman contrasts this with weaker studies, like ESP experiments where the effect keeps shrinking the more carefully it's checked. His main message: the first and hardest rule of science is not fooling yourself, since you are the easiest person to fool.",
+      "ids": [
+        "spya-rndcqw",
+        "spya-yzzxkw",
+        "spya-rbpppq"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  }
+}

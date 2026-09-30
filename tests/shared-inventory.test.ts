@@ -44,6 +44,7 @@ const NOTHING: PublicArtefacts = {
   sketch: false,
   trajectory: false,
   faq: false,
+  simpleSummary: false,
   citations: false,
   debate: false,
 };
@@ -57,6 +58,7 @@ const EVERYTHING: PublicArtefacts = {
   sketch: true,
   trajectory: true,
   faq: true,
+  simpleSummary: true,
   citations: true,
   debate: true,
 };
@@ -345,6 +347,9 @@ const WIRE_ROW = {
      `publicCitedWork`), which is invisible to this table. */
   faq: "faq",
   citations: "citations",
+  /* Simple, from the day it was built (2026-09-30): a sub-mode of Summary, so
+     Summary's row. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  simpleSummary: "summary",
   /* And the Debate, the same day (plan 260929c stage 4). A row the boundary
      refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
      which is invisible to this table too. */
@@ -397,24 +402,25 @@ describe("reading the flags off the wire", () => {
       sketch: true,
       trajectory: true,
       faq: true,
+      simpleSummary: true,
       citations: true,
       debate: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
   });
 
-  it("accepts the five booleans", () => {
+  it("accepts the complete boolean inventory", () => {
     expect(asPublicArtefacts(EVERYTHING)).toEqual(EVERYTHING);
   });
 
   /**
    * **Each flag read from its own key**, one at a time.
    *
-   * `asPublicArtefacts` reads five keys by hand, so `arc: row.tweets` is a live
+   * `asPublicArtefacts` reads the keys by hand, so `arc: row.tweets` is a live
    * typo — it compiles, and an all-true fixture accepts it. GPT Sol listed it,
    * 2026-09-02. A one-hot body is the only shape that catches a cross-wire.
    */
-  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory", "faq", "citations", "debate"] as const)(
+  it.each(ARTEFACT_KEYS)(
     "reads %s from its own key and not another's",
     (key) => {
       const oneOn = { ...NOTHING, [key]: true };
@@ -425,7 +431,7 @@ describe("reading the flags off the wire", () => {
   /* **A missing key is not a `false`.** Defaulting would tell an owner their
      glossary stays private, which is the exact sentence this slice exists to
      stop being guessed at. */
-  it.each(["arc", "tweets", "glossary", "ideas", "quotes", "trajectory", "faq", "citations", "debate"])(
+  it.each(ARTEFACT_KEYS)(
     "refuses a body with no %s, rather than defaulting it",
     (missing) => {
       const partial: Record<string, unknown> = { ...EVERYTHING };
@@ -476,6 +482,7 @@ describe("what counts as shareable", () => {
       sketch: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       glossary: STALE,
@@ -497,6 +504,7 @@ describe("what counts as shareable", () => {
       sketch: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       glossary: { ...STALE, entries: [] },
@@ -511,6 +519,7 @@ describe("what counts as shareable", () => {
       sketch: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       glossary: null,
@@ -518,5 +527,61 @@ describe("what counts as shareable", () => {
       quotes: null,
     });
     expect(none).toEqual(NOTHING);
+  });
+
+  it("reports a usable stored Simple, and only that", () => {
+    const available = shareableArtefacts({
+      arc: null,
+      tweets: null,
+      timeline: null,
+      sketch: null,
+      trajectory: null,
+      faq: null,
+      simpleSummary: {
+        version: "simple/1",
+        generator: "test",
+        slug: "x",
+        sourceHash: "0000000000000000",
+        generatedAt: "2020-01-01T00:00:00.000Z",
+        elapsedMs: 1,
+        paragraphs: [
+          { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
+          { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
+        ],
+      },
+      citations: null,
+      debate: null,
+      glossary: null,
+      ideas: null,
+      quotes: null,
+    });
+    expect(available).toEqual({ ...NOTHING, simpleSummary: true });
+  });
+
+  it("does not advertise a Simple the public payload refuses to publish", () => {
+    const available = shareableArtefacts({
+      arc: null,
+      tweets: null,
+      timeline: null,
+      sketch: null,
+      trajectory: null,
+      faq: null,
+      simpleSummary: {
+        version: "simple/1",
+        generator: "test",
+        slug: "x",
+        sourceHash: "0000000000000000",
+        generatedAt: "2020-01-01T00:00:00.000Z",
+        elapsedMs: 1,
+        /* Fewer than two paragraphs is not a usable or public Simple. */
+        paragraphs: [],
+      },
+      citations: null,
+      debate: null,
+      glossary: null,
+      ideas: null,
+      quotes: null,
+    });
+    expect(available).toEqual(NOTHING);
   });
 });

@@ -97,6 +97,11 @@ import {
   PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
 } from "./crossrefs.js";
 import {
+  generateSimpleSummary,
+  inputFingerprint as simpleFingerprint,
+  SIMPLE_VERSION,
+} from "./simple-summary.js";
+import {
   generateDebate,
   inputFingerprint as debateFingerprint,
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
@@ -137,7 +142,8 @@ import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
-import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
+import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
+import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import {
@@ -541,6 +547,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      it replaces rather than appends.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   "crossrefs",
+  /* `faq`'s two reasons again: it reads the blocks and the metadata, nothing
+     in the pipeline reads what it writes, and it replaces rather than appends.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  "simple",
 ]);
 
 export interface StepContext {
@@ -1733,6 +1743,65 @@ const ILLUSTRATE_REFUSAL: Record<IllustrateRefusal, ReaderFacingFailure> = {
  */
 function refuseToIllustrate(reason: IllustrateRefusal): never {
   throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
+
+/**
+ * **A PDF article's reference list, for the Citations stage** — plan 260930i
+ * (SPIDERYARN-READING2-6K). Stage 2 does not render a PDF's bibliography, so
+ * without this the stage sees `[8]` and nothing to say what it is.
+ *
+ * Read from the stored document's text layer (`pass0`, pdf.js, no model),
+ * through `readRawBytes` as `recoverPdfFigures` reads it, so it is the same
+ * bytes the article was made from. **Never fails the step**: a list is an
+ * improvement to the answer, not a precondition for one, so every road that
+ * finds none says which in `state` — the step's log line carries it — and the
+ * stage runs as it did before.
+ */
+async function pdfReferenceList(
+  ctx: StepContext,
+  store: ArtifactReads,
+): Promise<{
+  list: NumberedReferenceList | null;
+  state: "no-raw" | "not-pdf" | "scan" | "no-list" | "found" | "unreadable";
+  ms: number;
+}> {
+  const started = Date.now();
+  const manifest = await store.read(ctx.slug, "fetch", "raw");
+  if (manifest === null) return { list: null, state: "no-raw", ms: Date.now() - started };
+  if (manifest.kind !== "pdf") return { list: null, state: "not-pdf", ms: Date.now() - started };
+  try {
+    ctx.signal?.throwIfAborted();
+    const bytes = await readRawBytes(manifest, { slug: ctx.slug });
+    ctx.signal?.throwIfAborted();
+    const pass = await pass0(bytes, { maxPages: MAX_PAGES });
+    ctx.signal?.throwIfAborted();
+    /* A scan has no text layer to read a list from (Sol F7). */
+    if (pass.isScan) return { list: null, state: "scan", ms: Date.now() - started };
+    /* Running headers and footers out first (`pageLines`), so a journal's
+       header on every bibliography page is neither inside an entry nor, when
+       it says "References", taken for the list's heading (Sol F1). */
+    const lines = pass.pages.flatMap((p) => pageLines(pass, p.page));
+    const list = referenceListFrom(lines);
+    return { list, state: list === null ? "no-list" : "found", ms: Date.now() - started };
+  } catch (err) {
+    ctx.signal?.throwIfAborted();
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "citations",
+        /* A parser error can repeat document text in its message. Log only a
+           class (and our own bounded reason), never a stranger's PDF. */
+        why:
+          err instanceof RawDocumentUnavailable
+            ? `${err.name}:${err.reason}`
+            : err instanceof Error
+              ? err.name
+              : typeof err,
+      },
+      `citations ${ctx.slug}: could not read the PDF's reference list; going on without it`,
+    );
+    return { list: null, state: "unreadable", ms: Date.now() - started };
+  }
 }
 
 /**
@@ -3791,6 +3860,65 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
+  /* Stage 5r — Simple: a plain-words orientation, a sub-mode of Summary. Off
+     DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; run by a press on the
+     Simple chip, or on Metadata. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+
+     **No baseline read**, like `faq`: nothing addresses a paragraph, so a
+     re-run replaces them. */
+  simple: {
+    name: "simple",
+    label: "Writing it in plain words",
+    produces: ["simple"],
+    /**
+     * The exact body-only article rendering the request sends, with the
+     * **real, nullable** metadata, which is what `generateSimpleSummary`
+     * hashes too. No `profileHash`.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: SIMPLE_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateSimpleSummary({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        power: ctx.power,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const paragraphs = run.simpleSummary.paragraphs;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "simple",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          blocks: run.blocks,
+          paragraphs: paragraphs.length,
+          words: run.words,
+          /* Counts only — never the prose. `unanchored` and `unknownIds` are
+             the ones to watch: a paragraph the piece does not back. */
+          ...run.dropped,
+        },
+        `simple ${ctx.slug}: ${paragraphs.length} paragraphs, ${run.words} words`,
+      );
+      return {
+        parts: { simple: run.simpleSummary },
+        detail: `${paragraphs.length} paragraphs`,
+      };
+    },
+  },
   /**
    * **The picture a model draws of the argument** — docs/project/diagram.md
    * § Sketch, docs/plans/260830j-sketch-diagram.md.
@@ -4379,9 +4507,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          keyed on, so a read that quietly answered `null` would orphan every
          one of them. `previousCitationsFrom` refuses an unreadable baseline. */
       const previous = await previousCitationsFrom(store, ctx.slug);
+      const referenceList = await pdfReferenceList(ctx, store);
       const run = await generateCitations({
         article: await readArticle(ctx.slug, store),
         previous,
+        referenceList: referenceList.list,
         onProgress: ctx.report,
         signal: ctx.signal,
         power: ctx.power,
@@ -4419,6 +4549,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           notesReached: run.coverage.notesReached,
           references: run.coverage.references,
           referencesReached: run.coverage.referencesReached,
+          /* **The reference-list witness** (plan 260930i): a PDF whose list
+             was not found (`referenceList: "no-list"`) or whose entries
+             were found and none kept (`entries: 0` over a long list) is the
+             6K complaint coming back, and nothing on screen would say which. */
+          referenceList: referenceList.state,
+          referenceListEntries: referenceList.list?.entries.size ?? 0,
+          referenceListMs: referenceList.ms,
+          entries: rows.filter((c) => c.entry !== undefined).length,
           ...run.drops,
           ...run.scores,
         },

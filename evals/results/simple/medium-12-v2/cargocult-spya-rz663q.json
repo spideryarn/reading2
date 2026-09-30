@@ -1,0 +1,60 @@
+{
+  "arm": "medium-12-v2",
+  "effort": "medium",
+  "pitch": 12,
+  "slug": "cargocult-spya-rz663q",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:44.087Z",
+  "bodyWords": 3822,
+  "bodyBlocks": 41,
+  "wallMs": 8402,
+  "costUsd": 0.021862,
+  "tokens": {
+    "input": 8266,
+    "output": 533,
+    "reasoning": 14
+  },
+  "ok": true,
+  "words": 196,
+  "paragraphs": [
+    {
+      "text": "This is a 1974 graduation speech by physicist Richard Feynman. He talks about what he calls Cargo Cult Science: research that copies the outward form of science but misses something important, so it doesn't really work.",
+      "ids": [
+        "spya-f6b5fs",
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "text": "Feynman says this matters because many things people call science, like some teaching methods or ways of handling criminals, never actually improve even though experts keep studying them. He thinks ordinary people are wrongly made to feel their own good ideas are less valid than these unproven expert methods.",
+      "ids": [
+        "spya-aww976",
+        "spya-re4634"
+      ]
+    },
+    {
+      "text": "His main idea is scientific integrity: being brutally honest about your own work, even the parts that make you look wrong. That means reporting every flaw you find, publishing results whether they support your idea or not, and not fooling yourself, since he says you are the easiest person to fool.",
+      "ids": [
+        "spya-rxj5wa",
+        "spya-jk7mj4",
+        "spya-ed9mzv"
+      ]
+    },
+    {
+      "text": "He gives examples: scientists who kept measuring an electron's charge close to an old wrong answer because they didn't trust readings that differed from it, and a rat experiment that carefully ruled out every possible clue a rat could use to find its way. He contrasts these with parapsychology, where effects shrink away under closer testing but are never abandoned.",
+      "ids": [
+        "spya-s9msxy",
+        "spya-npdc6n",
+        "spya-rbpppq"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

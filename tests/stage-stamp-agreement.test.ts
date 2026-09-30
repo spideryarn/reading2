@@ -271,6 +271,9 @@ const STAGES = [
   /* Added the day the stage was registered, 2026-09-30, for `quiz`'s reason.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   "crossrefs",
+  /* Added the day the stage was registered, 2026-09-30, for `quiz`'s reason.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  "simple",
   "assets",
 ] as const;
 type Stage = (typeof STAGES)[number];
@@ -404,6 +407,21 @@ function scriptFor(stage: Stage, article: Article): string[] {
       return [
         JSON.stringify({
           links: [{ from: block.id, phrase: block.text.split(/\s+/).slice(0, 6).join(" "), to: to.id }],
+        }),
+      ];
+    }
+    case "simple": {
+      /* Two paragraphs, each on a body block — the fewest `buildSimpleSummary`
+         keeps, so a stub whose ids stopped resolving throws here rather than
+         testing nothing. */
+      const second = article.blocks.find((b) => b.id !== block.id && isBodyEvidence(b));
+      if (!second) throw new Error("the fixture has no second body block");
+      return [
+        JSON.stringify({
+          paragraphs: [
+            { text: "This piece is about something.", ids: [block.id] },
+            { text: "It matters for a reason it gives.", ids: [second.id] },
+          ],
         }),
       ];
     }

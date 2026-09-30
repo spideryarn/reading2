@@ -712,6 +712,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
      records the runs. */
   crossrefs: 300_000,
+  /* **MEASURED 2026-09-30**, stage 1's probe: 8–16 s for one Messages call over
+     the body, answering ~250 words, on articles of 3,800–8,600 body words, at
+     `medium` and `high` alike (evals/simple/results-260930.md). `faq`'s 150 s,
+     roughly ten times the slowest: nine articles are evidence, not a
+     distribution, and the longest on the shelf is twenty times these. */
+  simple: 150_000,
   /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
      seconds, one model call each, the longest being the constitution at 194.4s
      with the shape-claims section added to the prompt. Rounded up hard, because

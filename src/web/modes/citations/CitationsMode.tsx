@@ -7,7 +7,8 @@
  * (docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md),
  * with one thing missing on purpose:
  *
- * - **no passages** — the row's "first cited" is a jump through `onJump`, not a
+ * - **no passages** — the row's "first cited" is a jump through `onJump` (with a
+ *   `citePassageKey` so it lands on the citing words, plan 260930i), not a
  *   selection, so there is no `usePassageLifecycle` here and `selectPassages`
  *   answers `NO_FOUND` (src/web/reader/passages.ts).
  *
@@ -56,7 +57,7 @@ export function CitationsBand({
    * auto-run and the POST are not.
    */
   read: CitationsRead;
-  onJump(id: BlockId): void;
+  onJump(id: BlockId, passage?: string): void;
 }) {
   useRenderCount("CitationsBand");
   const owner = useCitations(slug, read);
@@ -80,7 +81,7 @@ export function VisitorCitationsBand({
   onJump,
 }: {
   citations: PublicCitations;
-  onJump(id: BlockId): void;
+  onJump(id: BlockId, passage?: string): void;
 }) {
   useRenderCount("VisitorCitationsBand");
   const controls = useCitationControls();

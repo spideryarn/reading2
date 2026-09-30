@@ -127,7 +127,7 @@ describe("the policy", () => {
     expect([...SHARING_STEPS].sort()).toEqual(
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
-        "sketch", "illustrated", "trajectory", "debate", "citations", "crossrefs",
+        "sketch", "illustrated", "trajectory", "debate", "citations", "crossrefs", "simple",
       ].sort(),
     );
   });

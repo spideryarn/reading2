@@ -1,0 +1,53 @@
+{
+  "arm": "medium-12-v2",
+  "effort": "medium",
+  "pitch": 12,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:44.093Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 9143,
+  "costUsd": 0.046122,
+  "tokens": {
+    "input": 19851,
+    "output": 642,
+    "reasoning": 141
+  },
+  "ok": true,
+  "words": 190,
+  "paragraphs": [
+    {
+      "text": "This article is a science review about how brain cells, called neurons, handle information. It explains a math tool called partial information decomposition, or PID, which breaks down how neurons combine signals from other neurons. The tool separates information into parts: information repeated across sources, information unique to one source, and information that only appears when sources are combined, called synergy.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "Understanding this matters because scientists still don't know exactly how brain circuits transform incoming signals into useful actions. New recording tools now capture activity from thousands of neurons at once, but making sense of that flood of data needs better methods. PID offers a way to see not just whether neurons talk to each other, but how they combine signals to compute something new.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain cells and monkeys performing tasks, the authors found synergy (joint, combined information) is common in real neural circuits. It was especially strong in well-connected \"rich club\" neurons, in circuits with more feedback loops among neurons, and where input signals were moderately, but not too, similar. In monkeys, synergy also shifted depending on the task, showing information processing changes with behavior.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

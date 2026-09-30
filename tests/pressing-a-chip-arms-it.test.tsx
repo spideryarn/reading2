@@ -236,6 +236,81 @@ describe("Remember's Recall | Quiz toggle", () => {
   });
 });
 
+/* ----------------------------------------------- Summary's Gists | Simple -- */
+
+const { SummarySubModeToggle } = await import("../src/web/modes/summary/SummaryMode.js");
+
+/** `slug: null` is the visitor's toggle, which must arm nothing. */
+function mountSummaryToggle(value: "gists" | "simple", slug: string | null = SLUG): string[] {
+  const changes: string[] = [];
+  act(() => {
+    root.render(
+      createElement(SummarySubModeToggle, { slug, value, onChange: (next: string) => void changes.push(next) }),
+    );
+  });
+  return changes;
+}
+
+function summaryChip(label: string): string {
+  const buttons = [...host.querySelectorAll<HTMLElement>(".summ-views .summ-pill")];
+  const at = buttons.findIndex((b) => b.textContent?.trim() === label);
+  if (at < 0) throw new Error(`no ${label} chip`);
+  return `.summ-views .summ-pill:nth-of-type(${at + 1})`;
+}
+
+describe("Summary's Gists | Simple switch", () => {
+  it("is a labelled group of focusable pressed-state controls", () => {
+    mountSummaryToggle("gists");
+    const group = host.querySelector("fieldset.summ-views");
+    const buttons = [...(group?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    expect(group?.querySelector("legend")?.textContent).toBe("View");
+    expect(buttons.map((button) => [button.type, button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+      ["button", "Gists", "true"],
+      ["button", "Simple", "false"],
+    ]);
+    act(() => buttons[1]?.focus());
+    expect(document.activeElement).toBe(buttons[1]);
+  });
+
+  it("arms Simple when Simple is pressed, and moves to it", () => {
+    const changes = mountSummaryToggle("gists");
+    expect(armed("simple")).toBe(false);
+    click(summaryChip("Simple"));
+    expect(armed("simple")).toBe(true);
+    expect(changes).toEqual(["simple"]);
+  });
+
+  it("arms a fresh press when Simple is pressed while already showing", () => {
+    /* The way back from a failed read (useAutoRun.ts § A failed read is not an
+       answer): nothing re-fires without a new nonce. No `onChange`, because
+       writing the same value would push a history entry that goes nowhere. */
+    const changes = mountSummaryToggle("simple");
+    click(summaryChip("Simple"));
+    const first = pendingActivation(SLUG, "simple");
+    expect(first).not.toBeNull();
+    click(summaryChip("Simple"));
+    expect(pendingActivation(SLUG, "simple")).not.toBe(first);
+    expect(changes).toEqual([]);
+  });
+
+  it("arms nothing for Gists, or for merely being in Simple", () => {
+    /* A pasted `?summary=simple`, a Back step, a last-view restore: each
+       mounts the switch with Simple already set, and none is a press. */
+    mountSummaryToggle("simple");
+    expect(armed("simple")).toBe(false);
+    mountSummaryToggle("simple");
+    click(summaryChip("Gists"));
+    expect(armed("simple")).toBe(false);
+  });
+
+  it("arms nothing for a visitor, who still gets to switch", () => {
+    const changes = mountSummaryToggle("gists", null);
+    click(summaryChip("Simple"));
+    expect(armed("simple")).toBe(false);
+    expect(changes).toEqual(["simple"]);
+  });
+});
+
 /* ------------------------------------------------- the bar's Tweets button -- */
 
 function mountDock(view: "article", visitor = false, onMode: (next: string) => void = () => {}): void {

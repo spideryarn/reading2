@@ -1390,7 +1390,9 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
   ],
   summary: [
     { label: "SummaryBand", as: "owner" },
-    { label: "SummaryBand", as: "visitor" },
+    /* Its own band since Simple (plan 260930i): the visitor's reads the
+       stored paragraphs off the payload, with no `useSimple` under it. */
+    { label: "VisitorSummaryBand", as: "visitor" },
   ],
   diagram: [
     { label: "DiagramBand", as: "owner" },
@@ -1457,6 +1459,7 @@ const NOTHING_AVAILABLE: PublicArtefacts = {
   sketch: false,
   trajectory: false,
   faq: false,
+  simpleSummary: false,
   citations: false,
   debate: false,
 };
@@ -1688,6 +1691,29 @@ describe("a press that met any broken band is retired", () => {
 
     containedInside("remember");
     expect(activation.pendingActivation(SLUG, "quiz"), "the Quiz press survived").toBeNull();
+    expect(jobPosts()).toEqual([]);
+  });
+
+  /* Summary's Simple chip (plan 260930i): `bandTarget` must answer `simple`
+     for `?summary=simple`, or the boundary retires nothing and the token waits
+     for a later mount to spend. */
+  it("summary: the Simple chip, when the Simple view throws under the real useSimple", async () => {
+    who.set(OWNER_A);
+    notBuilt = "/api/simple/";
+    await open("?mode=summary");
+    expect(text()).not.toContain("[mode-render]");
+    trace.length = 0;
+
+    probe.throwAt = "OwnerSimple";
+    const chip = [...host.querySelectorAll<HTMLButtonElement>(".summ-views .summ-pill")].find(
+      (b) => (b.textContent ?? "").trim() === "Simple",
+    );
+    expect(chip, "no Simple chip").toBeDefined();
+    await act(async () => chip?.click());
+    await settle();
+
+    containedInside("summary");
+    expect(activation.pendingActivation(SLUG, "simple"), "the Simple press survived").toBeNull();
     expect(jobPosts()).toEqual([]);
   });
 });

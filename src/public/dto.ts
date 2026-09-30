@@ -67,6 +67,8 @@ import type {
   DirectDebateRow,
   Faq,
   FaqQuestion,
+  SimpleParagraph,
+  SimpleSummary,
   Glossary,
   Idea,
   Ideas,
@@ -87,7 +89,7 @@ import type {
   Tweet,
   TweetThread,
 } from "../types.js";
-import { anchorFields, identifiesOf, readStoredLean } from "../types.js";
+import { anchorFields, identifiesOf, isSimpleParagraphs, readStoredLean } from "../types.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -97,6 +99,7 @@ import type {
   PublicDebate,
   PublicDirectDebateRow,
   PublicFaq,
+  PublicSimpleSummary,
   PublicIdentificationSignal,
   PublicGlossary,
   PublicGlossaryEntry,
@@ -495,6 +498,19 @@ function publicFaq(faq: Faq): PublicFaq {
         ...(q.difficulty !== undefined ? { difficulty: q.difficulty } : {}),
         ...(q.centrality !== undefined ? { centrality: q.centrality } : {}),
       }),
+    ),
+  };
+}
+
+/**
+ * **Simple, rebuilt paragraph by paragraph** — each `{ text, ids }` and
+ * nothing else; the stamp is pipeline provenance.
+ * src/public-types.ts § `PublicSimpleSummary` is the argument.
+ */
+function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
+  return {
+    paragraphs: simple.paragraphs.map(
+      (p): SimpleParagraph => ({ text: p.text, ids: [...p.ids] }),
     ),
   };
 }
@@ -966,6 +982,7 @@ export function publicArticle(row: {
   timeline: Timeline | null;
   trajectory: Trajectory | null;
   faq: Faq | null;
+  simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
   comments: readonly Comment[];
@@ -1016,6 +1033,9 @@ export function publicArticle(row: {
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
     ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
     ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
+    ...(row.simpleSummary !== null && isSimpleParagraphs(row.simpleSummary.paragraphs)
+      ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
+      : {}),
     ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),
     /* The article's own address goes in with it: a direct row can carry it in
        its witness and its `linked` signal, and it is judged there by the policy

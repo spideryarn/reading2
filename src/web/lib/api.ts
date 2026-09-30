@@ -861,6 +861,9 @@ const CACHEABLE = [
   /* With the route, as `/api/faq/` is: the owner's offline cache (Sol F1) —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   "/api/crossrefs/",
+  /* With the route, as `/api/faq/` is —
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  "/api/simple/",
   "/api/sketch/",
   /* **The artefact, and the plates' bytes ride along.** A URL under this prefix
      is either `/api/illustrated/<slug>` — JSON, cached like its neighbours — or

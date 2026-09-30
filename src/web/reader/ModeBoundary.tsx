@@ -38,8 +38,9 @@
  * ## And the press it retires is the press it would have claimed
  *
  * `bandTarget` (activation.ts) answers from the same tables the presses arm
- * from. It needs the sub-mode for the three bands whose chips arm something, so
- * this component reads those three parameters itself. That keeps them off
+ * from. It needs the sub-mode for the bands whose chips arm something —
+ * Diagram, Referee, Remember and Summary — so this component reads those
+ * parameters itself. That keeps them off
  * `Reader`'s own render, which the bands that own them each avoided for the
  * same reason (RememberBand, DiagramBand).
  */
@@ -48,7 +49,7 @@ import type { ReactNode } from "react";
 import { MODE_LABEL } from "../../title-text.js";
 import { bandTarget } from "../activation.js";
 import { FeatureBoundary } from "../FeatureBoundary.js";
-import { diagramParam, type Mode, refereeParam, rememberParam } from "../params.js";
+import { diagramParam, type Mode, refereeParam, rememberParam, summaryParam } from "../params.js";
 
 /**
  * **Whether each mode's band is inside a boundary, decided rather than fallen
@@ -111,19 +112,26 @@ export function ModeBoundary({
     diagram: diagramParam,
     referee: refereeParam,
     remember: rememberParam,
+    summary: summaryParam,
   });
-  /* Only an owner's band is selected by these parameters. A Diagram visitor
+  /* Only an owner's band is selected by the first three. A Diagram visitor
      is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
-     address change there is not a new band and must not retry a broken one. */
-  const subMode = owner
-    ? mode === "diagram"
-      ? sub.diagram
-      : mode === "referee"
-        ? sub.referee
-        : mode === "remember"
-          ? sub.remember
-          : ""
-    : "";
+     address change there is not a new band and must not retry a broken one.
+     **Summary's is the exception**: a visitor gets Simple too, off the payload
+     (SummaryMode.tsx § `VisitorSummaryBand`), so Gists and Simple are two
+     bands for either reader. */
+  const subMode =
+    mode === "summary"
+      ? sub.summary
+      : owner
+        ? mode === "diagram"
+          ? sub.diagram
+          : mode === "referee"
+            ? sub.referee
+            : mode === "remember"
+              ? sub.remember
+              : ""
+        : "";
   return (
     <FeatureBoundary
       name={MODE_LABEL[mode]}
