@@ -67,6 +67,32 @@
   color: var(--ink-faint);
 }
 
+/* "Only what I've read", and the share read. A setting above the question,
+   so small and quiet; the figure is a hint beside it, not a score.
+   docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md. */
+/* A wrapping row rather than one line of inline text: at phone width the
+   figure ran off the band's right edge, clipped (browser check, 2026-09-30).
+   Each part wraps whole, so nothing is orphaned. */
+.quiz-only-read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.75rem;
+  row-gap: 0.1rem;
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.88rem;
+  color: var(--ink-faint);
+}
+.quiz-only-read > span {
+  min-width: 0;
+}
+.quiz-only-read label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
 .quiz-question {
   margin: 0.4rem 0 0.7rem;
   font-size: 1.03rem;

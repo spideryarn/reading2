@@ -111,9 +111,24 @@ async function waitForReadingTimeWrites(path: string): Promise<void> {
   }
 }
 
+/**
+ * Whether `levels` can be believed yet — which is not the same as whether it
+ * is empty.
+ *
+ * `off`: not recording for this reader at all. `loading`: the opening read has
+ * not answered for *this* run of the effect (a slug, or the switch turned off
+ * and on again, is a new run). `failed`: it never will, so the levels hold only
+ * what this page has credited since. Only `loaded` means an empty map is "read
+ * nothing". GPT Sol's findings 1 and 3 on
+ * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md, which is what
+ * reads it.
+ */
+export type ReadingTimeStatus = "off" | "loading" | "loaded" | "failed";
+
 export interface ReadingTime {
   /** Blocks with a level above zero. Stable identity until one changes. */
   levels: ReadonlyMap<BlockId, ReadLevel>;
+  status: ReadingTimeStatus;
   /** `Reader`'s gate: is the prose on screen right now. Off until it says so. */
   setCounting: (on: boolean) => void;
 }
@@ -164,6 +179,12 @@ export function useReadingTime(
   enabled: boolean,
 ): ReadingTime {
   const [levels, setLevels] = useState<ReadonlyMap<BlockId, ReadLevel>>(NO_LEVELS);
+  /* Keyed to the slug it answers for, so a render between a slug change and
+     this effect's reset cannot report the previous article's `loaded`. */
+  const [opened, setOpened] = useState<{ slug: string; status: "loading" | "loaded" | "failed" }>({
+    slug,
+    status: "loading",
+  });
   const counting = useRef(false);
   const wordsRef = useRef(words);
   wordsRef.current = words;
@@ -174,6 +195,7 @@ export function useReadingTime(
 
   useEffect(() => {
     setLevels(NO_LEVELS);
+    setOpened({ slug, status: "loading" });
     if (!enabled) return;
 
     const path = readingTimePath(slug);
@@ -317,8 +339,10 @@ export function useReadingTime(
           if (typeof s === "number" && Number.isFinite(s) && s > 0) server.set(id, s);
         }
         recompute(new Set([...server.keys(), ...local.keys()]));
+        if (!gone) setOpened({ slug, status: "loaded" });
       } catch {
         /* Nothing to draw from the server is not a reason to stop recording. */
+        if (!gone) setOpened({ slug, status: "failed" });
       } finally {
         opening = false;
         if (flushAfterOpening && !gone) flush(false);
@@ -340,5 +364,6 @@ export function useReadingTime(
     };
   }, [slug, enabled]);
 
-  return { levels: enabled ? levels : NO_LEVELS, setCounting };
+  const status: ReadingTimeStatus = !enabled ? "off" : opened.slug === slug ? opened.status : "loading";
+  return { levels: enabled ? levels : NO_LEVELS, status, setCounting };
 }
