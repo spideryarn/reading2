@@ -378,7 +378,7 @@ non-problem: a run describes the deploys that *have* happened and leaves undeplo
 one. The real reason is that the sweep runs unattended every three hours and exists to leave
 `dev` committed, green and pushed; a changelog step would dirty the tree afterwards and spend a
 Sol review on a question that has nothing to do with whether the deploy is ready. So it is its own
-job, run by the Overseer at its own cadence, and it needs no person: see step 7. And a failure here does not look like a failure: the copy stage can
+job, which the Overseer starts straight after each deploy ([overseer.md § Deploying](overseer.md#deploying), since 2026-09-30), and it needs no person: see step 7. And a failure here does not look like a failure: the copy stage can
 strengthen *"code intended to do X"* into *"X is now available"* while every structural check passes.
 GPT Sol, asked to attack this, landed in the same place — **generate after the facts exist, review
 explicitly, publish one deploy late**
