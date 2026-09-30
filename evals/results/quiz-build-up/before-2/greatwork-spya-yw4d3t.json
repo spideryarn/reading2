@@ -1,0 +1,131 @@
+{
+  "arm": "before-2",
+  "slug": "greatwork-spya-yw4d3t",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:53:37.381Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "What three qualities does the article say the work you choose to pursue needs to have?",
+      "referenceAnswer": "It needs to be something you have a natural aptitude for, something you have a deep interest in, and something that offers scope to do great work.",
+      "evidence": [
+        "spya-aeqwcs"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "If an oracle could give a single-word answer to the secret of doing great work, what word does the author say he'd bet on?",
+      "referenceAnswer": "Curiosity.",
+      "evidence": [
+        "spya-a8tsmy"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What does the author identify as the key to accomplishing something large, like writing a book, through daily work such as writing one page a day?",
+      "referenceAnswer": "Consistency: getting something done every day, rather than a lot on some days and nothing on others, is what allows small daily efforts to add up to something big over time.",
+      "evidence": [
+        "spya-gvh3ek"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "According to the article, what resource do young people have far more of than they usually realize?",
+      "referenceAnswer": "Time. The author says the young have no idea how rich they are in time, and suggests spending it on slightly frivolous pursuits, like learning something out of pure curiosity or trying to build something just because it seems cool.",
+      "evidence": [
+        "spya-pnxut9"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What does the article say matters more for sustaining your morale than the size of your audience?",
+      "referenceAnswer": "The dedication of the audience, not its size; the value of an audience doesn't grow linearly with how big it is, so a small handful of people who genuinely love your work can be enough to sustain you.",
+      "evidence": [
+        "spya-ngkxpy"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "Why does the author say per-project procrastination (putting off a big project year after year) is more dangerous than everyday procrastination?",
+      "referenceAnswer": "Because it disguises itself as work: you stay busy on something else, so it never triggers the alarm bells that ordinary daily procrastination does, letting you lose years rather than just a day.",
+      "evidence": [
+        "spya-q0jujr",
+        "spya-e9jhjz"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "How does the article distinguish genuine style from affectation?",
+      "referenceAnswer": "Style is doing things in a distinctive way without trying to be distinctive; affectation is trying to seem impressive or distinctive, which amounts to pretending someone other than you is doing the work.",
+      "evidence": [
+        "spya-aah3tw",
+        "spya-kyybds"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "What distinguishes the good way of copying other people's work from the dangerous way, according to the article?",
+      "referenceAnswer": "The good way is to copy openly and consciously, building on it; the dangerous way is copying furtively or unconsciously, which makes you merely a train running on tracks laid down by someone else rather than someone genuinely building on prior work.",
+      "evidence": [
+        "spya-nckebu",
+        "spya-nckebu"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does the article claim that originality in choosing which problem to work on matters even more than originality in solving it?",
+      "referenceAnswer": "Because it's what distinguishes the people who discover whole new fields; the author notes people are far more original in how they solve problems than in deciding which problems to tackle, often drifting toward fashionable problems instead, so choosing an overlooked one is where the deepest insight often lies.",
+      "evidence": [
+        "spya-k7swrh",
+        "spya-kuuy6q"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "Why does the author say being puzzled or confused is actually a good sign when it comes to having original ideas, contrary to the popular image of experts as certain?",
+      "referenceAnswer": "Because new ideas typically arise from someone with expertise noticing that something puzzles them, as long as the thing they're puzzled about matters and no one else understands it either; originality partly consists of this willingness to sit with confusion rather than needing certainty.",
+      "evidence": [
+        "spya-v6rtpq",
+        "spya-easv8a"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "Why does the author say people underrate exponential growth in its early stages?",
+      "referenceAnswer": "Because the growth curve feels flat at the start even though it is still genuinely exponential; humans can't intuitively grasp this, so people fail to realize how valuable it would be to consciously invest extra effort in getting something with compounding growth started early.",
+      "evidence": [
+        "spya-kewuty"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "Why does the author argue that strictness and rule-breaking, though seemingly opposed, actually have to go together to discover new ideas?",
+      "referenceAnswer": "Being strict lets you notice the clues where reality clashes with the current accepted model, while being willing to break that model's implicit rules lets you actually propose something new; the author says popular culture only sees them as opposed because it wrongly assumes the issues at stake are trivial.",
+      "evidence": [
+        "spya-xkh302"
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ]
+}

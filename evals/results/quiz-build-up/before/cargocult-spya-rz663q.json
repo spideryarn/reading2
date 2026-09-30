@@ -1,0 +1,131 @@
+{
+  "arm": "before",
+  "slug": "cargocult-spya-rz663q",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:52:08.185Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "What story does Feynman use to explain what he means by \"Cargo Cult Science\"?",
+      "referenceAnswer": "He describes South Sea islanders who, after seeing planes land during the war bringing cargo, built fake runways, control huts, and bamboo antennas to attract planes again. They copy the outward form of what worked before perfectly, but no planes land, because something essential is missing.",
+      "evidence": [
+        "spya-fd2muf"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What does Feynman say is the very first principle of scientific integrity?",
+      "referenceAnswer": "That you must not fool yourself, because you are the easiest person for you to fool. He says once you've managed not to fool yourself, it becomes easy to be honest with other scientists.",
+      "evidence": [
+        "spya-ed9mzv"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "In the history of measurements of the electron's charge after Millikan, why did each new measurement creep up only slightly rather than jumping straight to the correct value?",
+      "referenceAnswer": "Millikan's original figure was slightly too low, but researchers were biased by his result: when they got a number much higher than his, they assumed something was wrong and searched harder for errors, while numbers close to his were accepted without as much scrutiny. This unconscious bias caused the true value to emerge only gradually over many measurements.",
+      "evidence": [
+        "spya-s9msxy",
+        "spya-uj9v2h"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "What happened when Feynman went to see Uri Geller's demonstration of bending a key?",
+      "referenceAnswer": "Geller rubbed a key held by Feynman's companion but nothing happened, and when he claimed it worked better underwater, they tried it with the key under running water in the bathroom and still nothing happened, so Feynman was unable to investigate the claimed phenomenon at all.",
+      "evidence": [
+        "spya-mmhbvn"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What test does Feynman propose for spotting topics where nobody actually has real knowledge?",
+      "referenceAnswer": "He says that if you can talk about a subject at a cocktail party without worrying that the hostess will accuse you of \"talking shop\" or your spouse will think you're flirting, then you can be sure the topic is one about which nobody actually knows anything.",
+      "evidence": [
+        "spya-wc4h5s"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What mistake did the psychology student's proposed experiment contain, and what did Feynman tell her she needed to do first?",
+      "referenceAnswer": "She wanted to change one condition and see if rats still produced the same behavior, but she hadn't first confirmed she could reproduce the original result under the original condition in her own lab. Feynman told her she needed to repeat the original experiment first, so she'd know any difference she found afterward was really due to the change she made and not some other uncontrolled factor.",
+      "evidence": [
+        "spya-tf8rj2"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why didn't the physicist at the National Accelerator Laboratory redo the light hydrogen experiment for comparison, and what does Feynman think this practice risks?",
+      "referenceAnswer": "He couldn't get time on the expensive, heavily booked accelerator to run the light hydrogen experiment because it wouldn't produce any new result, so he instead used someone else's data taken on different apparatus. Feynman worries that lab managers' hunger for new results to justify funding is undermining the scientific value of the experiments themselves.",
+      "evidence": [
+        "spya-m95kqm",
+        "spya-m95kqm"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does Feynman say the Wesson Oil advertising claim is a problem, even though the statement itself is technically true?",
+      "referenceAnswer": "The ad said Wesson Oil doesn't soak through food, which is true, but only at a certain temperature - at another temperature all oils, including Wesson, will soak through. By leaving that out, the ad creates a false impression even though no individual fact stated is false; it is the misleading implication, not the literal statement, that violates scientific integrity.",
+      "evidence": [
+        "spya-bpyx8n"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why does Feynman think it is dangerous for a parapsychology institute to train only students who already show ability to get PSI results?",
+      "referenceAnswer": "Such a policy teaches students to produce a desired kind of outcome rather than teaching them how to run an experiment with real scientific integrity. It rewards getting the \"right\" result instead of honest investigation, which is exactly the kind of corruption of method Feynman is warning against throughout the talk.",
+      "evidence": [
+        "spya-g203mu"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why does Feynman treat parapsychologists' response to failed replication - shrinking effects and eventually calling repeatability \"irrelevant\" - as a sign of Cargo Cult Science rather than real science?",
+      "referenceAnswer": "As critics pointed out flaws, researchers refined their techniques, but instead of the effect getting clearer it kept getting smaller until it vanished entirely, and rather than concluding there was no real phenomenon, a leading figure declared that expecting a repeatable experiment was an irrelevant demand. For Feynman, abandoning repeatability - one of science's basic requirements - to preserve a belief is exactly the kind of hollow imitation of scientific form he calls Cargo Cult Science.",
+      "evidence": [
+        "spya-rbpppq",
+        "spya-rbpppq"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "Why does Feynman argue that a scientist advising a government official must publish an unfavorable answer just as readily as a favorable one?",
+      "referenceAnswer": "He uses the example of advising a senator on where to drill: if the scientist only reports results the politician likes and suppresses the ones they don't, the advice is not scientific but is simply being used to support a predetermined agenda. Real scientific integrity means publishing findings regardless of which way they come out, the same principle he applies to cigarette companies only advertising favorable properties of their product.",
+      "evidence": [
+        "spya-s05sub",
+        "spya-jk7mj4"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "Why does Feynman say later researchers ignored Mr. Young's rat-corridor experiment even though he calls it an \"A-Number-1\" piece of science?",
+      "referenceAnswer": "Young's experiment was valuable precisely because it painstakingly eliminated every clue a rat could use to identify a door, revealing that rats relied on subtle sound cues from the floor, which showed exactly what controls were needed to run a trustworthy rat experiment. Later experimenters ignored his methods and controls entirely and went back to running rats the old, uncontrolled way, illustrating how Cargo Cult Science persists by disregarding inconvenient rigor rather than building on it.",
+      "evidence": [
+        "spya-yzzxkw",
+        "spya-wye8g6"
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ]
+}

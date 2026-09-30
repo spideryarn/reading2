@@ -520,8 +520,6 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
         question: "What does the paragraph say?",
         referenceAnswer: "It says one thing. Then it stops.",
         evidence: [{ blockId: BODY.id, quote: "One paragraph", start: 0 }],
-        band: "easy",
-        value: 3,
       },
     ],
     dropped: {

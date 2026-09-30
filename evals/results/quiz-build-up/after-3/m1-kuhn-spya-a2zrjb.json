@@ -1,0 +1,156 @@
+{
+  "arm": "after-3",
+  "slug": "m1-kuhn-spya-a2zrjb",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "546b29ed47654e7b715acc52a79fea68875516aa825fddc144e64c511602d28e",
+  "at": "2026-09-30T05:44:39.961Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 4,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 3,
+    "gaps": 3
+  },
+  "outputTokens": 48896,
+  "elapsedMs": 452319,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "What does Kuhn say his purpose is in building the \"Landscape of Consciousness\"?",
+      "referenceAnswer": "His purpose is simply to gather, describe, and classify the many different theories of consciousness, without judging which one is actually true, and then to explore what each implies for a few big questions.",
+      "evidence": [
+        "spya-m5fyu2",
+        "spya-peztjn"
+      ]
+    },
+    {
+      "question": "What is Chalmers's \"hard problem\" of consciousness?",
+      "referenceAnswer": "It is the problem of explaining why physical processes in the brain are accompanied by subjective, felt experience at all—why it feels like something from the inside to perceive or think, rather than there being no inner experience whatsoever.",
+      "evidence": [
+        "spya-xsyquy",
+        "spya-ma4jyx"
+      ]
+    },
+    {
+      "premise": "Chalmers's hard problem asks why brain processes are accompanied by subjective, felt experience at all.",
+      "question": "What does the \"zombie\" thought experiment try to show about materialism?",
+      "referenceAnswer": "It argues that because we can conceive of a being physically identical to us in every way but with no inner experience at all, facts about consciousness must be extra facts beyond the physical facts—so materialism, which holds everything is physical, must be false.",
+      "evidence": [
+        "spya-wt0yk4",
+        "spya-h5v09b"
+      ]
+    },
+    {
+      "question": "What is Sanfey's \"Abstract Realism\" trying to do about the mind-matter problem?",
+      "referenceAnswer": "It tries to bridge the gap between mind and matter by arguing that the first-person and third-person perspectives are complementary, each containing its own built-in observer function, and by examining how experience and its cause occur with no time gap between them.",
+      "evidence": [
+        "spya-hmdvve"
+      ]
+    },
+    {
+      "question": "What is the difference between \"phenomenal consciousness\" and \"access\" or \"cognitive\" consciousness, as the article distinguishes them?",
+      "referenceAnswer": "Phenomenal consciousness is the subjective, felt quality of an experience—what it is like to have it—while access or cognitive consciousness concerns the functional role of a mental state, such as how it is used for reasoning or report, rather than how it feels.",
+      "evidence": [
+        "spya-srr7py"
+      ]
+    },
+    {
+      "question": "What two general philosophical tensions does Kuhn say pervade every effort to understand consciousness?",
+      "referenceAnswer": "The tension between what we can know versus what actually exists (epistemology versus ontology), and the fact that correlation between mental and physical states does not by itself prove that one causes the other.",
+      "evidence": [
+        "spya-gnmvg2"
+      ]
+    },
+    {
+      "question": "What does Kuhn argue must be true of any theory that claims to fully explain consciousness, unless consciousness is taken as fundamental?",
+      "referenceAnswer": "He argues such a theory must claim that consciousness is literally identical to whatever physical or other process it points to, making every complete theory of consciousness, in that sense, a kind of identity theory.",
+      "evidence": [
+        "spya-xwj0m0"
+      ]
+    },
+    {
+      "premise": "Kuhn argues that any complete theory of consciousness must claim consciousness is identical to some underlying process.",
+      "question": "What does Materialism claim consciousness is identical to, and how split are professional philosophers on accepting this view?",
+      "referenceAnswer": "Materialism claims consciousness is entirely physical, produced solely by the brain with nothing left unexplained; a 2020 survey found philosophers only narrowly favor it, with about 52 percent physicalist, 32 percent non-physicalist, and 16 percent holding some other view.",
+      "evidence": [
+        "spya-wc6uv8"
+      ]
+    },
+    {
+      "premise": "Materialism claims consciousness is entirely physical, and philosophers are only narrowly split in favor of it.",
+      "question": "What does \"eliminative materialism,\" or illusionism, claim about our common-sense belief in inner subjective qualities?",
+      "referenceAnswer": "It claims that our ordinary belief in vivid inner subjective qualities is misleading—that this feeling is itself a kind of illusion produced by the brain, one that a completed neuroscience will eventually replace.",
+      "evidence": [
+        "spya-a4995p"
+      ]
+    },
+    {
+      "question": "According to Global Workspace Theory, what makes a particular piece of information become part of conscious experience?",
+      "referenceAnswer": "Information becomes conscious when it wins a competition among many rival signals in the brain and gets broadcast widely, making it accessible to memory, attention, and other processes throughout the brain.",
+      "evidence": [
+        "spya-e993jx",
+        "spya-e993jx"
+      ]
+    },
+    {
+      "premise": "Global Workspace Theory holds that information becomes conscious when it wins a competition among brain signals and is broadcast widely.",
+      "question": "What problem do electromagnetic field theories of consciousness claim to solve better than accounts based only on discrete neuron firing?",
+      "referenceAnswer": "They claim to solve the \"binding problem\"—how separate sensory features, such as a balloon's color and its roundness, combine into one unified experience—by proposing that a single overarching electromagnetic field ties them together.",
+      "evidence": [
+        "spya-hkpsee"
+      ]
+    },
+    {
+      "premise": "Electromagnetic field theories propose that a single unifying field, rather than neuron firing alone, ties experience together.",
+      "question": "What is the central claim of Grossberg's \"Adaptive Resonance Theory\" about conscious states?",
+      "referenceAnswer": "It holds that all conscious states are resonant states, arising when bottom-up sensory signals lock into a stable match with learned top-down expectations, and that only such resonant states carrying feature-based representations can become conscious.",
+      "evidence": [
+        "spya-m6mps0"
+      ]
+    },
+    {
+      "question": "According to Damasio, what is the \"root process\" behind consciousness?",
+      "referenceAnswer": "He argues it is \"homeostatic feelings\"—continuous inner feelings that track how close or far an organism's bodily state is from the ideal balance needed to stay alive, which he sees as the earliest source of conscious experience.",
+      "evidence": [
+        "spya-tjr8dv",
+        "spya-tjr8dv"
+      ]
+    },
+    {
+      "premise": "Damasio argues the root of consciousness is feelings that track how close an organism's bodily state is to a healthy balance.",
+      "question": "What do embodied and enactive theories claim is essential to consciousness, beyond the brain alone?",
+      "referenceAnswer": "They claim that the body and its ongoing, dynamic interaction with the surrounding environment are a constitutive part of what consciousness actually is, not merely tools the brain uses to produce it.",
+      "evidence": [
+        "spya-fc22mr"
+      ]
+    },
+    {
+      "premise": "Embodied and enactive theories hold that the body's interaction with the environment is part of what consciousness is, not just what it does.",
+      "question": "What does Andy Clark's \"extended mind\" thesis claim happens when a person and an external tool form a tightly coupled, two-way system?",
+      "referenceAnswer": "He claims that such a coupled person-tool system counts as a single cognitive system in its own right, so that removing the external part degrades mental performance just as removing part of the brain would.",
+      "evidence": [
+        "spya-bd3pnu",
+        "spya-bd3pnu"
+      ]
+    },
+    {
+      "premise": "Koch argues that consciousness can survive brain damage that destroys a person's ability to use language.",
+      "question": "What dispute do phylogenetic evolution theories raise about how widely conscious experience is spread across different species?",
+      "referenceAnswer": "They dispute whether consciousness increases gradually and smoothly from simple single-celled organisms up through the animal kingdom to humans, or instead appears in sudden jumps with sharp cutoffs, so that only some organisms have it at all.",
+      "evidence": [
+        "spya-kvxhjn"
+      ]
+    },
+    {
+      "premise": "Non-Reductive Physicalism holds that consciousness is entirely produced by the physical brain, yet mental states cannot be fully reduced to physical laws.",
+      "question": "What does Christian philosopher Peter van Inwagen argue about whether dualism is required for belief in the resurrection of the dead?",
+      "referenceAnswer": "He argues that dualism is not required for Christian resurrection belief—that belief in a separate immaterial soul was actually imported from Greek philosophy, and a wholly materialist view of human beings is compatible with bodily resurrection.",
+      "evidence": [
+        "spya-jq2x7h"
+      ]
+    }
+  ]
+}

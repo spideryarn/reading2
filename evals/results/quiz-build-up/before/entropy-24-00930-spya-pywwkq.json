@@ -1,0 +1,118 @@
+{
+  "arm": "before",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:51:04.436Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1
+  },
+  "questions": [
+    {
+      "question": "What does the presence of synergistic information in neural recordings suggest about how a target neuron responds to its inputs?",
+      "referenceAnswer": "It suggests neurons are not simply summing up the number of active inputs and firing based on the total, as a basic threshold model would predict. Instead, they are sensitive to the specific patterns formed jointly by multiple inputs, meaning the neuron performs a kind of integrative computation on those patterns.",
+      "evidence": [
+        "spya-sp50v3"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "How does transfer entropy differ from mutual information in what it tells you about two neurons?",
+      "referenceAnswer": "Mutual information is an undirected measure of instantaneous statistical dependence between two neurons' activity, similar to a nonlinear correlation, and reflects functional connectivity. Transfer entropy instead measures directed information flow from one neuron's past to another's future beyond what the target's own past explains, reflecting effective connectivity (actual information propagation).",
+      "evidence": [
+        "spya-p4pyuy"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "How much more synergistic information did triads located within a network's 'rich club' show compared to triads outside it?",
+      "referenceAnswer": "Rich club triads had about 2.7 times as much synergy as triads outside the rich club. Because rich club triads were both denser and individually more synergistic, they accounted for roughly 88% of all synergy in the network despite the rich club containing less than 40% of the neurons.",
+      "evidence": [
+        "spya-fud8q3"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "What happened to the balance of redundant versus synergistic information in the primate motor cortex during movement execution, and why did the researchers think this occurred?",
+      "referenceAnswer": "During the reach-and-grasp movement execution phase, redundant information increased dramatically relative to synergistic information, even though activity was generally synergy-dominated overall. The researchers interpreted this as the brain duplicating the 'move' signal many times to ensure reliable transmission to distant muscles, reducing the risk that a single corrupted signal would cause an error.",
+      "evidence": [
+        "spya-t8fayf"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "Why can't the total information that two source neurons jointly carry about a target simply be calculated by adding up what each source carries on its own?",
+      "referenceAnswer": "The joint information can be greater than the sum of the individual (marginal) contributions if the sources' combined pattern discloses something neither reveals alone (synergy), or it can be less if the same information is disclosed by both sources and gets double-counted (redundancy). Because either effect is possible, the whole is not generally equal to the sum of its parts.",
+      "evidence": [
+        "spya-e94ury"
+      ],
+      "band": "medium",
+      "value": 5
+    },
+    {
+      "question": "Why does the article say a 'complete' PID description becomes practically impossible for neurons with many parent inputs?",
+      "referenceAnswer": "The number of distinct partial information atoms grows extremely fast with the number of parent neurons, following the Dedekind numbers; for just six parents there are already 7,828,354 atoms, most of which are hard to interpret. Since single neurons can receive input from very large numbers of upstream neurons, a full decomposition becomes intractable.",
+      "evidence": [
+        "spya-aby2dp"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "What two historical limitations had held back the study of neural information processing, and what changed to overcome them?",
+      "referenceAnswer": "One limitation was a lack of sufficient data, since detecting synergistic dynamics requires large amounts of data to accurately infer multivariate dependencies; this was eased by new high-density electrical and optical recording technologies. The other was a lack of appropriate analytical tools to extract interpretable insights from the resulting large datasets, which multivariate information decomposition methods like PID have begun to address.",
+      "evidence": [
+        "spya-s9kmxa"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why is a chosen measure of redundancy essential for computing a full partial information decomposition, and why is there no single settled choice of measure?",
+      "referenceAnswer": "The equations relating joint and marginal mutual information leave four unknown partial information terms (redundancy, two unique terms, synergy) but only three known mutual information values, so the system is underdetermined; defining any one term (usually redundancy) lets the others be derived. Classical Shannon theory offers no unique way to define redundancy, so multiple competing redundancy functions have been proposed, each with its own tradeoffs and none universally accepted.",
+      "evidence": [
+        "spya-bgsd4n"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "How did the relationship between synergy and the similarity (mutual information) of two converging source neurons' activity change across different timescales?",
+      "referenceAnswer": "At short, synaptic-range timescales, greater similarity between the two source neurons' activity was associated with more synergy. But across a wider range of timescales, synergy only increased up to a point, peaking when mutual information was about 7% of its maximum possible value, and then decreased as similarity grew further, regardless of the specific timescale.",
+      "evidence": [
+        "spya-ybmve2"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "What new kind of analysis does 'local' PID make possible, and what did applying it to neuronal avalanches reveal?",
+      "referenceAnswer": "Local PID decomposes information into redundant, unique, and synergistic contributions for each individual moment or configuration rather than only as an average over all states, enabling a time-resolved 'informational time series'. Applying this to neuronal avalanches showed that they have distinct changing computational profiles, with the levels of the different information atoms varying over the course of a single avalanche.",
+      "evidence": [
+        "spya-mczhkp",
+        "spya-mczhkp"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "What caveat do the authors raise about using bivariate transfer entropy to build the effective networks from which they drew their computational triads?",
+      "referenceAnswer": "They note that bivariate transfer entropy analyses have been shown to overestimate the significance of connections between pairs of neurons, unlike multivariate approaches that account for the broader network context. This means the networks (and thus the triads) used in their in vitro studies may have included some spurious connections.",
+      "evidence": [
+        "spya-j4cy9j"
+      ],
+      "band": "hard",
+      "value": 3
+    }
+  ]
+}

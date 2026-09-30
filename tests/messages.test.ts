@@ -34,7 +34,6 @@ import {
   placingFailed,
   saidNothing,
   stepGaveUp,
-  quizBandsNotSpread,
   tookTooLong,
   wentQuiet,
 } from "../src/messages.js";
@@ -125,13 +124,6 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   stepGaveUp: (["retry", "ours", "bug", "blocked"] as const).map((kind) =>
     stepGaveUp(kind, "Writing the questions"),
   ),
-  /* **One call, not one per missing end.** This list is one entry per *code*,
-     which the "gives each distinct message its own code" invariant below
-     enforces — two calls differing only in their arguments read as two
-     sentences sharing a code and fail it, exactly as `tookTooLong(60)` would if
-     it appeared twice with two numbers. The production case: nine survivors,
-     no hard one. tests/quiz.test.ts covers the wording of every `gap` clause. */
-  quizBandsNotSpread: [quizBandsNotSpread(9, "there is no hard one among them to finish on")],
   /* **The one the guard above was written to find**, and it contributes no new
      code: all four branches defer to a `PLACING_*` constant or to
      `providerHttpFailure`, which is exactly why nothing noticed it was
@@ -282,6 +274,18 @@ describe("the code table and the messages are one fact, not two", () => {
        about a file that stopped existing. */
     const guard = "every-ai-code-is-registered.test.ts";
     expect(existsSync(path.join(import.meta.dirname, guard)), `${guard} is gone`).toBe(true);
+  });
+});
+
+describe("retired reader-facing codes", () => {
+  it("still classifies a stored quiz-spread failure", () => {
+    /* Jobs written before quiz/5 can keep this sentence indefinitely. Retiring
+       the band-spread refusal must not make its bracketed code cease to be one
+       of ours: `kindOfMessage` is also the authorship allowlist used before a
+       stored sentence may reach a reader or monitoring. */
+    expect(kindOfMessage("The questions did not cover the full range. [quiz-spread]")).toBe(
+      "retry",
+    );
   });
 });
 

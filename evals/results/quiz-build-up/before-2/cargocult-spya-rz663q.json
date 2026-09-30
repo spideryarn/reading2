@@ -1,0 +1,119 @@
+{
+  "arm": "before-2",
+  "slug": "cargocult-spya-rz663q",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:52:26.717Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 2,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1
+  },
+  "questions": [
+    {
+      "question": "Why does Feynman call certain failed but scientific-looking research \"Cargo Cult Science\"?",
+      "referenceAnswer": "He compares it to South Sea islanders who built fake airstrips, control towers, and bamboo antennas after the war, copying the form of what they'd seen without understanding what made it work. Cargo Cult Science follows all the outward forms and procedures of real science, but is missing the essential thing that makes results actually happen, so, as he puts it, the planes don't land.",
+      "evidence": [
+        "spya-fd2muf"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What does Feynman identify as the first principle for not fooling yourself as a scientist?",
+      "referenceAnswer": "He says the first principle is that you must not fool yourself, since you are the easiest person for you to fool. Only after guarding against that, he says, does it become easy to be honest with other scientists.",
+      "evidence": [
+        "spya-ed9mzv"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What did Feynman conclude from looking at education and criminal justice methods that are treated as scientific?",
+      "referenceAnswer": "Despite decades of expert theories about teaching reading and handling criminals, he found reading scores were barely improving and crime rates weren't decreasing even as these same experts kept refining their methods. He treats this as another \"witch doctor remedy\" that doesn't actually work despite being dressed up as science.",
+      "evidence": [
+        "spya-aww976"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What happened when Feynman tested Uri Geller's claimed abilities to read minds and bend keys?",
+      "referenceAnswer": "Nothing worked: no mind-reading demonstration succeeded, and the key did not bend even when they tried Geller's suggestion of doing it underwater. Feynman concluded he was unable to actually investigate the phenomenon because nothing happened.",
+      "evidence": [
+        "spya-mmhbvn"
+      ],
+      "band": "easy",
+      "value": 2
+    },
+    {
+      "question": "What test does Feynman propose for spotting subjects that nobody actually understands?",
+      "referenceAnswer": "He says if you're at a cocktail party discussing something and don't feel worried the hostess will accuse you of \"talking shop\" or your spouse of flirting, you can be sure the topic is one nobody really knows anything about.",
+      "evidence": [
+        "spya-wc4h5s"
+      ],
+      "band": "easy",
+      "value": 2
+    },
+    {
+      "question": "Why did successive measurements of the electron's charge after Millikan creep upward slowly instead of correcting to the right value all at once?",
+      "referenceAnswer": "Millikan's original figure was slightly off because he used an incorrect value for the viscosity of air. When later scientists got a result much higher than Millikan's, they assumed something was wrong and searched for a reason to discard it, but they didn't scrutinize results that came out close to Millikan's number in the same way, so the accepted value only inched upward over time instead of jumping to the correct figure.",
+      "evidence": [
+        "spya-s9msxy",
+        "spya-uj9v2h"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does Feynman use the Wesson Oil advertisement to illustrate a subtler kind of dishonesty than lying?",
+      "referenceAnswer": "The ad's claim that Wesson Oil doesn't soak through food is technically true, but it leaves out that no oil soaks through food at a certain temperature—all oils, including Wesson Oil, will soak through at a different temperature. He says it's the misleading implication conveyed by a true statement, not an outright falsehood, that scientific integrity requires you to avoid.",
+      "evidence": [
+        "spya-bpyx8n"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why did Feynman tell the psychology student she should first repeat the original rat experiment under the original conditions before testing her new condition?",
+      "referenceAnswer": "Repeating the original experiment first would confirm that she herself could reproduce the earlier result under the original condition, so that if the outcome changed after she altered the condition, she would know the change was really caused by that altered condition rather than by some unnoticed difference in her own setup or method.",
+      "evidence": [
+        "spya-tf8rj2"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why does Feynman criticize the deuterium experiment reported at the National Accelerator Laboratory?",
+      "referenceAnswer": "The researcher compared his heavy-hydrogen results to someone else's light-hydrogen data taken on completely different apparatus, rather than repeating the light-hydrogen run himself, because he couldn't get time on the expensive machine for an experiment predicted to give no new result. Feynman says this pressure to keep producing new results for funding was undermining the very scientific integrity the experiments depended on.",
+      "evidence": [
+        "spya-m95kqm"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "What rule does Feynman give about publishing scientific results, and why does he think it matters even for giving advice to politicians?",
+      "referenceAnswer": "He says you must decide to publish a result regardless of which way it comes out, not only the results that support the case you wanted to make, since selective publication of favorable results distorts the picture. He extends this to giving policy advice, saying that if a scientist's finding is only made public when it favors the politician asking, that isn't really scientific advice at all.",
+      "evidence": [
+        "spya-jk7mj4",
+        "spya-s05sub"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "Why does Feynman find it dangerous that a parapsychology institute's director planned to only train students who could already get PSI results?",
+      "referenceAnswer": "He says that teaching students only how to produce a particular desired result, rather than teaching them how to run an experiment with genuine scientific integrity, corrupts the whole point of doing science. It selects for people who deliver the answer wanted instead of people who honestly test whether something is true.",
+      "evidence": [
+        "spya-g203mu"
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ]
+}

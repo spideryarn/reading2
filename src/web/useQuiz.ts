@@ -90,10 +90,11 @@ async function readMark(
     if (event.name === "done") {
       const data = event.data as { reply?: unknown; verdict?: unknown };
       const reply = data.reply;
-      /* **Validated rather than cast**, because this decides how hard the next
-         question is and a stray string would step the ladder on nonsense. Any
-         other value is absence, which means *hold the band* — the same outcome
-         as the classifier having failed, and a perfectly ordinary one. */
+      /* **Validated rather than cast**, because this decides whether the next
+         step carries its premise and a stray string would decide it on
+         nonsense. Any other value is absence, which means *show the premise* —
+         the same outcome as the classifier having failed, and a perfectly
+         ordinary one. */
       const verdict: QuizVerdict | undefined =
         data.verdict === "right" || data.verdict === "wrong" ? data.verdict : undefined;
       /* The server's own whole reply where it sent one, because it is the
@@ -157,7 +158,7 @@ export interface Attempt {
   /**
    * **Whether they got it right — and it is never rendered.**
    *
-   * The adaptive ladder reads this to choose the next question
+   * The walk reads this to decide whether the next step carries its premise
    * (src/web/quiz-ladder.ts). `QuizPanel` must not print it, hint at it, or change
    * a word of copy because of it: docs/project/quiz.md is explicit that quoting
    * a difficulty at a reader hands them a token with nothing behind it, and a
@@ -165,7 +166,7 @@ export interface Attempt {
    *
    * Absent far more often than not: no verdict when the classifier failed or
    * timed out, when the question was ill-posed, or on any attempt that did not
-   * reach `done`. Absence means *hold the band*, which is why nothing here has
+   * reach `done`. Absence means *show the premise*, which is why nothing here has
    * to treat it as an error.
    */
   verdict?: QuizVerdict;

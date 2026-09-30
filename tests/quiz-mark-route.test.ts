@@ -210,8 +210,6 @@ async function quizInto(dir: string, opts: { stale?: boolean } = {}): Promise<Qu
         {
           question: "What does the piece say in that passage?",
           referenceAnswer: "It says the quoted thing. Then it moves on.",
-          band: "easy",
-          value: 4,
           evidence: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
         },
       ],

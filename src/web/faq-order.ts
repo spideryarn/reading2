@@ -51,7 +51,7 @@ import {
 } from "./threshold.js";
 
 /**
- * The two orders — `?faqby=` in the URL. **The type lives here and the runtime
+ * The four orders — `?faqby=` in the URL. **The type lives here and the runtime
  * list, `FAQ_ORDERS`, in params.ts**, which checks the two agree both ways.
  *
  * Split like that for two reasons that pull in opposite directions. params.ts
@@ -63,8 +63,19 @@ import {
  * from Node, and the server's tsconfig cannot type-check params.ts's `.tsx`
  * neighbours. A type-only import in params.ts is erased, so neither graph
  * sees an edge.
+ *
+ * **`centrality` and `difficulty` since 2026-09-30** — each score the
+ * prioritised order is built from, as its own sort, highest first. Greg
+ * (SPIDERYARN-READING2-67): *"the prioritisation must be based on some
+ * dimension (or more than one). Let's also make it possible to sort by that
+ * too (just as in Glossary we can sort by "hardest", "most central" etc"*. So
+ * they behave as the Glossary's do (GlossaryPanel.tsx § sortEntries): every
+ * question, no bar, a missing score last. `difficulty` is *hardest* first
+ * rather than easiest: the prioritised order already leads with the
+ * approachable ones, and hardest-first is the view it does not give.
+ * docs/plans/260930d-faq-provenance-into-a-tooltip-and-sort-by-centrality-and-difficulty.md.
  */
-export type FaqOrder = "prioritised" | "document";
+export type FaqOrder = "prioritised" | "document" | "centrality" | "difficulty";
 
 /** The two scores the order reads — structurally, so a visitor's question and the eval's both fit. */
 type Scored = Pick<FaqQuestion, "difficulty" | "centrality">;
@@ -96,10 +107,29 @@ export function canPrioritise(questions: readonly Scored[]): boolean {
   return canThreshold(questions, priorityOf);
 }
 
-/** The order actually in force: `prioritised` falls back to reading order when there is nothing to gate. */
+/**
+ * The orders worth a button, in the order the buttons are drawn — or none,
+ * when fewer than two would be (a single button is a control that does
+ * nothing), and none for a single question. `prioritised` only when the bar
+ * can hide something; a single-score
+ * order only when at least one question carries that score, as the Glossary
+ * offers `hardest` (GlossaryPanel.tsx § sortOptions).
+ */
+export function availableOrders(questions: readonly Scored[]): FaqOrder[] {
+  const out: FaqOrder[] = [
+    ...(canPrioritise(questions) ? (["prioritised"] as const) : []),
+    "document",
+    ...(questions.some((q) => q.centrality !== undefined) ? (["centrality"] as const) : []),
+    ...(questions.some((q) => q.difficulty !== undefined) ? (["difficulty"] as const) : []),
+  ];
+  /* One question has no order: the Glossary offers no sort below two entries
+     either (GlossaryPanel.tsx § `sorts`). GPT Sol's plan review, F1. */
+  return questions.length < 2 || out.length < 2 ? [] : out;
+}
+
+/** The order actually in force: one unavailable for this list falls back to reading order. */
 export function effectiveOrder(questions: readonly Scored[], order: FaqOrder): FaqOrder {
-  if (order !== "prioritised") return order;
-  return canPrioritise(questions) ? "prioritised" : "document";
+  return availableOrders(questions).includes(order) ? order : "document";
 }
 
 /** The bar applied once: what survives, in reading order, and how many went. */
@@ -127,21 +157,34 @@ export function orderQuestions<Q extends Scored>(
       return [...questions];
     case "prioritised": {
       const { visible } = visibleQuestions(questions, bar);
-      return visible
-        .map((question, index) => ({ question, index, p: priorityOf(question) }))
-        .sort((a, b) => {
-          if (a.p === undefined && b.p === undefined) return a.index - b.index;
-          if (a.p === undefined) return 1;
-          if (b.p === undefined) return -1;
-          return b.p - a.p || a.index - b.index;
-        })
-        .map(({ question }) => question);
+      return highestFirst(visible, priorityOf);
     }
+    case "centrality":
+    case "difficulty":
+      /* Every question, one score — no bar. */
+      return highestFirst(questions, (q) => q[order]);
     default: {
       const unhandled: never = order;
       return unhandled;
     }
   }
+}
+
+/**
+ * Highest score first, reading order breaking ties, and a missing score after
+ * every present one, in reading order — a question the model did not score is
+ * not one it scored low.
+ */
+function highestFirst<Q>(questions: readonly Q[], score: (q: Q) => number | undefined): Q[] {
+  return questions
+    .map((question, index) => ({ question, index, s: score(question) }))
+    .sort((a, b) => {
+      if (a.s === undefined && b.s === undefined) return a.index - b.index;
+      if (a.s === undefined) return 1;
+      if (b.s === undefined) return -1;
+      return b.s - a.s || a.index - b.index;
+    })
+    .map(({ question }) => question);
 }
 
 /** What a reader sees on opening the mode with nothing in the URL. */
@@ -155,11 +198,32 @@ export function faqNote(hidden: number, total: number): string {
 }
 
 /**
- * The two raw scores for `ScoreBars` — drawn, never printed, and never the
+ * The available raw scores for `ScoreBars` — drawn, never printed, and never the
  * compound (ScoreBars.tsx § What it does NOT do). The labels say what each
  * measures *for a question*, which is not what the Glossary's say for a term.
+ *
+ * **A row draws the scores its position was decided on**, the Glossary's rule:
+ * both under `prioritised`, the one under a single-score order, none in
+ * reading order.
  */
-export function scoresOf(question: Scored): { key: string; label: string; value: number }[] {
+export function scoresOf(question: Scored, order: FaqOrder): { key: string; label: string; value: number }[] {
+  const all = allScoresOf(question);
+  switch (order) {
+    case "prioritised":
+      return all;
+    case "centrality":
+    case "difficulty":
+      return all.filter((s) => s.key === order);
+    case "document":
+      return [];
+    default: {
+      const unhandled: never = order;
+      return unhandled;
+    }
+  }
+}
+
+function allScoresOf(question: Scored): { key: string; label: string; value: number }[] {
   /* Centrality on top, as in the Glossary: the upper bar takes the accent and
      is the load-bearing one (quotes.css § `.score-bar-fill.centrality`). */
   const out: { key: string; label: string; value: number }[] = [];

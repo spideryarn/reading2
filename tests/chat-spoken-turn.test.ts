@@ -63,10 +63,51 @@ describe("appending into an empty thread", () => {
     expect(thread.title).toBe("New chat");
   });
 
-  it("is always a chat thread, never a review", () => {
-    /* A spoken review is a mode nobody has designed. Passing a kind through
-       would be deciding it by accident. */
+  it("keeps Remember's placeholder when its first spoken transcription failed", () => {
+    /* Empty reader speech is valid when transcription failed. The companion's
+       answer still saves the exchange, so this placeholder can persist in the
+       shared list and must describe the kind the thread was created as. */
+    const { thread } = withSpokenTurn([], spoken({ question: "", kind: "remember" }), AT);
+    expect(thread.title).toBe("Remembering");
+  });
+
+  it("is a chat thread when the caller names no kind", () => {
     expect(withSpokenTurn([], spoken(), AT).thread.kind).toBe("chat");
+  });
+
+  it("is a Remember thread when Live was pressed in an empty Remember conversation", () => {
+    /* SPIDERYARN-READING2-70. Remember opens straight into an empty
+       conversation that exists only in the tab, so the first spoken exchange
+       is what creates it — and it used to create a chat, which Remember's
+       arrival rule then hid behind a fresh empty conversation.
+       docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md */
+    expect(withSpokenTurn([], spoken({ kind: "remember" }), AT).thread.kind).toBe("remember");
+  });
+
+  it("keeps an existing thread's kind, and refuses one that contradicts it", () => {
+    const remembered = withSpokenTurn([], spoken({ kind: "remember" }), AT);
+    const tail = remembered.reply.id;
+    /* No kind named: the thread decides, as it always has. */
+    expect(
+      withSpokenTurn(remembered.threads, spoken({ threadId: remembered.thread.id, expectedTailId: tail }), AT)
+        .thread.kind,
+    ).toBe("remember");
+    /* The same kind: a replay or a later exchange, and it passes. */
+    expect(
+      withSpokenTurn(
+        remembered.threads,
+        spoken({ threadId: remembered.thread.id, expectedTailId: tail, kind: "remember" }),
+        AT,
+      ).thread.kind,
+    ).toBe("remember");
+    /* A different kind: a thread is one kind for life. */
+    expect(() =>
+      withSpokenTurn(
+        remembered.threads,
+        spoken({ threadId: remembered.thread.id, expectedTailId: tail, kind: "chat" }),
+        AT,
+      ),
+    ).toThrow(ChatConflict);
   });
 
   it("carries passages, tools and interrupted only when there is something to say", () => {

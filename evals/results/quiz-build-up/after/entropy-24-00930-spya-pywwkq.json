@@ -1,0 +1,172 @@
+{
+  "arm": "after",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "d5fca6f8a04b7f11ebf96ecf419a5b0782cb897932a473e2c3fd10f6fe9cac79",
+  "at": "2026-09-30T05:11:22.981Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "gaps": 1
+  },
+  "outputTokens": 15591,
+  "elapsedMs": 129350,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "According to the article, what was the first of two historical limitations that hindered the study of information processing in neural circuits?",
+      "referenceAnswer": "A lack of adequate data, since analyzing synergistic dynamics requires large amounts of data to accurately infer the structure of multivariate dependence, and until recently such data were hard to obtain.",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "The first historical limitation was a lack of sufficient recorded data for inferring synergistic dynamics.",
+      "question": "What was the second historical limitation, which this review focuses on addressing?",
+      "referenceAnswer": "A lack of appropriate analytical approaches: even with abundant data, a method was still needed to extract interpretable insight from it; the review focuses on information theory and partial information decomposition as a way to fill this gap.",
+      "evidence": [
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "question": "What does mutual information measure about the relationship between two neurons' spiking activity?",
+      "referenceAnswer": "It measures how much knowing one neuron's state changes our ability to correctly infer the other's state, functioning as a kind of nonlinear correlation between their activity patterns.",
+      "evidence": [
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information captures the (undirected) statistical dependence between two neurons' activity, like a nonlinear correlation.",
+      "question": "Why is mutual information unable to measure genuine information transfer or flow between two neurons?",
+      "referenceAnswer": "Because it is an undirected measure of instantaneous dependency between two variables, with no notion of the time-directed structure needed to capture 'transfer' or 'flow'.",
+      "evidence": [
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information cannot capture directed flow because it lacks any time-ordered structure.",
+      "question": "What does transfer entropy measure that addresses this gap?",
+      "referenceAnswer": "Transfer entropy measures how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains, giving a directed measure of information flow.",
+      "evidence": [
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Transfer entropy quantifies directed information flow from a source neuron's past to a target neuron's future.",
+      "question": "Why is information flow alone, as measured by something like transfer entropy, not sufficient to explain how neurons process or combine multiple inputs?",
+      "referenceAnswer": "Because it only tracks flow from a single source to a target and cannot reveal how multiple streams of information interact, or how a neuron produces information that is not reducible to any one source alone.",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Capturing genuine information processing requires looking beyond flow from single sources to how multiple sources interact jointly.",
+      "question": "What basic fact about joint versus individual mutual information is the starting point for partial information decomposition?",
+      "referenceAnswer": "That the joint mutual information all the input neurons together provide about a target need not be reducible to (i.e. equal to the sum of) the mutual information each source provides individually.",
+      "evidence": [
+        "spya-h5dz45"
+      ]
+    },
+    {
+      "premise": "PID starts from the fact that the joint information about a target need not equal the sum of each source's individual information.",
+      "question": "What does it mean, in PID terms, if the joint mutual information (the whole) exceeds the sum of the individual sources' mutual information (the parts)?",
+      "referenceAnswer": "It means there is synergistic information about the target that is disclosed only by the joint state of all the sources together, not by any single source alone, reflecting an integrating computation by the target.",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "When the whole exceeds the sum of the parts, the system shows synergy, a joint computation not reducible to any single input.",
+      "question": "What does it mean instead if the whole is less than the sum of the parts?",
+      "referenceAnswer": "It means there is redundant information: the same information about the target is present in multiple sources and gets double-counted when their individual mutual informations are summed.",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "So synergy and redundancy are two opposite ways the joint information about a target can differ from the sum of its individual sources' information.",
+      "question": "In the simplest case of two parent neurons and one target, what four components does PID decompose the total joint mutual information into?",
+      "referenceAnswer": "Redundant information shared by both sources, the unique information each of the two sources individually provides, and synergistic information available only from their joint state.",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "question": "In the empirical cortical-culture study, how was synergy in a computational triad related to the amount of feedforward information propagation (transfer entropy) into it?",
+      "referenceAnswer": "Synergy was strongly positively correlated with feedforward transfer entropy across recordings and timescales, and was reliably about a quarter of that transfer entropy value.",
+      "evidence": [
+        "spya-kqkb58"
+      ]
+    },
+    {
+      "premise": "Synergy scaled reliably with feedforward transfer entropy in cortical culture triads.",
+      "question": "What is a 'rich club' in these effective neural networks?",
+      "referenceAnswer": "It is the set of best-connected neurons in the network that are mutually interconnected more densely than would be expected by chance, and that carry a disproportionate share of the network's information propagation.",
+      "evidence": [
+        "spya-bftp48"
+      ]
+    },
+    {
+      "premise": "Rich clubs are the densely interconnected, highly connected core of the network that dominate information propagation.",
+      "question": "How much more synergy did triads located inside the rich club have compared to triads outside it?",
+      "referenceAnswer": "Rich-club triads had about 2.7 times as much synergy as triads that were not in the rich club.",
+      "evidence": [
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "premise": "Rich-club triads had roughly 2.7 times more synergy than triads outside the rich club.",
+      "question": "Despite rich-club neurons making up less than 40% of all neurons, what share of the network's total synergy did rich-club triads account for?",
+      "referenceAnswer": "About 88% of the network-wide synergy.",
+      "evidence": [
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "premise": "Rich-club triads, though a minority of neurons, produced the large majority of the network's synergy.",
+      "question": "How did the number of recurrent connections between two source neurons relate to a triad's synergy, compared with the number of feedback connections from the target back to the sources?",
+      "referenceAnswer": "More recurrent connections between the sources were linked to greater synergy, with two recurrent connections giving about 50% more synergy than none, whereas feedback connections were not reliably linked to synergy and, if anything, were associated with somewhat less synergy.",
+      "evidence": [
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "premise": "More recurrent connectivity between sources boosted synergy, while feedback connectivity did not.",
+      "question": "At short, synaptic-range timescales, how did the similarity (mutual information) between two source neurons' spiking relate to the synergy of their shared target triad?",
+      "referenceAnswer": "Greater similarity between the source neurons' spiking activity was associated with greater synergy at these short timescales.",
+      "evidence": [
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "premise": "At longer timescales, synergy peaks early and then gives way to redundancy as source similarity keeps increasing.",
+      "question": "In the primate study, how did the balance between synergy and redundancy change specifically during the movement-execution phase of the task?",
+      "referenceAnswer": "The relative amount of redundant information increased dramatically during movement execution, which the authors interpreted as the brain duplicating the 'move' signal to help ensure it reliably reaches distant muscles.",
+      "evidence": [
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "premise": "During movement execution, redundancy rose sharply, likely to make the motor command more reliable.",
+      "question": "What major scalability problem limits applying a complete PID analysis to a neuron with many parent inputs?",
+      "referenceAnswer": "The number of distinct partial-information atoms grows explosively with the number of parents, reaching millions of atoms for just six parent neurons, making a full PID description intractable for realistically large numbers of inputs.",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    },
+    {
+      "premise": "Because the number of information atoms explodes so fast, a full PID description becomes intractable once a neuron has many inputs.",
+      "question": "What broader conclusion do the authors draw from the existence of synergy about how neurons process their inputs?",
+      "referenceAnswer": "They conclude that neurons do not simply sum their inputs and fire based on the total, but are sensitive to the specific patterns among incoming inputs, and that this pattern-sensitive processing is further shaped by the neuron's local network environment and the organism's behavioral state.",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    }
+  ]
+}

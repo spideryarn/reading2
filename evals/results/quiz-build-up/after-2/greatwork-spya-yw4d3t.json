@@ -1,0 +1,176 @@
+{
+  "arm": "after-2",
+  "slug": "greatwork-spya-yw4d3t",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "63e5e904575af4b3aef43163bbed8387b8537bed9df35026810b5c964b5714d5",
+  "at": "2026-09-30T05:24:22.820Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 15930,
+  "elapsedMs": 133799,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "What did the author do to arrive at this recipe for doing great work?",
+      "referenceAnswer": "He collected lists of techniques for doing great work from many different fields and looked at what they had in common, i.e. their intersection.",
+      "evidence": [
+        "spya-d7xxxq"
+      ]
+    },
+    {
+      "question": "What three qualities does the article say the work you choose to do must have?",
+      "referenceAnswer": "It has to be something you have a natural aptitude for, that you have a deep interest in, and that offers scope to do great work.",
+      "evidence": [
+        "spya-aeqwcs"
+      ]
+    },
+    {
+      "premise": "The article says the work you choose needs to be something you have aptitude for, deep interest in, and that offers scope for great work.",
+      "question": "What kind of curiosity does the article say marks the deep interest you should be looking for?",
+      "referenceAnswer": "An excessive curiosity - curiosity about something to a degree that would bore most other people.",
+      "evidence": [
+        "spya-k8tqsc"
+      ]
+    },
+    {
+      "premise": "The interest you're looking for is an excessive curiosity, one that would bore most other people.",
+      "question": "What four steps does the article lay out as the way practically everyone who's done great work has done it?",
+      "referenceAnswer": "Choose a field, learn enough to get to the frontier of knowledge in it, notice the gaps in that frontier, and explore the promising ones.",
+      "evidence": [
+        "spya-kr0zrr"
+      ]
+    },
+    {
+      "premise": "The four steps are choosing a field, learning enough to reach its frontier, noticing the gaps in it, and exploring the promising ones.",
+      "question": "Instead of making and executing a plan, what does the article say the recipe for doing great work usually is?",
+      "referenceAnswer": "Work hard on excitingly ambitious projects while just trying to preserve certain invariants, an approach the author calls 'staying upwind': at each stage doing whatever seems most interesting and gives the best future options.",
+      "evidence": [
+        "spya-mq6h90",
+        "spya-zzu2w0"
+      ]
+    },
+    {
+      "question": "Why does the article say it's acceptable to lie to yourself when starting work or a new project?",
+      "referenceAnswer": "Because work has an 'activation energy' that's higher than what's needed to keep going, so a small lie, such as telling yourself you're just going to glance at what you've done or underestimating how much a project will take, helps you get over that initial threshold.",
+      "evidence": [
+        "spya-c6es2t",
+        "spya-vammz4"
+      ]
+    },
+    {
+      "question": "What's the key difference the article draws between per-day procrastination and per-project procrastination?",
+      "referenceAnswer": "Per-project procrastination, putting off an ambitious project for years, is far more dangerous because it disguises itself as work: you're busy doing something else, so it doesn't set off the alarm that daily procrastination does.",
+      "evidence": [
+        "spya-e9jhjz",
+        "spya-q0jujr"
+      ]
+    },
+    {
+      "premise": "Per-project procrastination is more dangerous because it disguises itself as being busy with other work.",
+      "question": "What does the article say actually distinguishes people who accomplish great amounts of work over time?",
+      "referenceAnswer": "They don't necessarily get a lot done every day; they get something done each day rather than nothing, and that consistency compounds into large achievements over time.",
+      "evidence": [
+        "spya-gvh3ek"
+      ]
+    },
+    {
+      "question": "What does the article say happens to your work if you don't try to be the best in your field?",
+      "referenceAnswer": "You won't even end up being good; trying to be the best is what's actually required just to be good.",
+      "evidence": [
+        "spya-tyvegp"
+      ]
+    },
+    {
+      "premise": "If you don't try to be the best, you won't even end up being good.",
+      "question": "How does the article define affectation, the thing you should avoid?",
+      "referenceAnswer": "Affectation is effectively pretending that someone other than you is doing the work, adopting an impressive but fake persona, so that the fakeness ends up showing in the work.",
+      "evidence": [
+        "spya-kyybds"
+      ]
+    },
+    {
+      "premise": "Affectation means pretending someone other than you is doing the work, by adopting a fake, impressive persona.",
+      "question": "What quality does the article recommend as the positive alternative to avoiding affectation?",
+      "referenceAnswer": "Being earnest, whose core is being intellectually honest.",
+      "evidence": [
+        "spya-udt302",
+        "spya-jq7znf"
+      ]
+    },
+    {
+      "question": "When work could be seen as either creation or discovery, what does the article say you should do?",
+      "referenceAnswer": "Err on the side of discovery, trying to think of yourself as a mere conduit through which the ideas take their natural shape.",
+      "evidence": [
+        "spya-u9w5qs"
+      ]
+    },
+    {
+      "question": "According to the article, where do original ideas actually come from, rather than from directly trying to have them?",
+      "referenceAnswer": "From trying to build or understand something slightly too difficult for you.",
+      "evidence": [
+        "spya-gchmw3"
+      ]
+    },
+    {
+      "premise": "Original ideas come from trying to build or understand something slightly too difficult for you.",
+      "question": "What two qualities does the article say you need together in order to notice and fix a broken model of the world?",
+      "referenceAnswer": "Strictness, being stricter than other people about noticing where reality clashes with the accepted model, combined with a willingness to break rules.",
+      "evidence": [
+        "spya-hsstwz",
+        "spya-xeu6p8"
+      ]
+    },
+    {
+      "question": "What does the article say matters even more than originality in solving problems?",
+      "referenceAnswer": "Originality in choosing which problem to work on in the first place; this is what distinguishes the people who discover whole new fields.",
+      "evidence": [
+        "spya-k7swrh"
+      ]
+    },
+    {
+      "premise": "Originality in choosing which problem to work on matters even more than originality in solving it.",
+      "question": "How does the article say you get from starting small to eventually doing something great?",
+      "referenceAnswer": "By making successive versions: you start with something small and evolve it, so the final version ends up cleverer and more ambitious than anything you could have planned.",
+      "evidence": [
+        "spya-ngbzxc"
+      ]
+    },
+    {
+      "premise": "You get from starting small to doing something great by making successive versions, starting small and evolving it.",
+      "question": "What does the article say you should do about risk when working on ambitious projects?",
+      "referenceAnswer": "Take as much risk as you can afford, looking for a bet with high expected value rather than certainty; if you're not failing occasionally, you're probably being too conservative.",
+      "evidence": [
+        "spya-u9g0m4"
+      ]
+    },
+    {
+      "question": "What's the difference between the good way and the bad way of copying other people's work, according to the article?",
+      "referenceAnswer": "The good way is to copy openly and consciously; the bad way is to copy furtively or unconsciously, which reduces you to nothing more than a train running on tracks laid down by someone else.",
+      "evidence": [
+        "spya-nckebu"
+      ]
+    },
+    {
+      "question": "What does the article say matters more when it comes to colleagues, their quality or their quantity?",
+      "referenceAnswer": "Quality matters more; it's better to have one or two great colleagues than a building full of merely pretty good ones.",
+      "evidence": [
+        "spya-eny6fh"
+      ]
+    },
+    {
+      "question": "What four factors does the article say determine whether you do great work?",
+      "referenceAnswer": "Ability, interest, effort, and luck.",
+      "evidence": [
+        "spya-r4vhyb"
+      ]
+    }
+  ]
+}
