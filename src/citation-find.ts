@@ -110,6 +110,7 @@ import type {
   CitationFind,
   CitationLookup,
   CitationsFound,
+  CitedWork,
   FindCitationResponse,
   SearchEvidence,
 } from "./types.js";
@@ -442,6 +443,39 @@ function httpError(status: number, message: string): Error {
 }
 
 /**
+ * **The model call failed, and the provider is why** — refused (by status),
+ * past its deadline, or an answer that could not be read. It carries the house
+ * copy and an HTTP status exactly as `httpError` did, so `POST …/find` answers
+ * what it always answered; the class is only so that *Investigate*, which runs
+ * this lookup as its first step, can tell *the provider failed* (stop, spend
+ * nothing more) from *the store failed* or a bug (fail the press) — plan
+ * 260930d P-5.
+ */
+export class LookupCallFailed extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "LookupCallFailed";
+    this.status = status;
+  }
+}
+
+/**
+ * **Did the lookup's call fail for a reason outside our code?** A
+ * `LookupCallFailed` (above), or the network under `openRouterJson`: Node's
+ * `fetch` (undici) rejects every DNS, connection and TLS failure as the one
+ * `TypeError("fetch failed")`, and a body cut off mid-read as
+ * `TypeError("terminated")` — src/fetch.ts § How it fails. Matched on the exact
+ * message as well as the class, because a `TypeError` is also what a bug
+ * throws, and a bug must fail the press rather than read as a provider outage.
+ * `callOnce` rethrows these unchanged, so `/find` still answers them as it did.
+ */
+export function isLookupCallFailure(err: unknown): boolean {
+  if (err instanceof LookupCallFailed) return true;
+  return err instanceof TypeError && (err.message === "fetch failed" || err.message === "terminated");
+}
+
+/**
  * **The call, under its deadline, with every failure turned into the house
  * copy** (src/messages.ts) — a refused call by its status, the deadline as
  * `tookTooLong`, anything else rethrown for the route's catch-all. Logged by
@@ -460,11 +494,11 @@ async function callOnce(
     const ms = since(ctx.started);
     if (err instanceof ProviderRefused) {
       ctx.line.error({ model: ctx.model, ms, status: err.status }, `OpenRouter refused a citation find: ${err.status}`);
-      throw httpError(502, providerHttpFailure(err.status).message);
+      throw new LookupCallFailed(502, providerHttpFailure(err.status).message);
     }
     if (deadline.aborted) {
       ctx.line.error({ model: ctx.model, ms, timedOut: true }, "a citation find hit its deadline");
-      throw httpError(504, tookTooLong(Math.round(ctx.timeoutMs / 1000)).message);
+      throw new LookupCallFailed(504, tookTooLong(Math.round(ctx.timeoutMs / 1000)).message);
     }
     ctx.line.error({ ...errorFields(err), model: ctx.model, ms }, "a citation find failed");
     throw err;
@@ -529,7 +563,7 @@ async function sendAndRead(
   const reading = readFind(call.json, title);
   if (!reading) {
     line.error({ model: used, ms: since(started) }, "a web find's answer could not be read");
-    throw httpError(502, PROVIDER_UNREADABLE.message);
+    throw new LookupCallFailed(502, PROVIDER_UNREADABLE.message);
   }
   return { reading, model: used, json: call.json };
 }
@@ -545,13 +579,128 @@ function lookupLogFields(judged: ReturnType<typeof judgeLookup> | null): Record<
   };
 }
 
-export function makeFindCitation(
-  deps: FindCitationDeps,
-): (slug: string, entryId: string) => Promise<FindCitationResponse> {
+/** What `runCitationLookup` needs: somewhere to keep a find, and the call. No allowance — the caller brings its own. */
+export interface CitationLookupDeps {
+  readonly finds: Pick<CitationFindStore, "save">;
+  readonly call?: FindCitationDeps["call"];
+  readonly now?: () => string;
+  readonly timeoutMs?: number;
+}
+
+/**
+ * ***Look it up*, the whole of it, for one listed row — with no allowance and
+ * no route.** The body `makeFindCitation` had until plan 260930d, extracted so
+ * *Investigate* can run the same lookup as its first step (P-1): the lookup
+ * prompt, the raw answer judged by `readFind` and then `judgeLookup`, the
+ * `CitationFind` **saved before this returns**, and the same
+ * `FindCitationResponse` the route answers. **Every caller must take an
+ * allowance first** — this is a billed web search, and nothing here counts it.
+ *
+ * `listed` is the row as the list has it now; `article` is the article it
+ * belongs to. A call failure throws `LookupCallFailed`, or the raw network
+ * error (`isLookupCallFailure` recognises both); a save failure throws
+ * whatever the store threw.
+ */
+export async function runCitationLookup(
+  deps: CitationLookupDeps,
+  slug: string,
+  entryId: string,
+  listed: CitedWork,
+  article: Article,
+): Promise<FindCitationResponse> {
   const send = deps.call ?? ((body, options) => openRouterJson("citations-find", body, options));
   const now = deps.now ?? (() => new Date().toISOString());
   const timeoutMs = deps.timeoutMs ?? FIND_TIMEOUT_MS;
 
+  /* **Every row may be looked up** (plan 260929g R-3) — a row the article
+     linked too, for what its extract says. What was attached at read time
+     is dropped here: this press replaces it. */
+  const { lookup: _earlier, ...work } = listed;
+  /* A searched row, or one found before, may take the found page as its
+     link. A link the article gave never changes. */
+  const searched = work.linkFrom === "search" || work.linkFrom === "web";
+
+  /* What is sent about the work and the article, capped — the bibliography
+     entry, the best disambiguator there is for "Smith 2019", and the passage
+     that cites it. The same function builds the read-time fingerprint. */
+  const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
+  const context = lookupContext(work, (id) => text.get(id));
+
+  const model = modelFor("citations-find");
+  const line = log("model").child({ slug, entryId });
+
+  const started = Date.now();
+  const answered = await sendAndRead(lookupRequest(context, model), work.title, {
+    call: send,
+    model,
+    timeoutMs,
+    line,
+  });
+  const { reading, model: used } = answered;
+
+  const kept = reading.verdict.kind === "kept" ? reading.verdict.page : null;
+  /* The reading, judged only against the kept result's own extract. */
+  const judged = kept ? judgeLookup(answerObject(answered.json), kept, context) : null;
+  /* One line per call, and `searches` is on it because it is the alarm: the
+     prompt asks for one, and nothing else in the request enforces that. */
+  line.info(
+    {
+      model: used,
+      ms: since(started),
+      searches: reading.searches,
+      searchesFrom: reading.searchesFrom,
+      results: reading.results,
+      outcome: reading.verdict.kind === "kept" ? "kept" : reading.verdict.why,
+      linked: !searched,
+      ...(kept ? { host: hostOfPage(kept.url) } : {}),
+      ...lookupLogFields(judged),
+    },
+    "citation find",
+  );
+
+  if (!kept || !judged) {
+    return { outcome: "no-match", message: searched ? CITATION_NO_MATCH : CITATION_LOOKUP_NO_MATCH };
+  }
+
+  const at = now();
+  const host = hostOfPage(kept.url);
+  const lookup: CitationLookup = {
+    ...judged.reading,
+    host,
+    searches: reading.searches,
+    model: used,
+    at,
+    contextHash: lookupContextHash(context, model),
+    evidenceHash: lookupEvidenceHash(kept),
+  };
+  const title = kept.title?.trim().slice(0, TITLE_CAP);
+  const find: CitationFind = {
+    url: kept.url,
+    ...(title ? { title } : {}),
+    host,
+    searches: reading.searches,
+    model: used,
+    at,
+    lookup,
+  };
+  /* Awaited before the answer: a save that fails is the request's failure,
+     and the row is never drawn as found when it was not kept. */
+  await deps.finds.save(slug, entryId, find);
+  const { url, lookup: _stored, ...found } = find;
+  /* **The link and the lookup, separately** (R-3): only a searched row takes
+     the found page as its link; any other row comes back exactly as it was. */
+  return { outcome: "found", work: searched ? { ...work, url, linkFrom: "web", found } : work, lookup };
+}
+
+/**
+ * `POST /api/citations/:slug/:id/find` — the free checks, this route's own
+ * allowance, then `runCitationLookup`. **No button calls it since plan
+ * 260930d** (the one *Investigate* press runs the lookup as its first step);
+ * it stays for one deploy so a tab opened before that keeps working (P-7).
+ */
+export function makeFindCitation(
+  deps: FindCitationDeps,
+): (slug: string, entryId: string) => Promise<FindCitationResponse> {
   return async function findCitation(slug, entryId) {
     /* Ownership is this read: every one joins through `ownedSlug`, so somebody
        else's slug — or an article with no list — is a 404 before anything is
@@ -559,98 +708,21 @@ export function makeFindCitation(
     const { citations } = await deps.reader.loadCitations(slug);
     const listed = citations.citations.find((w) => w.id === entryId);
     if (!listed) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
-    /* **Every row may be looked up** (plan 260929g R-3) — a row the article
-       linked too, for what its extract says. What was attached at read time
-       is dropped here: this press replaces it. */
-    const { lookup: _earlier, ...work } = listed;
-    /* A searched row, or one found before, may take the found page as its
-       link. A link the article gave never changes. */
-    const searched = work.linkFrom === "search" || work.linkFrom === "web";
-
-    /* What is sent about the work and the article, capped — the bibliography
-       entry, the best disambiguator there is for "Smith 2019", and the passage
-       that cites it. The same function builds the read-time fingerprint. */
     const article = await deps.reader.loadArticle(slug);
-    const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
-    const context = lookupContext(work, (id) => text.get(id));
-
-    const model = modelFor("citations-find");
-    const line = log("model").child({ slug, entryId });
 
     /* **The allowance, after every check that can refuse for free** — a 404
        spends none of it — and before the one thing that costs. */
     const allowance = await deps.allowance.take("citation-find", FIND_RATE_POLICY);
     if (allowance.kind !== "allowed") {
-      line.warn({ why: allowance.kind }, "citation find: allowance spent");
+      log("model").child({ slug, entryId }).warn({ why: allowance.kind }, "citation find: allowance spent");
       throw refusedBy(allowance.kind);
     }
-
-    const started = Date.now();
-    let answered: FoundWorkPage & { json: unknown };
     try {
-      answered = await sendAndRead(lookupRequest(context, model), work.title, {
-        call: send,
-        model,
-        timeoutMs,
-        line,
-      });
+      return await runCitationLookup(deps, slug, entryId, listed, article);
     } finally {
       /* Frees the concurrency slot whatever happened; the fill still counts. */
       await deps.allowance.finish(allowance.id);
     }
-    const { reading, model: used } = answered;
-
-    const kept = reading.verdict.kind === "kept" ? reading.verdict.page : null;
-    /* The reading, judged only against the kept result's own extract. */
-    const judged = kept ? judgeLookup(answerObject(answered.json), kept, context) : null;
-    /* One line per call, and `searches` is on it because it is the alarm: the
-       prompt asks for one, and nothing else in the request enforces that. */
-    line.info(
-      {
-        model: used,
-        ms: since(started),
-        searches: reading.searches,
-        searchesFrom: reading.searchesFrom,
-        results: reading.results,
-        outcome: reading.verdict.kind === "kept" ? "kept" : reading.verdict.why,
-        linked: !searched,
-        ...(kept ? { host: hostOfPage(kept.url) } : {}),
-        ...lookupLogFields(judged),
-      },
-      "citation find",
-    );
-
-    if (!kept || !judged) {
-      return { outcome: "no-match", message: searched ? CITATION_NO_MATCH : CITATION_LOOKUP_NO_MATCH };
-    }
-
-    const at = now();
-    const host = hostOfPage(kept.url);
-    const lookup: CitationLookup = {
-      ...judged.reading,
-      host,
-      searches: reading.searches,
-      model: used,
-      at,
-      contextHash: lookupContextHash(context, model),
-      evidenceHash: lookupEvidenceHash(kept),
-    };
-    const title = kept.title?.trim().slice(0, TITLE_CAP);
-    const find: CitationFind = {
-      url: kept.url,
-      ...(title ? { title } : {}),
-      host,
-      searches: reading.searches,
-      model: used,
-      at,
-      lookup,
-    };
-    /* Awaited before the answer: a save that fails is the request's failure,
-       and the row is never drawn as found when it was not kept. */
-    await deps.finds.save(slug, entryId, find);
-    const { url, lookup: _stored, ...found } = find;
-    /* **The link and the lookup, separately** (R-3): only a searched row takes
-       the found page as its link; any other row comes back exactly as it was. */
-    return { outcome: "found", work: searched ? { ...work, url, linkFrom: "web", found } : work, lookup };
   };
 }
+

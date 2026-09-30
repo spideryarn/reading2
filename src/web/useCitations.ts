@@ -13,17 +13,14 @@
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
  * file is only the parse, the 404 branch and the verbs.
  *
- * The third verb is **`find`**, stage 3's *Find it on the web*, *Look it up*
- * since plan 260929g: one POST for one row (any row, since that plan),
- * `POST /api/citations/:slug/:id/find` (src/citation-find.ts).
- * Not a job — a reader-triggered call answering in seconds, like the glossary's
- * *Check the web* — and **one at a time**, so a second press cannot start a
- * second paid search while the first is out.
- *
- * The fourth is **`investigate`** (plan 260930a): one streamed, billed answer
- * about one work, `POST /api/citations/:slug/:id/investigate`, SSE — the
- * glossary's *Check the web* shape. Its `done` crosses to the read half by
- * `applyInvestigation`, the second narrow write beside `applyFound`.
+ * The third verb is **`investigate`** (plan 260930a): one streamed, billed
+ * press about one work, `POST /api/citations/:slug/:id/investigate`, SSE — the
+ * glossary's *Check the web* shape. **Since plan 260930d it is also *Look it
+ * up***, which had its own verb (`find`, `POST …/find`) until then: the press
+ * looks the work up first when the row has no current reading, and that
+ * step's answer arrives as a `lookup` frame, applied exactly as `/find`'s
+ * answer was (`applyFound`, then a re-read). Its `done` crosses to the read
+ * half by `applyInvestigation`, the second narrow write beside `applyFound`.
  *
  * ## Two hooks since 2026-09-16, not one
  *
@@ -51,6 +48,7 @@ import type {
   CitationsResponse,
   CitedWork,
   FindCitationResponse,
+  InvestigateStage,
   Job,
 } from "../types.js";
 import { wentQuiet } from "../messages.js";
@@ -63,13 +61,14 @@ import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 type CitationsStatus = "loading" | "none" | "ready" | "error";
 
 /**
- * What the last *Find it* said, on the row it was pressed on, when it did not
- * end in a found page. `no-match` is a result, drawn quietly; `failed` is the
- * server's failure sentence (src/messages.ts), drawn as an error.
+ * What the last press's lookup said, on the row it was pressed on, when it
+ * found no page: a result, drawn quietly, above the reading that goes on
+ * unconfirmed. A lookup that *failed* stops the press, so it is the press's
+ * failure (`InvestigateFailure`), not a note.
  */
 export interface FindNote {
   id: string;
-  kind: "no-match" | "failed";
+  kind: "no-match";
   message: string;
 }
 
@@ -89,6 +88,12 @@ export interface InvestigateFailure {
   id: string;
   message: string;
   previousAt: string | null;
+  /**
+   * The press's first step found and stored a page before the failure (plan
+   * 260930d P-4): the row shows the new lookup, and says the quick check was
+   * kept.
+   */
+  lookupKept: boolean;
 }
 
 export interface UseCitations {
@@ -124,27 +129,22 @@ export interface UseCitations {
    */
   regenerate(): Promise<void>;
   cancel(id: string): void;
-  /** The work whose *Find it* is running, or null. One at a time. */
-  finding: string | null;
-  /** What the last *Find it* that found nothing, or failed, said — and on which row. */
+  /** What the last press's lookup said when it found no page — and on which row. */
   findNote: FindNote | null;
-  /**
-   * ***Look it up*** — any row since plan 260929g stage 2. What came back is
-   * patched onto that row: its link fields, only on a searched row, and its
-   * `lookup`, only while the row is still the one that was asked about. Both
-   * are stored on the server, so a reload shows them too. src/citation-find.ts.
-   */
-  find(id: string): Promise<void>;
-  /** The work whose *Investigate* is streaming, or null. One at a time. */
+  /** The work whose *Investigate* is running, or null. One at a time. */
   investigating: string | null;
+  /** Which step that press is on: `finding` the work, then `reading`. Null before the first frame. */
+  investigateStage: InvestigateStage | null;
   /** The words so far. **Never on the row**: only `done`, sent after the save, puts one there. */
   investigateDraft: InvestigateDraft | null;
   /** The last *Investigate* that did not end in a stored answer. */
   investigateFailed: InvestigateFailure | null;
   /**
-   * ***Investigate*** — plan 260930a. One streamed, billed answer about one
-   * work, kept per row by the server and attached at read time while its
-   * context still matches. src/citation-investigate.ts.
+   * ***Investigate*** — plan 260930a, and *Look it up* as its first step since
+   * plan 260930d. The lookup's answer is patched onto the row as `/find`'s was
+   * (its link fields, only on a searched row, then a re-read attaches the
+   * lookup); the streamed answer is kept per row by the server and attached at
+   * read time while its context still matches. src/citation-investigate.ts.
    */
   investigate(id: string): Promise<void>;
 }
@@ -359,15 +359,7 @@ function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
  */
 export function useCitations(slug: string, read: CitationsRead): UseCitations {
   const { status, citations, stale, outdated, error, reload, refresh, applyFound, applyInvestigation } = read;
-  const [finding, setFinding] = useState<string | null>(null);
   const [findNote, setFindNote] = useState<FindNote | null>(null);
-  /* Admission for `find`, as a ref so two presses in one render cannot both
-     get past it. State would let both see `null`. */
-  const findLive = useRef(false);
-  /* The slug a reply belongs to. A find that returns after the reader has moved
-     to another article must not patch that article's list. */
-  const slugNow = useRef(slug);
-  slugNow.current = slug;
   /**
    * Revalidate on mount, behind whatever is on screen.
    *
@@ -395,44 +387,6 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     await queue.start({ force: true });
   }, [queue]);
 
-  const find = useCallback(
-    async (id: string) => {
-      if (findLive.current) return;
-      findLive.current = true;
-      const asked = slug;
-      setFinding(id);
-      setFindNote(null);
-      try {
-        const res = await apiFetch(
-          `/api/citations/${encodeURIComponent(asked)}/${encodeURIComponent(id)}/find`,
-          { method: "POST" },
-        );
-        /* The 404 and every failed call are JSON errors, and `readJson`
-           throws their sentence. (The 409 for a linked row went in plan
-           260929g: every row may be looked up.) */
-        const answer = await readJson<FindCitationResponse>(res);
-        if (slugNow.current !== asked) return;
-        if (answer.outcome === "no-match") {
-          setFindNote({ id, kind: "no-match", message: answer.message });
-          return;
-        }
-        /* Patch only the link fields. A fresh read attaches the lookup after
-           recomputing its fingerprint from the current block text; the client
-           cannot mirror that check because the row carries ids, not the text. */
-        const { url, linkFrom, found } = answer.work;
-        applyFound(id, { link: { url, linkFrom, ...(found ? { found } : {}) } });
-        void refresh();
-      } catch (err) {
-        if (slugNow.current !== asked) return;
-        setFindNote({ id, kind: "failed", message: (err as Error).message });
-      } finally {
-        findLive.current = false;
-        setFinding(null);
-      }
-    },
-    [slug, applyFound, refresh],
-  );
-
   /**
    * ***Investigate*** one work — plan 260930a, and the glossary's *Check the
    * web* (useGlossary.ts § `look`) nearly line for line, because the server
@@ -453,9 +407,18 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
    *   again, as it does for a list written while the band was closed.
    * - **One at a time**, across the list: each is a paid call, and the
    *   server's allowance runs one per reader at once anyway.
+   * - **The `lookup` frame is applied as `/find`'s answer was** (plan 260930d
+   *   P-3): a no-match is a quiet note on the row; a found page patches only
+   *   the link fields (`applyFound`, and only on a searched row), and a re-read
+   *   lets the server attach the lookup by its fingerprint, which the client
+   *   cannot check because the row carries block ids, not their text.
+   *   tests/citations-find-late-reply.test.tsx.
+   * - **A lookup that landed survives a failed reading** (P-4): the failure
+   *   records it, and the row says the quick check was kept.
    */
   const investigateLive = useRef<AbortController | null>(null);
   const [investigating, setInvestigating] = useState<string | null>(null);
+  const [investigateStage, setInvestigateStage] = useState<InvestigateStage | null>(null);
   const [investigateDraft, setInvestigateDraft] = useState<InvestigateDraft | null>(null);
   const [investigateFailed, setInvestigateFailed] = useState<InvestigateFailure | null>(null);
   /* What is stored on each row at the moment of a press, read without making
@@ -471,9 +434,12 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
       const mine = () => investigateLive.current === controller;
       const previousAt = citationsNow.current?.citations.find((w) => w.id === id)?.investigation?.at ?? null;
       setInvestigating(id);
+      setInvestigateStage(null);
       setInvestigateFailed(null);
       setInvestigateDraft(null);
+      setFindNote(null);
       let opened = false;
+      let lookupKept = false;
       try {
         const res = await apiFetch(
           `/api/citations/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/investigate`,
@@ -495,6 +461,27 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
             const got = (data as { investigation?: unknown } | null)?.investigation;
             return isInvestigation(got) ? got : undefined;
           },
+          other: (name, data) => {
+            if (!mine()) return;
+            if (name === "stage") {
+              const stage = (data as { stage?: unknown } | null)?.stage;
+              if (stage === "finding" || stage === "reading") setInvestigateStage(stage);
+              return;
+            }
+            if (name !== "lookup") return;
+            const answer = data as FindCitationResponse | null;
+            if (answer?.outcome === "no-match" && typeof answer.message === "string") {
+              setFindNote({ id, kind: "no-match", message: answer.message });
+              return;
+            }
+            if (answer?.outcome !== "found" || !answer.work) return;
+            /* Stored by the server before this frame was sent. Patch only the
+               link fields, then re-read: `applyFound` above has why. */
+            lookupKept = true;
+            const { url, linkFrom, found } = answer.work;
+            applyFound(id, { link: { url, linkFrom, ...(found ? { found } : {}) } });
+            void refresh();
+          },
         });
         if (mine()) {
           setInvestigateDraft(null);
@@ -511,16 +498,18 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
           id,
           message: err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
           previousAt,
+          lookupKept,
         });
         if (opened) await refresh();
       } finally {
         if (mine()) {
           investigateLive.current = null;
           setInvestigating(null);
+          setInvestigateStage(null);
         }
       }
     },
-    [slug, applyInvestigation, refresh],
+    [slug, applyFound, applyInvestigation, refresh],
   );
 
   /* Another article, or the band going, stops reading — useGlossary.ts's
@@ -532,8 +521,10 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
       investigateLive.current?.abort();
       investigateLive.current = null;
       setInvestigating(null);
+      setInvestigateStage(null);
       setInvestigateDraft(null);
       setInvestigateFailed(null);
+      setFindNote(null);
     },
     [slug],
   );
@@ -557,10 +548,9 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     ensure,
     regenerate,
     cancel: queue.cancel,
-    finding,
     findNote,
-    find,
     investigating,
+    investigateStage,
     investigateDraft,
     investigateFailed,
     investigate,

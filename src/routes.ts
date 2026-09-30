@@ -40,7 +40,8 @@
  *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
- *   POST   /api/citations/:slug/:id/investigate   look into one cited work on the web, and keep the answer → SSE
+ *   POST   /api/citations/:slug/:id/investigate   look one cited work up, then look into it on the web, and keep both → SSE
+ *   POST   /api/citations/:slug/:id/find   the lookup alone; no button calls it since plan 260930d, kept one deploy for open tabs
  *   POST   /api/source-guess/:slug   an upload looks for its own page on the web, once → SourceGuess
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
  *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
@@ -1919,10 +1920,13 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  * `POST /api/citations/:slug/:id/investigate`, SSE out. Citations'
  * *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
- * `streamTermLookup`'s shape exactly: the 404 and the allowance's 429/503 are
- * decided by `investigateCitation` before a header is written, then any number
- * of `delta` and exactly one `done` (`{ investigation }`, **written only after
- * it is stored**) or `error` (`{ error }`). Every delta has already passed the
+ * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
+ * by `investigateCitation` before a header is written. Then, since plan
+ * 260930d, `stage` (`{ stage: "finding" }`) and one `lookup` (the stored
+ * *Look it up* answer, `/find`'s body) when the press looks the work up first,
+ * and `stage` (`{ stage: "reading" }`); then any number of `delta` and exactly
+ * one `done` (`{ investigation }`, **written only after it is stored**) or
+ * `error` (`{ error }`). Every delta has already passed the
  * quote guard (src/investigate-quote-guard.ts); a stop is an `error` carrying
  * the guard's sentence, and the client replaces the whole streamed answer
  * with it.
@@ -1938,12 +1942,28 @@ async function streamCitationInvestigation(slug: string, entryId: string, res: S
   const { frame } = sse(res);
   try {
     for await (const event of stream()) {
-      if (event.type === "delta") {
-        frame("delta", { text: event.text });
-        continue;
+      switch (event.type) {
+        case "stage":
+          frame("stage", { stage: event.stage });
+          break;
+        case "lookup":
+          /* The body `POST …/find` answers, unchanged — the client applies it
+             exactly as it applied that route's answer. */
+          frame("lookup", event.response);
+          break;
+        case "delta":
+          frame("delta", { text: event.text });
+          break;
+        case "done": {
+          const done: InvestigateCitationDone = { investigation: event.investigation };
+          frame("done", done);
+          break;
+        }
+        default: {
+          const never: never = event;
+          throw new Error(`unhandled investigate event: ${JSON.stringify(never)}`);
+        }
       }
-      const done: InvestigateCitationDone = { investigation: event.investigation };
-      frame("done", done);
     }
   } catch (err) {
     captureFailure(err, { route: "citation-investigate", slug });

@@ -3868,15 +3868,28 @@ export interface CitationInvestigation {
 }
 
 /**
- * `POST /api/citations/:slug/:id/investigate` — SSE. Any number of `delta`
+ * `POST /api/citations/:slug/:id/investigate` — SSE. Since plan 260930d,
+ * first `stage` (`{ stage: "finding" }`) and one `lookup` (a
+ * `FindCitationResponse`, **already stored**) when the press looks the work up,
+ * then `stage` (`{ stage: "reading" }`); then any number of `delta`
  * (`{ text }`), then exactly one of `done` (this, **written only after the
  * investigation is stored**) or `error` (`{ error }`, the reader-facing
- * sentence). On `error` nothing new was kept: a previous investigation, if
- * any, is still the stored one.
+ * sentence). On `error` no new investigation was kept — but a `lookup` that
+ * arrived before it was, and its new match can detach the previous
+ * investigation (its fingerprint covers the match).
  */
 export interface InvestigateCitationDone {
   investigation: CitationInvestigation;
 }
+
+/**
+ * Which step of the one *Investigate* press is running (plan 260930d): `finding`
+ * — the lookup that looks for the work's own page, only when the row has no
+ * current `assessed` one — then `reading`, the streamed answer. Sent as a
+ * `stage` frame (`{ stage }`); a `lookup` frame between them carries the
+ * lookup's answer, the same `FindCitationResponse` `POST …/find` answers.
+ */
+export type InvestigateStage = "finding" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {

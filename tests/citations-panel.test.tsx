@@ -191,10 +191,9 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
-    finding: null,
     findNote: null,
-    find: async () => {},
     investigating: null,
+    investigateStage: null,
     investigateDraft: null,
     investigateFailed: null,
     investigate: async () => {},
@@ -250,10 +249,13 @@ interface Card {
   how: string;
 }
 
-/** The *Find it* button on one row — a real element, so a miss is a thrown error. */
-function findButton(id: string): HTMLButtonElement {
-  const el = row(id).querySelector<HTMLButtonElement>(".cite-find");
-  if (!el) throw new Error(`no Find it button on row ${id}`);
+/**
+ * The one paid button on a row — *Investigate*, which since plan 260930d is
+ * *Look it up* (was *Find it*) too. A real element, so a miss is a thrown error.
+ */
+function investigateButton(id: string): HTMLButtonElement {
+  const el = row(id).querySelector<HTMLButtonElement>(".cite-investigate");
+  if (!el) throw new Error(`no Investigate button on row ${id}`);
   return el;
 }
 
@@ -405,7 +407,7 @@ describe("CitationsPanel", () => {
       linkFrom: "search",
     });
     await draw(owner({ citations: artefact([searched, PASSING]) }));
-    const button = findButton(searched.id);
+    const button = investigateButton(searched.id);
     const card = await cardFor(button);
     for (const copy of [`${card.head} ${card.body}`, MODE_CATALOG.citations.how]) {
       expect(copy).toMatch(/searches the web for (this|the) work/i);
@@ -439,21 +441,22 @@ describe("CitationsPanel", () => {
       linkFrom: "search",
     });
     await draw(owner({ citations: artefact([searched, PASSING]) }));
-    const button = findButton(searched.id);
+    const button = investigateButton(searched.id);
     expect(button.hasAttribute("title"), "the button fell back to a title attribute").toBe(false);
 
     const card = await cardFor(button);
-    expect(earnsItsHover(card), "the Find it card does not earn its hover").toBeNull();
-    /* The effect of running it, which is the half the `title` left out: a press
-       that finds nothing stores nothing, so pressing again is not a way of
-       making progress. */
+    expect(earnsItsHover(card), "the Investigate card does not earn its hover").toBeNull();
+    /* The effect of running it, which is the half the `title` left out: what a
+       press costs, and what it leaves on the row. (*Find it*'s "finding
+       nothing keeps nothing" went with plan 260930d: a press that finds no page
+       still writes and keeps a reading, unconfirmed.) */
     expect(card.how.toLowerCase(), "the card no longer says what a press costs").toMatch(
       /cost|spend|pay|paid|price/,
     );
-    expect(
-      card.how.toLowerCase(),
-      "the card no longer says that finding nothing keeps nothing",
-    ).toMatch(/nothing|no match|no-match/);
+    expect(card.how.toLowerCase(), "the card no longer says what is kept").toMatch(/kept on this row/);
+    expect(card.how.toLowerCase(), "the card no longer says a searched row gains a link").toMatch(
+      /scholar search, the page it finds becomes the link/,
+    );
     /* **The false claim that shipped, guarded as a claim rather than as a
        phrase.** The first version of this copy said the row "keeps its Scholar
        fallback either way", which is wrong on the half that matters: a
@@ -662,8 +665,9 @@ describe("what a row says we have read", () => {
 
   /* Stage 1 pinned "does not read the work" here. Since stage 2 the press reads
      a search extract, so the card says that instead — and still never that it
-     read the full work, or checked the page is the work. */
-  it("the Look it up card, on a searched row, claims no check that the page is the work", async () => {
+     read the full work, or checked the page is the work. Since plan 260930d the
+     card is Investigate's, whose first step is that lookup. */
+  it("the Investigate card, on a searched row, claims no check that the page is the work", async () => {
     const searched = work({
       id: "spya-e2f3g4",
       title: "Searched",
@@ -673,11 +677,13 @@ describe("what a row says we have read", () => {
       linkFrom: "search",
     });
     await draw(owner({ citations: artefact([searched, PASSING]) }));
-    const card = await cardFor(findButton(searched.id));
+    const card = await cardFor(investigateButton(searched.id));
     const copy = `${card.head} ${card.body}`;
     expect(copy).not.toMatch(/verif|confirm|real link/i);
     expect(copy, "the card no longer says a searched row gains a link").toMatch(/scholar search/i);
-    expect(copy, "the card no longer says it does not read the full work").toMatch(/not the full work/i);
+    expect(copy, "the card no longer says it does not read the full work").toMatch(
+      /never fetches the paper itself/i,
+    );
   });
 });
 
@@ -799,33 +805,49 @@ describe("what a row says after Look it up", () => {
     expect(r.querySelector(".cite-lookup")).toBeNull();
   });
 
-  it("offers Look it up on a row the article linked, and again on one already looked up", async () => {
+  /* Plan 260930d: Look it up is Investigate's first step, so no row — linked,
+     looked up already, or neither — has a Look it up button of its own. */
+  it("offers no Look it up button on any row: one Investigate, which presses for its own row", async () => {
     const pressed: string[] = [];
     await draw(
       owner({
         citations: artefact([CENTRAL, LOOKED]),
-        find: async (id) => {
+        investigate: async (id) => {
           pressed.push(id);
         },
       }),
     );
-    const button = findButton(CENTRAL.id);
-    expect(button.textContent).toBe("Look it up");
-    expect(findButton(LOOKED.id).textContent).toBe("Look it up again");
-    await act(async () => button.click());
+    for (const id of [CENTRAL.id, LOOKED.id]) {
+      expect(row(id).querySelector(".cite-find"), "a Look it up button came back").toBeNull();
+      expect(row(id).querySelectorAll(".cite-meta .gloss-btn")).toHaveLength(1);
+    }
+    expect(row(CENTRAL.id).textContent).not.toMatch(/Look it up/);
+    await act(async () => investigateButton(CENTRAL.id).click());
     expect(pressed).toEqual([CENTRAL.id]);
   });
 
-  it("the Look it up card says it reads an extract, not the work, and that a given link stays", async () => {
+  it("the Investigate card says it reads an extract, not the work, and that a given link stays", async () => {
     await draw(owner({ citations: artefact([CENTRAL]) }));
-    const card = await cardFor(findButton(CENTRAL.id));
-    expect(card.head).toBe("Look it up");
-    expect(earnsItsHover(card), "the Look it up card does not earn its hover").toBeNull();
+    const card = await cardFor(investigateButton(CENTRAL.id));
+    expect(card.head).toBe("Investigate");
     const copy = `${card.head} ${card.body}`;
     expect(copy).toMatch(/extract/i);
-    expect(copy).toMatch(/not the full work/i);
+    expect(copy).toMatch(/quoting only passages code found/i);
     expect(copy).toMatch(/link the article gave never changes/i);
     expect(copy).not.toMatch(/verif|confirm|real link|from the paper/i);
+  });
+
+  it("says the first step's no-match quietly on the row it was pressed on", async () => {
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, LOOKED]),
+        findNote: { id: CENTRAL.id, kind: "no-match", message: "No page the search found was clearly this work's own." },
+      }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-find-note")?.textContent).toBe(
+      "No page the search found was clearly this work's own.",
+    );
+    expect(row(LOOKED.id).querySelector(".cite-find-note")).toBeNull();
   });
 });
 
@@ -834,8 +856,13 @@ describe("what a row says after Look it up", () => {
    into its row, a failure that replaces the whole streamed text, the kept
    answer folded to its first part, and what was read said by code. */
 
-const { INVESTIGATE_OFFER_LOOKUP, INVESTIGATE_PREVIOUS_KEPT, INVESTIGATE_WAIT, investigationProvenance } =
-  await import("../src/web/CitationInvestigation.js");
+const {
+  INVESTIGATE_FINDING,
+  INVESTIGATE_LOOKUP_KEPT,
+  INVESTIGATE_PREVIOUS_KEPT,
+  INVESTIGATE_WAIT,
+  investigationProvenance,
+} = await import("../src/web/CitationInvestigation.js");
 
 const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
   answer:
@@ -855,14 +882,8 @@ const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
   promptVersion: "1",
 };
 
-function investigateButton(id: string): HTMLButtonElement {
-  const el = row(id).querySelector<HTMLButtonElement>(".cite-investigate");
-  if (!el) throw new Error(`no Investigate button on row ${id}`);
-  return el;
-}
-
 describe("Investigate", () => {
-  it("is on every owner row beside Look it up, and presses for its own row", async () => {
+  it("is on every owner row, alone, and presses for its own row", async () => {
     const pressed: string[] = [];
     await draw(
       owner({
@@ -875,7 +896,7 @@ describe("Investigate", () => {
     for (const id of [CENTRAL.id, FAMOUS.id]) {
       const b = investigateButton(id);
       expect(b.textContent).toBe("Investigate");
-      expect(b.closest(".cite-meta")?.querySelector(".cite-find")).not.toBeNull();
+      expect(b.closest(".cite-meta")?.querySelector(".cite-find")).toBeNull();
       expect(b.hasAttribute("title"), "the button fell back to a title attribute").toBe(false);
     }
     await act(async () => investigateButton(FAMOUS.id).click());
@@ -925,12 +946,28 @@ describe("Investigate", () => {
     const copy = `${card.head} ${card.body}`;
     expect(copy).toMatch(/searches the web/i);
     expect(copy).toMatch(/profile/i);
+    /* Plan 260930d: both steps, in order. */
+    expect(card.what).toMatch(/^First it searches the web for this work's own page/);
+    expect(card.what).toMatch(/Then it writes a longer reading/);
     expect(card.how).toMatch(/costs money/i);
     expect(card.how).toMatch(/extracts/i);
     expect(card.how).toMatch(/may be an abstract or part of a paper/i);
-    expect(card.how).toMatch(/does not fetch the page itself/i);
-    expect(card.how).toMatch(/kept on this row/i);
+    expect(card.how).toMatch(/never fetches the paper itself/i);
+    expect(card.how).toMatch(/Both results are kept on this row/);
     expect(copy).not.toMatch(/verif|confirm|model call|not the paper|reads the paper/i);
+  });
+
+  it("says it is finding the work while the first step runs, then what the wait is", async () => {
+    await draw(
+      owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id, investigateStage: "finding" }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_FINDING);
+    expect(INVESTIGATE_FINDING).toBe("Finding the work…");
+    expect(row(FAMOUS.id).querySelector(".cite-inv-wait")).toBeNull();
+    await draw(
+      owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id, investigateStage: "reading" }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_WAIT);
   });
 
   it("streams into the pressed row only, says what the wait is first, and holds every other row", async () => {
@@ -962,7 +999,7 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([CENTRAL]),
-        investigateFailed: { id: CENTRAL.id, message: "This answer tried to quote a source directly.", previousAt: null },
+        investigateFailed: { id: CENTRAL.id, message: "This answer tried to quote a source directly.", previousAt: null, lookupKept: false },
         investigate: async () => {
           pressed++;
         },
@@ -983,7 +1020,7 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([had]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at },
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at, lookupKept: false },
       }),
     );
     const r = row(CENTRAL.id);
@@ -992,12 +1029,52 @@ describe("Investigate", () => {
     expect(r.querySelector(".cite-inv-text")?.textContent).toBe("The abstract on arxiv.org says the model does this.");
   });
 
+  /* Plan 260930d P-4: the first step stored a page, then the reading failed. */
+  it("after a lookup that landed and a reading that failed, says the quick check was kept, and shows it", async () => {
+    await draw(
+      owner({
+        citations: artefact([{ ...CENTRAL, lookup: ASSESSED }]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null, lookupKept: true },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-error")?.textContent).toContain("It stopped.");
+    const said = [...r.querySelectorAll(".cite-inv-previous")].map((n) => n.textContent);
+    expect(said).toEqual([INVESTIGATE_LOOKUP_KEPT]);
+    expect(INVESTIGATE_LOOKUP_KEPT).toBe("The longer investigation failed; the quick check was kept.");
+    /* The lookup itself is the row's, from the re-read. */
+    expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
+  });
+
+  it("claims the earlier investigation is still shown only when one still attaches after the re-read", async () => {
+    /* The new match detached the earlier answer: nothing stored on the row. */
+    await draw(
+      owner({
+        citations: artefact([{ ...CENTRAL, lookup: ASSESSED }]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at, lookupKept: true },
+      }),
+    );
+    let said = [...row(CENTRAL.id).querySelectorAll(".cite-inv-previous")].map((n) => n.textContent);
+    expect(said).toEqual([INVESTIGATE_LOOKUP_KEPT]);
+
+    /* It still attaches: both sentences, and the answer. */
+    await draw(
+      owner({
+        citations: artefact([{ ...CENTRAL, lookup: ASSESSED, investigation: INVESTIGATION }]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at, lookupKept: true },
+      }),
+    );
+    said = [...row(CENTRAL.id).querySelectorAll(".cite-inv-previous")].map((n) => n.textContent);
+    expect(said).toEqual([INVESTIGATE_LOOKUP_KEPT, INVESTIGATE_PREVIOUS_KEPT]);
+    expect(row(CENTRAL.id).querySelector(".cite-inv-text")).not.toBeNull();
+  });
+
   it("draws a newer stored answer rather than the failure, since an error does not prove nothing was kept", async () => {
     const kept = { ...CENTRAL, investigation: INVESTIGATION };
     await draw(
       owner({
         citations: artefact([kept]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null },
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null, lookupKept: false },
       }),
     );
     const r = row(CENTRAL.id);
@@ -1029,17 +1106,22 @@ describe("Investigate", () => {
     }
     expect(r.querySelector(".cite-inv-sources")?.textContent).toContain("The paper's page");
     expect(r.querySelector(".cite-inv-foot")?.textContent).toMatch(/^Investigated .+ · Investigate again$/);
-    /* No Look it up reading on this row, so the view offers it — as a line, not a second button. */
-    expect(r.querySelector(".cite-inv-offer")?.textContent).toBe(INVESTIGATE_OFFER_LOOKUP);
-    expect(r.querySelectorAll(".cite-find")).toHaveLength(1);
+    /* Plan 260930d: the offer of Look it up went with its button. */
+    expect(r.querySelector(".cite-inv-offer")).toBeNull();
+    expect(r.querySelectorAll(".cite-find")).toHaveLength(0);
+    expect(r.querySelector(".cite-inv-prov")?.textContent).toMatch(/We could not confirm that any result is this work itself\.$/);
   });
 
-  it("does not offer Look it up on a row that has its reading already", async () => {
+  it("on a looked-up row whose page this search did not return, says so rather than 'could not confirm'", async () => {
     await draw(owner({ citations: artefact([{ ...LOOKED, investigation: INVESTIGATION }]) }));
     const r = row(LOOKED.id);
     await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
-    expect(r.querySelector(".cite-inv-prov")).not.toBeNull();
-    expect(r.querySelector(".cite-inv-offer")).toBeNull();
+    const prov = r.querySelector(".cite-inv-prov")?.textContent ?? "";
+    expect(prov).toBe(investigationProvenance(INVESTIGATION, ASSESSED));
+    expect(prov).toMatch(
+      /The first check matched a page on arxiv\.org; this search's own results did not include it\.$/,
+    );
+    expect(prov).not.toMatch(/could not confirm/);
     /* The lookup's own reading is still drawn once, by the row. */
     expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
   });
@@ -1099,10 +1181,8 @@ const TAP_AGAIN = "Tap again to do it.";
 const tapHint = () => document.querySelector('[role="tooltip"] .tip-soon-tap')?.textContent ?? null;
 
 describe("a finger's first press on a paid button reveals its card; the second presses", () => {
-  const buttons = [
-    ["Investigate", "investigate", investigateButton],
-    ["Look it up", "find", findButton],
-  ] as const;
+  /* One paid button since plan 260930d; *Look it up* was the second. */
+  const buttons = [["Investigate", "investigate", investigateButton]] as const;
 
   for (const [name, hook, button] of buttons) {
     it(`${name}: the first tap opens the card and spends nothing, the second presses`, async () => {

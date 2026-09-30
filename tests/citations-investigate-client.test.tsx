@@ -242,6 +242,7 @@ describe("investigate", () => {
       id: ID,
       message: "This answer tried to quote a source directly. [cite-quoted]",
       previousAt: previous.at,
+      lookupKept: false,
     });
     expect(gets, "an error was trusted to mean nothing was kept").toBe(before + 1);
     expect(row()?.investigation).toEqual(previous);
@@ -315,6 +316,110 @@ describe("investigate", () => {
     });
     await flush();
     expect(posts).toBe(1);
+  });
+
+  /* ---------------------------------------------- plan 260930d: the first step -- */
+
+  it("follows the stage frames: finding, then reading", async () => {
+    await open();
+    await act(async () => {
+      void hook?.investigate(ID);
+    });
+    await flush();
+    expect(hook?.investigateStage).toBeNull();
+    await act(async () => push?.("stage", { stage: "finding" }));
+    await flush();
+    expect(hook?.investigateStage).toBe("finding");
+    await act(async () => push?.("stage", { stage: "reading" }));
+    await flush();
+    expect(hook?.investigateStage).toBe("reading");
+    await act(async () => push?.("stage", { stage: "anything else" }));
+    await flush();
+    expect(hook?.investigateStage, "an unknown stage was taken").toBe("reading");
+  });
+
+  it("a no-match lookup is a quiet note on the row, and the reading goes on", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    const before = gets;
+    await act(async () => push?.("lookup", { outcome: "no-match", message: "No page matched." }));
+    await flush();
+    expect(hook?.findNote).toEqual({ id: ID, kind: "no-match", message: "No page matched." });
+    expect(gets, "a no-match stored nothing, so there is nothing to re-read").toBe(before);
+    const kept = investigation("2026-09-30T10:00:00.000Z");
+    listed = { ...WORK, investigation: kept };
+    await act(async () => {
+      push?.("done", { investigation: kept });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(row()?.investigation).toEqual(kept);
+  });
+
+  it("a found lookup is re-read at once, and survives a reading that fails after it (P-4)", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    const before = gets;
+    const { lookup: _none, ...bare } = WORK;
+    await act(async () =>
+      push?.("lookup", {
+        outcome: "found",
+        work: bare,
+        lookup: {
+          state: "assessed",
+          host: "doi.org",
+          searches: 1,
+          model: "m",
+          at: "x",
+          contextHash: "c",
+          evidenceHash: "e",
+          excerptWords: 10,
+          verdict: { support: "not-in-extract" },
+        },
+      }),
+    );
+    await flush();
+    expect(gets, "the lookup was not re-read, so the server never attached it").toBe(before + 1);
+    await act(async () => {
+      push?.("error", { error: "The answer stopped. [cite-unfinished]" });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(hook?.investigateFailed).toMatchObject({ id: ID, lookupKept: true, previousAt: null });
+  });
+
+  it("a failure with no lookup landed does not say the quick check was kept", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    await act(async () => {
+      push?.("stage", { stage: "finding" });
+      push?.("error", { error: "The quick check failed. [cite-lookup-failed]" });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(hook?.investigateFailed).toMatchObject({ id: ID, lookupKept: false });
+    expect(hook?.investigateStage).toBeNull();
   });
 
   it("leaving aborts the fetch — the server finishes and stores it regardless", async () => {

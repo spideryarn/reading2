@@ -25,14 +25,19 @@
  *   accepts — stores nothing.
  * - **`done` only after the save.**
  *
- * ## Which result is the work (Sol Q-3)
+ * ## Which result is the work (Sol Q-3, then plan 260930d)
  *
  * No identity check of its own: that needs a structured URL pick, which breaks
- * streamed prose. When the row has a current *Look it up* that identified a
- * page, that page goes in as *the result we matched to this work*; otherwise the
- * prompt says to call a result this work only when title, authors and year
- * match, and the stored `matchedHost` is null, which the view turns into *we
- * could not confirm that any result is this work itself*.
+ * streamed prose. **Since plan 260930d the press runs *Look it up* first**
+ * (`runCitationLookup`, src/citation-find.ts — code's two-gate identity rule
+ * and verified quotes, stored as `/find` stores them) unless the row already
+ * has a current `assessed` lookup; then it reads the list again and builds the
+ * reading from what is stored now. When that lookup identified a page, the
+ * page goes in as *the result we matched to this work*; otherwise the prompt
+ * says to call a result this work only when title, authors and year match.
+ * The stored `matchedHost` is that page's host only when this answer's own
+ * extracts include it; the view says the rest from the row's lookup
+ * (src/web/CitationInvestigation.tsx § investigationProvenance).
  *
  * ## Security
  *
@@ -50,6 +55,12 @@
  */
 import type { AiRequestBody } from "./ai-call.js";
 import {
+  type CitationLookupDeps,
+  FIND_TIMEOUT_MS,
+  isLookupCallFailure,
+  runCitationLookup,
+} from "./citation-find.js";
+import {
   CITATION_INVESTIGATE_VERSION,
   investigateArticleKey,
   investigateContext,
@@ -65,7 +76,9 @@ import { errorFields, log, since } from "./log.js";
 import {
   ANSWER_OVERFLOWED_FIXED_ASK,
   CITATION_INVESTIGATE_BUSY,
+  CITATION_INVESTIGATE_GONE,
   CITATION_INVESTIGATE_LIMITED,
+  CITATION_INVESTIGATE_LOOKUP_FAILED,
   CITATION_INVESTIGATE_NOTHING_READ,
   CITATION_INVESTIGATE_QUOTED,
   CITATION_INVESTIGATE_RESTING,
@@ -80,14 +93,16 @@ import { PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
 import { articleWithIds, type OpenRouterMessage } from "./article-prompt.js";
 import { runStream, type StreamRun, type StreamRunEvent } from "./stream-run.js";
-import type { AllowanceTaken, FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
+import type { AllowanceTaken, CitationFindStore, FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
 import type {
   Article,
   Block,
   Citation,
-  CitationFind,
   CitationInvestigation,
   CitationsFound,
+  CitedWork,
+  FindCitationResponse,
+  InvestigateStage,
   Meta,
   SearchEvidence,
 } from "./types.js";
@@ -115,16 +130,20 @@ export const ANSWER_TOKENS = 1_500;
 /**
  * **The allowance, from the probe's measured cost** (the plan § The probe):
  * $0.120 a press on average, $0.153 worst, budgeted at $0.30 for the longest
- * articles. A $20 worst-case day gives a global fuse of 60 ($18); a reader gets
- * 20 a day (≤ $6), 8 an hour, one at a time. The lease is the deadline plus a
- * margin, so a process that dies mid-call frees its slot soon after.
+ * articles. A reader gets 20 a day, 8 an hour, one at a time. Since plan
+ * 260930d a press may run *Look it up* first (about 3¢ more, $0.33 at worst),
+ * so the global fuse is 55 (about $18) and the lease is both deadlines plus a
+ * margin, so a process that dies mid-press frees its slot soon after.
  */
 export const INVESTIGATE_RATE_POLICY: RatePolicy = {
   fills: 8,
   windowMs: 60 * 60 * 1000,
   concurrency: 1,
-  leaseMs: INVESTIGATE_TIMEOUT_MS + 30_000,
-  daily: { fills: 20, globalFills: 60, windowMs: 24 * 60 * 60 * 1000 },
+  /* Plan 260930d P-6: one press is now the lookup (up to its own deadline)
+     and then the reading, so the lease covers both deadlines plus the margin. */
+  leaseMs: FIND_TIMEOUT_MS + INVESTIGATE_TIMEOUT_MS + 30_000,
+  /* P-6: 55 × $0.33, a press's worst case with the lookup in it, is about $18. */
+  daily: { fills: 20, globalFills: 55, windowMs: 24 * 60 * 60 * 1000 },
 };
 
 function httpError(status: number, message: string): Error {
@@ -175,9 +194,9 @@ pages about the work.
 
 WHICH RESULTS TO DRAW ON
 
-When the details below name a result that an earlier check, Look it up, matched
-to this work, draw on that page as being about the work; you may say that page
-was matched by Look it up. Otherwise, draw on a result as being about this work
+When the details below name a result that a first check matched to this work,
+draw on that page as being about the work; you may say a first check matched
+that page. Otherwise, draw on a result as being about this work
 only when its title, authors and year match those given, and for results that
 only mention it, say what they say about it.
 
@@ -265,7 +284,7 @@ export function investigatePart(
   lines.push("");
   if (matched) {
     lines.push(
-      "An earlier check, Look it up, matched one search result to this work:",
+      "A first check matched one search result to this work:",
       `URL: ${matched.url}`,
       ...(matched.title ? [`Its title: ${matched.title}`] : []),
     );
@@ -415,7 +434,15 @@ export function provenanceOf(evidence: readonly SearchEvidence[], matchedUrl: st
 
 /* ------------------------------------------------------ the orchestration -- */
 
+/**
+ * What the stream yields, in order: `stage: finding` and one `lookup` only
+ * when the first step runs, then `stage: reading`, any number of `delta`, and
+ * one `done` after the save (plan 260930d).
+ */
 export type InvestigateEvent =
+  | { type: "stage"; stage: InvestigateStage }
+  /** The first step's answer — the very body `POST …/find` answers. */
+  | { type: "lookup"; response: FindCitationResponse }
   | { type: "delta"; text: string }
   | { type: "done"; investigation: CitationInvestigation };
 
@@ -430,13 +457,19 @@ export interface InvestigateCitationDeps {
     loadCitations(slug: string): Promise<CitationsFound>;
     loadArticle(slug: string): Promise<Article>;
   };
-  /** The stored find a current *Look it up* came from — its page's URL. */
-  readonly finds: { load(slug: string, entryId: string): Promise<CitationFind | null> };
+  /**
+   * The stored finds: `load` for the page a current lookup came from (its
+   * URL), `save` for the first step's own find (`runCitationLookup`).
+   */
+  readonly finds: Pick<CitationFindStore, "load" | "save">;
   readonly investigations: CitationInvestigationWriter;
   /** Required: each press is a billed, web-searching call over the whole article. */
   readonly allowance: Pick<FetchAllowanceStore, "take" | "finish">;
   /** The runner. Overridable so a test can drive every ending without a network. */
   readonly run?: (args: StreamRun) => AsyncGenerator<StreamRunEvent>;
+  /** The first step's model call (`runCitationLookup`'s). Overridable for the same reason. */
+  readonly lookupCall?: CitationLookupDeps["call"];
+  readonly lookupTimeoutMs?: number;
   readonly now?: () => string;
   readonly timeoutMs?: number;
   readonly stallMs?: number;
@@ -459,36 +492,122 @@ export function makeInvestigateCitation(
     const { citations } = await deps.reader.loadCitations(slug);
     const listed = citations.citations.find((w) => w.id === entryId);
     if (!listed) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
-    /* This press replaces whatever was attached at read time. */
-    const { investigation: _earlier, ...work } = listed;
-
-    const article = await deps.reader.loadArticle(slug);
-    const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
-    const context = investigateContext(work, (id) => text.get(id));
-    const matched = matchedPageOf(work, work.lookup ? await deps.finds.load(slug, entryId) : null);
-
-    const model = modelFor("citation-investigate");
-    const contextHash = investigateContextHash(
-      context,
-      investigateArticleKey(article.meta, article.blocks),
-      profile,
-      matched,
-      model,
-    );
-    const request = investigateRequest({ meta: article.meta, blocks: article.blocks, context, profile, matched, model });
-    const allowed = allowedQuoteTexts(article.blocks, context, matched);
+    /* Named: the narrowing above does not reach into the generators. */
+    const row: CitedWork = listed;
+    /* Read here as well as after the first step: an article that is not
+       there is refused for free, and the first step sends from this one. */
+    const firstArticle = await deps.reader.loadArticle(slug);
     const line = log("model").child({ slug, entryId });
 
-    /* **After every free refusal, before the one thing that costs.** */
+    /* **After every free refusal, before the one thing that costs** — one
+       allowance for the whole press, the lookup included (plan 260930d). */
     const allowance = await deps.allowance.take("citation-investigate", INVESTIGATE_RATE_POLICY);
     if (allowance.kind !== "allowed") {
       line.warn({ why: allowance.kind }, "citation investigate: allowance spent");
       throw refusedBy(allowance.kind);
     }
-    /* Named here: the narrowing above does not reach into `stream`. */
+    /* Named here: the narrowing above does not reach into `stream`. Freed
+       once, by whichever of the two `finally`s below gets there first. */
     const lease = allowance.id;
+    let leaseFreed = false;
+    const freeLease = async () => {
+      if (leaseFreed) return;
+      leaseFreed = true;
+      await deps.allowance.finish(lease);
+    };
+
+    /**
+     * **Step 1 runs unless the row already has a current `assessed` lookup**
+     * (plan 260930d P-2). `no-extract`, `not-identified` and `unreadable` run
+     * it again: this press is now the only way to improve them. The attached
+     * lookup is current by construction — `attachLookups` attaches only one
+     * whose fingerprint matches the list as it is now.
+     */
+    const findFirst = row.lookup?.state !== "assessed";
+
+    /**
+     * ***Look it up*, as the first step** — `runCitationLookup`, the very
+     * code `POST …/find` runs, saved before its answer is yielded. A no-match
+     * is an answer and the press goes on unconfirmed (P-5). A failed call
+     * stops the press, so nothing more is spent; a failed save, or anything
+     * else, is the press's failure as it is `/find`'s.
+     */
+    async function* findTheWork(): AsyncGenerator<InvestigateEvent> {
+      yield { type: "stage", stage: "finding" };
+      let response: FindCitationResponse;
+      try {
+        response = await runCitationLookup(
+          {
+            finds: deps.finds,
+            now,
+            ...(deps.lookupCall ? { call: deps.lookupCall } : {}),
+            ...(deps.lookupTimeoutMs === undefined ? {} : { timeoutMs: deps.lookupTimeoutMs }),
+          },
+          slug,
+          entryId,
+          row,
+          firstArticle,
+        );
+      } catch (err) {
+        if (!isLookupCallFailure(err)) throw err;
+        /* Already logged by `callOnce` with its status or deadline. */
+        line.warn({ ...errorFields(err) }, "citation investigate: the first step's call failed; stopping");
+        throw new Error(CITATION_INVESTIGATE_LOOKUP_FAILED.message);
+      }
+      yield { type: "lookup", response };
+    }
+
+    /**
+     * **Everything the reading is built from, read again after step 1** (P-3):
+     * the list may have been made again while the lookup ran, and step 1 may
+     * have just stored the find that makes the matched branch. So the row is
+     * re-resolved (gone → stop), the find loaded fresh, and only then the
+     * matched page, the request, the quotes the guard allows and the
+     * fingerprint are built — the same inputs `loadCitations` will hash.
+     */
+    async function prepare() {
+      const { citations: fresh } = await deps.reader.loadCitations(slug);
+      const current = fresh.citations.find((w) => w.id === entryId);
+      if (!current) throw new Error(CITATION_INVESTIGATE_GONE.message);
+      /* This press replaces whatever was attached at read time. */
+      const { investigation: _earlier, ...work } = current;
+
+      const article = await deps.reader.loadArticle(slug);
+      const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
+      const context = investigateContext(work, (id) => text.get(id));
+      const matched = matchedPageOf(work, work.lookup ? await deps.finds.load(slug, entryId) : null);
+
+      const model = modelFor("citation-investigate");
+      const contextHash = investigateContextHash(
+        context,
+        investigateArticleKey(article.meta, article.blocks),
+        profile,
+        matched,
+        model,
+      );
+      const request = investigateRequest({ meta: article.meta, blocks: article.blocks, context, profile, matched, model });
+      const allowed = allowedQuoteTexts(article.blocks, context, matched);
+      return { matched, model, contextHash, request, allowed };
+    }
 
     async function* stream(): AsyncGenerator<InvestigateEvent> {
+      try {
+        if (findFirst) yield* findTheWork();
+        const prepared = await prepare();
+        yield { type: "stage", stage: "reading" };
+        yield* reading(prepared);
+      } finally {
+        await freeLease();
+      }
+    }
+
+    async function* reading({
+      matched,
+      model,
+      contextHash,
+      request,
+      allowed,
+    }: Awaited<ReturnType<typeof prepare>>): AsyncGenerator<InvestigateEvent> {
       const guard = createQuoteGuard(allowed);
       const stopped = (cause: QuoteStopCause, model: string, ms: number): Error => {
         /* The cause and the counts, never the span. The plan's rule: if a
@@ -544,7 +663,7 @@ export function makeInvestigateCitation(
         }
       } finally {
         /* Frees the concurrency slot whatever happened; the fill still counts. */
-        await deps.allowance.finish(lease);
+        await freeLease();
       }
       if (!end) throw new Error(ENDED_UNFINISHED.message);
 
@@ -621,6 +740,7 @@ export function makeInvestigateCitation(
             searchesFrom: end.searchesFrom,
             extractsRead: provenance.extractsRead,
             longestExtractWords: provenance.longestExtractWords,
+            lookedUpFirst: findFirst,
             matched: matched !== null,
             matchRead: provenance.matchedHost !== null,
             inputTokens: end.usage?.prompt_tokens ?? null,

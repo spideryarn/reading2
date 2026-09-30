@@ -403,12 +403,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          if `verifyQuote` finds it in that excerpt, and the row labels the
          verdict as the AI's reading of the extract (CitationsPanel.tsx §
          readNoteOf, LookupReading).
-       The sentence is about the mode, not the press: *Look it up* is on a
+       - "Investigate … first searches … Then it writes a longer reading":
+         since plan 260930d *Look it up* is the first step of the one
+         *Investigate* press (src/citation-investigate.ts), skipped when the
+         row already has a current reading, and the reading after it is
+         written from search extracts (plan 260930a).
+       The sentence is about the mode, not the press: *Investigate* is on a
        row, owner-only, and the sentence says whose it is. No
        price — new-mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Look it up on any row, which searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. How influential a work is comes from the model's memory, not from a citation count.",
+    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Investigate any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then it writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: ["references", "bibliography", "sources", "works cited"],

@@ -118,3 +118,12 @@ A *Just find it* link (above). Reading the paper itself stays 5G's proposed stag
     working; its removal is a follow-up for a later deploy.
   - **P-8** The trade-off also costs capacity: the cheap path allowed 20 an hour and 60 a day, the
     merged press 8 and 20. Recorded; *Just find it* stays deferred.
+- **Built** (server and client in one pass, so one code review rather than one per stage — the
+  change is small enough to review whole). Step-1 failures: a refused call, the deadline or an
+  unreadable answer (`LookupCallFailed`) and undici's own network errors stop the press with
+  `[cite-lookup-failed]`; anything else fails it. **No schema change** for P-4's new provenance
+  branch: an investigation attaches only while its fingerprint (which covers the matched page)
+  matches, so the client can read the match from the row's attached lookup. The prompt no longer
+  names *Look it up* (the button is gone); prompt version 3, which hides investigations stored
+  under version 2 until pressed again — a deliberate cost of being honest about which prompt wrote
+  them. Tests were written after the code; four mutations each turned them red.
