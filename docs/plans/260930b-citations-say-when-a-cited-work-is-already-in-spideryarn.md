@@ -104,4 +104,17 @@ Both reviewed by GPT Sol (plan read-only, code before push).
 
 ## Status
 
-Planned.
+**Shipped to `dev`, not deployed** (2026-09-30).
+
+- Stage 1 and 2 landed together as 05fbc5e8. GPT Sol's code review
+  ([260930b-code-review-sol.md](260930b-code-review-sol.md)) found no P0/P1 and fixed four P2s
+  (whole-path DOI/arXiv parsing, owner-only rendering, a non-vacuous DTO test, the store guarded at
+  its export) — 3ef362b6. Its sandbox could not reach Postgres, so the scoped set was re-run outside
+  it: 15 files, 438 tests, exit 0.
+- **Browser check** (Playwright, a dev server of this worktree at 3ef362b6, three seeded local
+  articles, removed afterwards): the reader's own copy of a cited Nature paper drew *In your library*
+  with *matched by the same DOI*; a stranger's public copy of another drew *On the public shelf*; a
+  stranger's **private** copy of a third drew nothing, and neither its title nor its slug was in the
+  page or in the `GET /api/citations` response. The link opened the article in the same tab. No
+  overflow at 390px. [Desktop](260930b-shots/desktop.png), [phone](260930b-shots/mobile.png).
+- Noticed in passing, not ours: `?citeby=first` in a URL did not change the order on load.
