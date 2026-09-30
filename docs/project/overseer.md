@@ -311,6 +311,19 @@ recurring form.
 - **[feedback-reports.md](feedback-reports.md)**, a couple of times a day. Read the queue in full
   first, check `gjd-remote ls` for an `fb<short-id>` prefix before dispatching anything — that list
   is the claim register and it fails in the safe direction — and never more than three at a time.
+  **Look for the same idea under a different id, too** (Greg, 2026-09-30, report 6F: *"I find myself
+  suggesting it again because I can't remember whether I've already suggested it"*). Search its
+  distinctive words in `gjd-remote ls`, `npx tsx scripts/overseer-queue.ts list` and
+  `docs/user-feedback/`, then inspect each lead with `show <id>` or its note. Before dispatch, put
+  repeats in one entry. If its owner is live, SendMessage it the new report id for the final
+  `reports:` header; failed delivery leaves the repeat unresolved. **Add to every brief:** *"Before
+  building, quickly check (a cheap subagent is fine) docs/plans/, docs/user-feedback/,
+  `git log --oneline -200` and `gjd-remote ls`, opening matches rather than trusting their names. On
+  dev: end Shipped and name the commit. Another session owns it: SendMessage that session this
+  report's id for its note's `reports:` header, then stop without writing a second note."* The owner records both ids and the real ending; the sweep reads that note
+  for its Sentry update. This belongs in [feedback-reports.md § The run](feedback-reports.md#the-run),
+  and is here only because that file is pinned and re-pinning is Greg's
+  ([260930g](../plans/260930g-check-for-prior-work-before-building-a-feedback-report.md) § For Greg).
   Since 2026-09-10 a tmux loop (`feedback-sweep-loop`, started with `scripts/tmux-job.ts` from the
   Overseer's scratchpad, the same shape as the dashboard-refresh loop) runs one sweep every three
   hours as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
@@ -322,12 +335,15 @@ recurring form.
   for the Mindstone login to be removed from the box altogether (*"we shouldn't be using that account
   here"*), so it is out of `~/.claude-accounts/registry.json` and logged out, and every session runs
   on the default login.
-- **[changelog.md](changelog.md)**, every six hours, since 2026-09-12 — Greg: *"run a changelog.md at
-  some point in the next few hours if you haven't recently - make sure that's part of your regularly
-  scheduled things you do"*. The same shape as the feedback sweep: a tmux loop (`changelog-loop`)
-  running one `run-claude --mcp` job under the default login, which is where the Vercel MCP is signed
-  in. A run with no new production deploy writes nothing and says so; the lines it does write ship
-  with the next deploy, with no human gate ([§ 2](#2-answer-facts-route-judgement-default-the-product-call)).
+- **[changelog.md](changelog.md)**, after every deploy, since 2026-09-30 (every six hours from
+  2026-09-12 until then) — Greg: *"run a changelog.md at some point in the next few hours if you
+  haven't recently - make sure that's part of your regularly scheduled things you do"*, and on
+  2026-09-30, *"yes make the changelog loop happen in sync with deploys"*. It is step 6 of
+  [Deploying](#deploying): one `run-claude --mcp` job under the default login, which is where the
+  Vercel MCP is signed in. A run with no new production deploy writes nothing and says so; the lines
+  it does write ship with the next deploy, with no human gate ([§ 2](#2-answer-facts-route-judgement-default-the-product-call)).
+  There is no separate loop any more: a failed run is caught by the next one, because each run starts
+  from the file's watermark and covers every deploy since.
 - **[improve-the-codebase.md](../reusable/improve-the-codebase.md)**, every week or so, ending in an
   umbrella plan; then fan the clusters out to separate agents, **staggered, with non-overlapping file
   sets**.
@@ -482,7 +498,7 @@ The credentials are on the box: `~/code/spideryarn2/.env.prod`, copied from Greg
 Vercel CLI login in `~/.local/share/com.vercel.cli/auth.json`. Both are readable by every agent on the
 box, and Greg accepted that risk (2026-09-29).
 
-Every few hours, as a tmux loop like the changelog's:
+Every few hours, as a tmux loop like the feedback sweep's:
 
 1. In the primary `~/code/spideryarn2` on `dev` (a deploy refuses a worktree), pull. If
    `git log origin/main..HEAD` is empty, there is nothing to deploy.
@@ -499,6 +515,12 @@ Every few hours, as a tmux loop like the changelog's:
    [deployment.md](deployment.md).
 5. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
    to Greg.
+6. **Then start a changelog run**, straight away — Greg, 2026-09-30: *"make sure we're updating the
+   Changelog as part of the deploy process going forwards"*. It describes the deploy that just
+   happened, and its lines ship with the next one, so the page runs one deploy behind by design
+   ([changelog.md § Running it](changelog.md#running-it)). It is its own job under
+   `scripts/tmux-job.ts`, not a step inside `npm run deploy`: a changelog failure must not fail a
+   deploy.
 
 ### Dependabot alerts
 
