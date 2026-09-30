@@ -44,6 +44,7 @@ import { allTiers } from "../store/pg-tiers.js";
 import { billingAccounts } from "../db/schema.js";
 import { errorFields, log } from "../log.js";
 import { notifyAdmin } from "../email.js";
+import { afterResponse } from "../after-response.js";
 import { nextQuotaAdjustment } from "./quota-adjustment.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
@@ -332,8 +333,16 @@ export async function syncSubscriptionFromStripe(
            above relies on. */
         upgrade: planUpgrade(
           { priceId: row.priceId, status: row.status },
-          state ? { priceId: state.priceId, status: state.status } : null,
+          state
+            ? {
+                priceId: state.priceId,
+                status: state.status,
+                currentPeriodStart: state.currentPeriodStart,
+                currentPeriodEnd: state.currentPeriodEnd,
+              }
+            : null,
           tiers,
+          now,
         ),
       };
     },
@@ -341,16 +350,22 @@ export async function syncSubscriptionFromStripe(
     { isolationLevel: "read committed" },
   );
 
-  /* **After the commit, and unable to fail the sync.** A notification is
-     news, not state: a failed send is logged and forgotten, never retried and
-     never a 5xx back to Stripe, which would redeliver an event whose change is
-     already stored and so could not send it anyway. */
+  /* **After the commit, and off the response's critical path.** A notification
+     is news, not state: under `handleApi` the thunk starts only after the
+     response has been written, and the outer wrapper keeps Vercel alive for it.
+     Outside a request it is awaited here. Either way a failure is logged and
+     forgotten, never retried and never a 5xx back to Stripe, which would
+     redeliver an event whose change is already stored and so could not send it
+     anyway. */
   if (outcome.upgrade && outcome.result.kind === "synced") {
-    try {
-      await (options.onUpgrade ?? notifyUpgrade)(outcome.result.ownerId, outcome.upgrade);
-    } catch (err) {
-      logger.error({ customerId, ...errorFields(err) }, "telling the admin about an upgrade failed");
-    }
+    const upgrade = outcome.upgrade;
+    await afterResponse("telling the admin about an upgrade", async () => {
+      try {
+        await (options.onUpgrade ?? notifyUpgrade)(outcome.result.ownerId, upgrade);
+      } catch (err) {
+        logger.error({ customerId, ...errorFields(err) }, "telling the admin about an upgrade failed");
+      }
+    });
   }
   return outcome.result;
 }

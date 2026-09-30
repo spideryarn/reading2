@@ -162,6 +162,15 @@ describe("the no-provider-calls guard", () => {
     }
   });
 
+  it("still refuses the stateful providers tests must never reach", () => {
+    /* These are deliberately outside PROVIDER_HOSTS because they do not charge
+       per token. Literals here make removing one from ALSO_REFUSED observable
+       instead of letting a loop over the same register certify itself. */
+    for (const host of ["api.stripe.com", "api.resend.com"]) {
+      expect(providerHostOf(`https://${host}/v1/anything`), host).toBe(host);
+    }
+  });
+
   it("has a register that covers every paid URL written down in the source", () => {
     /* **The one genuinely independent check here**, and the reason it is worth
        having: it does not read `PROVIDER_HOSTS` to decide what to look for. It

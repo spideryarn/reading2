@@ -117,11 +117,19 @@ describe.skipIf(!pool)("the migration's backfill", () => {
 
   it("marks every existing account as already arrived, so none is announced", async () => {
     expect(backfill).toMatch(/^INSERT INTO[\s\S]*FROM "auth"."users"[\s\S]*DO NOTHING;\s*$/);
+    /* Hosted auth rows are allowed to lack this timestamp. The ledger's column
+       is not, so the migration must supply one rather than fail the deploy. */
+    await pool!.query("update auth.users set created_at = null where id = $1", [OLD_HAND]);
     await pool!.query(backfill);
 
     const announced: string[] = [];
     await noteArrival(OLD_HAND, { announce: async (id) => announced.push(id) });
     expect(announced).toEqual([]);
+    const { rows } = await pool!.query(
+      "select first_seen_at from spideryarn.reader_arrivals where owner_id = $1",
+      [OLD_HAND],
+    );
+    expect(rows[0]?.first_seen_at).toBeInstanceOf(Date);
 
     /* Twice is harmless: it is how a re-run would behave. */
     await pool!.query(backfill);
@@ -131,7 +139,7 @@ describe.skipIf(!pool)("the migration's backfill", () => {
 /* ----------------------------------------------------------- the wiring -- */
 
 /** Drive `handleApi` with a fake request/response pair, as tests/billing-usage-route.test.ts does. */
-async function get(url: string, verify: Verifier): Promise<number> {
+async function get(url: string, verify: Verifier, onEnd: () => void = () => {}): Promise<number> {
   const req = Object.assign((async function* () {})(), {
     method: "GET",
     url,
@@ -146,7 +154,9 @@ async function get(url: string, verify: Verifier): Promise<number> {
       return status;
     },
     setHeader() {},
-    end() {},
+    end() {
+      onEnd();
+    },
   } as unknown as ServerResponse;
   await handleApi(req, res, verify);
   return status;
@@ -177,5 +187,40 @@ describe.skipIf(!pool)("the route handler notes an arrival", () => {
 
     expect(await get("/api/library", signedIn)).toBe(200);
     expect(await arrived()).toBe(true);
+  });
+
+  it("ends the response before a slow arrival insert, then keeps the invocation alive", async () => {
+    const blocker = await pool!.connect();
+    let transactionOpen = false;
+    try {
+      await blocker.query("begin");
+      transactionOpen = true;
+      await blocker.query("lock table spideryarn.reader_arrivals in access exclusive mode");
+
+      let markEnded = () => {};
+      const ended = new Promise<void>((resolve) => {
+        markEnded = resolve;
+      });
+      let requestSettled = false;
+      const request = get("/api/library", signedIn, markEnded).then((status) => {
+        requestSettled = true;
+        return status;
+      });
+
+      const endedBeforeBlockedInsert = await Promise.race([
+        ended.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000)),
+      ]);
+      expect(endedBeforeBlockedInsert).toBe(true);
+      expect(requestSettled).toBe(false);
+
+      await blocker.query("rollback");
+      transactionOpen = false;
+      expect(await request).toBe(200);
+      expect(await arrived()).toBe(true);
+    } finally {
+      if (transactionOpen) await blocker.query("rollback").catch(() => {});
+      blocker.release();
+    }
   });
 });

@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import { afterResponse, withAfterResponseTasks } from "../src/after-response.js";
 import { DEFAULT_ADMIN_EMAIL, FROM, adminAddress, notifyAdmin, sendEmail } from "../src/email.js";
 
 const PROD = { VERCEL_ENV: "production", RESEND_API_KEY: "re_test_key" };
@@ -105,5 +106,52 @@ describe("notifyAdmin", () => {
   it("goes to SPIDERYARN_ADMIN_EMAIL when it is set", async () => {
     expect(adminAddress({ SPIDERYARN_ADMIN_EMAIL: " greg@example.com " })).toBe("greg@example.com");
     expect(adminAddress({ SPIDERYARN_ADMIN_EMAIL: "" })).toBe(DEFAULT_ADMIN_EMAIL);
+  });
+});
+
+describe("work after a response", () => {
+  it("starts only after the response callback and keeps the invocation alive", async () => {
+    let responseWritten = false;
+    let releaseTask = () => {};
+    const taskMayFinish = new Promise<void>((resolve) => {
+      releaseTask = resolve;
+    });
+    let markStarted = () => {};
+    const taskStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+
+    let invocationFinished = false;
+    const invocation = withAfterResponseTasks(async () => {
+      await afterResponse("test email", async () => {
+        markStarted();
+        await taskMayFinish;
+      });
+      responseWritten = true;
+      return "answered";
+    });
+    void invocation.then(() => {
+      invocationFinished = true;
+    });
+
+    await taskStarted;
+    const startedAfterResponse = responseWritten;
+    const stayedAliveForTask = !invocationFinished;
+    releaseTask();
+
+    await expect(invocation).resolves.toBe("answered");
+    expect(startedAfterResponse).toBe(true);
+    expect(stayedAliveForTask).toBe(true);
+  });
+
+  it("does not let a deferred failure change the answered request", async () => {
+    await expect(
+      withAfterResponseTasks(async () => {
+        await afterResponse("broken test email", async () => {
+          throw new Error("provider down");
+        });
+        return "answered";
+      }),
+    ).resolves.toBe("answered");
   });
 });

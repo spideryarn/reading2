@@ -13,6 +13,7 @@
 import type Stripe from "stripe";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { withAfterResponseTasks } from "../src/after-response.js";
 import { syncSubscriptionFromStripe } from "../src/billing/sync.js";
 import { type PlanUpgrade, type TierRow, planUpgrade } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -41,45 +42,73 @@ const BIG = tier("big", "price_big", 150);
 const TIERS = [SMALL, BIG];
 
 describe("what counts as an upgrade", () => {
+  const now = new Date("2026-09-30T12:00:00Z");
+  const period = {
+    currentPeriodStart: new Date("2026-09-01T00:00:00Z"),
+    currentPeriodEnd: new Date("2026-10-01T00:00:00Z"),
+  };
   const none = { priceId: null, status: null };
-  const small = { priceId: "price_small", status: "active" };
-  const big = { priceId: "price_big", status: "active" };
+  const small = { priceId: "price_small", status: "active", ...period };
+  const big = { priceId: "price_big", status: "active", ...period };
 
   it("free → paid is one", () => {
-    expect(planUpgrade(none, small, TIERS)).toEqual({ from: null, to: SMALL });
+    expect(planUpgrade(none, small, TIERS, now)).toEqual({ from: null, to: SMALL });
   });
   it("a lapsed subscription coming back is one", () => {
-    expect(planUpgrade({ priceId: "price_small", status: "canceled" }, small, TIERS)).toEqual({
+    expect(planUpgrade({ priceId: "price_small", status: "canceled" }, small, TIERS, now)).toEqual({
       from: null,
       to: SMALL,
     });
   });
   it("incomplete → active, the first payment landing, is one", () => {
-    expect(planUpgrade({ priceId: "price_small", status: "incomplete" }, small, TIERS)).toEqual({
+    expect(planUpgrade({ priceId: "price_small", status: "incomplete" }, small, TIERS, now)).toEqual({
       from: null,
       to: SMALL,
     });
   });
   it("smaller → larger is one", () => {
-    expect(planUpgrade(small, big, TIERS)).toEqual({ from: SMALL, to: BIG });
+    expect(planUpgrade(small, big, TIERS, now)).toEqual({ from: SMALL, to: BIG });
   });
   it("a trial starting is one — the plan began", () => {
-    expect(planUpgrade(none, { priceId: "price_small", status: "trialing" }, TIERS)).toEqual({
-      from: null,
-      to: SMALL,
-    });
+    expect(planUpgrade(none, { priceId: "price_small", status: "trialing", ...period }, TIERS, now)).toEqual(
+      { from: null, to: SMALL },
+    );
   });
   it("a renewal, a recovery, a downgrade and a cancellation are not", () => {
-    expect(planUpgrade(small, small, TIERS)).toBeNull();
-    expect(planUpgrade({ priceId: "price_small", status: "past_due" }, small, TIERS)).toBeNull();
-    expect(planUpgrade({ priceId: "price_small", status: "unpaid" }, small, TIERS)).toBeNull();
-    expect(planUpgrade({ priceId: "price_small", status: "paused" }, small, TIERS)).toBeNull();
-    expect(planUpgrade(big, small, TIERS)).toBeNull();
-    expect(planUpgrade(small, { priceId: "price_small", status: "canceled" }, TIERS)).toBeNull();
-    expect(planUpgrade(small, null, TIERS)).toBeNull();
+    expect(planUpgrade(small, small, TIERS, now)).toBeNull();
+    expect(planUpgrade({ priceId: "price_small", status: "past_due" }, small, TIERS, now)).toBeNull();
+    expect(planUpgrade({ priceId: "price_small", status: "unpaid" }, small, TIERS, now)).toBeNull();
+    expect(planUpgrade({ priceId: "price_small", status: "paused" }, small, TIERS, now)).toBeNull();
+    expect(planUpgrade(big, small, TIERS, now)).toBeNull();
+    expect(
+      planUpgrade(
+        small,
+        { priceId: "price_small", status: "canceled", ...period },
+        TIERS,
+        now,
+      ),
+    ).toBeNull();
+    expect(planUpgrade(small, null, TIERS, now)).toBeNull();
   });
   it("a price no tier sells is not one", () => {
-    expect(planUpgrade(none, { priceId: "price_unknown", status: "active" }, TIERS)).toBeNull();
+    expect(
+      planUpgrade(none, { priceId: "price_unknown", status: "active", ...period }, TIERS, now),
+    ).toBeNull();
+  });
+  it("an active subscription whose period is stale entitles nothing, so is not an upgrade", () => {
+    expect(
+      planUpgrade(
+        none,
+        {
+          priceId: "price_small",
+          status: "active",
+          currentPeriodStart: new Date("2026-08-01T00:00:00Z"),
+          currentPeriodEnd: new Date("2026-09-01T00:00:00Z"),
+        },
+        TIERS,
+        now,
+      ),
+    ).toBeNull();
   });
 });
 
@@ -147,7 +176,11 @@ async function freeAccount(): Promise<void> {
   );
 }
 
-function subscription(priceId: string, status = "active"): Stripe.Subscription {
+function subscription(
+  priceId: string,
+  status = "active",
+  periodDays: { readonly start: number; readonly end: number } = { start: -1, end: 29 },
+): Stripe.Subscription {
   const now = Math.floor(Date.now() / 1000);
   return {
     id: SUBSCRIPTION,
@@ -164,8 +197,8 @@ function subscription(priceId: string, status = "active"): Stripe.Subscription {
           id: "si_test_notice",
           object: "subscription_item",
           quantity: 1,
-          current_period_start: now - DAY / 1000,
-          current_period_end: now + (29 * DAY) / 1000,
+          current_period_start: now + (periodDays.start * DAY) / 1000,
+          current_period_end: now + (periodDays.end * DAY) / 1000,
           price: {
             id: priceId,
             object: "price",
@@ -185,6 +218,14 @@ async function sync(subscriptions: Stripe.Subscription[]): Promise<PlanUpgrade[]
     listSubscriptions: async () => subscriptions,
     onUpgrade: async (ownerId, upgrade) => {
       expect(ownerId).toBe(OWNER);
+      /* A callback inside the transaction would either see the old price on
+         this second connection or wait on the row lock. The notice belongs
+         strictly after the durable state change. */
+      const { rows } = await pool!.query(
+        "select price_id from spideryarn.billing_accounts where owner_id = $1",
+        [OWNER],
+      );
+      expect(rows[0]?.price_id).toBe(upgrade.to.stripePriceId);
       heard.push(upgrade);
     },
   });
@@ -217,6 +258,17 @@ describe.skipIf(!pool)("the sync announces an upgrade once", () => {
     expect((await sync([subscription(READER.price)])).length).toBe(1);
   });
 
+  it("an unpaid plan recovering to active is not announced as a new purchase", async () => {
+    await freeAccount();
+    expect(await sync([subscription(READER.price, "unpaid")])).toEqual([]);
+    expect(await sync([subscription(READER.price)])).toEqual([]);
+  });
+
+  it("does not announce the diagnostic row for an active but stale period", async () => {
+    await freeAccount();
+    expect(await sync([subscription(READER.price, "active", { start: -60, end: -30 })])).toEqual([]);
+  });
+
   it("a notifier that throws does not fail the sync, and the change is stored", async () => {
     await freeAccount();
     const result = await syncSubscriptionFromStripe(CUSTOMER, {
@@ -231,5 +283,44 @@ describe.skipIf(!pool)("the sync announces an upgrade once", () => {
       [OWNER],
     );
     expect(rows[0]?.price_id).toBe(READER.price);
+  });
+
+  it("starts the notice only after the response callback, while keeping the invocation alive", async () => {
+    await freeAccount();
+    let responseWritten = false;
+    let releaseNotice = () => {};
+    const noticeMayFinish = new Promise<void>((resolve) => {
+      releaseNotice = resolve;
+    });
+    let markStarted = () => {};
+    const noticeStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+
+    let invocationFinished = false;
+    const invocation = withAfterResponseTasks(async () => {
+      const result = await syncSubscriptionFromStripe(CUSTOMER, {
+        listSubscriptions: async () => [subscription(READER.price)],
+        onUpgrade: async () => {
+          markStarted();
+          await noticeMayFinish;
+        },
+      });
+      /* This callback stands for the route writing and ending its response. */
+      responseWritten = true;
+      return result;
+    });
+    void invocation.then(() => {
+      invocationFinished = true;
+    });
+
+    await noticeStarted;
+    const startedAfterResponse = responseWritten;
+    const stayedAliveForNotice = !invocationFinished;
+    releaseNotice();
+    await invocation;
+
+    expect(startedAfterResponse).toBe(true);
+    expect(stayedAliveForNotice).toBe(true);
   });
 });

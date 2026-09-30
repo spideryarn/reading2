@@ -33,6 +33,18 @@ const logger = log("store");
  * **after** the database has answered, so a failed insert is retried.
  */
 const known = new Set<string>();
+/* A long-lived box must not retain one string for every account for ever. Ten
+   thousand UUIDs are a small cache; evicting the oldest is harmless because
+   the ledger answers the next request with one indexed conflict/no-op. */
+const MAX_KNOWN_ARRIVALS = 10_000;
+
+function remember(ownerId: string): void {
+  if (known.size >= MAX_KNOWN_ARRIVALS) {
+    const oldest = known.values().next().value as string | undefined;
+    if (oldest !== undefined) known.delete(oldest);
+  }
+  known.add(ownerId);
+}
 
 /** A seam, for tests. Both default to the real thing. */
 export interface ArrivalDeps {
@@ -81,7 +93,7 @@ export async function noteArrival(ownerId: string, deps: ArrivalDeps = {}): Prom
     logger.error(errorFields(err), "could not record an account's arrival");
     return;
   }
-  known.add(ownerId);
+  remember(ownerId);
   if (!isNew) return;
   try {
     await (deps.announce ?? announceArrival)(ownerId);

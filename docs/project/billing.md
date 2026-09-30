@@ -1148,11 +1148,13 @@ clean sweep for ever. Verified against three real sandbox invoices rather than a
 `enabled_events`, and an event we handle but never receive looks exactly like one that never fires.
 See [Pointing Stripe at it](#pointing-stripe-at-it) below.
 
-**An upgrade emails us, after the commit.** `syncSubscriptionFromStripe` decides `planUpgrade`
-under its row lock and, once the transaction has committed, calls `notifyAdmin` — so every caller
-(this webhook, the confirm route, admission's resync) gets it, a redelivery cannot send it twice,
-and a failed send is logged rather than turned into a 5xx that Stripe would retry. The webhook's
-verification is untouched. [email.md § Mail the server sends itself](email.md#mail-the-server-sends-itself).
+**An upgrade emails us, after the commit and after the HTTP response.**
+`syncSubscriptionFromStripe` decides `planUpgrade` under its row lock and, once the transaction has
+committed, queues `notifyAdmin` with [`src/after-response.ts`](../../src/after-response.ts) — so every
+caller (this webhook, the confirm route, admission's resync) gets it, a redelivery cannot send it
+twice, and neither Resend's timeout nor a failed send delays or fails the request. The outer request
+wrapper keeps the serverless invocation alive until it settles. The webhook's verification is
+untouched. [email.md § Mail the server sends itself](email.md#mail-the-server-sends-itself).
 
 ### Pointing Stripe at it
 

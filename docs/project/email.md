@@ -97,6 +97,9 @@ Resend's HTTP API, from the same `hello@` sender) and `notifyAdmin` (the same, t
 - **The admin address** is `SPIDERYARN_ADMIN_EMAIL`, and defaults in code to `hello@spideryarn.com`,
   which forwards. No env file carries it; set it only to send somewhere else.
 - **Neither the recipient nor the body is logged**, only a label naming the kind of mail.
+- **A request never waits for Resend before it is answered.** `src/after-response.ts` starts these
+  notices after the routed callback has ended its response, then keeps the serverless invocation
+  alive until they settle. A direct non-HTTP caller waits normally rather than dropping the mail.
 
 The two notices, and why each fires when it does:
 

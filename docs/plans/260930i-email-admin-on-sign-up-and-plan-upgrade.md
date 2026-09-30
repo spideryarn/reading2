@@ -136,6 +136,19 @@ no P0. Taken:
 - Accepted as stated: both notices are **best-effort** — a crash after the commit, or Resend down,
   loses that notice, logged.
 
+## Changes after GPT Sol's built-code review
+
+- A current-period check joined the upgrade predicate. `chooseSubscription` deliberately stores a
+  stale active subscription for diagnosis; status and price alone would have mailed an upgrade for
+  a plan that entitles nothing.
+- Both notices now use the request-scoped queue in `src/after-response.ts`: their thunks start only
+  after the routed callback has ended its response, and the outer request awaits them so Vercel does
+  not freeze them halfway through. This removes Resend's ten-second timeout from Checkout confirm,
+  admission resync and the webhook as well as from the first authenticated request.
+- The arrival cache evicts its oldest id at 10,000 entries, bounding a long-lived box without
+  changing correctness: an evicted reader costs one indexed ledger no-op on their next request.
+- Resend's error body is no longer logged because provider validation prose may echo a recipient.
+
 ## The simpler options passed over
 
 - **A Supabase Auth hook or a database webhook on `auth.users`** would see sign-ups even when the
@@ -167,4 +180,4 @@ no P0. Taken:
 ## Review
 
 - Plan: GPT Sol, read-only — [260930i-…-review-sol.md](260930i-email-admin-on-sign-up-and-plan-upgrade-review-sol.md).
-- Code: GPT Sol, fixing inside the stage.
+- Code: GPT Sol, fixing inside the stage — [260930i-…-code-review-sol.md](260930i-email-admin-on-sign-up-and-plan-upgrade-code-review-sol.md). Its fixes were read, the database suites its sandbox could not reach were run, and the ordering test was seen to fail with the queue disabled.

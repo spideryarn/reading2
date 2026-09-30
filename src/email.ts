@@ -106,11 +106,13 @@ export async function sendEmail(email: Email, label: string, deps: EmailDeps = {
     });
 
     if (!response.ok) {
-      /* Resend's error body is `{ name, message }` about the request — never
-         the email's content — so it is safe to keep, trimmed. */
-      const detail = (await response.text().catch(() => "")).slice(0, 300);
+      /* Provider validation messages can echo a recipient or submitted field.
+         The status is enough to diagnose the class without breaking this
+         module's rule that neither recipient nor message reaches a log. Still
+         consume the body so fetch can release its connection. */
+      await response.text().catch(() => "");
       const reason = `Resend answered ${response.status}`;
-      logger.error({ label, status: response.status, detail }, "sending email failed");
+      logger.error({ label, status: response.status }, "sending email failed");
       return { kind: "failed", reason };
     }
 
