@@ -193,7 +193,13 @@ interface Fixture {
  * A published article carrying the named extras — each as a non-null column
  * **and** a `done` run row, which is what "has it" means to `hasArtefacts`.
  */
-async function publishWithExtras(slug: string, extras: StepName[]): Promise<Fixture> {
+async function publishWithExtras(
+  slug: string,
+  extras: StepName[],
+  /** `false` for an article with no address — how an upload looks to the database (schema.ts). */
+  opts: { url?: boolean } = {},
+): Promise<Fixture> {
+  const url = opts.url === false ? null : `https://example.com/${slug}`;
   const seeded = runBlocks({ slug, extractedHtml: EXTRACTED_HTML, previous: undefined });
   const blocks = blocksArtefact(seeded.blocks).blocks;
   const db = getDb();
@@ -243,13 +249,13 @@ async function publishWithExtras(slug: string, extras: StepName[]): Promise<Fixt
     .set({
       title: "A fixture article",
       excerpt: "A fixture built by tests/reset-and-regenerate.test.ts.",
-      finalUrl: `https://example.com/${slug}`,
+      finalUrl: url,
       fetchedAt: new Date("2026-09-28T00:00:00.000Z"),
       extractedHtml: EXTRACTED_HTML,
       stampedHtml: seeded.html,
       tree: mergeLabels(buildTree(rootOver(blocks), {}, blocks, slug), {}),
       navLabelStatus: "ready",
-      requestedUrl: `https://example.com/${slug}`,
+      requestedUrl: url,
       rawContentType: "text/html",
       rawEncoding: "utf-8",
       rawByteCount: EXTRACTED_HTML.length,
@@ -847,5 +853,33 @@ describe("a reset, through the real claim and publication", () => {
       profile: PROFILE,
     });
     expect(retried?.steps.find((s: JobStep) => s.name === "extract")?.force).toBe(true);
+  });
+
+  /**
+   * **The shelf's Rebuild, on an article with no address** — feedback 6B,
+   * docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md.
+   * The request is the one `useShelfActions` sends (src/web/ShelfEntry.tsx):
+   * plain `enqueue`, `force: ["extract"]`, no URL. The fake `fetch` throws, so a
+   * job that tried to fetch would fail here as the real one would with "No
+   * source URL".
+   */
+  mine("rebuilds an article with no address from the stored copy, without fetching", async () => {
+    const slug = `${SLUG_PREFIX}no-address`;
+    const before = await publishWithExtras(slug, [], { url: false });
+    const job = await enqueue({ slug, force: ["extract"], pump: false });
+    expect(job.steps.map((s) => s.name)).toEqual(DEFAULT_INGEST_STEPS);
+
+    const calls: Calls = { fetch: 0, extract: 0 };
+    const finished = await drive(job.id, partsFor(calls));
+    expect(finished.job.status, finished.job.error).toBe("done");
+    expect(calls.fetch, "the rebuild tried to fetch an article with no address").toBe(0);
+    expect(calls.extract, "the rebuild did not re-read the stored copy").toBe(1);
+    expect(finished.job.steps.find((s) => s.name === "fetch")?.status).toBe("skipped");
+
+    const after = await currentRevisionOf(slug);
+    expect(after, "the rebuild published nothing").not.toBe(before.revisionId);
+    const published = await revision(after ?? "");
+    expect(published.finalUrl, "the rebuild invented an address").toBeNull();
+    expect((await blockIdsOf(after ?? "")).length).toBe(before.blocks.length + 1);
   });
 });

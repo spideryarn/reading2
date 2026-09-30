@@ -29,6 +29,7 @@ in `converse` — [referee-mode.md § 4](referee-mode.md).)
 Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation, the sort),
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),
 [`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) (whether a step's premise is shown, and it never sorts),
+[`src/web/read-filter.ts`](../../src/web/read-filter.ts) (which questions are about what you have read),
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) (whether they got it right, asked in private),
 [`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
@@ -277,6 +278,37 @@ not merely the writing of frames, and gets no `done` at all.
   `useQuiz`'s one live request, and without the clear the new batch's Answer button is enabled and
   does nothing.
 
+## Only what you have read
+
+Greg, 2026-09-30 (SPIDERYARN-READING2-61):
+
+> So we generate questions for the whole article, but we might filter, you know, if there's a tick
+> box that defaults to only show me questions for stuff I've read, and then it would only show quiz
+> questions for the stuff that the user has read.
+
+With [reading time](reading-time.md) on, the band has a tick-box, **Only what I've read**, on by
+default, and beside it how much of the piece you have read ("about 40% of the piece read so far").
+The batch is still written over the whole article; the filter is the panel's, computed in the
+browser from the levels the page already has. The plan and GPT Sol's six changes to it are
+[260930e](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).
+
+- **Read** is a reading-time level of 3 or more — on screen for 70% of the time the block takes to
+  read — and a question is read when **every** one of its evidence blocks is, and is still in the
+  article. The share counts body words only, the reading-time clock's rule.
+  [`src/web/read-filter.ts`](../../src/web/read-filter.ts).
+- **The path is not rebuilt.** `at` is still an index into the artefact's array; the filter only
+  changes which indices can be landed on. "Question *n* of *N*" and *Show all* count what can be
+  landed on, and the list says how many more are about passages not yet read.
+- **A Next that skips a step is not an arrival by Next**, so the premise is shown: it is the bridge
+  over the step skipped. `showPremise` did not change.
+- **Nothing is drawn under a question the panel has not moved to.** While the step at `at` is
+  filtered out — at the opening, on ticking the box, after the switch goes off and on — nothing
+  interactive is drawn and an effect moves through `move`, which takes the draft and the mark with it.
+- **An empty level map is not "read nothing" until it is `loaded`.** While the opening read is
+  pending the band says it is looking; if it failed, it walks every question and says so. With
+  reading time off there is no tick-box at all.
+- The tick-box is per visit, not remembered.
+
 ## What is deliberately not here
 
 - **Attempts are not stored.** A reload starts fresh. `batchId` is the shape that keeps the door
@@ -286,7 +318,8 @@ not merely the writing of frames, and gets no `done` at all.
   wearing a different hat, and [privacy.md](privacy.md) makes a public promise about it.
 - **No reader profile in the stamp**, so no `profileChanged` on the response. Adding one later needs
   no migration — it would be a field on the JSON.
-- **Not scoped to `?at=`.** Whole article, every time.
+- **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,
+  above.
 - **No spoken quizzing.** Greg asked for it — *"ideally this would work well with Live Dialogue
   mode"* — and then chose to defer it whole rather than half-build it. The reasoning, and the three
   shapes it could take, are in [the plan § Spoken

@@ -6,7 +6,7 @@
  * The provenance sentence is the one place a reader learns how much of the
  * work was actually in front of the AI, so every branch is pinned whole: the
  * count (one result or many), the hosts (distinct, only real web addresses),
- * and the identity line (matched by *Look it up*, or not confirmed). There is
+ * and the identity line (matched by the first check and read here, matched but not returned here, or not confirmed — plan 260930d P-4). There is
  * no profile branch: the stored record does not say whether a profile was
  * sent, so the sentence does not claim either way.
  */
@@ -20,7 +20,7 @@ const MIDDLE =
   "We did not fetch any page ourselves; an extract may be an abstract or part of a paper's text.";
 
 describe("investigationProvenance", () => {
-  it("many results, one matched by Look it up: distinct hosts, the longest extract, the match", () => {
+  it("many results, one matched by the first check: distinct hosts, the longest extract, the match", () => {
     expect(
       investigationProvenance({
         sources: [
@@ -37,7 +37,7 @@ describe("investigationProvenance", () => {
         `${MIDDLE} ` +
         "The AI was asked to base what it says about the work on those extracts, and used this article to relate them. " +
         "It was instructed not to quote them. " +
-        "One result (arxiv.org) was matched to the work by Look it up.",
+        "One result (arxiv.org) is the page an earlier quick check matched to the work.",
     );
   });
 
@@ -88,8 +88,56 @@ describe("investigationProvenance", () => {
         `${MIDDLE} ` +
         "The AI was asked to base what it says about the work on that extract, and used this article to relate it. " +
         "It was instructed not to quote it. " +
-        "One result (doi.org) was matched to the work by Look it up.",
+        "One result (doi.org) is the page an earlier quick check matched to the work.",
     );
+  });
+
+  /* Plan 260930d P-4: the row's lookup matched a page, but this search did
+     not return a usable extract from it. `matchedHost` is null both when the
+     page is absent and when its result has an empty extract, so the copy must
+     not claim which happened. */
+  const UNMATCHED = {
+    sources: [src("https://example.org/a"), src("https://example.com/b")],
+    extractsRead: 2,
+    longestExtractWords: 90,
+    matchedHost: null,
+  };
+  const STEM =
+    "Web search returned extracts for 2 results (example.org, example.com), the longest about 90 words. " +
+    `${MIDDLE} ` +
+    "The AI was asked to base what it says about the work on those extracts, and used this article to relate them. " +
+    "It was instructed not to quote them. ";
+
+  it.each(["assessed", "unreadable"] as const)(
+    "a %s lookup whose page this search did not yield as an extract: says only what the evidence proves",
+    (state) => {
+      expect(investigationProvenance(UNMATCHED, { state, host: "arxiv.org" })).toBe(
+        `${STEM}An earlier quick check matched a page on arxiv.org; this search did not return an extract from it.`,
+      );
+    },
+  );
+
+  it.each(["no-extract", "not-identified"] as const)(
+    "a %s lookup identified no page, so it is still 'could not confirm'",
+    (state) => {
+      expect(investigationProvenance(UNMATCHED, { state, host: "arxiv.org" })).toBe(
+        `${STEM}We could not confirm that any result is this work itself.`,
+      );
+    },
+  );
+
+  it("no lookup, or a null one: 'could not confirm'", () => {
+    for (const lookup of [undefined, null]) {
+      expect(investigationProvenance(UNMATCHED, lookup)).toBe(
+        `${STEM}We could not confirm that any result is this work itself.`,
+      );
+    }
+  });
+
+  it("a page read here wins over the lookup's own host", () => {
+    expect(
+      investigationProvenance({ ...UNMATCHED, matchedHost: "doi.org" }, { state: "assessed", host: "arxiv.org" }),
+    ).toBe(`${STEM}One result (doi.org) is the page an earlier quick check matched to the work.`);
   });
 
   it("names no host that is not a web address, and drops the brackets when none is left", () => {

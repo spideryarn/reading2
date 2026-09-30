@@ -14,6 +14,11 @@
  * this is the client half. The rule is the server's: **only a `search` row is
  * ever upgraded**, because a link the article gave always wins.
  *
+ * **Since plan 260930d the reply is Investigate's `lookup` frame** (P-3): the
+ * one press looks the work up first, and the frame carries the body `/find`
+ * answered, applied the same way — so every case here now drives
+ * `investigate`, and the rule it pins is unchanged.
+ *
  * The find's reply is held, so the list can move under it — a reply that
  * resolved on arrival could not show the race at all. The re-run arrives through
  * `onFinished`, the seam a finished job really uses, as in
@@ -119,21 +124,35 @@ function json(body: unknown): Response {
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: { method?: string }) => {
-    if (init?.method === "POST" && input.endsWith("/find")) {
+    /* **Since plan 260930d the lookup is Investigate's first step**, and its
+       answer is the stream's `lookup` frame, the very body `/find` answered.
+       The stream opens at once and says `finding`; the frame is held until
+       the test lets it go, and the stream is left open after it — what this
+       file is about is the frame, not the reading after it. */
+    if (init?.method === "POST" && input.endsWith("/investigate")) {
       const asked = listed;
       const askedPassage = passage;
-      await new Promise<void>((go) => {
-        releaseFind = go;
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const push = (event: string, data: unknown) =>
+            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          push("stage", { stage: "finding" });
+          releaseFind = () => {
+            /* The real press stores before sending the frame, and refuses to
+               replace a link the article supplied; a later GET attaches the
+               stored reading only while the row's context still matches
+               (`attachLookups`). Mirroring those halves is what lets the
+               read-race case below distinguish a stale GET from current
+               server state. */
+            const sameContext = listed.why === asked.why && listed.url === asked.url && passage === askedPassage;
+            if (listed.linkFrom === "search") listed = { ...listed, ...FOUND_LINK };
+            if (sameContext) listed = { ...listed, lookup: LOOKUP };
+            push("lookup", foundFor(asked));
+          };
+        },
       });
-      /* The real route stores before replying, and refuses to replace a link
-         the article supplied; a later GET attaches the stored reading only
-         while the row's context still matches (`attachLookups`). Mirroring
-         those halves is what lets the read-race case below distinguish a
-         stale GET from current server state. */
-      const sameContext = listed.why === asked.why && listed.url === asked.url && passage === askedPassage;
-      if (listed.linkFrom === "search") listed = { ...listed, ...FOUND_LINK };
-      if (sameContext) listed = { ...listed, lookup: LOOKUP };
-      return json(foundFor(asked));
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
     }
     if (input === `/api/citations/${SLUG}`) {
       const snapshot = listed;
@@ -238,24 +257,25 @@ async function open(expected: CitedWork["linkFrom"] = "search"): Promise<void> {
 }
 
 /**
- * Press *Find it* and leave its reply held. The find's promise comes back in a
- * box: an async function returning a promise would flatten it, and awaiting the
- * press would then wait on the held reply for ever.
+ * Press *Investigate* and leave its lookup frame held. The press's promise is
+ * never awaited: the stream stays open after the frame, and unmounting aborts
+ * it. Returned in a box so the call sites read as they did for `find`.
  */
 async function press(): Promise<{ pending: Promise<void> | undefined }> {
   let pending: Promise<void> | undefined;
   await act(async () => {
-    pending = hook?.find(ID);
+    pending = hook?.investigate(ID);
   });
-  expect(hook?.finding).toBe(ID);
+  await flush();
+  expect(hook?.investigating).toBe(ID);
+  expect(hook?.investigateStage).toBe("finding");
   expect(releaseFind).not.toBeNull();
   return { pending };
 }
 
-async function answer({ pending }: { pending: Promise<void> | undefined }): Promise<void> {
+async function answer(_press: { pending: Promise<void> | undefined }): Promise<void> {
   await act(async () => {
     releaseFind?.();
-    await pending;
   });
   await flush();
 }

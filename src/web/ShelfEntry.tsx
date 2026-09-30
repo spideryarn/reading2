@@ -395,37 +395,46 @@ const TIPS = {
     how: "A few minutes, and it spends model calls. What you have written stays where the text did — notes are keyed to block ids, which are minted once and kept, so only a passage the page itself has rewritten can lose its marker.",
   },
   /**
-   * **The button that used not to be drawn at all.**
+   * **Rebuild, when there is nothing to fetch** — Greg, 2026-09-30, feedback
+   * 6B: *"It *could* rebuild them though, and so I feel like that button
+   * should still be active - it should just skip the refetching (and perhaps
+   * indicate that in the tooltip)."*
    *
-   * It queued a job whose first step failed with "No source URL", every time,
-   * having looked exactly like a button that ought to work — so on 2026-08-27
-   * it was deleted where there was nothing to fetch. That fixed the dead
-   * button and left a row that is five wide on one card and three on the next,
-   * which is what Greg noticed on 2026-09-05: *"sometimes I see them,
-   * sometimes I don't"*. Drawn and unavailable is the answer to both.
+   * History, because the button has been three things. On 2026-08-27 it was
+   * deleted where there was no address, because it queued a job whose first
+   * step failed with "No source URL" every time; on 2026-09-05 it came back
+   * drawn and unavailable, so the row was the same width on every card. Now it
+   * works: the job forces `extract` rather than `fetch`, so the copy we already
+   * hold is processed again and nothing is fetched (`rerun` below).
    *
-   * **It does not say why there is no address.** "You uploaded this" is a claim
-   * assembled from a gap in our own files, and an ordinary web article can be
-   * published with no `requested_url` and no `final_url` at all — the same
-   * reasoning, and the same refusal, as Metadata.tsx § `uploaded`.
+   * **One card for both absences** — no address, and an address stage 1 will
+   * not follow. They send the same request and do the same thing, so the
+   * distinction lives on Open the original, where it changes what happens
+   * (GPT Sol's plan review). **And it still does not say why there is no
+   * address**: "you uploaded this" is a claim assembled from a gap in our own
+   * files — the same refusal as Metadata.tsx § `uploaded`.
+   *
+   * "Processed again", not "read afresh": for a PDF, unchanged transcription
+   * chunks come back from their checkpoints (src/pdf-read.ts), so not every
+   * model call is bought again. GPT Sol, the same review.
    */
-  rerunNoUrl: {
-    head: "Re-fetch and rebuild",
-    what: "We have no record of an address for this article, so there is nothing to fetch again.",
-    how: "Everything already built from it is unaffected and stays on the shelf. The article's own metadata page shows what we do know about where it came from.",
+  rebuild: {
+    head: "Rebuild",
+    what: "There is no web address to fetch this article from, so nothing is fetched: the copy we already hold is processed again — the text is re-extracted, the blocks and the hierarchy are rebuilt, and the article's images are re-hosted.",
+    how: "A few minutes, and it may spend model calls. What you have written stays where the text did — notes are keyed to block ids, which are minted once and kept, so only a passage the new extraction rewrites can lose its marker.",
   },
   /**
-   * **And the same gate as the link**, since GPT Sol's review on 2026-09-05.
-   * The first version keyed the re-fetch on `entry.url` alone, so a
-   * `javascript:` or `mailto:` address got a live button — and stage 1 refuses
-   * anything but http(s) (src/fetch.ts), so it queued a job that always failed.
-   * That is precisely the dead button the 2026-08-27 fix was about, reached by
-   * the other door.
+   * **Nothing to fetch and no source the pipeline can safely reuse.** That is
+   * either no stored reference (`raw_source_kind` null, which src/db/schema.ts
+   * calls a real answer) or no completed `fetch` receipt beside it. Forcing
+   * `extract` in either state makes `fetch` run and fail with "No source URL":
+   * the dead button of 2026-08-27 once more. GPT Sol's plan and code reviews,
+   * 2026-09-30.
    */
-  rerunNotWeb: {
-    head: "Re-fetch and rebuild",
-    what: "The address recorded for this article is not one we can fetch.",
-    how: "Only http and https are followed. The job would be accepted and then fail at its first step, so the button does not offer it.",
+  rebuildUnavailable: {
+    head: "Rebuild",
+    what: "There is no web address to fetch this article from, and no stored source can be safely reused instead.",
+    how: "Everything already built from it is unaffected and stays on the shelf. The article's own metadata page shows what we do know about where it came from.",
   },
   open: {
     head: "Open the original",
@@ -537,34 +546,20 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
      what makes it a refresh rather than a resume: without it the queue skips
      every step whose artefact is already on disk, which is every step.
      `useJobs` picks the job up from the queue and the progress list shows it,
-     so there is nothing to render here beyond the button going quiet. */
-  const rerun = useCallback(async () => {
-    setRerunning(true);
-    try {
-      /* `fetchOk`, so the check cannot be dropped. The first version ignored the
-         response entirely, so a refused job — a bad slug, a queue that would not
-         take it, a 501 — left the button spinning briefly and then looking as
-         though it had worked. That is the silent success this repo keeps writing
-         up, and lib/api.ts § `fetchOk` is where it stopped being possible to
-         write it again by forgetting a line. */
-      await fetchOk("/api/jobs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ slug: entry.slug, force: ["fetch"] }),
-      });
-    } catch (e) {
-      shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
-    } finally {
-      setRerunning(false);
-    }
-  }, [entry.slug, shelf]);
+     so there is nothing to render here beyond the button going quiet.
 
-  /* **Only where there is something to re-fetch.** An uploaded PDF has no
-     address, and neither has an article old enough to predate our recording
-     one — so this button queued a job whose first step failed with "No source
-     URL", every time. Keyed on the URL rather than on "is it an upload",
-     because that is the actual precondition and it covers both cases. GPT Sol,
-     2026-08-27.
+     **`force: ["extract"]` where there is no web address to fetch** (feedback
+     6B, 2026-09-30). `fetch` is then not forced, finds the `raw` manifest it
+     wrote on the way in, and skips; everything from `extract` on runs again
+     over the copy we hold. The same job `enqueueReset` queues (src/jobs.ts),
+     without the reset plan. docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md. */
+  /* **Whether there is something to re-fetch** — which since 2026-09-30
+     decides what the button does rather than whether it works (`rerun` below).
+     An uploaded PDF has no address, and neither has an article old enough to
+     predate our recording one; forcing `fetch` for either queued a job whose
+     first step failed with "No source URL", every time. Keyed on the URL rather
+     than on "is it an upload", because that is the actual precondition and it
+     covers both cases. GPT Sol, 2026-08-27.
 
      **And `isWebUrl` on top of it, since 2026-08-31.** A shelf row's `url` is
      the same `final_url` the reading view's controls bar and the metadata page
@@ -582,13 +577,41 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
      2026-08-27 fix was about, reached by the other door, and the lesson is that
      "can we fetch it" and "can we link to it" were never two questions. */
   const hasWebUrl = Boolean(entry.url) && isWebUrl(entry.url ?? "");
+  /* **And whether `fetch` will really skip.** With no web address the rebuild
+     is safe only when the current revision has both a stored-source reference
+     and a completed `fetch` run. `stepIsDone` / `hasArtefacts` require both;
+     `sourceReusable` is that exact answer from the shelf query. `=== true`
+     fails closed if an older server somehow omits the new field. A raw
+     reference alone is not enough. GPT Sol's plan review and code review. */
+  const canRerun = hasWebUrl || entry.sourceReusable === true;
+  const rerun = useCallback(async () => {
+    if (!canRerun) return;
+    setRerunning(true);
+    try {
+      /* `fetchOk`, so the check cannot be dropped. The first version ignored the
+         response entirely, so a refused job — a bad slug, a queue that would not
+         take it, a 501 — left the button spinning briefly and then looking as
+         though it had worked. That is the silent success this repo keeps writing
+         up, and lib/api.ts § `fetchOk` is where it stopped being possible to
+         write it again by forgetting a line. */
+      await fetchOk("/api/jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: entry.slug, force: [hasWebUrl ? "fetch" : "extract"] }),
+      });
+    } catch (e) {
+      shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
+    } finally {
+      setRerunning(false);
+    }
+  }, [entry.slug, hasWebUrl, canRerun, shelf]);
 
   const archive = useCallback(() => void shelf.archive(entry.slug), [entry.slug, shelf]);
   /* The other half, for a card that is on the shelf because Archived is on
      (plan 260929a). The same PATCH as Undo, through `shelf.restore`. */
   const restore = useCallback(() => void shelf.restore(entry.slug), [entry.slug, shelf]);
 
-  return { copied, rerunning, hasWebUrl, copy, rerun, archive, restore, edit: onEdit };
+  return { copied, rerunning, hasWebUrl, canRerun, copy, rerun, archive, restore, edit: onEdit };
 }
 
 type ShelfActions = ReturnType<typeof useShelfActions>;
@@ -657,7 +680,7 @@ export function Actions({
   inTooltipGroup?: boolean;
 }) {
   const actions = useShelfActions(entry, shelf, onEdit);
-  const { copied, rerunning, hasWebUrl, copy, rerun } = actions;
+  const { copied, rerunning, hasWebUrl, canRerun, copy, rerun } = actions;
 
   /**
    * Which control's card is open, and whether a finger opened it.
@@ -789,19 +812,18 @@ export function Actions({
           id="rerun"
           armed={armed}
           onArm={setArmed}
-          tip={hasWebUrl ? TIPS.rerun : entry.url ? TIPS.rerunNotWeb : TIPS.rerunNoUrl}
-          commits={hasWebUrl && !rerunning}
+          tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildUnavailable}
+          commits={canRerun && !rerunning}
         >
-          {/* **The name says which of the two absences this is**, and not merely
-              that there is one. A screen reader gets no card, so the parenthesis
-              is the only place the reason reaches it — and a name reading "no
-              address" over an article that has one, of a scheme we will not
-              follow, contradicts the card beside it. GPT Sol, 2026-09-05. */}
+          {/* **The name says what the button will do** — re-fetch, rebuild
+              without fetching, or nothing and why. A screen reader gets no
+              card, so the parenthesis is the only place the reason reaches
+              it. GPT Sol, 2026-09-05; feedback 6B, 2026-09-30. */}
           <IconButton
-            label={rerunLabel(entry, hasWebUrl, rerunning)}
+            label={rerunLabel(hasWebUrl, canRerun, rerunning)}
             titled={false}
             onClick={() => void rerun()}
-            disabled={!hasWebUrl || rerunning}
+            disabled={!canRerun || rerunning}
           >
             <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
           </IconButton>
@@ -928,18 +950,20 @@ function RowGroup({ joined, children }: { joined: boolean; children: ReactNode }
 /**
  * The re-fetch button's accessible name, which has to carry what the card
  * carries — a screen reader is given the card as a *description* and may not
- * reach it at all, so the reason an unavailable control is unavailable belongs
- * in the name as well.
+ * reach it at all, so why this one rebuilds without fetching belongs in the
+ * name as well (feedback 6B, 2026-09-30: it used to say why it was
+ * unavailable).
  *
  * **And the menu's visible words**, since 2026-09-15: `ShelfActionsMenu` draws
  * this string as its item's text, so the word a finger reads and the name a
  * screen reader hears on the row are one string and cannot drift.
  */
-function rerunLabel(entry: LibraryEntry, hasWebUrl: boolean, rerunning: boolean): string {
-  if (hasWebUrl) return rerunning ? "Queueing…" : "Re-fetch and rebuild";
-  return entry.url
-    ? "Re-fetch and rebuild (the recorded address cannot be fetched)"
-    : "Re-fetch and rebuild (no address recorded)";
+function rerunLabel(hasWebUrl: boolean, canRerun: boolean, rerunning: boolean): string {
+  if (rerunning) return "Queueing…";
+  if (hasWebUrl) return "Re-fetch and rebuild";
+  return canRerun
+    ? "Rebuild from the stored copy (nothing to fetch)"
+    : "Rebuild (no web address and no reusable stored copy)";
 }
 
 /**
@@ -991,7 +1015,7 @@ const ITEM =
  * menu too. GPT Sol, 2026-09-15.
  */
 function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: ShelfActions }) {
-  const { copied, rerunning, hasWebUrl, copy, rerun, archive, restore, edit } = actions;
+  const { copied, rerunning, hasWebUrl, canRerun, copy, rerun, archive, restore, edit } = actions;
   const [open, setOpen] = useState(false);
 
   /**
@@ -1098,7 +1122,7 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
 
             <DropdownMenu.Item
               className={ITEM}
-              disabled={!hasWebUrl || rerunning}
+              disabled={!canRerun || rerunning}
               onSelect={() => void rerun()}
             >
               <RefreshCw
@@ -1106,7 +1130,7 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
                 aria-hidden="true"
                 className={`tw:shrink-0${rerunning ? " cmt-spinner" : ""}`}
               />
-              <span>{rerunLabel(entry, hasWebUrl, rerunning)}</span>
+              <span>{rerunLabel(hasWebUrl, canRerun, rerunning)}</span>
             </DropdownMenu.Item>
 
             {hasWebUrl ? (

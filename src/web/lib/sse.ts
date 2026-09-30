@@ -242,6 +242,11 @@ export async function readAnswerStream<T>(
     begin?(data: unknown): void;
     delta(text: string): void;
     done(data: unknown): T | undefined;
+    /**
+     * Any other named frame before the end — Citations' *Investigate* sends
+     * `stage` and `lookup` (plan 260930d). Ignored when absent, as before.
+     */
+    other?(name: string, data: unknown): void;
   },
 ): Promise<T> {
   let text = "";
@@ -272,6 +277,7 @@ export async function readAnswerStream<T>(
       const message = (event.data as { error?: unknown } | null)?.error;
       throw new Error(typeof message === "string" && message ? message : ENDED_UNFINISHED.message);
     }
+    on.other?.(event.name, event.data);
   }
   throw new Error(ENDED_UNFINISHED.message);
 }
