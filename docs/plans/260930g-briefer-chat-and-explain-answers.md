@@ -32,8 +32,8 @@ Each prompt already carries one length line, so the minimal tweak is to that lin
   because the measurement below showed chat ignoring every wording of the rule in `SYSTEM`. It
   copies the lever `provenanceLine` already uses for the same reason, and has its own test,
   `tests/chat-length-line.test.ts` (seen red with the line removed).
-- **converse.ts `REMEMBER_SYSTEM`:** *Short. One or two paragraphs, three at most.* — the rest of the
-  paragraph (Signposts, the fourth-paragraph warning) unchanged.
+- **converse.ts `REMEMBER_SYSTEM`:** tried *Short. One or two paragraphs, three at most.*, measured,
+  and **reverted**: it changed nothing (see Result). Remember ships as it was.
 
 **What else moves with it:**
 
@@ -44,7 +44,7 @@ Each prompt already carries one length line, so the minimal tweak is to that lin
   length rule.
 - No prompt here carries a version stamp, so there is nothing to bump.
 - **Cache:** each changed prompt is its own cached prefix, so the first call per article on each of
-  chat, Explain and Remember after deploy pays one cold write. Once, and small.
+  chat and Explain after deploy pays one cold write. Once, and small.
 
 **Left alone, on purpose:**
 
@@ -92,8 +92,9 @@ with the results. (On the retry, neither baseline arm had one.)
 **Remember** — [`evals/remember-stances.ts`](../../evals/remember-stances.ts): eight readers × four
 stances, tools off, words per answer printed on each answer's heading. Every run writes the same
 `evals/results/remember-stances.md`, so each is copied to its own name straight after it finishes —
-`remember-stances.260930g-before-1.md`, `-before-2.md`, `-after.md` — and the last run's file is
-left as the committed current transcript. Compare mean words per answer the same way as above, and
+`remember-stances.260930g-before-1.md`, `-before-2.md`, `-after.md`. (Two runs overlapped, so
+each transcript was taken from its own job log rather than the shared file; and since the Remember
+change was reverted, the shared file is left as it was on dev.) Compare mean words per answer the same way as above, and
 **read all 32 after-answers**, which is the harness's own pass condition. (Its header line said
 "Seven readers"; there are eight since `justTellMe`, fixed here.)
 
@@ -108,6 +109,9 @@ Budget: a few dollars in all.
 
 - Anything structural (a length setting on the profile, per-surface caps): not asked for.
 - *Check the web*'s own prompt, which glossary.md already names as worth doing.
+- **Remember briefer.** If Greg wants it too, the lever that worked on chat (a line beside the
+  reader's message, with a word budget) is the one to try, measured with `evals/remember-stances.ts`
+  against the two baselines committed here.
 
 ## Reviews
 
@@ -121,7 +125,13 @@ Budget: a few dollars in all.
   fix were confirmed. Three findings, all right: Remember's runs overwrite one file, it has eight
   readers not seven and every answer should be read, and the "without unfinished" average had no
   way to be produced. Folded in; the procedure changes are mechanical, so no round 3.
-- Code: GPT Sol — below.
+- **Code, GPT Sol (workspace-write, fixes in place): "pass with fixes".** Four P2s, all checked. It
+  softened the fidelity conclusion to what one control can show, and recorded Remember's null
+  result. It made `tests/chat-length-line.test.ts` pin the whole reminder and the budget in
+  `SYSTEM`, and cover Candidates and a turn with history (before, the test passed with the budget
+  deleted). And it fixed two comments that still quoted the old wording or named the wrong section
+  (`live.ts`, and converse.ts's `max_tokens`). Reverting the Remember line was my call after
+  reading its note: it did not suggest reverting.
 
 ## Result
 
@@ -133,7 +143,7 @@ two of them show how much one prompt varies from run to run.
 | Explain (comments, selections, *Check the web*), 12 cases | 280, 268 | 233 (the same Explain prompt in all five after arms: 235, 237, 243, 228, 233) | **−15%** |
 | Chat, 6 cases | 357, 373 | 262 | **−28%** |
 | Gutter "?" (a chat help turn), 4 passages | 471 | 341 | **−28%** |
-| Remember, 32 replies | 209, 225 | see below | |
+| Remember, 32 replies | 209, 225 | 210 (reverted) | none: within the before runs' spread |
 
 The arms are in `evals/results/plain-words/answers/`. Their Explain prompt is the final one
 throughout. Their chat prompt is not: `after-30` has the paragraph count only, `after-31` adds "a
@@ -143,8 +153,9 @@ the bytes.
 
 **Chat needed three attempts, and the first two are the finding.** With only the paragraph count
 changed, chat went from four paragraphs to two and made each one twice as long: 342 and 339 words,
-inside the before runs' spread. A word budget in `SYSTEM` (250) gave 324. The same budget as a line
-beside the question gave 247, i.e. −32%, with every answer landing near 250; the model treats the
+only 6–7% below the before runs' mean and short of the measured target. A word budget in `SYSTEM`
+(250) gave 324. The same budget as a line beside the question gave 247, i.e. −32%, with every answer
+landing near 250; the model treats the
 number as a target. 300 gives 262 (−28%), which is what shipped. Explain moved on the paragraph
 count alone and got no word budget.
 
@@ -153,8 +164,19 @@ count alone and got no word budget.
 pairs, the old one in 6, with 3 ties. The judge found two losses, both in final-prompt chat
 answers: that transfer entropy cannot show how inputs interact, and Seth's hedge that artificial
 consciousness is not ruled out. **The control**, the old prompt judged against itself
-(`pairs-before-30-vs-before-31.*`), found four losses, **the same two points among them**. So
-those are points the model drops from run to run, not a cost of being briefer.
+(`pairs-before-30-vs-before-31.*`), found four losses, **the same two points among them**. The
+omissions therefore occur under ordinary run-to-run variation too; this one control does not show
+that brevity can never make them more likely, but it gives no basis for attributing these two to the
+prompt change.
+
+**Remember did not show a clear length effect.** Its after run averaged 210 words, against 209 and
+225 before. The outputs still followed the stance rules overall, but one used a banned phrase and
+one was cut off, both failures also present in the before runs. Several answers still exceeded three
+paragraphs, so the new wording was not even followed as a cap. **So it was reverted**: a prompt
+line that measurably does nothing is noise in the prompt and a cache write for nothing. Remember's
+replies already average about 210 words, below where chat now lands, so it is already the briefest
+of the three. Because it was reverted, the 32 after-answers were skimmed for the counts rather than
+read in full, as the plan had asked.
 
 **Smoke cases** (read by hand, not committed): a requested section-by-section summary went from 768
 to 344 words. It still covers every section with citations and still runs past the budget, so "unless

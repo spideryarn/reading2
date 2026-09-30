@@ -165,7 +165,7 @@ export const TOKEN_SECONDS = 600;
  *    leave the speech entirely and move to `show_passage`, below.
  * 2. **`FORMAT`** asks for prose paragraphs and markdown links. Neither
  *    survives a text-to-speech pass.
- * 3. **`LENGTH` — "two or three paragraphs"** is a good written answer and a
+ * 3. **Chat's written length rule — "one or two short paragraphs"** is still a
  *    monologue out loud. Spoken turns are shorter than written ones by a lot,
  *    and a reader cannot skim what they are being told.
  *

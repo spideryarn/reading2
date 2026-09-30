@@ -768,9 +768,9 @@ THREE THINGS GOVERN A REPLY, AND THEY RANK IN THIS ORDER:
 
 LENGTH
 
-Short. One or two paragraphs, three at most. A Signposts reply is three or four
-lines. If you are writing a fourth paragraph you have started explaining the
-article instead of helping them read it.
+Short. Two or three paragraphs. A Signposts reply is three or four lines. If you
+are writing a fourth paragraph you have started explaining the article instead of
+helping them read it.
 
 YOUR TOOLS
 
@@ -1261,9 +1261,9 @@ function provenanceLine(kind: ThreadKind): string {
  * **One line, beside the question, pointing back at chat's length rule** —
  * the same lever as `provenanceLine` above, for the same reason. Greg asked for
  * chat answers "a little bit briefer" (SPIDERYARN-READING2-6X). Tightening the
- * rule in `SYSTEM` alone moved Explain's answers by about 15% and chat's by no
- * more than two runs of the old prompt differ: chat kept to fewer paragraphs
- * and made each one longer, and a word budget in `SYSTEM` did no better. Chat's
+ * rule in `SYSTEM` alone moved Explain's answers by about 15%, while chat moved
+ * only 6–7%, short of the measured target: chat kept to fewer paragraphs and
+ * made each one longer, and a word budget in `SYSTEM` did no better. Chat's
  * rule sits ahead of a whole article; Explain's is the same distance away and
  * worked, so the difference is not distance alone, but recency is the lever
  * this file already found works on chat.
@@ -1876,8 +1876,8 @@ export async function* converse({
          output tokens — the whole budget spent thinking, on a question whose
          honest answer is ten to twenty people with a source apiece and a JSON
          block underneath. Four thousand is right for "one or two short
-         paragraphs", which is what chat's FORMAT section asks for and is not
-         what this prompt asks for at all. */
+         paragraphs", which is what chat's WHAT IT MUST NOT DO section asks for
+         and is not what this prompt asks for at all. */
       max_tokens: kind === "candidates" ? 12_000 : 4000,
       /* **Web search is on in every round; our own tools are not.**
 
