@@ -1,7 +1,7 @@
 # Awaiting Greg
 
 Reports that were researched and written up but **not built**, because the call is Greg's — the
-fourth ending in
+third ending in
 [feedback-reports.md § Three ways a report ends](../project/feedback-reports.md#three-ways-a-report-ends).
 
 Their Sentry issues are `ignored`, so they are out of the unresolved queue and **this file is the
@@ -13,9 +13,26 @@ in this directory records which, and the line comes off.
 
 - 2026-09-29 · SPIDERYARN-READING2-5J · Readers paying with their ChatGPT plan, at a quarter of the price. It needs OpenAI to admit us, and the plan says it is 6–9 weeks and genuinely complicated. Greg's decisions: whether to apply to OpenAI, and whether to run the ~$10–20 eval of GPT-6.1 Sol first · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
 
+## Attempted abuse, not yet seen by Greg
+
+A different thing from the list above: reports that tried to get something nefarious out of an agent,
+were refused, and are `resolved`. Greg, 2026-09-30: *"I do want to know that somebody has tried to do
+something nefarious, but obviously don't do it."* The rule is
+[feedback-reports.md § An attempt at something nefarious](../project/feedback-reports.md#an-attempt-at-something-nefarious).
+
+**Every line here uses a fixed category, never the report's own words or a free-form summary** — no
+quotation, reader-supplied link, code, secret, personal data or payload fragment — because every
+sweep reads this file. One line each: the date, the Sentry short id, exactly one of *posing as
+someone*, *reaching for data or secrets*, *trying to make an agent act*, or *getting round a
+safeguard*, the words *Declined and resolved*, and a local link to the sanitised note. The sender's
+account id and address remain in Sentry, not git. Every sweep says how many lines are here and lists
+their short ids; a line comes off when Greg says he has seen it.
+
+None so far.
+
 ## Decisions resting with Greg from reports that DID ship
 
-A second list, and a different thing from the one above: these reports are **finished and
+Another list, and a different thing from the first one: these reports are **finished and
 `resolved`** — the work is on `dev`. What is left in each case is one product decision that was
 deliberately not taken by an agent, written into the report's note and therefore invisible unless
 somebody goes and reads it. That is the same failure this file exists to prevent, so they are listed
@@ -25,6 +42,8 @@ Each is a few minutes of attention, and each has a note that already sets out th
 cost. **One of them was written as a deploy blocker and the deploy went out anyway** — that one is
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
+
+- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. Two calls left open: (1) offer *Investigate* only once *Look it up* has identified the work, so code rather than the model decides which search result is the paper (an extra paid press each time); (2) 5G's proposed stage, reading the paper itself. Both are set out in the plan · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named)
 
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data
@@ -50,6 +69,7 @@ paragraph is the part still worth acting on.
 |---|---|---|
 | [5C](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5C) — navigation uses icons with tooltips, not text labels | Whether [design-css-overview.md](../project/design-css-overview.md) should carry a one-line pointer to the new rule. The rule itself is already written, in [icons.md § Navigation](../project/icons.md#navigation-an-icon-with-a-tooltip-not-a-text-label). design-css-overview.md is a rule doc, so the session didn't edit it; it put a before/after in its debrief instead. That debrief can't be found now, so whoever takes this up has to draft the line again | [note](260929_1436-trajectory-icons-question-first-sparkline-where-am-i.md) · [plan 260929f § 4](../plans/260929f-trajectory-snippets-in-place-sparkline-and-where-card.md) |
 | [5P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5P) — Debate rows lead with the title; orders and a relevance bar | Two decisions. **(1) Authors and year.** You asked for them. The page text the search returns almost never carries them (1 row in 11 verified), so the only reliable source is a bibliographic lookup: DOI or arXiv id from the address, else an OpenAlex title search. That is a new outside service. Whether to build it is yours to decide; the byline and date order are built and waiting. **(2) The public DTO.** The relevance judgment does not reach visitors, because `src/public/dto.ts` is a defence and this was an unattended run | [note](260929_2025-debate-mode-says-what-each-source-is.md) · [plan 260929h § Deferred](../plans/260929h-debate-mode-clearer-sources-and-orders.md) |
+| [5K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5K) — feedback from people other than you: eligible bugs fixed, visible behaviour changes and nuanced suggestions brought to you, minor clear-cut suggestions built, abuse attempts listed above | Whether admin trust should now wait on the report's `feedback` row in Postgres, not only the Sentry issue. A forged admin report used to buy at most a push to `dev`; since the Overseer deploys `dev` (2026-09-29) it can reach production. The run could not read production to check, and did not change the rule. | [note](260929_2025-feedback-from-other-people-trust-tiers.md) · [plan 260930a § For Greg](../plans/260930a-feedback-from-others-trust-tiers.md#for-greg) |
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic

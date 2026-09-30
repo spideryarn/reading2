@@ -32,6 +32,7 @@ const MODEL_CALLS = [
   "openRouterTranscription",
   "openRouterImage",
   "openRouterCall",
+  "runStream", // src/stream-run.ts: the caller builds the prompt, so the caller must carry the rule
 ];
 
 /**

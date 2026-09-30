@@ -20,6 +20,11 @@
  * *Check the web* — and **one at a time**, so a second press cannot start a
  * second paid search while the first is out.
  *
+ * The fourth is **`investigate`** (plan 260930a): one streamed, billed answer
+ * about one work, `POST /api/citations/:slug/:id/investigate`, SSE — the
+ * glossary's *Check the web* shape. Its `done` crosses to the read half by
+ * `applyInvestigation`, the second narrow write beside `applyFound`.
+ *
  * ## Two hooks since 2026-09-16, not one
  *
  * This said *"Mounted by `CitationsBand` alone, never hoisted: nothing outside
@@ -41,16 +46,19 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  CitationInvestigation,
   Citations,
   CitationsResponse,
   CitedWork,
   FindCitationResponse,
   Job,
 } from "../types.js";
+import { wentQuiet } from "../messages.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
 
@@ -63,6 +71,24 @@ export interface FindNote {
   id: string;
   kind: "no-match" | "failed";
   message: string;
+}
+
+/** The part of an *Investigate* answer that has arrived — never on the row. */
+export interface InvestigateDraft {
+  id: string;
+  text: string;
+}
+
+/**
+ * Why the last *Investigate* stopped, on the row it was pressed on, and what
+ * was stored there when it was pressed — so the panel can tell "the previous
+ * one is still shown" from "the new one was kept after all"
+ * (src/web/CitationInvestigation.tsx § investigationViewOf).
+ */
+export interface InvestigateFailure {
+  id: string;
+  message: string;
+  previousAt: string | null;
 }
 
 export interface UseCitations {
@@ -109,6 +135,18 @@ export interface UseCitations {
    * are stored on the server, so a reload shows them too. src/citation-find.ts.
    */
   find(id: string): Promise<void>;
+  /** The work whose *Investigate* is streaming, or null. One at a time. */
+  investigating: string | null;
+  /** The words so far. **Never on the row**: only `done`, sent after the save, puts one there. */
+  investigateDraft: InvestigateDraft | null;
+  /** The last *Investigate* that did not end in a stored answer. */
+  investigateFailed: InvestigateFailure | null;
+  /**
+   * ***Investigate*** — plan 260930a. One streamed, billed answer about one
+   * work, kept per row by the server and attached at read time while its
+   * context still matches. src/citation-investigate.ts.
+   */
+  investigate(id: string): Promise<void>;
 }
 
 /**
@@ -119,7 +157,8 @@ export interface UseCitations {
  * The citations are marked in the prose in **every** mode since 2026-09-16
  * (docs/plans/260916b-…, SPIDERYARN-READING2-3M), so the list is needed by a
  * reader who never opens the band. What crosses that seam is the *read*, plus
- * the one narrow write below, and nothing else:
+ * the two narrow writes below (`applyFound`, and `applyInvestigation` since
+ * plan 260930a), and nothing else:
  *
  * | | mounted by | what it is |
  * |---|---|---|
@@ -203,6 +242,15 @@ export interface CitationsRead {
    * for attaching it. tests/citations-find-late-reply.test.tsx.
    */
   applyFound(id: string, found: FoundPatch): void;
+  /**
+   * **The second narrow write**, for *Investigate*'s `done` (plan 260930a):
+   * the stored investigation onto the row with that id, and nothing else of
+   * it. The caller follows it with `refresh()`, so the server's attach-at-read
+   * rule (the context hash) stays the authority, exactly as for *Look it up*;
+   * the patch only saves the reader a blank moment between the last word and
+   * the read coming back.
+   */
+  applyInvestigation(id: string, investigation: CitationInvestigation): void;
 }
 
 /** What one *Look it up* answer patches, split as the server split it. */
@@ -281,7 +329,18 @@ export function useCitationsRead(slug: string): CitationsRead {
     [],
   );
 
-  return { status, citations, stale, outdated, error, reload, refresh, applyFound };
+  const applyInvestigation = useCallback((id: string, investigation: CitationInvestigation) => {
+    setCitations((current) =>
+      current
+        ? {
+            ...current,
+            citations: current.citations.map((w) => (w.id === id ? { ...w, investigation } : w)),
+          }
+        : current,
+    );
+  }, []);
+
+  return { status, citations, stale, outdated, error, reload, refresh, applyFound, applyInvestigation };
 }
 
 /** One row, with the link half of a *Look it up* answer. Lookup attachment belongs to the fresh server read. */
@@ -299,7 +358,7 @@ function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
  * why the fetch moved up there, and what this hook still has to do on mount.
  */
 export function useCitations(slug: string, read: CitationsRead): UseCitations {
-  const { status, citations, stale, outdated, error, reload, refresh, applyFound } = read;
+  const { status, citations, stale, outdated, error, reload, refresh, applyFound, applyInvestigation } = read;
   const [finding, setFinding] = useState<string | null>(null);
   const [findNote, setFindNote] = useState<FindNote | null>(null);
   /* Admission for `find`, as a ref so two presses in one render cannot both
@@ -374,6 +433,111 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     [slug, applyFound, refresh],
   );
 
+  /**
+   * ***Investigate*** one work — plan 260930a, and the glossary's *Check the
+   * web* (useGlossary.ts § `look`) nearly line for line, because the server
+   * half is `streamTermLookup`'s shape and the promises are the same:
+   *
+   * - **`done` means stored.** Only the `done` frame, sent after the save,
+   *   puts an investigation on the row; the words before it are a draft.
+   * - **An `error` does not prove nothing was kept**: a save can succeed and
+   *   the frame after it be lost. So a failure after the stream opened reads
+   *   the list again, while this run still holds admission, and the panel
+   *   draws a stored answer newer than the one at the press instead of the
+   *   failure (CitationInvestigation.tsx § investigationViewOf).
+   * - **Leaving stops the reading, not the investigation.** The server does
+   *   not pass the socket's close to the model call, so it finishes and
+   *   stores anyway. The band going, or another article, only aborts this
+   *   fetch; nothing is re-read then, because the answer is not stored yet at
+   *   that moment — the band's mount `reload` brings it in when it is opened
+   *   again, as it does for a list written while the band was closed.
+   * - **One at a time**, across the list: each is a paid call, and the
+   *   server's allowance runs one per reader at once anyway.
+   */
+  const investigateLive = useRef<AbortController | null>(null);
+  const [investigating, setInvestigating] = useState<string | null>(null);
+  const [investigateDraft, setInvestigateDraft] = useState<InvestigateDraft | null>(null);
+  const [investigateFailed, setInvestigateFailed] = useState<InvestigateFailure | null>(null);
+  /* What is stored on each row at the moment of a press, read without making
+     `investigate` change identity every time the list does. */
+  const citationsNow = useRef(citations);
+  citationsNow.current = citations;
+
+  const investigate = useCallback(
+    async (id: string) => {
+      if (investigateLive.current) return;
+      const controller = new AbortController();
+      investigateLive.current = controller;
+      const mine = () => investigateLive.current === controller;
+      const previousAt = citationsNow.current?.citations.find((w) => w.id === id)?.investigation?.at ?? null;
+      setInvestigating(id);
+      setInvestigateFailed(null);
+      setInvestigateDraft(null);
+      let opened = false;
+      try {
+        const res = await apiFetch(
+          `/api/citations/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/investigate`,
+          { method: "POST", signal: controller.signal },
+        );
+        if (!res.ok || !res.body) {
+          /* The 404 and the allowance's 429/503 are decided before the
+             stream opens, so they are JSON and `readJson` throws their
+             sentence. Nothing was stored. */
+          await readJson(res);
+          throw new Error(`The server replied ${res.status}.`);
+        }
+        opened = true;
+        const investigation = await readAnswerStream(res.body, {
+          delta: (text) => {
+            if (mine()) setInvestigateDraft({ id, text });
+          },
+          done: (data) => {
+            const got = (data as { investigation?: unknown } | null)?.investigation;
+            return isInvestigation(got) ? got : undefined;
+          },
+        });
+        if (mine()) {
+          setInvestigateDraft(null);
+          applyInvestigation(id, investigation);
+          void refresh();
+        }
+      } catch (err) {
+        if (controller.signal.aborted || !mine()) return;
+        /* **The whole draft goes**, not just its tail: a cut-off answer left
+           on screen under an error reads as the answer (plan 260930a § No
+           quotes from sources — a stop replaces the whole streamed text). */
+        setInvestigateDraft(null);
+        setInvestigateFailed({
+          id,
+          message: err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+          previousAt,
+        });
+        if (opened) await refresh();
+      } finally {
+        if (mine()) {
+          investigateLive.current = null;
+          setInvestigating(null);
+        }
+      }
+    },
+    [slug, applyInvestigation, refresh],
+  );
+
+  /* Another article, or the band going, stops reading — useGlossary.ts's
+     cleanup for `look`, for the same reason: the old stream's `done` must not
+     land on the next article's list, whose ids are the same shape. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — the cleanup must run when it changes
+  useEffect(
+    () => () => {
+      investigateLive.current?.abort();
+      investigateLive.current = null;
+      setInvestigating(null);
+      setInvestigateDraft(null);
+      setInvestigateFailed(null);
+    },
+    [slug],
+  );
+
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read
      is not an answer. */
   const auto = useAutoRun(slug, "citations", status, ensure, reload);
@@ -396,5 +560,29 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     finding,
     findNote,
     find,
+    investigating,
+    investigateDraft,
+    investigateFailed,
+    investigate,
   };
+}
+
+/**
+ * A `done` frame's investigation, checked field by field — the one object that
+ * becomes a kept answer on screen, so a malformed one is a failure, not an
+ * answer with holes in it (useGlossary.ts § isGlossaryLookup).
+ */
+function isInvestigation(data: unknown): data is CitationInvestigation {
+  const i = data as Partial<CitationInvestigation> | null | undefined;
+  return (
+    !!i &&
+    typeof i.answer === "string" &&
+    i.answer.trim() !== "" &&
+    Array.isArray(i.sources) &&
+    i.sources.every((s) => !!s && typeof (s as { url?: unknown }).url === "string") &&
+    typeof i.extractsRead === "number" &&
+    typeof i.longestExtractWords === "number" &&
+    (i.matchedHost === null || typeof i.matchedHost === "string") &&
+    typeof i.at === "string"
+  );
 }

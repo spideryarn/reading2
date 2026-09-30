@@ -71,6 +71,7 @@ import type {
   FeedbackKind,
   GlossaryLookup,
   CitationFind,
+  CitationInvestigation,
   SourceGuess,
   GlossaryFound,
   QuotesFound,
@@ -1320,6 +1321,22 @@ export interface RefereeClaimsStore {
  */
 export interface CitationFindStore {
   save(slug: string, entryId: string, find: CitationFind): Promise<void>;
+  /**
+   * One stored find, or `null` — for *Investigate*, which needs the URL of the
+   * page a current *Look it up* read (the row carries its host, not its URL).
+   * Owner-scoped: a slug the caller does not own is a 404.
+   */
+  load(slug: string, entryId: string): Promise<CitationFind | null>;
+}
+
+/**
+ * **Where Citations' *Investigate* keeps an answer** — one row per `(article,
+ * entry)`, overwritten by a second press. The read half is `loadCitations`,
+ * which attaches a row only while its fingerprint matches. Owner-scoped.
+ * src/store/pg-citation-investigations.ts.
+ */
+export interface CitationInvestigationStore {
+  save(slug: string, entryId: string, investigation: CitationInvestigation): Promise<void>;
 }
 
 /**
@@ -2321,7 +2338,11 @@ export type RateBucket =
   | "link-summary-fill"
   | "citation-find"
   | "shelf-topics"
-  | "upload-source-guess";
+  | "upload-source-guess"
+  /* Citations' *Investigate* — a streamed, web-searching answer over the whole
+     article, several times *Find it*'s cost a press, so its own allowance
+     (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`). */
+  | "citation-investigate";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

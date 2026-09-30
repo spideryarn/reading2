@@ -3801,6 +3801,59 @@ export interface CitedWork {
    * Owner-only: never crosses the public boundary.
    */
   lookup?: CitationLookup;
+  /**
+   * **What *Investigate* wrote about this work** — attached at read time from
+   * `citation_investigations`, only while its context fingerprint matches what
+   * would be sent now (src/citation-investigate-context.ts). Owner-only: never
+   * crosses the public boundary.
+   */
+  investigation?: CitationInvestigation;
+}
+
+/**
+ * **One *Investigate* answer, as kept** — docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ *
+ * `answer` is the AI's prose, written from web search extracts and instructed
+ * not to quote them; any quotation-marked span in it was checked by code to be
+ * the article's own words, the work's title or reference, or *Look it up*'s
+ * verified quotes (src/investigate-quote-guard.ts). Everything else here is
+ * code's account of what was read, never the model's.
+ */
+export interface CitationInvestigation {
+  answer: string;
+  /** The results the search returned **with a non-empty extract**, and only those. */
+  sources: Citation[];
+  /** How many results came back with a non-empty extract — N in *extracts for N results*. */
+  extractsRead: number;
+  /** Words in the longest of those extracts. */
+  longestExtractWords: number;
+  /**
+   * The host of the page *Look it up* matched to this work, **only when that
+   * page was among this answer's own extracts**; `null` means no result was
+   * confirmed to be the work itself, and the view says so.
+   */
+  matchedHost: string | null;
+  /** Billed searches the call reported; `null` when the provider did not say. */
+  searches: number | null;
+  /** Which usage field `searches` came from — `SearchUsagePath`. */
+  searchesFrom: string;
+  model: string;
+  /** ISO 8601. */
+  at: string;
+  /** Over everything the call was sent. Attached only while it matches. */
+  contextHash: string;
+  promptVersion: string;
+}
+
+/**
+ * `POST /api/citations/:slug/:id/investigate` — SSE. Any number of `delta`
+ * (`{ text }`), then exactly one of `done` (this, **written only after the
+ * investigation is stored**) or `error` (`{ error }`, the reader-facing
+ * sentence). On `error` nothing new was kept: a previous investigation, if
+ * any, is still the stored one.
+ */
+export interface InvestigateCitationDone {
+  investigation: CitationInvestigation;
 }
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */

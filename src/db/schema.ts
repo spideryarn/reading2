@@ -3719,6 +3719,70 @@ export const citationFinds = spideryarn.table(
 );
 
 /**
+ * **One cited work, looked into on demand** — Citations mode's *Investigate*,
+ * docs/plans/260930a-citations-investigate-one-work-on-demand.md,
+ * src/citation-investigate.ts. `citation_finds`' shape: reader state, one row
+ * per `(article, entry)`, overwritten by a second press, attached to the entry
+ * at read time only while `context_hash` matches a recomputation over what the
+ * call was sent (src/citation-investigate-context.ts).
+ *
+ * **Only an answer that passed every check is a row**: a clean `finished`
+ * ending, the in-stream quote guard, and at least one search result with a
+ * non-empty extract. `sources` are exactly those results, safeUrl-filtered —
+ * a variable list, as `glossary_lookups.citations` — and `extracts_read`,
+ * `longest_extract_words` and `matched_host` are code's account of what was
+ * read, never the model's.
+ */
+export const citationInvestigations = spideryarn.table(
+  "citation_investigations",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** A `CitedWork.id`, inherited across re-runs by dedupe key. */
+    entryId: text("entry_id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration, as `citation_finds`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** The streamed prose, as it passed the quote guard. */
+    answer: text("answer").notNull(),
+    /** The results with a non-empty extract, every URL through `safeUrl`. */
+    sources: jsonb("sources").$type<Citation[]>().notNull().default([]),
+    /** How many results came back with a non-empty extract. At least one. */
+    extractsRead: integer("extracts_read").notNull(),
+    /** Words in the longest of those extracts — *the longest about W words*. */
+    longestExtractWords: integer("longest_extract_words").notNull(),
+    /**
+     * The host of *Look it up*'s matched page, **only when that page's URL was
+     * among this answer's own extracts**; null otherwise — the provenance then
+     * says no result was confirmed to be the work.
+     */
+    matchedHost: text("matched_host"),
+    /** Billed searches the call reported — nullable, and null is not zero. */
+    searches: integer("searches"),
+    /** Which usage field `searches` came from (`SearchUsagePath`). */
+    searchesFrom: text("searches_from").notNull(),
+    model: text("model").notNull(),
+    /** Recomputed at read time; the row attaches only while it matches. */
+    contextHash: text("context_hash").notNull(),
+    /** `CITATION_INVESTIGATE_VERSION` when it was written. Inside the hash too. */
+    promptVersion: text("prompt_version").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.entryId] }),
+    check(
+      "citation_investigations_entry_id_format",
+      sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    check(
+      "citation_investigations_counts",
+      sql`${t.extractsRead} >= 1 and ${t.longestExtractWords} >= 0 and (${t.searches} is null or ${t.searches} >= 0)`,
+    ),
+    check("citation_investigations_answer", sql`char_length(${t.answer}) > 0`),
+  ],
+);
+
+/**
  * **Our guess at where an uploaded paper lives on the web** — one row per
  * article, docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Stored
  * where. Written by src/source-guess.ts through
@@ -5232,7 +5296,7 @@ export const rateLimitEvents = spideryarn.table(
   (t) => [
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),
