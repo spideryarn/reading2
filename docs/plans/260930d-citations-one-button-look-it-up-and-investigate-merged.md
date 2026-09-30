@@ -1,6 +1,6 @@
 # Citations: one button — *Look it up* and *Investigate* merged
 
-Status: **planned 2026-09-30, not built.** Feedback report SPIDERYARN-READING2-75 (`spya-mbgnwh`),
+Status: **planned 2026-09-30; plan review adopted (§ Review log, which overrides the body); not built.** Feedback report SPIDERYARN-READING2-75 (`spya-mbgnwh`),
 from Greg, relayed by the Overseer; sent 2026-09-30 05:19 from production `a522ba8c`, on
 `dongetal25-spya-vfmvmm` in Citations mode:
 
@@ -91,3 +91,30 @@ A *Just find it* link (above). Reading the paper itself stays 5G's proposed stag
 ## Review log
 
 (to be filled)
+- **Plan review** — [260930d-citations-one-button-plan-review-sol.md](260930d-citations-one-button-plan-review-sol.md),
+  *build with changes*, no P0. All eight adopted; they override anything above:
+  - **P-1** Step 1 is *Look it up*'s real path (`lookupRequest` → raw answer → `judgeLookup` →
+    save), extracted from `makeFindCitation` as `runCitationLookup` — not `findWorkPage`, which
+    sends the URL-only prompt. Pinned by tests.
+  - **P-2** Step 1 is skipped **only for a current `assessed` reading**. `no-extract`,
+    `not-identified` and `unreadable` re-run it — the merged button is now their only recovery path.
+  - **P-3** After step 1 the list and the article are **re-read**, the entry re-resolved (gone →
+    stop), the stored find loaded fresh, and only then are the matched page, the request, the
+    allowed quote texts and the fingerprint built. The client applies a `lookup` frame as it
+    applied `/find`'s answer — safe link fields only, then a re-read so the server attaches the
+    reading by fingerprint.
+  - **P-4** Partial success is a state: step 1 saved, step 2 failed. The row shows the new lookup
+    and *"The longer investigation failed; the quick check was kept."* It claims the earlier
+    investigation is still shown **only if it still attaches** after the re-read. And the
+    provenance line no longer says *could not confirm* when the row has a code-matched lookup that
+    this search's own results did not include: *"The first check matched a page on X; this
+    search's own results did not include it."*
+  - **P-5** Step 1 **no-match** continues, unconfirmed, after the existing no-match sentence. A step-1
+    **provider or timeout failure stops the press** (nothing more is spent; the reader retries).
+    Store failures and programming errors fail the press.
+  - **P-6** The lease becomes `FIND_TIMEOUT_MS + INVESTIGATE_TIMEOUT_MS + 30 s`; the global fuse drops
+    from 60 to **55** a day (55 × $0.33 ≈ $18).
+  - **P-7** `POST …/find` **stays** for now, with no button, so a tab opened before the deploy keeps
+    working; its removal is a follow-up for a later deploy.
+  - **P-8** The trade-off also costs capacity: the cheap path allowed 20 an hour and 60 a day, the
+    merged press 8 and 20. Recorded; *Just find it* stays deferred.
