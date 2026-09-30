@@ -187,6 +187,11 @@ td.text.has-hit[data-hues].block-flash-still {
 }
 td.text mark.hit.passage-flash { animation: passage-flash 1.2s ease-out; }
 td.text mark.hit.passage-flash-still { background-color: var(--highlight-wash); }
+/* And on a citation's words, Citations' *first cited* jump (rows.ts §
+   `citePassageKey`, plan 260930i). A cite mark has no background of its own —
+   its channel is the underline — so the wash simply fades to nothing. */
+td.text mark.cite.passage-flash { animation: passage-flash 1.2s ease-out; }
+td.text mark.cite.passage-flash-still { background-color: var(--highlight-wash); }
 
 /* `.block-id` was here, positioning six characters of Courier in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so

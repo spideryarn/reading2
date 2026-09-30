@@ -25,7 +25,7 @@ import { useQueryState, useQueryStates } from "nuqs";
 import type { BlockId, ChatThread, RememberStance, ThreadKind } from "../../../types.js";
 import { currentAt, rememberParam, threadParam, type Mode } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
-import { QuizPanel, RememberSubModeToggle } from "../../QuizPanel.js";
+import { QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
 import { useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
@@ -83,12 +83,15 @@ export function RememberBand({
   slug,
   blocks,
   readSoFar,
+  sections,
   onJump,
   onMode,
   onQuizKeys,
 }: {
   slug: string;
   blocks: Map<string, string>;
+  /** The tree and block positions, for the quiz's "Where to look again" — `QuizPanel`'s `sections`. */
+  sections: QuizSections;
   /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
@@ -136,6 +139,7 @@ export function RememberBand({
         subMode={toggle}
         blocks={blocks}
         readSoFar={readSoFar}
+        sections={sections}
         onJump={onJump}
         onArrowKeys={onQuizKeys}
       />
@@ -172,6 +176,7 @@ function QuizSubBand({
   subMode,
   blocks,
   readSoFar,
+  sections,
   onJump,
   onArrowKeys,
 }: {
@@ -179,6 +184,7 @@ function QuizSubBand({
   subMode: React.ReactNode;
   blocks: Map<string, string>;
   readSoFar?: ReadSoFar | undefined;
+  sections: QuizSections;
   onJump(id: BlockId): void;
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
@@ -190,6 +196,7 @@ function QuizSubBand({
       subMode={subMode}
       blocks={blocks}
       readSoFar={readSoFar}
+      sections={sections}
       onJump={onJump}
       onArrowKeys={onArrowKeys}
     />

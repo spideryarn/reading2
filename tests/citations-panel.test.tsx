@@ -11,6 +11,7 @@ import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
 import type { BlockId, Citations, CitedWork, Job } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
+import { citePassageKey } from "../src/web/rows.js";
 
 const {
   CAPPED_NOTE,
@@ -22,8 +23,13 @@ const {
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
   CITATION_BAR_DEFAULT,
+  CITING_WORDS_MAX,
   CitationsPanel,
   INFLUENCE_NOTE,
+  citingWordsOf,
+  quotedCitingWords,
+  byLineOf,
+  shortAuthors,
   canPrioritise,
   citeReadAssessed,
   citeReadNoExtract,
@@ -201,7 +207,11 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
   };
 }
 
-async function draw(o: UseCitations, bar: number | null = null) {
+async function draw(
+  o: UseCitations,
+  bar: number | null = null,
+  onJump: (id: BlockId, passage?: string) => void = () => {},
+) {
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
@@ -210,7 +220,7 @@ async function draw(o: UseCitations, bar: number | null = null) {
         onOrder: () => {},
         bar,
         onBar: () => {},
-        onJump: () => {},
+        onJump,
       }),
     ),
   );
@@ -570,6 +580,124 @@ describe("CitationsPanel", () => {
     expect(row(CENTRAL.id).querySelector(".cite-first")?.textContent).toContain("first cited");
     expect(row(CENTRAL.id).querySelector(".block-ref")?.textContent).toBe("k3m9qt");
     expect(row(listed.id).querySelector(".cite-first")?.textContent).toContain("only in the references");
+  });
+
+  /* SPIDERYARN-READING2-6J: one paragraph can cite three works, so the row
+     names the words it is cited with, and the jump carries the key that lands
+     the flash on that work's mark rather than the paragraph (plan 260930i). */
+  it("names the citing words and jumps to that work's mark, not the paragraph", async () => {
+    const cited = work({
+      id: "spya-t2v3w4",
+      title: "Shared memories",
+      relevance: 0.9,
+      influence: 0.9,
+      mentions: [{ blockId: FIRST, quote: "TV episodes [8]", start: 40 }],
+    });
+    const jumps: [BlockId, string | undefined][] = [];
+    await draw(owner({ citations: artefact([cited]) }), null, (id, passage) => jumps.push([id, passage]));
+    const link = row(cited.id).querySelector<HTMLAnchorElement>(".cite-first .block-ref");
+    expect(link?.textContent).toBe("“TV episodes [8]”");
+    await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
+    expect(jumps).toEqual([[FIRST, citePassageKey(cited.id)]]);
+  });
+
+  it("keeps the block id when no citing words are in that block", async () => {
+    const viaNote = work({
+      id: "spya-x2y3z4",
+      title: "Via a note",
+      relevance: 0.9,
+      influence: 0.9,
+      mentions: [{ blockId: LATER, quote: "a footnote's words", start: 0 }],
+    });
+    const jumps: [BlockId, string | undefined][] = [];
+    await draw(owner({ citations: artefact([viaNote]) }), null, (id, passage) => jumps.push([id, passage]));
+    const link = row(viaNote.id).querySelector<HTMLAnchorElement>(".cite-first .block-ref");
+    expect(link?.textContent).toBe("k3m9qt");
+    await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
+    expect(jumps).toEqual([[FIRST, undefined]]);
+  });
+});
+
+/* SPIDERYARN-READING2-6K: authors "even if in somewhat truncated form, and
+   also the date", and the entry — journal, conference — behind the by-line. */
+describe("the by-line", () => {
+  it("keeps two names as given and shortens more to the first and et al.", () => {
+    expect(shortAuthors("Tulving")).toBe("Tulving");
+    expect(shortAuthors("Ben-Yakov and Henson")).toBe("Ben-Yakov and Henson");
+    expect(shortAuthors("Porter, Vollrath, Shao")).toBe("Porter et al.");
+    expect(shortAuthors("Chen et al.")).toBe("Chen et al.");
+    expect(shortAuthors("Chen, Leong et al")).toBe("Chen et al.");
+    expect(byLineOf({ authors: "Porter, Vollrath, Shao", year: "2019" })).toBe("Porter et al. · 2019");
+    expect(byLineOf({ year: "2019" })).toBe("2019");
+    expect(byLineOf({})).toBe("");
+  });
+
+  it("draws the short form on the row, and the entry for a screen reader", async () => {
+    const entry = "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals. Nat. Neurosci. 20, 115–125";
+    const listed = work({
+      id: "spya-e2n3t4",
+      title: "Shared memories reveal shared structure in neural activity across individuals",
+      authors: "Chen et al.",
+      year: "2017",
+      entry,
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    const bare = work({ id: "spya-b2r3e4", title: "Bare", authors: "Tulving", year: "1983", relevance: 0.9, influence: 0.9 });
+    await draw(owner({ citations: artefact([listed, bare]) }));
+    const by = row(listed.id).querySelector(".cite-by");
+    expect(by?.classList.contains("cite-by-more")).toBe(true);
+    expect(by?.textContent).toBe(`Chen et al. · 2017 — ${entry}`);
+    expect(by?.querySelector(".sr-only")?.textContent).toBe(` — ${entry}`);
+    const card = await cardFor(by as Element);
+    expect(card.head).toBe("Chen et al. · 2017");
+    expect(card.what).toBe(entry);
+    expect(card.how).toContain("article's own reference list");
+    /* Nothing shortened and no entry: no card, no affordance promising one. */
+    const plain = row(bare.id).querySelector(".cite-by");
+    expect(plain?.textContent).toBe("Tulving · 1983");
+    expect(plain?.classList.contains("cite-by-more")).toBe(false);
+  });
+
+  it("keeps the full author list in the accessibility tree when the visible by-line is shortened", async () => {
+    const listed = work({
+      id: "spya-f2u3l4",
+      title: "Many authors",
+      authors: "Porter, Vollrath, Shao",
+      year: "2019",
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    await draw(owner({ citations: artefact([listed]) }));
+    const by = row(listed.id).querySelector(".cite-by");
+    expect(by?.querySelector(".sr-only")?.textContent).toContain("Porter, Vollrath, Shao");
+  });
+});
+
+describe("quotedCitingWords", () => {
+  it("quotes the words once, even when they are a quoted title already", () => {
+    expect(quotedCitingWords("TV episodes [8]")).toBe("“TV episodes [8]”");
+    expect(quotedCitingWords("“Scaling Hypothesis Revisited”")).toBe("“Scaling Hypothesis Revisited”");
+  });
+});
+
+describe("citingWordsOf", () => {
+  it("keeps a short quote whole", () => {
+    expect(citingWordsOf("TV episodes [8]")).toBe("TV episodes [8]");
+  });
+  it("keeps the end of a long quote that ends in its marker", () => {
+    const q =
+      "simple neural network models to explore how interactions between memory systems can support adaptive behavior (e.g., [16,17])";
+    const out = citingWordsOf(q);
+    expect(out.startsWith("…")).toBe(true);
+    expect(out.endsWith("(e.g., [16,17])")).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(CITING_WORDS_MAX + 1);
+  });
+  it("keeps the start of a long quote that does not", () => {
+    const q = "Tulving (1983) argued that episodic memory is a system distinct from semantic memory in its own right";
+    const out = citingWordsOf(q);
+    expect(out.startsWith("Tulving (1983)")).toBe(true);
+    expect(out.endsWith("…")).toBe(true);
   });
 });
 

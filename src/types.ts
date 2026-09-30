@@ -3834,6 +3834,16 @@ export interface CitedWork {
   influence?: number;
   /** The bibliography / reference-list / note entry, if the article has one. */
   reference?: CitationPlace;
+  /**
+   * **The work's entry as the article gives it**, ≤ 400 characters, whitespace
+   * collapsed — where journal, conference, volume and pages are. Always the
+   * article's own characters, sliced by code: the text of the `reference`
+   * block, or, for a PDF, the entry found in the reference list read from its
+   * text layer (src/citation-reference-list.ts), which is not a block because
+   * stage 2 does not render it. Plan 260930i. Owner-only: `publicCitedWork`
+   * does not name it.
+   */
+  entry?: string;
   /** Where the text cites it, ≤ 3. */
   mentions: CitationPlace[];
   /**
@@ -4095,6 +4105,22 @@ export interface CitationDrops {
    * addresses shows up in a run.
    */
   modelUrls: number;
+  /**
+   * An `entry` the model gave that is not, exactly once, in the PDF's reference
+   * list — dropped, and the row keeps its places (plan 260930i).
+   */
+  entryUnfound: number;
+  /**
+   * An `entry` found in the list whose number is not among its mentions'
+   * bracketed numbers — `[8]` paired with entry 9. Dropped (plan 260930i).
+   */
+  entryMismatch: number;
+  /** An entry whose text does not contain the model's title — the entry is dropped (plan 260930i, Sol F3). */
+  entryDisagrees: number;
+  /** Authors not all found as words of the work's entry — dropped, the entry kept. */
+  authorsUnfound: number;
+  /** A year the work's entry does not carry — dropped, the entry kept. */
+  yearUnfound: number;
 }
 
 /**
