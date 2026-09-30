@@ -20,10 +20,11 @@
  *
  * ## What it shares with `ideas`, and what it does not
  *
- * **The request is Ideas' byte for byte up to the breakpoint** —
+ * **The article block is Ideas' byte for byte up to the breakpoint** —
  * `articleWithIds(meta, blocks.filter(isBodyEvidence))` — and the user message
- * carries the same skeleton, so Ideas' fingerprint is this stage's unchanged
- * (Sol F11: the fingerprint covers exactly the bytes sent). It thinks at
+ * carries the same top-level skeleton. Its own fingerprint hashes those two
+ * rendered strings, so hidden supplement and nested-tree data cannot make a
+ * fresh artefact look stale (Sol F11). It thinks at
  * `medium` rather than `high`, so it shares no cached prefix with that group;
  * the after-import box queues each mode as its own job, which shares nothing
  * anyway.
@@ -34,7 +35,8 @@
  *    `from`**, not `block.text`: `renderedText(block.html)` is the text space
  *    src/web/annotate.ts marks in, and a phrase that occurs once in `block.text`
  *    and twice there is one the prose cannot place (Sol F4). The server gets the
- *    same string from the same html through jsdom — `renderedTextOf` below.
+ *    same string from the same html through jsdom, including the MathML text the
+ *    browser draws before annotation — `renderedTexter` below.
  * 2. **Every rule the prompt states is enforced**, each with a `dropped`
  *    counter (Sol F3). A rule the prompt asks for and the validator does not
  *    check holds until the first time it matters.
@@ -45,6 +47,8 @@
  *    linking. A missing list, or a non-empty one that validation empties, throws.
  */
 
+import { createHash } from "node:crypto";
+
 import type Anthropic from "@anthropic-ai/sdk";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
@@ -53,13 +57,14 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
 import { jsdom } from "./jsdom-lazy.js";
+import { findMathSpans, temmlRenderer, type RenderTex } from "./maths-tex.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import { renderedBlockMathsText } from "./quote-in-block.js";
 import { quoteFinder, quoteFinderWithMultiplicity } from "./quote-match.js";
 import {
-  articleWithIdsFingerprint,
   type BlockFingerprint,
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
@@ -120,16 +125,39 @@ export function answerTokens(cap: number): number {
 }
 
 /**
- * What this artefact was written from — Ideas' fingerprint, unchanged, because
- * the request is Ideas' (Sol F11). The stamp in src/pipeline.ts hands it the
- * real, nullable meta, and so does `generateCrossrefs`.
+ * What this artefact was written from: the exact article and skeleton bytes the
+ * model sees. `articleWithIdsFingerprint` is close, but deliberately hashes
+ * every block and every tree node; this request omits supplements and renders
+ * only `partsOf(tree)`. Hashing those hidden inputs would report a fresh paid
+ * artefact stale (Sol F11).
+ *
+ * The stage instructions have their own `PROMPT_VERSION`; the model has its own
+ * stamp field. This hash owns the two content-bearing request strings.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): string {
-  return articleWithIdsFingerprint(blocks, tree, meta);
+  /* `BlockFingerprint.treatment` is a database string rather than Block's
+     narrower union; the CHECK behind it permits only the same values. */
+  const evidence = blocks.filter((block) => block.treatment !== "supplement");
+  const renderedMeta: Meta = meta
+    ? ({
+        title: meta.title ?? fallbackHeadTitle(tree),
+        ...(meta.byline == null ? {} : { byline: meta.byline }),
+        ...(meta.siteName == null ? {} : { siteName: meta.siteName }),
+        ...(meta.url == null ? {} : { url: meta.url }),
+      } as Meta)
+    : ({ title: fallbackHeadTitle(tree) } as Meta);
+  const request = [
+    articleWithIds(renderedMeta, evidence),
+    renderPrompt({ tree, cap: linkCap(evidence.length) }),
+  ];
+  return createHash("sha256")
+    .update(`spya-crossrefs-input/1\n${JSON.stringify(request)}`, "utf8")
+    .digest("hex")
+    .slice(0, 16);
 }
 
 /** Does this artefact still describe the article, tree and metadata? */
@@ -173,6 +201,8 @@ export function buildCrossrefs(
     sourceHash: string;
     elapsedMs: number;
     dropped: CrossrefsDropped;
+    /** The browser's TeX renderer, present when this article contains maths. */
+    renderMaths?: RenderTex;
   },
 ): Crossrefs {
   if (!Array.isArray(parsed.links)) {
@@ -182,7 +212,7 @@ export function buildCrossrefs(
     );
   }
   const d = opts.dropped;
-  const links = toLinks(parsed.links, opts.blocks, d);
+  const links = toLinks(parsed.links, opts.blocks, d, opts.renderMaths);
   if (parsed.links.length > 0 && links.length === 0) {
     throw new Error(
       `The model named ${parsed.links.length} links and none of them could be kept, so there ` +
@@ -234,10 +264,11 @@ function words(phrase: string): number {
 
 /**
  * **The rendered text of a block** — what `renderedText` in
- * src/web/annotate.ts returns for the same html, computed the same way: a
- * detached `<div>` given the html as `innerHTML`, and its `textContent`. That
- * function builds its host with the browser's `document`; this one builds it
- * with jsdom's, once per call of the returned function's owner.
+ * src/web/annotate.ts returns for the html the reader receives. Ordinarily that
+ * is a detached `<div>` given the stored html as `innerHTML`, then its
+ * `textContent`. On a maths article the browser first replaces eligible TeX
+ * spans with MathML, so this goes through `renderedBlockMathsText`, the existing
+ * server half of that exact browser transform.
  *
  * **Not imported from annotate.ts**, which is a client module that reaches for
  * the global `document`; and not moved into a shared leaf, because a leaf the
@@ -246,9 +277,10 @@ function words(phrase: string): number {
  * `quoteFinderWithMultiplicity(…, "spaced")` in src/quote-match.ts, which both
  * sides import.
  */
-function renderedTexter(): (html: string) => string {
+function renderedTexter(renderMaths?: RenderTex): (html: string) => string {
   let host: HTMLElement | null = null;
   return (html) => {
+    if (renderMaths) return renderedBlockMathsText(html, renderMaths);
     if (host === null) {
       const { JSDOM } = jsdom();
       host = new JSDOM("").window.document.createElement("div");
@@ -267,6 +299,7 @@ export function toLinks(
   raw: readonly unknown[],
   blocks: readonly Block[],
   dropped: CrossrefsDropped,
+  renderMaths?: RenderTex,
 ): Crossref[] {
   const position = new Map<BlockId, number>();
   for (const [i, b] of blocks.entries()) position.set(b.id, i);
@@ -274,7 +307,7 @@ export function toLinks(
      could only have invented. */
   const evidence = blocks.filter(isBodyEvidence);
   const byId = new Map<string, Block>(evidence.map((b) => [b.id as string, b]));
-  const rendered = renderedTexter();
+  const rendered = renderedTexter(renderMaths);
   /* One reduced haystack per block, however many links start there. */
   const finders = new Map<
     string,
@@ -492,6 +525,14 @@ export async function generateCrossrefs(opts: {
   const answer = answerTokens(cap);
   const started = Date.now();
   const maxTokens = budgetFor("crossrefs", answer);
+  /* The reading view draws maths before annotations are located. Reuse the
+     server half of that transform only on articles that can take the slow path,
+     and load temml before spending the model call. */
+  let renderMaths: RenderTex | undefined;
+  if (evidence.some((block) => findMathSpans(block.text).length > 0)) {
+    const { default: temml } = await import("temml");
+    renderMaths = temmlRenderer(temml);
+  }
 
   let message: Anthropic.Message;
   try {
@@ -561,6 +602,7 @@ export async function generateCrossrefs(opts: {
     sourceHash,
     elapsedMs: Date.now() - started,
     dropped,
+    ...(renderMaths ? { renderMaths } : {}),
   });
 
   /* Nothing is written here — the caller writes through the store. */
@@ -577,4 +619,3 @@ export async function generateCrossrefs(opts: {
     elapsedMs: Date.now() - started,
   };
 }
-

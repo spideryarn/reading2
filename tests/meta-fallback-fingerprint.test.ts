@@ -354,9 +354,9 @@ describe("an article with no metadata", () => {
   });
 
   it("crossrefs: hashes the absent metadata, and still sends a head", async () => {
-    /* The fifth stage of this shape, plan 260930f. Its head must be Ideas' byte
-       for byte, so the property is the same one against the same fingerprint. */
-    const { generateCrossrefs } = await import("../src/crossrefs.js");
+    /* The fifth stage of this shape, plan 260930f. Its article head must be
+       Ideas' byte for byte, while its own hash covers the full rendered request. */
+    const { generateCrossrefs, inputFingerprint } = await import("../src/crossrefs.js");
     const block = quotable(withoutMeta.blocks);
     const at = withoutMeta.blocks.indexOf(block);
     const to = withoutMeta.blocks.find((_, i) => Math.abs(i - at) > 1);
@@ -369,7 +369,7 @@ describe("an article with no metadata", () => {
 
     expect(run.crossrefs.links).toHaveLength(1);
     expect(run.crossrefs.sourceHash).toBe(
-      articleWithIdsFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
+      inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
     );
     expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));
   });

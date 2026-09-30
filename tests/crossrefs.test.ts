@@ -14,7 +14,6 @@ import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
-import { articleWithIdsFingerprint } from "../src/source-hash.js";
 import { SHAPE } from "../src/store/artifacts.js";
 import type { Block, CrossrefsDropped } from "../src/types.js";
 import {
@@ -24,6 +23,7 @@ import {
   buildCrossrefs,
   emptyDropped,
   generateCrossrefs,
+  inputFingerprint,
   linkCap,
 } from "../src/crossrefs.js";
 import { STAGE_EFFORT } from "../src/models.js";
@@ -142,6 +142,59 @@ describe("every rule in the table is enforced, each with its counter", () => {
     const out = build([link(ABSTRACT.id, "Reduced Recall by 38%", RESULT_A.id)], d);
     expect(out.links).toEqual([{ from: ABSTRACT.id, phrase: "reduced recall by 38%", to: RESULT_A.id }]);
     expect(d).toEqual(emptyDropped());
+  });
+
+  it("matches decoded entities and phrases split across inline markup", () => {
+    const marked = block(
+      ABSTRACT.id,
+      "We found reduced recall by 38% & a lasting change.",
+      "<p>We found <em>reduced recall</em> by 38% &amp; a lasting change.</p>",
+    );
+    const d = emptyDropped();
+    const out = buildCrossrefs(
+      { links: [link(marked.id, "Reduced recall by 38% & a lasting", RESULT_A.id)] },
+      {
+        slug: "marked",
+        blocks: blocks.map((b) => (b.id === marked.id ? marked : b)),
+        sourceHash: "h",
+        elapsedMs: 1,
+        dropped: d,
+      },
+    );
+
+    expect(out.links).toEqual([
+      { from: marked.id, phrase: "reduced recall by 38% & a lasting", to: RESULT_A.id },
+    ]);
+    expect(d).toEqual(emptyDropped());
+  });
+
+  it("does not invent spacing for a line break the DOM does not put in textContent", () => {
+    const broken = block(
+      ABSTRACT.id,
+      "We found reduced recall by 38% in older adults.",
+      "<p>We found reduced recall<br>by 38% in older adults.</p>",
+    );
+    const d = emptyDropped();
+    const out = buildCrossrefs(
+      {
+        links: [
+          link(DISCUSSION.id, "the second experiment showed", RESULT_B.id),
+          link(broken.id, "reduced recall by 38%", RESULT_A.id),
+        ],
+      },
+      {
+        slug: "line-break",
+        blocks: blocks.map((b) => (b.id === broken.id ? broken : b)),
+        sourceHash: "h",
+        elapsedMs: 1,
+        dropped: d,
+      },
+    );
+
+    expect(out.links).toEqual([
+      { from: DISCUSSION.id, phrase: "the second experiment showed", to: RESULT_B.id },
+    ]);
+    expect(d.unquoted).toBe(1);
   });
 
   it("drops a `from` or `to` that is not a block of this article's body → unknownIds", () => {
@@ -355,7 +408,48 @@ beforeAll(async () => {
 });
 
 describe("the request", () => {
-  it("sends Ideas' article bytes and fingerprint, at medium effort, under its own task", async () => {
+  it("does not stale when only supplement or nested-tree data the request omits changes", () => {
+    const changed = blocks.map((b) =>
+      b.id === NOTE.id ? { ...b, text: "A different funding note the model is never shown." } : b,
+    );
+    const changedTree = structuredClone(example.tree);
+    const nested = Object.values(changedTree.nodes).find((node) => node.depth === 2);
+    if (!nested) throw new Error("fixture needs a nested node");
+    nested.title = "A hidden nested title";
+
+    expect(inputFingerprint(changed, example.tree, example.meta)).toBe(
+      inputFingerprint(blocks, example.tree, example.meta),
+    );
+    expect(inputFingerprint(blocks, changedTree, example.meta)).toBe(
+      inputFingerprint(blocks, example.tree, example.meta),
+    );
+  });
+
+  it("validates against the maths text the browser will render, not the stored TeX", async () => {
+    const maths = block(
+      DISCUSSION.id,
+      String.raw`The \(x^2\) result supports the claim.`,
+      String.raw`<p>The \(x^2\) result supports the claim.</p>`,
+    );
+    const article: Article = {
+      ...example,
+      slug: "maths-crossref",
+      blocks: blocks.map((b) => (b.id === DISCUSSION.id ? maths : b)),
+    };
+    answer = JSON.stringify({
+      links: [
+        GOOD,
+        link(maths.id, String.raw`the \(x^2\) result`, RESULT_A.id),
+      ],
+    });
+
+    const run = await generateCrossrefs({ article });
+
+    expect(run.crossrefs.links).toEqual([GOOD]);
+    expect(run.dropped.unquoted).toBe(1);
+  });
+
+  it("sends Ideas' article bytes and an exact request fingerprint, at medium effort, under its own task", async () => {
     const article: Article = { ...example, meta: null };
     answer = JSON.stringify({ links: [] });
     const run = await generateCrossrefs({ article, cacheArticle: true });
@@ -375,7 +469,7 @@ describe("the request", () => {
     expect(body.output_config.effort).toBe("medium");
     expect(STAGE_EFFORT.crossrefs).toBe("medium");
 
-    expect(run.crossrefs.sourceHash).toBe(articleWithIdsFingerprint(article.blocks, article.tree, null));
+    expect(run.crossrefs.sourceHash).toBe(inputFingerprint(article.blocks, article.tree, null));
     expect(run.crossrefs.links).toEqual([]);
   });
 });

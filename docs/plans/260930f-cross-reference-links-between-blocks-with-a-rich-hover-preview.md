@@ -51,9 +51,10 @@ they have no band. **In v1 only the article's owner sees them**; visitors wait o
 Ideas is the template, not Quotes. Ideas has the model name block ids, which it then validates. A
 cross-ref needs two ids, and Quotes never names one.
 
-**The input.** It sends exactly what Ideas sends: `articleWithIds` plus the tree. Section names
-are what tell the model where the Results and Methods are, and sending the same input means Ideas'
-fingerprint can be reused unchanged (Sol F11: the fingerprint must cover exactly the bytes sent).
+**The input.** Its article block is exactly what Ideas sends: `articleWithIds` over body blocks.
+The user message adds only the top-level part titles and gists, which tell the model where the
+Results and Methods are. Its fingerprint therefore hashes those two rendered strings, rather than
+Ideas' broader block-and-tree fingerprint (Sol F11: cover exactly the bytes sent, and no others).
 The call streams internally through `streamMessage` and ends at `finalMessage()`, so the spend is
 recorded and a large budget does not outlive the SDK's non-streaming timeout (F9). Nobody watches
 it line by line, so there is no incremental UI. It gets its own answer estimate for `budgetFor`,
@@ -306,7 +307,7 @@ The verdict was *build with changes*, with 13 findings (F1–F13), all taken:
 - **F2** (P0): the nonce design. The sanitiser half is left for Greg.
 - **F3–F9** (P1): all taken as written.
 - **F10**: `why` dropped.
-- **F11**: Ideas' input and fingerprint reused.
+- **F11**: the two rendered request strings are fingerprinted exactly.
 - **F12**: the inventory above.
 - **F13**: cost marked provisional, and measured.
 

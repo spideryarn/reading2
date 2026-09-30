@@ -161,7 +161,7 @@ Say what the passage says instead: "where mutual information is defined".`;
  */
 export function articleWithIds(
   meta: Meta,
-  blocks: Block[],
+  blocks: readonly Pick<Block, "id" | "text">[],
   identity: ArticleIdentity = "named",
 ): string {
   const body = blocks.map((b) => `${b.id}: ${b.text}`).join("\n\n");

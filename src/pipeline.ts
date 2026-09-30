@@ -4353,9 +4353,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     label: "Linking the article to itself",
     produces: ["crossrefs"],
     /**
-     * Ideas' fingerprint — the blocks, the tree (the skeleton is in the user
-     * message) and the cited head — with the **real, nullable** metadata, which
-     * is what `generateCrossrefs` hashes too. No `profileHash`.
+     * The exact body-only article rendering and top-level skeleton the request
+     * sends, with the **real, nullable** metadata, which is what
+     * `generateCrossrefs` hashes too. No `profileHash`.
      */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);

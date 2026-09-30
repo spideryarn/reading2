@@ -286,7 +286,7 @@ export interface ArticleReader {
 
   /**
    * The cross-references, plus whether they still describe the article — the
-   * cited head and the tree, as `loadFaq`, because the request is Ideas'.
+   * cited head and the top-level skeleton, matching the request's own stamp.
    * **Owner-only in v1**, and there is no public twin (the plan's § Left for
    * Greg). docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
    */

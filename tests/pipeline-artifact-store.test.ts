@@ -251,7 +251,7 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 /* `faq` is `articleWithIdsFingerprint` again, over the body — computed through
    its own module for the same reason. */
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
-/* `crossrefs` is Ideas' fingerprint, through its own module for the same reason. */
+/* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
 const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);
 /* `tweets` joined these on 2026-09-29: `tweets/5` sends `articleWithIds` so
    each post can name its passages, and its fingerprint moved with the head

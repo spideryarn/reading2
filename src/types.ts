@@ -2871,8 +2871,8 @@ export type StepName =
      `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
   | "citations"
   /* **Links between the article's own blocks** — a phrase in one block that
-     refers to what another shows in detail. Ideas' request, byte for byte up to
-     the breakpoint, at `medium` effort: so it IS an `ArticleStage`, and it
+     refers to what another shows in detail. Ideas' article block, byte for byte
+     up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`, and it
      shares a cached prefix with nothing, because no other `ids` stage thinks at
      `medium`. Not a mode: the links sit in the prose in every mode.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
@@ -4484,7 +4484,7 @@ export interface Crossrefs {
   version: string;
   generator: string;
   slug: string;
-  /** `articleWithIdsFingerprint` over the blocks, the tree and the cited head — Ideas' input. */
+  /** A hash of the body-only article rendering and top-level skeleton actually sent. */
   sourceHash: string;
   /**
    * In document order of `from`, then of the phrase within it. **An empty list

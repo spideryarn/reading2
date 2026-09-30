@@ -861,8 +861,8 @@ export const articleRevisions = spideryarn.table(
      * written by the `crossrefs` step.
      * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      *
-     * The WHOLE artefact, like its neighbours. `sourceHash` is Ideas'
-     * `articleWithIdsFingerprint` over the blocks, the tree and the cited head.
+     * The WHOLE artefact, like its neighbours. `sourceHash` covers the exact
+     * body-only article rendering and top-level skeleton the request sends.
      * No `profileHash`, and no foreign key from a link's two block ids to
      * `revision_blocks`, on the argument its neighbours make.
      */

@@ -567,7 +567,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
-    /* Ideas' request, so the same columns as `faq`. */
+    /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
@@ -588,7 +588,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
-    /* Ideas' request, so the same columns as `faq`. */
+    /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
@@ -609,7 +609,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
-    /* Ideas' request, so the same columns as `faq`. */
+    /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
@@ -669,7 +669,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
-    /* Ideas' request, so the same columns as `faq`. */
+    /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
@@ -721,7 +721,7 @@ const REVISION_READ_POLICY: Record<
     citations: "value",
     /* `faq` hashes the outline too: the skeleton is in its user message. */
     faq: "value",
-    /* Ideas' request, so the same columns as `faq`. */
+    /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
@@ -1229,7 +1229,7 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     ...CITED_FINGERPRINT_COLUMNS,
   },
-  /* The cited set, like `ideas` and `faq`: the same request, byte for byte. */
+  /* The cited head and tree its own exact-request fingerprint needs. */
   crossrefs: {
     id: articleRevisions.id,
     crossrefs: articleRevisions.crossrefs,
@@ -3085,7 +3085,7 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
-        /* The same shape as `faq`, over the same cited head: Ideas' request. */
+        /* The same stamp shape as `faq`, over its own exact request input. */
         case "crossrefs": {
           const crossrefs = revision.crossrefs as Crossrefs | null;
           if (!crossrefs || !tree || blocks.length === 0) return false;
@@ -3540,7 +3540,7 @@ const rawPgArticleReader: ArticleReader = {
   /**
    * The cross-references on their own — the Postgres half of `loadCrossrefs`.
    *
-   * The cited head and the tree, like `loadFaq`, because it is Ideas' request.
+   * The cited head and the tree used by its exact-request fingerprint.
    * **A 404 is the ordinary case** (the step is off `DEFAULT_INGEST_STEPS`); an
    * EMPTY list is a 200. **Owner-only**: there is no public twin in v1 —
    * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
