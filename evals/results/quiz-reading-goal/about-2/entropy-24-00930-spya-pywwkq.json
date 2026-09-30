@@ -1,0 +1,282 @@
+{
+  "arm": "about-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": null,
+  "about": "A computational neuroscientist who runs multi-electrode array recordings.",
+  "at": "2026-09-30T17:19:00.501Z",
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 7,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 7,
+    "gaps": 7
+  },
+  "questions": [
+    {
+      "question": "What were the two historical limitations that hindered the study of information processing in neural circuits?",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "One of the two historical limitations was a lack of appropriate data for inferring multivariate dependence.",
+      "question": "What technological advance largely resolved this data limitation?",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "question": "What does mutual information measure when applied to the spiking of two neurons?",
+      "evidence": [
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information cannot capture directed information flow between neurons.",
+      "question": "What does transfer entropy add that mutual information lacks?",
+      "evidence": [
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Understanding how neurons combine multiple inputs requires going beyond information transfer.",
+      "question": "What inequality shows that the total joint mutual information from multiple source neurons need not equal the sum of their individual mutual informations with the target?",
+      "evidence": [
+        "spya-h5dz45"
+      ]
+    },
+    {
+      "premise": "When the whole exceeds the sum of the parts, the system shows synergy.",
+      "question": "In the two-parent case, what four components does PID decompose the joint mutual information into?",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "Solving the two-parent case requires defining a redundancy function, since the equations alone are underdetermined.",
+      "question": "For cases with three or more parent neurons, what mathematical structure does the general PID framework use to decompose the joint mutual information into distinct information atoms?",
+      "evidence": [
+        "spya-m37w5y"
+      ]
+    },
+    {
+      "premise": "The lattice-based decomposition depends on choosing a redundancy function to define each information atom.",
+      "question": "Why is there no single universally accepted redundancy measure for PID?",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "Triads were defined using transfer entropy networks from cortical culture recordings.",
+      "question": "How did synergy relate to the feedforward transfer entropy in these triads?",
+      "evidence": [
+        "spya-kqkb58"
+      ]
+    },
+    {
+      "premise": "Rich club triads showed much higher synergy than triads outside the rich club.",
+      "question": "How did the number of recurrent connections between source neurons, versus feedback connections from the target, relate to synergy in a triad?",
+      "evidence": [
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "premise": "Recurrent connectivity between source neurons boosted synergy, while feedback connections did not.",
+      "question": "At short, synaptic-range timescales, how did synergy relate to the mutual information (similarity) between the two source neurons' activity?",
+      "evidence": [
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "premise": "At short timescales, synergy rose together with the similarity of source neuron activity.",
+      "question": "What happened to synergy as the timescale was lengthened well past the synaptic range, and what took over as correlation kept increasing?",
+      "evidence": [
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "premise": "One caveat was that cortical culture recordings might not reflect processing in a behaving animal.",
+      "question": "In the macaque study of pre-motor and motor regions, what happened to the balance of synergy and redundancy during movement execution?",
+      "evidence": [
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "premise": "Computing joint probability distributions is central to PID and grows harder with more neurons.",
+      "question": "Why does analyzing PID for large numbers of simultaneously recorded neurons quickly become impractical?",
+      "evidence": [
+        "spya-tz99zn",
+        "spya-aby2dp"
+      ]
+    }
+  ]
+}

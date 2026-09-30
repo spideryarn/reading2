@@ -85,14 +85,33 @@
  * attempts. **Nothing may call `readBaseline` for this kind**, because there is
  * no `BASELINE` row for it and that function throws for a kind with none.
  *
- * ## No profile in v1
+ * ## The profile: read, but not stamped or recorded
  *
- * Stated rather than defaulted into. There is a real argument for one — how
- * hard a question is depends on who is reading, which is the argument `ideas`
- * accepted — and it is deferred because it costs six more touchpoints and makes
- * every quiz stale the moment somebody edits their profile. Adding it later
- * needs no migration, since `profileHash` is a field on a JSON artefact. Write
- * the path for a well-read non-specialist first.
+ * Until 2026-09-30 the quiz ignored the profile. Greg, SPIDERYARN-READING2-6Q:
+ * *"if I've said I want to understand their methods, most of the questions
+ * should be about the methods, not an even spread across the paper."* So the
+ * rendered profile the job already carries is handed to the prompt, in its own
+ * section (`readerSection`) rather than the shared `profileSection`, because
+ * the shared one promises the profile changes nothing about the article's
+ * proportions and here the proportions are the point.
+ *
+ * Three things it deliberately does not do, each Greg's or forced:
+ *
+ * - **Not in the stamp.** Changing your goal does not make a quiz stale or
+ *   rewrite one; *Write them again* is a forced run and resolves the profile at
+ *   the press. Greg: *"no automatic regeneration needed for v1."*
+ * - **No `profileHash` on the artefact.** `ProfileCarrying` in src/store/pg.ts
+ *   is derived from every artefact type with one, so the field would put the
+ *   quiz in the owner's *make public* dialog as personalised — about a mode a
+ *   visitor never sees. It arrives with the label that would read it.
+ * - **The whole profile, not the purpose alone.** `Job.profile` is one rendered
+ *   string; carrying the purpose separately is the six touchpoints this
+ *   header used to warn about. The prompt confines the *About the reader* line
+ *   to assumed vocabulary, never which parts it asks about. And not
+ *   `PROFILE_RULES` either: they let the profile govern "which things you spend
+ *   words on", which is exactly what the About line must not do here.
+ *
+ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -776,7 +795,41 @@ gets a short path, and that is a correct answer. Do not pad: a padded question
 is a question about nothing, which is worse than one fewer step.
 
 Cover the piece. The takeaways usually draw on all of it, so the path should
-too; do not spend half the steps on its first third.
+too; do not spend half the steps on its first third. (Unless the reader has
+said why they are reading — below.)
+
+IF THE READER HAS SAID WHY THEY ARE READING
+
+Some requests end with a note about the reader: perhaps a line about who they
+are, perhaps a line saying why they are reading this piece. Most carry neither,
+and then none of this applies. When there is a reason for reading:
+
+- IT DECIDES WHERE THE PATH GOES. Choose the takeaways that matter for that
+  reason, and spend most of the questions on the parts of the piece that bear on
+  it. A reader who came for the methods gets a path mostly about the methods,
+  not an even spread across the piece.
+- IT IS STILL A PATH. Start with what the piece plainly says and lean each step
+  on the one before. A few early steps may set up what the later ones need —
+  what was studied, what the author is arguing against — so that the steps
+  about the reason have something to lean on.
+- IT NEVER CHANGES WHAT THE ARTICLE SAYS. Every question is about the subject,
+  answered by the article, anchored in its words. The reason changes which parts
+  you ask about, never what the piece says about them.
+- If the piece has little on the reason, set the path you would have set
+  anyway, and never say so.
+- ONLY THE REASON FOR READING MOVES THE PATH. A line about who they are may
+  change the vocabulary you assume and the least context a question needs to
+  say what it is asking about — never which parts of the piece you ask about,
+  which takeaways you head for, and never enough to answer the question. With a
+  line about who they are and no reason for reading, set the ordinary path.
+- Never address the reader, and never say or hint that a reason was given — in
+  a question, a premise or a reference answer. Nothing is asked "because" of it.
+  The subjects the reason names are ordinary words: use them wherever the
+  article does.
+
+    BAD   QUESTION  Since you came for the methods: how did the authors
+                    measure synergy?
+    GOOD  QUESTION  How did the authors measure synergy?
 
 ${plainWords("ask", "explain")}
 
@@ -811,12 +864,16 @@ line break inside a string either.`;
  * exactly the judgement the takeaways at the end of the path depend on.
  * It is also why this stage's freshness hash covers the tree.
  *
- * **Nothing about the reader goes in here**, and nothing about the call: the
- * article part above carries the cache breakpoint, and this stage shares that
- * prefix with `ideas`, `sketch` and `timeline` (`ARTICLE_RENDERER` in
- * src/models.ts).
+ * **The reader goes here and nowhere earlier.** The article part above carries
+ * the cache breakpoint, and this stage shares that prefix with `ideas`,
+ * `sketch` and `timeline` (`ARTICLE_RENDERER` in src/models.ts), so the one
+ * thing that varies per reader is in this, the last part.
+ *
+ * With no profile the output is byte-for-byte what it was before the reader
+ * arrived — Greg's *"the same as today when there isn't"*, which
+ * tests/profile-prompts.test.ts asks of the bytes.
  */
-export function renderPrompt(opts: { tree: Tree }): string {
+export function renderPrompt(opts: { tree: Tree; profile: string | null }): string {
   const skeleton = partsOf(opts.tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
@@ -825,7 +882,29 @@ export function renderPrompt(opts: { tree: Tree }): string {
 
 === ITS SHAPE ===
 
-${skeleton}`;
+${skeleton}${readerSection(opts.profile)}`;
+}
+
+/**
+ * The profile, for this stage — **not `profileSection`**, whose reminder says
+ * the profile changes nothing about the article's proportions. Here a reason
+ * for reading is meant to change exactly that; the binding rules are in
+ * `QUIZ_SYSTEM` § IF THE READER HAS SAID WHY THEY ARE READING, where the
+ * profile cannot reach them. Empty — not a heading over nothing — when there is
+ * no profile, for the reason `renderProfile` gives.
+ */
+function readerSection(profile: string | null): string {
+  if (!profile) return "";
+  return `
+
+=== WHY THIS READER IS HERE ===
+
+${profile}
+
+If a reason for reading is given above, aim the path at the takeaways that
+matter for it, and spend most of the questions on the parts of the piece that
+bear on it; if not, set the ordinary path. Everything is still about what the
+article says. Do not address the reader and do not mention this.`;
 }
 
 /**
@@ -883,6 +962,11 @@ export async function generateQuiz(opts: {
   cacheArticle?: boolean;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts — or
+   * `null`. Frozen on the job when it was posted; see the header.
+   */
+  profile?: string | null;
 }): Promise<QuizRun> {
   const { blocks, tree, meta: articleMeta } = opts.article;
 
@@ -935,7 +1019,7 @@ export async function generateQuiz(opts: {
           },
           { type: "text" as const, text: QUIZ_SYSTEM },
         ],
-        messages: [{ role: "user", content: renderPrompt({ tree }) }],
+        messages: [{ role: "user", content: renderPrompt({ tree, profile: opts.profile ?? null }) }],
       },
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );

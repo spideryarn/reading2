@@ -84,6 +84,7 @@ import { BASELINE, STAMP_SOURCE } from "../src/store/artifacts.js";
 import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import type { Quiz } from "../src/types.js";
+import { renderProfile } from "../src/profile.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
@@ -100,13 +101,16 @@ import type { Quiz } from "../src/types.js";
  */
 const answers: string[] = [];
 let calls = 0;
+/** What each call was sent, whole — so a case can ask what reached the model. */
+const sent: string[] = [];
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
-    streamMessage: () => {
+    streamMessage: (_label: string, params: unknown) => {
       calls++;
+      sent.push(JSON.stringify(params));
       const text = answers.shift();
       if (text === undefined) throw new Error("the stub ran out of scripted answers");
       const message = {
@@ -136,8 +140,9 @@ const SLUG = "noema-mythology-of-conscious-ai";
 let root = "";
 let store: MemoryArtifactStore;
 
-function ctxFor(): StepContext {
+function ctxFor(profile?: string): StepContext {
   return {
+    ...(profile !== undefined ? { profile } : {}),
     power: "standard",
     slug: SLUG,
     report: () => undefined,
@@ -173,9 +178,9 @@ async function script(): Promise<void> {
 }
 
 /** Run the stage for real and write what it produced, exactly as `jobs.ts` does. */
-async function runAndWrite(): Promise<Quiz> {
+async function runAndWrite(profile?: string): Promise<Quiz> {
   await script();
-  const ctx = ctxFor();
+  const ctx = ctxFor(profile);
   const result = await STEPS.quiz.run(ctx, store, nullCheckpointStore());
   /* The stub ran short if anything is left — a silent way for the stage to have
      taken a path this file did not intend. */
@@ -200,6 +205,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   calls = 0;
+  sent.length = 0;
   /* **A fresh store per case, read off the untouched copy of `example/`.** It
      replaces three lines of cleanup — delete `quiz.json`, delete the `steps/`
      markers, put `blocks.json` back — which existed only because the store and
@@ -315,5 +321,52 @@ describe("what the quiz step deliberately does not register", () => {
        409 is what covers the gap it leaves.
        docs/plans/260831al-review-quiz-sub-mode.md. */
     expect(BASELINE.quiz).toBeUndefined();
+  });
+});
+
+/**
+ * **The reader's reason for reading reaches the model** — SPIDERYARN-READING2-6Q,
+ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md. The
+ * job already carries the rendered profile (`POST /api/jobs` resolves it); until
+ * 2026-09-30 this step dropped it on the floor, and nothing would have said so.
+ */
+describe("the reader's reason for reading", () => {
+  const PROFILE = renderProfile({ purpose: "I want to understand their zymurgical methods." })!;
+
+  it("is in what the model is sent when the job carries one", async () => {
+    await runAndWrite(PROFILE);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain("zymurgical methods");
+  });
+
+  it("goes after the article, in the user message, and nowhere in the system part", async () => {
+    /* The article is the first system block and carries the cache breakpoint,
+       shared with ideas, sketch and timeline; a reader's words anywhere in the
+       system part would split that entry per reader. GPT Sol's plan review, 4. */
+    await runAndWrite(PROFILE);
+    const params = JSON.parse(sent[0] ?? "{}") as {
+      system: { text: string }[];
+      messages: { role: string; content: string }[];
+    };
+    for (const part of params.system) expect(part.text).not.toContain("zymurgical");
+    expect(params.messages).toHaveLength(1);
+    expect(params.messages[0]?.content).toContain("zymurgical");
+  });
+
+  it("leaves no trace when the job carries none", async () => {
+    await runAndWrite();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).not.toContain("WHY THIS READER IS HERE");
+    expect(sent[0]).not.toContain("Why they are reading this piece");
+  });
+
+  it("does not make the quiz stale when it changes — no automatic rewrite", async () => {
+    /* Greg: "no automatic regeneration needed for v1" — *Write them again*
+       picks up a new goal. So the profile is not in the stamp. */
+    await runAndWrite(PROFILE);
+    calls = 0;
+    const other = renderProfile({ purpose: "Only the discussion, please." })!;
+    expect(await stepIsDone(STEPS.quiz, ctxFor(other), store)).toBe(true);
+    expect(calls).toBe(0);
   });
 });

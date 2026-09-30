@@ -1,0 +1,319 @@
+{
+  "arm": "none-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": null,
+  "at": "2026-09-30T16:55:46.047Z",
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "questions": [
+    {
+      "question": "What two things did the article say historically limited the study of neural information processing?",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "One limitation was a lack of adequate analytical approaches for interpreting large-scale recordings.",
+      "question": "What framework does this review focus on as a way of addressing that analytical limitation?",
+      "evidence": [
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "question": "What does mutual information measure about the relationship between two neurons' activity?",
+      "evidence": [
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information is an undirected measure of dependence between two neurons, described as functional connectivity.",
+      "question": "How does transfer entropy differ from mutual information in what it captures?",
+      "evidence": [
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Transfer entropy tracks the directed flow of information from one neuron to another.",
+      "question": "Why is measuring information transfer alone not enough to reveal how neurons genuinely process or compute on their inputs?",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Understanding processing requires seeing how the joint state of multiple sources, not just each alone, informs a target's future.",
+      "question": "What does it mean for a system to show synergistic information, in terms of the joint versus summed individual information about a target?",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "Synergy is information only revealed by the sources' joint state, exceeding the sum of their individual contributions.",
+      "question": "What is redundant information, in contrast to synergy?",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "Redundant information is duplicated across sources, while synergistic information is only visible in their joint state.",
+      "question": "In the two-parent case of PID, what is meant by a source's unique information about the target?",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "The two-parent decomposition splits joint mutual information into redundant, unique, and synergistic terms.",
+      "question": "Why can't these redundant, unique, and synergistic terms be uniquely determined just from the known mutual information values, even in the two-parent case?",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "Even with two parents, solving for the partial information terms requires choosing a definition of redundancy.",
+      "question": "Why does extending PID to three or more parent neurons require a more complex mathematical framework than the two-parent case?",
+      "evidence": [
+        "spya-q9gytb"
+      ]
+    },
+    {
+      "question": "In the mouse cortical culture study, what steps were taken to identify and analyze computational triads?",
+      "evidence": [
+        "spya-sw5ukx"
+      ]
+    },
+    {
+      "premise": "Thousands of source-source-target triads were extracted and analyzed with PID in the cortical culture recordings.",
+      "question": "What relationship was found between synergy and the amount of feedforward information transfer (transfer entropy) across these triads?",
+      "evidence": [
+        "spya-kqkb58"
+      ]
+    },
+    {
+      "question": "What defines a 'rich club' among the recorded cortical neurons, in terms of information propagation?",
+      "evidence": [
+        "spya-bftp48"
+      ]
+    },
+    {
+      "premise": "Rich clubs are small sets of highly connected neurons that carry a disproportionate share of information propagation.",
+      "question": "How much greater was synergy in triads located inside rich clubs compared to those outside, and how much of the network's total synergy came from rich club triads?",
+      "evidence": [
+        "spya-fud8q3",
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "premise": "Rich club triads carry disproportionately high synergy, prompting a closer look at what connectivity patterns drive this.",
+      "question": "How did the number of recurrent connections (between the two source neurons) versus feedback connections (from target back to sources) relate to synergy in a triad?",
+      "evidence": [
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "question": "How did synergy relate to the similarity (mutual information) between the two source neurons' spiking activity across different timescales?",
+      "evidence": [
+        "spya-hkhpex",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "question": "In the behaving-primate study, what happened to the balance between redundancy and synergy during movement execution?",
+      "evidence": [
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "question": "What two caveats did the authors raise about the cortical culture PID findings?",
+      "evidence": [
+        "spya-j4cy9j",
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "question": "Why does applying PID to systems with many neurons run into practical sampling problems?",
+      "evidence": [
+        "spya-tz99zn"
+      ]
+    },
+    {
+      "premise": "Synergy has been shown to concentrate in rich clubs, recurrent connections, correlated inputs, and to shift with behavioral demands.",
+      "question": "According to the authors' summary, what does the widespread presence of synergy across these findings suggest about how neurons process their inputs?",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    }
+  ]
+}

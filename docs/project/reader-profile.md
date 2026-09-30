@@ -117,11 +117,20 @@ article never changes. [prompt-caching.md](prompt-caching.md) records the same m
 | `converse` | user message 2, breakpoint on it | the final user message, with the question |
 | `glossary` | `system[0]`, breakpoint on it | the user message |
 | `tweets` | `system[0]`, breakpoint on it | the user message |
+| `quiz` | `system[0]`, breakpoint on it | the user message, after the skeleton |
 | `summarise` | the user prompt — not cached, on purpose | near the top, with the other framing |
 
 The positioning rule inside the varying part is one rule, not two: **the thing the model must
 actually do goes last.** So chat and explain put the profile before the question; the batch stages
 put it near the top with the other framing.
+
+**The quiz reads it differently from every other stage** (since 2026-09-30, Greg's
+SPIDERYARN-READING2-6Q): a reason for reading is meant to change the *proportions* — *"if I've said I
+want to understand their methods, most of the questions should be about the methods"* — which is
+what `profileSection`'s reminder and `PROFILE_RULES` both hold the other stages back from. So the
+quiz carries neither; it has its own section and its own rules, and the *About you* half moves only
+the vocabulary a question assumes, never which parts it asks about.
+[quiz.md § Shaped by why you are reading](quiz.md#shaped-by-why-you-are-reading).
 
 **Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
 [the one structure](granularity-zoom.md#the-tree) that Structure, the zoom, the summaries and the spine

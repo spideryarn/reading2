@@ -3641,12 +3641,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * skeleton before the article, so re-cutting the sections changes the
      * question being asked while every block stays byte-identical.
      *
-     * **And no `profileHash`**, like `timeline` and unlike `ideas` and
-     * `sketch`. There is a real argument for one — how hard a question is
-     * depends on who is reading — and it was deferred rather than overlooked,
-     * with the six touchpoints it would cost written down in the plan. Adding
-     * it later needs no migration, because `profileHash` is a field on the JSON
-     * artefact. docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+     * **And no `profileHash`**, unlike `ideas` and `sketch`, although since
+     * 2026-09-30 the prompt reads the profile: a reader's goal shapes the path,
+     * and changing the goal must not rewrite the quiz behind them — *Write them
+     * again* is how a new goal is picked up (Greg, SPIDERYARN-READING2-6Q).
+     * src/quiz.ts § The profile.
      */
     stamp: async (ctx, store) => {
       /* `tryReadArticle`, where `run` below takes `readArticle` — the same
@@ -3676,6 +3675,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         power: ctx.power,
         cacheArticle: ctx.cacheArticle,
+        profile: ctx.profile ?? null,
       });
       const questions = run.quiz.questions;
       plog.info(
@@ -3689,6 +3689,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           cacheWriteTokens: run.cacheWriteTokens,
           ms: run.elapsedMs,
           questions: questions.length,
+          /* The profile's LENGTH, never the profile — it is the reader's own
+             words. docs/project/logging.md. */
+          profileChars: ctx.profile?.length ?? 0,
           /* **How much of the path leans on what came before, and where it
              broke.** `premised` counts the steps carrying a premise — a
              path with none is a list again, which is the failure the premise

@@ -319,6 +319,45 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
   reading time off there is no tick-box at all.
 - The tick-box is per visit, not remembered.
 
+## Shaped by why you are reading
+
+Greg, 2026-09-30 (SPIDERYARN-READING2-6Q):
+
+> If the reader has told us why they're reading this article (the "Why are you reading this?"
+> prompt from spya-esua8w), the quiz questions should be shaped around that goal. For example, if
+> I've said I want to understand their methods, most of the questions should be about the methods,
+> not an even spread across the paper.
+>
+> Keep it simple: one batch per article as now, written with the owner's goal when there is one,
+> and the same as today when there isn't. […] If the reader changes their goal, the existing "Write
+> them again" can pick up the new one; no automatic regeneration needed for v1.
+
+The goal is the article's *Why you're reading this one* ([reader-profile.md](reader-profile.md)),
+asked on the add page and in Trajectory. The quiz job already carried it — `POST /api/jobs` freezes
+the rendered profile onto every job — and the stage now hands it to the prompt. With a reason, the
+path heads for the takeaways that matter for it and spends most of its steps on the parts that bear
+on it; it is still a path, still anchored, and never says a reason was given. With none, the prompt
+is byte-for-byte what it was (`tests/profile-prompts.test.ts`). The plan and its measurement are
+[260930j](../plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md).
+
+- **Not the shared profile machinery.** `profileSection` promises the profile changes *"nothing
+  about its proportions"*, and `PROFILE_RULES` lets it govern what words are spent on; the quiz needs
+  the first broken for the goal and the second kept from the *About you* line. So it has its own
+  section and rules in [`src/quiz.ts`](../../src/quiz.ts), and *About you* moves only the vocabulary
+  a question assumes. The job carries both halves as one string; carrying the purpose alone would be
+  a second field on every job, and was passed over for v1.
+- **Not in the stamp, and no `profileHash`.** Changing your goal never rewrites a quiz; *Write them
+  again* is a forced run and picks up the goal at the press. A `profileHash` would put the quiz in
+  the *make public* dialog as personalised (`ProfileCarrying`, src/store/pg.ts) though visitors
+  never see a quiz. It arrives with the label that would read it.
+- **`quiz/5` was not bumped**, so a stored quiz is not marked outdated by this; goal-aware
+  generation arrived inside version 5 and reaches only quizzes written from now on.
+- **Which jobs carry the goal.** Every quiz the reading view or Metadata asks for. Not a CLI run
+  (`scripts/stage.ts` posts no profile), and a Retry reuses the failed job's own snapshot. A shelf
+  read that fails is swallowed and the quiz is written without the goal, as for every profiled mode.
+- **Visitors never see a quiz** (it is not in the public page's modes), which is why one batch per
+  article can be the owner's. If that changes, visitors get a generic batch then.
+
 ## What is deliberately not here
 
 - **Attempts are not stored.** A reload starts fresh. `batchId` is the shape that keeps the door
@@ -326,8 +365,9 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
   path, the position in it and the hidden verdict are React state and die with the attempt, and the
   verdict is not written to a log either — a per-answer right/wrong on a log line is a stored grade
   wearing a different hat, and [privacy.md](privacy.md) makes a public promise about it.
-- **No reader profile in the stamp**, so no `profileChanged` on the response. Adding one later needs
-  no migration — it would be a field on the JSON.
+- **No reader profile in the stamp**, so no `profileChanged` on the response, although the prompt
+  reads the profile since 2026-09-30 (above). Adding one later needs no migration — it would be a
+  field on the JSON.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,
   above.
 - **No spoken quizzing.** Greg asked for it — *"ideally this would work well with Live Dialogue
@@ -337,6 +377,7 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
 - **The questions do not know what you already said in Recall.** Also Greg's, also deferred: *"it
   should ideally/eventually take into account if the user has provided a freeform brain dump of what
   they remember"*. That wants a per-reader batch, which wants the profile in the stamp.
+- **No "written for: …" line** in the band, like Trajectory's *Reading for*. Greg: keep it simple.
 
 ## See also
 

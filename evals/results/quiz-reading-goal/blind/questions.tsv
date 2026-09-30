@@ -1,0 +1,112 @@
+1	Why is there no single universally accepted redundancy measure for PID?
+2	What extra ingredient must be supplied to fully solve for the four partial information components?
+3	How does the article distinguish what mutual information versus transfer entropy represent in terms of circuit connectivity?
+4	What property must a redundancy function have in order to be used for time-resolved, local decomposition rather than only average values?
+5	What analytical framework does the article present as resolving the analytical limitation?
+6	At short, synaptic-range timescales, how did synergy relate to the mutual information (similarity) between the two source neurons' activity?
+7	At short, synaptic-range timescales, how did the similarity between two source neurons' spiking activity relate to the synergy they produced?
+8	What does mutual information measure about the relationship between two neurons' spiking?
+9	Why does the amount of data needed for an information-theoretic analysis grow so quickly as more neurons are included?
+10	How did the number of recurrent connections between two source neurons relate to the synergy in a triad?
+11	At short, synaptic-range timescales, how did synergy relate to the similarity (mutual information) between two source neurons' spiking?
+12	In the two-parent PID example, what four pieces of information are needed to decompose how the sources jointly inform the target?
+13	Why does extending the decomposition from two source neurons to three or more make the analysis substantially harder?
+14	What happened to synergy as source-neuron similarity was examined across a wider range of longer timescales?
+15	What technological advance largely resolved this data limitation?
+16	What analytical framework does the article focus on as addressing this second limitation?
+17	What were the two historical limitations that held back the study of information processing in neural circuits?
+18	Why is there no single, universally accepted way to define redundant information for use in this decomposition?
+19	Why does adding a third (or more) source neuron make the general partial information decomposition problem harder to solve?
+20	Beyond sampling problems, what mathematical limitation makes a complete decomposition intractable for a neuron with many parent inputs?
+21	In the macaque motor task study, how did the balance between synergy and redundancy shift during the movement execution phase compared to other phases?
+22	Why can't all four of these partial information quantities be solved for directly from mutual information values alone?
+23	What capability does the SxPID package offer that sets it apart from the other tools discussed?
+24	What does mutual information measure about the spiking activity of two neurons?
+25	Why is measuring information transfer alone not enough to reveal how neurons genuinely process or compute on their inputs?
+26	If a researcher must discretize continuous data for this kind of analysis, what does the article recommend to avoid distorting the results?
+27	Why is information transfer, such as transfer entropy, not enough to reveal how neurons genuinely process or combine information from multiple sources?
+28	Why is the two-parent PID system described as 'underdetermined', and what resolves it?
+29	In the macaque study of pre-motor and motor regions, what happened to the balance of synergy and redundancy during movement execution?
+30	How did the number of recurrent connections between source neurons, versus feedback connections from the target, relate to synergy in a triad?
+31	Why does extending PID to three or more parent neurons require the more elaborate partial information lattice machinery?
+32	What does mutual information measure when applied to the spiking of two neurons?
+33	What second limitation remained even after large-scale recordings became available?
+34	What caveat did the authors raise about using bivariate transfer entropy networks to select the triads that were later analyzed with partial information decomposition?
+35	In that macaque study, how did the balance of synergy versus redundancy shift during movement execution compared to other task phases?
+36	What systematic bias appears when entropy and mutual information are estimated from a finite dataset that does not have enough samples for this many configurations?
+37	What caveat did the authors raise about building the functional networks for these in vitro studies using bivariate transfer entropy?
+38	Even when the decomposition successfully identifies which neurons show synergistic versus redundant dynamics, what does it fail to provide?
+39	In partial information decomposition, what does it mean when the joint information two sources provide about a target exceeds the sum of what each provides alone?
+40	Why does the type of data (discrete versus continuous) matter when choosing a redundancy measure for a new dataset?
+41	Which software toolbox offers the widest range of redundancy functions, and what extra step does it require if applied to time-series recordings?
+42	What happened to synergy as the timescale was lengthened well past the synaptic range, and what took over as correlation kept increasing?
+43	How did feedback connections, from the target back to the source neurons, relate to synergy?
+44	What happened to synergy as the timescale lengthened and source similarity kept increasing well beyond the synaptic range?
+45	What does transfer entropy add that mutual information lacks?
+46	What property must a chosen redundancy function have for this kind of local, time-resolved analysis to be possible at all?
+47	Why can't these redundant, unique, and synergistic terms be uniquely determined just from the known mutual information values, even in the two-parent case?
+48	In partial information decomposition, what is synergistic information?
+49	What is redundant information, in contrast to synergy?
+50	How did synergy relate to the similarity (mutual information) between the two source neurons' spiking activity across different timescales?
+51	Why does extending PID to three or more parent neurons require a more complex mathematical framework than the two-parent case?
+52	What is redundant information, in contrast to synergy?
+53	What framework does this review focus on as a way of addressing that analytical limitation?
+54	In the behaving-primate study, what happened to the balance between redundancy and synergy during movement execution?
+55	How many distinct information components exist for a target with six parent neurons, and what does this illustrate?
+56	In the mouse cortical culture study, what steps were taken to identify and analyze computational triads?
+57	What does transfer entropy add that mutual information lacks?
+58	What were the two historical limitations that hindered the study of information processing in neural circuits?
+59	How did synergy relate to the feedforward transfer entropy in these triads?
+60	What does transfer entropy add that lets it quantify directed information flow?
+61	Which package instead lets researchers work directly on time-series recordings and includes built-in tools for both decomposition and transfer entropy inference?
+62	What inequality shows that the total joint mutual information from multiple source neurons need not equal the sum of their individual mutual informations with the target?
+63	Why is tracking information flow alone not enough to reveal how neurons process information?
+64	What does 'synergistic information' mean in the two-source partial information decomposition?
+65	What defines a 'rich club' among the recorded cortical neurons, in terms of information propagation?
+66	According to the authors' summary, what does the widespread presence of synergy across these findings suggest about how neurons process their inputs?
+67	How does transfer entropy differ from mutual information in what it captures?
+68	What does the multi-target generalization of PID, called integrated information decomposition, allow that classic single-target PID cannot?
+69	Why is picking which redundancy formula to use a genuine difficulty for someone applying this method?
+70	What overall conclusion do the authors draw from the existence of statistical synergy about how neurons handle their inputs?
+71	Why is mutual information unable to quantify information transfer between neurons?
+72	Why does applying PID to systems with many neurons run into practical sampling problems?
+73	How much greater was synergy in triads located inside rich clubs compared to those outside, and how much of the network's total synergy came from rich club triads?
+74	What does mutual information measure between two neurons?
+75	Why does analyzing PID for large numbers of simultaneously recorded neurons quickly become impractical?
+76	What two caveats did the authors raise about the cortical culture PID findings?
+77	In the organotypic mouse cortical culture recordings, how did synergy in rich-club triads compare to triads outside the rich club?
+78	In the two-parent case of PID, what is meant by a source's unique information about the target?
+79	What is synergistic information in the PID decomposition of two sources and a target?
+80	What technological development helped overcome this data limitation?
+81	What systematic bias affects naive entropy and mutual information estimates when computed from a finite dataset?
+82	What does it mean for a system to show synergistic information, in terms of the joint versus summed individual information about a target?
+83	Even when partial information decomposition reliably detects statistical synergy, what does it fail to explain about that synergy?
+84	What new capability does 'local' PID offer that the standard, expected-value version of PID does not?
+85	According to the article's summary, what does the widespread presence of synergy in neural data reveal about how neurons behave?
+86	In the two-parent case, what four components does PID decompose the joint mutual information into?
+87	What caveat did the authors themselves raise about the transfer-entropy networks used to identify the triads analyzed in their cortical culture studies?
+88	How did the number of recurrent connections (between the two source neurons) versus feedback connections (from target back to sources) relate to synergy in a triad?
+89	Besides the explosive growth of the information lattice, what estimation problem limits PID and other information-theoretic analyses when data are limited?
+90	What makes a fully complete PID description of a neuron with many inputs practically impossible?
+91	What problem does the article warn about when discretizing continuous neural data, such as local field potentials, into too many bins for a PID analysis?
+92	For cases with three or more parent neurons, what mathematical structure does the general PID framework use to decompose the joint mutual information into distinct information atoms?
+93	What limitation does the MATLAB-based Neuroscience Information Theory Toolbox have compared to these Python options?
+94	What kind of technological advance did the article say resolved the data limitation?
+95	Why can a measure of information flow like transfer entropy, on its own, not show how a neuron actually processes or combines information from multiple sources?
+96	Why does the article say transfer entropy alone is insufficient to explain information processing?
+97	Beyond feedforward strength, what connectivity feature of a triad was found to further increase synergy, and which feature tended to slightly decrease it?
+98	What does transfer entropy add beyond what mutual information tells us?
+99	How does the IDTxl package differ from DIT in what kind of data it can work with directly?
+100	In contrast, what is redundant information in this framework?
+101	What does mutual information measure about the relationship between two neurons' activity?
+102	What relationship was found between synergy and the amount of feedforward information transfer (transfer entropy) across these triads?
+103	What new kind of analysis does the multi-target extension called integrated information decomposition allow, beyond what classic single-target decomposition can do?
+104	Before recent recording technology, what data-related limitation held back the study of how neural circuits process information?
+105	Why is it mathematically impossible to solve for the redundant, unique, and synergistic terms just from the known mutual information values, without extra assumptions?
+106	What two historical limitations does the article say hindered the study of information processing in neural circuits?
+107	Why is the system of equations relating the mutual information values to these four components underdetermined in the two-source case?
+108	In the mouse cortical culture recordings, where did synergy concentrate within the neural network?
+109	Why does the amount of data needed for a reliable analysis explode as more interacting neurons or variables are included?
+110	What limitation does the DIT software toolbox have regarding both the size of systems it can solve and the type of data it accepts?
+111	What two things did the article say historically limited the study of neural information processing?
+112	What compromise do researchers have to make when working with non-normal continuous neural data, such as local field potentials, given the available redundancy functions?

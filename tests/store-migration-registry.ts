@@ -704,6 +704,14 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the whole of its filesystem contact. Arrived 2026-09-05 with the parameter, which replaced " +
       "three callers setting `VERCEL=1` to make one `if` go the other way.",
   },
+  "tests/quiz-job-carries-the-reading-goal.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    reason:
+      "`POST /api/jobs` for a quiz freezes this article's `purpose` onto the job row " +
+      "(SPIDERYARN-READING2-6Q). The purpose and the job both live only in Postgres; the " +
+      "seeder is the whole of its filesystem contact.",
+  },
   "tests/enqueue-owns-the-article.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2629,6 +2637,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/draft-sweep-on-step-start.test.ts": "private-postgres",
   "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
+  "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
   /* The first inbound rate limiter, and the lane follows from what it
