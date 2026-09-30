@@ -127,6 +127,11 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
         .catch((e: Error) => {
           // An abort is this hook working, not a failure to report.
           if (e.name === "AbortError") return;
+          // A failed answer can escape an abort too. It belongs to the same
+          // query and archive scope as a successful one, so do not let an old
+          // failure replace newer results (plan 260930d code review).
+          if (current.current.query.trim() !== trimmed) return;
+          if (current.current.includeArchived !== includeArchived) return;
           setState({ ...IDLE, error: e.message, asked: true });
         });
     }, DEBOUNCE_MS);

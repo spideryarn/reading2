@@ -453,7 +453,7 @@ export function PrivacyPage() {
       {/* **The third false claim, and the worst of them.** The page said
           "delete an article and it goes". The button calls `shelf.archive`
           (ShelfEntry.tsx), which sets `archived_at` and destroys nothing — the
-          article is restorable under "Show archived" and every artefact stays.
+          article is restorable under "Include archived" and every artefact stays.
           GPT Sol found it by reading the button rather than the sentence, which
           is the only way it could have been found.
 
@@ -526,10 +526,10 @@ export function PrivacyPage() {
 
       <Section title="Deleting things">
         <p>
-          The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
-          article off the shelf and out of your library search, and you can bring it back at any
-          time: turn on “Include archived” beside the search box, and archived articles are listed
-          and searched too. Nothing is destroyed, and your notes on it are still there.
+          The <strong className="tw:text-foreground">Archive</strong> button moves an article to the
+          archive, which your shelf and library search hide by default. Turn on “Include archived”
+          beside the search box and archived articles are listed and searched too; you can put one
+          back at any time. Nothing is destroyed, and your notes on it are still there.
         </p>
         <p>
           If you want an article actually gone,{" "}

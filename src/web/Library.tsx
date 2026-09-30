@@ -980,7 +980,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
               e.currentTarget.blur();
             }
           }}
-          placeholder="Search titles, authors, and the text of every article"
+          placeholder="Search titles, authors, and article text"
           aria-label="Search the library"
           /* A ring as well as a border colour on focus. A 1px border changing
              from grey to orange is about one pixel's worth of colour on a
@@ -1055,7 +1055,7 @@ function Passages({
   if (state.hits.length === 0) {
     return (
       <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
-        Nothing in the text of any article matches “{query.trim()}”.
+        Nothing in the articles' text matches “{query.trim()}”.
         {/* Said once, here, at the end of the search's two answers. Greg
             searched for an article he had just archived, found nothing, and
             could not tell whether that was the archive or the search
@@ -1088,7 +1088,8 @@ function Passages({
     return (
       <section className="tw:mt-8">
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          Nothing in an unopened article matches “{query.trim()}”.
+          Nothing in an unopened article's text matches “{query.trim()}”.
+          {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
         </p>
         {alsoIn}
       </section>
@@ -1210,7 +1211,7 @@ function marked(text: string, query: string) {
 /* ------------------------------------------------------------- archived --- */
 
 /**
- * **What the archive is doing, while the Archived chip is on** — one quiet
+ * **What the archive is doing, while Include archived is on** — one quiet
  * line under the controls, and only when there is something to say.
  *
  * The archived articles themselves are not drawn here any more. Until plan
@@ -1244,7 +1245,7 @@ function ArchiveStatus({
   let text: string | null = null;
   if (archived === null) {
     text = failed
-      ? "Couldn't load the archived articles. Turn Archived off and on to try again."
+      ? "Couldn't load the archived articles. Turn Include archived off and on to try again."
       : "Loading archived…";
   } else if (archived.length === 0 && saysEmpty) {
     text = "Nothing archived.";

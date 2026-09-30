@@ -736,7 +736,7 @@ export interface LibrarySearch {
   /**
    * @param query what the reader typed, raw. Each adapter parses it its own way.
    * @param limit the most hits to return. The caller says whether the answer was cut.
-   * @param opts see `LibrarySearchOptions`. Absent means the whole library.
+   * @param opts see `LibrarySearchOptions`. Absent means all active articles.
    */
   searchLibrary(
     query: string,

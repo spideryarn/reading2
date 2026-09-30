@@ -56,6 +56,8 @@ let activeGate: Promise<void> | null;
 let activeFails: boolean;
 /** Hold the active-only passage search back, for the stale-response race. */
 let searchGate: Promise<void> | null;
+/** Make the held active-only passage search fail after it is released. */
+let searchFails: boolean;
 /** The stale-while-revalidate first paint, when a test needs one. */
 let cached: LibraryEntry[] | null;
 
@@ -112,6 +114,7 @@ vi.mock("../src/web/lib/api.js", () => ({
       const query = params.get("q") ?? "";
       const withArchive = params.get("archived") === "1";
       if (!withArchive && searchGate) await searchGate;
+      if (!withArchive && searchFails) return json({ error: "old search failed" }, 500);
       const hits =
         withArchive && query === "zibble"
           ? [{ slug: "delta", title: "Delta", blockId: "spya-k3m9qt", text: "a zibble in Delta", rank: 1, archived: true }]
@@ -174,6 +177,7 @@ beforeEach(() => {
   activeFails = false;
   cached = null;
   searchGate = null;
+  searchFails = false;
   /* Titles that interleave, so "sorted with everything else" is visible:
      by title, A (active) B (archived) C (active) D (archived). */
   active = [entry("alpha", "Alpha"), entry("charlie", "Charlie")];
@@ -523,7 +527,7 @@ describe("the Archived chip", () => {
 
   it("says the archive was not searched when off and nothing matched", async () => {
     await show("/?q=zibble");
-    const line = () => [...host.querySelectorAll("p")].find((p) => p.textContent?.startsWith("Nothing in the text"));
+    const line = () => [...host.querySelectorAll("p")].find((p) => p.textContent?.includes("Archived articles aren't searched"));
     await waitFor(() => !!line(), "the nothing-found line");
     expect(asked).toContain("GET /api/library/search?q=zibble");
     expect(line()?.textContent).toContain("turn on Include archived");
@@ -559,5 +563,24 @@ describe("the Archived chip", () => {
     release();
     await settle(150);
     expect(passage(), "the late empty answer did not repaint the list").toBeTruthy();
+  });
+
+  it("drops a late active-only failure that lands after the chip was pressed", async () => {
+    let release!: () => void;
+    searchGate = new Promise((r) => {
+      release = r;
+    });
+    searchFails = true;
+    await show("/?q=zibble");
+    await waitFor(() => asked.includes("GET /api/library/search?q=zibble"), "the first, held search");
+    const chip = archivedChip();
+    if (!chip) throw new Error("no chip");
+    click(chip);
+    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
+    await waitFor(() => !!passage(), "the archived passage");
+    release();
+    await settle(150);
+    expect(passage(), "the late failure did not replace the newer results").toBeTruthy();
+    expect(host.textContent).not.toContain("Couldn't search the text");
   });
 });

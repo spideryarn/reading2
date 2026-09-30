@@ -12,7 +12,7 @@ Report: SPIDERYARN-READING2-72, from Greg (admin), 2026-09-30, on `/?archived=1`
 >
 > — Greg, 2026-09-30
 
-**Status:** built (one stage); code review pending.
+**Status:** built and reviewed (one stage); on `dev`, not deployed.
 
 ## Root cause
 
@@ -80,6 +80,16 @@ It agreed with the root cause. What changed because of it:
 - **Important-doc gate (P1)** — not taken: `library.md` and `shelf-terms.md` are not among the seven
   entry points or `docs/reusable/`, so the before-and-after approval does not apply to them.
 - **Unread while the archive loads (P2)** — deferred, below.
+
+## Code review (GPT Sol, 2026-09-30)
+
+[code-review-sol](260930d-shelf-search-finds-archived-articles-and-the-archived-chip-says-include-code-review-sol.md).
+No P0. It fixed a P1 — a failed active-only answer escaping the abort could still replace the newer
+archived results; the error path now checks the same two halves of the question, with a test that
+went red without it — and changed copy that still said "every article", an unconditional "out of
+library search", or "turn Archived off" (Library, Metadata, Privacy, the shelf's tooltips). Two of
+its wordings were reworded afterwards to plainer ones ("Nothing in the articles' text matches …",
+placeholder "Search titles, authors, and article text"). The Unread limitation stays deferred.
 
 ## Simpler option passed over
 
