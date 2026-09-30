@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  availableOrders,
   canPrioritise,
   defaultView,
   effectiveOrder,
@@ -108,5 +109,49 @@ describe("the FAQ's compound", () => {
   it("starts the bar low enough to let most questions in", () => {
     expect(FAQ_BAR_DEFAULT).toBeGreaterThan(0);
     expect(FAQ_BAR_DEFAULT).toBeLessThanOrEqual(0.2);
+  });
+});
+
+/* SPIDERYARN-READING2-67: sort by either score the prioritised order is built
+   from, as the Glossary sorts by `hardest` and `most central`. Plan 260930d. */
+describe("the single-score orders", () => {
+  const broad = { id: "broad", difficulty: 0.1, centrality: 0.9 };
+  const dense = { id: "dense", difficulty: 0.9, centrality: 0.5 };
+  const mid = { id: "mid", difficulty: 0.5, centrality: 0.5 };
+  const partial = { id: "partial", centrality: 0.2 };
+
+  it("puts the most central first, ties in reading order, a missing score last", () => {
+    expect(orderQuestions([bare("x"), dense, broad, mid], "centrality").map((q) => q.id)).toEqual([
+      "broad",
+      "dense",
+      "mid",
+      "x",
+    ]);
+  });
+
+  it("puts the hardest first, and a question with no difficulty after every one that has one", () => {
+    expect(orderQuestions([partial, mid, broad, dense], "difficulty").map((q) => q.id)).toEqual([
+      "dense",
+      "mid",
+      "broad",
+      "partial",
+    ]);
+  });
+
+  it("hides nothing, whatever the bar says", () => {
+    expect(orderQuestions([broad, dense, mid], "centrality", 0.99)).toHaveLength(3);
+    expect(orderQuestions([broad, dense, mid], "difficulty", 0.99)).toHaveLength(3);
+  });
+
+  it("falls back to reading order when no question carries the score", () => {
+    expect(effectiveOrder([bare("x"), bare("y")], "centrality")).toBe("document");
+    expect(effectiveOrder([bare("x"), partial], "difficulty")).toBe("document");
+    expect(effectiveOrder([bare("x"), partial], "centrality")).toBe("centrality");
+  });
+
+  it("offers each order only when there is something for it to do", () => {
+    expect(availableOrders([bare("x"), bare("y")])).toEqual([]);
+    expect(availableOrders([partial, bare("y")])).toEqual(["document", "centrality"]);
+    expect(availableOrders([broad, dense])).toEqual(["prioritised", "document", "centrality", "difficulty"]);
   });
 });

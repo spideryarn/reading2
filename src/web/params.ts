@@ -630,11 +630,13 @@ export const citeBarParam = createParser<number>({
 /**
  * **How the FAQ is ordered** — `?faqby=`, since 2026-09-29. `prioritised` is
  * the default: what survives the bar, the most central and approachable
- * questions first; `document` is reading order, the order the FAQ had before.
+ * questions first; `document` is reading order, the order the FAQ had before;
+ * `centrality` and `difficulty` (since 2026-09-30, SPIDERYARN-READING2-67) are
+ * the two scores the prioritised order is built from, each highest first.
  * src/web/faq-order.ts; docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
  * `push` and an unknown value falls back to the default, as `?citeby=`.
  */
-export const FAQ_ORDERS = ["prioritised", "document"] as const satisfies readonly FaqOrder[];
+export const FAQ_ORDERS = ["prioritised", "document", "centrality", "difficulty"] as const satisfies readonly FaqOrder[];
 /* And the other way: every `FaqOrder` is in the list, or this line stops compiling. */
 const _everyFaqOrderListed: Exclude<FaqOrder, (typeof FAQ_ORDERS)[number]> extends never ? true : never = true;
 void _everyFaqOrderListed;

@@ -48,9 +48,9 @@
   gap: 0.25rem;
   min-width: 0;
 }
-/* The count and the profile badge, at the far end of the sort row since
-   2026-09-29, when the head row they used to sit in went (GlossaryPanel.tsx).
-   `margin-left: auto` pushes them right, and they wrap as one piece. */
+/* The trailing detail at the far end of a sort row: the Glossary's count and
+   profile badge, and the FAQ's (i). `margin-left: auto` pushes it right, and
+   multiple contents wrap as one piece. */
 .gloss-sort-trail {
   display: inline-flex;
   align-items: center;
