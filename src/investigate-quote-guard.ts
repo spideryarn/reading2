@@ -6,8 +6,10 @@
  *
  * *Investigate* writes prose from web search extracts, and a quotation from a
  * page the reader has not seen would be shown as the paper's own words with
- * nothing checking it. So the prompt allows quotation marks only around the
- * article's own words and the work's title, and this is what holds it to that,
+ * nothing checking it. So the prompt forbids quotation marks (plan 260930d),
+ * and this is what holds it to that — letting through only a span it finds in
+ * a text we allow (the article, the work's title, a checked quote), so a
+ * harmless lapse does not stop the answer —
  * **before** the text is sent rather than after — an earlier design checked the
  * finished answer, by which time the reader had watched the unchecked quote
  * arrive (Sol's Q-1, the plan's P0).

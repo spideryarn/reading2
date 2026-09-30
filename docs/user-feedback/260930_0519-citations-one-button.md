@@ -24,5 +24,8 @@ What we did:
 - The cost: about 15¢ a press, 12¢ when the check is skipped. The cheap 3¢ lookup has gone, and so
   has its larger hourly allowance. That is recorded as an assumption in the plan, with a one-line
   fallback (a quiet *Just find it* link) if it turns out to matter.
+- Testing it for real found that *Investigate*'s reading, as shipped for 5Q, was stopped by its own
+  quote check on most presses: the AI kept putting things in quotation marks. It is now told to use
+  none at all. Seven real presses afterwards all finished.
 
 Plan: [260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md).

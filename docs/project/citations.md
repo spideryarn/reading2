@@ -273,9 +273,18 @@ cleared ([`investigate-quote-guard.ts`](../../src/investigate-quote-guard.ts)).
 **What was read is said by code, from what the search returned**: how many results came back with
 an extract, their hosts, and the longest extract in words. It does not say "we did not read the
 paper": the probe found an extract that was most of a PDF. It says *we did not fetch any page
-ourselves; an extract may be an abstract or part of a paper's text*. It names *Look it up*'s
-match only when that page is among this answer's own results. Otherwise it says *we could not confirm
-that any result is this work itself*, and the prompt forbids describing a look-alike as the work.
+ourselves; an extract may be an abstract or part of a paper's text*. Then one identity line, in
+one of three forms: a result is *the page an earlier quick check matched to the work*; an earlier
+quick check *matched a page this search did not return an extract from*; or *we could not confirm
+that any result is this work itself* — and the prompt forbids describing a look-alike as the work.
+"Earlier" is deliberate: the match may come from this press's quick check or a previous one
+(260930d, the C-2 ruling).
+
+**The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
+words and the work's title led the model to quote its own phrases, the paper's terms and result
+titles too, and four of five real calls were stopped by the guard; with none allowed, seven of
+seven finished (260930d). The guard still lets through a span it finds in the article or a checked
+quote, so a harmless lapse does not stop an answer.
 
 **Kept, private, and hidden when out of date.** One row per work in `citation_investigations`,
 replaced by a second press. It is attached to an owner row only while its fingerprint matches.
@@ -287,7 +296,7 @@ earlier answer in place, and the row says so.
 **Bounded** by its own allowance bucket, `citation-investigate`: one at a time, 8 an hour and 20 a
 day per reader, and 55 a day across everyone. These numbers come from the probe: $0.12 a press on
 average and $0.15 at worst, budgeted at $0.30, plus the quick check's ~3¢ since the two were merged
-— 55 × $0.33 is about $18, under a $20-a-day ceiling. Exa is pinned, with 8
+and a 3,000-token answer ceiling — 55 × about $0.345 is about $19, under a $20-a-day ceiling. Exa is pinned, with 8
 results of at most 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)).
 It is the `citation-investigate` job on the gateway.
 

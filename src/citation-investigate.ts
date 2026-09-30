@@ -137,7 +137,8 @@ export const ANSWER_TOKENS = 3_000;
  * $0.120 a press on average, $0.153 worst, budgeted at $0.30 for the longest
  * articles. A reader gets 20 a day, 8 an hour, one at a time. Since plan
  * 260930d a press may run *Look it up* first (about 3¢ more, $0.33 at worst),
- * so the global fuse is 55 (about $18) and the lease is both deadlines plus a
+ * and the answer ceiling is 3,000 tokens (≤ 1.5¢ more), about $0.345 at worst —
+ * so the global fuse is 55 (about $19) and the lease is both deadlines plus a
  * margin, so a process that dies mid-press frees its slot soon after.
  */
 export const INVESTIGATE_RATE_POLICY: RatePolicy = {
@@ -175,10 +176,12 @@ function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
 /**
  * The system prompt — developed from the probe's draft
  * (scripts/probes/260930a-investigate-prompt.ts), fixing what the probe found:
- * two of six answers claimed the full text and one opened with "I"; quotation
- * marks are now allowed only round the article's own words and the work's
- * title (and *Look it up*'s verified quotes when given), and block quotes are
- * named, because the guard stops the answer at anything else.
+ * two of six answers claimed the full text and one opened with "I". Since plan
+ * 260930d it **forbids quotation marks outright**: allowing them round the
+ * article's words and the work's title led the model to quote its own phrases,
+ * the paper's terms and result titles too, and 4 of 5 real calls were stopped.
+ * The guard keeps its allowlist of checked texts as a fallback, so harmless
+ * non-compliance (the article's own words in quotes) does not stop an answer.
  *
  * **Constant**, so it sits in the cached prefix: everything that varies — the
  * work, the match, the profile — is in the second user part.

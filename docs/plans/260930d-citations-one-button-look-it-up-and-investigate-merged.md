@@ -1,6 +1,6 @@
 # Citations: one button — *Look it up* and *Investigate* merged
 
-Status: **planned 2026-09-30; plan review adopted (§ Review log, which overrides the body); not built.** Feedback report SPIDERYARN-READING2-75 (`spya-mbgnwh`),
+Status: **shipped to `dev` 2026-09-30, not deployed.** Plan review adopted (§ Review log, which overrides the body); code reviewed by GPT Sol; C-2 overruled with Opus; a browser check and a real-call reproduction changed the prompt. Feedback report SPIDERYARN-READING2-75 (`spya-mbgnwh`),
 from Greg, relayed by the Overseer; sent 2026-09-30 05:19 from production `a522ba8c`, on
 `dongetal25-spya-vfmvmm` in Citations mode:
 
@@ -160,3 +160,7 @@ A *Just find it* link (above). Reading the paper itself stays 5G's proposed stag
   article cost 4–6¢ against 13–15¢ for the first, so the article cache now hits between presses —
   the follow-up 260930a left open. This bears on 5Q as well: *Investigate* as shipped this morning
   would have been stopped on most presses.
+- **Narrow re-check of the post-review changes** —
+  [260930d-citations-one-button-recheck-sol.md](260930d-citations-one-button-recheck-sol.md):
+  *land*, three P3 wording fixes (stale quote-contract comments, citations.md's provenance
+  branches, the budget arithmetic now ~$19 at the 3,000-token ceiling), all applied.
