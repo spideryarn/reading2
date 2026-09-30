@@ -1,6 +1,6 @@
 # Quiz questions that build up to the takeaways
 
-**Status: built; landing.** Plan reviewed twice by GPT Sol (round 1 "do not build", round 2 "build
+**Status: shipped on `dev`, 2026-09-30.** Plan reviewed twice by GPT Sol (round 1 "do not build", round 2 "build
 with the listed fixes"), code reviewed twice (round 2 "do not ship" on a token budget that outlived the
 job claim — fixed, § What the measurements said), browser-checked on the box. Written 2026-09-30 in `worktree-quiz-build-up`, from
 [SPIDERYARN-READING2-5W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5W) (report
@@ -309,3 +309,29 @@ nothing" and the backward-pointer ban, with examples, and the eval's *alone* jud
 adopted: the eval refuses a new arm without its token and budget fields; the three older arms show
 a dash. The `after` arm was restarted on the revised prompt; a half-run on the round-1 prompt was
 stopped and discarded.
+
+**Code review round 1** ([review](260930c-quiz-questions-that-build-up-to-the-takeaways-code-review-sol.md);
+write-capable): C1 (a replaced batch's verdict could be recorded into the new one) and C2 (the
+retired `[quiz-spread]` code) fixed red-first by the reviewer and committed; W1 (P1, dense-paper
+premises) got the "context is not a premise" rule; W3 adopted; W2 (the source pack silently omits a
+cited block no longer in the article, and is not bound to the generating revision) noted, not
+fixed — the eval reads the local database read-only, and the five articles did not change during
+the run.
+
+**Code review round 2** ([review](260930c-quiz-questions-that-build-up-to-the-takeaways-code-review-sol-2.md)):
+"do not ship" on D1 (P1, a 78k ceiling outliving the 740 s claim) — fixed as above; D2 moot once
+the custom room went. Sol judged the residual dense-paper premise drift acceptable to ship, named.
+[Narrow check of the D1 fix](260930c-quiz-questions-that-build-up-to-the-takeaways-code-review-sol-3.md):
+fixed.
+
+**Browser check** (Sonnet subagent, Playwright on the box, this worktree's own dev server): all six
+checks passed at 1280 and 390 wide — the linear walk, the premise line, stems-only list, the premise
+hidden after a right answer then Next, no difficulty words, no JS errors. One oddity noticed in a
+mark: a stray code-styled chip reading `cvyfqe`, which looks like a block id rendered by
+`CitedText`; the marking prompt and renderer are untouched here, so it is left for a separate look.
+
+**Landing gates**, after merging `origin/dev`: typecheck exit 0; the full suite 1,229 files passed, 3
+failed — `fleet-composed-access`, `fleet-decisions-route` and `fleet-reports-route`, each of which
+starts the fleet server from a build this fresh worktree does not have (the log's own words: *"startFleetChild
+FAILS without a build"*), unrelated to this change.
+
