@@ -1,0 +1,18 @@
+1	PREFER=Y	LOSS=none	Y says the same thing cleanly, while X pastes a quote in awkwardly mid-sentence and pads the answer with outside history.
+2	PREFER=X	LOSS=none	X's "that they are related vs which one influences which" is a crisp preview that fits a signpost sentence; Y is longer and says the same.
+3	PREFER=Y	LOSS=X	Both define it well, but X leaves out the key argumentative point that transfer entropy cannot show how inputs interact, which is the gap PID is brought in to fill.
+4	PREFER=Y	LOSS=none	Y names all three modes and gives the "whole greater than the sum of the parts" intuition, which makes the term easier to grasp than X's abstract definition.
+5	PREFER=tie	LOSS=none	The two answers are nearly identical in content, quotes and clarity.
+6	PREFER=Y	LOSS=none	Y makes the same points more tightly, covering the leftover-after-redundant-and-unique definition and the move from transfer to processing, without X's Figure 1 detour.
+7	PREFER=X	LOSS=none	Both separate computational functionalism from functionalism in general; X does it in less space, and Y's extra paragraph repeats the article at length.
+8	PREFER=Y	LOSS=none	Y's concrete examples (a chatbot waking up, uploading a mind) show plainly why the assumption goes unnoticed, while X drifts into name-dropping outside the article.
+9	PREFER=X	LOSS=Y	Y drops Seth's own hedge that nothing rules out artificial consciousness altogether, and bends his position with "if true, his objections don't apply".
+10	PREFER=X	LOSS=none	X is short and complete; Y's allopoietic tangent adds length without helping the reader with this passage.
+11	PREFER=tie	LOSS=none	The two answers have the same content and the same framing, and are about equally clear.
+12	PREFER=X	LOSS=none	X lays out the two roles autopoiesis plays clearly; Y covers the same ground through heavier strings of stitched quotes.
+13	PREFER=Y	LOSS=none	Y states the trade-off more clearly and adds the sparsity middle ground; X's volume sentence is garbled.
+14	PREFER=Y	LOSS=none	The selection is only a byline, so Y's short framing serves the reader; X spends a paragraph on an encyclopedia-style biography.
+15	PREFER=X	LOSS=none	X covers the mechanism, the trade-off and the sparsity reconciliation in readable prose, where Y dumps long raw quotes with LaTeX in them (X's trade-off sentence is a little garbled).
+16	PREFER=tie	LOSS=none	Both give the same one-thing-per-neuron definition and the same contrast with polysemantic neurons.
+17	PREFER=X	LOSS=none	X explains both terms clearly and maps the next two codes to composition and superposition; Y's inserted quote about 4 neurons is less to the point.
+18	PREFER=X	LOSS=none	X is more concise and covers the baseline-anchor role; Y adds true but extra detail on how the local code reads out.

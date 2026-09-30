@@ -1,0 +1,18 @@
+1	PREFER=tie	LOSS=none	Both explain directed flow vs mutual information and its role before PID; X slightly crisper on "directed", Y adds the autocorrelation detail, neither loses anything.
+2	PREFER=X	LOSS=none	X explains the two tools plainly and says why they fall short (the gap PID fills); Y's "table of contents" framing and jargon-heavy MI quote are harder going but cover the same ground.
+3	PREFER=Y	LOSS=X	Y gives the core reason TE matters (it tracks flow but cannot show how sources interact, the gap PID fills) despite some needless side notes; X covers the empirical role well but leaves out that conceptual limitation.
+4	PREFER=tie	LOSS=none	Both define synergy as the joint-only surplus; X has a concrete example, Y previews the structural findings, both adequate.
+5	PREFER=tie	LOSS=none	Near-identical explanations of redundant/unique/synergistic and why synergy is the focus.
+6	PREFER=X	LOSS=none	X covers definition, processing-vs-transfer and the stakes more compactly; Y says the same at greater length with more quotation.
+7	PREFER=tie	LOSS=none	Same definition, stakes, four arguments and the functionalism distinction in both; different order only.
+8	PREFER=Y	LOSS=X	Y cleanly separates functionalism-in-general from the computational version and stays on the selection; X's outside-the-article paragraph blurs computational functionalism with functionalism generally before correcting itself.
+9	PREFER=X	LOSS=Y	Same content, but X is better paced and keeps Seth's caveat that artificial consciousness is not ruled out altogether, which Y omits.
+10	PREFER=tie	LOSS=none	Both define self-production and tie it to the brain-vs-computer contrast; X stresses do/are inseparability, Y adds the allopoietic contrast.
+11	PREFER=tie	LOSS=none	Very similar; both give the origin, the neuron example and the link to the anti-computer argument.
+12	PREFER=tie	LOSS=none	Both give the two jobs autopoiesis does (resisting the software/hardware split, linking life to consciousness).
+13	PREFER=X	LOSS=none	X states the dense-code example, the linear-readout cost and the composition trade-off more plainly; Y adds the semi-distributed nuance and a Toy Models aside at the cost of ease.
+14	PREFER=X	LOSS=Y	X tells the reader what the note's thesis is (distributed representations split into composition vs superposition); Y gives only the author bio and informal-note framing and explicitly skips what the title's terms mean.
+15	PREFER=X	LOSS=none	Both give the definition, the volume argument and the interpretability stakes; X reads more easily, Y is denser.
+16	PREFER=tie	LOSS=none	Both define one-neuron-one-meaning and the contrast with polysemantic; Y ties it to superposition, X to the wider interpretability puzzle.
+17	PREFER=tie	LOSS=none	Both explain monosemantic and why the local code has no superposition, and set it up as the baseline.
+18	PREFER=Y	LOSS=none	Y shows how composition keeps one-meaning-per-neuron while superposition gives it up, which makes the baseline's role clearer; X is adequate.

@@ -443,8 +443,9 @@ WHAT IT MUST NOT DO
 
 - Do not summarise the article unless the reader asks you to. They are reading it.
 - Do not praise or grade the writing.
-- Do not pad. Two or three short paragraphs is usually right; one is often
-  better.
+- Do not pad. One or two short paragraphs is usually right, and one is often
+  enough. Most answers need fewer than 300 words. Go longer when they ask for
+  more, such as a summary.
 - Do not open with "Great question" or restate the question back.
 
 YOUR TOOLS
@@ -767,9 +768,9 @@ THREE THINGS GOVERN A REPLY, AND THEY RANK IN THIS ORDER:
 
 LENGTH
 
-Short. Two or three paragraphs. A Signposts reply is three or four lines. If you
-are writing a fourth paragraph you have started explaining the article instead of
-helping them read it.
+Short. One or two paragraphs, three at most. A Signposts reply is three or four
+lines. If you are writing a fourth paragraph you have started explaining the
+article instead of helping them read it.
 
 YOUR TOOLS
 
@@ -1197,6 +1198,7 @@ export function buildConverseMessages(opts: {
   const teach = helpSection(opts.help ?? false);
   const how = stanceLine(kind, opts.stance);
   const marked = provenanceLine(kind);
+  const brief = lengthLine(kind);
   return [
     { role: "system", content: systemFor(kind) },
     {
@@ -1221,7 +1223,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, about, teach, how, marked, opts.question]
+      content: [position, who, about, teach, how, marked, brief, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -1253,6 +1255,27 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
 function provenanceLine(kind: ThreadKind): string {
   if (kind !== "chat") return "";
   return `Mark where each claim came from, as WHERE EACH CLAIM CAME FROM says: a block id for the article; a link for a page you found this turn; name the saved article for the reader's library; "The article doesn't say so, but…" for remembered background; and "My inference is…" for your reasoning. A specific fact from elsewhere is linked or called unverified.`;
+}
+
+/**
+ * **One line, beside the question, pointing back at chat's length rule** —
+ * the same lever as `provenanceLine` above, for the same reason. Greg asked for
+ * chat answers "a little bit briefer" (SPIDERYARN-READING2-6X). Tightening the
+ * rule in `SYSTEM` alone moved Explain's answers by about 15% and chat's by no
+ * more than two runs of the old prompt differ: chat kept to fewer paragraphs
+ * and made each one longer, and a word budget in `SYSTEM` did no better. Chat's
+ * rule sits ahead of a whole article; Explain's is the same distance away and
+ * worked, so the difference is not distance alone, but recency is the lever
+ * this file already found works on chat.
+ * docs/plans/260930g-briefer-chat-and-explain-answers.md.
+ *
+ * Chat only, below the breakpoint, and free of the words
+ * tests/help-prompt.test.ts forbids in a help turn's final message.
+ * tests/chat-length-line.test.ts.
+ */
+function lengthLine(kind: ThreadKind): string {
+  if (kind !== "chat") return "";
+  return "Keep it brief, as WHAT IT MUST NOT DO says: most answers need fewer than 300 words, unless they ask for more.";
 }
 
 /**
@@ -1852,7 +1875,7 @@ export async function* converse({
          `finish_reason: "length"` with **not one character of text** after 4,550
          output tokens — the whole budget spent thinking, on a question whose
          honest answer is ten to twenty people with a source apiece and a JSON
-         block underneath. Four thousand is right for "two or three short
+         block underneath. Four thousand is right for "one or two short
          paragraphs", which is what chat's FORMAT section asks for and is not
          what this prompt asks for at all. */
       max_tokens: kind === "candidates" ? 12_000 : 4000,
