@@ -57,14 +57,22 @@ says why) returns the article's rows grouped by scope, job and step, each with t
 [`src/cost-categories.ts`](../../src/cost-categories.ts) gives it — the same words `npm run cost`
 uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
 
-- **It is keyed on the slug, not the article id.** `article_id` is filled only when the account that
-  spent owns the article, so a visitor's chat on a public article carries the slug and no id. The
-  figure is everybody's spend on the article, not only its owner's.
+- **It is keyed on the article's id**, with one fallback: a row written without an id (the lookup
+  failed, or the call came before the article row existed) is matched on the owner's slug, but only
+  if it happened after this article was created. A slug is unique only among *current* articles,
+  and without that bound a new article that reused a deleted one's slug would inherit its bill.
+  `belongsTo` in [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts).
 - **It is a floor, and the page says by how much.** Calls that reported no cost are counted and not
   priced, and live conversations that connected and never posted usage are counted separately.
+  Calls that failed or were stopped are included — they usually still cost — and counted too.
+- **A call that wrote no row is invisible to it**: a failed ledger write, or a call made outside
+  every collector. Those exist only as process counters (`unscopedCalls()`, the collector's
+  `writeFailures`), and no per-article query can count them.
 - **Calls nobody attributed are invisible to it.** Before 2026-09-30 that was link previews and
   dictation, so an older article's figure is short by those.
-- **It is credits, not cash** — about 5.5% more leaves the bank
+- **The OpenRouter-credits part of it is not cash** — about 5.5% more leaves the bank for that part
+  only, since the fee is on buying credits; BYOK and our own arithmetic are not uplifted. The page
+  shows the credits figure separately for that reason
   ([ai-gateway.md § What it cost](ai-gateway.md#what-it-cost)).
 
 ## The route table says where the article is
@@ -85,16 +93,17 @@ Greg, 2026-09-30: *"I'd be fine to have a bunch of tests that don't usually run 
 actually do incur costs (using our API keys somehow) that then get tracked & checked."*
 
 [`evals/cost/ledger-check.ts`](../../evals/cost/ledger-check.ts) makes one tiny real call on each
-of the Messages, chat and embeddings wires, attributed to a fresh synthetic slug, and reads them
-back through the article query the metadata page uses. It fails unless all three rows are there,
-settled by the provider, and the query's total equals what the process that made the calls
-recorded. It is not in `npm test`: it lives under `evals/`, where spending is allowed and vitest
+of the Messages, chat and embeddings wires, attributed to a fresh synthetic slug, then takes three
+readings of the one spend: what the collector recorded, **the rows it persisted** (read back by run
+id, each one's wire, price source, outcome, scope, owner and slug checked), and the article query
+the metadata page uses. It fails unless all three agree to the nano-dollar and every row was
+settled by the provider. It is not in `npm test`: it lives under `evals/`, where spending is allowed and vitest
 cannot reach ([testing.md § Nothing under tests/ may call a paid provider](testing.md#nothing-under-tests-may-call-a-paid-provider)).
 
 **What it costs**: $0.000081 on 2026-09-30. It needs `OPENROUTER_API_KEY` and a database with the
 eval owner seeded, and its rows are `scope_kind = 'eval'`, so they are non-product spend everywhere
 they appear. Run it after a change to the gateway, the ledger or the attribution. Seen to fail with
-the article attribution removed (five checks red, exit 1).
+the article attribution removed (exit 1).
 
 Not covered yet: the transcription and images wires, which need an audio file and cost more per
 call.

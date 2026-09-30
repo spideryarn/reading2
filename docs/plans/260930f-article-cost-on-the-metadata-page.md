@@ -183,6 +183,44 @@ runs where `.env.local` has them.
 - Retrofitting slugs onto historical link-summary and dictation rows — the request did not carry
   them, so there is nothing to backfill from.
 
+## What changed after the plan review
+
+GPT Sol reviewed the plan read-only
+([review](260930f-article-cost-on-the-metadata-page-review-sol.md), BUILD WITH CHANGES). All six
+findings were taken:
+
+1. **P1 — boundary and identity.** The route is owner-only (already changed while building), and
+   the query now keys on **`article_id`**, falling back to `(owner_id, article_slug)` only for rows
+   with no id and only after the article's `created_at` — so a deleted article's slug, re-minted,
+   cannot inherit its rows. The "across all spenders / a visitor's chat" bullet in § 1 above was
+   wrong: the public surface is read-only, so nobody but the owner spends on an article today.
+   Tests: another owner's rows under the slug, and a 2020 row under the slug, both excluded.
+2. **P2 — the field covers every route.** `article` is required on exact rows as well as pattern
+   rows (`"handler" | "none"` on an exact row, which has no capture), and the route-contract test
+   refuses a row without it, a non-literal value, and `"first-capture"` on an exact row. The two
+   hand-wrapped routes answer `"handler"`.
+3. **P1 — the paid check reads the persisted rows.** By the collector's run id: exactly three, and
+   each one's wire, `cost_source`, outcome, scope, owner and slug checked, then their total against
+   the collector's and the admin query's. It checks the eval owner exists before spending.
+4. **P2 — the 5.5%** is said of the credits pocket only, with its own figure.
+5. **P2 — failed/aborted calls** are counted (`nonOkCalls`) and shown, and the page says a call that
+   wrote no row cannot be seen.
+6. **P3 — an index** on `ai_calls(article_id)`, migration `20260930102351_ai_calls_article_index`.
+   `realtime_sessions` is small (one row per live conversation) and not indexed.
+
+Not built from § *Tests*: a behavioural test that the link-summary route's hand wrap attributes
+its spend. That route's stream needs the store and a model stub together
+(tests/link-summary-stream-lifetime.test.ts is the harness, and it stubs the gateway below the
+point that records spend). The wrap is one line and in the code review; the dictation wrap, which
+is the same shape, has its test and was seen to fail with the wrap removed.
+
+**The shared local database would not take the migration**: it carries another session's
+migration (`1790762920540`) that is not on dev yet, and `db:migrate` refuses to reconcile — correctly.
+Not mine to delete. The private-Postgres test lane builds its own database from the journal, so the
+suite applies this migration regardless.
+
 ## Log
 
-- 2026-09-30 — plan written.
+- 2026-09-30 — plan written; Sol plan review, BUILD WITH CHANGES; all six findings taken.
+- 2026-09-30 — built. `npm run test:paid` run four times (two of them deliberately broken, to watch it
+  go red): **$0.000324 in total**.

@@ -562,13 +562,12 @@ Since 2026-09-30 the metadata page has a **What it cost** section, drawn for the
 only: `GET /api/admin/articles/:slug/cost`, behind the same namespace gate, grouped by step and job
 ([cost-tracking.md](cost-tracking.md)).
 
-**It answers only for an article the administrator owns.** The route asks `articleIdForOwned`
+**It answers only for an article the administrator owns.** The route asks `ownedArticleIdentity`
 before it reads any spend, so another account's slug is the ordinary 404. Everything else on these
 pages is a fact about an *account*; a per-mode breakdown of somebody else's article is a fact about
-what they did with it, which is the line § *What it deliberately does not show* draws. The figure
-itself still includes other people's spend *on the administrator's article* — a visitor's chat on
-it when it is public — because that is what the article cost. Widening it to other people's
-articles is a decision for Greg ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+what they did with it, which is the line § *What it deliberately does not show* draws. Widening it
+to other people's articles is a decision for Greg
+([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
 
 ## The plan and ingest columns
 
