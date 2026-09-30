@@ -193,3 +193,15 @@ above the list (and in the empty state):
   red-first), F4, F5, F6 (no box in the empty state; `ensure` after the awaited save), F7 (claim
   narrowed, no new machinery), F8 (the test matrix). Sol also said the simplest v1 is stage 1 plus a
   read-only line; the one-press box is kept, but only where no automatic run can race it.
+- 2026-09-30: stage 1 built (uncommitted, for review). `src/web/purpose.ts` (`savePurpose`,
+  `usePurpose`); Metadata's box saves through it. AddPage: the three producers now only feed one
+  derived `completion`; one effect decides; `running | ready | saving | opened` with a `claimed`
+  ref. **F3 was real** — watched red: a retried import that succeeded never opened. Fixed as the
+  plan said: `retry` answers `Job | null`, `JobCard` takes `onRetried`, AddPage follows it (seven
+  test fakes changed from `async () => {}` to `async () => null`). Tests:
+  `tests/add-page-purpose.test.tsx`, 30 cases, table-driven over the three producers; each guard
+  also checked by mutating it out. Differs from the plan in three small ways: the tick box stays
+  visible through *ready*/*saving*, because it is read at the press and the reader should see what
+  they are choosing; the box has `maxLength` 600 rather than a counter that can go over, since an
+  over-long draft would only fail after the import; and the Metadata page's local function is now
+  `commitPurpose`, to leave the name `savePurpose` to the shared one.

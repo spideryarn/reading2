@@ -166,7 +166,13 @@ export interface UseJobs {
    */
   reset(slug: string, regenerate: boolean): Promise<ResetResponse | null>;
   cancel(id: string): Promise<void>;
-  retry(id: string): Promise<void>;
+  /**
+   * `POST /api/jobs/:id/retry`. **Answers with the replacement job** — a retry
+   * is a new job with a new id (`retryJob` in src/jobs.ts), so a page watching
+   * one id must follow it or it watches the failed one for ever (plan 260930e,
+   * Sol's F3). Null on failure, with the sentence in `lastFailure()`.
+   */
+  retry(id: string): Promise<Job | null>;
   forget(id: string): Promise<void>;
 }
 
@@ -399,9 +405,7 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
     cancel: async (id) => {
       await act(() => send(`/api/jobs/${id}/cancel`, { method: "POST" }));
     },
-    retry: async (id) => {
-      await act(() => send(`/api/jobs/${id}/retry`, { method: "POST" }));
-    },
+    retry: (id) => act(() => send<Job>(`/api/jobs/${id}/retry`, { method: "POST" })),
     forget: async (id) => {
       await act(() => send(`/api/jobs/${id}`, { method: "DELETE" }));
     },
