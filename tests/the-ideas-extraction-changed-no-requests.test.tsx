@@ -730,6 +730,13 @@ const ARRIVAL: Shape[] = [
  *
  * It appears once, not twice, for the reason the quotes' line gives, and if it
  * ever doubles the same de-duplication has broken.
+ *
+ * **`/api/crossrefs/` is the sixth, new on 2026-09-30, and the same story
+ * again**: the cross-references are drawn in the prose in every mode, owner
+ * only, and have no band at all, so `OwnedReader` is the only place that can
+ * read them (src/web/useCrossrefs.ts). One cheap GET per owned article view,
+ * and no model call; once, through `useOrderedRead`, like its neighbours.
+ * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
  */
 const READING_VIEW: Shape[] = [
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
@@ -737,6 +744,7 @@ const READING_VIEW: Shape[] = [
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
   GET(`/api/citations/${SLUG}`),
+  GET(`/api/crossrefs/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
@@ -779,6 +787,7 @@ const CHAT: Shape[] = [
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
   GET(`/api/citations/${SLUG}`),
+  GET(`/api/crossrefs/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
   GET(`/api/chat/${SLUG}`),
   GET(`/api/comments/${SLUG}?anchors=whole-block`),

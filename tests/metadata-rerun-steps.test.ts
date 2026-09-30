@@ -62,6 +62,9 @@ describe("the steps the Metadata page will re-run", () => {
       "trajectory",
       "debate",
       "citations",
+      /* Plan 260930f, 2026-09-30: the one way to make cross-references for an
+         article already on the shelf. The three answers are in src/rerun-steps.ts. */
+      "crossrefs",
     ]);
   });
 

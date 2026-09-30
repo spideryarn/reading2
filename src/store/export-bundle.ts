@@ -399,6 +399,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "quiz",
   "faq",
   "trajectory",
+  "crossrefs",
   "sketch",
   "illustrated",
   "labels",
@@ -476,6 +477,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("trajectory.json", revision.trajectory);
+  at("crossrefs.json", revision.crossrefs);
   at("sketch.json", revision.sketch);
   at("illustrated.json", revision.illustrated);
   at("labels.json", revision.labels);
@@ -597,6 +599,7 @@ one thing that will make the rest of these files make sense.
       quiz.json            Questions generated from the article.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
       trajectory.json      A route through the quotes, in the order to read them, at three depths.
+      crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
       arc.json             The shape of the argument.
       tweets.json          Short extracts.
       labels.json          Section labels.
@@ -780,6 +783,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "Questions a careful reader might put to the article, and the passages that respond.",
   "augmentations/trajectory.json":
     "A route through the quotes, in the order to read them, at three depths.",
+  "augmentations/crossrefs.json":
+    "Links from a phrase in one paragraph to the paragraph that backs it.",
   "augmentations/sketch.json": "The diagram.",
   /* **The brief and the hashes, and not the pictures.** A plate's bytes are
      a content-addressed object in the blob store, so this file names them
@@ -884,6 +889,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
     { label: "trajectory stops", n: countOf(revision.trajectory, "stops") },
+    { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
     /* **Both collections, and only what is really named.** `assets` holds the
        article's own `<img src>`s in `entries` and the pictures recovered from a

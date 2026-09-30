@@ -73,6 +73,11 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "../faq.js";
 import {
+  inputFingerprint as crossrefsFingerprint,
+  isStale as crossrefsIsStale,
+  PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
+} from "../crossrefs.js";
+import {
   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
   trajectoryInput,
   trajectoryInputHash,
@@ -113,6 +118,7 @@ import {
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "../illustrated.js";
 import type { Illustrated } from "../illustrated-plate.js";
+import { figuresFingerprint } from "../illustrated-figures.js";
 import {
   deriveLibraryScalars,
   describeArticle,
@@ -150,6 +156,8 @@ import type {
   DebateFound,
   Faq,
   FaqFound,
+  Crossrefs,
+  CrossrefsFound,
   Trajectory,
   TrajectoryFound,
   Glossary,
@@ -491,6 +499,7 @@ type RevisionReader =
   | "citations"
   | "faq"
   | "trajectory"
+  | "crossrefs"
   | "arc"
   /**
    * **The image manifest on its own**, for the route that serves one asset's
@@ -537,7 +546,7 @@ const REVISION_READ_POLICY: Record<
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
-    trajectory: "value",
+    trajectory: "value", crossrefs: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -583,6 +592,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* Its article head, so the same cited metadata columns as `faq`. */
+    crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -602,6 +613,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* Its article head, so the same cited metadata columns as `faq`. */
+    crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -621,6 +634,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* Its article head, so the same cited metadata columns as `faq`. */
+    crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -679,6 +694,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* Its article head, so the same cited metadata columns as `faq`. */
+    crossrefs: "value",
     /* **Not because this stage's own prompt prints them** — its prompt prints
        the scene — but because this read reports the *Sketch's* staleness as
        well as its own, and answering that needs exactly what the `sketch` read
@@ -729,6 +746,8 @@ const REVISION_READ_POLICY: Record<
     citations: "value",
     /* `faq` hashes the outline too: the skeleton is in its user message. */
     faq: "value",
+    /* The top-level skeleton is in its user message, so it needs the tree. */
+    crossrefs: "value",
     /* `quotes` arrived from another session on 2026-08-31 taking
        `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
        outline like its five neighbours — and this line had not caught up.
@@ -775,7 +794,9 @@ const REVISION_READ_POLICY: Record<
      — `sendArticleAsset` (src/routes.ts) looks a hash up in this manifest and
      rebuilds the storage key from what it finds, so the manifest *is* the
      authorisation for handing over the bytes. GPT Sol, I-5. */
-  assets: { article: "value", metadata: "value", assets: "value" },
+  /* `illustrated` too: the paper's stored figures are in that artefact's
+     fingerprint (src/illustrated-figures.ts § `figuresFingerprint`). */
+  assets: { article: "value", metadata: "value", assets: "value", illustrated: "value" },
 
   /* Each artefact goes to the one read that returns it, and to the metadata
      page, which asks of every artefact "would we write this again today".
@@ -860,6 +881,9 @@ const REVISION_READ_POLICY: Record<
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
   trajectory: { metadata: "value", trajectory: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `faq` makes. `isCurrent` needs the column for its arm. */
+  crossrefs: { metadata: "value", crossrefs: "value" },
 
   /* **Read by nobody through here.** The two HTML columns are the whole article
      again, and they are pipeline artefacts reached through
@@ -1147,6 +1171,8 @@ export const REVISION_PROJECTIONS = {
     citations: articleRevisions.citations,
     /* For `isCurrent`'s arm, as `debate` above. */
     faq: articleRevisions.faq,
+    /* For `isCurrent`'s arm, as `debate` above. */
+    crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, and a seventh artefact that can carry a
        `profileHash` — `personalisedSteps` must be exhaustive. */
     trajectory: articleRevisions.trajectory,
@@ -1230,6 +1256,12 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     ...CITED_FINGERPRINT_COLUMNS,
   },
+  /* The cited head and tree its own exact-request fingerprint needs. */
+  crossrefs: {
+    id: articleRevisions.id,
+    crossrefs: articleRevisions.crossrefs,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
   /**
    * **The second projection that takes other artefacts' columns**, after
    * `illustrated`, and **no fingerprint columns**: the route's `sourceHash` is
@@ -1262,6 +1294,9 @@ export const REVISION_PROJECTIONS = {
     id: articleRevisions.id,
     illustrated: articleRevisions.illustrated,
     sketch: articleRevisions.sketch,
+    /* The manifest, because the paper's stored figures are in the
+       fingerprint (`figuresFingerprint`, src/illustrated-figures.ts). */
+    assets: articleRevisions.assets,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
@@ -1740,6 +1775,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   citations: ["article_revisions.citations"],
   faq: ["article_revisions.faq"],
   trajectory: ["article_revisions.trajectory"],
+  crossrefs: ["article_revisions.crossrefs"],
 };
 
 /**
@@ -2051,7 +2087,11 @@ function sketchIsCurrent(
  * it. Here it is inherited from the Sketch besides, so a guess would be wrong
  * twice over.
  */
-function illustratedIsCurrent(revision: { illustrated: unknown; sketch: unknown }): boolean {
+function illustratedIsCurrent(revision: {
+  illustrated: unknown;
+  sketch: unknown;
+  assets: unknown;
+}): boolean {
   const found = revision.illustrated as Illustrated | null;
   const sketch = revision.sketch as Sketch | null;
   /* An empty plate list counts as none, the same rule `SHAPE` and
@@ -2067,7 +2107,13 @@ function illustratedIsCurrent(revision: { illustrated: unknown; sketch: unknown 
       ...profile,
     },
     {
-      inputHash: illustratedFingerprint(sketch),
+      /* The paper's stored figures too, as the step stamps them —
+         `figuresFingerprint`, src/illustrated-figures.ts. */
+      inputHash: illustratedFingerprint(
+        sketch,
+        undefined,
+        figuresFingerprint(revision.assets as Assets | null),
+      ),
       promptVersion: ILLUSTRATED_PROMPT_VERSION,
       model: CAPABLE_MODEL,
       ...profile,
@@ -3079,6 +3125,23 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* The same stamp shape as `faq`, over its own exact request input. */
+        case "crossrefs": {
+          const crossrefs = revision.crossrefs as Crossrefs | null;
+          if (!crossrefs || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: crossrefs.sourceHash,
+              promptVersion: crossrefs.version,
+              model: crossrefs.generator,
+            },
+            {
+              inputHash: crossrefsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: CROSSREFS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         /* **Judged against what its prompt renders, not the article** — the
            route's `sourceHash` is `trajectoryInputHash` over the `quotes` and
            `ideas` columns beside it and the tree, the same value
@@ -3515,6 +3578,41 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
+   * The cross-references on their own — the Postgres half of `loadCrossrefs`.
+   *
+   * The cited head and the tree used by its exact-request fingerprint.
+   * **A 404 is the ordinary case** (the step is off `DEFAULT_INGEST_STEPS`); an
+   * EMPTY list is a 200. **Owner-only**: there is no public twin in v1 —
+   * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
+   * § Left for Greg. The prose draws nothing when `stale` (Sol F8).
+   */
+  async loadCrossrefs(slug: string): Promise<CrossrefsFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "crossrefs");
+    if (!found) throw notFound(slug);
+    const crossrefs = found.revision.crossrefs as Crossrefs | null;
+    if (!crossrefs || !Array.isArray(crossrefs.links)) {
+      throw Object.assign(
+        new Error(
+          `No cross-references for "${slug}" yet. Build them with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["crossrefs"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      crossrefs,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale:
+        !tree ||
+        crossrefsIsStale(crossrefs, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: crossrefs.version !== CROSSREFS_PROMPT_VERSION,
+    };
+  },
+
+  /**
    * The route through the Quotes — the Postgres half of `loadTrajectory`.
    *
    * **Judged against its own input, never the article's prose**: `stale` when
@@ -3800,7 +3898,11 @@ const rawPgArticleReader: ArticleReader = {
        else. */
     const stale =
       !sketch ||
-      illustratedIsStale(illustrated, sketch) ||
+      illustratedIsStale(
+        illustrated,
+        sketch,
+        figuresFingerprint(found.revision.assets as Assets | null),
+      ) ||
       !tree ||
       sketchIsStale(sketch, blocks, tree, citedMetaFingerprintOf(found.revision));
     return {
