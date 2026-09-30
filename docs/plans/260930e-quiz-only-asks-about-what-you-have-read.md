@@ -178,3 +178,7 @@ The bullet in `src/web/PrivacyPage.tsx` (§ What we keep), with the change in bo
 
 Nothing else in the bullet changes. Until it lands, the page understates one use of data it already
 declares; it does not understate what is kept. Listed in `awaiting-approval.md`.
+
+**Answered 2026-10-01**: Greg preferred not to list the uses at all, so the bullet now says some of
+Spideryarn's features use the totals, with one example —
+[261001a](261001a-privacy-reading-time-wording.md).

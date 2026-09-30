@@ -9,6 +9,8 @@ Feedback report SPIDERYARN-READING2-5J (`spya-ddpn5x`), from Greg (admin, so tru
 >
 > — Greg, 2026-09-29
 
+**Out of scope for now** — Greg, 2026-10-01: *"Ok, out of scope for now."* No application to OpenAI and no eval; the plan stands as the research if it comes back.
+
 **Status: plan only, nothing built. This is the second version, written the same day after Greg
 answered the first. It is waiting on two things:**
 1. OpenAI letting Spideryarn into "Sign in with ChatGPT" plan usage. Greg has not yet decided
