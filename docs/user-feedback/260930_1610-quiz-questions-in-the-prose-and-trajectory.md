@@ -1,3 +1,7 @@
+---
+reports: spya-mgupt0
+ending: shipped
+---
 # Quiz questions in the text as you read, and so at Trajectory's stops
 
 [SPIDERYARN-READING2-6V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6V), a suggestion
