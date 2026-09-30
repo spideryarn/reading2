@@ -343,6 +343,7 @@ async function queueJob(slug: string, names: StepName[], force: boolean): Promis
  * step registry, and a session opened by `openPgStoreSession`.
  */
 const realParts: AdvanceParts = {
+  power: async () => "standard",
   session: (job, attempt) =>
     openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
   steps: STEPS,

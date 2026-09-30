@@ -485,7 +485,7 @@ async function driveToDone(
     }
     const advanced = await withSpendAttribution(
       { jobId: job.id, articleSlug: job.slug, ownerId: EVAL_OWNER_ID },
-      () => advanceJobWith(job.id, { session: claimSession, steps, onStepSpend }),
+      () => advanceJobWith(job.id, { power: async () => "standard", session: claimSession, steps, onStepSpend }),
     );
     if (!advanced) throw new Error(`${job.slug}: job ${job.id} vanished mid-run`);
     job = advanced.job;

@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import type { FoundWorkPage, WorkToFind } from "../src/citation-find.js";
 import type { PaperText } from "../src/paper-text.js";
 import {
+  defaultFind,
   defaultFirstPages,
   GUESS_RATE_POLICY,
   isAnUpload,
@@ -32,6 +33,10 @@ import type {
   SourceGuessStore,
 } from "../src/store/contracts.js";
 import type { Article, Block, BlockId, Meta, SourceGuess, Tree } from "../src/types.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { log } from "../src/log.js";
+import { HIGH_POWER_MODEL_OPENROUTER, type ModelPower } from "../src/models.js";
+import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 
 const TITLE = "Oscillatory Coupling Between Hippocampus and Prefrontal Cortex During Memory Consolidation";
 const DOI = "10.1234/hpc.2024.5678";
@@ -72,6 +77,7 @@ const BLOCKS: Block[] = [
 
 function article(meta: Partial<Meta> = {}, sourceGuess?: SourceGuess): Article {
   return {
+    highPowerSince: null,
     meta: {
       slug: "an-upload",
       title: TITLE,
@@ -187,6 +193,7 @@ interface HarnessOptions {
 function harness(opts: HarnessOptions = {}) {
   const store = opts.store ?? memoryStore();
   const finds: WorkToFind[] = [];
+  const powers: ModelPower[] = [];
   const reads: string[] = [];
   const taken: { bucket: string; policy: RatePolicy }[] = [];
   const finished: string[] = [];
@@ -214,7 +221,8 @@ function harness(opts: HarnessOptions = {}) {
         finished.push(id);
       },
     },
-    find: async (work) => {
+    find: async (work, o) => {
+      powers.push(o.power);
       if (opts.delay === "search") await new Promise((go) => setTimeout(go, 300));
       finds.push(work);
       opts.onFind?.();
@@ -234,7 +242,7 @@ function harness(opts: HarnessOptions = {}) {
     },
     ...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
   });
-  return { guess, store, finds, reads, taken, finished, firstPagesCalls };
+  return { guess, store, finds, powers, reads, taken, finished, firstPagesCalls };
 }
 
 /* --------------------------------------------------------------- found -- */
@@ -481,5 +489,39 @@ describe("an HTML upload's first pages", () => {
     expect(text).toContain(TITLE);
     expect(text).toContain(DOI);
     expect(text).not.toContain("secret");
+  });
+});
+
+/* ------------------------------------------------ High-powered AI (260930f) -- */
+
+describe("High-powered AI — the upload source guess follows the article (Sol F4)", () => {
+  const high = (): Article => ({ ...article(), highPowerSince: "2026-09-30T00:00:00.000Z" });
+
+  it("searches at high power for an administrator's high-powered upload", async () => {
+    const h = harness({ article: high(), read: readPage({ meta: { title: TITLE, authors: ["Müller, Ana"], doi: DOI } }) });
+    await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () => h.guess("an-upload"));
+    expect(h.powers).toEqual(["high"]);
+  });
+
+  it("searches at standard power when the owner is not an administrator", async () => {
+    const h = harness({ article: high(), read: readPage({ meta: { title: TITLE, authors: ["Müller, Ana"], doi: DOI } }) });
+    await runAsOwner(DEV_OWNER_ID, () => h.guess("an-upload"));
+    expect(h.powers).toEqual(["standard"]);
+  });
+
+  it("the default search sends the power's model", async () => {
+    const sent: string[] = [];
+    const original = globalThis.fetch;
+    process.env.OPENROUTER_API_KEY = "test-key";
+    globalThis.fetch = (async (_url: unknown, init?: { body?: string }) => {
+      sent.push(String((JSON.parse(init?.body ?? "{}") as { model?: string }).model));
+      return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      await defaultFind({ title: TITLE }, { timeoutMs: 5_000, line: log("model"), power: "high" }).catch(() => {});
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(sent).toEqual([HIGH_POWER_MODEL_OPENROUTER]);
   });
 });

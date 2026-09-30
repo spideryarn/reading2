@@ -147,6 +147,8 @@ import {
   type AdvanceParts,
 } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
+import { messagesWireBody } from "../src/messages-stream.js";
+import { HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
 import { STEPS, type PipelineStep, type StepContext, type StepProduct } from "../src/pipeline.js";
 import type { ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
 import { readsPgArtifacts } from "../src/store/artifacts-pg.js";
@@ -433,6 +435,7 @@ function partsFor(
   steps: Partial<Record<StepName, PipelineStep>>,
 ): AdvanceParts {
   return {
+    power: async () => "standard",
     session: async (job: Job, attempt: string): Promise<StoreSession> => ({
       ...(await claimSession(job, attempt)),
       reads: fresh.reads,
@@ -641,6 +644,51 @@ describe("one claim walks the whole job", () => {
     expect(advanced?.job.error).not.toContain("the extractor fell over");
     expect(advanced?.job.error).toContain("Extracting the article");
     expect(advanced?.job.steps[2]?.status, "and it is still pending, not skipped").toBe("pending");
+  });
+
+  it("hands every step the power `parts.power` reads for it, and the wire follows (plan 260930f)", async () => {
+    const names: StepName[] = ["fetch", "extract"];
+    const seen: { power: string; model: string }[] = [];
+    const record = (ctx: StepContext) => {
+      /* What a stage would send: the same assembly `streamMessage` uses. */
+      const wire = messagesWireBody("arc", { max_tokens: 16, messages: [] }, ctx.power);
+      seen.push({ power: ctx.power, model: String(wire.model) });
+    };
+    const { job, parts } = await fixture("test-walk-high-power", names, { fetch: record, extract: record });
+
+    const read: string[] = [];
+    const advanced = await advanceAsOwner(job.id, {
+      ...parts,
+      power: async (j) => {
+        read.push(j.id);
+        return "high";
+      },
+    });
+
+    expect(advanced?.job.status).toBe("done");
+    /* Once per step, when it starts — decision 3 — not once per job. */
+    expect(read).toEqual([job.id, job.id]);
+    expect(seen).toEqual([
+      { power: "high", model: HIGH_POWER_MODEL_OPENROUTER },
+      { power: "high", model: HIGH_POWER_MODEL_OPENROUTER },
+    ]);
+  });
+
+  it("fails the step, and runs nothing, when the power cannot be read", async () => {
+    const names: StepName[] = ["fetch", "extract"];
+    const { ran, job, parts } = await fixture("test-walk-power-unreadable", names);
+
+    const advanced = await advanceAsOwner(job.id, {
+      ...parts,
+      power: async () => {
+        throw new Error("no article row");
+      },
+    });
+
+    expect(ran.names, "no step may run on a guessed model").toEqual([]);
+    expect(advanced?.done).toBe(true);
+    expect(advanced?.job.status).toBe("error");
+    expect(advanced?.job.steps[0]?.status).toBe("error");
   });
 
   it("stops the walk when a Stop lands between two steps", async () => {

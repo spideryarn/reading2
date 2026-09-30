@@ -128,6 +128,7 @@ describe("existingFor — which previous list a forced run appends to", () => {
 describe("buildQuotes, appending", () => {
   it("keeps every existing quote, with its id, and adds the new ones in document order", () => {
     const built = buildQuotes({ quotes: [{ text: THIRD }, { text: SECOND }] }, {
+      power: "standard",
       ...opts,
       dropped: drops(),
       existing: previous(),
@@ -144,6 +145,7 @@ describe("buildQuotes, appending", () => {
   it("lets an existing quote win an overlap with a LONGER new one — the reader's list does not change under them", () => {
     const dropped = drops();
     const built = buildQuotes({ quotes: [{ text: FIRST_LONGER }, { text: SECOND }] }, {
+      power: "standard",
       ...opts,
       dropped,
       existing: previous(),
@@ -170,6 +172,7 @@ describe("buildQuotes, appending", () => {
     const built = buildQuotes(
       { quotes: [{ text: longer }] },
       {
+        power: "standard",
         ...opts,
         blocks,
         dropped,
@@ -192,6 +195,7 @@ describe("buildQuotes, appending", () => {
     const built = buildQuotes(
       { quotes: [{ text: THIRD }] },
       {
+        power: "standard",
         ...opts,
         /* Simulates `isBodyEvidence` filtering B out after the earlier pass.
            It remains in the article and in the full document-order ruler. */
@@ -217,6 +221,7 @@ describe("buildQuotes, appending", () => {
     const built = buildQuotes(
       { quotes: [{ text: SECOND }] },
       {
+        power: "standard",
         ...opts,
         dropped: drops(),
         existing: previous({ quotes: [keptC, keptA] }),
@@ -227,6 +232,7 @@ describe("buildQuotes, appending", () => {
 
   it("treats the same line again as an overlap, not a second copy", () => {
     const built = buildQuotes({ quotes: [{ text: FIRST }] }, {
+      power: "standard",
       ...opts,
       dropped: drops(),
       existing: previous(),
@@ -238,20 +244,20 @@ describe("buildQuotes, appending", () => {
     /* A fresh list with nothing in it is a model call that produced nothing.
        An append that found nothing more is a real answer, and the panel says
        so; throwing would turn it into a failed job. */
-    const built = buildQuotes({ quotes: [] }, { ...opts, dropped: drops(), existing: previous() });
+    const built = buildQuotes({ quotes: [] }, { power: "standard", ...opts, dropped: drops(), existing: previous() });
     expect(built.quotes.map((q) => q.id)).toEqual(["spya-keep01"]);
     expect(built.lastAdded).toBe(0);
     expect(built.passes).toBe(2);
   });
 
   it("still throws on a FRESH list with nothing in it", () => {
-    expect(() => buildQuotes({ quotes: [] }, { ...opts, dropped: drops() })).toThrow(/no quotes/i);
+    expect(() => buildQuotes({ quotes: [] }, { power: "standard", ...opts, dropped: drops() })).toThrow(/no quotes/i);
   });
 
   it("accumulates what was discarded and how long it took, across passes", () => {
     const built = buildQuotes(
       { quotes: [{ text: SECOND }, { text: "Words this piece has never contained at all." }] },
-      { ...opts, dropped: drops(), existing: previous() },
+      { power: "standard", ...opts, dropped: drops(), existing: previous() },
     );
     expect(built.discarded.unfound).toBe(3);
     expect(built.elapsedMs).toBe(110);
@@ -266,6 +272,7 @@ describe("buildQuotes, appending", () => {
        and does it even when the pass added nothing. The list keeps its older
        version, so it goes on saying it includes such lines. */
     const built = buildQuotes({ quotes: [{ text: SECOND }] }, {
+      power: "standard",
       ...opts,
       dropped: drops(),
       profile: "a different reader",
@@ -277,6 +284,7 @@ describe("buildQuotes, appending", () => {
 
   it("an append that adds nothing does not restamp the version either", () => {
     const built = buildQuotes({ quotes: [] }, {
+      power: "standard",
       ...opts,
       dropped: drops(),
       existing: previous({ version: "quotes/3" }),
@@ -285,7 +293,7 @@ describe("buildQuotes, appending", () => {
   });
 
   it("a fresh list is stamped with the current version", () => {
-    const built = buildQuotes({ quotes: [{ text: SECOND }] }, { ...opts, dropped: drops() });
+    const built = buildQuotes({ quotes: [{ text: SECOND }] }, { power: "standard", ...opts, dropped: drops() });
     expect(built.version).toBe(PROMPT_VERSION);
   });
 
@@ -298,6 +306,7 @@ describe("buildQuotes, appending", () => {
     }));
     const dropped = drops();
     const built = buildQuotes({ quotes: [{ text: SECOND }, { text: THIRD }] }, {
+      power: "standard",
       ...opts,
       dropped,
       existing: previous({ quotes: many }),
@@ -311,7 +320,7 @@ describe("buildQuotes, appending", () => {
 
 describe("buildQuotes, replacing", () => {
   it("starts passes at 1 and counts every quote as added", () => {
-    const built = buildQuotes({ quotes: [{ text: SECOND }, { text: THIRD }] }, { ...opts, dropped: drops() });
+    const built = buildQuotes({ quotes: [{ text: SECOND }, { text: THIRD }] }, { power: "standard", ...opts, dropped: drops() });
     expect(built.passes).toBe(1);
     expect(built.lastAdded).toBe(2);
   });

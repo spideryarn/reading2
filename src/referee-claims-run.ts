@@ -101,7 +101,7 @@ import {
 import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import {
   explainAbort,
   providerFailedMidAnswer,
@@ -136,7 +136,7 @@ const CLAIMS_JOB = "referee-claims" as const;
  * `modelFor("search")`, so its new environment variable was an override that
  * silently did nothing. Same shape, same directory, two jobs later.
  */
-export const defaultModel = (): string => modelFor(CLAIMS_JOB);
+export const defaultModel = (power: ModelPower): string => modelFor(CLAIMS_JOB, power);
 
 /**
  * **How hard the model thinks before it answers — and the reason this call
@@ -372,6 +372,12 @@ export function buildClaimsMessages(meta: Meta, blocks: Block[]): OpenRouterMess
 export interface ClaimsRequest {
   meta: Meta;
   blocks: Block[];
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -434,7 +440,8 @@ const READER_LEFT = "The referee disconnected before the claims run finished.";
 export async function* runClaimsStream({
   meta,
   blocks,
-  model = defaultModel(),
+  power,
+  model = defaultModel(power),
   signal,
   timeoutMs = CLAIMS_TIMEOUT_MS,
   stallMs = CLAIMS_STALL_MS,
@@ -451,7 +458,7 @@ export async function* runClaimsStream({
   }
 
   const messages = buildClaimsMessages(meta, blocks);
-  const tooShortToCache = underCacheFloor(cachedText(messages));
+  const tooShortToCache = underCacheFloor(cachedText(messages), model);
 
   const deadline = AbortSignal.timeout(timeoutMs);
   const stall = new AbortController();

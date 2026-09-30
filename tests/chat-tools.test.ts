@@ -306,7 +306,7 @@ describe("runTool — what goes back to the model", () => {
     block("spya-aaaaaa", "Consciousness is not computation, and consciousness is not code."),
     block("spya-bbbbbb", "A short line about consciousness."),
   ];
-  const ctx = { slug: "example", meta, blocks };
+  const ctx = { slug: "example", meta, blocks, power: "standard" as const };
 
   it("states the counts as exhaustive when nothing was cut", async () => {
     const out = await runTool("search_article_words", { query: "consciousness" }, ctx);
@@ -569,7 +569,7 @@ describe("article_links — what goes back to the model", () => {
     withLink("spya-aaaaaa", "claimed", "https://www.washingtonpost.com/technology/lamda/"),
     withLink("spya-bbbbbb", "computational functionalism", "https://philpapers.org/rec/SHATRA-2"),
   ];
-  const ctx = { slug: "example", meta, blocks };
+  const ctx = { slug: "example", meta, blocks, power: "standard" as const };
 
   it("lists them with block, words and address, and says the count is exact", async () => {
     const out = await runTool("article_links", {}, ctx);
@@ -728,7 +728,7 @@ describe("read_web_page will not fetch the article the reader has open", () => {
      with ten seconds and a request telling the publisher somebody is reading.
      GPT Sol review, 2026-08-27. */
   const meta = { title: "A piece", slug: "example", url: "https://example.com/essays/x" } as Meta;
-  const ctx = { slug: "example", meta, blocks: [block("spya-aaaaaa", "words")] };
+  const ctx = { slug: "example", meta, blocks: [block("spya-aaaaaa", "words")], power: "standard" as const };
 
   it("refuses its own address", async () => {
     const out = await runTool("read_web_page", { url: "https://example.com/essays/x" }, ctx);
@@ -947,6 +947,7 @@ describe("converse — a turn that uses a tool", () => {
   it("emits a running row and a finished row under one index", async () => {
     const events = [];
     for await (const e of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -967,6 +968,7 @@ describe("converse — a turn that uses a tool", () => {
   it("carries the finished runs on the done event", async () => {
     let last: ConverseEvent | undefined;
     for await (const e of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -986,6 +988,7 @@ describe("converse — a turn that uses a tool", () => {
 
   it("sends the assistant's tool_calls back, with a tool message answering each", async () => {
     for await (const _ of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -1013,6 +1016,7 @@ describe("converse — a turn that uses a tool", () => {
        message differed by so much as a space the second request would pay a
        full write instead of reading what the first one left. */
     for await (const _ of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -1043,6 +1047,7 @@ describe("converse — a turn that uses a tool", () => {
     boom.mockRejectedValueOnce(new Error("the disk fell off"));
     const events = [];
     for await (const e of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -1062,6 +1067,7 @@ describe("converse — a turn that uses a tool", () => {
 
   it("offers our tools alongside the provider's web search", async () => {
     for await (const _ of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -1097,6 +1103,7 @@ describe("converse — a turn that uses a tool", () => {
       }),
     );
     for await (const _ of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -1190,6 +1197,7 @@ describe("the last round, where our tools are withheld", () => {
   const drain = async (): Promise<string | null> => {
     try {
       for await (const _ of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -1251,6 +1259,7 @@ describe("the last round, where our tools are withheld", () => {
     let message: string | null = null;
     try {
       for await (const _ of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -1308,6 +1317,7 @@ describe("the last round, where our tools are withheld", () => {
     let message: string | null = null;
     try {
       for await (const _ of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -1355,6 +1365,7 @@ describe("the last round, where our tools are withheld", () => {
     let message: string | null = null;
     try {
       for await (const event of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -1393,6 +1404,7 @@ describe("the last round, where our tools are withheld", () => {
 
     const events: ConverseEvent[] = [];
     for await (const event of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],

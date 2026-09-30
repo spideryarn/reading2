@@ -220,6 +220,7 @@ describe("the request body a help turn actually sends", () => {
 
   const ask = async (help?: true) => {
     for await (const _ of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],

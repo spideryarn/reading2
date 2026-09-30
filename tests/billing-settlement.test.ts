@@ -409,6 +409,7 @@ function fakeArc(): PipelineStep<"arc"> {
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
   return {
+    power: "standard",
     slug,
     report: () => {},
     signal: new AbortController().signal,

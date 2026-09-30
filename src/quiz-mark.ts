@@ -61,7 +61,7 @@
 
 import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import {
   ENDED_UNFINISHED,
   FILTER_STOPPED_IT,
@@ -102,7 +102,7 @@ import { plainWords } from "./plain-words.js";
  * module-load constant would be captured before some callers have run
  * `loadEnvLocal()`.
  */
-export const defaultModel = (): string => modelFor("quiz-mark");
+export const defaultModel = (power: ModelPower): string => modelFor("quiz-mark", power);
 
 /**
  * How long to wait for the model before giving up.
@@ -330,6 +330,12 @@ export interface QuizMarkRequest {
   evidence: readonly QuizEvidence[];
   /** What the reader wrote. Never logged. */
   answer: string;
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -539,7 +545,8 @@ export async function* markAnswerStream({
   referenceAnswer,
   evidence,
   answer,
-  model = defaultModel(),
+  power,
+  model = defaultModel(power),
   signal,
   timeoutMs = MARK_TIMEOUT_MS,
   stallMs = MARK_STALL_MS,
@@ -577,7 +584,7 @@ export async function* markAnswerStream({
   /* Logged, not thrown — below the floor the breakpoint is accepted and does
      nothing, and the zeros that result are indistinguishable from a cache that
      has broken. Saying which it is costs one boolean. */
-  const tooShortToCache = underCacheFloor(cachedText(messages));
+  const tooShortToCache = underCacheFloor(cachedText(messages), model);
 
   const deadline = AbortSignal.timeout(timeoutMs);
   /* The stall clock, and it has to be its own controller rather than another

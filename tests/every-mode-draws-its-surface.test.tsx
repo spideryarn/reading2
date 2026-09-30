@@ -237,6 +237,7 @@ const TREE: Article["tree"] = {
 };
 
 const OWNED: Article = {
+  highPowerSince: null,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,

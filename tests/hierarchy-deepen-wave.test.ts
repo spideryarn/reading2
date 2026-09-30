@@ -241,6 +241,7 @@ describe("which sections a wave asks about", () => {
     const tree = await waveOne();
     const fake = fakeExecutor();
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -273,6 +274,7 @@ describe("which sections a wave asks about", () => {
     const tree = await waveOne();
     const fake = fakeExecutor();
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -299,6 +301,7 @@ describe("which sections a wave asks about", () => {
     const tree = await waveOne();
     const fake = fakeExecutor((request) => Promise.resolve(answerFor(request, ["needs-deeper", "needs-deeper"])));
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -342,6 +345,7 @@ describe("which sections a wave asks about", () => {
       return Promise.resolve(answerFor(request));
     });
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -387,6 +391,7 @@ describe("which sections a wave asks about", () => {
     })();
     const fake = fakeExecutor();
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: plain,
       slug: SLUG,
@@ -412,6 +417,7 @@ describe("which sections a wave asks about", () => {
     const tree = await waveOne();
     const fake = fakeExecutor();
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -495,6 +501,7 @@ describe("a concurrent wave", () => {
     const tree = await waveOne();
     const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
       batches,
@@ -522,6 +529,7 @@ describe("a concurrent wave", () => {
       return answerFor(request);
     });
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -536,6 +544,7 @@ describe("a concurrent wave", () => {
 
     const deeper = await rebuild(out.root!);
     const sequential = await deepenTree({
+      power: "standard",
       tree: await waveOne(),
       blocks: BLOCKS,
       slug: SLUG,
@@ -561,6 +570,7 @@ describe("a concurrent wave", () => {
     const gate = new WidthGate(4);
     let refusals = 0;
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: memoryCheckpoints({ slug: SLUG, articleId: "a-deepen-wave" }),
       execute: async (request) => {
@@ -588,6 +598,7 @@ describe("a concurrent wave", () => {
     const tree = await waveOne();
     await expect(
       deepenTree({
+        power: "standard",
         tree,
         blocks: BLOCKS,
         slug: SLUG,
@@ -620,6 +631,7 @@ describe("a concurrent wave", () => {
     let slowStarted = false;
     await expect(
       runExpansionWave({
+        power: "standard",
         slug: SLUG,
         checkpoints: memory,
         batches,
@@ -668,6 +680,7 @@ describe("a concurrent wave", () => {
     const started = Date.now();
     await expect(
       runExpansionWave({
+        power: "standard",
         slug: SLUG,
         checkpoints: nullCheckpointStore(),
         batches,
@@ -729,6 +742,7 @@ describe("running out of the step's deadline", () => {
     const tree = await waveOne();
     const fake = fakeExecutor();
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -770,6 +784,7 @@ describe("running out of the step's deadline", () => {
       return answerFor(request);
     });
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -815,6 +830,7 @@ describe("running out of the step's deadline", () => {
     let deadlineAt = Date.now() + 3_600_000;
     let sent = 0;
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: memory,
       batches,
@@ -870,6 +886,7 @@ describe("running out of the step's deadline", () => {
       return answerFor(request);
     });
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -929,6 +946,7 @@ describe("a call the model refuses on every draw", () => {
     const memory = memoryCheckpoints({ slug: SLUG, articleId: "a-deepen-refused" });
     let doomed: string | undefined;
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: memory,
       batches,
@@ -968,6 +986,7 @@ describe("a call the model refuses on every draw", () => {
     const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
     let doomed: string | undefined;
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
       batches,
@@ -1005,6 +1024,7 @@ describe("a call the model refuses on every draw", () => {
     const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
     let doomed: string | undefined;
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
       batches,
@@ -1045,6 +1065,7 @@ describe("what a fatal wave leaves behind", () => {
     const paying = payingExecutor();
     let slowStarted = false;
     const caught = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -1111,6 +1132,7 @@ describe("what the width gate did while the wave ran", () => {
 
     let refused = false;
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -1159,6 +1181,7 @@ describe("what the width gate did while the wave ran", () => {
       { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
     );
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: plain,
       slug: SLUG,
@@ -1268,6 +1291,7 @@ describe("where the wave sits in the step", () => {
     const { generateHierarchy } = await import("../src/hierarchy.js");
     const fake = fakeExecutor();
     const run = await generateHierarchy({
+      power: "standard",
       blocks: BLOCKS,
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
@@ -1285,6 +1309,7 @@ describe("where the wave sits in the step", () => {
     const { generateHierarchy } = await import("../src/hierarchy.js");
     const fake = fakeExecutor();
     const run = await generateHierarchy({
+      power: "standard",
       blocks: BLOCKS,
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
@@ -1322,6 +1347,7 @@ describe("where the wave sits in the step", () => {
       const { generateHierarchy } = await import("../src/hierarchy.js");
       const fake = fakeExecutor();
       await generateHierarchy({
+        power: "standard",
         blocks: BLOCKS,
         slug: SLUG,
         checkpoints: nullCheckpointStore(),
@@ -1368,6 +1394,7 @@ describe("where the wave sits in the step", () => {
   it("keeps the wave-1 tree, and says so, when the wave throws", async () => {
     const { generateHierarchy } = await import("../src/hierarchy.js");
     const run = await generateHierarchy({
+      power: "standard",
       blocks: BLOCKS,
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
@@ -1397,6 +1424,7 @@ describe("where the wave sits in the step", () => {
     try {
       const { generateHierarchy } = await import("../src/hierarchy.js");
       const run = await generateHierarchy({
+        power: "standard",
         blocks: BLOCKS,
         slug: SLUG,
         checkpoints: nullCheckpointStore(),
@@ -1463,6 +1491,7 @@ describe("what a deepening wave says it cost", () => {
     const memory = memoryCheckpoints({ slug: SLUG, articleId: "a-deepen-cost" });
     const once = async (): Promise<Awaited<ReturnType<typeof runExpansionWave>>> =>
       runExpansionWave({
+        power: "standard",
         slug: SLUG,
         checkpoints: memory,
         execute: payingExecutor().execute,
@@ -1499,6 +1528,7 @@ describe("what a deepening wave says it cost", () => {
     const { deepenSeed, batches } = await plan(tree, ONE_PER_CALL);
     const paying = payingExecutor((_request, n) => (n === 1 ? "this is not an answer" : null));
     const wave = await runExpansionWave({
+      power: "standard",
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
       execute: paying.execute,
@@ -1531,6 +1561,7 @@ describe("what a deepening wave says it cost", () => {
       return paying.execute(request);
     };
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -1559,6 +1590,7 @@ describe("the run's token totals", () => {
   it("adds the wave once on a deepened run, and nothing at all on an ordinary one", async () => {
     const { generateHierarchy } = await import("../src/hierarchy.js");
     const plainRun = await generateHierarchy({
+      power: "standard",
       blocks: BLOCKS,
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
@@ -1569,6 +1601,7 @@ describe("the run's token totals", () => {
     expect(plainRun.deepen).toBeNull();
 
     const deepRun = await generateHierarchy({
+      power: "standard",
       blocks: BLOCKS,
       slug: SLUG,
       checkpoints: nullCheckpointStore(),
@@ -1592,6 +1625,7 @@ describe("the run's token totals", () => {
     try {
       const { generateHierarchy } = await import("../src/hierarchy.js");
       await generateHierarchy({
+        power: "standard",
         blocks: BLOCKS,
         slug: SLUG,
         checkpoints: nullCheckpointStore(),
@@ -1629,6 +1663,7 @@ describe("the run's token totals", () => {
       const { saveDeepenRecords } = await import("../src/hierarchy-deepen.js");
       const tree = await waveOne();
       const out = await deepenTree({
+        power: "standard",
         tree,
         blocks: BLOCKS,
         slug: SLUG,
@@ -1733,6 +1768,7 @@ describe("re-asking a wave the store has already answered", () => {
     ): Promise<number> => {
       const paying = payingExecutor();
       await runExpansionWave({
+        power: "standard",
         slug,
         checkpoints,
         execute: paying.execute,
@@ -1765,6 +1801,7 @@ describe("re-asking a wave the store has already answered", () => {
     ): Promise<{ wave: Awaited<ReturnType<typeof runExpansionWave>>; sent: number }> => {
       const paying = payingExecutor();
       const wave = await runExpansionWave({
+        power: "standard",
         slug: SLUG,
         checkpoints: memory,
         execute: paying.execute,
@@ -1824,6 +1861,7 @@ describe("re-asking a wave the store has already answered", () => {
     }> => {
       const paying = payingExecutor();
       const run = await generateHierarchy({
+        power: "standard",
         blocks: BLOCKS,
         slug: SLUG,
         checkpoints: memory,
@@ -1922,6 +1960,7 @@ describe("the question on a part the cascade built", () => {
     const tree = await rootOnlyTree();
     const fake = fakeExecutor((request) => Promise.resolve(answerWithQuestions(request)));
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -1956,6 +1995,7 @@ describe("the question on a part the cascade built", () => {
     const tree = await waveOne();
     const fake = fakeExecutor((request) => Promise.resolve(answerWithQuestions(request)));
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,
@@ -1994,6 +2034,7 @@ describe("the question on a part the cascade built", () => {
     const tree = await rootOnlyTree();
     const fake = fakeExecutor((request) => Promise.resolve(answerWithQuestions(request, false)));
     const out = await deepenTree({
+      power: "standard",
       tree,
       blocks: BLOCKS,
       slug: SLUG,

@@ -719,8 +719,15 @@
     {
       "idx": 102,
       "version": "7",
-      "when": 1790779853545,
-      "tag": "20260930145053_simple_summary",
+      "when": 1790776404153,
+      "tag": "20260930135324_article_high_power_since",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790781268044,
+      "tag": "20260930151428_simple_summary",
       "breakpoints": true
     }
   ]

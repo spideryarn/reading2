@@ -899,7 +899,7 @@ function metaFor(c: Case): Meta {
 
 /** The guarded call: the real feature, exactly as a referee gets it. */
 async function guarded(c: Case): Promise<{ claims: Claim[]; model: string; withheld: string[] }> {
-  const out = await runClaims({ meta: metaFor(c), blocks: [...c.blocks] });
+  const out = await runClaims({ power: "standard", meta: metaFor(c), blocks: [...c.blocks] });
   return { claims: out.claims, model: out.model, withheld: out.withheld };
 }
 
@@ -913,7 +913,7 @@ async function guarded(c: Case): Promise<{ claims: Claim[]; model: string; withh
 async function ablated(
   c: Case,
 ): Promise<{ claims: Claim[]; model: string; removed: number; withheld: string[] }> {
-  const model = defaultModel();
+  const model = defaultModel("standard");
   const { prompt, removed } = withoutRefusals(CLAIMS_SYSTEM);
   const base = buildClaimsMessages(metaFor(c), [...c.blocks]);
   const messages = [{ role: "system" as const, content: prompt }, ...base.slice(1)];

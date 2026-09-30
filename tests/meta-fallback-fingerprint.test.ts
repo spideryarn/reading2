@@ -236,7 +236,7 @@ describe("an article with no metadata", () => {
       ],
     });
 
-    const run = await generateIdeas({ article: withoutMeta, previous: null });
+    const run = await generateIdeas({ power: "standard", article: withoutMeta, previous: null });
 
     /* The stamp's own value: `articleWithIdsFingerprint(blocks, tree, null)`,
        which is what src/pipeline.ts computes when the store has no metadata. */
@@ -282,7 +282,7 @@ describe("an article with no metadata", () => {
       ],
     });
 
-    const run = await generateSketch({ article: withoutMeta });
+    const run = await generateSketch({ power: "standard", article: withoutMeta });
 
     expect(run.sketch.sourceHash).toBe(
       articleWithIdsFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
@@ -316,7 +316,7 @@ describe("an article with no metadata", () => {
       ],
     });
 
-    const run = await generateTimeline({ article: withoutMeta, previous: null });
+    const run = await generateTimeline({ power: "standard", article: withoutMeta, previous: null });
 
     expect(run.timeline.sourceHash).toBe(
       datedArticleFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
@@ -346,7 +346,7 @@ describe("an article with no metadata", () => {
       ],
     });
 
-    const run = await generateFaq({ article: withoutMeta });
+    const run = await generateFaq({ power: "standard", article: withoutMeta });
 
     expect(run.faq.sourceHash).toBe(
       articleWithIdsFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
@@ -366,7 +366,7 @@ describe("an article with no metadata", () => {
       links: [{ from: block.id, phrase: block.text.split(/\s+/).slice(0, 6).join(" "), to: to.id }],
     });
 
-    const run = await generateCrossrefs({ article: withoutMeta });
+    const run = await generateCrossrefs({ article: withoutMeta, power: "standard" });
 
     expect(run.crossrefs.links).toHaveLength(1);
     expect(run.crossrefs.sourceHash).toBe(

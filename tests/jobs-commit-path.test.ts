@@ -380,6 +380,7 @@ describe("a step run for real, through the commit", () => {
        HTML, or finished the step without either, is caught here as well as
        above. */
     const ctx: StepContext = {
+      power: "standard",
       slug: SLUG,
       report: () => undefined,
       signal: new AbortController().signal,

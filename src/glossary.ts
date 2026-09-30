@@ -52,7 +52,7 @@ import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -696,6 +696,8 @@ export function buildGlossary(
     slug: string;
     blocks: Block[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     /** The rendered profile this was written from, or null for none. */
     profile?: string | null;
     elapsedMs: number;
@@ -738,7 +740,7 @@ export function buildGlossary(
 
   return {
     version: PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent, and never omitted the way an empty field usually is
@@ -1311,6 +1313,8 @@ export async function generateGlossary(opts: {
    * is — see tests/glossary-ideas-baseline.test.ts.
    */
   previous: Glossary | null;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<GlossaryRun> {
   /* `meta` stays nullable all the way to the fingerprint. An article with no
      metadata is a legitimate input — the head of the prompt simply loses its
@@ -1452,7 +1456,7 @@ export async function generateGlossary(opts: {
           },
         ],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -1503,6 +1507,7 @@ export async function generateGlossary(opts: {
 
   const scores = noGlossaryScoreDrops();
   const glossary = buildGlossary(parseJson(raw), {
+    power: opts.power,
     slug: tree.slug,
     blocks,
     sourceHash,
@@ -1520,7 +1525,7 @@ export async function generateGlossary(opts: {
     words,
     added: glossary.entries.length - (existing?.entries.length ?? 0),
     unmatched: glossary.entries.filter((e) => e.blocks.length === 0).length,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

@@ -56,6 +56,7 @@ import { Readability } from "@mozilla/readability";
    `articleLinks` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 import type { Block, Citations, CitationsFound, CitedWork, Meta, ToolRun } from "./types.js";
+import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
 import { findPassages } from "./search.js";
@@ -188,6 +189,8 @@ export interface ToolContext {
   blocks: Block[];
   /** The turn's abort — a reader who presses stop stops the tool too. */
   signal?: AbortSignal;
+  /** The article's High-powered AI setting — a tool that calls a model asks it (plan 260930f). */
+  power: ModelPower;
 }
 
 /** What `runTool` hands back: two lines for the reader, one payload for the model. */
@@ -1064,6 +1067,7 @@ async function searchMeaning(args: Record<string, unknown>, ctx: ToolContext): P
       blocks: ctx.blocks,
       criterion,
       timeoutMs: MEANING_TIMEOUT_MS,
+      power: ctx.power,
       ...(ctx.signal ? { signal: ctx.signal } : {}),
     });
     if (result.hits.length === 0) {

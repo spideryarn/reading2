@@ -86,6 +86,7 @@ function roundsOf(...bodies: string[][]) {
 async function drain() {
   const events = [];
   for await (const event of converse({
+    power: "standard",
     meta,
     blocks,
     history: [],
@@ -168,6 +169,7 @@ describe("a terminator that had already arrived when our own clock fired", () =>
     let failure: string | null = null;
     try {
       for await (const event of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],

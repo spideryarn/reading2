@@ -62,6 +62,7 @@ const METADATA = `/read/${SLUG}/metadata`;
 
 function article(visibility: Visibility | undefined): Article {
   return {
+    highPowerSince: null,
     meta: { slug: SLUG, title: "A piece", url: "https://example.com/the-piece" },
     blocks: [
       {

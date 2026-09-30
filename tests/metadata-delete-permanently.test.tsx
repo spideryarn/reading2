@@ -102,6 +102,7 @@ const SLUG = "a-piece";
 const TITLE = "A piece";
 
 const ARTICLE: Article = {
+  highPowerSince: null,
   meta: { slug: SLUG, title: TITLE },
   blocks: [
     {
@@ -242,6 +243,13 @@ async function open(article: Article = ARTICLE): Promise<void> {
     );
   });
   await settle();
+  /* Opened the way a reader opens it. A `.click()` reaches a control inside
+     `hidden` too, so without this every case below would pass over a section
+     nobody could see into. */
+  const heading = section()?.querySelector<HTMLButtonElement>("h2 > button");
+  expect(heading?.getAttribute("aria-expanded"), "Delete is shut by default").toBe("false");
+  await act(async () => heading?.click());
+  expect(contents()?.hidden, "opening did not show it").toBe(false);
 }
 
 /** Let every pending microtask and zero-delay timer run. */
@@ -255,8 +263,15 @@ async function settle(): Promise<void> {
 
 /** The section, by the id `Section` derives from its label. */
 const section = (): HTMLElement | null => host.querySelector("#sec-delete-this-article");
+/**
+ * Everything under the heading. The section is shut by default and kept mounted
+ * since 2026-09-30 (SPIDERYARN-READING2-6Z), so this is `Section`'s `hidden`
+ * wrapper — and the heading is now a button of its own, which is why a count of
+ * "no button at all" is taken here rather than over the whole section.
+ */
+const contents = (): HTMLElement | null => section()?.querySelector(":scope > div") ?? null;
 /** The one card inside it. */
-const card = (): HTMLElement | null => section()?.querySelector(":scope > div") ?? null;
+const card = (): HTMLElement | null => contents()?.querySelector(":scope > div") ?? null;
 
 const buttonSaying = (text: string): HTMLButtonElement | undefined =>
   [...host.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes(text));
@@ -309,7 +324,7 @@ describe("Delete permanently — when it is offered at all", () => {
 
   it("never says bare 'Delete', which meant archive for nine days", async () => {
     await open();
-    const labels = [...(section()?.querySelectorAll("button") ?? [])].map((b) =>
+    const labels = [...(contents()?.querySelectorAll("button") ?? [])].map((b) =>
       (b.textContent ?? "").trim(),
     );
     expect(labels).toContain("Delete permanently");
@@ -364,7 +379,12 @@ describe("Delete permanently — when it is offered at all", () => {
     expect(trigger(), "still offered over metadata we failed to re-establish").toBeUndefined();
     expect(alertText()).toContain("Reload the page");
     /* And nothing is merely disabled — there is no button at all. */
-    expect(section()?.querySelectorAll("button")).toHaveLength(0);
+    expect(contents()?.querySelectorAll("button")).toHaveLength(0);
+    /* **Archive holds itself to the same rule since 2026-09-30**, at both of
+       its buttons: it used to go on offering whichever way round the stale
+       read said. Metadata.tsx § useArchive. */
+    expect(host.querySelector('[data-top-action="archive"]'), "top Archive over a failed refresh").toBeNull();
+    expect(host.querySelector("#sec-archive-this-article")?.querySelectorAll("button")).toHaveLength(0);
   });
 
   /** The other half of the same lever: a refresh that lands leaves it offered. */
@@ -386,7 +406,7 @@ describe("Delete permanently — when it is offered at all", () => {
     expect(trigger()).toBeUndefined();
     expect(section()?.textContent).toContain("saved copy");
     /* And nothing about it is merely disabled — there is no button at all. */
-    expect(section()?.querySelectorAll("button")).toHaveLength(0);
+    expect(contents()?.querySelectorAll("button")).toHaveLength(0);
   });
 
   it("is withheld on an address with no article of its own", async () => {
@@ -405,6 +425,22 @@ describe("Delete permanently — the two-step confirm", () => {
     /* The question is up, and nothing has been asked of the server. */
     expect(confirmButton()).toBeTruthy();
     expect(asked.filter((a) => a.startsWith("DELETE"))).toEqual([]);
+  });
+
+  it("keeps a half-finished confirmation when the section is shut and reopened", async () => {
+    await open();
+    await press(trigger());
+    const confirm = confirmButton();
+    const heading = section()?.querySelector<HTMLButtonElement>("h2 > button");
+
+    await act(async () => heading?.click());
+    expect(contents()?.hidden).toBe(true);
+    expect(confirmButton(), "shutting unmounted the confirmation").toBe(confirm);
+
+    await act(async () => heading?.click());
+    expect(contents()?.hidden).toBe(false);
+    expect(confirmButton(), "reopening restarted the confirmation").toBe(confirm);
+    expect(trigger()).toBeUndefined();
   });
 
   it("names the article in the question, so the reader reads which one", async () => {
@@ -760,7 +796,7 @@ describe("Delete permanently — what happens after the press", () => {
     expect(confirmButton()).toBeUndefined();
     expect(trigger()).toBeUndefined();
     expect(keepButton()).toBeUndefined();
-    expect(section()?.querySelectorAll("button")).toHaveLength(0);
+    expect(contents()?.querySelectorAll("button")).toHaveLength(0);
   });
 
   /**

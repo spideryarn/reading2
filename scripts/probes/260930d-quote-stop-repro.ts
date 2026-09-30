@@ -45,7 +45,7 @@ async function oneRun(slug: string, id: string): Promise<number> {
   const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
   const context = investigateContext(work, (bid) => text.get(bid));
   const matched = matchedPageOf(work, work.lookup ? await citationFindStore.load(slug, id) : null);
-  const model = modelFor("citation-investigate");
+  const model = modelFor("citation-investigate", "standard");
   const request = investigateRequest({ meta: article.meta, blocks: article.blocks, context, profile: null, matched, model });
   const allowed = allowedQuoteTexts(article.blocks, context, matched);
 

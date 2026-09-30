@@ -165,6 +165,7 @@ const ARTICLE: PublicArticle = {
 };
 
 const OWNED: Article = {
+  highPowerSince: null,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,

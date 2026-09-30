@@ -121,6 +121,7 @@ import {
 /* Types only. `src/hierarchy.ts` is the module this one is imported *by*, so a
    value import here would be the wrong way round and would close a cycle. */
 import type { BuildReport, ModelNode } from "./hierarchy.js";
+import type { ModelPower } from "./models.js";
 import {
   messagesWireBody,
   streamMessage,
@@ -242,6 +243,12 @@ export interface ExpansionIdentity {
   /** The exact object `streamMessage` would be handed — `ExpansionRequest.params`. */
   params: MessagesBody;
   /**
+   * The article's power, which picks the model `messagesWireBody` puts in the
+   * request — so an Opus wave never reuses a Sonnet answer (plan 260930f
+   * decision 7). It must be the power the executor sends at.
+   */
+  power: ModelPower;
+  /**
    * `expansionBodyHash` of the body this wave is being run over, after
    * `splitBlocks` — **not** `hashBlocks`, and that is the point of it.
    *
@@ -336,7 +343,7 @@ export function canonicalExpansionRequest(id: ExpansionIdentity): Record<string,
     promptVersion: EXPANSION_PROMPT_STAMP,
     /* Built at call time, the way the call builds it, so an environment override
        of the model moves the key rather than silently answering its question. */
-    request: messagesWireBody("hierarchy", id.params),
+    request: messagesWireBody("hierarchy", id.params, id.power),
     bodyHash: id.bodyHash,
     seedHash: id.seed.hash,
     recipe: canonicalRecipe(id.recipe),
@@ -825,11 +832,12 @@ export function freeAnswer(text: string): ExpansionAnswer {
  * several of them in flight; per-call text deltas would be a progress bar racing
  * itself. The wave reports whole calls instead.
  */
-export function liveExpansionExecutor(signal?: AbortSignal): ExpansionExecutor {
+export function liveExpansionExecutor(power: ModelPower, signal?: AbortSignal): ExpansionExecutor {
   return async (request) => {
     let message: Anthropic.Message;
     try {
       const call = streamMessage("hierarchy", request.params, {
+        power,
         ...(signal ? { signal } : {}),
       });
       message = await call.finalMessage();
@@ -1288,6 +1296,8 @@ export async function runExpansionWave(opts: {
    * does not delete anything.
    */
   reask?: boolean;
+  /** The power the executor sends at — part of every checkpoint key. Plan 260930f. */
+  power: ModelPower;
 }): Promise<ExpansionWaveResult> {
   const { slug, checkpoints, execute, batches, blocks, seed, recipe } = opts;
   const gate = opts.gate ?? sharedGate;
@@ -1305,11 +1315,13 @@ export async function runExpansionWave(opts: {
       blocks,
       outline: seed.outline,
       recipe,
+      power: opts.power,
       index,
     });
     const key = checkpointKey(
       canonicalExpansionRequest({
         params: request.params,
+        power: opts.power,
         bodyHash,
         seed,
         recipe,
@@ -2285,8 +2297,9 @@ function readWaveAnswers(opts: {
   blocks: readonly Block[];
   recipe: CascadeRecipe;
   index: BlockIndex;
+  power: ModelPower;
 }): WaveReading {
-  const { wave, byTarget, blocks, recipe, index } = opts;
+  const { wave, byTarget, blocks, recipe, index, power } = opts;
   const attachments: Attachment[] = [];
   const records: CandidateRecord[] = [];
   const report = emptyReport();
@@ -2339,6 +2352,7 @@ function readWaveAnswers(opts: {
             depth: candidate.depth + 1,
             blocks,
             recipe,
+            power,
             /* **The verdict of the proposal this very node was built from.** */
             verdict: child.proposed.verdict,
             /* No `retries` and no `fanOut`: this node was never itself expanded,
@@ -2482,6 +2496,8 @@ export async function deepenTree(opts: {
   /** Forwarded to the wave. Defaults there to `reaskExpansions(slug)`, which is off. */
   reask?: boolean;
   onProgress?: (detail: string) => void;
+  /** The power `execute` sends at — forwarded to the wave's checkpoint keys. Plan 260930f. */
+  power: ModelPower;
 }): Promise<DeepenResult> {
   const { tree, blocks, slug } = opts;
   const recipe = opts.recipe ?? CASCADE_RECIPE;
@@ -2508,7 +2524,16 @@ export async function deepenTree(opts: {
        state rather than "finished", which `decideExpansion` reports under its own
        names (`no-verdict`, `unassessed-ceiling`) so that the bounds cannot read
        high on the one wave where no verdict exists. */
-    const record = recordCandidate({ node, where, wave: 1, depth, blocks, recipe, index });
+    const record = recordCandidate({
+      node,
+      where,
+      wave: 1,
+      depth,
+      blocks,
+      recipe,
+      index,
+      power: opts.power,
+    });
     records.push(record);
     if (record.effective.decision !== "expand") return;
     /* A `CascadeNode` view of the proposal node, because that is what an
@@ -2624,6 +2649,7 @@ export async function deepenTree(opts: {
    */
   const wave = await runExpansionWave({
     slug,
+    power: opts.power,
     checkpoints: opts.checkpoints,
     execute: opts.execute,
     batches,
@@ -2656,7 +2682,14 @@ export async function deepenTree(opts: {
     ...(opts.reask !== undefined ? { reask: opts.reask } : {}),
   }).catch((err: unknown) => {
     if (!(err instanceof ExpansionWaveFailed)) throw err;
-    const partial = readWaveAnswers({ wave: err.partial, byTarget, blocks, recipe, index });
+    const partial = readWaveAnswers({
+      wave: err.partial,
+      byTarget,
+      blocks,
+      recipe,
+      index,
+      power: opts.power,
+    });
     records.push(...partial.records);
     const banked = partial.attachments.filter((a) => a.checkpointed).length;
     warnUncheckpointed(slug, partial.attachments.length - banked);
@@ -2686,7 +2719,7 @@ export async function deepenTree(opts: {
     });
   });
 
-  const read = readWaveAnswers({ wave, byTarget, blocks, recipe, index });
+  const read = readWaveAnswers({ wave, byTarget, blocks, recipe, index, power: opts.power });
   const { attachments, report } = read;
   records.push(...read.records);
 

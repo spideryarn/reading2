@@ -362,15 +362,15 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
   const pos = (i: number) => `#${String(i + 1).padStart(2, "0")}`;
   const jobs: Record<Exclude<Generator, "illustrated">, () => Promise<void>> = {
     arc: async () => {
-      const run = await generateArc({ article });
+      const run = await generateArc({ power: "standard", article });
       write("arc", run.arc.entries.map((e, i) => ({ key: pos(i), field: "text", text: e.text })), usageOf(run));
     },
     tweets: async () => {
-      const run = await generateTweets({ article, profile: null });
+      const run = await generateTweets({ power: "standard", article, profile: null });
       write("tweets", run.thread.tweets.map((t, i) => ({ key: pos(i), field: "text", text: t.text })), usageOf(run));
     },
     ideas: async () => {
-      const run = await generateIdeas({ article, previous: null, profile: null });
+      const run = await generateIdeas({ power: "standard", article, previous: null, profile: null });
       write(
         "ideas",
         run.ideas.ideas.flatMap((idea, i) =>
@@ -383,7 +383,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       );
     },
     quotes: async () => {
-      const run = await generateQuotes({ article, previous: null, profile: null });
+      const run = await generateQuotes({ power: "standard", article, previous: null, profile: null });
       write(
         "quotes",
         run.quotes.quotes.flatMap((q) => (q.reason ? [{ key: norm(q.text), field: "reason", text: q.reason, context: q.text }] : [])),
@@ -391,18 +391,18 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       );
     },
     citations: async () => {
-      const run = await generateCitations({ article, previous: null });
+      const run = await generateCitations({ power: "standard", article, previous: null });
       write("citations", run.citations.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
     },
     sketch: async () => {
-      const run = await generateSketch({ article, profile: null });
+      const run = await generateSketch({ power: "standard", article, profile: null });
       /* The whole Sketch first, beside its items, so a later `--only illustrated` paints the same one. */
       fs.writeFileSync(fullSketch, `${JSON.stringify(run.sketch, null, 2)}\n`);
       write("sketch", sketchItems(run.sketch, blockText), usageOf(run));
       sketchThisRun = run.sketch;
     },
     quiz: async () => {
-      const run = await generateQuiz({ article });
+      const run = await generateQuiz({ power: "standard", article });
       write(
         "quiz",
         run.quiz.questions.flatMap((q, i) => [
@@ -413,17 +413,17 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       );
     },
     faq: async () => {
-      const run = await generateFaq({ article });
+      const run = await generateFaq({ power: "standard", article });
       /* The FAQ writes questions only; its answers are the article's own passages. */
       write("faq", run.faq.questions.map((q, i) => ({ key: pos(i), field: "question", text: q.question })), usageOf(run));
     },
     labels: async () => {
-      const run = await generateLabels({ tree: article.tree, blocks: article.blocks, slug: SLUG, checkpoints: nullCheckpointStore() });
+      const run = await generateLabels({ power: "standard", tree: article.tree, blocks: article.blocks, slug: SLUG, checkpoints: nullCheckpointStore() });
       const order = article.blocks.map((b) => b.id as string).filter((id) => run.labels[id] !== undefined);
       write("labels", order.map((id) => ({ key: id, field: "label", text: run.labels[id] as string, context: clip(blockText.get(id) ?? "") })), usageOf(run));
     },
     timeline: async () => {
-      const run = await generateTimeline({ article, previous: null });
+      const run = await generateTimeline({ power: "standard", article, previous: null });
       write(
         "timeline",
         run.timeline.events.map((e, i) => ({ key: pos(i), field: "label", text: e.label, ...(e.occurrences[0] ? { context: e.occurrences[0].quote } : {}) })),
@@ -433,7 +433,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
     "quiz-mark": async () => {
       const items: Item[] = [];
       for (const c of MARK_CASES) {
-        const r = await markAnswer({
+        const r = await markAnswer({ power: "standard",
           meta: article.meta,
           blocks: article.blocks,
           question: c.question,
@@ -448,7 +448,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
     search: async () => {
       const items: Item[] = [];
       for (const criterion of SEARCHES) {
-        const r = await findPassages({ meta: article.meta, blocks: article.blocks, criterion });
+        const r = await findPassages({ power: "standard", meta: article.meta, blocks: article.blocks, criterion });
         const seen = new Map<string, number>();
         for (const h of r.hits) {
           /* Two hits in one block get #2, so a key still names one item. */
@@ -462,7 +462,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
     remember: async () => {
       const items: Item[] = [];
       for (const c of REMEMBER_CASES) {
-        items.push({ key: c.id, field: "reply", text: await turn({ question: c.text, kind: "remember" }), context: `Reader's summary: ${c.text}` });
+        items.push({ key: c.id, field: "reply", text: await turn({ power: "standard", question: c.text, kind: "remember" }), context: `Reader's summary: ${c.text}` });
       }
       write("remember", items);
     },
@@ -473,14 +473,14 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
         items.push({
           key: blockId,
           field: "reply",
-          text: await turn({ question: HELP_QUESTION, at: blockId, kind: "chat", anchor: { blockId }, help: true }),
+          text: await turn({ power: "standard", question: HELP_QUESTION, at: blockId, kind: "chat", anchor: { blockId }, help: true }),
           context: clip(blockText.get(blockId) ?? "", 1200),
         });
       }
       write("help", items);
     },
     "referee-claims": async () => {
-      const out = await runClaims({ meta: article.meta, blocks: article.blocks });
+      const out = await runClaims({ power: "standard", meta: article.meta, blocks: article.blocks });
       write(
         "referee-claims",
         out.claims.flatMap((c, i) => [
@@ -517,7 +517,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
           sketch = JSON.parse(raw) as Sketch;
           from = "this arm's earlier sketch run";
         }
-        const run = await generateIllustrated({
+        const run = await generateIllustrated({ power: "standard",
           article,
           sketch,
           profile: null,

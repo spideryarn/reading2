@@ -132,6 +132,7 @@ function ctx(over: Partial<StepContext> = {}): StepContext {
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
+    power: "standard",
     ...over,
   };
 }

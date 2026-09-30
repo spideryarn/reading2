@@ -602,6 +602,7 @@ function partsWith(
   leaseMs?: number,
 ): AdvanceParts {
   return {
+    power: async () => "standard",
     session: (job, attempt) =>
       openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
     steps: registryWith(step, tweets),
@@ -736,6 +737,7 @@ async function claimWithSession(slug: string, names: StepName[]): Promise<Claime
 /** The context `runStep` would have built, for the cases that call `commit` directly. */
 function contextFor(slug: string): StepContext {
   return {
+    power: "standard",
     slug,
     report: () => {},
     signal: new AbortController().signal,

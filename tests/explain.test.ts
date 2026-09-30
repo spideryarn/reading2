@@ -86,7 +86,7 @@ function bodyOf(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
   return JSON.parse(init.body as string);
 }
 
-const ask = () => explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" });
+const ask = () => explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" });
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
@@ -135,7 +135,7 @@ describe("streaming", () => {
     );
     const seen: string[] = [];
     let answer = "";
-    for await (const e of explainStream({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" })) {
+    for await (const e of explainStream({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" })) {
       if (e.type === "delta") seen.push(e.text);
       else answer = e.answer;
     }
@@ -245,7 +245,7 @@ describe("a deeper search, when the reader says the answer was not good enough",
        whole cache away one field earlier. The cap is now the same for everyone.
        docs/research/260826b-prompt-caching-anthropic.md, invalidation table. */
     fetchMock.mockResolvedValue(reply({}));
-    await explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", deep: true });
+    await explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", deep: true });
     const deepTools = bodyOf(fetchMock).tools;
 
     fetchMock.mockClear();
@@ -299,7 +299,7 @@ describe("failures are loud", () => {
       });
     });
     await expect(
-      explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", timeoutMs: 20 }),
+      explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", timeoutMs: 20 }),
     ).rejects.toThrow(/did not finish within/);
   });
 
@@ -313,7 +313,7 @@ describe("failures are loud", () => {
       body: new ReadableStream<Uint8Array>({ pull() {} }), // opens, then says nothing
     } as unknown as Response);
     await expect(
-      explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", stallMs: 20 }),
+      explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", stallMs: 20 }),
     ).rejects.toThrow(/\[ai-stalled\]/);
   });
 

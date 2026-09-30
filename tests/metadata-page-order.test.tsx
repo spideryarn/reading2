@@ -76,6 +76,7 @@ function article(): Article {
     ],
     assets: undefined,
     navLabelStatus: "ready",
+    highPowerSince: null,
     sourceGuess: undefined,
     tree: {
       version: "t",
@@ -569,5 +570,275 @@ describe("the button that takes the article off the shelf", () => {
     /* The same element, relabelled — the reversibility the word promises, on
        screen. */
     expect(button()?.textContent?.trim()).toBe("Put back");
+  });
+});
+
+/**
+ * **Three more sections shut, and Archive and Share… under the title.** Greg,
+ * 2026-09-30 (SPIDERYARN-READING2-6Z): *"we can have more of the sections be
+ * default collapsed, like authors, export, delete … a button to archive near
+ * the top … and also a button to publicly share"*.
+ * docs/plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md.
+ */
+describe("the top of the page: Archive, Share…, and what is shut", () => {
+  let calls: { url: string; init: RequestInit | undefined }[];
+  /** What each metadata GET answers, in turn (the last repeats), or a status to fail with. */
+  let metaAnswers: (Record<string, unknown> | number | "hang")[];
+  /** What each PATCH answers, in turn: a stored date, `null`, a bad body, a status, or never. */
+  let patchAnswers: (string | null | number | "hang" | "malformed")[];
+
+  const META = {
+    slug: SLUG,
+    dir: DIR,
+    stages: STAGES,
+    comments: 0,
+    profile: null,
+    purpose: null,
+    archivedAt: null as string | null,
+  };
+  const STORED = "2026-09-30T11:00:00.000Z";
+
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  beforeEach(() => {
+    calls = [];
+    metaAnswers = [META];
+    patchAnswers = [STORED];
+    history.replaceState(null, "", `/read/${SLUG}/metadata`);
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      if (init?.method === "PATCH") {
+        const next = patchAnswers.shift();
+        if (next === "hang") return new Promise<Response>(() => {});
+        if (next === "malformed") return Promise.resolve(json({ entry: { archivedAt: 23 } }));
+        if (typeof next === "number") return Promise.resolve(json({ error: "went away" }, next));
+        return Promise.resolve(json({ entry: { slug: SLUG, archivedAt: next ?? null } }));
+      }
+      const next = metaAnswers.length > 1 ? metaAnswers.shift() : metaAnswers[0];
+      if (next === "hang") return new Promise<Response>(() => {});
+      return Promise.resolve(typeof next === "number" ? json({ error: "no" }, next) : json(next));
+    });
+  });
+
+  async function flush() {
+    for (let i = 0; i < 4; i++) await act(async () => new Promise((go) => setTimeout(go, 0)));
+  }
+  async function settled(meta: Partial<Meta> = {}) {
+    await mount(meta);
+    await flush();
+  }
+
+  const top = () => host.querySelector<HTMLElement>('[data-testid="metadata-top-actions"]');
+  const topArchive = () => host.querySelector<HTMLButtonElement>('[data-top-action="archive"]');
+  const topShare = () => host.querySelector<HTMLButtonElement>('[data-top-action="share"]');
+  const bottomArchive = () =>
+    [...(host.querySelector("#sec-archive-this-article")?.querySelectorAll("button") ?? [])].find((b) =>
+      ["Archive", "Put back", "Archiving…", "Putting back…"].includes(b.textContent?.trim() ?? ""),
+    );
+  const patches = () => calls.filter((c) => c.init?.method === "PATCH");
+
+  it("shuts Authors, Export and Delete, and opening each shows what is inside", async () => {
+    await settled({ authors: [{ name: "Ada Lovelace", affiliations: ["Analytical Society"] }] });
+
+    for (const [label, inside] of [
+      ["Authors", "Analytical Society"],
+      ["Export", "Export this article"],
+      ["Delete this article", "Delete permanently"],
+    ] as const) {
+      const heading = sectionHeading(label);
+      expect(heading?.getAttribute("aria-expanded"), `${label} is open by default`).toBe("false");
+      const section = heading?.closest("section");
+      /* Shut means not visible: absent, or inside a `hidden` wrapper. */
+      const visible = () => {
+        if (!section) return false;
+        const walk = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          if (n.textContent?.includes(inside) && !n.parentElement?.closest("[hidden]")) return true;
+        }
+        return false;
+      };
+      expect(visible(), `${label} shows "${inside}" while shut`).toBe(false);
+      await act(async () => heading?.click());
+      expect(visible(), `${label} did not open`).toBe(true);
+    }
+    /* The count stays on the shut Authors heading. */
+    expect(sectionHeading("Authors")?.closest("h2")?.textContent).toContain("1");
+  });
+
+  it("archives from the top, says you can carry on reading, and moves nowhere", async () => {
+    await settled();
+    expect(topArchive()?.textContent?.trim()).toBe("Archive");
+    const node = topArchive();
+    node?.focus();
+
+    await act(async () => topArchive()?.click());
+    await flush();
+
+    expect(patches()).toHaveLength(1);
+    expect(patches()[0]?.url).toBe(`/api/library/${SLUG}`);
+    expect(JSON.parse(String(patches()[0]?.init?.body))).toEqual({ archived: true });
+    expect(topArchive()?.textContent?.trim()).toBe("Put back");
+    /* The same DOM node, so focus stays on it — ArchiveArticle's rule. */
+    expect(topArchive()).toBe(node);
+    expect(document.activeElement).toBe(node);
+    expect(top()?.textContent).toContain("carry on reading");
+    /* One state: the section at the foot agrees without being touched. */
+    expect(bottomArchive()?.textContent?.trim()).toBe("Put back");
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+  });
+
+  it("follows a press at the foot of the page", async () => {
+    await settled();
+    await act(async () => bottomArchive()?.click());
+    await flush();
+    expect(topArchive()?.textContent?.trim()).toBe("Put back");
+  });
+
+  it("puts an archived article back from the top, and both buttons say Archive again", async () => {
+    metaAnswers = [{ ...META, archivedAt: STORED }];
+    patchAnswers = [null];
+    await settled();
+    expect(topArchive()?.textContent?.trim()).toBe("Put back");
+    expect(top()?.textContent).toContain("carry on reading");
+
+    await act(async () => topArchive()?.click());
+    await flush();
+
+    expect(JSON.parse(String(patches()[0]?.init?.body))).toEqual({ archived: false });
+    expect(topArchive()?.textContent?.trim()).toBe("Archive");
+    expect(bottomArchive()?.textContent?.trim()).toBe("Archive");
+    expect(top()?.textContent).not.toContain("carry on reading");
+  });
+
+  it("disables both while one is out, so only one PATCH can be sent", async () => {
+    patchAnswers = ["hang"];
+    await settled();
+    /* The two controls share state, but both can still be activated before a
+       render has put `disabled` on either one. The hook itself owns the one-write
+       rule, so this same-turn press must be refused there too. */
+    await act(async () => {
+      topArchive()?.click();
+      bottomArchive()?.click();
+    });
+    expect(topArchive()?.disabled).toBe(true);
+    expect(bottomArchive()?.disabled).toBe(true);
+    await act(async () => {
+      topArchive()?.click();
+      bottomArchive()?.click();
+    });
+    expect(patches()).toHaveLength(1);
+  });
+
+  it("offers no archive button over a malformed archive state", async () => {
+    metaAnswers = [{ ...META, archivedAt: 23 }];
+    await settled();
+    expect(topArchive()).toBeNull();
+    expect(bottomArchive()).toBeUndefined();
+    expect(host.querySelector('#sec-archive-this-article [role="alert"]')).toBeTruthy();
+  });
+
+  it("re-reads rather than trusting a malformed successful PATCH answer", async () => {
+    patchAnswers = ["malformed"];
+    metaAnswers = [META, 500];
+    await settled();
+    await act(async () => topArchive()?.click());
+    await flush();
+
+    expect(calls.filter((c) => c.url === `/api/metadata/${SLUG}`)).toHaveLength(2);
+    expect(topArchive()).toBeNull();
+    expect(bottomArchive()).toBeUndefined();
+  });
+
+  it("after a failed PATCH, shows what a fresh read says, with the error beside the top button", async () => {
+    patchAnswers = [500];
+    /* The write landed although its answer did not: the re-read says archived. */
+    metaAnswers = [META, { ...META, archivedAt: STORED }];
+    await settled();
+    await act(async () => topArchive()?.click());
+    await flush();
+
+    expect(topArchive()?.textContent?.trim()).toBe("Put back");
+    expect(bottomArchive()?.textContent?.trim()).toBe("Put back");
+    expect(top()?.textContent).toContain("Couldn't confirm that");
+    /* Announced once, by the section, not twice. */
+    expect(top()?.querySelector('[role="alert"], [role="status"]')).toBeNull();
+    expect(host.querySelector('#sec-archive-this-article [role="alert"]')).toBeTruthy();
+  });
+
+  it("offers neither archive button when the PATCH and the re-read both fail", async () => {
+    patchAnswers = [500];
+    metaAnswers = [META, 500];
+    await settled();
+    await act(async () => topArchive()?.click());
+    await flush();
+
+    expect(topArchive()).toBeNull();
+    expect(bottomArchive()).toBeUndefined();
+  });
+
+  it("offers no archive button when the metadata request failed", async () => {
+    metaAnswers = [500];
+    await settled();
+    expect(topArchive()).toBeNull();
+    expect(bottomArchive()).toBeUndefined();
+  });
+
+  it("offers no archive button while the metadata request is unresolved", async () => {
+    metaAnswers = ["hang"];
+    await settled();
+    expect(topArchive()).toBeNull();
+    expect(bottomArchive()).toBeUndefined();
+  });
+
+  it("draws neither top button on the example fixture", async () => {
+    metaAnswers = [{ ...META, dir: "example" }];
+    await settled();
+    expect(top()).toBeNull();
+    expect(topShare()).toBeNull();
+  });
+
+  it("Share… goes to Access & sharing, lands on its heading, and asks the server nothing", async () => {
+    metaAnswers = [
+      {
+        ...META,
+        sharing: {
+          visibility: "private",
+          publicAt: null,
+          personalised: [],
+          available: {
+            arc: true,
+            tweets: true,
+            glossary: true,
+            ideas: true,
+            quotes: true,
+            timeline: true,
+            sketch: true,
+            trajectory: true,
+            faq: true,
+            citations: true,
+            debate: true,
+          },
+        },
+      },
+    ];
+    await settled();
+    const sharing = host.querySelector("#sec-access-sharing");
+    /* Present before the press, so "no confirmation open" below means something. */
+    expect(sharing?.textContent).toContain("Share with anyone");
+    const before = calls.length;
+
+    await act(async () => topShare()?.click());
+
+    const heading = sharing?.querySelector("h2");
+    expect(document.activeElement).toBe(heading);
+    /* Programmatic focus still needs a visible location for a sighted keyboard
+       reader; this heading has no other focus treatment to replace the outline. */
+    expect(heading?.className).not.toContain("outline-none");
+    expect(calls.length, "Share… sent a request").toBe(before);
+    /* Nothing published and nothing half-published: the confirmation, with its
+       rights tick-box, is still behind the card's own button. */
+    expect(sharing?.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(sharing?.textContent).toContain("Share with anyone");
   });
 });

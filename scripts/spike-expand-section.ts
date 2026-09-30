@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     output_config: { effort: PRODUCTION_EFFORT },
     system: EXPAND_SYSTEM,
     messages: [{ role: "user", content: user }],
-  });
+  }, { power: "standard" });
   const message: Anthropic.Message = await call.finalMessage();
   const elapsed = Math.round((Date.now() - started) / 1000);
   const raw = message.content

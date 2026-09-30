@@ -242,6 +242,7 @@ function buildOpts(quotes: readonly Quote[]) {
     profileHash: null,
     elapsedMs: 1,
     dropped: emptyDrops(),
+    power: "standard" as const,
   };
 }
 
@@ -731,6 +732,7 @@ function storeWith(quotes: Quote[] | null, ideas: Ideas | null = null, withTree:
 }
 
 const ctx = (profile?: string): StepContext => ({
+  power: "standard",
   slug: SLUG,
   report: () => undefined,
   signal: new AbortController().signal,

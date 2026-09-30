@@ -486,7 +486,9 @@ async function* callModel(
   host: string,
   signal: AbortSignal | undefined,
 ): AsyncGenerator<{ type: "delta"; text: string } | { type: "done"; summary: string }> {
-  const model = modelFor("link-summary");
+  /* Quick tier, which High-powered AI does not move (plan 260930f decision 2),
+     so the power is not this article's to decide. */
+  const model = modelFor("link-summary", "standard");
   const deadline = AbortSignal.timeout(SUMMARY_TIMEOUT_MS);
   /* The stall clock, and it has to be its own controller: a stall timer is
      restarted every time a chunk lands, and a timeout signal cannot be. */
@@ -841,7 +843,7 @@ export async function* linkSummaryStream({
     contextHash: fingerprint(reader),
     profileHash: profileFingerprint(profile),
     promptVersion: LINK_SUMMARY_PROMPT_VERSION,
-    model: modelFor("link-summary"),
+    model: modelFor("link-summary", "standard"),
   };
 
   /* 4. The cache. A hit takes no lock and no allowance, and is the overwhelming

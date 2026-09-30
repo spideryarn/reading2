@@ -53,7 +53,7 @@
  */
 import type { Block, Citation, Meta } from "./types.js";
 import { loadEnvLocal } from "./env.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import { blockRefLeaks, rawIds } from "./block-ref-leak.js";
 import { providerFailedMidAnswer } from "./openrouter-stream.js";
@@ -83,7 +83,7 @@ import {
  * exactly as the default parameter below used to read it. A module-load
  * constant would be captured before some callers have run `loadEnvLocal()`.
  */
-export const defaultModel = (): string => modelFor("explain");
+export const defaultModel = (power: ModelPower): string => modelFor("explain", power);
 
 /**
  * How long to wait for the model before giving up.
@@ -320,6 +320,12 @@ export interface ExplainRequest {
    * answer, where a wrong pitch in a glossary wastes one entry.
    */
   profile?: string | null;
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -458,7 +464,8 @@ export async function* explainStream({
   quote,
   deep = false,
   profile = null,
-  model = defaultModel(),
+  power,
+  model = defaultModel(power),
   signal,
   timeoutMs = EXPLAIN_TIMEOUT_MS,
   stallMs = EXPLAIN_STALL_MS,
@@ -484,7 +491,7 @@ export async function* explainStream({
   /* Logged, not thrown — below the floor the breakpoint is accepted and does
      nothing, and the zeros that result are indistinguishable from a cache that
      has broken. Saying which it is costs one boolean. */
-  const tooShortToCache = underCacheFloor(cachedText(messages));
+  const tooShortToCache = underCacheFloor(cachedText(messages), model);
 
   const request = {
     model,

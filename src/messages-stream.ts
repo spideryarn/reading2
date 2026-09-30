@@ -65,7 +65,7 @@ import {
   recordSpend,
 } from "./ai-spend.js";
 import { NOT_CONFIGURED } from "./messages.js";
-import { type Task, modelFor } from "./models.js";
+import { isHighPowerModel, type ModelPower, type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
 
 /** Where the Anthropic Messages protocol is served from. Not `api.anthropic.com`. */
@@ -446,32 +446,53 @@ export interface MeteredCall {
  * recomputed by the caller: `resolveModel` reads the environment at call time,
  * so two reads are two chances to disagree.
  */
-export function messagesWireBody(task: Task, body: MessagesBody): Anthropic.MessageStreamParams {
+export function messagesWireBody(
+  task: Task,
+  body: MessagesBody,
+  power: ModelPower,
+): Anthropic.MessageStreamParams {
+  const model = modelFor(task, power);
+  /* **Effort parity, plan 260930f decision 1.** Opus 5.5's default effort is
+     `medium` where Sonnet 5's is `high`, so a call that thinks adaptively
+     without naming an effort (`illustrated` today) would think *less* on the
+     model that is meant to think more. It gets `high` — Sonnet's own default,
+     so no `max_tokens` ceiling sized against Sonnet is asked for more than it
+     was. Keyed on the model actually sent rather than on `power`, because the
+     reason is the model's default: an override to Opus needs it too. A call
+     that chose its own effort keeps it. */
+  const parity =
+    isHighPowerModel(model) && body.thinking?.type === "adaptive" && body.output_config?.effort === undefined
+      ? { output_config: { ...body.output_config, effort: "high" as const } }
+      : {};
   /* **After the spread, not before it.** It was before until 2026-08-28, so a
      body assembled at run time — out of something the type system never saw —
      could carry its own `provider` and win. Nothing did; the test that proved
      it possible was written the same hour, and it went red on the old order.
      `model` was already after, which is why only one of the two was wrong. */
-  return {
+  const wire = {
     ...body,
+    ...parity,
     provider: MESSAGES_PROVIDER,
-    model: modelFor(task),
-  } as Anthropic.MessageStreamParams;
+    model,
+  };
+  return wire as Anthropic.MessageStreamParams;
 }
 
 export function streamMessage(
   task: Task,
   body: MessagesBody,
-  options?: { signal?: AbortSignal },
+  /* `power` required, like `modelFor`'s: which article this call is for
+     decides the model, and a stage that has not asked does not compile. */
+  options: { power: ModelPower; signal?: AbortSignal },
 ): MeteredCall {
   const client = messagesClient();
   const startedAt = Date.now();
-  const wire = messagesWireBody(task, body);
+  const wire = messagesWireBody(task, body, options.power);
   const model = wire.model;
   /* Registered before the stream opens, so a call that never comes back leaves a
      trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
   const callId = beginSpend(task, model);
-  const stream = client.messages.stream(wire, options);
+  const stream = client.messages.stream(wire, options.signal ? { signal: options.signal } : undefined);
   const meter = meterStream(stream);
   /* Off the client rather than out of the environment a second time: the key the
      call actually went out with is the one the reconciliation has to ask about,
@@ -527,7 +548,7 @@ export function streamMessage(
            it was aborted, or the error *is* the abort — the signal's own reason,
            or an `AbortError` where none was given. "The signal happens to be
            aborted now" is not one of the two. */
-        const aborted = stream.aborted || isAbort(err, options?.signal);
+        const aborted = stream.aborted || isAbort(err, options.signal);
         record(
           task,
           model,

@@ -78,7 +78,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageCli } from "../../src/cli-ledger.js";
-import { PDF_READER_MODEL } from "../../src/models.js";
+import { modelFor, PDF_READER_MODEL } from "../../src/models.js";
 import {
   assemble,
   type FrontMatterAnswer,
@@ -376,7 +376,7 @@ const shippedLadder: Arm = async (sample, pass, fixture) => ({
  * decisions rather than two draws from the same model.
  */
 const tidyPass: Arm = async (sample, pass, fixture) => {
-  const reader = openRouterFrontMatterReader();
+  const reader = openRouterFrontMatterReader(modelFor("pdf-frontmatter", "standard"));
   const at = tidyAt(fixture.slug, sample.prompt, sample.sample, reader.id);
   const items = frontMatterWindow(sample.transcript);
   let answer: FrontMatterAnswer;
@@ -415,7 +415,7 @@ const tidyWithAuthors: Arm = async (sample, pass, fixture) => {
   const front = await tidyPass(sample, pass, fixture);
   const bylineIds = front.bylineIds ?? [];
   if (bylineIds.length === 0) return front;
-  const live = openRouterAuthorsReader();
+  const live = openRouterAuthorsReader(modelFor("pdf-frontmatter", "standard"));
   const at = authorsAt(fixture.slug, sample.prompt, sample.sample, live.id);
   /* The cache is the reader: an answer on disk is replayed rather than bought. */
   const reader: AuthorsReader = existsSync(at)

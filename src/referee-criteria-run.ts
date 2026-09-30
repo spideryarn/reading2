@@ -92,7 +92,7 @@ import {
   PROVIDER_UNREADABLE,
   saidNothing,
 } from "./messages.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import {
   collectCitations,
   explainAbort,
@@ -129,7 +129,7 @@ const CRITERIA_JOB = "referee-criteria" as const;
  * read `modelFor("search")`, so its new environment variable was an override
  * that silently did nothing. Same shape, same file, one job later.
  */
-export const defaultModel = (): string => modelFor(CRITERIA_JOB);
+export const defaultModel = (power: ModelPower): string => modelFor(CRITERIA_JOB, power);
 
 /**
  * How long to wait before giving up, and how long a silent stream may stay
@@ -407,6 +407,12 @@ export interface CriterionRequest {
   /** What the referee typed. */
   criterion: string;
   config: RefereeCriterionConfig;
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -540,7 +546,8 @@ export async function* runCriterionStream({
   blocks,
   criterion,
   config,
-  model = defaultModel(),
+  power,
+  model = defaultModel(power),
   signal,
   timeoutMs,
   stallMs,
@@ -560,7 +567,7 @@ export async function* runCriterionStream({
   }
 
   const messages = buildCriterionMessages(meta, blocks, criterion, config);
-  const tooShortToCache = underCacheFloor(cachedText(messages));
+  const tooShortToCache = underCacheFloor(cachedText(messages), model);
 
   const deadline = AbortSignal.timeout(deadlineMs);
   const stall = new AbortController();

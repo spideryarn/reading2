@@ -60,7 +60,7 @@ import { jsdom } from "./jsdom-lazy.js";
 import { findMathSpans, temmlRenderer, type RenderTex } from "./maths-tex.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { renderedBlockMathsText } from "./quote-in-block.js";
 import { quoteFinder, quoteFinderWithMultiplicity } from "./quote-match.js";
@@ -203,6 +203,8 @@ export function buildCrossrefs(
     dropped: CrossrefsDropped;
     /** The browser's TeX renderer, present when this article contains maths. */
     renderMaths?: RenderTex;
+    /** Which capable model wrote it — the article's High-powered AI setting (plan 260930f). */
+    power: ModelPower;
   },
 ): Crossrefs {
   if (!Array.isArray(parsed.links)) {
@@ -226,8 +228,9 @@ export function buildCrossrefs(
   }
   return {
     version: PROMPT_VERSION,
-    /* `CAPABLE_MODEL`, the name — every staleness check compares against it. */
-    generator: CAPABLE_MODEL,
+    /* The name of the model that wrote it. Freshness treats Sonnet and Opus
+       as one generation (`sameGenerator`, plan 260930f decision 6). */
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     links,
@@ -508,6 +511,8 @@ export async function generateCrossrefs(opts: {
   signal?: AbortSignal;
   /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
   cacheArticle?: boolean;
+  /** The article's High-powered AI setting — which capable model runs (plan 260930f). */
+  power: ModelPower;
 }): Promise<CrossrefsRun> {
   const { blocks, tree, meta: realMeta } = opts.article;
 
@@ -554,7 +559,7 @@ export async function generateCrossrefs(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, cap }) }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -603,6 +608,7 @@ export async function generateCrossrefs(opts: {
     elapsedMs: Date.now() - started,
     dropped,
     ...(renderMaths ? { renderMaths } : {}),
+    power: opts.power,
   });
 
   /* Nothing is written here — the caller writes through the store. */
@@ -610,7 +616,7 @@ export async function generateCrossrefs(opts: {
     crossrefs,
     blocks: blocks.length,
     dropped,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

@@ -215,6 +215,7 @@ async function quizInto(dir: string, opts: { stale?: boolean } = {}): Promise<Qu
       ],
     },
     {
+      power: "standard",
       slug: path.basename(dir),
       blocks,
       /* The real fingerprint, so the artefact is genuinely current — unless the

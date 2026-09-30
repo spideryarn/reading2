@@ -157,7 +157,7 @@ async function ask(
   anchor: ChatAnchor | null,
   help: boolean,
 ): Promise<Omit<Outcome, "run" | "slug" | "blockId" | "case" | "role" | "question" | "seconds">> {
-  for await (const event of converse({
+  for await (const event of converse({ power: "standard",
     meta,
     blocks,
     history: [],

@@ -1178,6 +1178,7 @@ const SKETCH: PublicSketch = {
    Only Referee needs it. */
 
 const OWNED: Article = {
+  highPowerSince: null,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,

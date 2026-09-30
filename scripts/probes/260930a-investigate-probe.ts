@@ -161,7 +161,7 @@ async function oneCall(slug: string, id: string, profiled: boolean): Promise<Row
       ],
     },
   ];
-  const model = modelFor("explain");
+  const model = modelFor("explain", "standard");
   const request = { model, max_tokens: 1500, tools: [tool()], messages };
   const end: StreamEnd = { terminated: false };
   const deadline = AbortSignal.timeout(TIMEOUT_MS);
@@ -237,7 +237,7 @@ async function oneCall(slug: string, id: string, profiled: boolean): Promise<Row
 }
 
 async function maxCharsCheck(): Promise<void> {
-  const model = modelFor("explain");
+  const model = modelFor("explain", "standard");
   const request = {
     model,
     max_tokens: 200,

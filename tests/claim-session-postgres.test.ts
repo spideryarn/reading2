@@ -618,6 +618,7 @@ describe("a claim under Postgres", () => {
     const job = await queueJob(slug, INGEST);
 
     const advanced = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
     });
@@ -686,6 +687,7 @@ describe("a claim under Postgres", () => {
 
     const job = await queueJob(slug, ["hierarchy"]);
     const advanced = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       /* The real registry, unfaked: every one of these must skip, and a step
          that ran would fetch or call a model, which is a loud failure rather
@@ -731,6 +733,7 @@ describe("a claim under Postgres", () => {
     const { steps, blocks } = articleSteps(slug, "ptv", "the late-step article");
     const ingest = await queueJob(slug, INGEST);
     await advanceUntilItRuns(ingest.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
     });
@@ -741,6 +744,7 @@ describe("a claim under Postgres", () => {
     let sawBlocks = 0;
     const job = await queueJob(slug, ["arc"]);
     const advanced = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,
@@ -817,6 +821,7 @@ describe("a claim under Postgres", () => {
     const first = articleSteps(slug, "rfa", "before the refresh");
     const ingest = await queueJob(slug, INGEST);
     await advanceUntilItRuns(ingest.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...first.steps } as never,
     });
@@ -829,6 +834,7 @@ describe("a claim under Postgres", () => {
     const refresh = await queueJob(slug, INGEST, true);
     let draftId = "";
     const failed = await advanceUntilItRuns(refresh.id, {
+      power: async () => "standard",
       session: async (job, attempt) => {
         const session = await claimSession(job, attempt);
         draftId = (await jobRow(job.id))?.draftRevisionId ?? "";
@@ -883,6 +889,7 @@ describe("a claim under Postgres", () => {
     );
 
     const advanced = await advanceUntilItRuns(retried!.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...second.steps } as never,
     });
@@ -930,6 +937,7 @@ describe("a claim under Postgres", () => {
     const job = await queueJob(slug, INGEST);
 
     const advanced = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
       /* 22s leaves a 2s deadline after `DEADLINE_MARGIN_MS`, and `blocks` needs
@@ -1037,6 +1045,7 @@ describe("a claim under Postgres", () => {
        draft pointer on a `queued` job — case 5 is the same arrangement, asserted
        rather than assumed. */
     const released = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
       leaseMs: DEADLINE_MARGIN_MS + 2_000,
@@ -1057,6 +1066,7 @@ describe("a claim under Postgres", () => {
     const MARKER = "THE POOL TIMEOUT A DRIVER WOULD HAVE QUOTED";
     let opens = 0;
     const advanced = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: async (claimed, attempt) => {
         opens += 1;
         if (opens === 1) throw new Error(`connect ETIMEDOUT — ${MARKER}`);
@@ -1133,6 +1143,7 @@ describe("a claim under Postgres", () => {
     const before = articleSteps(slug, "rqa", "before the re-extraction");
     const ingest = await queueJob(slug, INGEST);
     await advanceUntilItRuns(ingest.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...before.steps } as never,
     });
@@ -1164,6 +1175,7 @@ describe("a claim under Postgres", () => {
     expect(early.kind, "the queued job claimed past an older one on its article").toBe("busy");
 
     await advanceUntilItRuns(rewrite.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...after.steps } as never,
     });
@@ -1173,6 +1185,7 @@ describe("a claim under Postgres", () => {
     /* What the `ideas` step read, as it read it. */
     let sawFirstBlockText: string | null = null;
     const advanced = await advanceUntilItRuns(ideas.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,
@@ -1286,6 +1299,7 @@ describe("a claim under Postgres", () => {
        the one in use. */
     let inFlightDraft: string | null = null;
     const paused = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,
@@ -1364,6 +1378,7 @@ describe("a claim under Postgres", () => {
       },
     } as PipelineStep;
     const finished = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...steps, extract: countedExtract } as never,
     });
@@ -1412,6 +1427,7 @@ describe("a claim under Postgres", () => {
     const job = await queueJob(slug, INGEST);
 
     const advanced = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,
@@ -1487,6 +1503,7 @@ describe("a claim under Postgres", () => {
       session: claimSession,
       steps: { ...STEPS, ...steps, extract: hangingStep("extract") } as never,
       leaseMs: DEADLINE_MARGIN_MS + 1_500,
+      power: async () => "standard" as const,
     };
 
     for (let window = 1; window <= REQUEUE_BUDGET; window++) {
@@ -1651,6 +1668,7 @@ describe("a claim under Postgres", () => {
        two rather than starting a step it cannot finish. No requeue is spent —
        a between-steps release is free. */
     const first = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 30_000,
@@ -1664,6 +1682,7 @@ describe("a claim under Postgres", () => {
 
     /* --- Window 2: the clean pause, with the tree already paid for. --------- */
     const paused = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(true) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 6_000,
@@ -1703,6 +1722,7 @@ describe("a claim under Postgres", () => {
 
     /* --- Window 4: the finish, on the draft the first three left. ---------- */
     const finished = await advanceUntilItRuns(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
     });

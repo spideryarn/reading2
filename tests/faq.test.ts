@@ -368,7 +368,7 @@ describe("the two scores on a question (faq/4, plan 260929g)", () => {
 });
 
 describe("the three empty outcomes", () => {
-  const opts = () => ({ slug: "s", blocks, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped() });
+  const opts = () => ({ slug: "s", blocks, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" as const });
 
   it("fails an answer with no questions array", () => {
     expect(() => buildFaq({}, opts())).toThrow(/no `questions` array/);
@@ -421,7 +421,7 @@ describe("the request", () => {
     answer = JSON.stringify({
       questions: [q("Why does this follow?", [{ blockId: quotable.id, quote: words }])],
     });
-    const run = await generateFaq({ article, cacheArticle: true });
+    const run = await generateFaq({ power: "standard", article, cacheArticle: true });
 
     answer = JSON.stringify({
       ideas: [
@@ -434,7 +434,7 @@ describe("the request", () => {
       ],
     });
     const { generateIdeas } = await import("../src/ideas.js");
-    await generateIdeas({ article, previous: null, cacheArticle: true });
+    await generateIdeas({ power: "standard", article, previous: null, cacheArticle: true });
 
     const [faqCall, ideasCall] = sent;
     expect(faqCall?.task).toBe("faq");

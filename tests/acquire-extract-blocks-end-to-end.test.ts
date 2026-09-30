@@ -101,6 +101,7 @@ function fetched(): FetchedDocument {
 
 function ctx(): StepContext {
   return {
+    power: "standard",
     slug: SLUG,
     url: "https://example.test/probe",
     report: () => undefined,

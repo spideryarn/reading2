@@ -376,13 +376,13 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
       const summaries = async (): Promise<Line[]> => {
         const { body } = splitBlocks(article.blocks);
         const { params } = structureRequest(body);
-        const message = await streamMessage("hierarchy", params, {}).finalMessage();
+        const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
         const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
         const { root } = parseJsonFrom<{ root: ModelNode }>(stripFence(raw), "plain-words structure answer");
         return flatten(root, 0, []);
       };
       const glossary = async (): Promise<Entry[]> => {
-        const run = await generateGlossary({ article: { ...article, slug }, previous: null, profile: null });
+        const run = await generateGlossary({ power: "standard", article: { ...article, slug }, previous: null, profile: null });
         return run.glossary.entries.map((e) => ({
           name: e.name,
           aliases: e.aliases,

@@ -533,7 +533,7 @@ async function main(): Promise<void> {
     );
     say();
     try {
-      const run = await generateQuiz({ article });
+      const run = await generateQuiz({ power: "standard", article });
       const { quiz } = run;
       const premised = quiz.questions.filter((q) => q.premise).length;
       say(
@@ -635,7 +635,7 @@ async function main(): Promise<void> {
     const started = performance.now();
     let out: QuizMarkResult;
     try {
-      out = await markAnswer({
+      out = await markAnswer({ power: "standard",
         meta,
         blocks: article.blocks,
         question: c.question,

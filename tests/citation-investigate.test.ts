@@ -18,6 +18,10 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
+import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
+
 import { FIND_TIMEOUT_MS, LOOKUP_SYSTEM, makeFindCitation } from "../src/citation-find.js";
 import {
   INVESTIGATE_MAX_CHARACTERS,
@@ -167,6 +171,8 @@ const NO_MATCH_ANSWER = lookupAnswer({});
 
 interface Harness {
   deltas: string[];
+  /** The article the reader seam answers with — `ARTICLE` unless a case needs another. */
+  article?: Article;
   outcome?: StreamOutcome;
   evidence?: SearchEvidence[] | null;
   lookup?: CitationLookup;
@@ -213,7 +219,7 @@ function harness(h: Harness) {
         const rows = reads > 1 && after !== undefined ? after : listed;
         return { citations: citationsOf(rows), stale: false, outdated: false };
       },
-      loadArticle: async () => ARTICLE,
+      loadArticle: async () => h.article ?? ARTICLE,
     },
     finds: {
       /* The store: a find saved by step 1 is the one read back. */
@@ -935,5 +941,29 @@ describe("between the steps: the list is read again (P-3)", () => {
     expect(h.runs).toHaveLength(0);
     expect(h.saved).toHaveLength(0);
     expect(h.finished).toEqual(["lease-1"]);
+  });
+});
+
+/* ------------------------------------------------ High-powered AI (260930f) -- */
+
+describe("High-powered AI — both of the press's calls follow the article (Sol F4)", () => {
+  const HIGH = { ...ARTICLE, highPowerSince: "2026-09-30T00:00:00.000Z" } as unknown as Article;
+
+  it("sends Opus for the reading and for the nested find-first lookup, on an administrator's article", async () => {
+    const h = harness({ deltas: ["An answer."], article: HIGH });
+    await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, async () => {
+      await drain((await h.investigate(SLUG, ID, null)).stream());
+    });
+    expect(h.lookupCalls[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
+    expect((h.runs[0]?.request as unknown as { model: string }).model).toBe(HIGH_POWER_MODEL_OPENROUTER);
+  });
+
+  it("sends Sonnet for the same article when its owner is not an administrator", async () => {
+    const h = harness({ deltas: ["An answer."], article: HIGH });
+    await runAsOwner(DEV_OWNER_ID, async () => {
+      await drain((await h.investigate(SLUG, ID, null)).stream());
+    });
+    expect(h.lookupCalls[0]?.model).toBe(CAPABLE_MODEL_OPENROUTER);
+    expect((h.runs[0]?.request as unknown as { model: string }).model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
 });

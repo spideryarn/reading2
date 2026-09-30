@@ -159,7 +159,7 @@ describe("the automatic stages never see the note", () => {
     const { generateArc } = await import("../src/arc.js");
     const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
-    const prompt = await promptOf(() => generateArc({ article }));
+    const prompt = await promptOf(() => generateArc({ power: "standard", article }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -171,7 +171,7 @@ describe("the automatic stages never see the note", () => {
     /* `previous: null` — a first pass, which is what this fixture is. The
        argument is required so that landing D cannot drop it silently; here it
        is the honest value rather than a placeholder. src/glossary.ts. */
-    const prompt = await promptOf(() => generateGlossary({ article, previous: null }));
+    const prompt = await promptOf(() => generateGlossary({ power: "standard", article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -180,7 +180,7 @@ describe("the automatic stages never see the note", () => {
     const { generateTweets } = await import("../src/tweets.js");
     const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
-    const prompt = await promptOf(() => generateTweets({ article }));
+    const prompt = await promptOf(() => generateTweets({ power: "standard", article }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -197,7 +197,7 @@ describe("the automatic stages never see the note", () => {
     const { generateQuotes } = await import("../src/quotes.js");
     const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
-    const prompt = await promptOf(() => generateQuotes({ article, previous: null }));
+    const prompt = await promptOf(() => generateQuotes({ power: "standard", article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -210,7 +210,7 @@ describe("the automatic stages never see the note", () => {
     const { generateIdeas } = await import("../src/ideas.js");
     const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
     const article = await readArticleFromDir(DIR);
-    const prompt = await promptOf(() => generateIdeas({ article, previous: null }));
+    const prompt = await promptOf(() => generateIdeas({ power: "standard", article, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -228,7 +228,7 @@ describe("the automatic stages never see the note", () => {
        the model is never handed a note at all. Handing it one with a label
        would not have been a fix. */
     const { generateHierarchy } = await import("../src/hierarchy.js");
-    const prompt = await promptOf(() => generateHierarchy({ blocks, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }));
+    const prompt = await promptOf(() => generateHierarchy({ power: "standard", blocks, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -260,7 +260,7 @@ describe("the automatic stages never see the note", () => {
 
     const { generateHierarchy } = await import("../src/hierarchy.js");
     const prompt = await promptOf(() =>
-      generateHierarchy({ blocks: stranded, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }),
+      generateHierarchy({ power: "standard", blocks: stranded, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }),
     );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
@@ -281,7 +281,7 @@ describe("the automatic stages never see the note", () => {
        tree is in, rather than relying on stage 4 having run. */
     const { generateLabels } = await import("../src/labels.js");
     const prompt = await promptOf(() =>
-      generateLabels({ tree, blocks, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }),
+      generateLabels({ power: "standard", tree, blocks, slug: "block-policy-prompts", checkpoints: nullCheckpointStore() }),
     );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);

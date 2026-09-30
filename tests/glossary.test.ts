@@ -325,7 +325,7 @@ describe("inDocumentOrder", () => {
 });
 
 describe("buildGlossary", () => {
-  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234, power: "standard" as const };
 
   it("keeps only what it can render, and degrades the rest", () => {
     const g = buildGlossary(
@@ -395,7 +395,7 @@ describe("buildGlossary", () => {
  * wrong. A counter that only fired inside `score()` would never see the first.
  */
 describe("buildGlossary score accounting", () => {
-  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234, power: "standard" as const };
 
   it("counts nothing when both scores arrive in range", () => {
     const scores = noGlossaryScoreDrops();
@@ -1056,7 +1056,7 @@ describe("what an entry says — the glossary/2 field split", () => {
      their provenance. What is testable is the plumbing that shape needs; the
      prose itself is a model call and is not. See
      docs/plans/260826d-glossary-entries-worth-reading.md. */
-  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234, power: "standard" as const };
 
   it("keeps an entry with only one of the two prose fields", () => {
     /* The whole point. A coinage needs no background; a person simply quoted
@@ -1279,7 +1279,7 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
      killing every `?term=` link the reader held — while the file was
      overwritten and `passes` reset to 1. The button that did it said "Find more
      terms". */
-  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1 };
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1, power: "standard" as const };
 
   const v1: Glossary = {
     version: "glossary/1",

@@ -1796,6 +1796,20 @@ export interface Article {
    * 4).
    */
   sourceGuess: SourceGuess | undefined;
+
+  /**
+   * **When High-powered AI was switched on for this article**, off
+   * `articles.high_power_since` — or `null`, which is off.
+   * docs/plans/260930f-high-powered-ai-per-article.md.
+   *
+   * The column, not the decision: whether the article's calls actually go to
+   * Opus is `articlePower` in src/models.ts, which also asks whether the owner
+   * is an administrator (decision 4). Every request-path route asks that of
+   * this field; a required key, for `assets`' reason, so a projection that
+   * forgot it is a type error rather than an article quietly answered by the
+   * cheaper model.
+   */
+  highPowerSince: string | null;
 }
 
 /**
@@ -2443,6 +2457,15 @@ export interface ArticleMetadata {
    * `null` is an answer rather than a gap. Same shape as `purpose`.
    */
   archivedAt: string | null;
+
+  /**
+   * **When High-powered AI was switched on for this article, or `null`** —
+   * `articles.high_power_since`, off the row already in hand.
+   * docs/plans/260930f-high-powered-ai-per-article.md. The column, not the
+   * effect: the switch on `/metadata` is shown only to an administrator, and
+   * only their articles ever run it (`articlePower`, src/models.ts).
+   */
+  highPowerSince: string | null;
 
   /* ---- sharing. docs/plans/260827ai-public-read-only-access.md § Stage 1 ---- */
 

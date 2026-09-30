@@ -219,6 +219,7 @@ import {
   FileQuestion,
   FileType,
   Fingerprint,
+  Globe,
   Image,
   Layers,
   Link2,
@@ -248,7 +249,6 @@ import type {
   Article,
   ArticleMetadata,
   ArticleSharing,
-  LibraryEntry,
   Meta,
   SourceGuess,
   StageState,
@@ -287,6 +287,7 @@ import { ProfileBox } from "./ProfileBox.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { PageContents } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
+import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
 import { ResetArticle } from "./ResetArticle.js";
 import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
@@ -673,6 +674,13 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
+  /* One archive state for the two buttons that change it — `useArchive`. */
+  const archive = useArchive(
+    slug,
+    provenance?.archivedAt,
+    provenance !== null,
+    Boolean(provenanceError),
+  );
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */
   const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
@@ -699,6 +707,15 @@ export function Metadata({
    * one page's contents list the other page's sections.
    */
   const body = useRef<HTMLElement>(null);
+
+  /* Share… in `TopActions`: to the sharing card, landing on its heading.
+     Through `body` rather than `document`, for the reason `body`'s docstring
+     gives. `scrollIntoView` is optional-called because jsdom has none. */
+  function goToSharing(): void {
+    const section = body.current?.querySelector<HTMLElement>(`#${sectionId("Access & sharing")}`);
+    section?.scrollIntoView?.({ block: "start" });
+    section?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  }
 
   const pipelineLine = useMemo(() => {
     if (!provenance) return null;
@@ -834,6 +851,10 @@ export function Metadata({
           </p>
         )}
 
+        {/* The two acts people come here for most often, under the title —
+            `TopActions`. */}
+        <TopActions archive={archive} fixture={showingFixture} onShare={goToSharing} />
+
         {/* --------------------------------------------- 2. in one sentence --
             Serif, because this is the article talking rather than the app —
             the same distinction the reading view makes between prose and
@@ -875,7 +896,10 @@ export function Metadata({
             the byline is in the facts line under the title, as it always was.
             The names link to the shelf searched for them, as in the masthead. */}
         {meta.authors && (
-          <Section label="Authors" aside={`${meta.authors.length}`}>
+          /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
+             *"we can have more of the sections be default collapsed, like
+             authors, export, delete"*. The count stays on the heading. */
+          <Section label="Authors" aside={`${meta.authors.length}`} collapsible>
             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
               {meta.authors.map((author, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: two authors can share a name; order is the identity
@@ -1150,12 +1174,7 @@ export function Metadata({
             than over it for the same reason — that is the least urgent thing
             here, and it is still not something to scroll this button past. */}
         <Section label="Archive this article">
-          <ArchiveArticle
-            slug={slug}
-            archivedAt={provenance?.archivedAt}
-            failed={Boolean(provenanceError)}
-            fixture={showingFixture}
-          />
+          <ArchiveArticle archive={archive} fixture={showingFixture} />
         </Section>
 
         {/* ------------------------------------------ 11. destroying it --
@@ -1166,7 +1185,11 @@ export function Metadata({
             shelf card deliberately has no such button — its controls are
             hover-revealed and adjacent, and on a phone they are all tap
             targets. docs/plans/260906h-delete-an-article-permanently.md. */}
-        <Section label="Delete this article">
+        {/* Shut until opened, since 2026-09-30 (SPIDERYARN-READING2-6Z, with
+            Authors and Export). Kept mounted, so a confirm half-way through
+            survives the reader shutting it; the confirm itself is unchanged,
+            and shutting the section only adds a press in front of it. */}
+        <Section label="Delete this article" collapsible keepMounted>
           <DeletePermanently
             slug={slug}
             /* **`||`, not `??`, and a browser pass is what found that.** An
@@ -1240,7 +1263,7 @@ function SharingSection({
 }) {
   if (!offer) return null;
   return (
-    <Section label="Access & sharing">
+    <Section label="Access & sharing" landing>
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
           page background — Greg: *"the section should be inside a box like the
@@ -1349,6 +1372,11 @@ function RerunSection({
 }) {
   return (
     <Section label="Re-run AI processing" collapsible keepMounted>
+      {/* **High-powered AI**, administrator only — it draws nothing for anybody
+          else. First in the section, above the rows it changes the model for:
+          switching it re-runs nothing, and the rows below are how you ask.
+          docs/plans/260930f-high-powered-ai-per-article.md, decision 8. */}
+      <HighPowerSwitch slug={slug} since={provenance?.highPowerSince} onChanged={onFinished} />
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
           shipped while the placeholder it replaces did not is that a button
@@ -1722,7 +1750,12 @@ function ExportSection({
   if (!offer) return null;
 
   return (
-    <Section label="Export">
+    /* Shut until opened, since 2026-09-30 (SPIDERYARN-READING2-6Z). Kept
+       mounted, so a zip being built when the reader shuts it still downloads.
+       Its error, if one arrives while shut, is inside `hidden` and so is not
+       announced until the section is opened — accepted: the reader shut it
+       themselves, mid-wait. GPT Sol, plan review. */
+    <Section label="Export" collapsible keepMounted>
       <div className={`${CARD} tw:p-4`}>
         {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
             the toolbar's `IconButton` — this one has a label to carry and no
@@ -2300,19 +2333,60 @@ function TechnicalDetails({
  * was written first and removed as redundant when a review pointed at the outer
  * one.
  */
-function ArchiveArticle({
-  slug,
-  archivedAt,
-  failed,
-  fixture,
-}: {
-  slug: string;
-  /** From the server. `undefined` until it lands, and for ever if it does not. */
-  archivedAt: string | null | undefined;
-  failed: boolean;
-  /** This address has no article of its own — see `showingFixture` at the call site. */
-  fixture: boolean;
-}) {
+type ArchiveControl = {
+  /** An ISO date, `null` for *on the shelf*, `undefined` for *we do not know*. */
+  at: string | null | undefined;
+  /** Unknown because something failed, rather than because nothing has answered yet. */
+  lost: boolean;
+  busy: boolean;
+  error: string | null;
+  set: (archived: boolean) => Promise<void>;
+};
+
+/** A real answer to the archive question, or `undefined` when the wire did not say. */
+function archiveAt(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return undefined;
+  return value;
+}
+
+/** Read the PATCH representation without turning a malformed success into *on the shelf*. */
+function archiveAtFromPatch(value: unknown, slug: string): string | null | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const entry = (value as Record<string, unknown>).entry;
+  if (entry === null || typeof entry !== "object") return undefined;
+  const row = entry as Record<string, unknown>;
+  if (row.slug !== slug) return undefined;
+  /* `LibraryEntry.archivedAt` is absent when the article is on the shelf; an
+     explicit null says the same thing in tests and is harmless on the wire. */
+  return "archivedAt" in row ? archiveAt(row.archivedAt) : null;
+}
+
+/**
+ * **The page's one answer to "is this archived", and the one way to change it.**
+ *
+ * Lifted out of `ArchiveArticle` on 2026-09-30, when Archive got a second
+ * button near the top of the page (`TopActions`, SPIDERYARN-READING2-6Z). Two
+ * buttons with a state each could disagree on one screen — the top saying
+ * *Archive* while the section says *Put back* — so both read this, and a press
+ * on either flips both.
+ * docs/plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md.
+ *
+ * **`failed` makes `at` unknown**, which it did not before the lift: a failed
+ * *refresh* keeps the old `provenance` on the page (see `readProvenance`), so
+ * reading `archivedAt` off it alone offered Archive or Put back from an answer
+ * the latest request could no longer vouch for. What the reader has done since
+ * (`acted`) still wins, because the server told us that after the stale read.
+ * GPT Sol, plan review, 2026-09-30.
+ */
+function useArchive(
+  slug: string,
+  /** From the server, still `unknown` here because `readJson<T>` only casts. */
+  archivedAt: unknown,
+  /** Distinguishes an unanswered request from an answered body missing its required field. */
+  answered: boolean,
+  failed: boolean,
+): ArchiveControl {
   /* What the reader has just done, if anything — `null` means they have not
      touched it, and the server's answer stands. A sentinel object rather than
      seeding a `useState` from the prop in an effect, because the prop arrives
@@ -2324,15 +2398,22 @@ function ArchiveArticle({
   const [acted, setActed] = useState<{ at: string | null | undefined } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const now = useNow();
+  /* `disabled` lands on both buttons at the next render. This closes the
+     smaller window before that render, when the two controls can both dispatch
+     their click and would otherwise send the same PATCH twice. */
+  const inFlight = useRef(false);
 
-  const at = acted ? acted.at : archivedAt;
+  const fromServer = archiveAt(archivedAt);
+  const unreadable = answered && fromServer === undefined;
+  const at = acted ? acted.at : failed || unreadable ? undefined : fromServer;
 
   /* One function for both directions, because they are one PATCH with one
      boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
      deliberately the same request on the shelf side. Two functions here would
      be two places to get the field name wrong. */
   async function set(archived: boolean): Promise<void> {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -2347,8 +2428,11 @@ function ArchiveArticle({
          archiving something already archived keeps the ORIGINAL date
          (src/shelf.ts), and a locally-invented `new Date()` would print a
          timestamp the store disagrees with. */
-      const { entry } = await readJson<{ entry: LibraryEntry }>(r);
-      setActed({ at: entry.archivedAt ?? null });
+      const stored = archiveAtFromPatch(await readJson<unknown>(r), slug);
+      if (stored === undefined) {
+        throw new Error("The server's answer did not say whether this article is archived.");
+      }
+      setActed({ at: stored });
     } catch (e) {
       /* **A failed request is not proof that nothing was written**, and saying
          so was this control's one dishonest sentence until a cross-model review
@@ -2368,14 +2452,129 @@ function ArchiveArticle({
         const m = await readJson<ArticleMetadata>(
           await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
         );
-        setActed({ at: m.archivedAt });
+        setActed({ at: archiveAt(m.archivedAt) });
       } catch {
         setActed({ at: undefined });
       }
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
+
+  return {
+    at,
+    lost: at === undefined && (failed || unreadable || acted !== null),
+    busy,
+    error,
+    set,
+  };
+}
+
+/** The quiet inline button this page uses for an act with a sentence beside it. */
+const QUIET_BUTTON =
+  "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+
+/**
+ * **Archive and Share…, under the title.** Greg, 2026-09-30
+ * (SPIDERYARN-READING2-6Z): *"perhaps we could add a button to archive near the
+ * top because that's going to be quite a common action, and also a button to
+ * publicly share."*
+ *
+ * - **Archive is the same act as the section at the foot of the page**, off the
+ *   same `useArchive` state, and it follows that section's rules: no button
+ *   while we do not know, one `<button>` across both labels so focus survives
+ *   the press, the box and never the bin or the red. Nothing navigates — *"it
+ *   doesn't need to kick you out of the article itself"* — and the line under it
+ *   says so. That line and the error are plain text: the section's `status` and
+ *   `alert` already announce them once.
+ * - **Share… does not share.** It takes the reader to *Access & sharing* and
+ *   lands on its heading, because publishing has its own confirmation and
+ *   rights tick-box there and this must not become a way round them — Greg
+ *   expected as much: *"it'll probably have to take you to the section for
+ *   public sharing"*. It does not know whether the article is already public;
+ *   saying so would mean lifting `AccessSharing`'s state up too, deferred in the
+ *   plan.
+ *
+ * Neither on the fixture, where there is no row to archive or share.
+ * docs/plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md.
+ */
+function TopActions({
+  archive,
+  fixture,
+  onShare,
+}: {
+  archive: ArchiveControl;
+  fixture: boolean;
+  /** Scroll to *Access & sharing* and focus its heading. */
+  onShare: () => void;
+}) {
+  const now = useNow();
+  if (fixture) return null;
+  const { at, busy, error, set } = archive;
+  const archived = at !== null && at !== undefined;
+  const when = archived ? timeAgo(at, now) : undefined;
+  return (
+    <div className="tw:mt-4 tw:flex tw:flex-wrap tw:items-center tw:gap-2" data-testid="metadata-top-actions">
+      {/* Fixed slots, `? … : null`, so the Archive button keeps its DOM node
+          when the lines around it come and go — see `ArchiveArticle`. */}
+      {at !== undefined ? (
+        <button
+          type="button"
+          data-top-action="archive"
+          onClick={() => void set(!archived)}
+          disabled={busy}
+          title={
+            archived
+              ? "Back onto the shelf."
+              : "Off the shelf, and reversible. You stay here and can carry on reading."
+          }
+          className={QUIET_BUTTON}
+        >
+          {archived ? <Undo2 size={14} /> : <Archive size={14} />}
+          {busy ? (archived ? "Putting back…" : "Archiving…") : archived ? "Put back" : "Archive"}
+        </button>
+      ) : null}
+      <button
+        type="button"
+        data-top-action="share"
+        onClick={onShare}
+        title="Takes you to Access & sharing below, which asks before anything goes public."
+        className={QUIET_BUTTON}
+      >
+        <Globe size={14} />
+        Share…
+      </button>
+      {archived ? (
+        <p className="tw:m-0 tw:basis-full tw:text-sm tw:text-foreground">
+          {when ? `Archived ${when}` : "Archived"} — off the shelf, and you can carry on reading.
+        </p>
+      ) : null}
+      {error ? (
+        <p className="tw:m-0 tw:basis-full tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive">
+          <TriangleAlert size={12} /> Couldn't confirm that — {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The Archive section at the foot of the page: the control, and what it does
+ * said before it is done. Its state is `useArchive`'s, above, which is where
+ * the rules about unknown and failed states now live.
+ */
+function ArchiveArticle({
+  archive,
+  fixture,
+}: {
+  /** The page's one archive state, shared with `TopActions`. */
+  archive: ArchiveControl;
+  /** This address has no article of its own — see `showingFixture` at the call site. */
+  fixture: boolean;
+}) {
+  const { at, lost, busy, error, set } = archive;
+  const now = useNow();
 
   /* Not ignorance but a refusal, and it comes first because it is the one state
      where the answer is known and the act is still impossible: nothing under
@@ -2401,7 +2600,6 @@ function ArchiveArticle({
      Archive would still be telling the reader the article is on the shelf, and
      none of the three establishes that. */
   if (at === undefined) {
-    const lost = failed || acted !== null;
     return (
       <div className={`${CARD} tw:p-4`}>
         <p
@@ -3191,6 +3389,7 @@ function Section({
   aside,
   collapsible,
   keepMounted,
+  landing,
   children,
 }: {
   label: string;
@@ -3207,6 +3406,15 @@ function Section({
    * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
    */
   keepMounted?: boolean;
+  /**
+   * **The heading can take focus from a script**, for a button elsewhere on the
+   * page that sends the reader here — *Share…* in `TopActions`, which lands on
+   * *Access & sharing*. The heading rather than the first control inside,
+   * because that control changes with the card's state (a link box, *Share with
+   * anyone…*, or nothing while it loads), and a landing that puts an action
+   * under Enter is the wrong kind of arrival. GPT Sol, plan review, 2026-09-30.
+   */
+  landing?: boolean;
   children: ReactNode;
 }) {
   /* Local state, not a URL parameter, and this page's own `at` two hundred
@@ -3261,7 +3469,9 @@ function Section({
        knife edge that a browser lost. See the constant's docstring; if you
        change this 24, that number has to stay above it. */
     <section id={sectionId(label)} data-section={label} className="tw:mt-8 tw:scroll-mt-24">
-      <h2 className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
+      <h2
+        {...(landing ? { tabIndex: -1 } : {})}
+        className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
         {collapsible ? (
           /* The heading itself is the control, so the target is the whole line
              rather than a 12px chevron. `aria-expanded` on the button and

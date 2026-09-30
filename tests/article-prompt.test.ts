@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 import {
   BLOCK_ID_NOTE,
   CACHE_FLOOR_TOKENS,
+  HIGH_POWER_CACHE_FLOOR_TOKENS,
   articleText,
   articleWithIds,
   cachedText,
@@ -32,6 +33,7 @@ import {
   underCacheFloor,
 } from "../src/article-prompt.js";
 import type { TextPart } from "../src/article-prompt.js";
+import { CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
 import { buildSearchMessages } from "../src/search.js";
 import { buildExplainMessages } from "../src/explain.js";
 import { HISTORY_TURNS, buildConverseMessages, recentHistory } from "../src/converse.js";
@@ -474,14 +476,26 @@ describe("the cache floor", () => {
     // Below the floor a breakpoint is accepted and does nothing, returning zeros
     // that look exactly like a broken cache. Callers log this so the two can be
     // told apart.
-    expect(underCacheFloor(articleWithIds(meta, blocks))).toBe(true);
+    expect(underCacheFloor(articleWithIds(meta, blocks), CAPABLE_MODEL_OPENROUTER)).toBe(true);
   });
 
   it("flips at the boundary the estimate implies", () => {
     const under = "x".repeat((CACHE_FLOOR_TOKENS - 1) * 4);
     const over = "x".repeat((CACHE_FLOOR_TOKENS + 1) * 4);
-    expect(underCacheFloor(under)).toBe(true);
-    expect(underCacheFloor(over)).toBe(false);
+    expect(underCacheFloor(under, CAPABLE_MODEL_OPENROUTER)).toBe(true);
+    expect(underCacheFloor(over, CAPABLE_MODEL_OPENROUTER)).toBe(false);
+  });
+
+  it("uses the high-power model's own, lower floor for Opus (plan 260930f, measured)", () => {
+    /* 700 tokens: over Opus 5.5's 512, under Sonnet 5's 1,024. Asking with
+       Sonnet's floor would log a false "too short" on every such prefix a
+       high-powered article sends. */
+    const between = "x".repeat(700 * 4);
+    expect(underCacheFloor(between, CAPABLE_MODEL_OPENROUTER)).toBe(true);
+    expect(underCacheFloor(between, HIGH_POWER_MODEL_OPENROUTER)).toBe(false);
+    expect(underCacheFloor("x".repeat((HIGH_POWER_CACHE_FLOOR_TOKENS - 1) * 4), HIGH_POWER_MODEL_OPENROUTER)).toBe(
+      true,
+    );
   });
 
   it("estimates tokens from characters", () => {
@@ -496,7 +510,7 @@ describe("the cache floor", () => {
     const long = Array.from({ length: 400 }, (_, i) =>
       block(`spya-${String(i).padStart(6, "0")}`, "A sentence of ordinary length goes here."),
     );
-    expect(underCacheFloor(articleWithIds(meta, long))).toBe(false);
+    expect(underCacheFloor(articleWithIds(meta, long), CAPABLE_MODEL_OPENROUTER)).toBe(false);
   });
 });
 

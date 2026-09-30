@@ -111,7 +111,7 @@ import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED, QUIZ_NOTHING_ANCHORED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
 import {
@@ -428,6 +428,8 @@ export function buildQuiz(
     slug: string;
     blocks: readonly Block[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     elapsedMs: number;
     dropped: QuizDropped;
   },
@@ -474,7 +476,7 @@ export function buildQuiz(
        compares a stored `generator` against this constant, and the prefixed
        OpenRouter spelling is how we reach the model rather than what it is
        called. src/models.ts § the third spelling. */
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     /* **`sourceHash`, `version`, `generator` — the store's spellings, off the
        artefact.** `stampOf` (src/store/artifacts.ts) reads these three names
@@ -879,6 +881,8 @@ export async function generateQuiz(opts: {
   signal?: AbortSignal;
   /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
   cacheArticle?: boolean;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<QuizRun> {
   const { blocks, tree, meta: articleMeta } = opts.article;
 
@@ -933,7 +937,7 @@ export async function generateQuiz(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt({ tree }) }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -980,6 +984,7 @@ export async function generateQuiz(opts: {
 
   const dropped = emptyDropped();
   const quiz = buildQuiz(parseJson(raw), {
+    power: opts.power,
     slug: opts.article.slug,
     blocks,
     sourceHash,
@@ -996,7 +1001,7 @@ export async function generateQuiz(opts: {
     blocks: blocks.length,
     words,
     dropped,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

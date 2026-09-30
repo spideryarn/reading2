@@ -81,7 +81,8 @@ import path from "node:path";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
-import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
+import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { lookUpTerm } from "../src/store/index.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
 import type { Block, GlossaryEntry, GlossaryLookup, GlossaryResponse } from "../src/types.js";
@@ -243,6 +244,7 @@ function harness(opts: {
   citations: { url: string; title?: string }[];
   ending?: ExplainEnding;
   saveFails?: boolean;
+  highPowerSince?: string;
 }) {
   const block: Block = {
     id: "spya-aaaaaa" as Block["id"],
@@ -257,11 +259,13 @@ function harness(opts: {
     meta: { slug: "harness", title: "A piece" },
     blocks: [block],
     tree: { rootId: block.id, nodes: {} },
+    highPowerSince: opts.highPowerSince ?? null,
   } as unknown as Article;
 
   /** What `explain` was asked, so the test can assert on the request. */
   const asked: { blockId: string; quote: string }[] = [];
   const saved: { termId: string; lookup: GlossaryLookup }[] = [];
+  const powers: string[] = [];
 
   const prepare = makeLookUpTerm({
     reader: {
@@ -284,6 +288,7 @@ function harness(opts: {
     },
     explainStream: async function* (req) {
       asked.push({ blockId: req.blockId, quote: req.quote });
+      powers.push(req.power);
       yield { type: "delta", text: "An " };
       yield {
         type: "done",
@@ -311,8 +316,30 @@ function harness(opts: {
     return { entry };
   };
 
-  return { lookUp, asked, saved, order };
+  return { lookUp, asked, saved, order, powers };
 }
+
+/**
+ * **No mutation.** The injected harness below: a reader that answers from
+ * memory and an `explainStream` that records its request. Nothing is stored and
+ * no store is selected — plan 260930f's check that the lookup asks with the
+ * article's power.
+ */
+describe("High-powered AI (plan 260930f) — the lookup's explain follows the article", () => {
+  const entry = { id: "spya-kennedy", name: "John F. Kennedy", aliases: ["JFK"], blocks: ["spya-aaaaaa"] };
+
+  it("asks at high power for an administrator's high-powered article", async () => {
+    const h = harness({ text: "JFK was assassinated in 1963.", entry, citations: [], highPowerSince: "2026-09-30T00:00:00.000Z" });
+    await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () => h.lookUp("harness", entry.id));
+    expect(h.powers).toEqual(["high"]);
+  });
+
+  it("asks at standard power when the owner is not an administrator", async () => {
+    const h = harness({ text: "JFK was assassinated in 1963.", entry, citations: [], highPowerSince: "2026-09-30T00:00:00.000Z" });
+    await runAsOwner(DEV_OWNER_ID, () => h.lookUp("harness", entry.id));
+    expect(h.powers).toEqual(["standard"]);
+  });
+});
 
 describe("what the model is asked, and what is kept from its answer", () => {
   it("quotes the form of the term the article actually uses", async () => {

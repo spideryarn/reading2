@@ -155,6 +155,7 @@ async function readyToVerify(bytes: Uint8Array) {
       report: () => {},
       signal: new AbortController().signal,
       cacheArticle: false,
+      power: "standard" as const,
     },
   };
 }
@@ -167,6 +168,7 @@ function urlContext(slug: string, signal = new AbortController().signal) {
     report: () => {},
     signal,
     cacheArticle: false,
+    power: "standard" as const,
   };
 }
 
