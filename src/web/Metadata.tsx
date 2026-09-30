@@ -222,6 +222,7 @@ import {
   Image,
   Layers,
   Link2,
+  CornerDownRight,
   List,
   ListOrdered,
   ListTree,
@@ -375,6 +376,10 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      Reused rather than a new import — the Citations panel is stage 2 of
      docs/plans/260911g-citations-mode.md, and may choose its own glyph. */
   citations: Link2,
+  /* The arrow the block-link card already draws for a jump (ProseHoverCard.tsx):
+     what a cross-reference does is take you to another block of the piece.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  crossrefs: CornerDownRight,
 };
 
 /*
@@ -1419,6 +1424,8 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   trajectory: "Trajectory",
   debate: "Debate",
   citations: "Citations",
+  /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
+  crossrefs: "Cross-references",
 };
 
 /**

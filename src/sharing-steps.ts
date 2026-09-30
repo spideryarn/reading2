@@ -91,6 +91,7 @@ export const STEP_SHARING = {
   trajectory: { column: "trajectory", reads: ["quotes", "ideas"] },
   debate: { column: "debate", reads: [] },
   citations: { column: "citations", reads: [] },
+  crossrefs: { column: "crossrefs", reads: [] },
 } as const satisfies Record<StepName, "exclusive" | SharingPolicy>;
 
 /** The steps whose entry above is a policy rather than `"exclusive"`. */

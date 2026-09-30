@@ -31,7 +31,7 @@
  * on *am I signed in*. That is Greg's rule and it is what makes the read-only
  * chrome one thing rather than two.
  */
-import type { CitedWork, Comment, Glossary, ThreadSummary } from "../types.js";
+import type { CitedWork, Comment, Crossref, Glossary, ThreadSummary } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
@@ -78,6 +78,19 @@ export type ReaderCapability =
        * card off a shared link.
        */
       citations: CitationsRead;
+      /**
+       * **The cross-references the prose may draw**, or null — `useCrossrefs`,
+       * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+       *
+       * Null for none generated, still loading, failed, **or stale** (Sol F8):
+       * the hook has already decided what is drawable, so nothing downstream
+       * has a staleness flag to forget.
+       *
+       * **No visitor arm, for the citations' reason:** the public DTO carries
+       * no cross-references until the defence edit left for Greg lands, so a
+       * visitor gets no marks and no card by construction.
+       */
+      crossrefs: readonly Crossref[] | null;
       /**
        * The arc, and whether one is being written right now. `useArc`.
        *

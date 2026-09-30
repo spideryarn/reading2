@@ -161,6 +161,14 @@ export const STEP_ORDER = [
      the whole article that a reader asks for by pressing the mode.
      docs/plans/260911g-citations-mode.md. */
   "citations",
+  /* **Last, and like `citations` in no cache group that its place could
+     break**: it sends Ideas' bytes but thinks at `medium`, and no other `ids`
+     stage does, so it shares a cached prefix with nothing and its position
+     breaks no contiguity. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
+     be as fast as possible — and in `FORCE_ONLY_WHEN_NAMED`: a model call over
+     the whole article, queued by the add page's after-import box or a press on
+     Metadata. docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  "crossrefs",
 ] as const satisfies readonly StepName[];
 
 /**

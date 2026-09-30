@@ -210,6 +210,7 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   illustrated: 600_000,
   debate: 180_000,
   citations: 180_000,
+  crossrefs: 180_000,
 };
 
 const stateAt = (name: StepName, ms: number) =>

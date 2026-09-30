@@ -268,6 +268,9 @@ const STAGES = [
   /* Added the day the stage was registered, 2026-09-16, for `quiz`'s reason.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Added the day the stage was registered, 2026-09-30, for `quiz`'s reason.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  "crossrefs",
   "assets",
 ] as const;
 type Stage = (typeof STAGES)[number];
@@ -388,6 +391,22 @@ function scriptFor(stage: Stage, article: Article): string[] {
           ],
         }),
       ];
+    case "crossrefs": {
+      /* One link that survives `toLinks`: a phrase copied from the quotable
+         block, to a body block at least two away. `buildCrossrefs` accepts an
+         empty list, so a stub whose link stopped resolving throws here (a
+         non-empty list emptied) rather than writing an empty artefact and
+         testing nothing. */
+      const all = article.blocks;
+      const at = all.findIndex((b) => b.id === block.id);
+      const to = all.find((b, i) => Math.abs(i - at) > 1 && isBodyEvidence(b));
+      if (!to) throw new Error("the fixture has no second body block to link to");
+      return [
+        JSON.stringify({
+          links: [{ from: block.id, phrase: block.text.split(/\s+/).slice(0, 6).join(" "), to: to.id }],
+        }),
+      ];
+    }
     case "sketch":
       return [JSON.stringify(sketchAnswer(article))];
     case "assets":

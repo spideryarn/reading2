@@ -373,7 +373,14 @@ function HoverCard({
        deciding whether to follow an address somebody else chose: the article's
        own hyperlinks, the links a chat answer writes into its prose
        (`cited-link`, Cited.tsx), and the sources listed under an answer. */
-    selector: "mark.term, mark.cite, .prose a[href], a.cited-link, .chat-sources a[href]",
+    /* **`:not(.xref)` on both marks: a cross-reference wins the words it is
+       on** (Sol F5). A term or a citation over the same phrase is one merged
+       `<mark class="term xref">`, and two cards over one phrase — this one and
+       BlockLinkCard's — would be two answers to one hover. The xref's card is
+       the block preview, and the term keeps its underline and the glossary.
+       docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+    selector:
+      "mark.term:not(.xref), mark.cite:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href]",
     /* Both containers survive their own re-render, which is the whole
        requirement — see `host`. A chat answer's `<p>` does not, so the
        fallback would leave a card pinned to a detached node as an answer
@@ -445,7 +452,12 @@ function HoverCard({
        anchor branch below preserves its established second-tap jump. Were there
        a foot button here, the precedence between a term and a citation on one
        `<mark>` would have to be decided; there is not, so it does not. */
-    tapSelector: `mark.term, mark.cite, a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
+    /* `:not(.xref)` for the selector's reason, and here it decides more than a
+       card: a tap this hook claims is a reveal, so a term under a
+       cross-reference would take the first tap and the jump would need a second.
+       Excluded, the tap falls through to TableView's click and jumps, as a
+       `BlockRef` does. */
+    tapSelector: `mark.term:not(.xref), mark.cite:not(.xref), a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch
        screen the words are a far bigger target than a 10px-tall row of text,

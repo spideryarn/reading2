@@ -1,5 +1,5 @@
 {
-  "id": "a685fc0d-49f7-4dfe-8406-70081dcd1add",
+  "id": "34b782e4-d6cb-42d7-923d-5b6a3bc6bc61",
   "prevId": "70020ec2-5963-414c-8a43-483d527f7a67",
   "version": "7",
   "dialect": "postgresql",
@@ -702,6 +702,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "crossrefs": {
+          "name": "crossrefs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "trajectory": {
           "name": "trajectory",
           "type": "jsonb",
@@ -1070,12 +1076,6 @@
         },
         "public_at": {
           "name": "public_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "high_power_since": {
-          "name": "high_power_since",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -4679,7 +4679,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

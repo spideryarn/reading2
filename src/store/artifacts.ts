@@ -45,6 +45,7 @@ import type {
   Arc,
   Block,
   Citations,
+  Crossrefs,
   Debate,
   Faq,
   Trajectory,
@@ -101,7 +102,8 @@ export type ArtifactKind =
   | "sketch"
   | "illustrated"
   | "debate"
-  | "citations";
+  | "citations"
+  | "crossrefs";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -205,6 +207,12 @@ export interface ArtifactMap {
    * `citations` step. docs/plans/260911g-citations-mode.md.
    */
   citations: Citations;
+  /**
+   * Links between the article's own blocks — `Crossrefs`, src/types.ts,
+   * written by the `crossrefs` step.
+   * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+   */
+  crossrefs: Crossrefs;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -398,6 +406,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      `buildCitations` throws only when the model named works and every one of
      them was dropped. */
   citations: { field: "citations", ok: isArray },
+  /* A `links` array, and **an EMPTY one is usable**, as `faq`'s is: a piece
+     with nothing worth linking is a real answer. `buildCrossrefs` throws on a
+     missing list and on one validation empties, so neither reaches here. */
+  crossrefs: { field: "links", ok: isArray },
 };
 
 /**
@@ -930,6 +942,9 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      nothing can half-inherit. */
   debate: "debate",
   citations: "citations",
+  /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
+     re-run simply replaces the list. */
+  crossrefs: "crossrefs",
 };
 
 /**

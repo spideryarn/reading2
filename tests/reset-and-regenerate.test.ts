@@ -441,7 +441,8 @@ describe("RESET_ROLE", () => {
     expect(extraSteps()).toEqual(
       STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels"),
     );
-    expect(extraSteps()).toHaveLength(13);
+    /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f). */
+    expect(extraSteps()).toHaveLength(14);
   });
 
   it("finds every extra's column in STORAGE, one whole column each", () => {

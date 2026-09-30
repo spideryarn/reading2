@@ -209,6 +209,56 @@ mark.cite[data-hover-tap] {
   background: color-mix(in oklab, var(--highlight) 5%, transparent);
 }
 
+/* ---- a cross-reference ----------------------------------------------
+   The sixth `MarkKind` (annotate.ts § `xrefMarks`): a phrase that points at the
+   block showing in detail what it summarises. Hover or focus shows that block's
+   section and opening (BlockLinkCard.tsx); a click, a tap or Enter jumps there.
+   docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+
+   **Dotted, in the link colour, on `text-decoration`.** It is the one mark a
+   click follows, so it takes the link's hue (`--highlight-ink`, as `.prose a`)
+   where the citation's dashed rule is grey and the term's dotted rule is a
+   `border-bottom` in the faint highlight tint several pixels lower. The quote's
+   stroke is a `box-shadow` and a search a `background`, so neither collides.
+   It shares `text-decoration` with a citation: over one phrase this rule comes
+   later and wins, which is the precedence the handlers already give it — the
+   xref takes the words it is on.
+
+   **The words keep their colour**, for `mark.cmt`'s and `mark.cite`'s reason:
+   repainting the author's prose in the link colour would make our annotation
+   look like the author's own hyperlink. The tint lives in the rule alone.
+
+   `pointer` rather than `help`: unlike a term or a citation, a click does
+   something here. */
+mark.xref {
+  background: none;
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--highlight-ink) 75%, transparent);
+  cursor: pointer;
+  transition: text-decoration-color 0.12s, background 0.12s;
+  /* Sequential focus scrolls the mark's margin box into view. The reader
+     already reserves this room at the end of the document (`.reader` in
+     dock.css); naming it on the focus target is what keeps a Tab arrival above
+     the fixed dock rather than merely making it possible to scroll there. */
+  scroll-margin-block-end: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+}
+mark.xref:hover {
+  text-decoration-color: var(--highlight-ink);
+  background: color-mix(in oklab, var(--highlight) 6%, transparent);
+}
+/* The one Tab stop per phrase (annotate.ts gives it to the first piece). A
+   ring rather than the hover wash, so a keyboard reader can see which of the
+   page's stops they are on; `:focus-visible` so a click does not leave one. */
+mark.xref:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+  border-radius: 2px;
+  text-decoration-color: var(--highlight-ink);
+}
+
 /* A search hit. **The one mark whose intensity means something** — `--hit-a` is
    set per run by annotate.ts from the model's confidence, so a passage the
    model was sure about is visibly heavier than one it was hedging on. A binary

@@ -121,11 +121,13 @@ describe("mayOverlap", () => {
 });
 
 describe("the policy", () => {
-  it("names the plan's thirteen sharing steps, and no others", () => {
+  it("names the plan's thirteen sharing steps, the fourteenth since, and no others", () => {
+    /* `crossrefs` joined on 2026-09-30, a whole column that reads nothing —
+       docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
     expect([...SHARING_STEPS].sort()).toEqual(
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
-        "sketch", "illustrated", "trajectory", "debate", "citations",
+        "sketch", "illustrated", "trajectory", "debate", "citations", "crossrefs",
       ].sort(),
     );
   });

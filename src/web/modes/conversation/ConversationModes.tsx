@@ -85,6 +85,7 @@ export function RememberBand({
   readSoFar,
   onJump,
   onMode,
+  onQuizKeys,
 }: {
   slug: string;
   blocks: Map<string, string>;
@@ -92,6 +93,8 @@ export function RememberBand({
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
   onMode(next: Mode): void;
+  /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
+  onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("RememberBand");
   const [{ remember, thread }, setBoth] = useQueryStates({
@@ -128,7 +131,14 @@ export function RememberBand({
 
   if (remember === "quiz")
     return (
-      <QuizSubBand slug={slug} subMode={toggle} blocks={blocks} readSoFar={readSoFar} onJump={onJump} />
+      <QuizSubBand
+        slug={slug}
+        subMode={toggle}
+        blocks={blocks}
+        readSoFar={readSoFar}
+        onJump={onJump}
+        onArrowKeys={onQuizKeys}
+      />
     );
   return (
     <ConversationBand
@@ -163,16 +173,27 @@ function QuizSubBand({
   blocks,
   readSoFar,
   onJump,
+  onArrowKeys,
 }: {
   slug: string;
   subMode: React.ReactNode;
   blocks: Map<string, string>;
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
+  onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("QuizSubBand");
   const owner = useQuiz(slug);
-  return <QuizPanel owner={owner} subMode={subMode} blocks={blocks} readSoFar={readSoFar} onJump={onJump} />;
+  return (
+    <QuizPanel
+      owner={owner}
+      subMode={subMode}
+      blocks={blocks}
+      readSoFar={readSoFar}
+      onJump={onJump}
+      onArrowKeys={onArrowKeys}
+    />
+  );
 }
 
 /**

@@ -2892,7 +2892,14 @@ export type StepName =
      `ideas`, `timeline`, `quiz`, `faq` and `sketch` send the body only. Different
      bytes, so no shared cached prefix, so no row in `STAGE_EFFORT` or
      `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
-  | "citations";
+  | "citations"
+  /* **Links between the article's own blocks** — a phrase in one block that
+     refers to what another shows in detail. Ideas' article block, byte for byte
+     up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`, and it
+     shares a cached prefix with nothing, because no other `ids` stage thinks at
+     `medium`. Not a mode: the links sit in the prose in every mode.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  | "crossrefs";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -4443,6 +4450,89 @@ export interface FaqResponse {
 
 /** As `QuizFound`: the same type, because there is no `profileChanged` to omit. */
 export type FaqFound = FaqResponse;
+
+/* -------------------------------------------------------------- crossrefs --
+   Links inside one article: a short phrase in one block that refers to what
+   another block shows in detail — the `crossrefs` column on
+   `article_revisions`. docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+
+   Here rather than in src/crossrefs.ts for the reason `Faq` is: the prose will
+   need the shape, and `src/web/` may import only the pure leaves.
+
+   **No `why` line** (Sol F10): the target's own words, in the preview card,
+   are the account of what is there. */
+
+/**
+ * *These words in block `from` refer to what block `to` shows in detail.*
+ *
+ * `phrase` is **the article's own characters**, sliced out of the rendered text
+ * of `from` — `renderedText(block.html)`, the text space src/web/annotate.ts
+ * marks in — where it occurs **exactly once** under
+ * `quoteFinderWithMultiplicity(…, "spaced")` (src/quote-match.ts). The client
+ * places it by the same rule, so a phrase the server kept is one the prose can
+ * mark. There is no offset: one occurrence needs no disambiguator.
+ */
+export interface Crossref {
+  from: BlockId;
+  phrase: string;
+  to: BlockId;
+}
+
+/**
+ * What validation threw away. Counts only — never a phrase. A dropped link
+ * looks exactly like one the model never offered, which is why they are stored
+ * and logged.
+ */
+export interface CrossrefsDropped {
+  /** `from` or `to` is not a block of this article's body. */
+  unknownIds: number;
+  /** A link to its own block or to the block either side of it. */
+  nearby: number;
+  /** A phrase under 2 or over 12 words. */
+  length: number;
+  /** A phrase that does not occur in the rendered text of `from`. */
+  unquoted: number;
+  /** A phrase that occurs more than once there — the prose could not tell which. */
+  ambiguous: number;
+  /** A phrase overlapping an earlier link's in the same block. */
+  overlap: number;
+  /** Links past the cap (`linkCap`, src/crossrefs.ts). */
+  truncated: number;
+  /** A row we could not read: not an object, or a missing or non-string field. */
+  malformed: number;
+}
+
+/** The artefact. The `crossrefs` column on `article_revisions`. */
+export interface Crossrefs {
+  version: string;
+  generator: string;
+  slug: string;
+  /** A hash of the body-only article rendering and top-level skeleton actually sent. */
+  sourceHash: string;
+  /**
+   * In document order of `from`, then of the phrase within it. **An empty list
+   * is a real answer**: the model found nothing worth linking.
+   */
+  links: Crossref[];
+  dropped: CrossrefsDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/**
+ * `GET /api/crossrefs/:slug`. **A stale artefact is not drawn** (Sol F8): a
+ * link can still name two surviving ids and a matching phrase and no longer be
+ * true, and the prose has no panel to say "out of date" in.
+ */
+export interface CrossrefsResponse {
+  crossrefs: Crossrefs;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+export type CrossrefsFound = CrossrefsResponse;
 
 /* ----------------------------------------------------------------- debate --
    What the rest of the web says about this piece — the `debate` column on

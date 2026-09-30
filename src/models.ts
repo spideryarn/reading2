@@ -578,6 +578,10 @@ export type Task =
      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
      `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
   | "faq"
+  /* Links between the article's own blocks —
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+     Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
+  | "crossrefs"
   /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      **Not article-reading**: it sends the quotes and never the article, so it
      is no `ArticleStage` and its effort is a constant in src/trajectory.ts. */
@@ -926,6 +930,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   illustrated: "capable",
   quiz: "capable",
   faq: "capable",
+  crossrefs: "capable",
   trajectory: "capable",
   explain: "capable",
   chat: "capable",
@@ -1154,6 +1159,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   illustrated: "messages",
   quiz: "messages",
   faq: "messages",
+  crossrefs: "messages",
   trajectory: "messages",
   explain: "chat",
   chat: "chat",
@@ -1265,6 +1271,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   faq: null,
+  crossrefs: null,
   trajectory: null,
   citations: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
@@ -1540,7 +1547,8 @@ export type ArticleStage =
   | "sketch"
   | "timeline"
   | "quiz"
-  | "faq";
+  | "faq"
+  | "crossrefs";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -1673,6 +1681,15 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      Untested, like every effort choice not yet through
      evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
   faq: "high",
+  /* `medium`, the plan's call: matching a claim to the paragraph that backs it
+     is reading, not the multi-step inference `ideas` and `quiz` are paid `high`
+     for. **It therefore shares a cached prefix with nothing** — the same bytes
+     as `ideas`, a different effort — and that costs nothing today, because the
+     after-import box queues every mode as its own job and two jobs share no
+     cache anyway. Untested, like every effort choice not yet through
+     evals/results/effort-vs-quality.md.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  crossrefs: "medium",
 };
 
 /**
@@ -1729,6 +1746,9 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   /* Every passage names a block id, so the ids have to be on the page — and it
      sends the body only, byte-identical to `ideas`, so it joins that prefix. */
   faq: "ids",
+  /* Two block ids a row, so the ids have to be on the page — and the body
+     only, byte-identical to `ideas`. The effort differs, so no share. */
+  crossrefs: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

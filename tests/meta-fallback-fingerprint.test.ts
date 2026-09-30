@@ -353,6 +353,27 @@ describe("an article with no metadata", () => {
     expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));
   });
 
+  it("crossrefs: hashes the absent metadata, and still sends a head", async () => {
+    /* The fifth stage of this shape, plan 260930f. Its article head must be
+       Ideas' byte for byte, while its own hash covers the full rendered request. */
+    const { generateCrossrefs, inputFingerprint } = await import("../src/crossrefs.js");
+    const block = quotable(withoutMeta.blocks);
+    const at = withoutMeta.blocks.indexOf(block);
+    const to = withoutMeta.blocks.find((_, i) => Math.abs(i - at) > 1);
+    if (!to) throw new Error("the fixture has no second block to link to");
+    answer = JSON.stringify({
+      links: [{ from: block.id, phrase: block.text.split(/\s+/).slice(0, 6).join(" "), to: to.id }],
+    });
+
+    const run = await generateCrossrefs({ article: withoutMeta, power: "standard" });
+
+    expect(run.crossrefs.links).toHaveLength(1);
+    expect(run.crossrefs.sourceHash).toBe(
+      inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
+    );
+    expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));
+  });
+
   /**
    * **The control, and without it the two tests above are worthless.**
    *

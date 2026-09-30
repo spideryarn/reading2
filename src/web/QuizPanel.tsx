@@ -80,8 +80,8 @@
  * old request, which is otherwise still holding `useQuiz`'s single live slot
  * and leaves the new batch's Answer button enabled and inert.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, List, MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
 import type { BlockId, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
 import { showPremise } from "./quiz-ladder.js";
@@ -93,12 +93,18 @@ import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { TooltipGroup } from "./Tooltip.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { IconButton } from "./IconButton.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
 import { useRenderCount } from "./perf.js";
+
+/** "3 questions", "1 question". */
+function questionCount(n: number): string {
+  return `${n} question${n === 1 ? "" : "s"}`;
+}
 
 /**
  * **Recall | Quiz**, at the top of the Remember band.
@@ -111,6 +117,13 @@ import { useRenderCount } from "./perf.js";
  * The navigation rules it triggers (clear `thread` in one step; Quiz wins a
  * pasted collision) are `RememberBand`'s, in src/web/App.tsx. This component only
  * says which half is open and asks for the other.
+ *
+ * **Words, not icons, and that was weighed** (SPIDERYARN-READING2-71, plan
+ * 260930h § 2): Greg's "maybe remember mode as well" left it open, and a glyph
+ * whose meaning lives only in a hover card says nothing to a sighted reader on
+ * a touch screen, where the card never opens. The quiz's ‹ › are conventional
+ * enough to stand alone; "say what you took from it" versus "the article asks"
+ * is not. GPT Sol's plan review, finding 4.
  */
 export function RememberSubModeToggle({
   slug,
@@ -181,6 +194,7 @@ export function QuizPanel({
   blocks,
   readSoFar,
   onJump,
+  onArrowKeys,
 }: {
   owner: UseQuiz;
   /**
@@ -196,6 +210,12 @@ export function QuizPanel({
       every citation chip in the band is drawn through. */
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
+  /**
+   * **Hands `Reader` the ← / → handler**, or `null` on unmount — the
+   * `horizontal` argument of `useArrowNav` (keynav.ts), as Trajectory's
+   * `onControl` does. Absent in a test that is not about the keys.
+   */
+  onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("QuizPanel");
   const { quiz, attempt, answered } = owner;
@@ -550,6 +570,48 @@ export function QuizPanel({
     if (!canGoNext || nextAt === undefined) return;
     move(nextAt, nextAt === at + 1);
   };
+  const goPrevious = () => {
+    if (previousAt !== undefined) move(previousAt, false);
+  };
+
+  /**
+   * **← / → step the path** — SPIDERYARN-READING2-71; docs/project/keyboard.md
+   * § ← / → in Quiz. The buttons' own rules, so the keys can do
+   * no more than the buttons, plus one the buttons do not have: **a key will not
+   * throw away words that have not been marked.** The textarea stops its own
+   * key presses, so this is the reader who typed, clicked somewhere else, and
+   * pressed → expecting nothing. A click on a labelled button is a deliberate
+   * act; a stray key is not. A failed or unfinished mark is not a mark.
+   *
+   * `false` is "took nothing", and `useArrowNav` then leaves the key with the
+   * browser — the ends of the path do not wrap, as Trajectory's do not.
+   *
+   * Read through a ref, so `Reader` is handed one stable function for the life
+   * of the panel and a quiz render does not re-render the reading view.
+   */
+  const unmarked = typed.trim() !== "" && (mine?.status !== "done" || superseded);
+  /* **And not while the microphone is recording or its transcript is on its
+     way**, box empty or not: a browser that shows no rough words leaves the box
+     empty while it listens, and the transcript lands through `setTyped` after a
+     move — under the *next* question. GPT Sol's plan review, finding 2. */
+  const listening = dictate.dictation.armed || dictate.readOnly;
+  const stepByKey = useRef<(dir: -1 | 1) => boolean>(() => false);
+  stepByKey.current = (dir) => {
+    if (!question || unmarked || listening) return false;
+    if (dir === 1) {
+      if (!canGoNext) return false;
+      goNext();
+      return true;
+    }
+    if (previousAt === undefined) return false;
+    goPrevious();
+    return true;
+  };
+  useLayoutEffect(() => {
+    if (!onArrowKeys) return;
+    onArrowKeys((dir) => stepByKey.current(dir));
+    return () => onArrowKeys(null);
+  }, [onArrowKeys]);
 
   /**
    * Picking a question by hand out of the list — a jump to that step on the
@@ -799,24 +861,45 @@ export function QuizPanel({
                       order there is, and a history stack would be a second
                       one. Not an arrival by Next, so the step shows its
                       premise. */}
-                  <button
-                    type="button"
-                    disabled={previousAt === undefined}
-                    onClick={() => previousAt !== undefined && move(previousAt, false)}
+                  {/* **Icons, their words in the tooltip** — Greg,
+                      SPIDERYARN-READING2-71; docs/project/icons.md §
+                      Navigation. `IconButton`, so an unavailable one is
+                      `aria-disabled` rather than natively disabled and its
+                      card still opens; the click is refused in there. The
+                      tooltip names the key, which does the same thing. */}
+                  <Tooltip content={<p>Previous question (←)</p>} placement="top">
+                    <IconButton
+                      label="Previous question"
+                      titled={false}
+                      disabled={previousAt === undefined}
+                      onClick={goPrevious}
+                    >
+                      <ChevronLeft />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip
+                    content={
+                      <p>{stillMarking ? "Next question (→), once the mark has finished" : "Next question (→)"}</p>
+                    }
+                    placement="top"
                   >
-                    Previous
-                  </button>
-                  <button type="button" disabled={!canGoNext} onClick={goNext}>
-                    Next
-                  </button>
-                  <button
-                    type="button"
-                    className="quiz-disclose"
-                    aria-expanded={listing}
-                    onClick={() => setListing((v) => !v)}
+                    <IconButton label="Next question" titled={false} disabled={!canGoNext} onClick={goNext}>
+                      <ChevronRight />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip
+                    content={<p>{listing ? "Hide the list" : `Show all ${questionCount(includedAt.length)}`}</p>}
+                    placement="top"
                   >
-                    {listing ? "Hide the list" : `Show all ${includedAt.length}`}
-                  </button>
+                    <IconButton
+                      label={listing ? "Hide the list" : `Show all ${questionCount(includedAt.length)}`}
+                      titled={false}
+                      aria-expanded={listing}
+                      onClick={() => setListing((v) => !v)}
+                    >
+                      <List />
+                    </IconButton>
+                  </Tooltip>
                 </div>
 
                 {listing && (
