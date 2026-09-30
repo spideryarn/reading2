@@ -1,0 +1,317 @@
+{
+  "arm": "goal-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": "I want to apply this to my own recordings, so I need to know the practical problems: what makes PID hard to use on real data.",
+  "about": null,
+  "at": "2026-09-30T17:16:16.079Z",
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "gaps": 1
+  },
+  "questions": [
+    {
+      "question": "What does mutual information measure about the spiking activity of two neurons?",
+      "evidence": [
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information is an undirected measure of dependency between two neurons.",
+      "question": "What does transfer entropy add beyond what mutual information tells us?",
+      "evidence": [
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Transfer entropy tracks the directed flow of information from one neuron toward another.",
+      "question": "Why is tracking information flow alone not enough to reveal how neurons process information?",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Understanding processing requires knowing how source neurons' combined pasts affect a target beyond what each source shows individually.",
+      "question": "In partial information decomposition, what does it mean when the joint information two sources provide about a target exceeds the sum of what each provides alone?",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "With two source neurons, PID splits the joint information into redundant, unique, and synergistic parts.",
+      "question": "Why is the system of equations relating the mutual information values to these four components underdetermined in the two-source case?",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "There are three known mutual information values but four unknown partial information terms.",
+      "question": "What extra ingredient must be supplied to fully solve for the four partial information components?",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "Solving the two-source case requires defining a redundancy measure.",
+      "question": "Why does adding a third (or more) source neuron make the general partial information decomposition problem harder to solve?",
+      "evidence": [
+        "spya-q9gytb"
+      ]
+    },
+    {
+      "premise": "With more than two sources, the decomposition needs a full lattice of information atoms rather than a simple four-term system.",
+      "question": "Why is there no single, universally accepted way to define redundant information for use in this decomposition?",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "The choice of redundancy function depends on trade-offs like whether it handles more than two predictors or continuous data.",
+      "question": "What compromise do researchers have to make when working with non-normal continuous neural data, such as local field potentials, given the available redundancy functions?",
+      "evidence": [
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "Discretizing continuous data into too many bins risks not having enough data to estimate probabilities reliably.",
+      "question": "Why does the amount of data needed for an information-theoretic analysis grow so quickly as more neurons are included?",
+      "evidence": [
+        "spya-tz99zn"
+      ]
+    },
+    {
+      "premise": "With many neurons, the number of possible joint spiking configurations explodes exponentially.",
+      "question": "What systematic bias appears when entropy and mutual information are estimated from a finite dataset that does not have enough samples for this many configurations?",
+      "evidence": [
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "premise": "Undersampling can inflate apparent mutual information even between unrelated signals.",
+      "question": "Beyond sampling problems, what mathematical limitation makes a complete decomposition intractable for a neuron with many parent inputs?",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    },
+    {
+      "premise": "Some heuristic measures trade completeness for scalability to larger systems.",
+      "question": "What limitation does the DIT software toolbox have regarding both the size of systems it can solve and the type of data it accepts?",
+      "evidence": [
+        "spya-cqrzab"
+      ]
+    },
+    {
+      "premise": "DIT only solves lattices for up to five sources and requires data already converted into a joint probability distribution.",
+      "question": "How does the IDTxl package differ from DIT in what kind of data it can work with directly?",
+      "evidence": [
+        "spya-ng5zs5"
+      ]
+    },
+    {
+      "premise": "IDTxl can analyze time series directly and includes transfer entropy tools plus two PID solvers.",
+      "question": "What limitation does the MATLAB-based Neuroscience Information Theory Toolbox have compared to these Python options?",
+      "evidence": [
+        "spya-cwsuea"
+      ]
+    },
+    {
+      "premise": "Software tools differ in which redundancy functions and data formats they support.",
+      "question": "What caveat did the authors raise about using bivariate transfer entropy networks to select the triads that were later analyzed with partial information decomposition?",
+      "evidence": [
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "premise": "Bivariate transfer entropy networks may overstate which connections are significant, affecting which triads are studied.",
+      "question": "Even when partial information decomposition reliably detects statistical synergy, what does it fail to explain about that synergy?",
+      "evidence": [
+        "spya-spdx0y"
+      ]
+    },
+    {
+      "premise": "Partial information decomposition reveals statistical synergy without explaining its biological cause.",
+      "question": "What property must a redundancy function have in order to be used for time-resolved, local decomposition rather than only average values?",
+      "evidence": [
+        "spya-ckpq7e"
+      ]
+    },
+    {
+      "premise": "Only certain redundancy functions can be localized to specific moments, which is needed for time-resolved analysis.",
+      "question": "What overall conclusion do the authors draw from the existence of statistical synergy about how neurons handle their inputs?",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    }
+  ]
+}

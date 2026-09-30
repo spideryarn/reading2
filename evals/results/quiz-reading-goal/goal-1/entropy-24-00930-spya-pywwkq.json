@@ -1,0 +1,311 @@
+{
+  "arm": "goal-1",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": "I want to apply this to my own recordings, so I need to know the practical problems: what makes PID hard to use on real data.",
+  "about": null,
+  "at": "2026-09-30T17:14:38.572Z",
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "questions": [
+    {
+      "question": "Before recent recording technology, what data-related limitation held back the study of how neural circuits process information?",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "New recording technologies have largely solved the data-availability problem.",
+      "question": "What second limitation remained even after large-scale recordings became available?",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "question": "Why can a measure of information flow like transfer entropy, on its own, not show how a neuron actually processes or combines information from multiple sources?",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Partial information decomposition was developed to fill this gap by separating information into distinct components.",
+      "question": "What does 'synergistic information' mean in the two-source partial information decomposition?",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "The decomposition splits information into redundant, unique, and synergistic parts.",
+      "question": "Why is it mathematically impossible to solve for the redundant, unique, and synergistic terms just from the known mutual information values, without extra assumptions?",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "Solving the decomposition requires choosing a formula for redundancy.",
+      "question": "Why is picking which redundancy formula to use a genuine difficulty for someone applying this method?",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "The two-source case already needs a chosen redundancy measure to solve.",
+      "question": "Why does extending the decomposition from two source neurons to three or more make the analysis substantially harder?",
+      "evidence": [
+        "spya-q9gytb"
+      ]
+    },
+    {
+      "premise": "The number of decomposition components grows very fast as more sources are added.",
+      "question": "How many distinct information components exist for a target with six parent neurons, and what does this illustrate?",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    },
+    {
+      "question": "Why does the type of data (discrete versus continuous) matter when choosing a redundancy measure for a new dataset?",
+      "evidence": [
+        "spya-uktkdy",
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "Many redundancy measures cannot handle non-Gaussian continuous signals like LFPs, so such data must sometimes be discretized.",
+      "question": "If a researcher must discretize continuous data for this kind of analysis, what does the article recommend to avoid distorting the results?",
+      "evidence": [
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "Discretizing with too many bins risks finite-size problems.",
+      "question": "Why does the amount of data needed for a reliable analysis explode as more interacting neurons or variables are included?",
+      "evidence": [
+        "spya-tz99zn"
+      ]
+    },
+    {
+      "premise": "Insufficient data relative to the number of possible states leads to undersampling.",
+      "question": "What systematic bias affects naive entropy and mutual information estimates when computed from a finite dataset?",
+      "evidence": [
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "question": "What caveat did the authors themselves raise about the transfer-entropy networks used to identify the triads analyzed in their cortical culture studies?",
+      "evidence": [
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "question": "Even when the decomposition successfully identifies which neurons show synergistic versus redundant dynamics, what does it fail to provide?",
+      "evidence": [
+        "spya-spdx0y"
+      ]
+    },
+    {
+      "question": "Which software toolbox offers the widest range of redundancy functions, and what extra step does it require if applied to time-series recordings?",
+      "evidence": [
+        "spya-cqrzab"
+      ]
+    },
+    {
+      "premise": "DIT requires probability distributions to be built manually from time-series data.",
+      "question": "Which package instead lets researchers work directly on time-series recordings and includes built-in tools for both decomposition and transfer entropy inference?",
+      "evidence": [
+        "spya-ng5zs5"
+      ]
+    },
+    {
+      "question": "What capability does the SxPID package offer that sets it apart from the other tools discussed?",
+      "evidence": [
+        "spya-ng5zs5"
+      ]
+    },
+    {
+      "premise": "Some tools support time-resolved, local measures of information sharing rather than only averaged values.",
+      "question": "What property must a chosen redundancy function have for this kind of local, time-resolved analysis to be possible at all?",
+      "evidence": [
+        "spya-ckpq7e"
+      ]
+    },
+    {
+      "question": "What new kind of analysis does the multi-target extension called integrated information decomposition allow, beyond what classic single-target decomposition can do?",
+      "evidence": [
+        "spya-cds6mm"
+      ]
+    }
+  ]
+}

@@ -23,6 +23,7 @@ import { renderProfile } from "../src/profile.js";
 import { renderPrompt as glossaryPrompt } from "../src/glossary.js";
 import { renderPrompt as tweetsPrompt } from "../src/tweets.js";
 import { renderPrompt as quotesPrompt } from "../src/quotes.js";
+import { renderPrompt as quizPrompt } from "../src/quiz.js";
 
 const id = (i: number) => `spya-aaaaa${i}`;
 
@@ -117,5 +118,43 @@ describe("quotes' prompt", () => {
 
   it("does not gain so much as a blank line when there is none", () => {
     expect(render(null)).not.toMatch(/\n{3,}/);
+  });
+});
+
+/**
+ * The quiz joined on 2026-09-30 (SPIDERYARN-READING2-6Q): a reader who has said
+ * why they are reading gets a path that heads for that. It has **its own
+ * section** rather than `profileSection`, because the shared reminder says the
+ * profile changes nothing about the article's proportions and here the
+ * proportions are the point — so the first marker is the quiz's own heading.
+ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
+ */
+describe("quiz's prompt", () => {
+  const QUIZ_MARKERS = ["WHY THIS READER IS HERE", "neuroethologist", "I want the evidence"];
+  const render = (profile: string | null) => quizPrompt({ tree: TREE, profile });
+
+  it("carries the profile when there is one", () => {
+    const out = render(PROFILE);
+    for (const marker of QUIZ_MARKERS) expect(out).toContain(marker);
+  });
+
+  it("says nothing about a reader when there is none", () => {
+    const out = render(null);
+    for (const marker of [...QUIZ_MARKERS, "WHO IS READING"]) expect(out).not.toContain(marker);
+  });
+
+  it("is byte-for-byte today's user prompt when there is none", () => {
+    /* "The same as today when there isn't" — Greg's words, asked of the bytes.
+       The literal is the varying user message as it stood before the profile
+       arrived. `QUIZ_SYSTEM` gained conditional rules and is not byte-equal. */
+    expect(render(null)).toBe(`Set the quiz for this article — up to 20 questions.
+
+=== ITS SHAPE ===
+
+PART 1: part-a
+  the gist of part-a
+
+PART 2: part-b
+  the gist of part-b`);
   });
 });
