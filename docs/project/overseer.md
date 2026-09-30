@@ -493,6 +493,18 @@ Every few hours, as a tmux loop like the changelog's:
 5. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
    to Greg.
 
+### Dependabot alerts
+
+Greg, 2026-09-30: *"for now, let's focus on high-severity and above - address those automatically if
+they arise."* So a **high or critical** alert is yours to act on without asking: dispatch a session to
+upgrade or replace the dependency, with the usual review, and ship it in the next deploy. **Moderate
+and low** alerts are left alone for now; mention a new one to Greg in a line, no more.
+
+Where you see them: the box has no GitHub API credential
+([hetzner-remote-server-box.md](hetzner-remote-server-box.md)), so the signal is the line every push
+to `dev` or `main` prints — `GitHub found N vulnerabilities … (x high, y moderate)`. Read it after each
+deploy's push; `npm audit --audit-level=high` in the primary is the second opinion.
+
 ### Dispatching agents
 
 **The queue is the entry point for every new idea, Greg's included.** Greg, 2026-09-09: *"preferring
