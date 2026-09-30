@@ -4487,6 +4487,14 @@ export const DEBATE_ORDER_DATE =
 /** The line over *prioritised*'s claim rows the AI gave no relevance to. Never hidden by the bar. */
 export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
 
+/**
+ * Where Debate's threads box would be, when the call that makes it failed
+ * (plan 260930j). Says the list is whole, because the reader's next question is
+ * whether they are missing sources, and they are not.
+ */
+export const DEBATE_THREADS_FAILED =
+  "The AI could not pick out the threads these sources share this time. Every source it found is still listed below.";
+
 /** The line over *date*'s rows with no year found on the page. */
 export const DEBATE_UNDATED = "No year found on these pages";
 

@@ -83,6 +83,7 @@ export const REMEMBERED = [
   "name", // debate's identification threshold
   "debateby", // debate order
   "bears", // debate's relevance threshold
+  "debatethread", // which of debate's threads narrows its list
   "citeby", // citations order
   "citebar", // citations threshold
   "faqby", // FAQ order
