@@ -309,3 +309,74 @@ The verdict was *build with changes*, with 13 findings (F1–F13), all taken:
 - **F11**: Ideas' input and fingerprint reused.
 - **F12**: the inventory above.
 - **F13**: cost marked provisional, and measured.
+
+## Stage 2 as built
+
+Client only; the server files from stage 1 are untouched.
+
+- **`src/web/xref.ts`** holds the nonce: twelve hex characters from `crypto.getRandomValues`,
+  kept in module memory. It also holds `xrefTarget(el, links)`, the one resolver every handler
+  uses. The resolver is strict about shape (`<nonce>-<digits>`) and reads `to` from the links by
+  index, never from the DOM.
+- **`src/web/useCrossrefs.ts`** is the owner read. It goes through `useOrderedRead`, so
+  StrictMode sends one GET rather than two. It yields `null` on a 404, an error, or a stale
+  artefact.
+  - It does not revalidate after a crossrefs job finishes. This is the same named gap the
+    glossary, quotes and citations have.
+- **The data path** is `OwnedReader` → `ReaderCapability.crossrefs` (owner arm only) → `Reader` →
+  `TableView` (`xrefs`, put into `ProseEntry`, `sameInputs` and the `proseHtml` dependencies) and
+  → `BlockLinkProvider` (`resolveXref`).
+- **`xrefMarks`** in `annotate.ts` uses the same `"spaced"` unique rule as the server. On top of
+  that it drops a phrase that crosses an author's `<a href>`, and a phrase that overlaps one already
+  kept.
+  - `annotateHtml` gives the first piece it draws `tabindex="0"`, `role="link"` and the whole
+    phrase as its `aria-label`.
+  - The section name reaches assistive technology through the card's `aria-describedby`, not
+    through the label.
+- **The handlers:**
+  - `TableView`'s delegated click jumps unless the selection is not collapsed. A modified click does
+    nothing.
+  - A delegated Enter keydown jumps too. This replaced the `useKeyWithClickEvents` suppression.
+  - `onMouseUp` returns for an xref after the selection branch and before comment or chat.
+  - `mark.hit.xref` joined `NOT_A_BLOCK_SELECTION`. This was not in the plan; it is the
+    citation's line, repeated for the xref.
+  - `ProseHoverCard`'s `selector` and `tapSelector` exclude `.xref`, so a tap on a term or citation
+    under an xref falls through to the jump.
+- **The CSS** (in `annotations.css`) is a 2px dotted `text-decoration` in `--highlight-ink`, with a
+  `:focus-visible` outline in `--highlight`. The words keep their colour.
+- **Tests:**
+  - `tests/xref-marks.test.ts` (7) and `tests/xref-prose.test.tsx` (15), which use the real
+    TableView, BlockLinkCard and ProseHoverCard and the real hook with a mocked `apiFetch`.
+  - `tests/the-ideas-extraction-changed-no-requests.test.tsx` now expects one
+    `GET /api/crossrefs/…` per owned article view.
+- **Mutations.** Each of these was checked by breaking it, watching a test go red, and restoring
+  it:
+  - the nonce prefix check (3 tests red);
+  - the `:not(.xref)` exclusions (3);
+  - the mouse-up return;
+  - Enter;
+  - the selection guard;
+  - the memo dependency;
+  - the stale filter;
+  - the author-link drop;
+  - the one-focus-stop set.
+
+  Most of the TableView tests were written after the handlers. Their red was shown this way rather
+  than first.
+
+**The browser check** (Sonnet, Playwright, `the-mythology-of-conscious-ai-spya-rn5m0q`, port 5273)
+passed underlines, hover card, click jump with flash and back chip, Tab with Enter (one stop for a
+three-piece phrase), and a tap at 390×844.
+
+- **The local artefact was stale at first**, so nothing was drawn. That is correct behaviour, and
+  the agent regenerated it locally (about $0.05).
+  - The review's in-progress edits to the fingerprint inputs had moved it.
+- Screenshots: `260930f-xref-underlines.png`, `-hover-card`, `-after-jump`, `-focus-ring`,
+  `-touch-before`, `-touch-after-tap`, `-touch-jump-chip`.
+
+Seen and not fixed:
+
+- A Tab-focused mark can sit behind the bottom dock.
+- The back chip rendered below the emulated touch viewport. This is possibly an emulation artefact
+  and wants a real phone.
+- The xref's dotted rule is close to a glossary term's; the difference is mainly the warmer colour.

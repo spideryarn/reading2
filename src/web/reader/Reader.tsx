@@ -110,6 +110,7 @@ import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
+import { xrefTarget, type XrefResolver } from "../xref.js";
 import { flushPendingFlash, resetFlash } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
@@ -1315,6 +1316,22 @@ export function Reader({
   );
 
   /**
+   * **The cross-references the prose draws, and how the card finds where one
+   * goes** — docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+   *
+   * Owner-only, and the seam is the enforcement: a visitor's capability has no
+   * `crossrefs`, so `xrefs` is null for them and nothing is drawn — no
+   * `?? artefacts…` fallback, for `works`' reason above. Already null when the
+   * artefact is stale (useCrossrefs.ts).
+   *
+   * The resolver is `xrefTarget` bound to the same array TableView marks with,
+   * so the card and the click can never disagree about a mark's target. Its
+   * identity changes only when the links do.
+   */
+  const xrefs = owner?.crossrefs ?? null;
+  const resolveXref = useCallback<XrefResolver>((el) => xrefTarget(el, xrefs), [xrefs]);
+
+  /**
    * The article's footnotes: which blocks make up each note, and which passages
    * cite it. Built once here because two consumers need the same answer — the
    * hover card, which shows a note's whole range, and the table, which marks the
@@ -2104,7 +2121,7 @@ export function Reader({
     /* Every block link inside — panels, chips, the chat dialog through its
        portal — reads its card and its "is this block real" answer from here.
        BlockLinkCard.tsx. */
-    <BlockLinkProvider index={blockLinks}>
+    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref}>
     <div
       /* `text-alone` says the article is the only thing on the page, so the
          stylesheet can centre the reading column and put the masthead over it
@@ -2327,6 +2344,7 @@ export function Reader({
         }
         terms={termSelections}
         cites={citeSelections}
+        xrefs={xrefs}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}

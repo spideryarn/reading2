@@ -37,7 +37,7 @@ import { quoteFinderWithMultiplicity } from "../quote-match.js";
 import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { ValenceDirection } from "./valence.js";
-import type { Block, BlockId, QuoteStroke } from "../types.js";
+import type { Block, BlockId, Crossref, QuoteStroke } from "../types.js";
 import { costOn, leafClock, noteCost } from "./annotation-cost.js";
 
 /**
@@ -97,8 +97,17 @@ import { costOn, leafClock, noteCost } from "./annotation-cost.js";
  * file one entry in a union and one `if`, which is the evidence that the
  * approach holds; if a fourth ever needs per-mark *styling* that classes cannot
  * express, that is when to reconsider.
+ *
+ * `xref` is a cross-reference — a phrase that points at the block showing in
+ * detail what it summarises — and the sixth kind, added 2026-09-30
+ * (docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md).
+ * **It is the one mark a click follows**, so it is also the one whose
+ * attribute the page must be able to tell from the article's own: its
+ * `data-xref` carries a per-page-load nonce, and every handler resolves it
+ * through `xrefTarget` in xref.ts, never by reading a target off the DOM. Where
+ * it overlaps another kind it wins the click, the tap and the hover.
  */
-export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite";
+export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref";
 
 /**
  * How many coloured rules one phrase can wear.
@@ -259,6 +268,12 @@ interface MarkBase {
    * maximum beside it, for the same can-not-arise reason.
    */
   quoteStroke?: QuoteStroke;
+  /**
+   * The accessible name of an `xref` mark — the whole phrase, which the first
+   * piece carries as its `aria-label` so a phrase split across an `<em>` is
+   * announced whole rather than as its first fragment. `xref` marks only.
+   */
+  label?: string;
 }
 
 /** A comment's stored anchor, before it has been matched against the block. */
@@ -371,6 +386,10 @@ function annotate(html: string, marks: readonly Mark[]): string {
   const nodes: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
 
+  /* The cross-references that have already had their one focus stop. A phrase
+     split by an `<em>` is several pieces, and only the first one drawn is a
+     tab stop — see the `xref` branch below. */
+  const focusStops = new Set<string>();
   let offset = 0;
   for (const node of nodes) {
     const value = node.nodeValue ?? "";
@@ -423,6 +442,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
       const terms = covering.filter((m) => m.kind === "term");
       const hits = covering.filter((m) => m.kind === "hit");
       const cites = covering.filter((m) => m.kind === "cite");
+      const xrefs = covering.filter((m) => m.kind === "xref");
       // Every class that applies. `mark.cmt` and `mark.chat` are what the click
       // handler in TableView.tsx selects on, so a term or a hit must never
       // carry either class alone — and neither artefact may lose its class
@@ -433,6 +453,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
         terms.length > 0 ? "term" : "",
         hits.length > 0 ? "hit" : "",
         cites.length > 0 ? "cite" : "",
+        xrefs.length > 0 ? "xref" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -660,6 +681,28 @@ function annotate(html: string, marks: readonly Mark[]): string {
 
          Written last, so the attributes come out in the order the classes do. */
       if (cites.length > 0) el.setAttribute("data-cite", cites.map((m) => m.id).join(" "));
+      /* **One id, not a list.** `xrefMarks` never lets two cross-references
+         overlap in a block, so a piece carries at most one; taking the first is
+         the defensive reading if that ever stops being true. The id is
+         `<nonce>-<i>` and means nothing without the artefact — xref.ts.
+
+         **The first piece drawn is the one focus stop** (Sol F6): `tabindex`
+         and `role="link"` on it, and the whole phrase as its name. The pieces
+         after it are clickable — the handler finds the mark from any of them —
+         but not in the tab order, so a phrase split by an `<em>` is one Tab
+         press rather than three. "Drawn" rather than "starts here": a first
+         piece inside an `<svg>` is skipped above, and then the next one takes
+         the stop rather than nobody. */
+      const xref = xrefs[0];
+      if (xref) {
+        el.setAttribute("data-xref", xref.id);
+        if (!focusStops.has(xref.id)) {
+          focusStops.add(xref.id);
+          el.setAttribute("tabindex", "0");
+          el.setAttribute("role", "link");
+          if (xref.label) el.setAttribute("aria-label", xref.label);
+        }
+      }
       /* The one the reader has pressed — the comment whose dialog is open, the
          search hit they clicked in the panel, the conversation on screen, the
          term selected in the glossary band. All four mean the same thing and
@@ -993,4 +1036,91 @@ export function citeMarks(
     if (marks.length > 0) byBlock.set(block.id, marks);
   }
   return byBlock;
+}
+
+/* ------------------------------------------------------- cross-references --
+   The fourth kind this file finds for itself, and the only one a click follows.
+   docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md § 2. */
+
+/**
+ * Every cross-reference, as marks, grouped by the block it starts from.
+ *
+ * **The same unique rule the server validated with** — Sol F4. src/crossrefs.ts
+ * kept a link only if its phrase occurs exactly once in `renderedText(from.html)`
+ * under `quoteFinderWithMultiplicity(…, "spaced")`, and this asks the same
+ * question of the same string. So a phrase the server kept is one the prose can
+ * mark, and a phrase not found exactly once here — the block changed under a
+ * carried artefact, say — draws nothing rather than guessing. `"spaced"`, not
+ * `citeMarks`' `"forgiving"`, because agreeing with the server is the point.
+ *
+ * **Dropped here, on the client:**
+ *
+ * - a phrase whose range intersects an author's `<a href>` — the author's link
+ *   keeps its card and its click (the plan's one exception to "xref wins");
+ * - a phrase overlapping one already kept in the same block, first in the
+ *   artefact's order winning — the server enforces this too, and this is the
+ *   belt that lets `annotateHtml` write one `data-xref` per piece.
+ *
+ * `id` is `<nonce>-<i>`, where `i` indexes `links` **as given** — the
+ * artefact's own array — so `xrefTarget` (xref.ts) reads `to` back by index.
+ * `nonce` is a parameter rather than read from xref.ts so a test can pin it;
+ * the reading view passes `XREF_NONCE`.
+ */
+export function xrefMarks(
+  blocks: readonly Block[],
+  links: readonly Crossref[],
+  nonce: string,
+): Map<BlockId, Mark[]> {
+  const byBlock = new Map<BlockId, Mark[]>();
+  if (links.length === 0) return byBlock;
+
+  const wanted = new Map<BlockId, { i: number; phrase: string }[]>();
+  for (const [i, link] of links.entries()) {
+    const list = wanted.get(link.from) ?? [];
+    list.push({ i, phrase: link.phrase });
+    wanted.set(link.from, list);
+  }
+
+  for (const block of blocks) {
+    const here = wanted.get(block.id);
+    if (!here) continue;
+    const text = renderedText(block.html);
+    const find = quoteFinderWithMultiplicity(text, "spaced");
+    const authorLinks = block.html.includes("<a") ? linkRanges(block.html) : [];
+    const marks: Mark[] = [];
+    for (const { i, phrase } of here) {
+      const span = find(phrase);
+      /* `null` is "not there" and "there twice" alike: no mark. */
+      if (!span) continue;
+      const crosses = (r: { start: number; end: number }) => span.start < r.end && span.end > r.start;
+      if (authorLinks.some(crosses) || marks.some(crosses)) continue;
+      marks.push({
+        id: `${nonce}-${i}`,
+        kind: "xref" as const,
+        start: span.start,
+        end: span.end,
+        label: text.slice(span.start, span.end),
+      });
+    }
+    if (marks.length > 0) byBlock.set(block.id, marks);
+  }
+  return byBlock;
+}
+
+/**
+ * The rendered-text ranges inside an author's `<a href>`, in the offset space
+ * `renderedText` defines — the same text-node walk `annotate` makes, so the two
+ * cannot disagree about where a link's words are.
+ */
+function linkRanges(html: string): { start: number; end: number }[] {
+  const root = host(html);
+  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const ranges: { start: number; end: number }[] = [];
+  let offset = 0;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const length = n.nodeValue?.length ?? 0;
+    if (n.parentElement?.closest("a[href]")) ranges.push({ start: offset, end: offset + length });
+    offset += length;
+  }
+  return ranges;
 }
