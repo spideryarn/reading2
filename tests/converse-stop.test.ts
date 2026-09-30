@@ -63,7 +63,7 @@ function stubFetch(make: () => Response | Promise<Response>) {
 async function run(signal: AbortSignal, stop: () => void, at: (chars: number) => boolean) {
   const events = [];
   let chars = 0;
-  for await (const event of converse({ meta, blocks, history: [], question: "why?", slug: "example", signal })) {
+  for await (const event of converse({ power: "standard", meta, blocks, history: [], question: "why?", slug: "example", signal })) {
     events.push(event);
     if (event.type === "delta") {
       chars += event.text.length;
@@ -118,6 +118,7 @@ describe("a stop ends in `done`, never in a throw", () => {
     );
     const events: unknown[] = [];
     const iterator = converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -219,6 +220,7 @@ describe("a stop ends in `done`, never in a throw", () => {
     const events: { type: string }[] = [];
     setTimeout(() => controller.abort(new Error("stopped")), 40);
     for await (const event of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -281,6 +283,7 @@ describe("a stop ends in `done`, never in a throw", () => {
     setTimeout(() => controller.abort(new Error("stopped")), 20);
     try {
       for await (const event of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -361,6 +364,7 @@ describe("a stop ends in `done`, never in a throw", () => {
     const events: { type: string; run?: { status: string } }[] = [];
     let stoppedAt = -1;
     for await (const event of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -450,6 +454,7 @@ describe("a stop ends in `done`, never in a throw", () => {
     let failure: string | null = null;
     try {
       for await (const event of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -485,6 +490,7 @@ describe("a stop ends in `done`, never in a throw", () => {
     const events: { type: string }[] = [];
     setTimeout(() => controller.abort(new Error("stopped")), 5);
     for await (const event of converse({
+      power: "standard",
       meta,
       blocks,
       history: [],
@@ -572,6 +578,7 @@ describe("failures are loud", () => {
 
     async function run() {
       for await (const _event of converse({
+        power: "standard",
         meta,
         blocks,
         history: [],
@@ -614,7 +621,7 @@ describe("failures are loud", () => {
     );
 
     async function run() {
-      for await (const _event of converse({ meta, blocks, history: [], question: "why?", slug: "example" })) {
+      for await (const _event of converse({ power: "standard", meta, blocks, history: [], question: "why?", slug: "example" })) {
         // Draining is the point; the throw happens on the failed response.
       }
     }

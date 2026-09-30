@@ -260,6 +260,7 @@ describe("a claim where every step skipped and the publication failed", () => {
     const logged = await logLinesWhile(async () => {
       const advanced = await runAsOwner(DEV_OWNER_ID, () =>
         advanceJobWith(job.id, {
+          power: async () => "standard",
           session: sessionThatCannotPublish,
           steps: { ...STEPS, arc: SKIPPING_STEP } as never,
         }),

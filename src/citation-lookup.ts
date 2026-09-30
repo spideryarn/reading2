@@ -57,6 +57,7 @@
 import { createHash } from "node:crypto";
 
 import { firstAuthor } from "./citations.js";
+import { generationKey } from "./models.js";
 import { findQuote } from "./quote-match.js";
 import type {
   CitationLookup,
@@ -151,11 +152,17 @@ function hash16(parts: readonly unknown[]): string {
  * applied, the prompt version and the model asked for (not the one that
  * answered: the fingerprint is recomputed at read time, where only the
  * configured model is known).
+ *
+ * **The model's generation, not its id** (`generationKey`): Sonnet and the
+ * high-power Opus hash alike, so switching an article's power does not detach
+ * every lookup from it; any other model still hashes differently. The key is
+ * the old wire id for both, so existing rows still match. Plan 260930f
+ * decision 6, Sol F1.
  */
 export function lookupContextHash(context: LookupContext, model: string): string {
   return hash16([
     CITATION_LOOKUP_VERSION,
-    model,
+    generationKey(model),
     context.title,
     context.authors,
     context.year,

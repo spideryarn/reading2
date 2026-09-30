@@ -134,7 +134,7 @@ const server = createServer((req, res) => {
         const started = Date.now();
         const out = await runAsOwner(environmentOwnerId(), async () => {
           const article = await loadArticle(slug);
-          return runTool(name, args, {
+          return runTool(name, args, { power: "standard",
             slug,
             meta: article.meta,
             blocks: article.blocks,

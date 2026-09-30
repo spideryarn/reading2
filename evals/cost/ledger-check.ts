@@ -99,10 +99,14 @@ async function main(): Promise<number> {
 
   const { report } = await collectSpend(
     async () => {
-      await streamMessage("labels", {
-        max_tokens: 16,
-        messages: [{ role: "user", content: PROMPT }],
-      }).finalMessage();
+      await streamMessage(
+        "labels",
+        {
+          max_tokens: 16,
+          messages: [{ role: "user", content: PROMPT }],
+        },
+        { power: "standard" },
+      ).finalMessage();
       await openRouterJson("eval", {
         model: QUICK_MODEL_OPENROUTER,
         max_tokens: 16,

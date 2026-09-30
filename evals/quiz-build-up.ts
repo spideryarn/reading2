@@ -261,7 +261,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
       if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
       console.log(`${arm}: ${slug} (${PROMPT_VERSION})`);
       const article = await loadArticle(slug);
-      const run = await generateQuiz({ article: { ...article, slug } });
+      const run = await generateQuiz({ power: "standard", article: { ...article, slug } });
       const file: ArmFile = {
         arm,
         slug,

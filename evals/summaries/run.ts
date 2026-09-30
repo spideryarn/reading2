@@ -337,7 +337,7 @@ async function commandPlan(o: Options): Promise<void> {
   const docs = await loadAll(o);
   console.log(`# What a run would buy\n`);
   console.log(`Corpus root: ${o.corpusRoot}`);
-  console.log(`Model:       ${modelFor("hierarchy")}\n`);
+  console.log(`Model:       ${modelFor("hierarchy", "standard")}\n`);
   let nodes = 0;
   let promptChars = 0;
   for (const doc of docs) {
@@ -401,7 +401,7 @@ async function commandGenerate(o: Options): Promise<void> {
     plan,
     depth: o.depth,
     stub: o.stub,
-    model: o.stub ? "(stub — no model was called)" : modelFor("hierarchy"),
+    model: o.stub ? "(stub — no model was called)" : modelFor("hierarchy", "standard"),
     claimLimits: CLAIM_LIMITS,
   };
   await writeFile(path.join(dir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
@@ -428,7 +428,7 @@ async function commandGenerate(o: Options): Promise<void> {
     }
   }
 
-  const coverage = coverageFor(cells, plan, o.stub ? "stub" : modelFor("hierarchy"));
+  const coverage = coverageFor(cells, plan, o.stub ? "stub" : modelFor("hierarchy", "standard"));
   console.log("");
   for (const line of coverageLines(coverage)) console.log(line);
   console.log(`\nWrote ${dir}`);

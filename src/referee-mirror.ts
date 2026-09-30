@@ -171,7 +171,7 @@ import {
 } from "./openrouter-stream.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import { findQuote } from "./quote-match.js";
 import { plainWords } from "./plain-words.js";
 /* **`parseHits` is named for search and is not about hits.** It pulls exactly
@@ -208,7 +208,7 @@ const MIRROR_JOB = "referee-mirror" as const;
  * `SPIDERYARN_REFEREE_MIRROR_MODEL` if that is set — see `resolveModel` there
  * for why the override is read in that file rather than here.
  */
-export const defaultModel = (): string => modelFor(MIRROR_JOB);
+export const defaultModel = (power: ModelPower): string => modelFor(MIRROR_JOB, power);
 
 /**
  * How long the whole run may take.
@@ -457,6 +457,12 @@ export interface MirrorRequest {
    * in the log it is what lines this run up with the comments it read.
    */
   slug?: string;
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -1407,7 +1413,8 @@ export async function* mirrorStream({
   comments,
   criteria = [],
   slug,
-  model = defaultModel(),
+  power,
+  model = defaultModel(power),
   signal,
   timeoutMs = MIRROR_TIMEOUT_MS,
   stallMs = MIRROR_STALL_MS,

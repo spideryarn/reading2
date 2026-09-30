@@ -190,7 +190,7 @@ describe("a batch that comes back short", () => {
     wire.answers.push(allBut(58, [4]));
     wire.answers.push(answering([4], "A repaired claim about paragraph"));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(wire.calls.length).toBe(2);
     const second = wire.calls[1]!;
@@ -221,7 +221,7 @@ describe("a batch that comes back short", () => {
     wire.answers.push(allBut(58, [4], "First-pass claim about paragraph"));
     wire.answers.push(answering([4], "Second-ask claim about paragraph"));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(run.labels[blocks[0]!.id]).toContain("First-pass claim");
     expect(run.labels[blocks[3]!.id]).toContain("Second-ask claim");
@@ -233,7 +233,7 @@ describe("a batch that comes back short", () => {
     const { tree, blocks } = oneSection(12);
     wire.answers.push(allBut(12, []));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(wire.calls.length).toBe(1);
     expect(run.dropped).toEqual([]);
@@ -249,7 +249,7 @@ describe("a batch that comes back short", () => {
     wire.answers.push("TRUNCATED");
     wire.answers.push(allBut(12, []));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(wire.calls.length).toBe(2);
     expect(wire.calls[1]!.maxTokens).toBeGreaterThan(wire.calls[0]!.maxTokens);
@@ -275,7 +275,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(58, [4]));
     wire.answers.push(JSON.stringify({ labels: [] }));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(wire.calls.length).toBe(2);
     expect(run.dropped).toEqual([blocks[3]!.id]);
@@ -292,7 +292,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(58, [4]));
     wire.answers.push(JSON.stringify({ labels: [] }));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(run.file.dropped).toEqual([blocks[3]!.id]);
   });
@@ -304,7 +304,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(58, [4, 9, 40]));
     wire.answers.push(JSON.stringify({ labels: [] }));
 
-    await expect(generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /missing paragraphs 4, 9, 40/,
     );
   });
@@ -321,14 +321,14 @@ describe("when the re-ask comes back short too", () => {
     const { tree, blocks } = oneSection(50);
     wire.answers.push(allBut(50, [7]));
     wire.answers.push(JSON.stringify({ labels: [] }));
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
     expect(run.dropped).toEqual([blocks[6]!.id]);
 
     wire.calls.length = 0;
     wire.answers.length = 0;
     wire.answers.push(allBut(50, [7, 8]));
     wire.answers.push(JSON.stringify({ labels: [] }));
-    await expect(generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /missing paragraphs 7, 8/,
     );
   });
@@ -352,7 +352,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(12, [7]));
     wire.answers.push(JSON.stringify({ labels: [] }));
 
-    await expect(generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /could not be checked for a displacement/,
     );
   });
@@ -373,7 +373,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(20, [7]));
     wire.answers.push(JSON.stringify({ labels: [] }));
 
-    const run = await generateLabels({ tree, blocks: withHeading, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks: withHeading, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(run.dropped).toEqual([]);
     expect(run.labels[blocks[6]!.id]).toBe("What The Section Is Called");
@@ -401,7 +401,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(19, [7]));
     wire.answers.push(JSON.stringify({ labels: [] }));
 
-    await expect(generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /were dropped by the batches that asked for them/,
     );
   });
@@ -435,7 +435,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(shifted);
     wire.answers.push(answering([7], `A claim concerning ${WORDS[7]} in the`));
 
-    await expect(generateLabels({ tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /match the paragraph after it/,
     );
   });
@@ -467,7 +467,7 @@ describe("when the re-ask comes back short too", () => {
     // Answers one of the two it was asked for: a shortfall in its own right.
     wire.answers.push(JSON.stringify({ labels: [[7, displaced(7)]] }));
 
-    await expect(generateLabels({ tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /match the paragraph after it/,
     );
   });
@@ -492,7 +492,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(20, [7]));
     wire.answers.push("TRUNCATED");
 
-    const message = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }).then(
+    const message = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }).then(
       () => "it did not throw at all",
       (err: unknown) => (err instanceof Error ? err.message : String(err)),
     );
@@ -541,7 +541,7 @@ describe("when the re-ask comes back short too", () => {
     // The re-ask succeeds, so the merged set is complete — and displaced.
     wire.answers.push(JSON.stringify({ labels: [[7, displaced(7)]] }));
 
-    await expect(generateLabels({ tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
+    await expect(generateLabels({ power: "standard", tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() })).rejects.toThrow(
       /match the paragraph after it/,
     );
   });
@@ -552,7 +552,7 @@ describe("when the re-ask comes back short too", () => {
     wire.answers.push(allBut(58, [4, 9]));
     wire.answers.push(answering([9], "A repaired claim about paragraph"));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(run.dropped).toEqual([blocks[3]!.id]);
     expect(run.labels[blocks[8]!.id]).toContain("repaired");
@@ -631,6 +631,7 @@ describe("a hostile article, rather than a hostile response", () => {
     wire.answers.push(JSON.stringify({ labels: [[4, "or"]] }));
 
     const run = await generateLabels({
+      power: "standard",
       tree,
       blocks,
       slug: "test",
@@ -657,6 +658,7 @@ describe("a hostile article, rather than a hostile response", () => {
     wire.answers.push(allBut(58, [4]));
 
     const run = await generateLabels({
+      power: "standard",
       tree,
       blocks,
       slug: "test",
@@ -706,7 +708,7 @@ describe("an answer with one malformed pair", () => {
       wire.answers.push(withBadPair(58, bad));
       wire.answers.push(answering([4], "A repaired claim about paragraph"));
 
-      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+      const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
       expect(wire.calls.length).toBe(2);
       expect(wire.calls[1]!.parts.join("\n")).toMatch(/paragraph 4\b/);
@@ -723,7 +725,7 @@ describe("an answer with one malformed pair", () => {
     wire.answers.push(withBadPair(58, [[4, ""]]));
     wire.answers.push(JSON.stringify({ labels: [[4, ""]] }));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(run.dropped).toEqual([blocks[3]!.id]);
     expect(Object.keys(run.labels).length).toBe(57);
@@ -748,7 +750,7 @@ describe("an answer with one malformed pair", () => {
     wire.answers.push(JSON.stringify({ labels: [[7, displaced(7)]] }));
 
     await expect(
-      generateLabels({ tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() }),
+      generateLabels({ power: "standard", tree, blocks: distinct, slug: "test", checkpoints: nullCheckpointStore() }),
     ).rejects.toThrow(/match the paragraph after it/);
   });
 
@@ -763,7 +765,7 @@ describe("an answer with one malformed pair", () => {
     );
     wire.answers.push(allBut(12, []));
 
-    const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
     expect(wire.calls.length).toBe(2);
     expect(wire.calls[1]!.maxTokens, "a whole re-draw, not a re-ask").toBeGreaterThan(
@@ -793,7 +795,7 @@ describe("an answer with one malformed pair", () => {
       wire.answers.push(answer);
       wire.answers.push(allBut(12, []));
 
-      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+      const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
 
       expect(wire.calls.length).toBe(2);
       expect(wire.calls[1]!.maxTokens).toBeGreaterThan(wire.calls[0]!.maxTokens);
@@ -809,7 +811,7 @@ describe("an answer with one malformed pair", () => {
     wire.answers.push(withBadPair(58, dupe));
 
     await expect(
-      generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
+      generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
     ).rejects.toBeInstanceOf(LabelsFailed);
   });
 
@@ -835,6 +837,7 @@ describe("an answer with one malformed pair", () => {
       wire.answers.push(answer);
 
       const err = await generateLabels({
+        power: "standard",
         tree,
         blocks,
         slug: "test",
@@ -861,7 +864,7 @@ describe("an answer with one malformed pair", () => {
 describe("the error the step fails with", () => {
   async function failure(): Promise<unknown> {
     const { tree, blocks } = oneSection(12);
-    return generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }).then(
+    return generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }).then(
       () => new Error("it did not throw at all"),
       (err: unknown) => err,
     );
@@ -931,6 +934,7 @@ describe("an abort while a batch is being attempted", () => {
       let err: unknown;
       try {
         err = await generateLabels({
+          power: "standard",
           tree,
           blocks,
           slug: "test",

@@ -485,10 +485,10 @@ describe("the arc", () => {
 
   it("does not throw when the model returns one sentence per real part", () => {
     const sentences = partsOf(tree).map((_, i) => `Sentence ${i + 1}.`);
-    expect(() => buildArc(sentences, tree, "example", FIXTURE_HASH)).not.toThrow();
+    expect(() => buildArc(sentences, tree, "example", FIXTURE_HASH, "standard")).not.toThrow();
     // And the reverse: one per depth-1 child, apparatus included, is refused.
     const tooMany = [...sentences, "A sentence about the endnotes."];
-    expect(() => buildArc(tooMany, tree, "example", FIXTURE_HASH)).toThrow(/Refusing to guess/);
+    expect(() => buildArc(tooMany, tree, "example", FIXTURE_HASH, "standard")).toThrow(/Refusing to guess/);
   });
 
   it("numbers the argument only — 3 / 7, never 3 / 9", () => {
@@ -497,7 +497,7 @@ describe("the arc", () => {
       partsOf(tree).map((_, i) => `Sentence ${i + 1}.`),
       tree,
       "example",
-      FIXTURE_HASH,
+      FIXTURE_HASH, "standard",
     );
     const cells = [...buildArcColumn(geometry, arc)!.values()];
     const numbered = cells.filter((c) => c.index !== undefined);
@@ -647,7 +647,7 @@ describe("a reader standing mid-Notes", () => {
   });
 
   it("and the arc's numbering agrees with all three", () => {
-    const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example", FIXTURE_HASH);
+    const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example", FIXTURE_HASH, "standard");
     const cells = buildArcColumn(geometry, arc)!;
     const rows = [...cells.keys()].sort((a, b) => a - b);
     const startingAtOrBefore = rows.filter((r) => r <= midNoteRow).at(-1)!;

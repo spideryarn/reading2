@@ -221,7 +221,7 @@ async function runOne(slug: string, article: Article, ideas: readonly Idea[], ar
      stored list's sourceHash, i.e. that these are the bytes the pipeline used. */
   const input: PipelineArticle = { slug, blocks: article.blocks, tree: article.tree, meta: article.meta ?? null };
   const { result, report } = await collectSpend(
-    () => generateQuotes({ article: input, previous: null, profile: null }),
+    () => generateQuotes({ power: "standard", article: input, previous: null, profile: null }),
     { attribution: { scopeKind: "eval", articleSlug: slug } },
   );
   if (arm === "nudge" && nudgeApplied === before) throw new Error("nudge arm ran without the patch applying");

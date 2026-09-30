@@ -351,7 +351,11 @@ export async function resolveAccess(
      owner-only (src/types.ts § `Article.sourceGuess`) — so the public arm says
      *nobody has looked* in so many words. */
   const drawn: Article =
-    found.kind === "owned" ? found.article : { ...found.article, sourceGuess: undefined };
+    found.kind === "owned"
+      ? found.article
+      : /* Nor whether the owner switched High-powered AI on — that is the
+           owner's spend, not the visitor's business (plan 260930f). */
+        { ...found.article, sourceGuess: undefined, highPowerSince: null };
   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,
   });

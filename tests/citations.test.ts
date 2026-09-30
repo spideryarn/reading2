@@ -86,7 +86,7 @@ function build(
   const run = () =>
     buildCitations(
       { capped: false, works, ...extra },
-      { slug: "t", blocks, sourceHash: "h.h", elapsedMs: 1, inherit: null, drops, scores },
+      { power: "standard", slug: "t", blocks, sourceHash: "h.h", elapsedMs: 1, inherit: null, drops, scores },
     );
   if (allDropped) {
     expect(run).toThrow();
@@ -379,6 +379,7 @@ describe("every place is verified against the article", () => {
     expect(build([], [body]).rows).toEqual([]);
     expect(() =>
       buildCitations({}, {
+        power: "standard",
         slug: "t", blocks: [body], sourceHash: "h", elapsedMs: 1, inherit: null,
         drops: emptyDrops(), scores: noScoreDrops(),
       }),
@@ -489,7 +490,7 @@ describe("one row per work, and ids that survive a re-run", () => {
           { title: "Elements of Episodic Memory", why: "New.", ...scored, mentions: [{ block: "spya-b00003", quote: "Tulving (1983)" }] },
         ],
       },
-      { slug: "t", blocks: BLOCKS, sourceHash: "moved", elapsedMs: 1, inherit, drops, scores: noScoreDrops() },
+      { power: "standard", slug: "t", blocks: BLOCKS, sourceHash: "moved", elapsedMs: 1, inherit, drops, scores: noScoreDrops() },
     );
     const byKey = new Map(second.citations.map((c) => [c.key, c.id]));
     expect(byKey.get("doi:10.1140/epje/i2004-10074-4")).toBe(first.citations[0]!.id);
@@ -611,7 +612,7 @@ describe("generateCitations", () => {
       capped: false,
       works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
     });
-    const run = await generateCitations({ article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null });
+    const run = await generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null });
     expect(run.citations.version).toBe(PROMPT_VERSION);
     expect(run.citations.citations).toHaveLength(1);
     expect(run.coverage).toEqual({ notes: 1, notesReached: 1, references: 1, referencesReached: 0, works: 1 });
@@ -621,7 +622,7 @@ describe("generateCitations", () => {
     stop = "max_tokens";
     answer = '{"works": [{"title": "Si';
     await expect(
-      generateCitations({ article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null }),
+      generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null }),
     ).rejects.toThrow(/ran past its/);
     stop = "end_turn";
   });

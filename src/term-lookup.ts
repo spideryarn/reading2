@@ -29,6 +29,8 @@
  * thing the panel spent a rewrite acquiring. See docs/project/glossary.md.
  */
 
+import { articlePower } from "./models.js";
+import { currentOwnerId } from "./owner.js";
 import {
   type ExplainEnding,
   explainStream as explainStreamDefault,
@@ -314,6 +316,9 @@ export function makeLookUpTerm(
       for await (const event of explainStream({
         meta: article.meta,
         blocks: article.blocks,
+        /* High-powered AI (plan 260930f): the reader seam is owner-scoped, so
+           the ambient owner is this article's. */
+        power: articlePower(article.highPowerSince, currentOwnerId()),
         blockId,
         quote,
         ...(signal ? { signal } : {}),
@@ -637,6 +642,9 @@ export function makeAskAboutTerm(
       for await (const event of explainStream({
         meta: article.meta,
         blocks: article.blocks,
+        /* High-powered AI (plan 260930f): the reader seam is owner-scoped, so
+           the ambient owner is this article's. */
+        power: articlePower(article.highPowerSince, currentOwnerId()),
         blockId: found.blockId,
         /* **The article's words, not the reader's.** `found.quote` is
            `anchor.matched`, the run of characters actually in that block, so

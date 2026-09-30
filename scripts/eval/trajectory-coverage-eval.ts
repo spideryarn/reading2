@@ -263,12 +263,12 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     async () => {
       if (arm === "new") {
         const input = NEW.trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-        return NEW.generateTrajectory({ slug, input, profile: null });
+        return NEW.generateTrajectory({ power: "standard", slug, input, profile: null });
       }
       if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
       if (!isV6(OLD)) {
         const input = OLD.trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-        return OLD.generateTrajectory({ slug, input, profile: null });
+        return OLD.generateTrajectory({ power: "standard", slug, input, profile: null });
       }
       return OLD.generateTrajectory({
         slug,

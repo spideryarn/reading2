@@ -15,6 +15,10 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
+import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
+
 import { ProviderRefused, type AiRequestBody, type JsonCall } from "../src/ai-call.js";
 import {
   FIND_SYSTEM,
@@ -136,6 +140,7 @@ function harness(
   reply: unknown | Error,
   works: CitedWork[] = [work()],
   allowed: AllowanceTaken = { kind: "allowed", id: "lease-1" },
+  article: Article = ARTICLE,
 ) {
   const saved: { slug: string; entryId: string; find: CitationFind }[] = [];
   const sent: AiRequestBody[] = [];
@@ -144,7 +149,7 @@ function harness(
   const findCitation = makeFindCitation({
     reader: {
       loadCitations: async () => ({ citations: list(works), stale: false, outdated: false }) as CitationsFound,
-      loadArticle: async () => ARTICLE,
+      loadArticle: async () => article,
     },
     finds: {
       async save(slug, entryId, find) {
@@ -516,6 +521,7 @@ describe("the request — the only bounds on spend that exist", () => {
     const sent: AiRequestBody[] = [];
     const { reading } = await findWorkPage({ title: TITLE }, null, {
       model: "a-model",
+      power: "standard",
       call: async (body) => {
         sent.push(body);
         return { json: answer({ results: [A_REVIEW, THE_PAPER] }) } as JsonCall;
@@ -566,6 +572,7 @@ describe("the request — the only bounds on spend that exist", () => {
     const sent: AiRequestBody[] = [];
     await findWorkPage({ title: TITLE }, null, {
       model: "a-model",
+      power: "standard",
       call: async (body) => {
         sent.push(body);
         return { json: answer({ results: [THE_PAPER] }) } as JsonCall;
@@ -601,5 +608,35 @@ describe("attachFinds — a found page is read back, and never beats the article
   it("returns the same list when there is nothing to attach", () => {
     const citations = list([work()]);
     expect(attachFinds(citations, new Map())).toBe(citations);
+  });
+});
+
+/* ------------------------------------------------ High-powered AI (260930f) -- */
+
+describe("High-powered AI — the /find route and findWorkPage follow the article (Sol F4)", () => {
+  const HIGH = { ...ARTICLE, highPowerSince: "2026-09-30T00:00:00.000Z" } as unknown as Article;
+
+  it("sends Opus for an administrator's high-powered article", async () => {
+    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }), [work()], undefined, HIGH);
+    await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () => findCitation("a-piece", WORK_ID));
+    expect(sent[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
+  });
+
+  it("sends Sonnet when the owner is not an administrator, column or no column", async () => {
+    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }), [work()], undefined, HIGH);
+    await runAsOwner(DEV_OWNER_ID, () => findCitation("a-piece", WORK_ID));
+    expect(sent[0]?.model).toBe(CAPABLE_MODEL_OPENROUTER);
+  });
+
+  it("findWorkPage resolves the model from `power` when no model is given", async () => {
+    const sent: AiRequestBody[] = [];
+    await findWorkPage({ title: TITLE }, null, {
+      power: "high",
+      call: async (body) => {
+        sent.push(body);
+        return { json: answer({ results: [THE_PAPER] }) } as JsonCall;
+      },
+    });
+    expect(sent[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
   });
 });

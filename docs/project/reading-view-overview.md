@@ -283,6 +283,9 @@ The key itself, and the four things the chord refuses to do, are
 - **[experimental-features.md](experimental-features.md)** — the switch for features that are not
   finished, on this page and at the end of the bottom bar. Off by default, some modes and four Diagram
   pictures behind it, and the rule that hiding a feature never breaks a link to it.
+- **[high-powered-ai.md](high-powered-ai.md)** — one article's capable-tier calls on Opus instead of
+  Sonnet, for a difficult piece: the switch on `/metadata`, what moves and what does not, and why
+  switching it re-runs nothing.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
 - **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle

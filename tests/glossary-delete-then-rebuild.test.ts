@@ -405,6 +405,7 @@ async function queueGlossaryJob(slug: string): Promise<string> {
 /** The parts production passes, with the fake over the one paid step. */
 function partsWith(step: PipelineStep<"glossary">): AdvanceParts {
   return {
+    power: async () => "standard",
     session: (job, attempt) =>
       openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
     steps: { ...STEPS, glossary: step },

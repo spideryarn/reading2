@@ -187,7 +187,7 @@ async function draw(opts: Options): Promise<void> {
   for (const dir of opts.dirs) {
     const slug = path.basename(dir);
     process.stdout.write(`${slug}: drawing…`);
-    const r = await generateSketch({
+    const r = await generateSketch({ power: "standard",
       article: await readArticleFromDir(dir),
       ...(systemOverride ? { systemOverride } : {}),
       onProgress: (d) => process.stdout.write(`\r${slug}: ${d}          `),

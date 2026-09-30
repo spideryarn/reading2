@@ -127,7 +127,7 @@ const link = (from: string, phrase: unknown, to: string) => ({ from, phrase, to 
 function build(links: unknown, dropped: CrossrefsDropped = emptyDropped()) {
   return buildCrossrefs(
     { links },
-    { slug: "sleep", blocks, sourceHash: "h", elapsedMs: 1, dropped },
+    { slug: "sleep", blocks, sourceHash: "h", elapsedMs: 1, power: "standard", dropped },
   );
 }
 
@@ -157,7 +157,7 @@ describe("every rule in the table is enforced, each with its counter", () => {
         slug: "marked",
         blocks: blocks.map((b) => (b.id === marked.id ? marked : b)),
         sourceHash: "h",
-        elapsedMs: 1,
+        elapsedMs: 1, power: "standard",
         dropped: d,
       },
     );
@@ -186,7 +186,7 @@ describe("every rule in the table is enforced, each with its counter", () => {
         slug: "line-break",
         blocks: blocks.map((b) => (b.id === broken.id ? broken : b)),
         sourceHash: "h",
-        elapsedMs: 1,
+        elapsedMs: 1, power: "standard",
         dropped: d,
       },
     );
@@ -371,7 +371,7 @@ describe("every rule in the table is enforced, each with its counter", () => {
 
 describe("three empty outcomes, three different answers", () => {
   it("a missing `links` throws: a failed answer, not an empty one", () => {
-    expect(() => buildCrossrefs({}, { slug: "s", blocks, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped() })).toThrow(
+    expect(() => buildCrossrefs({}, { slug: "s", blocks, sourceHash: "h", elapsedMs: 1, power: "standard", dropped: emptyDropped() })).toThrow(
       /no `links` array/,
     );
     expect(() => build("not a list")).toThrow(/no `links` array/);
@@ -443,7 +443,7 @@ describe("the request", () => {
       ],
     });
 
-    const run = await generateCrossrefs({ article });
+    const run = await generateCrossrefs({ article, power: "standard" });
 
     expect(run.crossrefs.links).toEqual([GOOD]);
     expect(run.dropped.unquoted).toBe(1);
@@ -452,13 +452,15 @@ describe("the request", () => {
   it("sends Ideas' article bytes and an exact request fingerprint, at medium effort, under its own task", async () => {
     const article: Article = { ...example, meta: null };
     answer = JSON.stringify({ links: [] });
-    const run = await generateCrossrefs({ article, cacheArticle: true });
+    const run = await generateCrossrefs({ article, cacheArticle: true, power: "standard" });
 
     answer = JSON.stringify({
       ideas: [],
     });
     const { generateIdeas } = await import("../src/ideas.js");
-    await generateIdeas({ article, previous: null, cacheArticle: true }).catch(() => undefined);
+    await generateIdeas({ article, previous: null, cacheArticle: true, power: "standard" }).catch(
+      () => undefined,
+    );
 
     const [call, ideasCall] = sent;
     if (!call || !ideasCall) throw new Error("expected both calls");

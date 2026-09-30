@@ -151,7 +151,7 @@ beforeEach(() => {
 });
 
 describe("the structure checkpoint's key", () => {
-  const canonical = () => canonicalStructureRequest(structureRequest(BLOCKS).params);
+  const canonical = () => canonicalStructureRequest(structureRequest(BLOCKS).params, "standard");
 
   it("is a digest of the request the call actually makes, not a list somebody keeps", () => {
     const c = canonical();
@@ -166,7 +166,7 @@ describe("the structure checkpoint's key", () => {
     /* `modelFor("hierarchy")`, which is the OpenRouter address the call goes to
        — NOT `CAPABLE_MODEL`, which is the same model's name and is what a
        hand-copied key would have reached for. src/models.ts § CAPABLE_MODEL. */
-    expect(request.model).toBe(modelFor("hierarchy"));
+    expect(request.model).toBe(modelFor("hierarchy", "standard"));
     expect(c.promptVersion).toBe(PROMPT_VERSION);
   });
 
@@ -176,7 +176,7 @@ describe("the structure checkpoint's key", () => {
        mutation test below can only enumerate fields the object already has. So
        `request` is `messagesWireBody`'s own output, byte for byte — the same
        function `streamMessage` sends. ⟨GPT Sol, 2026-09-04.⟩ */
-    expect(canonical().request).toEqual(messagesWireBody("hierarchy", structureRequest(BLOCKS).params));
+    expect(canonical().request).toEqual(messagesWireBody("hierarchy", structureRequest(BLOCKS).params, "standard"));
   });
 
   it("moves when any field of that request moves — enumerated, not listed", () => {
@@ -206,7 +206,7 @@ describe("the structure checkpoint's key", () => {
        never be replayed onto blocks it does not name. That is the property, and
        it is asserted rather than assumed. */
     const renamed = BLOCKS.map((b) => ({ ...b, id: b.id.replace("chk", "xyz") }));
-    expect(structureKey(canonicalStructureRequest(structureRequest(renamed).params))).not.toBe(
+    expect(structureKey(canonicalStructureRequest(structureRequest(renamed).params, "standard"))).not.toBe(
       structureKey(canonical()),
     );
   });
@@ -219,12 +219,12 @@ describe("the structure checkpoint's key", () => {
 describe("generateHierarchy and the structure checkpoint", () => {
   it("makes the call once and reuses the answer on the next run", async () => {
     const checkpoints = memoryCheckpoints();
-    const first = await generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+    const first = await generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
     expect(structureCalls).toBe(1);
     expect([...checkpoints.entries.keys()]).toHaveLength(1);
     expect([...checkpoints.entries.keys()][0]).toMatch(/^hierarchy-structure:/);
 
-    const second = await generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+    const second = await generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
     expect(structureCalls, "the second run bought the structure call again").toBe(1);
     /* Same tree, not merely no call: a resumed run that quietly produced a
        different structure would be worse than one that paid twice. */
@@ -260,6 +260,7 @@ describe("generateHierarchy and the structure checkpoint", () => {
     labelsThrow = true;
     try {
       const first = await generateHierarchy({
+        power: "standard",
         blocks: BLOCKS,
         slug: "structure-checkpoint",
         checkpoints,
@@ -273,6 +274,7 @@ describe("generateHierarchy and the structure checkpoint", () => {
       expect(checkpoints.entries.size, "the tree this attempt paid for was not kept").toBe(1);
 
       const second = await generateHierarchy({
+        power: "standard",
         blocks: BLOCKS,
         slug: "structure-checkpoint",
         checkpoints,
@@ -296,7 +298,7 @@ describe("generateHierarchy and the structure checkpoint", () => {
       root: { title: "No gist here", range: ["spya-chk001", "spya-chk003"] },
     });
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
+      generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
     ).rejects.toThrow();
     expect(checkpoints.entries.size).toBe(0);
   });
@@ -305,7 +307,7 @@ describe("generateHierarchy and the structure checkpoint", () => {
     const checkpoints = memoryCheckpoints();
     modelAnswer = "{ this is not JSON at all";
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
+      generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
     ).rejects.toThrow();
     expect(checkpoints.entries.size, "a malformed answer would be replayed for ever").toBe(0);
   });
@@ -320,7 +322,7 @@ describe("generateHierarchy and the structure checkpoint", () => {
       root: { title: "Bad", gist: "Names a block that is not there.", range: ["spya-nope01", "spya-chk003"] },
     });
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
+      generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
     ).rejects.toThrow();
     expect(checkpoints.entries.size).toBe(0);
   });
@@ -356,13 +358,13 @@ describe("generateHierarchy and the structure checkpoint", () => {
   for (const [what, answer] of POISON) {
     it(`buys the tree again when the stored answer ${what}`, async () => {
       const checkpoints = memoryCheckpoints();
-      const key = structureKey(canonicalStructureRequest(structureRequest(BLOCKS).params));
+      const key = structureKey(canonicalStructureRequest(structureRequest(BLOCKS).params, "standard"));
       await checkpoints.write("structure-checkpoint", "hierarchy-structure", key, {
         fingerprint: key,
         answer,
       });
 
-      const run = await generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+      const run = await generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
       expect(structureCalls, "the stored answer was replayed rather than replaced").toBe(1);
       expect(run.structureResumed).toBe(false);
       /* And the row is gone, replaced by one that works — otherwise the next
@@ -379,9 +381,9 @@ describe("generateHierarchy and the structure checkpoint", () => {
        knows about a key: nothing — so the caller is the gate. A row written by
        an older format, or by something else entirely, must read as a miss. */
     const checkpoints = memoryCheckpoints();
-    const key = structureKey(canonicalStructureRequest(structureRequest(BLOCKS).params));
+    const key = structureKey(canonicalStructureRequest(structureRequest(BLOCKS).params, "standard"));
     await checkpoints.write("structure-checkpoint", "hierarchy-structure", key, { answer: 42 });
-    await generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+    await generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
     expect(structureCalls).toBe(1);
   });
 });

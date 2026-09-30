@@ -94,6 +94,7 @@ function stubRounds(rounds: string[][]) {
 async function answer() {
   const events = [];
   for await (const event of converse({
+    power: "standard",
     meta,
     blocks,
     history: [],

@@ -92,7 +92,7 @@ const unanchored = (n: number): Record<string, unknown> =>
   raw(n, { evidence: [{ blockId: "spya-aaaaaa", quote: "a sentence the article lacks" }] });
 
 const build = (questions: unknown[], dropped: QuizDropped = emptyDropped()) =>
-  buildQuiz({ questions }, { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped });
+  buildQuiz({ questions }, { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped });
 
 const texts = (questions: readonly { question: string }[]): string[] => questions.map((q) => q.question);
 
@@ -352,7 +352,7 @@ describe("what the model says, and what we believe of it", () => {
             },
           ],
         },
-        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
+        { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
       ),
     ).toThrow();
     expect(dropped.unknownIds).toBe(1);
@@ -378,7 +378,7 @@ describe("what the model says, and what we believe of it", () => {
           },
         ],
       },
-      { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
+      { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
     );
     expect(dropped.unquoted).toBe(1);
     expect(dropped.unanchored).toBe(0);
@@ -425,7 +425,7 @@ describe("what the model says, and what we believe of it", () => {
     };
     const quiz = buildQuiz(
       { questions: [one, { ...one, question: "  what does a Simulated Rainstorm not do?  " }] },
-      { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
+      { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
     );
     expect(quiz.questions).toHaveLength(1);
     expect(dropped.duplicate).toBe(1);
@@ -450,7 +450,7 @@ describe("what the model says, and what we believe of it", () => {
             null,
           ],
         },
-        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
+        { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
       ),
     ).toThrow();
     expect(dropped.malformed).toBe(3);
@@ -471,7 +471,7 @@ describe("what the model says, and what we believe of it", () => {
             },
           ],
         },
-        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
+        { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
       ),
     ).toThrow();
     expect(dropped.malformed).toBe(1);
@@ -492,7 +492,7 @@ describe("what the model says, and what we believe of it", () => {
             },
           ],
         },
-        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
+        { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
       ),
     ).toThrow(/nothing to write/);
   });
@@ -503,7 +503,7 @@ describe("what the model says, and what we believe of it", () => {
        here — every article can be asked about — so both roads lead to a throw,
        and this one says which road it was. src/timeline.ts § `buildTimeline`. */
     expect(() =>
-      buildQuiz({}, { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() }),
+      buildQuiz({}, { power: "standard", slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() }),
     ).toThrow(/questions/);
   });
 });
@@ -519,7 +519,7 @@ describe("the stamp the store will read off the artefact", () => {
         },
       ],
     },
-    { slug: "noema", blocks, sourceHash: "the-hash", elapsedMs: 12, dropped: emptyDropped() },
+    { power: "standard", slug: "noema", blocks, sourceHash: "the-hash", elapsedMs: 12, dropped: emptyDropped() },
   );
 
   /**
@@ -558,7 +558,7 @@ describe("the stamp the store will read off the artefact", () => {
           },
         ],
       },
-      { slug: "noema", blocks, sourceHash: "the-hash", elapsedMs: 12, dropped: emptyDropped() },
+      { power: "standard", slug: "noema", blocks, sourceHash: "the-hash", elapsedMs: 12, dropped: emptyDropped() },
     );
     expect(quiz.batchId).toMatch(/^spya-[a-z0-9]{6}$/);
     expect(again.batchId).not.toBe(quiz.batchId);

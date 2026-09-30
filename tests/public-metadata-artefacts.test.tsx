@@ -47,6 +47,7 @@ const { NOUN } = await import("../src/web/visitor.js");
 const SLUG = "a-piece";
 
 const ARTICLE: Article = {
+  highPowerSince: null,
   meta: { slug: SLUG, title: "A piece" },
   blocks: [
     {

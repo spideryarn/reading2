@@ -195,6 +195,7 @@ const TREE = {
    so each was right about its own half and the pair did not typecheck. `"ready"`
    because the tree here is fully built: nothing in this file is about labels. */
 const OWNED: Article = {
+  highPowerSince: null,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,

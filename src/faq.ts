@@ -48,7 +48,7 @@ import { mintUniqueId } from "./ids.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
 import {
@@ -377,6 +377,8 @@ export function buildFaq(
     slug: string;
     blocks: readonly Block[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     elapsedMs: number;
     dropped: FaqDropped;
     /** What happened to the two scores — logged by the caller, never stored. */
@@ -404,7 +406,7 @@ export function buildFaq(
   return {
     version: PROMPT_VERSION,
     /* `CAPABLE_MODEL`, the name — every staleness check compares against it. */
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     /* The store's spellings (`sourceHash`, `version`, `generator`), which
        `stampOf` reads — src/store/artifacts.ts. */
@@ -601,6 +603,8 @@ export async function generateFaq(opts: {
   signal?: AbortSignal;
   /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
   cacheArticle?: boolean;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<FaqRun> {
   const { blocks, tree, meta: realMeta } = opts.article;
 
@@ -641,7 +645,7 @@ export async function generateFaq(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, count }) }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -685,6 +689,7 @@ export async function generateFaq(opts: {
   const dropped = emptyDropped();
   const scoreDrops = noDifficultyCentralityDrops();
   const faq = buildFaq(parseJson(raw), {
+    power: opts.power,
     slug: opts.article.slug,
     blocks: evidence,
     sourceHash,
@@ -700,7 +705,7 @@ export async function generateFaq(opts: {
     words,
     dropped,
     scoreDrops,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

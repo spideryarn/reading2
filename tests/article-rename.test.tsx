@@ -61,6 +61,7 @@ const SLUG = "a-piece-about-owls";
 function article(title: string): Article {
   const id = "spya-owl001" as BlockId;
   return {
+    highPowerSince: null,
     meta: { slug: SLUG, title, byline: "A Writer", siteName: "Somewhere" },
     blocks: [
       { id, tag: "p", kind: "text", text: "Owls are quiet.", words: 3, html: "<p>Owls are quiet.</p>", gistable: true },

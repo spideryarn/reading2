@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   await runAsOwner(environmentOwnerId(), async () => {
     const article = await loadArticle(slug);
     const runs = await Promise.all(
-      Array.from({ length: n }, () => generateGlossary({ article: { ...article, slug }, previous: null, profile: null })),
+      Array.from({ length: n }, () => generateGlossary({ power: "standard", article: { ...article, slug }, previous: null, profile: null })),
     );
     for (const r of runs) {
       const entries = r.glossary.entries;

@@ -397,6 +397,7 @@ describe("a publication that was refused", () => {
     await pgJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
 
     const parts: AdvanceParts = {
+      power: async () => "standard",
       /* **Production's own session factory**, with two things replaced — the
          freshness reads, so the step skips, and the successful settlement, so
          the publication throws. Spreading it is safe: `pgStoreSession` returns
@@ -532,7 +533,7 @@ describe("a run the reader stopped", () => {
       throw stageFailure(MODEL_REFUSED, "the model answered with stop_reason: refusal");
     });
 
-    const advanced = await advanceJobWith(queued.id, { session: claimSession, steps: STEPS });
+    const advanced = await advanceJobWith(queued.id, { power: async () => "standard", session: claimSession, steps: STEPS });
 
     expect(advanced?.job.status, "it was not cancelled, so this proves nothing").toBe("cancelled");
 
@@ -600,6 +601,7 @@ describe("a run its own deadline stopped", () => {
    */
   async function overrun(id: string) {
     return await advanceJobWith(id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,

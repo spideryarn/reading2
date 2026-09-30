@@ -133,7 +133,7 @@ function raw(over: Record<string, unknown> = {}): Record<string, unknown> {
 function build(events: unknown[], dropped: Dropped = emptyDropped()): Timeline {
   return buildTimeline(
     { events },
-    { slug: "test", blocks: BLOCKS, sourceHash: "h", frame: FRAME, elapsedMs: 1, dropped },
+    { power: "standard", slug: "test", blocks: BLOCKS, sourceHash: "h", frame: FRAME, elapsedMs: 1, dropped },
   );
 }
 
@@ -654,6 +654,7 @@ describe("the answer's shape is read before anything in it", () => {
          a failed answer can wear the empty one's clothes. */
       expect(() =>
         buildTimeline(answer, {
+          power: "standard",
           slug: "test",
           blocks: BLOCKS,
           sourceHash: "h",

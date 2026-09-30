@@ -784,6 +784,23 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * drives `converse` with a stubbed `fetch` to say the same thing about the
    * tool definitions.
    */
+  /* High-powered AI, plan 260930f — both born on Postgres after the witness run,
+     so `static-only` for the reason the four link-preview entries give. */
+  "tests/high-power-routes.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres. It seeds two articles under two owners through `scratchArticleInPg`, " +
+      "drives `handleApi`, and writes `articles.high_power_since` through the admin route — so " +
+      "the owner scoping it asserts IS the Postgres owner filter. Only `fetch` is stubbed.",
+  },
+  "tests/high-power-step.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres: its subject is `readStepPower`, one owner-scoped read of " +
+      "`articles.high_power_since`, against rows it seeds and sets itself.",
+  },
   "tests/help-prompt.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -2671,6 +2688,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/health.test.ts": "private-postgres",
   "tests/helpers-load-article.test.ts": "private-postgres",
   "tests/helpers-seed-reader-state.test.ts": "private-postgres",
+  /* High-powered AI's switch and every request-path route family, plan 260930f.
+     Private: it writes `articles.high_power_since` on its own seeded rows. */
+  "tests/high-power-routes.test.ts": "private-postgres",
+  "tests/high-power-step.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/illustrated-pg.test.ts": "private-postgres",
   "tests/illustrated-route.test.ts": "private-postgres",

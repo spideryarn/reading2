@@ -41,7 +41,6 @@
 import { createHash } from "node:crypto";
 import { openRouterJson } from "./ai-call.js";
 import { AUTHOR_LIMITS } from "./authors.js";
-import { modelFor } from "./models.js";
 import type { FrontMatterItem } from "./pdf-frontmatter.js";
 import type { Author } from "./types.js";
 
@@ -455,7 +454,11 @@ export interface AuthorsReader {
  */
 const MAX_TOKENS = 8_000;
 
-export function openRouterAuthorsReader(model: string = modelFor("pdf-frontmatter")): AuthorsReader {
+export function openRouterAuthorsReader(
+  /* Required: the article's power picks it (plan 260930f), and a default here
+     would let the pipeline forget to ask. */
+  model: string,
+): AuthorsReader {
   const spent = { input: 0, output: 0 };
   return {
     id: `${model}/${authorsFingerprint(model)}`,

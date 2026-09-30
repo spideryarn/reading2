@@ -262,7 +262,7 @@ async function oneTurn(opts: {
   const { task, ctx, question, kind } = opts;
   let text = "";
   let tools = 0;
-  for await (const event of converse({
+  for await (const event of converse({ power: "standard",
     meta: ctx.article.meta,
     blocks: ctx.article.blocks,
     history: historyBefore(task, ctx.round),
@@ -331,7 +331,7 @@ const TASKS: readonly InteractionTask[] = [
     rounds: { kind: "cold-then-warm" },
     async run({ article, round }) {
       const block = quotableBlock(article.blocks.slice(round === 1 ? 0 : 1));
-      const result = await explain({
+      const result = await explain({ power: "standard",
         meta: article.meta,
         blocks: article.blocks,
         blockId: block.id,
@@ -389,7 +389,7 @@ const TASKS: readonly InteractionTask[] = [
     async run({ article, round }) {
       const criterion =
         round === 1 ? "passages that make a concrete prediction" : "passages that concede a limitation";
-      const result = await findPassages({
+      const result = await findPassages({ power: "standard",
         meta: article.meta,
         blocks: article.blocks,
         criterion,
@@ -409,7 +409,7 @@ const TASKS: readonly InteractionTask[] = [
     async run({ article, round }) {
       const block = quotableBlock(article.blocks.slice(round === 1 ? 0 : 1));
       const quote = quoteFrom(block, 160);
-      const result = await markAnswer({
+      const result = await markAnswer({ power: "standard",
         meta: article.meta,
         blocks: article.blocks,
         question: `In your own words, what is this passage doing in the argument?`,
@@ -435,7 +435,7 @@ const TASKS: readonly InteractionTask[] = [
       "their own measurement.",
     rounds: { kind: "cold-then-warm" },
     async run({ article, round }) {
-      const outcome = await runCriterion({
+      const outcome = await runCriterion({ power: "standard",
         meta: article.meta,
         blocks: article.blocks,
         criterion:
@@ -479,7 +479,7 @@ const TASKS: readonly InteractionTask[] = [
       "step and so cannot be a draw there. Add it to the article's cost, never to a reader's.",
     rounds: { kind: "one" },
     async run({ article }) {
-      const outcome = await runClaims({ meta: article.meta, blocks: article.blocks });
+      const outcome = await runClaims({ power: "standard", meta: article.meta, blocks: article.blocks });
       return `${JSON.stringify(outcome).length} bytes of outcome`;
     },
   },
@@ -501,7 +501,7 @@ const TASKS: readonly InteractionTask[] = [
     rounds: { kind: "one" },
     async run({ article }) {
       const block = quotableBlock(article.blocks);
-      const result = await mirror({
+      const result = await mirror({ power: "standard",
         blocks: article.blocks,
         comments: [
           {

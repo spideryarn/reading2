@@ -30,7 +30,8 @@ import { type FoundWorkPage, findWorkPage, hostOfPage, type WorkToFind } from ".
 import { jsdom } from "./jsdom-lazy.js";
 import { errorFields, log, since } from "./log.js";
 import { SOURCE_GUESS_BUSY, SOURCE_GUESS_LIMITED, SOURCE_GUESS_RESTING, tookTooLong } from "./messages.js";
-import { modelFor } from "./models.js";
+import { articlePower, type ModelPower, modelFor } from "./models.js";
+import { currentOwnerId } from "./owner.js";
 import { normaliseWhitespace, type PaperText, readPaperText } from "./paper-text.js";
 import { pass0 } from "./pdf.js";
 import { isSamePaper, type PaperIdentity, paperIdentity } from "./source-guess.js";
@@ -106,6 +107,13 @@ export type GuessWhy =
   | `read:${string}`
   | `judge:${string}`;
 
+/**
+ * What one search is told: its share of the deadline, the log line, and the
+ * article's High-powered AI setting (plan 260930f) — required, so a `find`
+ * cannot be called without somebody deciding which model searches.
+ */
+export type FindOpts = { timeoutMs: number; line: ReturnType<typeof log>; power: ModelPower };
+
 export interface GuessSourceDeps {
   /** Owner-scoped: a stranger's slug is a 404 before anything is spent. */
   readonly reader: {
@@ -116,7 +124,7 @@ export interface GuessSourceDeps {
   /** Required, so nothing can build this without a bound on spend. */
   readonly allowance: Pick<FetchAllowanceStore, "take" | "finish">;
   /** The search. Overridable so a test drives every outcome without a network. */
-  readonly find?: (work: WorkToFind, opts: { timeoutMs: number; line: ReturnType<typeof log> }) => Promise<FoundWorkPage>;
+  readonly find?: (work: WorkToFind, opts: FindOpts) => Promise<FoundWorkPage>;
   /** The candidate page's read. Overridable for the same reason. */
   readonly read?: (url: string, opts: { signal: AbortSignal; timeoutMs: number }) => Promise<PaperText>;
   /** The stored source's first pages as text. Overridable so a test needs no pdf.js. */
@@ -156,11 +164,12 @@ export function isAnUpload(meta: Meta): boolean {
 }
 
 /** The default search: `findWorkPage` under this job's own name and model. Exported for scripts/eval-source-guess.ts. */
-export function defaultFind(work: WorkToFind, opts: { timeoutMs: number; line: ReturnType<typeof log> }): Promise<FoundWorkPage> {
+export function defaultFind(work: WorkToFind, opts: FindOpts): Promise<FoundWorkPage> {
   return findWorkPage(work, null, {
     call: (body: AiRequestBody, o: { signal: AbortSignal }): Promise<JsonCall> =>
       openRouterJson("upload-source-guess", body, o),
-    model: modelFor("upload-source-guess"),
+    model: modelFor("upload-source-guess", opts.power),
+    power: opts.power,
     timeoutMs: opts.timeoutMs,
     line: opts.line,
   });
@@ -290,10 +299,11 @@ async function searchAndJudge(
   tools: Tools,
   clock: Clock,
   meter: Meter,
+  power: ModelPower,
 ): Promise<SourceGuessOutcome> {
   const none = (why: GuessWhy): SourceGuessOutcome => ({ status: "none", why, ...meter });
   requireTime(clock);
-  const found = await tools.find(workToFind(meta), { timeoutMs: clock.remaining(), line: clock.line });
+  const found = await tools.find(workToFind(meta), { timeoutMs: clock.remaining(), line: clock.line, power });
   requireTime(clock);
   meter.searches = found.reading.searches;
   meter.model = found.model;
@@ -318,7 +328,7 @@ async function searchAndJudge(
     kind: judged.canonicalUrl ? "canonical" : "matching",
     matchedBy: judged.matchedBy,
     searches: meter.searches,
-    model: meter.model ?? modelFor("upload-source-guess"),
+    model: meter.model ?? modelFor("upload-source-guess", power),
   };
 }
 
@@ -440,7 +450,16 @@ export function makeGuessSource(deps: GuessSourceDeps): (slug: string) => Promis
     try {
       result = {
         ok: true,
-        outcome: await withinDeadline(() => searchAndJudge(identity, article.meta, tools, clock, meter), clock),
+        outcome: await withinDeadline(() => searchAndJudge(
+            identity,
+            article.meta,
+            tools,
+            clock,
+            meter,
+            /* The reader seam is owner-scoped, so the ambient owner is this
+               article's (plan 260930f, Sol F4). */
+            articlePower(article.highPowerSince, currentOwnerId()),
+          ), clock),
       };
     } catch (err) {
       result = { ok: false, err };

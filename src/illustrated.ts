@@ -116,7 +116,7 @@ import {
 } from "./illustrated-plate.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL } from "./models.js";
+import { generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
@@ -1007,6 +1007,8 @@ export async function generateIllustrated(opts: {
   systemOverride?: string;
   /** Injected so tests and the eval can run without a network. */
   draw?: DrawPlate;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
   /**
    * **The article's own figures, loaded** — `loadArticleFigures`
    * (src/illustrated-figures.ts). Absent or empty: the brief is offered none
@@ -1053,7 +1055,7 @@ export async function generateIllustrated(opts: {
           { role: "user", content: renderPrompt({ sketch: opts.sketch, profile, figures }) },
         ],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -1110,7 +1112,7 @@ export async function generateIllustrated(opts: {
     ),
   });
 
-  illustrated.generator = CAPABLE_MODEL;
+  illustrated.generator = generatorFor(opts.power);
   illustrated.illustrator = IMAGE_MODEL;
   illustrated.slug = opts.article.slug;
   /* **`sourceHash` is deliberately not set here.** It is a hash of the exact
@@ -1133,7 +1135,7 @@ export async function generateIllustrated(opts: {
     cancelled,
     raw,
     report,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     imageModel: IMAGE_MODEL,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,

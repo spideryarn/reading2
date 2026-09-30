@@ -29,12 +29,12 @@ const arc: Arc = buildArc(
   parts.map((_, i) => `arc sentence ${i + 1}`),
   tree,
   "example",
-  FIXTURE_HASH,
+  FIXTURE_HASH, "standard",
 );
 
 describe("buildArc", () => {
   it("refuses a sentence count that doesn't match the parts", () => {
-    expect(() => buildArc(["only one"], tree, "example", FIXTURE_HASH)).toThrow(/Refusing to guess/);
+    expect(() => buildArc(["only one"], tree, "example", FIXTURE_HASH, "standard")).toThrow(/Refusing to guess/);
   });
 
   it("pairs each sentence with the part at the same index", () => {

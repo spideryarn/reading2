@@ -270,6 +270,7 @@ async function runHierarchyStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
 
 /** Nothing here sends the article anywhere, so there is no prefix to pay for. */
 const ctx: StepContext = {
+  power: "standard",
   slug: SLUG,
   report: () => {},
   signal: new AbortController().signal,

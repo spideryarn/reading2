@@ -38,7 +38,7 @@ import {
   wasRefused,
   type MessagesBody,
 } from "./messages-stream.js";
-import { CAPABLE_MODEL, type Effort } from "./models.js";
+import { CAPABLE_MODEL, type Effort, generatorFor, type ModelPower } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -652,12 +652,17 @@ export function structureRequest(body: Block[]): {
  * `buildTree` that reads the JSON differently is a different question with the
  * same bytes, and nothing else here would notice.
  */
-export function canonicalStructureRequest(params: MessagesBody): Record<string, unknown> {
+export function canonicalStructureRequest(
+  params: MessagesBody,
+  power: ModelPower,
+): Record<string, unknown> {
   return {
     promptVersion: PROMPT_VERSION,
     /* Built at call time, like the call builds it, so an environment override of
-       the model moves the key rather than silently answering its question. */
-    request: messagesWireBody("hierarchy", params),
+       the model moves the key rather than silently answering its question —
+       and so does the article's power: an Opus run must not reuse a Sonnet
+       structure and call it Opus's (plan 260930f decision 7). */
+    request: messagesWireBody("hierarchy", params, power),
   };
 }
 
@@ -2278,6 +2283,8 @@ export async function generateHierarchy(opts: {
    * the wave runs to completion, which is what a command line and a test want.
    */
   deadlineAt?: number;
+  /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<HierarchyRun> {
   const { blocks, slug } = opts;
   const structural = blocks.filter((b) => isStructural(b)).length;
@@ -2417,7 +2424,7 @@ export async function generateHierarchy(opts: {
    * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md
    * is what happens when the instrumentation covers only the throwing case.
    */
-  const structureFingerprint = checkpointKey(canonicalStructureRequest(params));
+  const structureFingerprint = checkpointKey(canonicalStructureRequest(params, opts.power));
   let raw: string | null = null;
   try {
     const stored = await opts.checkpoints.read<unknown>(slug, "hierarchy-structure", [
@@ -2501,6 +2508,7 @@ export async function generateHierarchy(opts: {
     let message: Anthropic.Message;
     try {
       const call = streamMessage("hierarchy", params, {
+        power: opts.power,
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
 
@@ -2642,7 +2650,8 @@ export async function generateHierarchy(opts: {
         blocks: body,
         slug,
         checkpoints: opts.checkpoints,
-        execute: opts.expansionExecutor ?? liveExpansionExecutor(opts.signal),
+        execute: opts.expansionExecutor ?? liveExpansionExecutor(opts.power, opts.signal),
+        power: opts.power,
         ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
         ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
@@ -2797,7 +2806,10 @@ export async function generateHierarchy(opts: {
   const parts: HierarchyArtefacts = {
     labels: pending,
     blocks: blocksArtefact(blocks),
-    tree: mergeLabels(structure, pending.labels),
+    /* `buildTree` stamps the standard name, as it always has for its many
+       callers that only want a tree; this is the one that knows which model
+       really cut it (plan 260930f). */
+    tree: { ...mergeLabels(structure, pending.labels), generator: generatorFor(opts.power) },
   };
 
   /* **The invariants, on the artefacts that are about to be handed back.** They
@@ -2905,7 +2917,7 @@ export async function generateHierarchy(opts: {
        are equal by a convention rather than by construction, which is the
        arrangement this whole stage of the migration exists to remove. */
     inputHash: parts.labels.sourceHash,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     blocks: blocks.length,
     structural,
     supplementNodes: groups.length,

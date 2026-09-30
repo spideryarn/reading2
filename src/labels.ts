@@ -61,9 +61,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { createHash } from "node:crypto";
-import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
+import { underCacheFloor } from "./article-prompt.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL } from "./models.js";
+import { generatorFor, type ModelPower, modelFor } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { codeOfMessage, kindOfMessage, MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -1037,11 +1037,22 @@ export function batchParts(
  * Sixteen hex characters, compared only for equality. src/source-hash.ts makes
  * the same argument at more length.
  */
-export function batchFingerprint(batch: Batch, blocks: Block[], outline: string): string {
+export function batchFingerprint(
+  batch: Batch,
+  blocks: Block[],
+  outline: string,
+  power: ModelPower,
+): string {
   const { shared, own } = batchParts(batch, blocks, outline);
   const canonical = [
     LABELS_PROMPT_VERSION,
-    CAPABLE_MODEL,
+    /* **The model actually sent, by name** — unlike a freshness stamp, which
+       treats Sonnet and Opus as one generation. A checkpoint is a paid-for
+       answer reused, and an Opus run reusing a Sonnet batch would publish it
+       as Opus's (plan 260930f decision 7). `generatorFor("standard")` is the
+       `CAPABLE_MODEL` this held before, so every stored key still matches.
+       Labels has no environment override, so the name is exact. */
+    generatorFor(power),
     EFFORT,
     SYSTEM,
     batch.blocks.map((b) => b.id).join(","),
@@ -1148,8 +1159,8 @@ export function coversExactly(entry: LabelCheckpointEntry, batch: Batch): boolea
  * accepted is calling the result a fact, which is why the field it feeds is
  * named `estimatedCacheable`.
  */
-export function prefixIsCacheable(prefix: string): boolean {
-  return estimateTokens(SYSTEM + prefix) >= CACHE_FLOOR_TOKENS;
+export function prefixIsCacheable(prefix: string, power: ModelPower): boolean {
+  return !underCacheFloor(SYSTEM + prefix, modelFor("labels", power));
 }
 
 /**
@@ -1860,6 +1871,7 @@ async function runBatch(
   blocks: Block[],
   outline: string,
   signal: AbortSignal | undefined,
+  power: ModelPower,
   headroom: number,
   only?: number[],
 ): Promise<{ labels: Record<string, string>; record: LabelBatchRecord }> {
@@ -1920,7 +1932,7 @@ async function runBatch(
           },
         ],
       },
-      { ...(signal ? { signal } : {}) },
+      { power, ...(signal ? { signal } : {}) },
     ).finalMessage();
   } catch (err) {
     throw anthropicCallFailed(err);
@@ -2074,6 +2086,7 @@ async function repairShortfall(
   blocks: Block[],
   outline: string,
   signal: AbortSignal | undefined,
+  power: ModelPower,
 ): Promise<{ labels: Record<string, string>; record: LabelBatchRecord }> {
   /* `LABEL_HEADROOM`, not double it. The reservation is for the model's
      reasoning about *this answer*, and this answer is a handful of labels —
@@ -2085,6 +2098,7 @@ async function repairShortfall(
     blocks,
     outline,
     signal,
+    power,
     LABEL_HEADROOM,
     first.shortfall.missing,
   );
@@ -2375,6 +2389,8 @@ export async function generateLabels(opts: {
   checkpoints: CheckpointStore;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
+  /** Which capable model labels it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<LabelRun> {
   const started = Date.now();
   const batches = planBatches(opts.tree, opts.blocks);
@@ -2427,7 +2443,7 @@ export async function generateLabels(opts: {
    * `info`, because that is the production level.
    * docs/reusable/silent-success.md.
    */
-  const fingerprints = batches.map((batch) => batchFingerprint(batch, opts.blocks, outline));
+  const fingerprints = batches.map((batch) => batchFingerprint(batch, opts.blocks, outline, opts.power));
   let stored: Map<string, unknown>;
   try {
     stored = await opts.checkpoints.read<unknown>(opts.slug, "hierarchy-labels", fingerprints);
@@ -2494,7 +2510,7 @@ export async function generateLabels(opts: {
      See docs/research/260826b-prompt-caching-anthropic.md § Concurrency and
      docs/project/prompt-caching.md § The floor. */
   const prefix = batches[0] ? batchParts(batches[0], opts.blocks, outline).shared : "";
-  const estimatedCacheable = prefixIsCacheable(prefix);
+  const estimatedCacheable = prefixIsCacheable(prefix, opts.power);
   const queue = new PQueue({ concurrency: estimatedCacheable ? 1 : CONCURRENCY });
 
   let done = 0;
@@ -2547,7 +2563,7 @@ export async function generateLabels(opts: {
 
         let out: Awaited<ReturnType<typeof runBatch>>;
         try {
-          out = await runBatch(batch, opts.blocks, outline, signal, LABEL_HEADROOM);
+          out = await runBatch(batch, opts.blocks, outline, signal, opts.power, LABEL_HEADROOM);
         } catch (err) {
           /* Matched on the class, not on words in the message. A message test
              would go quietly dead the first time somebody improved the wording,
@@ -2566,13 +2582,14 @@ export async function generateLabels(opts: {
                the only failure that carries a `shortfall`, and that is what this
                branch reads — not the message, and not the error's name. */
             if (cameBackShort(err)) {
-              out = await repairShortfall(err, batch, opts.blocks, outline, signal);
+              out = await repairShortfall(err, batch, opts.blocks, outline, signal, opts.power);
             } else {
               const redrawn = await runBatch(
                 batch,
                 opts.blocks,
                 outline,
                 signal,
+                opts.power,
                 LABEL_HEADROOM * 2,
               );
               /* Both requests' usage, not just the one that worked. The first
@@ -2732,7 +2749,7 @@ export async function generateLabels(opts: {
     labels,
     file: {
       version: LABELS_PROMPT_VERSION,
-      generator: CAPABLE_MODEL,
+      generator: generatorFor(opts.power),
       slug: opts.slug,
       sourceHash,
       structureHash: structureHash(opts.tree),

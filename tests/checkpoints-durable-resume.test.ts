@@ -757,7 +757,7 @@ describe("a checkpoint survives the job that paid for it", () => {
          them — one row per batch, under the fingerprint the plan mints. */
       const writer = storeFor();
       for (const batch of batches) {
-        const fingerprint = batchFingerprint(batch, blocks, outline);
+        const fingerprint = batchFingerprint(batch, blocks, outline, "standard");
         await writer.write(SLUG, "hierarchy-labels", fingerprint, {
           fingerprint,
           labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
@@ -775,7 +775,7 @@ describe("a checkpoint survives the job that paid for it", () => {
 
       await noAuth(async () => {
         /* A new store object, as a new job would build. */
-        const run = await generateLabels({ tree, blocks, slug: SLUG, checkpoints: storeFor() });
+        const run = await generateLabels({ power: "standard", tree, blocks, slug: SLUG, checkpoints: storeFor() });
         expect(run.resumed).toBe(batches.length);
         expect(run.batches).toBe(batches.length);
         expect(run.inputTokens).toBe(0);
@@ -793,7 +793,7 @@ describe("a checkpoint survives the job that paid for it", () => {
       const batches = planBatches(tree, blocks);
       const writer = storeFor();
       for (const batch of batches) {
-        const fingerprint = batchFingerprint(batch, blocks, outline);
+        const fingerprint = batchFingerprint(batch, blocks, outline, "standard");
         await writer.write(SLUG, "hierarchy-labels", fingerprint, {
           fingerprint,
           labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
@@ -818,6 +818,7 @@ describe("a checkpoint survives the job that paid for it", () => {
            matching on the code is what proves a real request was attempted. */
         await expect(
           generateLabels({
+            power: "standard",
             tree,
             blocks,
             slug: OTHER_SLUG,

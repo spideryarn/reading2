@@ -95,7 +95,8 @@ import {
   providerHttpFailure,
   tookTooLong,
 } from "./messages.js";
-import { modelFor } from "./models.js";
+import { articlePower, type ModelPower, modelFor } from "./models.js";
+import { currentOwnerId } from "./owner.js";
 import {
   collectSearchEvidence,
   type SearchUsagePath,
@@ -542,9 +543,12 @@ export interface FoundWorkPage {
 export async function findWorkPage(
   work: WorkToFind,
   reference: string | null,
-  opts: FindOptions = {},
+  /* `power` required and no `{}` default (plan 260930f, Sol F4): which model
+     searches is the article's to decide, and a default here is how a route
+     would forget to ask. `model` still overrides it. */
+  opts: FindOptions & { power: ModelPower },
 ): Promise<FoundWorkPage> {
-  const model = opts.model ?? modelFor("citations-find");
+  const model = opts.model ?? modelFor("citations-find", opts.power);
   const { reading, model: used } = await sendAndRead(findRequest(work, reference, model), work.title, {
     ...opts,
     model,
@@ -563,10 +567,12 @@ interface FindOptions {
 async function sendAndRead(
   body: AiRequestBody,
   title: string,
-  opts: FindOptions,
+  /* `model` required: both callers have already resolved it, and resolving
+     it again here would be a second answer that could differ. */
+  opts: FindOptions & { model: string },
 ): Promise<FoundWorkPage & { json: unknown }> {
   const send = opts.call ?? ((b, options) => openRouterJson("citations-find", b, options));
-  const model = opts.model ?? modelFor("citations-find");
+  const model = opts.model;
   const timeoutMs = opts.timeoutMs ?? FIND_TIMEOUT_MS;
   const line = opts.line ?? log("model");
   const started = Date.now();
@@ -620,6 +626,8 @@ export async function runCitationLookup(
   entryId: string,
   listed: CitedWork,
   article: Article,
+  /** The article's High-powered AI setting — which model searches (plan 260930f). */
+  power: ModelPower,
 ): Promise<FindCitationResponse> {
   const send = deps.call ?? ((body, options) => openRouterJson("citations-find", body, options));
   const now = deps.now ?? (() => new Date().toISOString());
@@ -639,7 +647,7 @@ export async function runCitationLookup(
   const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
   const context = lookupContext(work, (id) => text.get(id));
 
-  const model = modelFor("citations-find");
+  const model = modelFor("citations-find", power);
   const line = log("model").child({ slug, entryId });
 
   const started = Date.now();
@@ -742,7 +750,16 @@ export function makeFindCitation(
       await deps.allowance.finish(allowance.id);
     };
     try {
-      return await runCitationLookup({ ...deps, callFinished: release }, slug, entryId, listed, article);
+      return await runCitationLookup(
+        { ...deps, callFinished: release },
+        slug,
+        entryId,
+        listed,
+        article,
+        /* The reader seam is owner-scoped, so the ambient owner is this
+           article's (plan 260930f). */
+        articlePower(article.highPowerSince, currentOwnerId()),
+      );
     } catch (err) {
       /* `callOnce` brands undici's two otherwise-indistinguishable TypeErrors
          so Investigate can classify only errors from the provider boundary.

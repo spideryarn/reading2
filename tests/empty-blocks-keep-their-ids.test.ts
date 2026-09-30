@@ -443,6 +443,7 @@ describe("the blocks step reports itself done under a Postgres-shaped store", ()
     }) as unknown as ArtifactReads;
 
   const ctx = (): StepContext => ({
+    power: "standard",
     slug: "empty-blocks-probe",
     url: "https://example.test/empty",
     report: () => undefined,

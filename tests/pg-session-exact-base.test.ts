@@ -452,6 +452,7 @@ async function reopenWithSession(slug: string, jobId: string): Promise<Claimed> 
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
   return {
+    power: "standard",
     slug,
     report: () => {},
     signal: new AbortController().signal,

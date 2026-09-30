@@ -151,7 +151,7 @@ describe("the overflow message each public caller gets", () => {
       }),
     );
     const thrown = await thrownBy(
-      findPassagesStream({ meta, blocks: BLOCKS, criterion: "how were people assigned?" }),
+      findPassagesStream({ power: "standard", meta, blocks: BLOCKS, criterion: "how were people assigned?" }),
     );
     /* The exact sentence, not merely that something was thrown: the test this
        replaces asserted `toBeDefined()`, and every failure in this module is
@@ -172,6 +172,7 @@ describe("the overflow message each public caller gets", () => {
     );
     const thrown = await thrownBy(
       runCriterionStream({
+        power: "standard",
         meta,
         blocks: BLOCKS,
         criterion: "Are the controls adequate?",
@@ -195,7 +196,7 @@ describe("the overflow message each public caller gets", () => {
         passages: [],
       }),
     );
-    const thrown = await thrownBy(runClaimsStream({ meta, blocks: BLOCKS }));
+    const thrown = await thrownBy(runClaimsStream({ power: "standard", meta, blocks: BLOCKS }));
     expect(thrown?.message).toBe(ANSWER_OVERFLOWED_FIXED_ASK.message);
     expect(thrown?.message).not.toMatch(/narrow/);
     expect(thrown?.message).toMatch(/\[ai-overflowed-no-ask\]$/);
@@ -205,7 +206,7 @@ describe("the overflow message each public caller gets", () => {
     fetchMock.mockResolvedValue(
       cutOff("remarks", { kind: "vague", commentId: "spya-c00001", note: "n" }),
     );
-    const thrown = await thrownBy(mirrorStream({ blocks: BLOCKS, comments: [COMMENT] }));
+    const thrown = await thrownBy(mirrorStream({ power: "standard", blocks: BLOCKS, comments: [COMMENT] }));
     expect(thrown?.message).toBe(ANSWER_OVERFLOWED_FIXED_ASK.message);
     expect(thrown?.message).not.toMatch(/narrow/);
     expect(thrown?.message).toMatch(/\[ai-overflowed-no-ask\]$/);

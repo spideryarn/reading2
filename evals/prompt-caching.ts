@@ -110,7 +110,7 @@ async function searchTwice(
   const out: CallResult[] = [];
   for (const [i, criterion] of criteria.entries()) {
     const started = Date.now();
-    const result = await findPassages({ meta, blocks, criterion });
+    const result = await findPassages({ power: "standard", meta, blocks, criterion });
     out.push({
       label: i === 0 ? "search #1 (cold — expect a write)" : "search #2 (warm — expect a read)",
       /* Read back off the log line's own source rather than re-derived here, so
@@ -153,7 +153,7 @@ async function chatTwice(slug: string, meta: Meta, blocks: Block[]): Promise<Cal
     const started = Date.now();
     let answer = "";
     let usage: CallResult | null = null;
-    for await (const event of converse({
+    for await (const event of converse({ power: "standard",
       meta,
       blocks,
       history,

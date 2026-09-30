@@ -188,7 +188,7 @@ describe("generateArc", () => {
     answer = JSON.stringify({ arc: ["One sentence.", "Another sentence."] });
     const { generateArc } = await import("../src/arc.js");
 
-    const run = await generateArc({ article: withMeta });
+    const run = await generateArc({ power: "standard", article: withMeta });
 
     expect(run.arc.sourceHash).toBe(articleFingerprint(BLOCKS, TREE, META));
     // The title reached the prompt, so the head it is being judged on is the
@@ -211,7 +211,7 @@ describe("generateArc", () => {
     answer = JSON.stringify({ arc: ["One sentence.", "Another sentence."] });
     const { generateArc } = await import("../src/arc.js");
 
-    const bare = await generateArc({ article: withoutMeta });
+    const bare = await generateArc({ power: "standard", article: withoutMeta });
 
     expect(bare.arc.sourceHash).toBe(articleFingerprint(BLOCKS, TREE, null));
     expect(bare.arc.sourceHash).not.toBe(articleFingerprint(BLOCKS, TREE, META));
@@ -226,7 +226,7 @@ describe("generateTweets", () => {
     answer = JSON.stringify({ tweets: ["First post.", "Second post."] });
     const { generateTweets } = await import("../src/tweets.js");
 
-    const run = await generateTweets({ article: withMeta });
+    const run = await generateTweets({ power: "standard", article: withMeta });
 
     expect(run.thread.sourceHash).toBe(articleWithIdsFingerprint(BLOCKS, TREE, META));
     expect(sent.join("\n")).toContain(TITLE);
@@ -241,7 +241,7 @@ describe("generateTweets", () => {
     answer = JSON.stringify({ tweets: ["First post.", "Second post."] });
     const { generateTweets } = await import("../src/tweets.js");
 
-    const bare = await generateTweets({ article: withoutMeta });
+    const bare = await generateTweets({ power: "standard", article: withoutMeta });
 
     expect(bare.thread.sourceHash).toBe(articleWithIdsFingerprint(BLOCKS, TREE, null));
     expect(bare.thread.sourceHash).not.toBe(articleWithIdsFingerprint(BLOCKS, TREE, META));
