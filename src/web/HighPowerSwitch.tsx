@@ -1,6 +1,6 @@
 /**
  * **High-powered AI, one article at a time** — the switch on `/metadata` that
- * moves this article's AI from Claude Sonnet to Claude Opus.
+ * moves this article's capable-tier calls from Claude Sonnet to Claude Opus.
  * docs/project/high-powered-ai.md; the build is
  * docs/plans/260930f-high-powered-ai-per-article.md, decision 8 and stage 3.
  *
@@ -24,7 +24,7 @@ import { useState } from "react";
 import { TriangleAlert, Zap } from "lucide-react";
 
 import { isAdmin } from "../admin.js";
-import { apiFetch, readJson } from "./lib/api.js";
+import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { exactly } from "./relative-time.js";
 import { useSession } from "./useSession.js";
 
@@ -45,7 +45,10 @@ export function HighPowerSwitch({
   const { user } = useSession();
   const [since, setSince] = useState(read);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    kind: "refused" | "unknown";
+    message: string;
+  } | null>(null);
 
   /* **A new read from the page wins, and only a new one.** Adjusted during
      render when `read` itself changes — not in an effect keyed on `saving` too,
@@ -56,7 +59,10 @@ export function HighPowerSwitch({
   const [lastRead, setLastRead] = useState(read);
   if (read !== lastRead) {
     setLastRead(read);
-    if (!saving) setSince(read);
+    if (!saving) {
+      setSince(read);
+      setError(null);
+    }
   }
 
   if (!isAdmin(user?.id)) return null;
@@ -76,7 +82,20 @@ export function HighPowerSwitch({
         setSince(body.highPowerSince);
         onChanged();
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: unknown) => {
+        const message = e instanceof Error ? e.message : "The request failed.";
+        if (statusOf(e) !== null) {
+          /* The server answered with a refusal, so the old state is still the
+             latest answer it gave us. */
+          setError({ kind: "refused", message });
+        } else {
+          /* A connection can disappear after the transaction commits. Do not
+             claim that means "not saved": ask the ordered page read which
+             state the server now holds. */
+          setError({ kind: "unknown", message });
+          onChanged();
+        }
+      })
       .finally(() => setSaving(false));
   }
 
@@ -96,17 +115,22 @@ export function HighPowerSwitch({
         <span>High-powered AI</span>
       </label>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-        Uses Claude Opus instead of Sonnet for this article's AI — better on hard pieces, and
-        about twice what each call costs us. Only runs from now on use it; nothing re-runs by itself. Press{" "}
-        <em>Run it again</em> on a mode below to redo it with Opus.
+        Uses Claude Opus for this article&apos;s Sonnet calls — better on hard pieces, at about twice
+        Sonnet&apos;s token prices. Only later runs use it; nothing re-runs by itself. Use a mode&apos;s{" "}
+        <em>Run it again</em> button below to redo that mode with Opus.
       </p>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
         {error ? (
           <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
-            <TriangleAlert size={12} /> Not saved — {error}
+            <TriangleAlert size={12} />
+            {error.kind === "refused" ? "Not saved" : "Couldn't confirm that"} — {error.message}
           </span>
+        ) : saving ? (
+          "Saving…"
         ) : since ? (
           `On since ${exactly(since) ?? since}.`
+        ) : loaded ? (
+          "Off."
         ) : null}
       </p>
     </div>

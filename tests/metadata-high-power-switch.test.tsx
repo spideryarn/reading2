@@ -229,6 +229,8 @@ const box = (): HTMLInputElement | null =>
   host.querySelector<HTMLInputElement>('[data-high-power] input[type="checkbox"]');
 const words = (): string =>
   host.querySelector<HTMLElement>("[data-high-power]")?.textContent ?? "";
+const status = (): HTMLElement | null =>
+  host.querySelector<HTMLElement>('[data-high-power] [aria-live="polite"]');
 
 async function click(el: HTMLElement | null): Promise<void> {
   await act(async () => el?.click());
@@ -251,7 +253,10 @@ describe("the High-powered AI switch", () => {
     expect(box()?.disabled).toBe(false);
     expect(words()).toContain("High-powered AI");
     expect(words()).toContain("Opus");
+    expect(words()).toContain("Off.");
     expect(words()).not.toContain("On since");
+    expect(box()?.labels?.[0]?.textContent).toContain("High-powered AI");
+    expect(status()).toBeTruthy();
   });
 
   it("reads as on, with its date, when the column is already set", async () => {
@@ -315,6 +320,9 @@ describe("the High-powered AI switch", () => {
       });
     await act(async () => box()?.click());
     expect(box()?.disabled).toBe(true);
+    expect(status()?.textContent).toContain("Saving");
+    await act(async () => box()?.click());
+    expect(puts).toHaveLength(1);
     await act(async () => release?.());
     await settle();
     expect(box()?.disabled).toBe(false);
@@ -332,5 +340,21 @@ describe("the High-powered AI switch", () => {
     expect(words()).toContain("Not saved");
     expect(words()).toContain("That article isn't one of yours.");
     expect(words()).not.toContain("On since");
+  });
+
+  it("re-reads after a lost reply because the write may have landed", async () => {
+    session.user = { id: ADMIN_USER_ID_LOCAL };
+    await open();
+    const readsBefore = metadataReads;
+    putAnswer = (on) => {
+      serverSince = on ? SINCE : null;
+      return Promise.reject(new TypeError("The reply was lost"));
+    };
+    await click(box());
+    expect(puts).toHaveLength(1);
+    expect(metadataReads).toBeGreaterThan(readsBefore);
+    expect(box()?.checked).toBe(true);
+    expect(words()).toContain("On since");
+    expect(words()).not.toContain("Not saved");
   });
 });

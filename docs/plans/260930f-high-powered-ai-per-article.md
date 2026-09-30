@@ -271,10 +271,10 @@ wrong:
 ### Stage 3 — the switch on `/metadata`, and the docs
 
 - In `Metadata.tsx`, above the *Re-run AI processing* rows, admin-only: a checkbox
-  **High-powered AI** — *"Uses Claude Opus instead of Sonnet for this article's AI: better on hard
-  pieces, about twice the cost. Only runs from now on use it; nothing re-runs by itself — press Run it
-  again on a mode to redo it."* When on, each rerun row's button is unchanged; the technical details
-  already show which model wrote hierarchy and arc.
+  **High-powered AI** — *"Uses Claude Opus for this article's Sonnet calls: better on hard pieces,
+  at about twice Sonnet's token prices. Only later runs use it; nothing re-runs by itself."* When on,
+  each rerun row's button is unchanged; the technical details already show which model wrote
+  hierarchy and arc.
 - A browser check (Sonnet subagent, Playwright on the box): toggle on, run one cheap mode, confirm the
   artefact's generator is Opus in the metadata technical details and in `ai_calls`; toggle off, the
   mode still reads as current.
@@ -288,21 +288,25 @@ The UI half, 2026-09-30.
 - **`src/web/HighPowerSwitch.tsx`**, mounted first inside `RerunSection` in `Metadata.tsx`, above
   the whole-article row and the mode rows it changes the model for. It draws nothing unless
   `isAdmin(useSession().user?.id)`. It is a native checkbox tinted like the experimental switch on
-  `/profile`, with the help text beneath it and `On since <date>` when on. The box is controlled by
-  the server's last answer, never by the click. It is disabled until the metadata has answered and
-  while the `PUT` is out. A failure reads `Not saved — <the server's message>` and leaves the box as
-  it was. A success calls the page's `refresh`.
+  `/profile`, with the help text beneath it and a polite live status: `Saving…`, `On since <date>` or
+  `Off.`. The box is controlled by the server's last answer, never by the click. It is disabled until
+  the metadata has answered and while the `PUT` is out. A failure reads `Not saved — <the server's
+  message>` and leaves the box as it was. A lost reply is ambiguous — the write may have committed —
+  so it says it could not confirm the change and re-reads the server. A success calls the page's
+  `refresh`.
 - **Where it sits has a cost.** The section is shut by default, so an admin sees whether an article
   is on only after opening *Re-run AI processing*. Section's `aside` slot on the heading row could
   say it while shut. That was not built.
-- **`tests/metadata-high-power-switch.test.tsx`** has 7 tests, mounted through `Metadata`. It covers
-  six things:
+- **`tests/metadata-high-power-switch.test.tsx`** has 8 tests, mounted through `Metadata`. It covers
+  eight things:
   - it is absent for a reader and present for the admin;
   - it already reads as on when the column is set;
   - it sends `PUT /api/admin/article/:slug/high-power` with `{on:true}` and then `{on:false}`, and
     re-reads the metadata after each;
   - it is disabled while the write is out;
   - a 404 leaves the box unchanged and shows the message;
+  - a lost reply re-reads the setting instead of falsely claiming the write failed;
+  - the native label and polite live status expose the control and its save state;
   - a race, below.
 - **The browser check found a bug that the first five tests missed.** It ran under Playwright on the
   box, against this worktree's own vite on :5391, signed in as the local admin, on
@@ -317,7 +321,8 @@ The UI half, 2026-09-30.
 
 ## Deferred — written up for Greg, not built
 
-These are his decisions; each is small once decided.
+These are the decisions still needed. The server half is not only a visibility change: charging and
+switching have to be one billing transaction.
 
 1. **The charge.** A high-powered article counts **2** articles; a public one **1** (Greg's
    0.5 × 2). The half-price public rule is already built
@@ -339,16 +344,31 @@ These are his decisions; each is small once decided.
    **Recommended: a one-time upgrade charge event**, unique per article, timestamped when the switch
    is first turned on (at import, that is the ingest's own moment). It is one extra article's worth
    — 2 half-units private, 1 public, recomputed from live visibility like ingest rows, frozen on
-   delete the same way. Switching off refunds nothing (the Opus calls were spent); switching on again
-   charges nothing new. Open question for Greg: does a re-added URL (a second ingest of the same
-   article) change that single charge? Proposed: no.
+   delete the same way. Added to the base ingest, the arithmetic is therefore **2 articles private**
+   (`2 + 2 = 4` half-units) and **1 article public** (`1 + 1 = 2` half-units), as Greg asked.
+   Switching off refunds nothing (the Opus calls were spent); switching on again charges nothing
+   new. Open question for Greg: does a re-added URL (a second ingest of the same article) change that
+   single charge? Proposed: no.
+
+   Do not model the upgrade as an ordinary `ingest_events` row without changing the contracts around
+   it. `usageSql` and `ingestsUsed` in `src/store/pg-billing.ts` treat every such success as an ingest,
+   and the unsettled rows as job reservations; an upgrade is neither. Use a distinct charge table or
+   add an explicit event kind and update both enforcement and display counts. Whichever shape wins,
+   admitting the charge, recording it and setting `high_power_since` must be atomic under billing's
+   existing lock order: `billing_accounts` before `articles`. Otherwise two switch requests can
+   double-charge, or the switch can turn on without its charge.
 2. **When the charge applies.** At import (the flag on the paste box / upload, available *"up to the
    point where it starts doing the structure"*), or on switching on from `/metadata` for an article
    already imported, or both. Switching on later without a charge would let anyone import cheap and
    upgrade free; charging the second slot at switch-on is the simplest honest rule.
-3. **Refuse with one doc left** — follows from 1, with one wrinkle: admission today deliberately
-   admits one half-unit of overdraft (`used < budget`, billing.md), so "refuse unless two whole
-   articles remain" is a different comparison from the one ingests use, and needs its own test.
+3. **Admission depends on where the switch is used.** A new private high-powered import needs the
+   base ingest and its upgrade together — 4 half-units, or two whole articles of room — so Greg's
+   *"disabled if they've only got one doc remaining"* applies there. Upgrading an article that was
+   already charged needs only the incremental event: 2 half-units private, so one whole article of
+   room is enough; if it is public, 1 half-unit is enough. The current ingest admission deliberately
+   tests only `used < budget` and may overdraft by one half-unit. These variable-cost actions instead
+   need `used + requested cost <= budget`, with tests for import versus later upgrade and private
+   versus public.
 4. **Re-runs.** Re-running a mode is free today. On a high-powered article each re-run costs us twice
    as much. Probably still fine at beta volumes; worth a sentence.
 5. **Pricing and features copy, proposed:**
@@ -356,8 +376,11 @@ These are his decisions; each is small once decided.
      to our strongest model. It counts as two articles (one, if you've shared it publicly)."*
    - `/features`: an entry, *"High-powered AI — Opus instead of Sonnet for one article, when the
      reading is hard."*
-6. **Who sees the switch.** v1: administrators. Opening it to readers is the same component with
-   `isAdmin` swapped for the entitlement check that item 1 creates, plus decision 4's one line.
+6. **Who sees the switch.** v1: administrators. The component can replace `isAdmin` with the
+   entitlement answer item 1 creates, and decision 4's model-selection line can then admit charged
+   readers. That is only the client/model half: today's `PUT` is inside `/api/admin`, so the reader
+   half also needs an authenticated owner route whose handler performs item 1's atomic admission,
+   charge and switch. A client entitlement check is never the permission or billing gate.
 
 ## Measurements
 
@@ -382,6 +405,16 @@ Sonnet 5's 1,024 (the control confirms the method: 912 does not cache on Sonnet)
 Every call was answered by the model asked for (`answeredBy` matched). The script was a scratch
 file and is not kept.
 
+## End-to-end check, 2026-09-30
+
+On the local stack, as the local administrator, on `pow-spya-fvrt2e` (84 blocks):
+`high_power_since` set, then `npx tsx scripts/stage.ts arc pow-spya-fvrt2e --force` — the step log
+says `model: claude-opus-5-5`, and its `ai_calls` row says `requested_model` and `answered_model`
+`anthropic/claude-opus-5.5`, upstream Anthropic, $0.0098. Then the column cleared and the same
+command run without `--force`: `arc skipped — already done`, no model call. So the switch reaches the
+wire, the ledger records the model actually sent, and switching off re-runs nothing. The article was
+left switched off.
+
 ## Review log
 
 - **Plan review, round 1** (GPT Sol, read-only):
@@ -405,6 +438,17 @@ file and is not kept.
   here. It could not run the three Postgres-backed suites (no loopback in its sandbox); they were run
   here.
 
+- **Code review, Stage 3** (GPT Sol, write-capable, candidate 8784aeee):
+  [prompt](260930f-high-powered-ai-per-article-stage3-review-prompt.md),
+  [answer](260930f-high-powered-ai-per-article-stage3-review-sol.md). `VERDICT: ship`. It fixed two
+  P1s and two P2s itself: the switch's copy said *all* the article's AI moved and *each call* cost
+  twice (only capable-tier calls move; quick jobs, live voice and image generation do not); a
+  response lost after the PUT committed was reported as *Not saved* over stale state (now: re-read
+  and say *Couldn't confirm*); the live region was silent while saving and after switching off; and
+  the deferred billing arithmetic conflated a new high-power import with upgrading an article
+  already charged. Read and re-gated here. Two rounds of code review, both `ship`: discovery closed.
+
 ## Status
 
-Stages 1–3 built. Stage 3 review next.
+**Landed on `dev`, not deployed.** Stages 1–3 built, reviewed and checked end to end. The reader
+half (§ Deferred) waits on Greg.
