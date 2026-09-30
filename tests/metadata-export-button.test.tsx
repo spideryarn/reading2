@@ -215,6 +215,15 @@ async function open(): Promise<void> {
     );
   });
   await settle();
+  /* Shut by default since 2026-09-30 (SPIDERYARN-READING2-6Z), and opened here
+     the way a reader opens it: a `.click()` reaches a button inside `hidden`
+     too, so without this the cases below would pass over a shut section.
+     Absent where the section is withheld, which two cases below assert. */
+  const heading = host.querySelector<HTMLButtonElement>("#sec-export h2 > button");
+  if (heading) {
+    expect(heading.getAttribute("aria-expanded"), "Export is shut by default").toBe("false");
+    await act(async () => heading.click());
+  }
 }
 
 /** Let every pending microtask and zero-delay timer run. */
@@ -302,6 +311,26 @@ describe("the Export button", () => {
     await act(async () => release?.());
     await settle();
     expect(exportButton()?.disabled).toBe(false);
+    expect(clicked).toHaveLength(1);
+  });
+
+  it("keeps an in-flight export mounted when the section is shut", async () => {
+    exportAnswer = null;
+    await open();
+    await act(async () => exportButton()?.click());
+    const pending = [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+      b.textContent?.includes("Building the zip…"),
+    );
+    const section = host.querySelector("#sec-export");
+    const heading = section?.querySelector<HTMLButtonElement>("h2 > button");
+
+    await act(async () => heading?.click());
+    expect(heading?.getAttribute("aria-expanded")).toBe("false");
+    expect(pending?.closest("[hidden]"), "shutting unmounted the in-flight export").toBeTruthy();
+    expect(pending?.isConnected).toBe(true);
+
+    await act(async () => release?.());
+    await settle();
     expect(clicked).toHaveLength(1);
   });
 
