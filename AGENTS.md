@@ -62,7 +62,9 @@ listed here; the names under each are files in `docs/project/`.
   `live-conversation.md` (talking to the article out loud) ·
   `remember-mode.md` (say what you took from it, and find out) ·
   `quiz.md` (the other half: the article asks, you answer) ·
-  `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
+  `links.md` (hover cards on the article's own hyperlinks) ·
+  `cross-references.md` (the article linked to itself, claim to the passage behind it) ·
+  `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) ·
   `shelf-terms.md` (the topics above it, picked without a model) ·
   `public-shelf.md` (the other one: `/read/public`, for strangers) ·

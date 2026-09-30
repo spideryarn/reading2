@@ -239,6 +239,11 @@ mark.xref {
   text-decoration-color: color-mix(in oklab, var(--highlight-ink) 75%, transparent);
   cursor: pointer;
   transition: text-decoration-color 0.12s, background 0.12s;
+  /* Sequential focus scrolls the mark's margin box into view. The reader
+     already reserves this room at the end of the document (`.reader` in
+     dock.css); naming it on the focus target is what keeps a Tab arrival above
+     the fixed dock rather than merely making it possible to scroll there. */
+  scroll-margin-block-end: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
 }
 mark.xref:hover {
   text-decoration-color: var(--highlight-ink);

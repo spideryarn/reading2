@@ -13,6 +13,7 @@ in this directory records which, and the line comes off.
 
 - 2026-09-29 · SPIDERYARN-READING2-5J · Readers paying with their ChatGPT plan, at a quarter of the price. It needs OpenAI to admit us, and the plan says it is 6–9 weeks and genuinely complicated. Greg's decisions: whether to apply to OpenAI, and whether to run the ~$10–20 eval of GPT-6.1 Sol first · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
 - 2026-09-30 · SPIDERYARN-READING2-61 · **Shipped; only the privacy wording waits.** The quiz now reads the stored reading-time totals too, and the /privacy bullet names only the outline and margin as their purpose — one clause to add, and published wording is yours · [260930e § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md)
+- 2026-09-30 · SPIDERYARN-READING2-5Z · **Shipped for owners; two defence edits wait.** Cross-reference links in the prose are on `dev`, drawn for the article's owner. (1) Reserve the `xref` mark in the sanitiser, and forbid `data-block-link`/`-preview`/`-missing`, which an article can already forge. (2) Let visitors see the links through the public DTO. Both are listed defences, so an unattended run did not touch them · [260930f § Left for Greg](../plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md#left-for-greg-two-defence-edits)
 
 ## Attempted abuse, not yet seen by Greg
 

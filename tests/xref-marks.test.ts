@@ -18,6 +18,8 @@
  * text-node offset space.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { annotateHtml, xrefMarks } from "../src/web/annotate.js";
 import { XREF_NONCE, xrefIndex, xrefTarget } from "../src/web/xref.js";
 import type { Block, BlockId, Crossref } from "../src/types.js";
@@ -124,5 +126,21 @@ describe("xrefTarget", () => {
     el.setAttribute("data-xref", `${XREF_NONCE}-0`);
     expect(xrefTarget(el, null)).toBeNull();
     expect(xrefTarget(el, LINKS)).toBe(FOUR);
+  });
+});
+
+describe("xref keyboard focus", () => {
+  it("reserves the fixed dock's room when the browser scrolls a focused mark into view", () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync(resolve("src/web/styles/annotations.css"), "utf8");
+    document.head.append(style);
+    const mark = document.createElement("mark");
+    mark.className = "xref";
+    document.body.append(mark);
+    expect(getComputedStyle(mark).scrollMarginBlockEnd).toBe(
+      "calc(var(--dock-space) + var(--hint-h) + 0.75rem)",
+    );
+    mark.remove();
+    style.remove();
   });
 });

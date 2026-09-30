@@ -47,9 +47,20 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { useJobs } from "./useJobs.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 
-/** What the prose may draw: the response's links when fresh, else null. */
-export function drawableCrossrefs(found: CrossrefsResponse | null): readonly Crossref[] | null {
-  if (!found || found.stale) return null;
+/** What the prose may draw: this article's response links when fresh, else null. */
+export function drawableCrossrefs(
+  found: CrossrefsResponse | null,
+  slug: string,
+): readonly Crossref[] | null {
+  /* The request-generation fence below stops a late response for the previous
+     route. This is the other seam: the response itself must name the article it
+     was requested for. Usually foreign block ids would happen not to place, but
+     that is not an ownership or freshness check, and two revisions can preserve
+     the same ids. **If slugs ever become renameable** (src/ingest.ts § the short
+     id), the stored `crossrefs.slug` goes stale with them and this check would
+     hide every link without a word — compare the revision, or rewrite the field
+     in the rename. */
+  if (!found || found.stale || found.crossrefs.slug !== slug) return null;
   return Array.isArray(found.crossrefs?.links) ? found.crossrefs.links : null;
 }
 
@@ -71,7 +82,7 @@ export function useCrossrefs(slug: string): readonly Crossref[] | null {
         }
         const found = await readJson<CrossrefsResponse>(res);
         if (!current()) return;
-        setRead({ slug, links: drawableCrossrefs(found) });
+        setRead({ slug, links: drawableCrossrefs(found, slug) });
       } catch {
         /* Nothing to say in the prose, and nothing to retry from: an owner's
            reading view without its underlines is the page it was yesterday. */

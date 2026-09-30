@@ -10,12 +10,21 @@
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-5Z, on `nihms-536461-spya-nr87dn`)
 
-Status: **planned, plan reviewed**. GPT Sol returned *build with changes*, and all 13 findings are
-taken; see [§ Plan review](#plan-review). This is an unattended run from a feedback sweep. Greg is an
-admin, so the report is trusted and this run builds it. The calls his words leave open are under
-[Assumptions](#assumptions). **Two pieces need edits to listed defences, which an unattended run may
-not make.** They are written up for Greg under
-[§ Left for Greg](#left-for-greg-two-defence-edits) rather than built.
+Status: **built, 2026-09-30; on `dev`, owner-only**. Stages 1–3 have landed.
+
+- **Plan review** (GPT Sol): *build with changes*, and all 13 findings were taken.
+- **Code review 1**, on stage 1: *approve with these fixes*. C1 and C2 were fixed by Sol.
+- **Code review 2**, on stage 2 plus a check of C1 and C2: *approve with these fixes*. D1 and D2
+  were fixed by Sol.
+- **Browser check** passed at desktop and touch widths.
+
+This is an unattended run from a feedback sweep. Greg is an admin, so the report is trusted and
+this run built it. The calls his words leave open are under [Assumptions](#assumptions). **Two
+pieces need edits to listed defences, which an unattended run may not make.** They are written up
+for Greg under [§ Left for Greg](#left-for-greg-two-defence-edits) rather than built. Sol's
+review 2 graded the older half of the first one, the forgeable `data-block-link`, **P0** (its D3).
+It predates this work, this work does not widen it, and it waits on Greg rather than being
+overruled.
 
 ## What the reader gets
 
@@ -322,8 +331,9 @@ Client only; the server files from stage 1 are untouched.
 - **`src/web/useCrossrefs.ts`** is the owner read. It goes through `useOrderedRead`, so
   StrictMode sends one GET rather than two. It yields `null` on a 404, an error, or a stale
   artefact.
-  - It does not revalidate after a crossrefs job finishes. This is the same named gap the
-    glossary, quotes and citations have.
+  - A `useJobs("quiet", ...)` subscription refreshes the read after a crossrefs job for this
+    article finishes. It sees work the shared engine is already polling, but does not buy the
+    reading view an idle polling cadence of its own.
 - **The data path** is `OwnedReader` → `ReaderCapability.crossrefs` (owner arm only) → `Reader` →
   `TableView` (`xrefs`, put into `ProseEntry`, `sameInputs` and the `proseHtml` dependencies) and
   → `BlockLinkProvider` (`resolveXref`).
@@ -375,9 +385,36 @@ three-piece phrase), and a tap at 390×844.
 - Screenshots: `260930f-xref-underlines.png`, `-hover-card`, `-after-jump`, `-focus-ring`,
   `-touch-before`, `-touch-after-tap`, `-touch-jump-chip`.
 
-Seen and not fixed:
+Seen in the browser check:
 
-- A Tab-focused mark can sit behind the bottom dock.
+- A Tab-focused mark could sit behind the bottom dock. Review 2 added the dock's permanent
+  clearance as the mark's `scroll-margin-block-end`.
 - The back chip rendered below the emulated touch viewport. This is possibly an emulation artefact
   and wants a real phone.
 - The xref's dotted rule is close to a glossary term's; the difference is mainly the warmer colour.
+
+## Code reviews
+
+- **Review 1** (stage 1, `97c5c3c0`):
+  [prompt](260930f-cross-reference-links-code-review-1-prompt.md) ·
+  [answer](260930f-cross-reference-links-code-review-1-sol.md). The verdict was *approve with these
+  fixes*. Sol found and fixed two P1s:
+  - **C1**: the fingerprint covered supplements and nested tree nodes that the request never
+    sends. It now hashes the exact request strings.
+  - **C2**: a raw-TeX phrase could pass the server check and then never be marked on a maths page.
+    The server now checks against the MathML-rendered text, the way the browser draws it.
+
+  Committed as `caaacce6`.
+- **Review 2** (stage 2, `9d615800` and `8ee4c5d5`, plus a narrow check of C1 and C2):
+  [prompt](260930f-cross-reference-links-code-review-2-prompt.md) ·
+  [answer](260930f-cross-reference-links-code-review-2-sol.md). The verdict was *approve with these
+  fixes*.
+  - **D1** (P1, fixed): the hook now also refuses a response naming another slug. I added a comment
+    on it: if slugs ever become renameable, this check would hide every link silently.
+  - **D2** (P1, fixed): the Tab-focus scroll margin clears the dock.
+  - **D3** (P0, reported, pre-existing): the forgeable `data-block-link`. Left for Greg, as above.
+  - **D4** (P3): plan prose, fixed.
+
+  Sol confirmed that C1 and C2 are right and that server and client agree. Discovery is closed
+  after two rounds.
+

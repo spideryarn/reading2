@@ -430,11 +430,11 @@ describe("the xref wins the words it is on", () => {
 });
 
 describe("where the links come from", () => {
-  const response = (stale: boolean): CrossrefsResponse => ({
+  const response = (stale: boolean, artefactSlug = "the-slug"): CrossrefsResponse => ({
     crossrefs: {
       version: "crossrefs/2",
       generator: "test",
-      slug: "s",
+      slug: artefactSlug,
       sourceHash: "h",
       links: LINKS,
       dropped: {
@@ -477,6 +477,19 @@ describe("where the links come from", () => {
     });
     await act(async () => {});
     expect(vi.mocked(apiFetch)).toHaveBeenCalled();
+    expect(row(A).querySelectorAll("mark.xref")).toHaveLength(0);
+    expect(row(B).querySelectorAll("mark.xref")).toHaveLength(0);
+  });
+
+  it("an artefact naming another article draws nothing", async () => {
+    vi.useRealTimers();
+    vi.mocked(apiFetch).mockResolvedValue(
+      new Response(JSON.stringify(response(false, "another-slug")), { status: 200 }),
+    );
+    await act(async () => {
+      root.render(<Owned />);
+    });
+    await act(async () => {});
     expect(row(A).querySelectorAll("mark.xref")).toHaveLength(0);
     expect(row(B).querySelectorAll("mark.xref")).toHaveLength(0);
   });
