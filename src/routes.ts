@@ -165,7 +165,7 @@ import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
    here and thrown away; `ChatConflict` is what they throw and what this file
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
-import { ChatConflict, withEdit, withRetry } from "./chat.js";
+import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
@@ -3396,7 +3396,7 @@ async function spokenChat(
   threadId: string,
   body: unknown,
 ): Promise<{ thread: ChatThread }> {
-  const { question, answer, passages, tools, interrupted, expectedTailId } = (body ??
+  const { question, answer, passages, tools, interrupted, expectedTailId, kind } = (body ??
     {}) as Record<string, unknown>;
   if (typeof question !== "string" || typeof answer !== "string") {
     throw httpError(400, "Expected { question, answer, expectedTailId }");
@@ -3406,6 +3406,12 @@ async function spokenChat(
      them would let a caller skip the guard by omission. */
   if (expectedTailId !== null && typeof expectedTailId !== "string") {
     throw httpError(400, "expectedTailId is required, and is null for an empty conversation");
+  }
+  /* **Absent, `chat` or `remember`.** The kind the tab began this conversation
+     as, used only if this exchange is what creates it; a contradiction with a
+     stored thread is `withSpokenTurn`'s 409. `SpokenTurn.kind` in src/chat.ts. */
+  if (kind !== undefined && !isSpokenKind(kind)) {
+    throw httpError(400, "kind must be chat or remember");
   }
   /* An empty question is ordinary — the transcriber fails — and so is an empty
      answer, if the reader hung up mid-breath. Both empty is not a turn, and
@@ -3443,6 +3449,7 @@ async function spokenChat(
       ...(parseSpokenPassages(passages, known) ?? {}),
       ...(parseSpokenTools(tools) ?? {}),
       ...(interrupted === true ? { interrupted: true } : {}),
+      ...(kind !== undefined ? { kind } : {}),
       model: LIVE_MODEL,
     }),
   ).then((t) => t.thread);
