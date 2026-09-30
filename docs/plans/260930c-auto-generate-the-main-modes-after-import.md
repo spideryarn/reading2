@@ -1,6 +1,6 @@
 # Auto-generate the main modes after an import
 
-Status: plan, 2026-09-30. Sentry SPIDERYARN-READING2-5Y (report `spya-sufetx`), from Greg (admin,
+Status: shipped on `dev` 2026-09-30, not deployed. Sentry SPIDERYARN-READING2-5Y (report `spya-sufetx`), from Greg (admin,
 verified by account id). Note:
 [260930_0553](../user-feedback/260930_0553-main-modes-generate-after-import.md).
 
@@ -237,3 +237,27 @@ are its diff, which I read line by line and kept whole:
   auto-modes.ts.
 
 Gates after its changes: the six neighbouring suites (60 tests) and `npm run typecheck` pass.
+
+**Browser check** (a Sonnet subagent, Playwright on the box, local stack, 2026-09-30). It ran while
+Sol's edits were landing, so its first screenshots show the old copy. Everything it tested behaves
+the same after those edits. All four checks passed. On a fresh import (`love`), the page posted
+exactly `["tweets"]`, `["glossary"]`, `["quotes"]`, `["ideas"]` and
+`["quotes","ideas","trajectory"]`, 05:20:12–13 UTC. Tweets, Glossary, Quotes and Ideas ran side by
+side and were done by 05:21:54. The Trajectory job stayed queued until then, skipped Quotes and
+Ideas as already done, and was done at 05:22:14. `labels` was done at 05:20:34, before any of them,
+so the wait behind it was short.
+
+Opening Quotes and Trajectory while their jobs were queued showed the job's progress and created no
+new job. With the box unticked, no mode jobs were queued, and the choice was remembered on the next
+add page.
+
+Seen, and not this change's:
+
+- The Quotes band says *"Nobody has chosen the quotes for this one yet…"* beside a running spinner.
+  That is accurate, but it reads oddly now that a job can already be running when you arrive.
+- A 404 URL sat on *"Queueing it…"* with no error. The posting path is untouched by this change.
+
+Gates at push: seven neighbouring suites (118 tests), `npm run typecheck`, and Biome on the touched
+files, all clean. The full suite was not run.
+
+Status: shipped on `dev`, not deployed.
