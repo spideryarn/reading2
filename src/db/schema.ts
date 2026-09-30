@@ -3985,6 +3985,27 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * **One row per account the server has seen**, written on its first
+ * authenticated request — which is the only way the server learns of a
+ * sign-up at all, since sign-up is Supabase Auth in the browser.
+ *
+ * It exists to answer one question exactly once across every instance: *is
+ * this account new?* `insert … on conflict do nothing returning` gives a row to
+ * exactly one request, and that request tells the admin (src/arrivals.ts).
+ * The migration that made it backfilled every account that already existed,
+ * so shipping it announced nobody.
+ *
+ * Deliberately nothing but the id and a time: no address, no provider. The
+ * address is in `auth.users`, and a second copy would be one more place an
+ * erasure has to reach. docs/plans/260930i-email-admin-on-sign-up-and-plan-upgrade.md.
+ */
+export const readerArrivals = spideryarn.table("reader_arrivals", {
+  /** `auth.users(id)`, ON DELETE CASCADE. FK in the migration by hand, like every other owner key. */
+  ownerId: uuid("owner_id").primaryKey(),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* -------------------------------------------------------------- feedback -- */
 
 /**

@@ -42,11 +42,13 @@ import { articles } from "./half-units.js";
 import { getDb } from "../db/client.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { billingAccounts } from "../db/schema.js";
-import { log } from "../log.js";
+import { errorFields, log } from "../log.js";
+import { notifyAdmin } from "../email.js";
+import { afterResponse } from "../after-response.js";
 import { nextQuotaAdjustment } from "./quota-adjustment.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
-import { choiceRules, quotaRules } from "./tiers.js";
+import { type PlanUpgrade, choiceRules, planUpgrade, quotaRules } from "./tiers.js";
 
 const logger = log("store");
 
@@ -103,6 +105,34 @@ export type ListSubscriptions = (customerId: string) => Promise<Stripe.Subscript
 export interface SyncOptions {
   /** The test seam described above. Never set in production. */
   readonly listSubscriptions?: ListSubscriptions;
+  /**
+   * What to do about an upgrade once it has committed. Tests only; the default
+   * is `notifyUpgrade`, which emails the admin.
+   */
+  readonly onUpgrade?: (ownerId: string, upgrade: PlanUpgrade) => Promise<unknown>;
+}
+
+/**
+ * **Tell the admin somebody bought more.** Plain text, and nothing about the
+ * reader but their account id: the address lives in `auth.users`, which the
+ * deployed server cannot read (src/store/admin-accounts.ts), and `/admin` can.
+ */
+export async function notifyUpgrade(ownerId: string, upgrade: PlanUpgrade): Promise<unknown> {
+  const from = upgrade.from?.productName ?? "Free";
+  const to = upgrade.to.productName;
+  return await notifyAdmin(
+    {
+      subject: `Plan upgrade: ${from} → ${to}`,
+      text: [
+        `An account has moved from ${from} to ${to} (${upgrade.to.ingestsPerPeriod} articles a month).`,
+        "",
+        `Account id: ${ownerId}`,
+        "",
+        "Who it is: https://www.spideryarn.com/admin",
+      ].join("\n"),
+    },
+    "plan upgrade",
+  );
 }
 
 /**
@@ -171,7 +201,7 @@ export async function syncSubscriptionFromStripe(
      whose setup script has not run, which must not turn a webhook into a 500. */
   const tiers = await allTiers();
 
-  return await getDb().transaction(
+  const outcome = await getDb().transaction(
     async (tx) => {
       /* The lock, and the mapping lookup, in one statement. Unlike admission
          there is nothing to create first: a customer we have never heard of is
@@ -188,6 +218,9 @@ export async function syncSubscriptionFromStripe(
              plan change twice. */
           stripeSubscriptionId: billingAccounts.stripeSubscriptionId,
           priceId: billingAccounts.priceId,
+          /* With the price, the plan this account was paying for before this
+             sync — the other half of `planUpgrade` below. */
+          status: billingAccounts.status,
           currentPeriodStart: billingAccounts.currentPeriodStart,
           quotaLimitDelta: billingAccounts.quotaLimitDelta,
           quotaPeriodStart: billingAccounts.quotaPeriodStart,
@@ -197,7 +230,7 @@ export async function syncSubscriptionFromStripe(
         .for("update")
         .limit(1);
 
-      if (!row) return { kind: "unmapped", customerId } satisfies SyncResult;
+      if (!row) return { result: { kind: "unmapped", customerId } satisfies SyncResult, upgrade: null };
 
       /* Inside the lock, deliberately — see the header. `listFromStripe` is
          what this was before the seam, comment for comment. */
@@ -288,12 +321,51 @@ export async function syncSubscriptionFromStripe(
         .where(eq(billingAccounts.ownerId, row.ownerId));
 
       return {
-        kind: "synced",
-        ownerId: row.ownerId,
-        status: state?.status ?? null,
-      } satisfies SyncResult;
+        result: {
+          kind: "synced",
+          ownerId: row.ownerId,
+          status: state?.status ?? null,
+        } satisfies SyncResult,
+        /* **Decided under the lock, against the row this transaction
+           replaced**, so it is at most once per change: a redelivered webhook,
+           or the confirm route racing the webhook, finds the new price already
+           stored and sees no change. The same property the quota arithmetic
+           above relies on. */
+        upgrade: planUpgrade(
+          { priceId: row.priceId, status: row.status },
+          state
+            ? {
+                priceId: state.priceId,
+                status: state.status,
+                currentPeriodStart: state.currentPeriodStart,
+                currentPeriodEnd: state.currentPeriodEnd,
+              }
+            : null,
+          tiers,
+          now,
+        ),
+      };
     },
     /* Pinned, as everywhere else in the store. */
     { isolationLevel: "read committed" },
   );
+
+  /* **After the commit, and off the response's critical path.** A notification
+     is news, not state: under `handleApi` the thunk starts only after the
+     response has been written, and the outer wrapper keeps Vercel alive for it.
+     Outside a request it is awaited here. Either way a failure is logged and
+     forgotten, never retried and never a 5xx back to Stripe, which would
+     redeliver an event whose change is already stored and so could not send it
+     anyway. */
+  if (outcome.upgrade && outcome.result.kind === "synced") {
+    const upgrade = outcome.upgrade;
+    await afterResponse("telling the admin about an upgrade", async () => {
+      try {
+        await (options.onUpgrade ?? notifyUpgrade)(outcome.result.ownerId, upgrade);
+      } catch (err) {
+        logger.error({ customerId, ...errorFields(err) }, "telling the admin about an upgrade failed");
+      }
+    });
+  }
+  return outcome.result;
 }
