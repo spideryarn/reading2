@@ -207,6 +207,7 @@ const ALL_BUILT: PublicArtefacts = {
   sketch: true,
   trajectory: true,
   faq: true,
+  simpleSummary: true,
   citations: true,
   debate: true,
 };
@@ -281,6 +282,7 @@ describe("the sharing card, on the page that owns it", () => {
         sketch: false,
         trajectory: false,
         faq: false,
+        simpleSummary: false,
         citations: false,
         debate: false,
       } satisfies PublicArtefacts,
@@ -484,6 +486,7 @@ describe("the sharing card, on the page that owns it", () => {
         sketch: false,
         trajectory: false,
         faq: false,
+        simpleSummary: false,
         citations: false,
         debate: false,
         /* Annotated like `ALL_BUILT` above and for the same reason: an untyped

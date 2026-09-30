@@ -37,6 +37,14 @@ describe("rememberableSearch", () => {
     );
   });
 
+  it("keeps Summary's sub-mode, which only a press on its chip can spend on", () => {
+    /* `?summary=simple` restored mounts Simple's read and nothing else: the run
+       is armed by the chip's click (SummaryMode.tsx), never by arrival — so it
+       is a place you were, like `?deep=`. Plan 260930i. */
+    expect(rememberableSearch("?mode=summary&summary=simple")).toBe("?mode=summary&summary=simple");
+    expect(hasArticleState("?summary=simple")).toBe(true);
+  });
+
   it("keeps each pair byte-for-byte, so a comma list is not reserialised", () => {
     /* `URLSearchParams` would hand back `crits=spya-a%2Cspya-b`, which parses
        to the same thing and reads as somebody else's URL. Same reason

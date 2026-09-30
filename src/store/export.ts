@@ -447,6 +447,8 @@ export async function exportArticle(
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.crossrefs)
     await put("article_revisions", "crossrefs.json", revision.crossrefs);
+  if (revision.simpleSummary)
+    await put("article_revisions", "simple-summary.json", revision.simpleSummary);
   if (revision.trajectory)
     await put("article_revisions", "trajectory.json", revision.trajectory);
   if (revision.sketch) await put("article_revisions", "sketch.json", revision.sketch);

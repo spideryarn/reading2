@@ -1379,3 +1379,158 @@ describe("an arrival from the prose", () => {
     expect(host.querySelector<HTMLInputElement>(".quiz-only-read input")?.checked).toBe(false);
   });
 });
+
+/**
+ * **Where to look again** — SPIDERYARN-READING2-6R,
+ * docs/plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md.
+ *
+ * The rules a screenshot would not catch: the block appearing on no evidence
+ * (a right answer, or no verdict); a count or a verdict word reaching the page;
+ * "back to its question" offered for the question already open, or for one
+ * the reading filter will not let the reader land on.
+ */
+describe("where to look again", () => {
+  const THIRD = "spya-h4r7nx";
+  const THREE = new Map([...BLOCKS, [THIRD, "The third paragraph."]]);
+  const on = (id: string) => [{ blockId: id as BlockId, quote: "x", start: 0 }];
+  const PATH = batch([
+    question(1, { evidence: on(KNOWN) }),
+    question(2, { evidence: on(OTHER), premise: "The second step's premise." }),
+    question(3, { evidence: on(THIRD) }),
+  ]);
+  const [first, second] = PATH.questions as [QuizQuestion, QuizQuestion, QuizQuestion];
+  /** "Opening" is KNOWN; "Middle" is OTHER and THIRD. */
+  const SECTIONS = {
+    sections: [
+      { row: 0, blockId: KNOWN as BlockId, nodeId: "n1", title: "Opening" },
+      { row: 1, blockId: OTHER as BlockId, nodeId: "n2", title: "Middle" },
+    ],
+    rowOf: new Map<BlockId, number>([
+      [KNOWN as BlockId, 0],
+      [OTHER as BlockId, 1],
+      [THIRD as BlockId, 2],
+    ]),
+  };
+
+  function paintSections(o: UseQuiz, readSoFar?: ReadSoFar) {
+    act(() => {
+      root.render(
+        createElement(QuizPanel, {
+          owner: o,
+          blocks: THREE,
+          readSoFar,
+          sections: SECTIONS,
+          onJump: (id: BlockId) => jumped.push(id),
+        }),
+      );
+    });
+  }
+
+  function judged(id: string, verdict?: "right" | "wrong"): Attempt {
+    return { questionId: id, answer: "a", status: "done", reply: "ok", error: null, ...(verdict ? { verdict } : {}) };
+  }
+
+  const block = () => host.querySelector(".quiz-look-again");
+  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const RETRY = "Back to a question on Opening";
+
+  it("is not there until an answer has been judged wrong", () => {
+    paintSections(owner({ quiz: PATH }));
+    expect(block()).toBeNull();
+    paintSections(owner({ quiz: PATH, attempt: judged(first.id, "right") }));
+    expect(block()).toBeNull();
+    paintSections(owner({ quiz: PATH, attempt: judged(first.id) }));
+    expect(block()).toBeNull();
+  });
+
+  it("names the section and nothing else, and the name jumps the prose there", () => {
+    paintSections(owner({ quiz: PATH, attempt: judged(first.id, "wrong") }));
+    expect(block()?.textContent).toBe("Where to look againOpening");
+    const before = jumped.length;
+    act(() => {
+      (host.querySelector(".quiz-look-again-section") as HTMLElement).click();
+    });
+    expect(jumped.slice(before)).toEqual([KNOWN]);
+  });
+
+  it("offers the missed question from elsewhere on the path, not while it is open, and goes back to it as a jump", () => {
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(o);
+    expect(buttons(RETRY)).toHaveLength(0);
+    paintSections({ ...o, attempt: null });
+    press("Next question");
+    expect(stem()).toBe(second.question);
+    expect(buttons(RETRY)).toHaveLength(1);
+    press(RETRY);
+    expect(stem()).toBe(first.question);
+    expect(host.textContent).toContain("Question 1 of 3");
+  });
+
+  it("returns to a later missed question as a jump, so its premise is shown", () => {
+    const o = owner({ quiz: PATH });
+    paintSections(o);
+    press("Next question");
+    paintSections({ ...o, attempt: judged(second.id, "wrong") });
+    press("Next question");
+    expect(stem()).toBe("Question number 3?");
+
+    press("Back to a question on Middle");
+    expect(stem()).toBe(second.question);
+    expect(host.querySelector(".quiz-premise")?.textContent).toBe("The second step's premise.");
+  });
+
+  it("drops the section once its answer is judged right again", () => {
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(o);
+    expect(block()).not.toBeNull();
+    paintSections({ ...o, attempt: judged(first.id, "right") });
+    expect(block()).toBeNull();
+  });
+
+  it("drops the old wrong verdict when a newer finished mark has no verdict", () => {
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(o);
+    expect(block()).not.toBeNull();
+    paintSections({ ...o, attempt: judged(first.id) });
+    expect(block()).toBeNull();
+  });
+
+  it("forgets the section on a replacement batch, even while the old completed attempt is still in props", () => {
+    const old = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(old);
+    expect(block()).not.toBeNull();
+
+    /* The replacement deliberately reuses question ids and the old attempt
+       survives the first render. Without both the map reset and the
+       reset-only verdict pass, "Opening" comes straight back on the new batch. */
+    paintSections({
+      ...old,
+      quiz: { ...PATH, batchId: "spya-batch2" },
+      attempt: judged(first.id, "wrong"),
+    });
+    expect(stem(), "the reset hid the new batch instead of clearing the old verdict").toBe(first.question);
+    expect(block()).toBeNull();
+  });
+
+  it("does not offer a question the reading filter will not land on", () => {
+    const read = (ids: string[]): ReadSoFar => ({
+      levels: new Map(ids.map((id) => [id as BlockId, 4 as const])),
+      status: "loaded",
+      bodyWords: new Map([
+        [KNOWN as BlockId, 100],
+        [OTHER as BlockId, 100],
+        [THIRD as BlockId, 100],
+      ]),
+    });
+    /* Answered while everything was read… */
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(o, read([KNOWN, OTHER, THIRD]));
+    paintSections({ ...o, attempt: null }, read([KNOWN, OTHER, THIRD]));
+    press("Next question");
+    expect(buttons(RETRY)).toHaveLength(1);
+    /* …and then the opening passage no longer counts as read. */
+    paintSections({ ...o, attempt: null }, read([OTHER, THIRD]));
+    expect(block()?.textContent).toContain("Opening");
+    expect(buttons(RETRY)).toHaveLength(0);
+  });
+});

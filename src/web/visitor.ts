@@ -93,6 +93,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   timeline: "a timeline",
   trajectory: "a trajectory",
   faq: "an FAQ",
+  simpleSummary: "a plain-words summary",
   citations: "a list of citations",
   debate: "a debate",
   sketch: "a sketch",

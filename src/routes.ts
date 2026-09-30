@@ -38,6 +38,7 @@
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
  *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
+ *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
  *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
@@ -151,6 +152,7 @@ import {
   loadQuiz,
   loadFaq,
   loadCrossrefs,
+  loadSimpleSummary,
   loadTrajectory,
   loadDebate,
   loadCitations,
@@ -8096,6 +8098,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       /* No `withProfileChanged`: not written for a profile. */
       send(res, 200, await loadCrossrefs(slugPart(captures, 1)));
+    },
+  },
+
+  /* Simple, Summary's plain-words sub-mode —
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. GET only, and no
+     DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["simple"] }. This route never spends. The
+     owner's read; a visitor gets the stored one through the public DTO. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/simple\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      /* No `withProfileChanged`: not written for a profile. `stale` and
+         `outdated` apart, as `/api/faq/` has them. */
+      send(res, 200, await loadSimpleSummary(slugPart(captures, 1)));
     },
   },
 

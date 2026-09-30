@@ -1,0 +1,61 @@
+{
+  "arm": "medium-15-v2",
+  "effort": "medium",
+  "pitch": 15,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:41.907Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "wallMs": 10230,
+  "costUsd": 0.044776,
+  "tokens": {
+    "input": 18983,
+    "output": 681,
+    "reasoning": 11
+  },
+  "ok": true,
+  "words": 263,
+  "paragraphs": [
+    {
+      "text": "This essay asks whether artificial intelligence could ever be truly conscious — able to actually feel or experience things, not just act smart. It's written by a neuroscientist who studies consciousness, and it pushes back against the growing idea that chatbots or AI systems already have, or soon will have, real inner experience.",
+      "ids": [
+        "spya-gjy45p",
+        "spya-e68t9h"
+      ]
+    },
+    {
+      "text": "The question matters because if AI really were conscious, it would deserve moral concern and maybe even rights, and we couldn't just switch it off. But it also matters if we wrongly believe AI is conscious when it isn't: we might get manipulated, care about the wrong things, or treat real suffering as unimportant. Either way, how we think about this changes how we understand ourselves too.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-sge6a2"
+      ]
+    },
+    {
+      "text": "The author argues we're biased to see consciousness in AI because we mix up two different things: intelligence (being able to do clever tasks) and consciousness (actually feeling or experiencing anything at all). We assume they go together because in humans they do, but that's not necessarily true elsewhere. He also argues brains aren't really like computers — they're living, changing, and tied to time in ways computers running programs are not, so simply running the right program probably isn't enough to create real experience.",
+      "ids": [
+        "spya-nj888h",
+        "spya-j0a9rq",
+        "spya-a8jgf4"
+      ]
+    },
+    {
+      "text": "His conclusion: real conscious AI is unlikely with today's computers, but AI that merely seems conscious is already here, and that's its own serious problem. He warns against ever deliberately trying to build conscious machines, and says society should think carefully now about how to treat convincing but possibly unfeeling AI, rather than getting swept up in hype.",
+      "ids": [
+        "spya-c5ve5t",
+        "spya-vs0vpj",
+        "spya-x63ycg"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

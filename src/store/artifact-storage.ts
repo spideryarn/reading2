@@ -36,7 +36,8 @@ export type WholeColumn =
   | "illustrated"
   | "debate"
   | "citations"
-  | "crossrefs";
+  | "crossrefs"
+  | "simpleSummary";
 
 /**
  * Where one `(step, kind)` lives in Postgres.
@@ -132,6 +133,10 @@ export const STORAGE: {
   debate: { debate: { at: "column", column: "debate" } },
   citations: { citations: { at: "column", column: "citations" } },
   crossrefs: { crossrefs: { at: "column", column: "crossrefs" } },
+  /* The kind is the step's name, as every other kind here is — it is also the
+     URL segment (`/api/simple/`), which tests/cacheable-covers-artefact-routes.test.ts
+     derives from the kind. The column is named for what it holds. */
+  simple: { simple: { at: "column", column: "simpleSummary" } },
 };
 
 /** The site for one `(step, kind)`, or a clear error rather than `undefined`. */

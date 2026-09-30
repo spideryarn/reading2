@@ -68,6 +68,7 @@ export const REMEMBERED = [
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "deep", // how far down summary mode goes
+  "summary", // gists or simple — only a press on the Simple chip spends
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
   "dhue", // what a dot's colour means

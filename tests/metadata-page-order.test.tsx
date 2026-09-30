@@ -816,6 +816,7 @@ describe("the top of the page: Archive, Share…, and what is shut", () => {
             sketch: true,
             trajectory: true,
             faq: true,
+            simpleSummary: true,
             citations: true,
             debate: true,
           },

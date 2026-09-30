@@ -16,10 +16,12 @@ The design, the review that reshaped it and the real runs are
 ## A row
 
 The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
-gives them, one plain sentence on *what the piece uses it for*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
+gives them, more than two authors shortened to *First et al.*, one plain sentence on *what the piece uses it for*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
 where the link came from, and **first cited**, a jump to the passage
 ([`BlockRef`](../../src/web/BlockRef.tsx)). A work the article names only in its bibliography says
-*only in the references* and jumps there.
+*only in the references* and jumps there. § [Which citation, and whose
+entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
+2026-09-30.
 
 ## The one safety property
 
@@ -48,6 +50,60 @@ of a matching page, and never the work itself. `readNoteOf` in
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
+
+## Which citation, and whose entry
+
+Asked for through the Feedback button on 2026-09-30, from a PDF of a numbered-citation review
+(SPIDERYARN-READING2-6J, then 6K):
+
+> it would be more helpful to highlight specifically within the block where the citation is,
+> because sometimes there are multiple citations in a block, and somehow citations mode doesn't
+> make it obvious which citation corresponds to, you know, which footnote.
+
+> I wonder if there's a way to include the author names as well somehow, even if in somewhat
+> truncated form, and also the date. And/or, you know, provide a tooltip with extra metadata like
+> journal/conference/etc.
+
+[260930i](../plans/260930i-citations-mark-the-exact-citation-and-read-the-pdf-reference-list.md)
+is the design and GPT Sol's review that reshaped it; this says what is built.
+
+**First cited names the words, and lands on them.** The link is the words the article cites the
+work with — *first cited “TV episodes [8]”* — the verified mention in the `firstCited` block,
+shortened keeping its marker end (`citingWordsOf`). The jump passes `citePassageKey(work.id)`, the
+second key shape `passageMarks` ([`rows.ts`](../../src/web/rows.ts)) reads: it finds the
+`mark.cite` fragments whose `data-cite` names the work, so the centring scroll and the arrival
+flash land on the phrase rather than the paragraph. Found at render time by `citeMarks`, never by
+the stored offset ([block-ids.md](block-ids.md)). A work reached only through a footnote marker, or
+a visitor, who has no marks, keeps the old behaviour — the block id, or a wash of the whole
+paragraph. The key names a work, not an occurrence: two cites of one work in one paragraph flash
+together, accepted.
+
+**A PDF's reference list is read from its text layer.** Stage 2 does not render a PDF's
+bibliography (`RENDERED` in [`pdf.ts`](../../src/pdf.ts)), so before this the stage saw `[8]` and
+nothing to say what it was, and the model described the cite instead of naming the work (*"Study on
+recall of TV episodes"*). Now the `citations` step reads the stored PDF with `pass0`, strips running
+headers, and [`citation-reference-list.ts`](../../src/citation-reference-list.ts) splits the text
+under the bibliography heading **at the list's own numbers**. The model sees the list after the
+article, one `[n] entry` a line, and names each work's entry **by number**. Code keeps it only if:
+
+- the list has that number, and the work's verified mentions cite it (`[8]`, `[7,8]`, `[6–9]`) —
+  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors;
+- the model's title is in the entry — else the entry is dropped as disagreeing.
+
+Then every author name must be a word of the entry, or the authors go, and the year must be one of
+its years, stored as the entry's token (`2017a`). The entry text shown is the list's, split by code,
+never a string the model copied. A numbered list only: an author–year PDF bibliography gets no list
+yet. No list, a scan or an unreadable document never fails the step; the step's log line says which
+(`referenceList`, `referenceListEntries`, `entries`, and the drops `entryUnfound`,
+`entryMismatch`, `entryDisagrees`).
+
+**An HTML bibliography's entry is its block's text**, when the block is `role: "reference"` and no
+other work claims it — a shared footnote would show one work its neighbour's venue.
+
+**Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
+the article's own reference list, which we have not looked up; the prose hover card shows the entry
+in full, since a card is what a finger gets. `entry` is owner-only: `publicCitedWork` does not name
+it, and widening that projection is a change to a defence, left for Greg.
 
 ## The orders, and the bar
 
@@ -366,11 +422,12 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads. Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; a DOI or arXiv id in a PDF's entry used as the row's link; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
 [`src/citations.ts`](../../src/citations.ts) (the stage) ·
+[`citation-reference-list.ts`](../../src/citation-reference-list.ts) (a PDF's numbered list) ·
 [`useCitations.ts`](../../src/web/useCitations.ts) (`useCitationsRead` is the half `OwnedReader`
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·

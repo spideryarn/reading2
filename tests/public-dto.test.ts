@@ -38,6 +38,7 @@ import type {
   Debate,
   DirectDebateRow,
   Faq,
+  SimpleSummary,
   Glossary,
   Ideas,
   Quotes,
@@ -65,6 +66,7 @@ const NO_ARTEFACTS = {
   timeline: null,
   trajectory: null,
   faq: null,
+  simpleSummary: null,
   citations: null,
   debate: null,
   /* **An empty array, not `null`** — comments are not an artefact, so there is
@@ -1036,6 +1038,26 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **A stored Simple with every field set** — the stamp above all: the
+   * paragraphs cross, the pipeline's provenance does not. Plan 260930i.
+   */
+  const SIMPLE: SimpleSummary = {
+    version: "simple/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    generatedAt: "2026-09-30T10:00:00.000Z",
+    elapsedMs: 7_000,
+    paragraphs: [
+      { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
+      {
+        text: "It matters because a copy would not do.",
+        ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
+      },
+    ],
+  };
+
+  /**
    * **A stored Citations list with every field set, and three addresses** — a
    * clean DOI, one carrying a credential, and one on a private host. The two
    * bad links must be gone from the wire and their rows kept (plan 260929c
@@ -1094,6 +1116,9 @@ describe("the artefacts a shared link carries", () => {
           contextHash: "invhashsentinel0",
           promptVersion: "citation-investigate/1",
         },
+        /* The work's reference entry (plan 260930i) — owner-only until the
+           public DTO names it, which is Greg's call on a defence. */
+        entry: "entry sentinel from the reference list",
         /* Attached only by the owner's GET route. A non-vacuous sentinel for
            the public DTO's field-by-field omission (plan 260930b). */
         inSpideryarn: {
@@ -1179,6 +1204,7 @@ describe("the artefacts a shared link carries", () => {
     timeline: TIMELINE,
     trajectory: TRAJECTORY,
     faq: FAQ,
+    simpleSummary: SIMPLE,
     citations: CITATIONS,
     debate: null,
     comments: [],
@@ -1637,6 +1663,27 @@ describe("the artefacts a shared link carries", () => {
     expect(JSON.stringify(built.faq)).not.toContain("dropped");
   });
 
+  /** The paragraphs and their passages' ids, and not the stamp. Plan 260930i. */
+  it("carries Simple's paragraphs and their ids, and not the stamp", () => {
+    expect(pathsUnder("simpleSummary")).toEqual(
+      ["paragraphs", "paragraphs[].ids", "paragraphs[].text"].sort(),
+    );
+    expect(built.simpleSummary).toEqual({ paragraphs: SIMPLE.paragraphs });
+    const json = JSON.stringify(built.simpleSummary);
+    for (const provenance of ["simple/1", "some-model", "abc123", "generatedAt", "elapsedMs"]) {
+      expect(json, provenance).not.toContain(provenance);
+    }
+  });
+
+  it("does not publish a stored Simple artefact outside its 2–4 paragraph contract", () => {
+    const invalid = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      simpleSummary: { ...SIMPLE, paragraphs: [] },
+    });
+    expect("simpleSummary" in invalid).toBe(false);
+  });
+
   /**
    * **Each cited work minus `key` and `found`, and every address re-judged.**
    * Exact nested keys against a list with every field set, so a spread of the
@@ -1714,6 +1761,18 @@ describe("the artefacts a shared link carries", () => {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+  });
+
+  /**
+   * **Nor a work's reference entry** (plan 260930i, GPT Sol's plan review F9).
+   * It is the article's own text, but for a PDF it is text the public page does
+   * not show, and widening the projection is a change to a defence
+   * (docs/project/security-map.md), left for Greg.
+   */
+  it("carries no cited work's reference entry, anywhere", () => {
+    const json = JSON.stringify(built);
+    expect(json).not.toContain("entry sentinel from the reference list");
+    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("entry");
   });
 
   /** Nor the owner's read-time link to another article (plan 260930b). */
@@ -1806,6 +1865,7 @@ describe("the artefacts a shared link carries", () => {
       timeline: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       comments: [],
@@ -1836,7 +1896,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "citations", "debate"]) {
+    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "simpleSummary", "citations", "debate"]) {
       expect(key in bare, key).toBe(false);
     }
   });

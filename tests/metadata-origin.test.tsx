@@ -165,6 +165,7 @@ async function visitor(meta: Partial<Meta>) {
           sketch: false,
           trajectory: false,
           faq: false,
+          simpleSummary: false,
           citations: false,
           debate: false,
         },

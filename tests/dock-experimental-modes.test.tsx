@@ -324,6 +324,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   sketch: false,
   trajectory: false,
   faq: false,
+  simpleSummary: false,
   citations: false,
   debate: false,
 };
@@ -337,6 +338,7 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   sketch: true,
   trajectory: true,
   faq: true,
+  simpleSummary: true,
   citations: true,
   debate: true,
 };

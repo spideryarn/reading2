@@ -56,6 +56,7 @@ import {
   overBundleCap,
 } from "../src/store/export-bundle.js";
 import { exportArticle } from "../src/store/export.js";
+import type { SimpleSummary } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -113,6 +114,20 @@ const NO_BUCKET_REVISION_ID = "00000000-0000-4000-8000-00000000b0d4";
 const EXTRACTED = "<article><p>before the ids were stamped on</p></article>";
 const STAMPED = `<article><p data-spya-id="${BLOCKS[0]}">before the ids were stamped on</p></article>`;
 const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came from" }];
+
+/** A generated artefact that both export formats must carry whole. */
+const SIMPLE: SimpleSummary = {
+  version: "simple/1",
+  generator: "fixture-model",
+  slug: SLUG,
+  sourceHash: "0123456789abcdef",
+  generatedAt: "2026-09-30T12:00:00.000Z",
+  elapsedMs: 321,
+  paragraphs: [
+    { text: "The article explains the question.", ids: [BLOCKS[0]] },
+    { text: "It then gives the answer and its limits.", ids: [BLOCKS[1], BLOCKS[2]] },
+  ],
+};
 
 /* A real source document, so the rollback's `readRawDocument` actually reaches
    for the bucket — which is what makes the control below bite. The hash has to
@@ -197,6 +212,7 @@ await pgReady({
   columns: [
     { table: "spideryarn.chat_messages", column: "passages" },
     { table: "spideryarn.chat_messages", column: "interrupted" },
+    { table: "spideryarn.article_revisions", column: "simple_summary" },
   ],
 });
 
@@ -270,6 +286,7 @@ describe("the bundle is the faithful projection", () => {
           },
         },
         assets: ASSETS,
+        simpleSummary: SIMPLE,
         rawSourceSha256: RAW_SHA256,
         rawSourceKind: "html",
       })
@@ -458,6 +475,14 @@ describe("the bundle is the faithful projection", () => {
     // No glossary was ever generated for this article, so there is no file.
     expect(bundled.has("augmentations/glossary.json")).toBe(false);
     expect(bundled.has("augmentations/searches.json")).toBe(false);
+  });
+
+  it("carries Simple whole through the bundle and rollback exports", async () => {
+    expect(parsed("augmentations/simple-summary.json")).toEqual(SIMPLE);
+    const rollback = JSON.parse(
+      await readFile(path.join(out, SLUG, "simple-summary.json"), "utf8"),
+    ) as SimpleSummary;
+    expect(rollback).toEqual(SIMPLE);
   });
 
   /**

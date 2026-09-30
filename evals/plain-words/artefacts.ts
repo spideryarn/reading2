@@ -391,7 +391,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       );
     },
     citations: async () => {
-      const run = await generateCitations({ power: "standard", article, previous: null });
+      const run = await generateCitations({ power: "standard", article, previous: null, referenceList: null });
       write("citations", run.citations.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
     },
     sketch: async () => {

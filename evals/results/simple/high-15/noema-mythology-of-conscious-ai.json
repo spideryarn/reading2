@@ -1,0 +1,16 @@
+{
+  "arm": "high-15",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T15:00:32.415Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "wallMs": 13200,
+  "costUsd": null,
+  "tokens": null,
+  "ok": false,
+  "error": "The model wrote 327 words and the limit is 320. Nothing is kept rather than a cut-down version."
+}

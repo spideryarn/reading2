@@ -400,6 +400,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "faq",
   "trajectory",
   "crossrefs",
+  "simpleSummary",
   "sketch",
   "illustrated",
   "labels",
@@ -478,6 +479,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("faq.json", revision.faq);
   at("trajectory.json", revision.trajectory);
   at("crossrefs.json", revision.crossrefs);
+  at("simple-summary.json", revision.simpleSummary);
   at("sketch.json", revision.sketch);
   at("illustrated.json", revision.illustrated);
   at("labels.json", revision.labels);
@@ -600,6 +602,7 @@ one thing that will make the rest of these files make sense.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
       trajectory.json      A route through the quotes, in the order to read them, at three depths.
       crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
+      simple-summary.json  A few paragraphs in plain words, and the passages each rests on.
       arc.json             The shape of the argument.
       tweets.json          Short extracts.
       labels.json          Section labels.
@@ -785,6 +788,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "A route through the quotes, in the order to read them, at three depths.",
   "augmentations/crossrefs.json":
     "Links from a phrase in one paragraph to the paragraph that backs it.",
+  "augmentations/simple-summary.json":
+    "A few paragraphs in plain words, and the passages each rests on.",
   "augmentations/sketch.json": "The diagram.",
   /* **The brief and the hashes, and not the pictures.** A plate's bytes are
      a content-addressed object in the blob store, so this file names them
@@ -890,6 +895,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
     { label: "trajectory stops", n: countOf(revision.trajectory, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
+    { label: "plain-words paragraphs", n: countOf(revision.simpleSummary, "paragraphs") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
     /* **Both collections, and only what is really named.** `assets` holds the
        article's own `<img src>`s in `entries` and the pictures recovered from a

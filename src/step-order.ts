@@ -113,6 +113,14 @@ export const STEP_ORDER = [
      over the whole article that a reader asks for by opening the mode.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Beside `faq`, a fifth time for the same argument: `high` effort (measured
+     against `medium` in stage 1, src/models.ts § STAGE_EFFORT), the `ids`
+     renderer and the body-only evidence, so it is in the `ideas` … `sketch`
+     cache group and this list keeps it contiguous. Off `DEFAULT_INGEST_STEPS`
+     and in `FORCE_ONLY_WHEN_NAMED`: a model call over the whole article that a
+     reader asks for by pressing Summary's Simple chip.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  "simple",
   /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
      below, and it is the slowest single model call in the app at 121–194
      seconds measured. docs/project/diagram.md § Sketch. */

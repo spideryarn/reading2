@@ -974,6 +974,8 @@ export type ChatJob = Exclude<
   | "trajectory"
   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */
   | "crossrefs"
+  /* Generation, on the Messages wire like `faq`. src/simple-summary.ts. */
+  | "simple"
   /* **Not a pipeline stage, and still not on this wire.** A live session is a
      WebRTC connection the browser holds open to OpenAI; this file never sends
      it anything and never sees a response, so there is no OpenRouter path to

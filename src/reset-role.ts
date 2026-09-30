@@ -76,6 +76,9 @@ export const RESET_ROLE = {
      DEFAULT_INGEST_STEPS, a whole column: exactly the modes' shape, though it
      is not a mode. */
   crossrefs: "extra",
+  /* Made on a press of Summary's Simple chip, off DEFAULT_INGEST_STEPS, a whole
+     column: the modes' shape. */
+  simple: "extra",
 } as const satisfies Record<StepName, ResetRole>;
 
 /** The steps a reset drops — a type, so a map over them is exhaustive. */

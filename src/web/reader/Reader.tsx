@@ -55,7 +55,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
-import { SummaryBand } from "../modes/summary/SummaryMode.js";
+import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
 import {
@@ -463,6 +463,9 @@ export function Reader({
      removal timer rather than retaining a detached prose cell for 1.2s. */
   useEffect(() => resetFlash, []);
   const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
+  /* The quiz's "Where to look again" names the same sections the reader sees
+     here — docs/plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md. */
+  const quizSections = useMemo(() => ({ sections, rowOf }), [sections, rowOf]);
   /**
    * **A jump that starts inside a band.** The same `jumpTo`, and then — where
    * the band lies over the whole article, which on a phone it does — the band
@@ -1872,6 +1875,7 @@ export function Reader({
             onQuizArrivalTaken={quizArrivalTaken}
             blocks={blockText}
             readSoFar={readSoFar}
+            sections={quizSections}
             onJump={bandJump}
             onMode={setMode}
             onQuizKeys={onQuizKeys}
@@ -1947,8 +1951,16 @@ export function Reader({
             onJump={bandJump}
           />
         );
+      /* Gists are the tree's own and free to anyone; Simple is an artefact, so
+         since 2026-09-30 this is an owner/visitor pair — the visitor's band
+         takes the stored paragraphs off the payload and fetches nothing.
+         docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
       case "summary":
-        return <SummaryBand article={article} onJump={bandJump} />;
+        if (!owner)
+          return (
+            <VisitorSummaryBand article={article} simple={artefacts?.simpleSummary} onJump={bandJump} />
+          );
+        return <SummaryBand slug={slug} article={article} onJump={bandJump} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default

@@ -202,6 +202,7 @@ one holding three look identical in an L2 cell. This is item 5 on
 |---|---|---|---|
 | `mode=summary` | | push | A mode is where you are, not a glance — [url-state.md](url-state.md) |
 | `deep` | `0`, `1` (default), `2` | push | How much of the article's shape you are looking at is a deliberate act on the view, like the retired `cols` and `text` did |
+| `summary` | `gists` (default), `simple` | push | Which half of the mode is open — § Simple, below |
 
 `?len=` was the third row until 2026-08-31 and went with the ladder.
 
@@ -288,11 +289,11 @@ bracketed hint as a finished line, and `bareWords` strips that bracket **before*
 punctuation so the gist-echo check still catches a gist re-asked in the new shape. Both halves are
 held by `tests/summaries-eval.test.ts`, which used to assert the defect and now asserts the fix.
 
-### There is no prompt that generates Summary mode, and that is the whole story
+### There is no prompt that generates the Gists view, and that is the whole story
 
 The literal request cannot be carried out, because the sentence in this panel is the **`gist`** that
-stage 4 writes onto every internal node — this feature has no stage, no artefact and no prompt of
-its own (§ top of this file). And that gist is rendered in ten other places: the granularity-zoom
+stage 4 writes onto every internal node — the Gists view has no stage, artefact or prompt of its
+own (§ top of this file). And that gist is rendered in ten other places: the granularity-zoom
 columns, the spine tooltips, the masthead, the shelf card on [the library](library.md) and
 [the public shelf](public-shelf.md), the outline rows, the diagram cards, the fisheye.
 
@@ -615,6 +616,40 @@ Stated rather than smoothed over:
   after any flick. So the window covers the handoff — the debounce — and nothing more.
 
 
+## Simple — a plain-words orientation
+
+**Built 2026-09-30.** Summary's second sub-mode, beside **Gists**: a few short paragraphs in everyday
+words saying what the piece is about, why it matters, and its key ideas. Asked for by an admin
+through the Feedback button (SPIDERYARN-READING2-6E):
+
+> Add a sort of sub mode to the summary mode for something like, explain it to me like I'm 12 or 15.
+> … It just helps the reader orient, like, okay, what is this about and why is it important, and
+> what are the key ideas or whatever.
+>
+> — Greg, 2026-09-30
+
+It is the feature closest to [vision.md](vision.md)'s anti-goal, so it is kept an **orientation,
+not a digest**: two to four paragraphs, capped by code; **every paragraph is a door** — the passages
+it rests on, drawn as the same `BlockRef` chips the gists use, and a paragraph with none is dropped
+when it is written; and a foot saying it was written by AI and that the article says it better.
+Plain text, never markdown.
+
+- **The door rule.** Pressing the Simple chip with nothing stored runs the `simple` job; arriving on
+  `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
+  the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
+  public article gets the stored paragraphs off the payload, or a line saying none has been made.
+- **One level, pitched at 15.** Greg's shorter ELI12 is **deferred** until he has read ELI15 on a real
+  paper; the probe outputs of both are in the plan.
+- **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
+  waits about ten seconds behind the job progress, like FAQ. Why, and the one decision left for
+  Greg, are in
+  [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md) § *A departure from CLAUDE.md*.
+
+Code: [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx),
+[`useSimple.ts`](../../src/web/useSimple.ts), the switch in
+[`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx); the stage is
+[`src/simple-summary.ts`](../../src/simple-summary.ts).
+
 ## What this deliberately does not have
 
 **A length control.** See [above](#why-there-is-no-length-control). The two generated rungs and the
@@ -623,14 +658,13 @@ stage that wrote them were deleted on 2026-08-31.
 **The expertise axis.** Their second version crossed three lengths with three reading levels
 (beginner / intermediate / expert) behind two sliders. There is no evidence anywhere in their repo
 that anyone used it — no telemetry, no follow-up doc, no critique — and two sliders is a lot of
-interface for a thing nobody measured. If reading level ever matters here, the cheaper form is a
-single global setting rather than a second axis on every summary, so that the zoom axis keeps meaning
-one thing.
+interface for a thing nobody measured. The gists still have one level. Simple is a single plain level
+of its own, not a second axis across the gists, so the zoom axis keeps meaning one thing.
 
-**Anything generated on demand.** Nothing is written when you move the Depth control, and there is
-nothing this panel can spend. That also makes their bug impossible here: their heading tooltips
-fetched summaries for headings the granularity filter had already hidden — real money spent
-generating text nobody could see.
+**Anything generated as you move around.** Nothing is written when you move the Depth control, and
+the Gists spend nothing. The one thing here that spends is Simple, once per article on a press, and
+kept. That still makes their bug impossible: their heading tooltips fetched summaries for headings
+the granularity filter had already hidden — real money spent generating text nobody could see.
 
 **Markdown.** A gist is a plain sentence. Rendering arbitrary model output as HTML is what
 [security.md](security.md) is about.
