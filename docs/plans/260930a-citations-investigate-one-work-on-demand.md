@@ -1,6 +1,6 @@
 # Citations: an *Investigate* button that looks into one cited work, on demand
 
-Status: **planned 2026-09-30; settled after two plan-review rounds; not built.** Feedback report SPIDERYARN-READING2-5Q (`spya-wtm6qx`),
+Status: **shipped to `dev` 2026-09-30, not deployed.** Planned and settled after two plan-review rounds; built in three stages, each reviewed by GPT Sol; the quote guard settled after three narrow checks (§ Review log). Feedback report SPIDERYARN-READING2-5Q (`spya-wtm6qx`),
 from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from Citations mode on
 `9689-full-spya-m43th2`:
 
