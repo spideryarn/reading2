@@ -129,6 +129,14 @@ const REVIEW = {
     "true in a cool kitchen and wrong in a warm one.",
 };
 
+const SECOND_REVIEW = {
+  url: "https://another-baking-review.example/gregs-feeding-schedule",
+  title: "A second look at Greg's feeding schedule",
+  content:
+    "Notes on my sourdough starter, week 3 recommends twice-daily feeding. This second review " +
+    "finds that schedule excessive outside a cool kitchen.",
+};
+
 const BLOG = {
   url: "https://myeclecticbites.com/sourdough-starter-notes",
   title: "Sourdough starter notes",
@@ -143,6 +151,18 @@ const DIRECT_ROW = JSON.stringify([
     relation: "qualifies",
     lean: "leans-against",
     applies: "It accepts the schedule only for cool kitchens.",
+  },
+]);
+
+const TWO_DIRECT_ROWS = JSON.stringify([
+  ...JSON.parse(DIRECT_ROW),
+  {
+    url: SECOND_REVIEW.url,
+    sourceQuote: "finds that schedule excessive outside a cool kitchen",
+    articleReferenceQuote: "Notes on my sourdough starter, week 3",
+    relation: "qualifies",
+    lean: "leans-against",
+    applies: "It says the schedule applies only in a cool kitchen.",
   },
 ]);
 
@@ -190,6 +210,22 @@ describe("two passes, one artefact", () => {
     expect(run.debate.claims.counts.webSearches).toBe(5);
     /* The total is the alarm the log line carries. */
     expect(run.webSearches).toBe(8);
+  });
+
+  it("runs the search-free synthesis as a third debate call over the kept rows", async () => {
+    answers = [
+      answer({ fenced: TWO_DIRECT_ROWS, searches: 3, annotations: [REVIEW, SECOND_REVIEW] }),
+      answer({ fenced: CLAIM_ROW, searches: 5, annotations: [BLOG] }),
+      answer({ fenced: JSON.stringify({ themes: [], key: [] }), searches: 0 }),
+    ];
+
+    const run = await generateDebate({ power: "standard", article });
+
+    expect(calls).toHaveLength(3);
+    expect(calls.every((c) => c.job === "debate")).toBe(true);
+    expect(calls[2]?.body.model).toBe(calls[0]?.body.model);
+    expect(calls[2]?.body.tools).toBeUndefined();
+    expect(run.debate.synthesis).toEqual({ kind: "made", themes: [], key: [] });
   });
 
   /**

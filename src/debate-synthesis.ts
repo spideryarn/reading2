@@ -19,11 +19,13 @@
  * work. The first measured pass grouped an arXiv preprint with its own project
  * page, and a paper with its ACL Anthology copy, as a "theme" (plan §
  * Measured; Sol's F3). So two rows are the same work when their addresses are
- * the same once the obvious aliases are removed (`www.`, a trailing slash, the
- * query, the fragment, arXiv's `abs`/`pdf` and version suffix), **or** their
- * titles are the same once case, punctuation and a trailing site name are
- * removed. It is deliberately conservative: it catches the copies we have seen,
- * and a pair it misses is two pages, which is still true.
+ * the same once the obvious aliases are removed (`www.`, a trailing slash,
+ * tracking parameters, the fragment, arXiv's `abs`/`pdf` and version suffix),
+ * **or** their distinctive titles are the same once case, punctuation and a
+ * genuine trailing site name are removed. Semantic query parameters and ports
+ * stay: either can name a different page, and a false match here silently
+ * discards a theme or key source. It is deliberately conservative: a pair it
+ * misses is still truthfully two pages.
  */
 import { isSpideryarnId } from "./ids.js";
 import {
@@ -52,34 +54,85 @@ export function keyCap(works: number): number {
   return Math.min(MAX_KEY_SOURCES, Math.max(1, Math.floor(works / 3)));
 }
 
-/** An address with its obvious aliases removed. */
-export function canonicalAddress(url: string): string {
+const TRACKING_QUERY_KEYS = new Set(["dclid", "fbclid", "gclid", "mc_cid", "mc_eid", "msclkid"]);
+
+/** An address with only aliases known not to identify its content removed. */
+export function canonicalAddress(url: string): string | null {
+  if (typeof url !== "string" || url.trim() === "") return null;
   try {
     const u = new URL(url);
     const host = u.hostname.toLowerCase().replace(/^www\./, "");
-    const arxiv = host.endsWith("arxiv.org")
-      ? /^\/(?:abs|pdf)\/([^/]+?)(?:v\d+)?(?:\.pdf)?\/?$/.exec(u.pathname)
+    const arxiv = host === "arxiv.org" || host.endsWith(".arxiv.org")
+      ? /^\/(?:abs|pdf)\/(.+?)\/?$/.exec(u.pathname)
       : null;
-    if (arxiv?.[1]) return `arxiv:${arxiv[1]}`;
-    return `${host}${u.pathname.replace(/\/+$/, "")}`;
+    if (arxiv?.[1]) {
+      const id = arxiv[1].replace(/\.pdf$/i, "").replace(/v\d+$/i, "");
+      if (id !== "") return `arxiv:${id}`;
+    }
+    const query = new URLSearchParams(u.search);
+    for (const key of [...query.keys()]) {
+      const lower = key.toLowerCase();
+      if (lower.startsWith("utm_") || TRACKING_QUERY_KEYS.has(lower)) query.delete(key);
+    }
+    query.sort();
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return `${host}${u.port ? `:${u.port}` : ""}${u.pathname.replace(/\/+$/, "")}${suffix}`;
   } catch {
-    return url;
+    return null;
+  }
+}
+
+function normaliseTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function distinctiveTitle(title: string): string | null {
+  const words = title.split(/\s+/u).filter(Boolean);
+  /* Four words and thirty characters: "Active Retrieval Augmented Generation", a
+     paper the first measured pass saw on arXiv and the ACL Anthology, is four.
+     Short generic titles ("Introduction", "Methods") stay out. */
+  return title.length >= 30 && words.length >= 4 ? title : null;
+}
+
+/** Is a final `| ...` clause presentation added by the site, rather than part of the work's title? */
+function isSiteSuffix(suffix: string, url: string | undefined): boolean {
+  const key = normaliseTitle(suffix).replace(/\s+/g, "");
+  if (key === "projectpage") return true;
+  if (!url) return false;
+  try {
+    const labels = new URL(url).hostname.toLowerCase().replace(/^www\./, "").split(".");
+    /* `ACL Anthology` against `aclanthology.org`; a suffix need not repeat the TLD. */
+    const hostName = labels.slice(0, Math.max(1, labels.length - 1)).join("").replace(/[^a-z0-9]/g, "");
+    return key.length >= 4 && hostName === key;
+  } catch {
+    return false;
   }
 }
 
 /**
- * A title with case, punctuation and a trailing ` | Site` removed — or `null`
- * when too short to identify anything, or cut short by the search engine.
+ * A distinctive title with case and punctuation removed — and a trailing
+ * ` | Site` removed only when it names the row's actual site. Short generic
+ * titles are not identities, and neither is one cut short by the search engine.
  */
-export function titleKey(title: string | undefined): string | null {
-  if (!title) return null;
+export function titleKey(title: string | undefined, url?: string): string | null {
+  if (typeof title !== "string" || title.trim() === "") return null;
   if (/(\.\.\.|…)\s*$/.test(title)) return null;
-  const words = title
-    .replace(/\s+\|[^|]*$/, "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-  return words.length >= 12 ? words : null;
+  const siteSuffix = /^(.*?)\s+\|\s*([^|]+)$/.exec(title);
+  const withoutSuffix =
+    siteSuffix?.[1] && siteSuffix[2] && isSiteSuffix(siteSuffix[2], url) ? siteSuffix[1] : title;
+  return distinctiveTitle(normaliseTitle(withoutSuffix));
+}
+
+function addressHost(url: string): string | null {
+  if (typeof url !== "string") return null;
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -89,7 +142,7 @@ export function titleKey(title: string | undefined): string | null {
 export function workIds(rows: readonly SynthesisRow[]): Map<string, number> {
   const work = new Map<string, number>();
   const byAddress = new Map<string, number>();
-  const byTitle = new Map<string, number>();
+  const byTitle = new Map<string, number[]>();
   /* Union–find over at most two dozen rows. */
   const parent: number[] = [];
   const find = (i: number): number => {
@@ -99,14 +152,24 @@ export function workIds(rows: readonly SynthesisRow[]): Map<string, number> {
   };
   rows.forEach((row, i) => {
     parent[i] = i;
-    for (const [key, index] of [
-      [canonicalAddress(row.url), byAddress],
-      [titleKey(row.title), byTitle],
-    ] as const) {
-      if (key === null) continue;
-      const seen = index.get(key);
-      if (seen === undefined) index.set(key, i);
+    const address = canonicalAddress(row.url);
+    if (address !== null) {
+      const seen = byAddress.get(address);
+      if (seen === undefined) byAddress.set(address, i);
       else parent[find(i)] = find(seen);
+    }
+
+    const title = titleKey(row.title, row.url);
+    const host = addressHost(row.url);
+    if (title !== null && host !== null) {
+      const seen = byTitle.get(title) ?? [];
+      /* Two paths on one host can be genuinely different pages with the same
+         headline. Title matching exists for cross-site copies; the address
+         rule above owns aliases within one site. */
+      const copy = seen.find((other) => addressHost(rows[other]?.url ?? "") !== host);
+      if (copy !== undefined) parent[find(i)] = find(copy);
+      seen.push(i);
+      byTitle.set(title, seen);
     }
   });
   rows.forEach((row, i) => {
@@ -215,13 +278,16 @@ export function readStoredSynthesis(debate: {
         : null;
     case "made": {
       if (!Array.isArray(s.themes) || !Array.isArray(s.key)) return { kind: "failed" };
+      const offered = s.themes.length + s.key.length;
       const themes = s.themes.filter(isRecord).map(
         (t): CandidateTheme => ({ id: t.id, label: t.label, gist: t.gist, rowIds: t.rowIds }),
       );
       const key = s.key.filter(isRecord).map(
         (k): CandidateKey => ({ rowId: k.rowId, role: k.role, why: k.why }),
       );
-      return { kind: "made", ...settleSynthesis(themes, key, [...debate.direct.rows, ...debate.claims.rows]) };
+      const settled = settleSynthesis(themes, key, [...debate.direct.rows, ...debate.claims.rows]);
+      if (offered > 0 && settled.themes.length + settled.key.length === 0) return { kind: "failed" };
+      return { kind: "made", ...settled };
     }
     default:
       return null;

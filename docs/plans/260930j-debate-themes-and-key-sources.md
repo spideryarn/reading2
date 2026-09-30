@@ -1,6 +1,6 @@
 # Debate: the themes the sources share, and the key sources
 
-Status: **built; plan reviewed by GPT Sol (build with changes, all P1s taken); code review pending.** Report SPIDERYARN-READING2-6M, from Greg's own
+Status: **built and on `dev`; plan and code reviewed by GPT Sol.** Report SPIDERYARN-READING2-6M, from Greg's own
 account, 2026-09-30.
 
 ## What Greg asked
@@ -66,10 +66,12 @@ kept rows and answers two questions:
 kept row; a theme needs rows from **two different works**; a key source is one per work; roles are
 a closed set; labels and sentences have length caps; theme ids are unique spideryarn ids; extras
 past the caps are dropped. Each check drops one item. **A work** is a conservative identity: two
-rows are one work when their addresses match once the obvious aliases are gone (`www.`, trailing
-slash, query, arXiv `abs`/`pdf`/version) or their titles match once case, punctuation and a
-trailing `| Site` are gone. It catches both copies the first pass grouped; a pair it misses is
-still two pages.
+rows are one work when their addresses match once aliases known not to identify the content are
+gone (`www.`, trailing slash, tracking parameters, fragment, arXiv `abs`/`pdf`/version), or when
+distinctive titles on different hosts match once case, punctuation and a genuine trailing
+`| Site` are gone. Semantic query parameters and ports stay, and two paths on one host are not
+merged by title: a false match would silently drop a theme or key source. It catches both copies
+the first pass grouped; a pair it misses is still two pages.
 
 **Stored on the debate artefact** as `synthesis`, a union with every state named:
 `made` (either list may be empty, but only when the model offered nothing), `too-few` (fewer than
@@ -178,6 +180,36 @@ GPT Sol, read-only, 2026-09-30:
 URL state and the counting rules, and it is a fair call on a 3–6 row list. Kept the filter because
 Greg asked to *highlight* the key sources and themes, and pressing one to see only its sources is
 how a list of six becomes two you can compare; the machinery is small and tested.
+
+## The code review
+
+GPT Sol, `workspace-write`, 2026-09-30:
+[prompt](260930j-debate-themes-code-review-prompt.md) ·
+[scoped diff](260930j-debate-themes-code-review.diff) ·
+[answer](260930j-debate-themes-code-review-sol.md). No P0. It fixed five in place, which I read:
+
+- **P1** the work identity was too loose (it dropped every query parameter and port, stripped any
+  `| suffix`, merged same-host pages with one headline, took `notarxiv.org` for arXiv) → semantic
+  query parameters and ports are kept, only tracking parameters go; a `| suffix` is stripped only
+  when it names the row's own site or says *project page*; title matching is only across hosts.
+- **P1** a stored `made` whose every item failed the checks read as an empty `made` → `failed`.
+- **P2** a non-string stored title threw inside the identity code → it contributes no identity.
+- **P2** tests for the third call's wire (same job and model, no tools), the foot following the
+  thread, the visitor path never reaching the stored reader, the prompt's safeguards.
+- **P3** a comment still said the synthesis could not fail the step.
+
+One change of mine on top: Sol's fix required **five** words before a title could identify a work,
+which lost the FLARE copies the first pass measured ("Active Retrieval Augmented Generation" on
+arXiv and the ACL Anthology is four). Now four words and thirty characters, with a test that went
+red first.
+
+Reported, not fixed, and left for Greg:
+
+- **Two different works with the same distinctive title on two hosts** will be merged. The fix is
+  a stronger identity (DOI, authors, year), which is the bibliographic lookup 5P already deferred.
+- **The panel trusts stored row titles and URLs to be strings** — pre-existing, and wider than
+  this change.
+- **Visitors get no threads**, as § Visitors says.
 
 ## In a browser
 

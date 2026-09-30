@@ -52,6 +52,7 @@ import type {
   DebateCounts,
   DebateLean,
   DebateLosses,
+  DebateSynthesis,
   DirectDebateRow,
   IdentificationLevel,
 } from "../src/types.js";
@@ -1826,7 +1827,7 @@ describe("DebatePanel — threads", () => {
       claims: { rows: [rowA, rowB, rowC], counts: counts() },
       synthesis,
     } as Partial<Debate>);
-  const made = {
+  const made: DebateSynthesis = {
     kind: "made",
     themes: [{ id: "spya-thm002", label: "replication", gist: "Both retest it.", rowIds: [rowA.id, rowB.id] }],
     key: [{ rowId: rowC.id, role: "dissents", why: "It takes the other side." }],
@@ -1878,10 +1879,13 @@ describe("DebatePanel — threads", () => {
   it("offers the key sources first, then each theme, each with its count", () => {
     paint(owner({ debate: withSynthesis(made) }), "named", "claim");
     const buttons = [...host.querySelectorAll(".dbt-thread")];
+    expect(host.querySelector(".dbt-thread-list")?.getAttribute("role")).toBe("group");
+    expect(host.querySelector(".dbt-thread-list")?.getAttribute("aria-label")).toMatch(/Show only/);
     expect(buttons.map((b) => b.querySelector(".dbt-thread-label")?.textContent)).toEqual([
       "Key sources1",
       "replication2",
     ]);
+    expect(buttons.every((b) => b.getAttribute("type") === "button")).toBe(true);
     expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
   });
 
@@ -1906,6 +1910,24 @@ describe("DebatePanel — threads", () => {
     expect(threaded).toEqual([null]);
   });
 
+  it("uses the thread-filtered rows for the foot's page count too", () => {
+    const debate = artefact({
+      direct: {
+        rows: [],
+        counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }),
+      },
+      claims: {
+        rows: [rowA, rowB, rowC],
+        counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
+      },
+      synthesis: made,
+    });
+    paint(owner({ debate }), "named", "claim", new Map(), { thread: "spya-thm002" });
+    expect(text()).toContain(
+      "The search for answers to what it claims returned evidence from 3 pages; 2 contribute to the rows shown.",
+    );
+  });
+
   it("hands a press back as the thread's id, and a second press as a clear", () => {
     paint(owner({ debate: withSynthesis(made) }), "named", "claim");
     act(() => (host.querySelectorAll(".dbt-thread")[0] as HTMLButtonElement).click());
@@ -1920,6 +1942,23 @@ describe("DebatePanel — threads", () => {
     paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "spya-gone00" });
     expect(titles()).toEqual(["One", "Two", "Three"]);
     expect(host.querySelector(".dbt-thread-showing")).toBeNull();
+  });
+
+  it("never reads synthesis on a visitor's PublicDebate", () => {
+    const shared = {
+      searchedAt: "2026-09-05T10:00:00.000Z",
+      direct: { rows: [], sourceNotPublishable: 0 },
+      claims: { rows: [rowA, rowB, rowC], sourceNotPublishable: 0 },
+    } as unknown as PublicDebate;
+    Object.defineProperty(shared, "synthesis", {
+      get: () => {
+        throw new Error("the owner-only synthesis was read");
+      },
+    });
+    expect(() => paintShared(shared, "claim")).not.toThrow();
+    expect(host.querySelector(".dbt-threads")).toBeNull();
+    expect(host.querySelector(".dbt-key-line")).toBeNull();
+    expect(titles()).toEqual(["One", "Two", "Three"]);
   });
 
   it("disables a thread the relevance bar has emptied", () => {

@@ -1889,7 +1889,9 @@ export async function generateDebate(opts: {
   );
 
   /* **The third call, over what the two kept** — themes and key sources
-     (src/debate-themes.ts). It cannot fail the step: see `synthesiseDebate`. */
+     (src/debate-themes.ts). An unusable answer or provider refusal keeps the
+     rows with a named `failed` synthesis; operational errors still fail the
+     step, as `synthesiseDebate` documents. */
   opts.onProgress?.("Finding the threads the sources share");
   const synthesis = await synthesiseDebate({
     rows: [...directRows.rows, ...claimRows.rows],

@@ -32,7 +32,6 @@ import { createParser, debounce } from "nuqs";
 import type { DebateBears, IdentificationLevel, TrajectoryDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
-import { KEY_THREAD } from "./debate-threads.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
@@ -1322,6 +1321,9 @@ export const bearsParam = createParser<DebateBears>({
  * filter* by `selectedThread` (debate-threads.ts). `replace`, like `?bears=`:
  * it narrows a list rather than moving to a new view.
  */
+/** `?debatethread=key` — the key sources. A theme is its own id, which never spells this. Here rather than in debate-threads.ts so this eager file does not pull that one into every reader's first download (tests/eager-client-graph.test.ts). */
+export const KEY_THREAD = "key";
+
 export const debateThreadParam = createParser<string>({
   parse: (v) => (v === KEY_THREAD || isSpideryarnId(v) ? v : null),
   serialize: (v) => v,

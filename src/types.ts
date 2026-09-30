@@ -5256,8 +5256,9 @@ export function isDebateKeyRole(value: unknown): value is DebateKeyRole {
 
 /**
  * **One thread several sources pick up.** `rowIds` are ids of rows in this same
- * artefact, and at least two of them are on **different pages** — a theme one
- * page raises twice is that page's point, not something people keep saying.
+ * artefact, and at least two of them are from **different works** — two copies
+ * of one paper do not turn that paper's point into something several sources
+ * keep saying.
  */
 export interface DebateTheme {
   /**

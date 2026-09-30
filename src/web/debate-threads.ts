@@ -14,9 +14,11 @@
  * than offered as a button that empties the list.
  */
 import type { DebateKeyRole, DebateKeySource, DebateSynthesis } from "../types.js";
+/* The constant lives in params.ts, the eager file, so that file need not
+   import this one (tests/eager-client-graph.test.ts). */
+import { KEY_THREAD } from "./params.js";
 
-/** `?debatethread=key` — the key sources. A theme is its own id, which never spells this. */
-export const KEY_THREAD = "key";
+export { KEY_THREAD };
 
 export interface Thread {
   /** What `?debatethread=` holds. */
