@@ -12,6 +12,11 @@
  * npx tsx evals/plain-words/answers.ts pairs --a before --b after
  * ```
  *
+ * `--keep-unfinished` on `generate` keeps a `term` answer that *Check the web*
+ * would discard (a truncated one, say) instead of failing the arm, and `report`
+ * counts them. For a length comparison, where the answer cut off at the token
+ * cap is the one that matters most — docs/plans/260930g-briefer-chat-and-explain-answers.md.
+ *
  * **The calls are production's**: `explainStream` and `converse` with
  * `kind: "chat"` and tools on, exactly as the routes make them. Web search stays
  * on because it is part of what an answer is; `report` says how often it was
@@ -105,7 +110,7 @@ function locate(blocks: { id: string; text: string }[], term: string): { blockId
   throw new Error(`"${term}" appears in no block — pick another case`);
 }
 
-async function generate(arm: string): Promise<void> {
+async function generate(arm: string, keepUnfinished: boolean): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
@@ -140,7 +145,7 @@ async function generate(arm: string): Promise<void> {
         const { blockId, quote, sentence } = locate(article.blocks, term);
         jobs.push(
           explainOnce(article.meta, article.blocks, blockId, quote).then((r) => {
-            if (!CHECK_THE_WEB_KEEPS.has(r.ending)) throw new Error(`${slug} "${quote}": Check the web would discard this answer (ending ${r.ending})`);
+            if (!keepUnfinished && !CHECK_THE_WEB_KEEPS.has(r.ending)) throw new Error(`${slug} "${quote}": Check the web would discard this answer (ending ${r.ending})`);
             return { slug, term, kind: "term" as const, asked: quote, ...r };
           }),
           explainOnce(article.meta, article.blocks, blockId, sentence).then((r) => ({ slug, term, kind: "sentence" as const, asked: sentence, ...r })),
@@ -198,11 +203,13 @@ function report(): void {
   for (const arm of fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()).sort()) {
     const { answers } = readArm(arm);
     console.log(`\n== ${arm} (${answers.length} answers)`);
-    console.log("kind        n  words/answer  searches/answer  hard-share  hard types per 100 words (not counting the term)");
+    console.log("kind        n  words/answer  unfinished  searches/answer  hard-share  hard types per 100 words (not counting the term)");
     for (const kind of ["term", "sentence", "chat"] as const) {
       const as = answers.filter((a) => a.kind === kind);
       const h = hardShare(as.map((a) => prose(a.text)));
       const searches = as.reduce((n, a) => n + a.searches, 0) / Math.max(as.length, 1);
+      /* Explain answers only: chat records no ending, and arms before `--keep-unfinished` never kept one. */
+      const unfinished = as.filter((a) => a.ending !== undefined && !CHECK_THE_WEB_KEEPS.has(a.ending)).length;
       let types = 0;
       let words = 0;
       for (const a of as) {
@@ -212,7 +219,7 @@ function report(): void {
         types += new Set(ws.map((w) => w.toLowerCase()).filter((w) => !own.has(w) && !isCommon(w))).size;
       }
       console.log(
-        `${kind.padEnd(9)} ${String(as.length).padStart(3)}  ${(h.words / Math.max(as.length, 1)).toFixed(0).padStart(12)}  ${searches.toFixed(1).padStart(15)}  ${`${(h.share * 100).toFixed(1)}%`.padStart(10)}  ${((types / Math.max(words, 1)) * 100).toFixed(2).padStart(8)}   ${h.top.slice(0, 10).join(" ")}`,
+        `${kind.padEnd(9)} ${String(as.length).padStart(3)}  ${(h.words / Math.max(as.length, 1)).toFixed(0).padStart(12)}  ${String(unfinished).padStart(10)}  ${searches.toFixed(1).padStart(15)}  ${`${(h.share * 100).toFixed(1)}%`.padStart(10)}  ${((types / Math.max(words, 1)) * 100).toFixed(2).padStart(8)}   ${h.top.slice(0, 10).join(" ")}`,
       );
     }
   }
@@ -264,7 +271,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (cmd === "generate") {
     const arm = flag("--arm");
     if (!arm || !/^(before|after)(-\d+)?$/.test(arm)) throw new Error("generate needs --arm before|after[-N]");
-    await generate(arm);
+    await generate(arm, rest.includes("--keep-unfinished"));
   } else if (cmd === "report") {
     report();
   } else if (cmd === "pairs") {
@@ -273,6 +280,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (!a || !b) throw new Error("pairs needs --a <arm> --b <arm>");
     pairs(a, b);
   } else {
-    throw new Error("usage: answers.ts generate --arm <arm> | report | pairs --a <arm> --b <arm>");
+    throw new Error("usage: answers.ts generate --arm <arm> [--keep-unfinished] | report | pairs --a <arm> --b <arm>");
   }
 }
