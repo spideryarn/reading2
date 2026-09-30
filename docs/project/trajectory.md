@@ -229,6 +229,15 @@ quotes both whole):
   is a button: its tooltip says *Stop k of N · about P% through the article*, and a screen reader
   still hears the count on every step. With the words gone, the depth buttons share its row where
   the band is wide enough, and wrap under it where it is not.
+
+**The (i) shares the controls' row, and ‹ › name their keys** — Greg, 2026-09-30,
+SPIDERYARN-READING2-73 and -74 ([plan 260930h](../plans/260930h-trajectory-info-button-on-the-controls-row-and-shortcut-keys-in-tooltips.md)).
+In the 400px band the (i) had been overflowing the head by about 13px, onto a row of its own. The
+head's gaps are tighter now, and the (i) travels in one group with the depth buttons, so a head too
+narrow for one row breaks before the depths and the (i) is never alone on a row. The arrows, and the
+door's *Next stop ›*, have hover and focus cards that say what they do and name ← or →; a finger's
+tap still steps at once. The rule behind that is
+[tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
 - **Where am I.** Each row's position mark is also a button, whose tooltip is a small fisheye of the
   article's outline: the top-level sections, and down the path to this stop's section with its near
   neighbours, the section you are in marked. It is one component (`WhereCard` over `whereRows` in

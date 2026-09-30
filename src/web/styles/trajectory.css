@@ -16,8 +16,23 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem 0.7rem;
+  /* 0.4rem across, not 0.7rem: with the depth buttons' padding below, the
+     ~24px that lets a five-stop route's stepper, depths and (i) share one row
+     of the 377px head (SPIDERYARN-READING2-73, plan 260930h). */
+  gap: 0.4rem;
   width: 100%;
+}
+/* **The depth buttons and the (i), one group that does not wrap.** A head
+   too narrow for one row — a long route's sparkline is up to 72px — breaks
+   between the stepper and this group, so the (i) is always on a row of
+   controls and never alone on its own (SPIDERYARN-READING2-73). `flex: 1` so
+   the group fills what is left of its row and the (i)'s `margin-left: auto`
+   keeps it at the right edge, where it was. */
+.traj-head-end {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .traj-stepper { display: flex; align-items: center; gap: 0.2rem; }
@@ -75,7 +90,7 @@
   border: 0;
 }
 .traj-depth {
-  padding: 0 0.6rem;
+  padding: 0 0.45rem;
   border-radius: 0;
   font-size: 0.85rem;
 }
@@ -99,7 +114,8 @@
    pushed to its right edge, whose tooltip holds the two sentences that were
    the foot (SPIDERYARN-READING2-52). Quiet, like Quotes' `.quotes-why`: it
    is a footnote, not a control the reader needs to walk the route. The
-   house height, so it sits level with the stepper's row when the head wraps. */
+   house height, so it sits level with the stepper's row. It shares
+   `.traj-head-end` with the depth buttons, so it wraps only with them. */
 .traj-about {
   display: inline-flex;
   align-items: center;
