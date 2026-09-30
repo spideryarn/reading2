@@ -25,8 +25,8 @@ reader, not only admins.
 - What the confirm used to say is now a faint note under the **Sketch** (*about $0.20,
   about two minutes*), **Debate** (*up to two calls, $0.20–0.40 on a short article*) and
   **Trajectory** (*needs Quotes first*) rows — visible before pressing, no extra click.
-- The glossary's button is now the plain *Run it again*, with a note: *Adds more terms to the list;
-  if the article or your reader profile has changed, writes a new one*. It used to say *Find more
+- The glossary's button is now the plain *Run it again*, with a note: *Adds more terms to an
+  up-to-date list; otherwise writes a new one*. It used to say *Find more
   terms* every time, but a run over a stale glossary rewrites it (found by GPT Sol; the old confirm
   made the same wrong promise).
 - *Retry* now shows *Starting…* straight away, so a double click sends one retry — on every mode

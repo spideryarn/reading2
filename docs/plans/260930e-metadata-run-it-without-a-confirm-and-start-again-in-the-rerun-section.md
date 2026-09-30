@@ -84,9 +84,12 @@ reader's, so Greg's request does not reach it.
   rewrites it otherwise. The first build keyed *Find more terms* on `done`; the code review showed
   `done` tracks the model and not the profile, so that guessed wrong both ways. Built instead: the
   glossary gets the plain *Run it* / *Run it again* like every mode, and a note — *Adds more terms
-  to the list; if the article or your reader profile has changed, writes a new one* — that says both
-  outcomes rather than predicting one. The old confirm and label promised the append every time, so
-  this is a pre-existing gap the removal surfaced, not one it opened.
+  to an up-to-date list; otherwise writes a new one* — covering every branch of `existingFor`
+  (no prior list, and a changed source, prompt version or profile; the second code review listed
+  them) rather than predicting one. The review's wording named all four and was too long to read
+  as a faint note; *up-to-date* carries them. The old confirm
+  and label promised the append every time, so this is a pre-existing gap the removal surfaced, not
+  one it opened.
 - **Double press on Run** (code review, by extension of its Retry finding). Two click events can
   reach the handler before React commits `starting`. A ref latch in `RerunRow` holds for the POST's
   round trip. Not in `useStepJob.start`: other panels call it twice on purpose, and two suites went
@@ -144,7 +147,19 @@ rerun card, before the first mode row, and still asks before it posts.
   fixes): a synchronous Retry latch in `useStepJob` and its tests (kept); the glossary label still
   mispredicting (reworked, above); ResetArticle's Retry still fire-and-forget (P3, deferred below).
   The work after it went back for a second look —
-  [260930e-code-review-2-sol.md](260930e-code-review-2-sol.md).
+  [260930e-code-review-2-sol.md](260930e-code-review-2-sol.md), EXIT=0: ready after its fixes (the
+  glossary note missed the no-list and prompt-change cases; two comments credited `starting` where
+  the ref does the work; a test for the post-answer, pre-poll gap). No latch defect found.
+
+## Checks
+
+- Browser, twice (Sonnet subagent, Playwright, own dev server): one-press run with no confirm;
+  notes under the four rows; Whole article first in the card with its confirm intact; experimental
+  off hides it; at 390px every row's button stays on the name's line and nothing overflows.
+  [260930e-shot2-390.png](260930e-shot2-390.png), [260930e-shot2-1280.png](260930e-shot2-1280.png),
+  [260930e-shot2-reset-confirm-1280.png](260930e-shot2-reset-confirm-1280.png).
+- Both double-press tests went red without their latch (two posts, two retries) before going green.
+- `npx vitest run .test.tsx`: 257 files, 4596 tests green; typecheck exit 0.
 
 ## Deferred
 

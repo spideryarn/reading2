@@ -819,14 +819,15 @@ only cost is ours, there is no per-reader spend cap
 ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)), and a second
 click never bounded that anyway: a script calls the route. So it went for every reader. **What the
 confirm said still has to be said somewhere**, and each piece has a home: the glossary's *appends* is
-a note under its name — it adds terms when `existingFor` accepts the old list and writes a new one
-when the article or the reader profile changed, and the page cannot know which, so the note says
-both and the button is the plain *Run it again*; the sketch's price and wait, debate's **up to two
-separately metered calls** at $0.20–0.40 on a short article, and Trajectory's *needs Quotes first*
-are the same kind of note under those rows' names. Each note is also its button's accessible
-description. A Retry is one press too, and holds *Starting…* across its round trip so a double
-click sends one. The whole-article reset, the first row of the same card, keeps its
-confirm — it removes the extras and can move comments, which is the reader's to agree to.
+a note under its name — it adds terms when `existingFor` accepts a matching old list and writes a
+new one when there is none, or when the article, the Glossary prompt or the reader profile changed.
+The page cannot know which, so the note says both and the button is the plain *Run it again*; the
+sketch's price and wait, debate's **up to two separately metered calls** at $0.20–0.40 on a short
+article, and Trajectory's *needs Quotes first* are the same kind of note under those rows' names.
+Each note is also its button's accessible description. A Retry is one press too, and holds
+*Starting…* across its round trip so a double click sends one. The whole-article reset, the first
+row of the same card, keeps its confirm — it removes the extras and can move comments, which is the
+reader's to agree to.
 
 ### A reader can start an article again, and have its modes made again after it
 

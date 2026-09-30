@@ -391,10 +391,10 @@ describe("the Re-run AI processing section", () => {
   });
 
   /**
-   * **With the confirm gone, nothing but `starting` stands between a double
-   * click and two paid runs.** `start` sets it before its first `await`, and
-   * `JobProgress` draws a status in place of the button while it is set — so
-   * across the whole round trip there is no button to land on.
+   * **With the confirm gone, a synchronous ref closes the gap before React can
+   * commit `starting`.** After that commit, `JobProgress` draws a status in
+   * place of the button until polling carries the returned job — so there is
+   * no second button after the POST answers either.
    */
   it("posts once however soon the second press comes", async () => {
     holdPost = true;
@@ -417,6 +417,11 @@ describe("the Re-run AI processing section", () => {
 
     await act(async () => releasePost?.());
     await settle();
+    expect(row("timeline")?.textContent).toContain("Starting");
+    expect(
+      button("timeline", "Run it again"),
+      "the button returned after the POST but before the job appeared in polling",
+    ).toBeUndefined();
     expect(posts).toHaveLength(1);
   });
 
@@ -431,8 +436,9 @@ describe("the Re-run AI processing section", () => {
   it("labels the glossary like any mode and says it may add or rewrite", async () => {
     await open();
     expect(button("glossary", "Find more terms")).toBeUndefined();
-    expect(row("glossary")?.textContent).toContain("Adds more terms to the list");
-    expect(row("glossary")?.textContent).toContain("writes a new one");
+    expect(row("glossary")?.textContent).toContain(
+      "Adds more terms to an up-to-date list; otherwise writes a new one",
+    );
     await press(button("glossary", "Run it again"));
     expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
   });

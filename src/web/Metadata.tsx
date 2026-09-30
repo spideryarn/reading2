@@ -1411,9 +1411,10 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * that every press went through; Greg asked for the confirm to go (below, at
  * `RerunRow`). The glossary's says **both** outcomes: a run appends when
  * `existingFor` (src/glossary.ts) accepts the old list — same source, prompt
- * version and reader profile — and rewrites it otherwise, and nothing on this
- * page knows which in advance (GPT Sol's code review). The old confirm, and the
- * *Find more terms* label, promised the append every time.
+ * version and reader profile — and writes a new list when there is no old one
+ * or any of those three differ. Nothing on this page knows which in advance
+ * (GPT Sol's two code reviews). The old confirm, and the *Find more terms*
+ * label, promised the append every time.
  *
  * The Sketch's figures are `SKETCH_PRICE` and `SKETCH_WAIT` from
  * ./sketch-cost.ts, so this page and the Sketch panel cannot name two different
@@ -1434,7 +1435,11 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  */
 const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
   glossary:
-    "Adds more terms to the list; if the article or your reader profile has changed, writes a new one",
+    /* *Up to date* is doing the work: `existingFor` refuses the old list when
+       there is none, or the source, the prompt version or the reader profile
+       differs — GPT Sol's second review listed the branches, and a note naming
+       all four was too long to be read as a note. */
+    "Adds more terms to an up-to-date list; otherwise writes a new one",
   sketch: `${SKETCH_PRICE}, ${SKETCH_WAIT}`,
   debate: "Up to two calls: $0.20–0.40 on a short article, more on a long one",
   trajectory: "Needs Quotes first; without them it stops before any model call",
@@ -1468,11 +1473,11 @@ const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * deliberately not built — docs/project/ai-gateway.md § What stops a reader
  * spending our money.
  *
- * **A double click still posts once.** `start` sets `starting` before its
- * first `await`, and `JobProgress` draws a status instead of the button while
- * `starting` is true and the job band after — so the second click has no button
- * to land on. The Retry is the same shape: the failure clears as the new job
- * appears.
+ * **A double click still posts once.** The synchronous `pressing` ref below
+ * closes the gap before React commits; `start` then keeps `starting` true from
+ * the POST through the poll that first carries the job, and `JobProgress` draws
+ * a status instead of the button throughout. Retry has the same two layers in
+ * `useStepJob`: a ref before the commit, then `starting` until its job appears.
  *
  * ## Everything after the press is `JobProgress`
  *
