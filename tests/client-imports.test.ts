@@ -41,6 +41,11 @@ const WEB = path.join(ROOT, "src", "web");
  */
 const SHARED = new Set([
   "types.js", // the shapes both sides speak in
+  /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
+     the server applies to the model's answer and the panel applies again to
+     the stored one, so the two cannot drift. Imports `types.js` and `ids.js`
+     and nothing else. See src/debate-synthesis.ts and plan 260930j. */
+  "debate-synthesis.js",
   "ids.js", // minting and validating block ids
   "urls.js", // the http(s) allowlist, used by the server and the panel
   "reading-time.js",

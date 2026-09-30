@@ -1583,6 +1583,8 @@ function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): Re
     relevance: null,
     onRelevance: noop,
     articleYear: null,
+    thread: null,
+    onThread: noop,
   });
 }
 

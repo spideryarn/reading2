@@ -32,6 +32,7 @@ import { createParser, debounce } from "nuqs";
 import type { DebateBears, IdentificationLevel, TrajectoryDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
+import { KEY_THREAD } from "./debate-threads.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
@@ -1307,6 +1308,22 @@ void _everyBearsListed;
 
 export const bearsParam = createParser<DebateBears>({
   parse: (v) => (DEBATE_BEARS_WORDS.includes(v as DebateBears) ? (v as DebateBears) : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
+
+/**
+ * **Which of Debate's threads narrows the list** — `?debatethread=<theme id>` or
+ * `?debatethread=key` for the key sources (plan 260930j, SPIDERYARN-READING2-6M).
+ *
+ * Not `?thread=`, which is the open conversation and survives a mode switch
+ * like every parameter. A theme id is a `mintId`, so anything that is neither
+ * that shape nor `key` parses to `null`. A well-formed id this debate does not
+ * have — a link from before a re-run — gets through here and is read as *no
+ * filter* by `selectedThread` (debate-threads.ts). `replace`, like `?bears=`:
+ * it narrows a list rather than moving to a new view.
+ */
+export const debateThreadParam = createParser<string>({
+  parse: (v) => (v === KEY_THREAD || isSpideryarnId(v) ? v : null),
   serialize: (v) => v,
 }).withOptions({ history: "replace" });
 

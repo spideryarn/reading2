@@ -594,3 +594,126 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   padding: 0.45rem 0.7rem;
   border-top: 1px solid var(--rule);
 }
+
+/* ---------------------------------------------------------------- threads --
+   **The themes the sources share, and the key sources** — plan 260930j
+   (SPIDERYARN-READING2-6M). A box above the rows, inside the scroller: it is
+   a reading of the list, so it scrolls with it rather than pinning over it
+   like the bars do. Each thread is a toggle in the order bar's register
+   (`.gloss-sort-btn`: transparent until pressed, `--surface-raised` and a rule
+   when on), made taller because a theme carries its sentence under its label. */
+.dbt-threads {
+  margin: 0.2rem 0 0.4rem;
+  padding: 0.4rem 0.5rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+}
+.dbt-threads-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.3rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dbt-thread-list { display: flex; flex-direction: column; gap: 0.15rem; }
+.dbt-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .dbt-thread:hover:not(:disabled) { background: var(--surface-raised); }
+}
+.dbt-thread:active:not(:disabled) { background: var(--surface-raised); }
+.dbt-thread.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+}
+.dbt-thread:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.dbt-thread:disabled { cursor: default; opacity: 0.55; }
+.dbt-thread-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.dbt-thread.on .dbt-thread-label { color: var(--highlight-ink); }
+.dbt-thread-count {
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* The theme's sentence: two lines, then an ellipsis, until it is pressed —
+   the box must not push the first row off a phone screen. */
+.dbt-thread-gist {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.dbt-thread.on .dbt-thread-gist { display: block; -webkit-line-clamp: unset; line-clamp: none; }
+.dbt-thread-showing {
+  margin: 0.35rem 0.4rem 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+.dbt-thread-all {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--highlight-ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.dbt-key-star { flex: none; color: var(--highlight-ink); }
+/* Where the box would be when the call failed: one quiet line, the
+   `.dbt-frame` register, so it reads as provenance rather than an error. */
+.dbt-thread-failed {
+  margin: 0.2rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+
+/* **A key row says so above its title.** One line in the AI line's register,
+   the reason after it in the row's quieter ink. */
+.dbt-key-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.4rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.dbt-key-label {
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dbt-key-why { flex-basis: 100%; color: var(--ink-soft); }

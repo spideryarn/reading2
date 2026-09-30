@@ -152,6 +152,7 @@ import type {
   DebateLean,
   DebateLosses,
   DebateRelation,
+  DebateSynthesis,
   DirectDebateRow,
   IdentificationSignal,
   Meta,
@@ -171,6 +172,15 @@ import { anyLost, distinctSources, isDebateBears, isDebateDocument } from "./typ
 import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
 import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
 import { plainWords } from "./plain-words.js";
+import { log } from "./log.js";
+import {
+  readSynthesisAnswer,
+  SYNTHESIS_ANSWER_TOKENS,
+  SYNTHESIS_MIN_ROWS,
+  THEMES_SYSTEM,
+  themesPrompt,
+} from "./debate-themes.js";
+import { keyCap, workIds } from "./debate-synthesis.js";
 
 export { anyLost, distinctSources, isDebateDocument };
 export type {
@@ -193,8 +203,10 @@ export type {
  * `debate/2`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  *
  * `debate/3`, 2026-09-29: each row also says how much the passage `bears` on its target — `directly`, `partly` or `loosely` — so a reader can order the list by relevance (SPIDERYARN-READING2-5P; docs/plans/260929h-debate-mode-clearer-sources-and-orders.md, stage 2). The stage also asked for the work's `title`, `authors` and `year`, checked against the page's extract, and dropped them before shipping: measured, they verified on 1 row of 11, because the search engine's extract is a passage from the middle of the page and the page's head is almost never in it (the plan's § The measurement, as it runs).
+ *
+ * `debate/4`, 2026-09-30: a third, search-free call reads the kept rows and stores the themes they share and the key sources as `synthesis` (SPIDERYARN-READING2-6M; docs/plans/260930j-debate-themes-and-key-sources.md). The two passes' prompts are unchanged, so a row means what it meant under `debate/3`.
  */
-export const PROMPT_VERSION = "debate/3";
+export const PROMPT_VERSION = "debate/4";
 
 /* ------------------------------------------------------------ the four caps --
    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
@@ -1876,6 +1888,15 @@ export async function generateDebate(opts: {
     claims.webSearches,
   );
 
+  /* **The third call, over what the two kept** — themes and key sources
+     (src/debate-themes.ts). It cannot fail the step: see `synthesiseDebate`. */
+  opts.onProgress?.("Finding the threads the sources share");
+  const synthesis = await synthesiseDebate({
+    rows: [...directRows.rows, ...claimRows.rows],
+    model,
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  });
+
   const elapsedMs = Date.now() - started;
   return {
     debate: {
@@ -1887,11 +1908,86 @@ export async function generateDebate(opts: {
       direct: directRows,
       claims: claimRows,
       elapsedMs,
+      synthesis,
     },
     model,
     webSearches: direct.webSearches + claims.webSearches,
     elapsedMs,
   };
+}
+
+/**
+ * **The themes the kept rows share, and the key sources** — one search-free
+ * call (src/debate-themes.ts; plan 260930j).
+ *
+ * **Its failure does not fail the step**, and that is the one deliberate
+ * exception to this file's rule that every failure is total. The rule exists
+ * because a half-artefact from the *searches* would state something false —
+ * *"nobody replied"* over a pass that broke. Nothing like that is possible
+ * here: the rows are complete and verified before this runs, and a missing
+ * synthesis is stored as `{kind: "failed"}`, a state the panel names. Throwing
+ * it all away would spend two web searches to protect a label.
+ *
+ * **Only the provider's refusal is degraded to `failed`.** An abort (the
+ * caller's cancel, or the step's 740 s clock) propagates, as it does from
+ * either pass; so does anything else thrown — a transport error, a missing
+ * key, a bug — because catching those would hide a broken deployment behind a
+ * missing box (GPT Sol's plan review, F5). They fail the step, as they would
+ * from a pass.
+ */
+const synthesisLog = log("pipeline").child({ step: "debate" });
+
+export async function synthesiseDebate(opts: {
+  rows: readonly (DirectDebateRow | ClaimDebateRow)[];
+  model: string;
+  signal?: AbortSignal;
+}): Promise<DebateSynthesis> {
+  const { rows } = opts;
+  if (rows.length < SYNTHESIS_MIN_ROWS) return { kind: "too-few", rows: rows.length };
+  let call: JsonCall;
+  try {
+    call = await openRouterJson(
+      "debate",
+      {
+        model: opts.model,
+        max_tokens: SYNTHESIS_ANSWER_TOKENS,
+        messages: [
+          { role: "system", content: THEMES_SYSTEM },
+          /* The cap is counted in works, not rows — two rows of one paper are
+             one candidate (src/debate-synthesis.ts § What a "work" is). */
+          { role: "user", content: themesPrompt(rows, keyCap(new Set(workIds(rows).values()).size)) },
+        ],
+      },
+      ...(opts.signal ? [{ signal: opts.signal }] : []),
+    );
+  } catch (err) {
+    if (!(err instanceof ProviderRefused) || wasAborted(err, opts.signal)) throw err;
+    /* The status only — `ProviderRefused` carries no body (the file header §
+       Logging). */
+    synthesisLog.warn({ status: err.status }, "debate synthesis call was refused");
+    return { kind: "failed" };
+  }
+  const choice = (call.json as ChatAnswer | null)?.choices?.[0];
+  /* The same allowlist the passes use: only a clean stop is an answer. */
+  if (choice?.finish_reason !== "stop") {
+    synthesisLog.warn(
+      { finish: choice?.finish_reason ?? null },
+      "debate synthesis did not finish cleanly",
+    );
+    return { kind: "failed" };
+  }
+  const content: unknown = choice.message?.content;
+  const body = typeof content === "string" ? lastClosedFence(content) : null;
+  let raw: unknown = null;
+  try {
+    raw = body === null ? null : JSON.parse(body);
+  } catch {
+    /* Never rethrown: the error would carry a stranger's page. */
+    raw = null;
+  }
+  const read = readSynthesisAnswer(raw, rows);
+  if (read.kind === "failed") synthesisLog.warn("debate synthesis answer was not usable");
+  return read;
 }
 
 /**

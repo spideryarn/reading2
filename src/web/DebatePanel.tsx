@@ -111,6 +111,7 @@ import {
   Globe,
   type LucideIcon,
   RotateCcw,
+  Star,
   ThumbsDown,
   ThumbsUp,
   TriangleAlert,
@@ -127,6 +128,7 @@ import {
   DEBATE_CLAIMS_NONE_SHARED,
   DEBATE_RESPONSES_NONE_SHARED,
   DEBATE_UNDATED,
+  DEBATE_THREADS_FAILED,
   DEBATE_UNJUDGED,
   debateClaimsUnverified,
   debateResponsesUnverified,
@@ -138,6 +140,7 @@ import {
   type Debate,
   type DebateBears,
   type DebateCounts,
+  type DebateKeySource,
   type DebateLean,
   type IdentificationLevel,
   distinctSources,
@@ -166,6 +169,16 @@ import {
   readWorkTitle,
   visibleClaims,
 } from "./debate-order.js";
+import {
+  inThread,
+  KEY_ROLE_LABEL,
+  keyByRow,
+  selectedThread,
+  shownInThread,
+  type Thread,
+  threadsOf,
+} from "./debate-threads.js";
+import { readStoredSynthesis } from "../debate-synthesis.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -903,6 +916,13 @@ interface Props {
    * carry it, so a visitor gets none.
    */
   articleYear: number | null;
+  /**
+   * Which thread narrows the list — `?debatethread=`, a theme id or `key`, or
+   * `null` for none (debate-threads.ts). Owner-only in effect: a visitor's
+   * debate carries no synthesis, so there is nothing for it to name.
+   */
+  thread: string | null;
+  onThread(thread: string | null): void;
 }
 
 export function DebatePanel({
@@ -916,6 +936,8 @@ export function DebatePanel({
   relevance: chosenRelevance,
   onRelevance,
   articleYear,
+  thread: threadParam,
+  onThread,
 }: Props) {
   useRenderCount("DebatePanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
@@ -973,25 +995,51 @@ export function DebatePanel({
         : { visible: [...claimRows], hiddenCount: 0, unscoredCount: 0 },
     [relevant, claimRows, relevance],
   );
-  /* **The final visible list**, each search's rows through its own bar. The
-     head count, the lead's placement and the foot's page counts all read this
-     (the plan's F10). */
-  const rows = useMemo(
+  /**
+   * **The threads, and the one the address names** — plan 260930j. The owner's
+   * stored synthesis read through `readStoredSynthesis`, never directly: JSONB
+   * comes back unchecked. A visitor's debate has none (the public DTO does not
+   * carry it), so for them this is empty and the filter is a no-op.
+   *
+   * **The third narrowing, after both bars.** Each button's count is its rows
+   * the bars left (`shownInThread`), and the list below is those rows only.
+   */
+  const synthesis = useMemo(
+    () => (debate !== null && !isShared(debate) ? readStoredSynthesis(debate) : null),
+    [debate],
+  );
+  const threads = useMemo(() => threadsOf(synthesis), [synthesis]);
+  const keyRows = useMemo(() => keyByRow(synthesis), [synthesis]);
+  const thread = selectedThread(threads, threadParam);
+  const barredVisible = useMemo(
     (): DebateRow[] => [...barred.visible, ...barredClaims.visible],
     [barred, barredClaims],
   );
+  const threadDirect = useMemo(() => inThread(barred.visible, thread), [barred, thread]);
+  const threadClaims = useMemo(() => inThread(barredClaims.visible, thread), [barredClaims, thread]);
+
+  /* **The final visible list**, each search's rows through its own bar and
+     then the thread. The head count, the lead's placement and the foot's page
+     counts all read this (the plan's F10) — `sourcesNote` counts the pages
+     behind *the rows shown*, and a thread decides which those are as much as a
+     bar does (GPT Sol's review of 260930j, F6). */
+  const rows = useMemo(
+    (): DebateRow[] => [...threadDirect, ...threadClaims],
+    [threadDirect, threadClaims],
+  );
   const groups = useMemo(
-    () => orderDebateRows(barred.visible, barredClaims.visible, order, blockOrder, articleYear),
-    [barred, barredClaims, order, blockOrder, articleYear],
+    () => orderDebateRows(threadDirect, threadClaims, order, blockOrder, articleYear),
+    [threadDirect, threadClaims, order, blockOrder, articleYear],
   );
 
   /* The two kinds of sentence that are not rows: what came back with nothing
      (the lead), and what each search lost (the foot). Both are derived from the
      stored counts, so both are memoised on the artefact.
 
-     **The foot is handed the rows each bar left**, not the artefact's whole
-     groups: its second sentence counts the pages that *contribute to the rows
-     shown*, and the bars decide which those are (`sourcesNote`). The lead
+     **The foot is handed the rows the bars and the thread left**, not the
+     artefact's whole groups: its second sentence counts the pages that
+     *contribute to the rows shown*, and those decide which they are
+     (`sourcesNote`). The lead
      is handed the artefact untouched, because its subject is what the search
      came back with — a group emptied by the reader's own threshold is not a
      search that found nothing, and `hiddenNote` already says which it is. That
@@ -1012,10 +1060,10 @@ export function DebatePanel({
        (src/public-types.ts § `PublicDebateGroup`). */
     if (isShared(debate)) return withheldLines(debate);
     return footLines({
-      direct: { rows: barred.visible, counts: debate.direct.counts },
-      claims: { rows: barredClaims.visible, counts: debate.claims.counts },
+      direct: { rows: threadDirect, counts: debate.direct.counts },
+      claims: { rows: threadClaims, counts: debate.claims.counts },
     });
-  }, [debate, barred, barredClaims]);
+  }, [debate, threadDirect, threadClaims]);
 
   /**
    * @param again beside a debate that is already there, so the run is forced.
@@ -1200,7 +1248,29 @@ export function DebatePanel({
                 above the list. Anything else goes after the list. */}
             <Lead text={lead} placement={placement} order={order} at="top" />
 
-            {rows.length > 0 && <DebateList groups={groups} order={order} onJump={onJump} />}
+            {/* **The threads, above the rows and inside the scroller** — they
+                are a reading of the list, so they scroll with it rather than
+                pinning over it like the bars. Plan 260930j. */}
+            {threads.length > 0 && (
+              <Threads
+                threads={threads}
+                selected={thread}
+                visible={barredVisible}
+                shown={rows}
+                onThread={onThread}
+              />
+            )}
+            {/* **A failed synthesis says so**, quietly, rather than vanishing —
+                otherwise *asked and failed* looks exactly like *searched before
+                threads existed* and like *nothing shared* (GPT Sol's review of
+                260930j, F1). The rows are unaffected, and the line says that
+                too. `too-few` and an older debate draw nothing: there, nothing
+                was asked. */}
+            {synthesis?.kind === "failed" && <p className="dbt-thread-failed">{DEBATE_THREADS_FAILED}</p>}
+
+            {rows.length > 0 && (
+              <DebateList groups={groups} order={order} onJump={onJump} keyRows={keyRows} />
+            )}
 
             <Lead text={lead} placement={placement} order={order} at="after" />
 
@@ -1498,6 +1568,92 @@ function OrderBar({
 }
 
 /**
+ * **The threads box**: the key sources and the themes the sources share, each
+ * a button that narrows the list to its rows — plan 260930j, Greg's *"highlight
+ * key themes from other people and commentary … and key nodes"*.
+ *
+ * `aria-pressed` toggle buttons in a group, the order bar's shape. One at a
+ * time: pressing the pressed one clears it, as does *show all*. A thread the
+ * bars have emptied is disabled and says why, rather than offering a press that
+ * empties the list.
+ *
+ * Every string here is the model's, drawn as text; the heading says whose.
+ */
+function Threads({
+  threads,
+  selected,
+  visible,
+  shown,
+  onThread,
+}: {
+  threads: readonly Thread[];
+  selected: Thread | null;
+  /** The rows both bars left, before the thread — what each count is out of. */
+  visible: readonly { id: string }[];
+  /** The rows on screen after the thread. */
+  shown: readonly { url: string }[];
+  onThread(thread: string | null): void;
+}) {
+  return (
+    <section className="dbt-threads" aria-label="Threads across these sources">
+      <h3 className="dbt-threads-head">
+        <span className="dbt-ai-tag" title="The AI's reading of the sources below — nothing in what the search returned checks it">
+          AI
+        </span>
+        Threads across these sources
+      </h3>
+      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that filter a
+          list, not form controls — the order bar's reason. */}
+      <div className="dbt-thread-list" role="group" aria-label="Show only the sources on">
+        {threads.map((t) => {
+          const count = shownInThread(t, visible);
+          const on = selected?.id === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className={`dbt-thread${on ? " on" : ""}${t.kind === "key" ? " dbt-thread-key" : ""}`}
+              aria-pressed={on}
+              disabled={count === 0 && !on}
+              title={
+                count === 0
+                  ? "The bars above are hiding every source on this"
+                  : on
+                    ? "Show every source again"
+                    : "Show only these sources"
+              }
+              onClick={() => onThread(on ? null : t.id)}
+            >
+              <span className="dbt-thread-label">
+                {t.kind === "key" && <Star size={12} aria-hidden="true" className="dbt-key-star" />}
+                {t.label}
+                <span className="dbt-thread-count">{count}</span>
+              </span>
+              {t.gist && <span className="dbt-thread-gist">{t.gist}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {/* In the head count's own words (`headCount`: excerpts, and pages when
+          they differ), so the two cannot disagree. When the bars have hidden
+          every row of the chosen thread, it says so in the open rather than in
+          a tooltip a finger cannot reach (Sol's F7). */}
+      {selected && (
+        <p className="dbt-thread-showing">
+          {shown.length === 0
+            ? "The bars above are hiding every source on this thread"
+            : `Showing ${headCount(shown)} ${selected.kind === "key" ? "picked as key" : `on “${selected.label}”`}`}
+          {" · "}
+          <button type="button" className="dbt-thread-all" onClick={() => onThread(null)}>
+            show all
+          </button>
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
  * **The list, in whichever order is drawn.** *By claim* is one headed section
  * per group — *About this piece*, then each claim in the article's own words
  * with the way to it. The other orders are flat, with at most two quiet lines
@@ -1513,16 +1669,19 @@ function DebateList({
   groups,
   order,
   onJump,
+  keyRows,
 }: {
   groups: readonly DebateGroup<DirectRow, ClaimRow>[];
   order: DebateOrder;
   onJump(id: BlockId): void;
+  /** Each key source's reason, by row id — empty for a visitor or an older debate. */
+  keyRows: ReadonlyMap<string, DebateKeySource>;
 }) {
   const grouped = order === "claim";
   const list = (rows: readonly DebateRow[]) => (
     <ol className="dbt-list">
       {rows.map((row) => (
-        <Row key={row.id} row={row} showClaim={!grouped} onJump={onJump} />
+        <Row key={row.id} row={row} showClaim={!grouped} onJump={onJump} keySource={keyRows.get(row.id)} />
       ))}
     </ol>
   );
@@ -1683,10 +1842,13 @@ function Row({
   row,
   showClaim,
   onJump,
+  keySource,
 }: {
   row: DebateRow;
   showClaim: boolean;
   onJump(id: BlockId): void;
+  /** Set when the AI picked this row as a key source (plan 260930j). */
+  keySource: DebateKeySource | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const detailId = useId();
@@ -1708,7 +1870,21 @@ function Row({
     work.year === null ? null : String(work.year),
   ].filter((part): part is string => part !== null);
   return (
-    <li className={`dbt-item${open ? " open" : ""}`}>
+    <li className={`dbt-item${open ? " open" : ""}${keySource ? " key" : ""}`}>
+      {/* **A key source says so first, and why** — above the title, because it
+          is the reason a reader would look at this row before the others.
+          Labelled AI like the reading below it: nothing checks the pick.
+          Plan 260930j. */}
+      {keySource && (
+        <p className="dbt-key-line">
+          <span className="dbt-ai-tag" title="The AI's pick — nothing in what the search returned checks it">
+            AI
+          </span>
+          <Star size={12} aria-hidden="true" className="dbt-key-star" />
+          <span className="dbt-key-label">Key source · {KEY_ROLE_LABEL[keySource.role]}</span>
+          <span className="dbt-key-why">{keySource.why}</span>
+        </p>
+      )}
       {/* **The work is the headline**, and it is the link out — a real `<a href>`
           so the browser's own affordances work (the status bar, a middle
           click). `noreferrer` as well as `noopener`: this is a stranger's page

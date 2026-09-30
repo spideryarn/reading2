@@ -193,6 +193,7 @@ const levelled: (IdentificationLevel | null)[] = [];
 const ordered: DebateOrder[] = [];
 /** Every stop the relevance bar was dragged to — `null` is its reset. */
 const relevanced: (DebateBears | null)[] = [];
+const threaded: (string | null)[] = [];
 
 /**
  * **The bar is wound fully open unless a test is about the bar.**
@@ -209,7 +210,7 @@ function paint(
   level: IdentificationLevel | null = "named",
   order: DebateOrder = "prioritised",
   blockOrder: ReadonlyMap<BlockId, number> = new Map(),
-  extra: { relevance?: DebateBears | null; articleYear?: number | null } = {},
+  extra: { relevance?: DebateBears | null; articleYear?: number | null; thread?: string | null } = {},
 ) {
   act(() => {
     root.render(
@@ -224,6 +225,8 @@ function paint(
         relevance: extra.relevance ?? null,
         onRelevance: (next: DebateBears | null) => relevanced.push(next),
         articleYear: extra.articleYear ?? null,
+        thread: extra.thread ?? null,
+        onThread: (next: string | null) => threaded.push(next),
       }),
     );
   });
@@ -244,6 +247,8 @@ function paintShared(debate: PublicDebate, order: DebateOrder = "prioritised") {
         relevance: null,
         onRelevance: () => {},
         articleYear: null,
+        thread: null,
+        onThread: () => {},
       }),
     );
   });
@@ -263,6 +268,7 @@ beforeEach(() => {
   levelled.length = 0;
   ordered.length = 0;
   relevanced.length = 0;
+  threaded.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -1804,5 +1810,136 @@ describe("a visitor, whose rows carry none of the new fields", () => {
     ]);
     expect(host.querySelector(".dbt-rel")).toBeNull();
     expect(host.querySelector(".dbt-byline")).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ threads --
+   Plan 260930j (SPIDERYARN-READING2-6M): the themes the sources share and the
+   key sources, as a box of toggles above the list. */
+describe("DebatePanel — threads", () => {
+  const rowA = claim({ id: "spya-thra01", url: "https://a.example/one", title: "One" });
+  const rowB = claim({ id: "spya-thra02", url: "https://b.example/two", title: "Two" });
+  const rowC = claim({ id: "spya-thra03", url: "https://c.example/three", title: "Three" });
+  const withSynthesis = (synthesis: unknown) =>
+    artefact({
+      direct: { rows: [], counts: counts() },
+      claims: { rows: [rowA, rowB, rowC], counts: counts() },
+      synthesis,
+    } as Partial<Debate>);
+  const made = {
+    kind: "made",
+    themes: [{ id: "spya-thm002", label: "replication", gist: "Both retest it.", rowIds: [rowA.id, rowB.id] }],
+    key: [{ rowId: rowC.id, role: "dissents", why: "It takes the other side." }],
+  };
+  const titles = () => [...host.querySelectorAll(".dbt-title")].map((a) => a.textContent);
+
+  it("draws nothing for a debate searched before synthesis existed, or one too small to ask", () => {
+    paint(owner({ debate: withSynthesis(undefined) }), "named", "claim");
+    expect(host.querySelector(".dbt-threads")).toBeNull();
+    expect(host.querySelector(".dbt-thread-failed")).toBeNull();
+    paint(owner({ debate: withSynthesis({ kind: "too-few", rows: 2 }) }), "named", "claim");
+    expect(host.querySelector(".dbt-threads")).toBeNull();
+    expect(host.querySelector(".dbt-thread-failed")).toBeNull();
+    expect(titles()).toEqual(["One", "Two", "Three"]);
+  });
+
+  it("says so, quietly, when the call failed — and keeps every row", () => {
+    paint(owner({ debate: withSynthesis({ kind: "failed" }) }), "named", "claim");
+    expect(host.querySelector(".dbt-threads")).toBeNull();
+    expect(host.querySelector(".dbt-thread-failed")?.textContent).toMatch(/still listed below/);
+    expect(titles()).toEqual(["One", "Two", "Three"]);
+  });
+
+  it("says in the open when the bars hide every row of the chosen thread", () => {
+    const hidden = {
+      direct: { rows: [], counts: counts() },
+      claims: {
+        rows: [
+          { ...rowA, bears: "loosely" as const },
+          { ...rowB, bears: "loosely" as const },
+          { ...rowC, bears: "directly" as const },
+        ],
+        counts: counts(),
+      },
+      synthesis: made,
+    } as Partial<Debate>;
+    paint(owner({ debate: artefact(hidden) }), "named", "prioritised", new Map(), {
+      relevance: "directly",
+      thread: "spya-thm002",
+    });
+    expect(titles()).toEqual([]);
+    expect(host.querySelector(".dbt-thread-showing")?.textContent).toMatch(
+      /The bars above are hiding every source on this thread/,
+    );
+    /* The pressed button stays pressable, so it can be let go. */
+    expect((host.querySelector(".dbt-thread.on") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("offers the key sources first, then each theme, each with its count", () => {
+    paint(owner({ debate: withSynthesis(made) }), "named", "claim");
+    const buttons = [...host.querySelectorAll(".dbt-thread")];
+    expect(buttons.map((b) => b.querySelector(".dbt-thread-label")?.textContent)).toEqual([
+      "Key sources1",
+      "replication2",
+    ]);
+    expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
+  });
+
+  it("marks a key row with its reason", () => {
+    paint(owner({ debate: withSynthesis(made) }), "named", "claim");
+    const lines = [...host.querySelectorAll(".dbt-key-line")];
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.textContent).toContain("Key source · takes a different view");
+    expect(lines[0]?.textContent).toContain("It takes the other side.");
+  });
+
+  it("narrows the list to the thread the address names, and says how to undo it", () => {
+    paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "spya-thm002" });
+    expect(titles()).toEqual(["One", "Two"]);
+    expect(host.querySelector(".dbt-thread.on")?.getAttribute("aria-pressed")).toBe("true");
+    expect(host.querySelector(".dbt-thread-showing")?.textContent).toContain(
+      "Showing 2 excerpts on “replication”",
+    );
+    /* The head count and the foot follow the thread, not only the list. */
+    expect(host.querySelector(".gloss-count")?.textContent).toBe("2 excerpts");
+    act(() => (host.querySelector(".dbt-thread-all") as HTMLButtonElement).click());
+    expect(threaded).toEqual([null]);
+  });
+
+  it("hands a press back as the thread's id, and a second press as a clear", () => {
+    paint(owner({ debate: withSynthesis(made) }), "named", "claim");
+    act(() => (host.querySelectorAll(".dbt-thread")[0] as HTMLButtonElement).click());
+    expect(threaded).toEqual(["key"]);
+    paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "key" });
+    expect(titles()).toEqual(["Three"]);
+    act(() => (host.querySelector(".dbt-thread.on") as HTMLButtonElement).click());
+    expect(threaded).toEqual(["key", null]);
+  });
+
+  it("reads an id this debate does not have as no filter, not an empty list", () => {
+    paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "spya-gone00" });
+    expect(titles()).toEqual(["One", "Two", "Three"]);
+    expect(host.querySelector(".dbt-thread-showing")).toBeNull();
+  });
+
+  it("disables a thread the relevance bar has emptied", () => {
+    const judgedRows = {
+      direct: { rows: [], counts: counts() },
+      claims: {
+        rows: [
+          { ...rowA, bears: "loosely" as const },
+          { ...rowB, bears: "loosely" as const },
+          { ...rowC, bears: "directly" as const },
+        ],
+        counts: counts(),
+      },
+      synthesis: made,
+    } as Partial<Debate>;
+    paint(owner({ debate: artefact(judgedRows) }), "named", "prioritised", new Map(), {
+      relevance: "directly",
+    });
+    const theme = host.querySelectorAll(".dbt-thread")[1] as HTMLButtonElement;
+    expect(theme.disabled).toBe(true);
+    expect(theme.querySelector(".dbt-thread-count")?.textContent).toBe("0");
   });
 });
