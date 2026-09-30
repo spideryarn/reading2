@@ -632,7 +632,9 @@ describe("the panel", () => {
     await draw(owner(), view());
     expect(host.querySelector(".traj-foot")?.textContent ?? "").not.toContain("Quotes");
     expect(info().hasAttribute("title"), "a tooltip, not a title").toBe(false);
-    expect(info(), "last in the head, after the depth control").toBe(host.querySelector(".traj-head-end")!.lastElementChild);
+    const end = host.querySelector(".traj-head-end")!;
+    expect(end, "the depths-and-info group is last in the head").toBe(host.querySelector(".traj-head")!.lastElementChild);
+    expect(info(), "the info control follows the depths inside that group").toBe(end.lastElementChild);
     expect(tip()).toBeNull();
     /* A tap — a click, with no hover first — opens it: touch has no hover. */
     await act(async () => info().click());
@@ -994,17 +996,18 @@ describe("the step controls name their keys", () => {
   }
 
   it.each([
-    [2, "Previous stop", "←"],
-    [1, "Back to stop 1", "←"],
-    [2, "Next stop", "→"],
-  ])("on stop %i, %s's card names %s, and it has no title", async (position, label, key) => {
+    [2, "Previous stop", "←", "Back one stop along the route."],
+    [1, "Back to stop 1", "←", "Back to the first stop."],
+    [2, "Next stop", "→", "On to the next stop along the route."],
+  ])("on stop %i, %s's card names %s, and it has no title", async (position, label, key, truth) => {
     await draw(owner(), view({ position }));
     const button = host.querySelector<HTMLButtonElement>(`.traj-head [aria-label="${label}"]`)!;
     expect(button.hasAttribute("title"), "a card, not a title").toBe(false);
     await hover(button);
     expect(document.querySelectorAll('[role="tooltip"]'), "one card, not a stale one beside it").toHaveLength(1);
     expect(tip()).toContain(label);
-    expect(tip()).toContain(`Or press ${key}`);
+    expect(tip()).toContain(`While reading, press ${key}`);
+    expect(tip()).toContain(truth);
   });
 
   it("opens on keyboard focus too, and follows ‹'s label from stop 2 to stop 1", async () => {
@@ -1022,12 +1025,30 @@ describe("the step controls name their keys", () => {
     expect(tip()).not.toContain("Previous stop");
   });
 
+  it("closes Next's card when stepping makes the button disabled", async () => {
+    await draw(owner(), view({ position: 2 }));
+    const next = () => host.querySelector<HTMLButtonElement>('.traj-head [aria-label="Next stop"]')!;
+    await act(async () => next().focus());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(tip()).toContain("Next stop");
+
+    await draw(owner(), view({ position: 3 }));
+    expect(next().disabled).toBe(true);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+    expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(0);
+  });
+
   it("the door's Next stop names → too", async () => {
     await act(async () =>
       root.render(createElement(TrajectoryDoor, { door: { kind: "next", cue: null }, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
     );
     await hover(host.querySelector("button")!);
-    expect(tip()).toContain("→");
+    expect(tip()).toContain("While reading, press →");
+    expect(tip()).toContain("On to the next stop along the route.");
   });
 
   /* 73: the (i) rides with the depth buttons, so when the head is too narrow

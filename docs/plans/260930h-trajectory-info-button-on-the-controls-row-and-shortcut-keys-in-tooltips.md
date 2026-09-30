@@ -65,9 +65,9 @@ attribute — which [tooltips.md](../project/tooltips.md) calls a regression, an
 
 | Button | Head | What | How |
 |---|---|---|---|
-| ‹ on stops 2… | Previous stop | Back one stop along the route. | Or press ← (not while typing in a box). |
-| ‹ on stop 1 | Back to stop 1 | Back to the first stop's passage. | Or press ← (not while typing in a box). |
-| › | Next stop | On to the next stop along the route. | Or press → (not while typing in a box). |
+| ‹ on stops 2… | Previous stop | Back one stop along the route. | While reading, press ←. |
+| ‹ on stop 1 | Back to stop 1 | Back to the first stop. | While reading, press ←. |
+| › | Next stop | On to the next stop along the route. | While reading, press →. |
 
 **The cards do not promise that the article scrolls** (Sol F1): a stop whose block has gone since
 the route was planned is still stepped onto, and the step lands nowhere. That no-op is older than
@@ -160,3 +160,21 @@ A Sonnet browser agent, on this worktree's own vite, local article
 - **Seen, not changed:** on a wrapped head, an arrow's card covers the depth row while it is open —
   transient, hover or focus only. And on a phone, pressing *Most* steps the band aside onto the
   stop, which is the narrow-window step-aside from 260928, not this change.
+
+## The code review, and what was kept
+
+GPT Sol, `--sandbox workspace-write`, which fixes as it goes (answer: `260930h-code-review-sol.md`,
+a summary only; the diff was read directly). Kept:
+
+- **"While reading, press ←."** in place of *Or press ← (not while typing in a box).* Shorter, and
+  also true while the Dock drawer is open, which suspends the keys with the buttons still mounted
+  behind it. The table above now shows it.
+- **`enabled` on `StepTip`**, so Next's card closes when a step disables the button under a focused
+  card. There is a test for it.
+- **A tighter assertion** that the depths-and-(i) group is the head's last child.
+- **tooltips.md** now names Commands' ⌘K / Ctrl-K as one of the cards that already say their key.
+
+Reverted: *"…, if its passage is still available"* on every card. The cards promise only a step
+along the route, and that stays true on a stale route, where the stop changes but the page does not
+move. The hedge made every card longer to cover a rare case that the copy never claimed. Also fixed:
+a relative link in the feedback note that pointed at a path that does not exist.

@@ -316,8 +316,9 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
               more than the buttons. */}
           <StepTip
             head={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
-            what={view.position <= 1 ? "Back to the first stop's passage." : "Back one stop along the route."}
+            what={view.position <= 1 ? "Back to the first stop." : "Back one stop along the route."}
             keyName="←"
+            enabled={view.position >= 1}
           >
             <button
               type="button"
@@ -347,7 +348,12 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
           <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
             Stop {view.position} of {total}
           </span>
-          <StepTip head="Next stop" what="On to the next stop along the route." keyName="→">
+          <StepTip
+            head="Next stop"
+            what="On to the next stop along the route."
+            keyName="→"
+            enabled={view.position < total}
+          >
             <button
               type="button"
               className="traj-arrow"
@@ -418,21 +424,24 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
 
 /**
  * **A step control's card**: what it does, and its key — Trajectory's ‹ › and
- * the door's *Next stop ›* (plan 260930h). "Not while typing" because the keys
- * go through keynav's guards and hovering a button does not blur a text box
- * (Sol F2); docs/project/tooltips.md § A shortcut is named on its card.
+ * the door's *Next stop ›* (plan 260930h). "While reading" covers keynav's
+ * guards, including the Dock drawer suspending the keys while the buttons stay
+ * mounted behind it; docs/project/tooltips.md § A shortcut is named on its card.
  */
 function StepTip({
   head,
   what,
   keyName,
   placement = "bottom",
+  enabled = true,
   children,
 }: {
   head: string;
   what: string;
   keyName: "←" | "→";
   placement?: "top" | "bottom";
+  /** False when the native button is disabled; also closes a card already open. */
+  enabled?: boolean;
   children: ReactElement<Record<string, unknown>>;
 }) {
   return (
@@ -440,7 +449,8 @@ function StepTip({
       placement={placement}
       keepSide
       className="tip-soon"
-      content={<ControlTip head={head} what={what} how={`Or press ${keyName} (not while typing in a box).`} />}
+      enabled={enabled}
+      content={<ControlTip head={head} what={what} how={`While reading, press ${keyName}.`} />}
     >
       {children}
     </Tooltip>
@@ -999,7 +1009,12 @@ export function TrajectoryDoor({
           </button>
         )}
         {door?.kind === "next" && (
-          <StepTip head="Next stop" what="On to the next stop along the route." keyName="→" placement="top">
+          <StepTip
+            head="Next stop"
+            what="On to the next stop along the route."
+            keyName="→"
+            placement="top"
+          >
             <button type="button" className="traj-door-btn" onClick={onNext}>
               Next stop ›
             </button>

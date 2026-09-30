@@ -201,7 +201,7 @@ reason. `tests/keynav-horizontal.test.ts` pins both halves — the handler takes
 one the stride still moves. The plan is
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md) § Keys (Sol F5).
 
-The band's ‹ › and the door's *Next stop ›* name their key on their cards (*Or press ← (not while typing in a box).*), since
+The band's ‹ › and the door's *Next stop ›* name their key on their cards (*While reading, press ←.*), since
 2026-09-30 — every shortcut belongs on its control's card:
 [tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
 

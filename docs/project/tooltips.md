@@ -202,24 +202,24 @@ that rule; [keyboard.md](keyboard.md) and [icons.md](icons.md) point here.
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-74)
 
-The key is the fact a reader cannot guess by pressing the button, so it is exactly what the card's
-second paragraph is for. Say it as a short sentence in `how` — *Or press ← (not while typing in a box).* on
-Trajectory's ‹ › and on its door's *Next stop ›*, *Enter to send.* on Chat's Send button, and *⌘Enter / Ctrl-Enter
-opens it from the article* on the Metadata button. There is no `keys` prop yet: with three cards
-there was no pattern worth a slot, and a sentence reads better than a keycap row
+The key is a fact a reader cannot guess by pressing the button, so keep it in the card's prose where
+it reads naturally. Trajectory says *While reading, press ←.* on ‹ › and on its door's *Next stop ›*;
+Chat says *Enter to send* and *Shift+Enter for a new line*; Metadata says *⌘Enter / Ctrl-Enter opens
+it from the article*; and Commands names *⌘K / Ctrl-K*. There is no `keys` prop yet: these cards
+keep the keys in sentences, which read better here than a keycap row
 ([260930h](../plans/260930h-trajectory-info-button-on-the-controls-row-and-shortcut-keys-in-tooltips.md)).
 
-Two things make it easy to get wrong:
+Three things make it easy to get wrong:
 
 - **The card must still open when the control cannot be pressed.** A natively `disabled` button is
   no reliable tooltip trigger ([§ the shelf's action row](#controltip-which-is-what-most-of-them-are-now)),
   so a control whose key matters most when it looks unavailable wants `aria-disabled`, as Chat's
   Send has. Trajectory's › at the end of a pass is still natively disabled, which is a known gap.
 - **Say when the key does not work.** ← / → step Trajectory only through keynav's guards — no
-  modifier, no auto-repeat, and not while a text box has focus
-  ([keyboard.md](keyboard.md), § ← / → in Trajectory). Hovering a button does not
-  blur a focused box, so a bare *Or press ←* is sometimes false; the cards say *(not while typing in
-  a box)*. Check the equivalent for any new card.
+  modifier, no auto-repeat, not while a text box has focus, and not while the Dock drawer is open
+  ([keyboard.md](keyboard.md), § ← / → in Trajectory). The buttons remain mounted behind that
+  drawer, so a bare *Or press ←* would be false there; the cards say *While reading, press ←.*
+  Check the equivalent for any new card.
 - **These are hover and focus cards.** On a touch device a tap on ‹ › steps at once, and the card
   is not readable there. That is on purpose: a phone has no ← to learn about, and reveal-then-commit
   on a mode's main control would cost every step a second tap.
