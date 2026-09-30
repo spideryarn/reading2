@@ -1,6 +1,6 @@
 # Citations: an *Investigate* button that looks into one cited work, on demand
 
-Status: **planned 2026-09-30; revised after plan review round 1; not built.** Feedback report SPIDERYARN-READING2-5Q (`spya-wtm6qx`),
+Status: **planned 2026-09-30; settled after two plan-review rounds; not built.** Feedback report SPIDERYARN-READING2-5Q (`spya-wtm6qx`),
 from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from Citations mode on
 `9689-full-spya-m43th2`:
 
@@ -48,38 +48,66 @@ The answer is short plain prose in up to three parts, each opening with a plain 
    extends, or sits awkwardly with the article beyond the one claim.
 3. **For you** — only when the reader has written a profile or *why you're reading this one*.
 
-### No quotes from sources — the rule that makes streaming honest
+### No quotes from sources, checked inside the stream (settled after round 2)
 
-The first version checked quotes after the stream ended. GPT Sol's P0: the reader has already seen
-an unchecked quote as the paper's words by then, and a warning under it does not undo that. So:
+The first version checked quotes after the stream ended; the second refused a finished answer that
+had quoted a source. Both let the reader see unchecked quote-shaped text first (Sol P-1, Q-1, P0).
+The settled design moves the guard **into the stream**, so it holds text back before it is sent:
 
-- **The prompt forbids quoting any source.** Paraphrase, and name where it came from.
-- **The quote guard** (code, after the stream ends): every run of six or more words inside straight
-  or curly double quotes must be found (`findQuote`, strict) **in the article itself** — quoting the
-  article being read is fine, and it is in the prompt. Anything else: **the answer is not stored**,
-  no `done`, and the client replaces the streamed text with *"This answer quoted a source directly,
-  which we could not check, so it was not kept."* with *Investigate again*. Exposure is bounded to
-  the one viewing, and it is taken back.
-- **Verbatim evidence stays with 5G's *Look it up***, the one code-verified quote path. When a
-  current lookup is stored for the row, the investigation view shows its verdict and quote beside
-  it, with its own provenance line unchanged; when none is, the view offers *Look it up* (a
-  separate charge, so not run automatically).
+- **The prompt allows quotation marks only around this article's own words** (and the work's title),
+  and no block quotes. Everything from a source is paraphrased and attributed.
+- **The server holds back** any text from an opening `"`, `“` or `‘` (U+2018) to its close, and
+  any line beginning `>` to its end. A held span is sent only once code has found it (`findQuote`,
+  normalised) in one of the **allowed texts**: the article's blocks, the work's title and reference
+  entry as supplied, and — only when the Look it up match below applies — Look it up's two stored,
+  code-verified quotes. Short spans are held and checked too; a one-word article term passes.
+- **A span that is not found, or that is still open after 400 characters or at the end of the
+  stream, stops the answer there**: the span is never sent, nothing is stored, and the client
+  **replaces the whole streamed answer** with *"This answer tried to quote a source directly, which
+  we can't check, so it was stopped and not kept."* and *Investigate again*. A disconnect can only
+  lose text, never show unchecked text.
+- Straight single quotes (apostrophes) are left to the prompt. Verbatim prose without quotation marks
+  is not guarded; it carries no attribution, and the provenance says the AI *was instructed not to
+  quote*, not that it did not.
+- Verbatim evidence stays with 5G's *Look it up*. When a current lookup exists, the view shows its
+  verdict and quote beside the investigation with its own provenance line; when none does, the view
+  offers *Look it up* (a separate charge).
+- The probe counts stops by cause; if a cause is common, fix the prompt, not the guard.
+
+### Which result is the work (Sol Q-3, settled)
+
+Investigate does not run its own identity check: that needs a structured URL pick, which breaks
+streamed prose. Instead:
+
+- If the row has a **current Look it up that identified a page** (5G's two-gate rule passed), that
+  page's URL, title and two verified quotes go into the prompt as *the result we matched to this
+  work*. The provenance says *one result (host) was matched to the work by Look it up* **only if
+  code finds that URL (normalised) among this answer's own non-empty-extract results**; otherwise the
+  line would credit a page this answer never read.
+- Otherwise the provenance says *we could not confirm that any result is this work itself*, and the
+  prompt says: describe a result as this work only when its title, authors and year match those
+  given; otherwise say the work itself was not found and describe only what the results that
+  mention it say.
+
+*Sol still objects to Q-3's residual* (without a code-checked identity, the prose may describe a
+look-alike as the work). **Overruled**, on Opus's arbitration: the provenance line then declares the
+gap in plain words, so the claim is no stronger than what we know. The fuller fix — offer
+Investigate only once Look it up has identified the work — is a product call left open for Greg.
 
 ### What was read, said by code, not by the model (5G's rule)
 
-Under the answer, always at the same claim level:
+Under the answer, from what the call returned (Sol Q-2):
 
-> *We did not obtain the paper itself, or the full text of any page. This was written from search
-> extracts of N results (arxiv.org, nature.com, …). It is the AI's reading of those extracts,
-> paraphrased, not quoted.*
+> *We did not fetch or read the full paper. Web search returned extracts for N results (arxiv.org,
+> nature.com, …); the provider does not say whether an extract holds all of a short page. The AI was
+> asked to base what it says about the work on those extracts, and used this article [and your
+> profile and purpose] to relate them. It was instructed not to quote them.*
+> plus one of the two identity lines above.
 
-- N counts only results whose extract was non-empty (Sol P-2).
-- **No "one of them matches the work" line** (Sol P-3): applying 5G's identity rule to every
-  evidence page answers a weaker question than 5G asks, and "the paper itself was not obtained" is
-  the claim we can fully back.
-- Sources are listed as `safeUrl`-filtered links, host and title.
-- The search is **pinned to Exa** with a small `max_total_results`, and the per-result size the
-  model and our copy agree on is settled by the probe (step 1 of stage 1).
+- **At least one non-empty extract is required to store.** An answer with none is refused.
+- The sources listed, N and the hosts are exactly the results with a non-empty extract.
+- Search pinned to Exa with a small `max_total_results`; the per-result configuration is set by the
+  probe and written here.
 
 ### Inputs to the call
 
@@ -135,6 +163,10 @@ into the row. When done: the answer, the *what was read* line, the sources, *Loo
 beside it or the offer of it, and *Investigated <date> · Investigate again*. A stored investigation
 is collapsed to its first lead with a toggle, so the list stays a list. Not on the hover card.
 
+**A failed *Investigate again* keeps the old answer** (Sol Q-4): the new run replaces nothing until
+it is stored, so on a stop or error the client restores the previous stored answer with *The new
+investigation was not kept; the previous one is still shown.*
+
 ## Stages
 
 1. **Server.** Step 1 is a gate: a real streaming probe (a script, Exa pinned, a small result cap)
@@ -175,3 +207,14 @@ is collapsed to its first lead with a toggle, so the list stays a list. Not on t
   quotes streamed, the house streaming rule and 5G's rule stop pulling against each other. Opus also
   ruled: extract a runner rather than add a seam (P-5); one hash over everything, profile included
   (P-4); fold the probe into stage 1 as its gate (P-6).
+- **Plan review, round 2** —
+  [260930a-citations-investigate-plan-review-2-sol.md](260930a-citations-investigate-plan-review-2-sol.md),
+  verdict *rethink*: P-3…P-8 closed; Q-1 (P0: the post-stream guard still showed unchecked
+  quote-shaped text first), Q-2 (the provenance sentence claimed more than the wire shows), Q-3 (P1:
+  nothing ties an extract to the work), Q-4 (a failed rerun). Settled by me after two rounds and
+  checked by Opus, who accepted it with five changes, all adopted: cap held spans and fail an
+  unclosed one; replace the whole streamed answer on a stop; let the work's title and reference
+  count as allowed quotes; guard U+2018; claim Look it up's match only when its URL is among this
+  answer's own extracts, and pass its verified quotes in. Q-1: moved the guard into the stream, which
+  closes the P0 (nothing quote-shaped is sent before it is checked). Q-2 and Q-4 adopted. **Q-3
+  partly overruled** — § Which result is the work.
