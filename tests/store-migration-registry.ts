@@ -2532,6 +2532,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 260930i: the sync announcing an upgrade. It calls `pgReady`, seeds its own
      owner and its own two tiers, and its oracle is what the real sync wrote. */
   "tests/billing-upgrade-notice.test.ts": "private-postgres",
+  /* 260930i: the sign-up ledger. `pgReady`, its own two seeded accounts, and
+     its oracle is the ledger's rows. */
+  "tests/reader-arrivals.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
@@ -3258,6 +3261,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      off the `auth.users` foreign key. */
   "tests/billing-upgrade-notice.test.ts": {
     "6e7a11ce-0000-4000-8000-00000000b6f1": { kind: "seeded" },
+  },
+  /* 260930i's two accounts, both `seedAuthUser` in `beforeAll`; the ledger's
+     owner key needs the rows. */
+  "tests/reader-arrivals.test.ts": {
+    "a441e0a1-0000-4000-8000-0000000000a1": { kind: "seeded" },
+    "a441e0a1-0000-4000-8000-0000000000a2": { kind: "seeded" },
   },
   /* Stage C of the permanent-delete plan, 2026-09-06. `seedAuthUser` in
      `beforeEach`, deleted again in `afterAll`, and it needs the row three times

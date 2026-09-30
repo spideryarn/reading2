@@ -2,8 +2,11 @@
 
 Up: [architecture.md](architecture.md)
 
-The only email Spideryarn sends today is **auth email**, from Supabase. Anything new that sends mail
-should reuse the same Resend key and domain rather than add a second provider.
+Spideryarn sends two kinds of email, both through Resend with one key and one domain: **auth
+email**, which Supabase sends over SMTP, and **the server's own**, which goes through
+[`src/email.ts`](../../src/email.ts) — today only notices to us about sign-ups and upgrades
+([§ Mail the server sends itself](#mail-the-server-sends-itself)). Anything new that sends mail
+should go through `src/email.ts` rather than add a second way or a second provider.
 
 **Auth email — sign-up confirmations, password resets, magic links — goes out through
 [Resend](https://resend.com), from `Spideryarn <hello@spideryarn.com>`, since 2026-09-29.** Before
@@ -69,6 +72,53 @@ Supabase's, because the app sends none of them.
 set-a-new-password screen. A reset sent from the dashboard lands as an implicit-flow link that our
 PKCE client refuses. That is why the recovery email says only "Continue to Spideryarn", rather than
 promising a reset or a completed login. The plan above has the measurement and the deferred build.
+
+## Mail the server sends itself
+
+> We had talked in the past about sending out an email to me (the admin user, e.g. to
+> hello@spideryarn.com ) whenever a new user signs up and whenever a new user upgrades their pricing
+> plan. […] Make sure that we have nice reusable machinery for dealing with email where it makes
+> sense to do so.
+>
+> — Greg, 2026-09-30
+
+[`src/email.ts`](../../src/email.ts) is the machinery: `sendEmail` (one plain-text email, through
+Resend's HTTP API, from the same `hello@` sender) and `notifyAdmin` (the same, to us). Built in
+[260930i](../plans/260930i-email-admin-on-sign-up-and-plan-upgrade.md). What a caller can rely on:
+
+- **It never throws.** Every outcome is a value — `sent`, `skipped` or `failed` — and a failure is
+  also logged under the `email` component. A notice must never fail the request or the payment it is
+  about, so the callers send **after** the thing has been recorded.
+- **Only production sends.** Anywhere `VERCEL_ENV` is not `production` it logs that it would have
+  sent and returns `skipped` — the box's `.env.local` carries the real key, so otherwise every local
+  sign-up and test-mode checkout would mail a real inbox. `SPIDERYARN_EMAIL_SEND=1` opts a process
+  in for a deliberate manual check, and is ignored under vitest. Tests also refuse `api.resend.com`
+  at the network (`tests/setup/provider-guard.ts`).
+- **The admin address** is `SPIDERYARN_ADMIN_EMAIL`, and defaults in code to `hello@spideryarn.com`,
+  which forwards. No env file carries it; set it only to send somewhere else.
+- **Neither the recipient nor the body is logged**, only a label naming the kind of mail.
+
+The two notices, and why each fires when it does:
+
+- **A sign-up** is an account's **first authenticated request**, because the server never sees a
+  sign-up — that is Supabase Auth in the browser. `spideryarn.reader_arrivals` is the ledger: its
+  primary key hands the row to exactly one request across every instance, and that request sends
+  the mail, after its route has answered ([`src/arrivals.ts`](../../src/arrivals.ts)). An email
+  sign-up that is never confirmed is never announced. The migration backfilled every account that
+  existed, so shipping it announced nobody.
+- **An upgrade** is decided inside `syncSubscriptionFromStripe`, under the lock it already holds, by
+  `planUpgrade` in [`src/billing/tiers.ts`](../../src/billing/tiers.ts): free → paid, or a smaller
+  → larger plan. Renewals, recoveries from `past_due` or `unpaid`, downgrades and cancellations send
+  nothing. Because the transition is read against the row it replaces, a redelivered webhook or the
+  confirm route racing it cannot send twice — [billing.md](billing.md).
+
+**Both are best-effort.** A crash between the commit and the send, or Resend being down, loses that
+notice for good; it is logged, and `/admin` is the record.
+
+**Neither carries the reader's address** — the account id and a link to `/admin`. A copy of the
+address in Resend's log, the forwarder and an inbox would be three more places an erasure has to
+reach, and the deployed server cannot read `auth.users` to get it anyway
+([admin-accounts.ts](../../src/store/admin-accounts.ts)).
 
 ## See also
 

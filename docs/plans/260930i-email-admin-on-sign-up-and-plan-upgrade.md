@@ -52,8 +52,8 @@ notifyAdmin({ subject, text }, deps?)   → Promise<SendResult>   // sendEmail t
 - **Plain text only** for admin mail. HTML templates wait for a reader-facing email that needs one.
 - A `deps` seam (`fetch`, `env`) so tests never touch the network, in the same shape as
   `listSubscriptions` on the sync.
-- Never logs the body, and the admin email carries only what Greg needs: the account id, the email
-  address, and for upgrades the tier names — no article text.
+- Never logs the body or the recipient. The admin email carries the account id, a link to `/admin`,
+  and for upgrades the tier names — no address and no article text (see the review changes below).
 
 ### 2. Upgrades: after the commit, in `syncSubscriptionFromStripe`
 
@@ -96,8 +96,8 @@ so any failure is logged and the request carries on; it adds one indexed insert 
 request per instance, and one Resend round trip to their very first request ever.
 
 **The migration backfills every existing `auth.users` id**, so shipping this does not mail Greg once
-for every reader who already has an account. A reader who signs up between the migration and the
-deploy is backfilled and missed; that is a window of minutes, and acceptable.
+for every reader who already has an account. Only accounts that exist when the migration runs are
+classified as existing; one made after it is announced on its first request after the deploy.
 
 What counts as a sign-up, then, is **an account's first authenticated request** — for email sign-up,
 after they have confirmed their address. An account created but never confirmed is never announced.
@@ -106,8 +106,35 @@ That is arguably the better signal, and the plan says so rather than hiding it.
 ### 4. Privacy page
 
 Resend has been carrying auth mail since 2026-09-29 and is **not** in the subprocessor list on
-`/privacy`. This adds a line: Resend, email delivery (sign-up confirmations, and the account's email
-address when we notify ourselves of a sign-up), Ireland (eu-west-1).
+`/privacy`. This adds a line: Resend, email delivery (the sign-up confirmation, so they see the
+reader's address), Ireland (eu-west-1). The Stripe line there still says payments are "not switched
+on yet", which has been false since 2026-09-03; that is the page's wording and left for Greg.
+
+## Changes after GPT Sol's plan review
+
+[The review](260930i-email-admin-on-sign-up-and-plan-upgrade-review-sol.md): *build with changes*,
+no P0. Taken:
+
+- **"Before" is the plan the account *held*, not the one it was paid up for** (P1). Otherwise
+  `unpaid` → `active` read as a purchase. Any status on a recognised price counts as held except
+  `canceled`, `incomplete_expired` and `incomplete`; "after" stays the entitled rule. A trial
+  starting counts as a plan starting.
+- **No reader's address in either mail** (P1 ×2): the account id and a link to `/admin`. The server
+  cannot read `auth.users` in production anyway, and a copy in Resend, the forwarder and an inbox is
+  three more places an erasure would have to reach. If Greg wants the address in the sign-up mail it
+  is one line in `src/arrivals.ts` — `requireUser` already has it — plus a sentence on `/privacy`.
+- **The arrival is noted after the route has answered** (P2), so a new reader never waits on Resend;
+  still awaited, so a serverless instance is not frozen mid-send. The line sits after
+  `serveAuthenticatedApi` in `serveApi`: `requireUser` and the gate are not touched, and only a
+  `VerifiedUser` reaches it. Flagged for Greg as a line in the file that holds a defence.
+- **The cache is written only after the insert has answered** (P2), and a test proves a failed
+  insert is retried.
+- **A focused backfill test** (P2): private test databases seed accounts after migrating, so the
+  migration alone would not exercise it.
+- **`SPIDERYARN_EMAIL_SEND=1` is ignored under vitest**, and `api.resend.com` joins Stripe in the
+  test network tripwire (P2).
+- Accepted as stated: both notices are **best-effort** — a crash after the commit, or Resend down,
+  loses that notice, logged.
 
 ## The simpler options passed over
 
@@ -139,5 +166,5 @@ address when we notify ourselves of a sign-up), Ireland (eu-west-1).
 
 ## Review
 
-- Plan: GPT Sol, read-only — `docs/plans/260930i-…-review-sol.md` once it lands.
+- Plan: GPT Sol, read-only — [260930i-…-review-sol.md](260930i-email-admin-on-sign-up-and-plan-upgrade-review-sol.md).
 - Code: GPT Sol, fixing inside the stage.

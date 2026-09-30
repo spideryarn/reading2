@@ -24,7 +24,7 @@ describe("sendEmail", () => {
     const [url, init] = fetch.mock.calls[0] ?? [];
     expect(url).toBe("https://api.resend.com/emails");
     expect(init?.method).toBe("POST");
-    expect((init?.headers as Record<string, string>).authorization).toBe("Bearer re_test_key");
+    expect((init?.headers as Record<string, string> | undefined)?.authorization).toBe("Bearer re_test_key");
     expect(JSON.parse(String(init?.body))).toEqual({
       from: FROM,
       to: ["someone@example.com"],

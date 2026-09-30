@@ -322,6 +322,7 @@ import { ownedArticleIdentity } from "./store/pg.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
+import { noteArrival } from "./arrivals.js";
 import {
   placingFailed,
   UNEXPECTED_FAILURE,
@@ -9766,6 +9767,15 @@ export async function serveAuthenticatedApi(
      * see there for why that is load-bearing rather than tidy.
      */
     if (await dispatchAuthRoute(AUTH_ROUTES, { user, request })) {
+      /* **Is this account new?** After a route has answered, so a new reader
+         never waits on the mail, and awaited, so a serverless instance is not
+         frozen with it half sent. It decides nothing about this request and
+         cannot throw. Here, in the half only a `VerifiedUser` reaches, rather
+         than after the hand-off in `serveApi` — whose every other line a
+         stranger runs, which is how tests/owner-isolation.test.ts reads it. A
+         request whose route threw does not arrive; its next one does.
+         src/arrivals.ts, docs/plans/260930i. */
+      await noteArrival(user.id);
       return;
     }
 
