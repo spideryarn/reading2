@@ -393,7 +393,9 @@ Every half hour or so, in this order — the first two need no model, the last o
    does, and the same thresholds and the same pause apply to whichever of the two is nearer its
    limit — slowing Claude sessions down to hand more to Codex is only an answer while Codex has
    room. Watch both budgets, and ration against the tighter one.
-3. **Then pull from the queue**, if the box, the window and the file sets allow. Every brief quotes
+3. **Then pull from the queue**, if the box, the window and the file sets allow — prioritised by a
+   combination of ease and value, unless Greg said otherwise
+   ([engineering-manager.md § How far to run](../reusable/engineering-manager.md#how-far-to-run)). Every brief quotes
    Greg's words, names the sessions in flight and the files each owns, and says what is *not* this
    agent's — never a queue of agents behind one "owner" of a shared file.
 
