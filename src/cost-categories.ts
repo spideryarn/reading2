@@ -199,6 +199,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An uploaded paper looking for its own page on the web, fired once when
      its owner opens it — src/source-guess.ts. Request scope, owner-triggered. */
   "upload-source-guess": "interactive request work",
+  /* Citations' *Investigate* — src/citation-investigate.ts. A reader presses it. */
+  "citation-investigate": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
   /* The word that decides how hard the reader's next question is, judged from

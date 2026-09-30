@@ -10,6 +10,7 @@
  * The server half is `sse` in src/routes.ts; the OpenRouter half, which parses
  * a different SSE dialect, is `sseChunks` in src/openrouter-stream.ts.
  */
+import { ENDED_UNFINISHED } from "../../messages.js";
 import { markUnreachable } from "./reader-facing.js";
 
 export interface ServerEvent {
@@ -217,4 +218,60 @@ function parseFrame(frame: string): ServerEvent | null {
     // judgement as the server side, and for the same reason.
     return null;
   }
+}
+
+/**
+ * **A streamed, kept answer's terminal contract, in one function** — written
+ * for the glossary's two streams (the box and *Check the web*, src/web/useGlossary.ts)
+ * and moved here unchanged when Citations' *Investigate* needed the same one
+ * (src/web/useCitations.ts, plan 260930a stage 2). `readMark` in
+ * src/web/useQuiz.ts is the same shape.
+ *
+ * An optional `begin`, any number of `delta`, then exactly one `done` or
+ * `error`. The result is returned **only** from a `done` that `done` accepts —
+ * each caller checks its own shape, because this is the one object that becomes
+ * a finished answer on screen and a malformed one is a failure, not an answer
+ * with holes in it. An `error` frame throws its sentence, and so does the body
+ * simply ending, which is the case the whole design is arranged against — a
+ * stream that stops cleanly looks exactly like one that finished. A stall
+ * throws `StreamStalled` from `readEvents`, and the caller words it.
+ */
+export async function readAnswerStream<T>(
+  body: ReadableStream<Uint8Array>,
+  on: {
+    begin?(data: unknown): void;
+    delta(text: string): void;
+    done(data: unknown): T | undefined;
+  },
+): Promise<T> {
+  let text = "";
+  for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
+    if (event.name === "begin") {
+      on.begin?.(event.data);
+      continue;
+    }
+    if (event.name === "delta") {
+      const piece = (event.data as { text?: unknown } | null)?.text;
+      if (typeof piece === "string" && piece) {
+        text += piece;
+        on.delta(text);
+      }
+      continue;
+    }
+    if (event.name === "done") {
+      const result = on.done(event.data);
+      if (result === undefined) {
+        throw new Error(
+          "The answer arrived in a form this page could not read, so it is not shown as finished. " +
+            "Trying again starts a fresh answer.",
+        );
+      }
+      return result;
+    }
+    if (event.name === "error") {
+      const message = (event.data as { error?: unknown } | null)?.error;
+      throw new Error(typeof message === "string" && message ? message : ENDED_UNFINISHED.message);
+    }
+  }
+  throw new Error(ENDED_UNFINISHED.message);
 }

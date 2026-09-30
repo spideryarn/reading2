@@ -65,6 +65,7 @@
 
 import { log } from "../log.js";
 import { makeFindCitation } from "../citation-find.js";
+import { makeInvestigateCitation } from "../citation-investigate.js";
 import { makeGuessSource } from "../source-guess-run.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
@@ -72,6 +73,7 @@ import type {
   ArticleReader,
   ChatStore,
   CitationFindStore,
+  CitationInvestigationStore,
   CommentStore,
   ReadingTimeStore,
   FeedbackStore,
@@ -105,6 +107,7 @@ import { pgLinkSummaryStore } from "./pg-link-summaries.js";
 import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgCitationFindStore } from "./pg-citation-finds.js";
+import { pgCitationInvestigationStore } from "./pg-citation-investigations.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgReaderStore } from "./pg-reader.js";
@@ -534,6 +537,25 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
 export const findCitation = makeFindCitation({
   reader,
   finds: citationFindStore,
+  allowance: fetchAllowanceStore,
+});
+
+/** Where *Investigate* keeps an answer — one row per `(article, entry)`. */
+export const citationInvestigationStore: CitationInvestigationStore = guarded(
+  "citation-investigations",
+  pgCitationInvestigationStore,
+);
+
+/**
+ * Citations' *Investigate*: one streamed, web-searching answer about one cited
+ * work, kept. `findCitation`'s parts plus the finds as a read (the URL of the
+ * page a current *Look it up* read) and its own store —
+ * src/citation-investigate.ts. Below `fetchAllowanceStore` for the same reason.
+ */
+export const investigateCitation = makeInvestigateCitation({
+  reader,
+  finds: citationFindStore,
+  investigations: citationInvestigationStore,
   allowance: fetchAllowanceStore,
 });
 

@@ -820,6 +820,29 @@ export async function exportArticle(
     await put("citation_finds", "citation-finds.json", { finds });
   }
 
+  /* Citations' *Investigate*, keyed by entry id for the finds' reason. Column
+     for column, fingerprint included, so the rollback keeps an answer the read
+     path would no longer attach. */
+  if (rows.citationInvestigations.length) {
+    const investigations: Record<string, unknown> = {};
+    for (const row of rows.citationInvestigations) {
+      investigations[row.entryId] = {
+        answer: row.answer,
+        sources: row.sources,
+        extractsRead: row.extractsRead,
+        longestExtractWords: row.longestExtractWords,
+        matchedHost: row.matchedHost,
+        searches: row.searches,
+        searchesFrom: row.searchesFrom,
+        model: row.model,
+        contextHash: row.contextHash,
+        promptVersion: row.promptVersion,
+        at: row.at.toISOString(),
+      };
+    }
+    await put("citation_investigations", "citation-investigations.json", { investigations });
+  }
+
   /* Keyed by block id, the address everything else here uses. */
   if (rows.readingTime.length) {
     const seconds: Record<string, number> = {};

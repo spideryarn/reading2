@@ -424,7 +424,7 @@ export interface FindCitationDeps {
     loadArticle(slug: string): Promise<Article>;
   };
   /** Where a kept find goes. */
-  readonly finds: CitationFindStore;
+  readonly finds: Pick<CitationFindStore, "save">;
   /**
    * **The bound on presses** — required, so a caller cannot build this without
    * one. Each press is a billed web search, and ownership says *which* article,

@@ -1079,6 +1079,21 @@ describe("the artefacts a shared link carries", () => {
           verdict: { support: "supports", quote: "lookup support quote sentinel from the extract" },
           paperDoes: { says: "lookup paper does sentinel", quote: "lookup paper does quote sentinel from the extract" },
         },
+        /* The owner's *Investigate* (plan 260930a): private, every string a
+           sentinel that must not reach the wire. */
+        investigation: {
+          answer: "investigation answer sentinel",
+          sources: [{ url: "https://investigated-source.example/x", title: "investigated source sentinel" }],
+          extractsRead: 1,
+          longestExtractWords: 42,
+          matchedHost: "investigation-matched-host.example",
+          searches: 1,
+          searchesFrom: "server_tool_use_details",
+          model: "m",
+          at: "2026-09-30T10:00:00.000Z",
+          contextHash: "invhashsentinel0",
+          promptVersion: "citation-investigate/1",
+        },
       },
       {
         id: "w-cred",
@@ -1674,6 +1689,23 @@ describe("the artefacts a shared link carries", () => {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("lookup");
+  });
+
+  /** **Nor does the owner's *Investigate*** (plan 260930a § The route, the store, the limits). */
+  it("carries no part of a cited work's investigation, anywhere", () => {
+    const json = JSON.stringify(built);
+    for (const sentinel of [
+      '"investigation"',
+      "investigation answer sentinel",
+      "investigated-source.example",
+      "investigated source sentinel",
+      "investigation-matched-host.example",
+      "invhashsentinel0",
+      '"extractsRead"',
+    ]) {
+      expect(json, sentinel).not.toContain(sentinel);
+    }
+    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
   });
 
   /**

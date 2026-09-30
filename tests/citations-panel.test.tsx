@@ -193,6 +193,10 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
     finding: null,
     findNote: null,
     find: async () => {},
+    investigating: null,
+    investigateDraft: null,
+    investigateFailed: null,
+    investigate: async () => {},
     ...over,
   };
 }
@@ -807,4 +811,310 @@ describe("what a row says after Look it up", () => {
     expect(copy).toMatch(/link the article gave never changes/i);
     expect(copy).not.toMatch(/verif|confirm|real link|from the paper/i);
   });
+});
+
+/* ------------------------------------------------------------ Investigate --
+   Plan 260930a stage 2. The button on every owner row, the answer streaming
+   into its row, a failure that replaces the whole streamed text, the kept
+   answer folded to its first part, and what was read said by code. */
+
+const { INVESTIGATE_OFFER_LOOKUP, INVESTIGATE_PREVIOUS_KEPT, INVESTIGATE_WAIT, investigationProvenance } =
+  await import("../src/web/CitationInvestigation.js");
+
+const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
+  answer:
+    "Does it back the claim?\nThe abstract on arxiv.org says the model does this.\n\nHow else it bears on this article\nIt also extends the method in a second direction.",
+  sources: [
+    { url: "https://arxiv.org/abs/1234", title: "The paper's page" },
+    { url: "https://www.nature.com/articles/x" },
+  ],
+  extractsRead: 2,
+  longestExtractWords: 310,
+  matchedHost: null,
+  searches: 1,
+  searchesFrom: "usage.server_tool_use.web_search_requests",
+  model: "test",
+  at: "2026-09-30T09:00:00.000Z",
+  contextHash: "ctx",
+  promptVersion: "1",
+};
+
+function investigateButton(id: string): HTMLButtonElement {
+  const el = row(id).querySelector<HTMLButtonElement>(".cite-investigate");
+  if (!el) throw new Error(`no Investigate button on row ${id}`);
+  return el;
+}
+
+describe("Investigate", () => {
+  it("is on every owner row beside Look it up, and presses for its own row", async () => {
+    const pressed: string[] = [];
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, FAMOUS]),
+        investigate: async (id) => {
+          pressed.push(id);
+        },
+      }),
+    );
+    for (const id of [CENTRAL.id, FAMOUS.id]) {
+      const b = investigateButton(id);
+      expect(b.textContent).toBe("Investigate");
+      expect(b.closest(".cite-meta")?.querySelector(".cite-find")).not.toBeNull();
+      expect(b.hasAttribute("title"), "the button fell back to a title attribute").toBe(false);
+    }
+    await act(async () => investigateButton(FAMOUS.id).click());
+    expect(pressed).toEqual([FAMOUS.id]);
+  });
+
+  it("is on no visitor row", async () => {
+    await act(async () =>
+      root.render(
+        createElement(CitationsPanel, {
+          access: {
+            kind: "visitor",
+            citations: {
+              capped: false,
+              citations: [
+                {
+                  id: "spya-v2w3x4",
+                  title: "Public",
+                  why: "What the piece uses it for.",
+                  mentions: [],
+                  citedAt: [FIRST],
+                  firstCited: FIRST,
+                  citedInBody: true,
+                  url: "https://doi.org/10.1000/xyz",
+                  linkFrom: "doi",
+                },
+              ],
+            },
+          },
+          order: "document",
+          onOrder: () => {},
+          bar: null,
+          onBar: () => {},
+          onJump: () => {},
+        }),
+      ),
+    );
+    expect(row("spya-v2w3x4").querySelector(".cite-investigate")).toBeNull();
+    expect(row("spya-v2w3x4").querySelector(".cite-inv")).toBeNull();
+  });
+
+  it("its card says what it does, costs and keeps, and distinguishes extracts from pages it fetched", async () => {
+    await draw(owner({ citations: artefact([CENTRAL]) }));
+    const card = await cardFor(investigateButton(CENTRAL.id));
+    expect(card.head).toBe("Investigate");
+    expect(earnsItsHover(card), "the Investigate card does not earn its hover").toBeNull();
+    const copy = `${card.head} ${card.body}`;
+    expect(copy).toMatch(/searches the web/i);
+    expect(copy).toMatch(/profile/i);
+    expect(card.how).toMatch(/costs money/i);
+    expect(card.how).toMatch(/extracts/i);
+    expect(card.how).toMatch(/may be an abstract or part of a paper/i);
+    expect(card.how).toMatch(/does not fetch the page itself/i);
+    expect(card.how).toMatch(/kept on this row/i);
+    expect(copy).not.toMatch(/verif|confirm|model call|not the paper|reads the paper/i);
+  });
+
+  it("streams into the pressed row only, says what the wait is first, and holds every other row", async () => {
+    await draw(owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id }));
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_WAIT);
+    expect(investigateButton(CENTRAL.id).textContent).toBe("Investigating…");
+    expect(investigateButton(FAMOUS.id).getAttribute("aria-disabled")).toBe("true");
+
+    let pressed = 0;
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, FAMOUS]),
+        investigating: CENTRAL.id,
+        investigateDraft: { id: CENTRAL.id, text: "Does it back the claim?\nThe abs" },
+        investigate: async () => {
+          pressed++;
+        },
+      }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")).toBeNull();
+    expect(row(CENTRAL.id).querySelector(".cite-inv-draft")?.textContent).toBe("Does it back the claim?\nThe abs");
+    expect(row(FAMOUS.id).querySelector(".cite-inv")).toBeNull();
+    await act(async () => investigateButton(FAMOUS.id).click());
+    expect(pressed, "a second Investigate started while one was out").toBe(0);
+  });
+
+  it("on a failure, shows the sentence in place of everything that streamed, and offers it again", async () => {
+    let pressed = 0;
+    await draw(
+      owner({
+        citations: artefact([CENTRAL]),
+        investigateFailed: { id: CENTRAL.id, message: "This answer tried to quote a source directly.", previousAt: null },
+        investigate: async () => {
+          pressed++;
+        },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-draft")).toBeNull();
+    expect(r.querySelector(".cite-inv-error")?.textContent).toContain("This answer tried to quote a source directly.");
+    expect(r.querySelector(".cite-inv-previous")).toBeNull();
+    const again = r.querySelector<HTMLButtonElement>(".cite-inv-again");
+    expect(again?.textContent).toBe("Investigate again");
+    await act(async () => again?.click());
+    expect(pressed).toBe(1);
+  });
+
+  it("on a failed Investigate again, restores the previous answer and says the new one was not kept", async () => {
+    const had = { ...CENTRAL, investigation: INVESTIGATION };
+    await draw(
+      owner({
+        citations: artefact([had]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-error")?.textContent).toContain("It stopped.");
+    expect(r.querySelector(".cite-inv-previous")?.textContent).toBe(INVESTIGATE_PREVIOUS_KEPT);
+    expect(r.querySelector(".cite-inv-text")?.textContent).toBe("The abstract on arxiv.org says the model does this.");
+  });
+
+  it("draws a newer stored answer rather than the failure, since an error does not prove nothing was kept", async () => {
+    const kept = { ...CENTRAL, investigation: INVESTIGATION };
+    await draw(
+      owner({
+        citations: artefact([kept]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-error")).toBeNull();
+    expect(r.querySelector(".cite-inv-text")).not.toBeNull();
+  });
+
+  it("folds a kept answer to its first part, and opens to every part, what was read, the sources and the date", async () => {
+    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: INVESTIGATION }]) }));
+    const r = row(CENTRAL.id);
+    expect(investigateButton(CENTRAL.id).textContent).toBe("Investigate again");
+    expect([...r.querySelectorAll(".cite-inv-lead")].map((n) => n.textContent)).toEqual(["Does it back the claim?"]);
+    expect(r.querySelector(".cite-inv-prov")).toBeNull();
+    const toggle = r.querySelector<HTMLButtonElement>(".cite-inv-toggle");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+
+    await act(async () => toggle?.click());
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect([...r.querySelectorAll(".cite-inv-lead")].map((n) => n.textContent)).toEqual([
+      "Does it back the claim?",
+      "How else it bears on this article",
+    ]);
+    expect(r.querySelector(".cite-inv-prov")?.textContent).toBe(investigationProvenance(INVESTIGATION));
+    const links = [...r.querySelectorAll<HTMLAnchorElement>(".cite-inv-sources a")];
+    expect(links.map((a) => a.textContent)).toEqual(["arxiv.org", "nature.com"]);
+    for (const a of links) {
+      expect(a.getAttribute("target")).toBe("_blank");
+      expect(a.getAttribute("rel")).toContain("noopener");
+    }
+    expect(r.querySelector(".cite-inv-sources")?.textContent).toContain("The paper's page");
+    expect(r.querySelector(".cite-inv-foot")?.textContent).toMatch(/^Investigated .+ · Investigate again$/);
+    /* No Look it up reading on this row, so the view offers it — as a line, not a second button. */
+    expect(r.querySelector(".cite-inv-offer")?.textContent).toBe(INVESTIGATE_OFFER_LOOKUP);
+    expect(r.querySelectorAll(".cite-find")).toHaveLength(1);
+  });
+
+  it("does not offer Look it up on a row that has its reading already", async () => {
+    await draw(owner({ citations: artefact([{ ...LOOKED, investigation: INVESTIGATION }]) }));
+    const r = row(LOOKED.id);
+    await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
+    expect(r.querySelector(".cite-inv-prov")).not.toBeNull();
+    expect(r.querySelector(".cite-inv-offer")).toBeNull();
+    /* The lookup's own reading is still drawn once, by the row. */
+    expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
+  });
+
+  it("renders answer and source titles as text, and links only to http(s) sources", async () => {
+    const unsafe = {
+      ...INVESTIGATION,
+      answer: "Does it back the claim?\n<img src=x onerror=alert(1)> is model text.",
+      sources: [
+        { url: "javascript:alert(1)", title: "<img src=x onerror=alert(2)>" },
+        { url: "https://safe.example/paper", title: "<b>Source title</b>" },
+      ],
+    };
+    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: unsafe }]) }));
+    const r = row(CENTRAL.id);
+    expect(r.querySelector("img, b")).toBeNull();
+    expect(r.querySelector(".cite-inv-text")?.textContent).toContain("<img src=x onerror=alert(1)>");
+
+    await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
+    const links = [...r.querySelectorAll<HTMLAnchorElement>(".cite-inv-sources a")];
+    expect(links.map((link) => link.href)).toEqual(["https://safe.example/paper"]);
+    expect(links[0]?.getAttribute("target")).toBe("_blank");
+    expect(links[0]?.getAttribute("rel")).toContain("noopener");
+    expect(r.querySelector(".cite-inv-source-title")?.textContent).toContain("<b>Source title</b>");
+  });
+});
+
+/* ------------------------------------------------------- a finger's press --
+   Both of a row's paid buttons carry a card saying what a press costs, and on
+   a touch screen the tap that opened the card was also the tap that spent the
+   money (plan 260930a § Review log, Browser check). Reveal, then commit: a
+   finger's first tap opens the card and says "Tap again to do it.", the second
+   presses; a mouse presses at once. docs/project/touch.md.
+
+   The pointer is read off the press's `pointerdown`, never off the click: on
+   iOS 18.2 and later a finger's click says `mouse` (WebKit bug 282988), so the
+   iPad case below sends exactly that. jsdom has no PointerEvent, so these are
+   MouseEvents carrying `pointerType`, as tests/spine-hover.test.tsx sends. */
+
+function fire(el: Element, type: string, pointerType: string) {
+  const ev = new MouseEvent(type, { bubbles: true, cancelable: true, detail: 1 });
+  Object.defineProperty(ev, "pointerType", { value: pointerType });
+  Object.defineProperty(ev, "pointerId", { value: 1 });
+  el.dispatchEvent(ev);
+}
+
+/** One press: down, up, click. `click` is what the click itself reports. */
+async function press(el: Element, down: "touch" | "mouse", click: string = down) {
+  await act(async () => {
+    fire(el, "pointerdown", down);
+    fire(el, "pointerup", down);
+    fire(el, "click", click);
+  });
+}
+
+const TAP_AGAIN = "Tap again to do it.";
+const tapHint = () => document.querySelector('[role="tooltip"] .tip-soon-tap')?.textContent ?? null;
+
+describe("a finger's first press on a paid button reveals its card; the second presses", () => {
+  const buttons = [
+    ["Investigate", "investigate", investigateButton],
+    ["Look it up", "find", findButton],
+  ] as const;
+
+  for (const [name, hook, button] of buttons) {
+    it(`${name}: the first tap opens the card and spends nothing, the second presses`, async () => {
+      const pressed: string[] = [];
+      await draw(owner({ citations: artefact([CENTRAL]), [hook]: async (id: string) => void pressed.push(id) }));
+      await press(button(CENTRAL.id), "touch");
+      expect(pressed, "one tap spent the money").toEqual([]);
+      expect(tapHint()).toBe(TAP_AGAIN);
+      await press(button(CENTRAL.id), "touch");
+      expect(pressed).toEqual([CENTRAL.id]);
+    });
+
+    it(`${name}: an iPad's tap, whose click says mouse, still only reveals`, async () => {
+      const pressed: string[] = [];
+      await draw(owner({ citations: artefact([CENTRAL]), [hook]: async (id: string) => void pressed.push(id) }));
+      await press(button(CENTRAL.id), "touch", "mouse");
+      expect(pressed, "the click's pointerType decided it, not the press's").toEqual([]);
+      expect(tapHint()).toBe(TAP_AGAIN);
+      await press(button(CENTRAL.id), "touch", "mouse");
+      expect(pressed).toEqual([CENTRAL.id]);
+    });
+
+    it(`${name}: a mouse click presses at once and says nothing about tapping`, async () => {
+      const pressed: string[] = [];
+      await draw(owner({ citations: artefact([CENTRAL]), [hook]: async (id: string) => void pressed.push(id) }));
+      await press(button(CENTRAL.id), "mouse");
+      expect(pressed).toEqual([CENTRAL.id]);
+      expect(tapHint()).toBeNull();
+    });
+  }
 });

@@ -610,6 +610,15 @@ export type Task =
    * an article opening and looking for itself.
    */
   | "upload-source-guess"
+  /**
+   * **One cited work, looked into on demand** — Citations mode's *Investigate*,
+   * src/citation-investigate.ts. A streamed answer written with a few web
+   * searches over the whole article, so explain's shape and explain's model;
+   * its own job because one press reads the article about twice and runs its
+   * own searches, and folded into `explain` it would move that line with
+   * nothing saying why. docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+   */
+  | "citation-investigate"
   | "link-summary";
 
 /**
@@ -839,6 +848,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   "citations-find": "capable",
   /* `citations-find`'s tier and its reason: the same prompt, the same pick. */
   "upload-source-guess": "capable",
+  /* Explain's tier, because it is explain's kind of work: prose about the
+     article, with web search, that a reader reads as it arrives. */
+  "citation-investigate": "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -1043,6 +1055,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citations-find": "chat",
   /* Chat, for `citations-find`'s reason: it is the same web-search call. */
   "upload-source-guess": "chat",
+  /* Chat, for `citations-find`'s reason — the web-search server tool — and
+     because a reader watches it stream. */
+  "citation-investigate": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1141,6 +1156,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      running the real feature against another model. */
   "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
   "upload-source-guess": "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
+  "citation-investigate": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

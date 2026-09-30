@@ -15,11 +15,13 @@
  * counts only.
  */
 
+import { and, eq } from "drizzle-orm";
+
 import { getDb } from "../db/client.js";
 import { citationFinds } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import type { CitationFind } from "../types.js";
-import { lookupColumns } from "./citation-lookup-row.js";
+import { findFromRow, lookupColumns } from "./citation-lookup-row.js";
 import type { CitationFindStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { articleIdForOwned } from "./pg.js";
@@ -44,6 +46,16 @@ const rawPgCitationFindStore: CitationFindStore = {
       .insert(citationFinds)
       .values({ articleId, entryId, ownerId: currentOwnerId(), ...values })
       .onConflictDoUpdate({ target: [citationFinds.articleId, citationFinds.entryId], set: values });
+  },
+
+  async load(slug: string, entryId: string): Promise<CitationFind | null> {
+    const articleId = await articleIdForOwned(slug);
+    const [row] = await getDb()
+      .select()
+      .from(citationFinds)
+      .where(and(eq(citationFinds.articleId, articleId), eq(citationFinds.entryId, entryId)))
+      .limit(1);
+    return row ? findFromRow(row) : null;
   },
 };
 

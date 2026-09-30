@@ -181,11 +181,11 @@ describe("every environment read under src/ is literal", () => {
       expect(yields("src/vercel-health.ts", "value")).toEqual([]);
     });
 
-    it("leave src/models.ts's fourteen overrides to MODEL_ENV_VAR's runtime values", () => {
+    it("leave src/models.ts's fifteen overrides to MODEL_ENV_VAR's runtime values", () => {
       /* A different soundness question from the pin: the pin says `resolveModel`
          still indexes that record, this says what the record contains. */
       const fromRecord = sweep.names.filter((n) => n.file === "src/models.ts" && n.door === "pin");
-      expect(fromRecord).toHaveLength(14);
+      expect(fromRecord).toHaveLength(15);
       for (const n of fromRecord) expect(n.name).toMatch(/^SPIDERYARN_[A-Z_]+_MODEL$/);
     });
   });
