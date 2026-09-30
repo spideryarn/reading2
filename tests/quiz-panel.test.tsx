@@ -30,11 +30,12 @@
  * Each has a positive control beside it, because a test that has never been
  * able to fail is not evidence — docs/reusable/silent-success.md.
  */
-import { act, createElement } from "react";
+import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
 import type { Attempt, UseQuiz } from "../src/web/useQuiz.js";
+import type { ReadSoFar } from "../src/web/read-filter.js";
 import { STARTING } from "../src/job-state.js";
 
 /**
@@ -867,5 +868,254 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
       expect(stem()).toBe(third.question);
       expect(premiseShown()).toBeNull();
     });
+  });
+});
+
+/**
+ * **Only what you have read** — SPIDERYARN-READING2-61,
+ * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md.
+ *
+ * The rules that look right on a screenshot when they are wrong: an empty map
+ * from a failed or unfinished read shown as "read nothing"; a question drawn
+ * under a draft that belonged to another; a Next over an unread step treated
+ * as an arrival from the step before, which hides the premise that bridges it.
+ */
+describe("only what you have read", () => {
+  /** A third real block, so three steps can each lean on their own passage. */
+  const THIRD = "spya-h4r7nx";
+  const THREE = new Map([...BLOCKS, [THIRD, "The third paragraph."]]);
+  const on = (id: string) => [{ blockId: id as BlockId, quote: "x", start: 0 }];
+  const P2 = "The second step's premise.";
+  const P3 = "The third step's premise.";
+  const PATH = batch([
+    question(1, { evidence: on(KNOWN) }),
+    question(2, { evidence: on(OTHER), premise: P2 }),
+    question(3, { evidence: on(THIRD), premise: P3 }),
+  ]);
+  const [first, second, third] = PATH.questions as [QuizQuestion, QuizQuestion, QuizQuestion];
+
+  function read(ids: string[], status: ReadSoFar["status"] = "loaded"): ReadSoFar {
+    return {
+      levels: new Map(ids.map((id) => [id, 4 as const])),
+      status,
+      bodyWords: new Map([
+        [KNOWN, 100],
+        [OTHER, 100],
+        [THIRD, 200],
+      ]),
+    };
+  }
+
+  function paintRead(o: UseQuiz, readSoFar: ReadSoFar | undefined, blocks = THREE) {
+    act(() => {
+      root.render(createElement(QuizPanel, { owner: o, blocks, readSoFar, onJump: () => {} }));
+    });
+  }
+
+  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const premiseShown = () => host.querySelector(".quiz-premise")?.textContent ?? null;
+  const box = () => host.querySelector<HTMLInputElement>(".quiz-only-read input");
+  const tick = () =>
+    act(() => {
+      box()?.click();
+    });
+
+  function judged(id: string, verdict: "right" | "wrong"): Attempt {
+    return { questionId: id, answer: "a", status: "done", reply: "ok", error: null, verdict };
+  }
+
+  it("has no tick-box, and walks every question, when reading time is off", () => {
+    paintRead(owner({ quiz: PATH }), undefined);
+    expect(box()).toBeNull();
+    expect(stem()).toBe(first.question);
+    expect(host.textContent).toContain("Question 1 of 3");
+  });
+
+  it("opens on the first question about a passage read, and counts only those", () => {
+    paintRead(owner({ quiz: PATH }), read([OTHER, THIRD]));
+    expect(box()?.checked).toBe(true);
+    expect(stem()).toBe(second.question);
+    expect(host.textContent).toContain("Question 1 of 2");
+  });
+
+  it("says how much of the piece is read, by body words", () => {
+    paintRead(owner({ quiz: PATH }), read([THIRD]));
+    /* 200 of 400 words. By blocks it would have been a third. */
+    expect(host.textContent).toContain("about 50% of the piece read so far");
+  });
+
+  it("says nothing has been read yet rather than showing an unread question, and unticking brings them back", () => {
+    paintRead(owner({ quiz: PATH }), read([]));
+    expect(stem()).toBeNull();
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).toContain("None of these questions is about a passage you have read yet");
+    tick();
+    expect(stem()).toBe(first.question);
+    expect(host.textContent).toContain("Question 1 of 3");
+  });
+
+  it("waits while the levels are loading, rather than calling that read nothing", () => {
+    paintRead(owner({ quiz: PATH }), read([], "loading"));
+    expect(host.textContent).toContain("Looking for what you have read");
+    expect(host.textContent).not.toContain("None of these questions");
+    expect(host.querySelector("textarea")).toBeNull();
+  });
+
+  it("walks every question, and says why, when the levels could not be loaded", () => {
+    paintRead(owner({ quiz: PATH }), read([], "failed"));
+    expect(stem()).toBe(first.question);
+    expect(host.textContent).toContain("Question 1 of 3");
+    expect(host.textContent).toContain("couldn’t load what you have read");
+    expect(host.textContent).not.toContain("of the piece read so far");
+  });
+
+  it("counts a passage the article no longer has as unread, however long it was on screen", () => {
+    paintRead(owner({ quiz: PATH }), read([THIRD]), new Map([...BLOCKS]));
+    expect(host.textContent).toContain("None of these questions");
+  });
+
+  it("shows the premise after a Next that skipped a step, even one answered right earlier", () => {
+    /* The skipped step must carry a `right`, or the premise shows anyway and
+       the test proves nothing about how the reader arrived. So: untick, answer
+       step 2 right, tick again (which moves off step 2), go back to step 1,
+       then Next over step 2 to step 3. */
+    const o = owner({ quiz: PATH });
+    const some = read([KNOWN, THIRD]);
+    paintRead(o, some);
+    tick();
+    press("Next");
+    expect(stem()).toBe(second.question);
+    paintRead({ ...o, attempt: judged(second.id, "right") }, some);
+    tick();
+    expect(stem()).toBe(third.question);
+    press("Previous");
+    expect(stem()).toBe(first.question);
+    press("Next");
+    expect(stem()).toBe(third.question);
+    expect(premiseShown(), "a Next over a skipped step counted as arriving from it").toBe(P3);
+  });
+
+  it("hides the premise after a right answer when Next skipped nothing — the control", () => {
+    paintRead(owner({ quiz: PATH, attempt: judged(first.id, "right") }), read([KNOWN, OTHER]));
+    press("Next");
+    expect(stem()).toBe(second.question);
+    expect(premiseShown()).toBeNull();
+  });
+
+  it("lists only the questions read, and says how many more there are", () => {
+    paintRead(owner({ quiz: PATH }), read([KNOWN]));
+    press("Show all 1");
+    const rows = [...host.querySelectorAll(".quiz-list-row")].map((r) => r.textContent ?? "");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain(first.question);
+    expect(host.textContent).toContain("2 more are about passages you have not read yet");
+  });
+
+  it("keeps the question and the draft as more of the piece is read", () => {
+    const o = owner({ quiz: PATH });
+    paintRead(o, read([OTHER]));
+    type("half an answer");
+    const clears = cleared.length;
+    paintRead(o, read([KNOWN, OTHER]));
+    expect(stem()).toBe(second.question);
+    expect(host.querySelector("textarea")?.value).toBe("half an answer");
+    expect(cleared.length).toBe(clears);
+    /* And the earlier step is now reachable. */
+    expect(host.textContent).toContain("Question 2 of 2");
+  });
+
+  it("moves off an unread question through the ordinary move when the tick-box goes back on", () => {
+    paintRead(owner({ quiz: PATH }), read([OTHER]));
+    tick();
+    /* Unticked: the whole path again, from where the reader was. */
+    expect(stem()).toBe(second.question);
+    press("Previous");
+    expect(stem()).toBe(first.question);
+    type("a draft about the first");
+    const clears = cleared.length;
+    tick();
+    expect(stem()).toBe(second.question);
+    /* The draft belonged to the first question, and went with it. */
+    expect(host.querySelector("textarea")?.value).toBe("");
+    expect(cleared.length).toBeGreaterThan(clears);
+  });
+});
+
+describe("only what you have read, across a new batch", () => {
+  it("opens a replacement batch on its first question read, not near the old batch's place", () => {
+    const on = (id: string) => [{ blockId: id as BlockId, quote: "x", start: 0 }];
+    const readSoFar: ReadSoFar = {
+      levels: new Map([[KNOWN, 4 as const]]),
+      status: "loaded",
+      bodyWords: new Map([[KNOWN, 100]]),
+    };
+    const A = batch([1, 2, 3, 4].map((n) => question(n, { evidence: on(KNOWN) })), "spya-batch1");
+    /* Unread, read, unread, read: from the old place (index 2) the nearest
+       read step is 3; from the front it is 1. */
+    const B = batch(
+      [1, 2, 3, 4].map((n) =>
+        question(n, { question: `New question ${n}?`, evidence: on(n % 2 === 0 ? KNOWN : OTHER) }),
+      ),
+      "spya-batch2",
+    );
+    const paintB = (quiz: Quiz) =>
+      act(() => {
+        root.render(
+          createElement(QuizPanel, { owner: owner({ quiz }), blocks: BLOCKS, readSoFar, onJump: () => {} }),
+        );
+      });
+    paintB(A);
+    press("Next");
+    press("Next");
+    expect(host.querySelector(".quiz-question")?.textContent).toBe("Question number 3?");
+    paintB(B);
+    expect(host.querySelector(".quiz-question")?.textContent).toBe("New question 2?");
+  });
+
+  it("does not paint the replacement batch at the old batch's index before its reset effect", () => {
+    const commits: Array<string | null> = [];
+    const A = batch([question(1), question(2), question(3)], "spya-batch1");
+    const B = batch(
+      [1, 2, 3].map((n) => question(n, { question: `New question ${n}?` })),
+      "spya-batch2",
+    );
+
+    function CommitProbe() {
+      /* Layout effects see the committed DOM before QuizPanel's passive reset
+         effects. A final-DOM assertion cannot catch the one paint in which a
+         new question can otherwise sit over the preceding batch's draft. */
+      useLayoutEffect(() => {
+        commits.push(host.querySelector(".quiz-question")?.textContent ?? null);
+      });
+      return null;
+    }
+
+    const paintWithProbe = (quiz: Quiz) =>
+      act(() => {
+        root.render(
+          createElement(
+            "div",
+            null,
+            createElement(QuizPanel, {
+              owner: owner({ quiz }),
+              blocks: BLOCKS,
+              onJump: () => {},
+            }),
+            createElement(CommitProbe),
+          ),
+        );
+      });
+
+    paintWithProbe(A);
+    press("Next");
+    press("Next");
+    type("an answer to the old third question");
+    commits.length = 0;
+
+    paintWithProbe(B);
+
+    expect(commits[0], "the first replacement commit exposed the old index").toBeNull();
+    expect(host.querySelector(".quiz-question")?.textContent).toBe("New question 1?");
+    expect(host.querySelector("textarea")?.value).toBe("");
   });
 });

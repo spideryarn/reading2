@@ -27,6 +27,7 @@ import { currentAt, rememberParam, threadParam, type Mode } from "../../params.j
 import { useRenderCount } from "../../perf.js";
 import { QuizPanel, RememberSubModeToggle } from "../../QuizPanel.js";
 import { useQuiz } from "../../useQuiz.js";
+import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
 import { useLiveConversation } from "../../live/useLiveConversation.js";
 import { ChatPanel } from "../../ChatPanel.js";
@@ -81,11 +82,14 @@ import { ChatPanel } from "../../ChatPanel.js";
 export function RememberBand({
   slug,
   blocks,
+  readSoFar,
   onJump,
   onMode,
 }: {
   slug: string;
   blocks: Map<string, string>;
+  /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
+  readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
   onMode(next: Mode): void;
 }) {
@@ -123,7 +127,9 @@ export function RememberBand({
   );
 
   if (remember === "quiz")
-    return <QuizSubBand slug={slug} subMode={toggle} blocks={blocks} onJump={onJump} />;
+    return (
+      <QuizSubBand slug={slug} subMode={toggle} blocks={blocks} readSoFar={readSoFar} onJump={onJump} />
+    );
   return (
     <ConversationBand
       /* Keyed so that leaving Quiz and coming back starts clean rather than
@@ -155,16 +161,18 @@ function QuizSubBand({
   slug,
   subMode,
   blocks,
+  readSoFar,
   onJump,
 }: {
   slug: string;
   subMode: React.ReactNode;
   blocks: Map<string, string>;
+  readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("QuizSubBand");
   const owner = useQuiz(slug);
-  return <QuizPanel owner={owner} subMode={subMode} blocks={blocks} onJump={onJump} />;
+  return <QuizPanel owner={owner} subMode={subMode} blocks={blocks} readSoFar={readSoFar} onJump={onJump} />;
 }
 
 /**

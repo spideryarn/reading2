@@ -405,6 +405,12 @@ behind the switch — Fable's recommendation in
 
 It goes with the article (a cascade through `block_identities`), and is in both exports.
 
+**Since 2026-09-30 the quiz reads it too** — [quiz.md § Only what you have read](quiz.md#only-what-you-have-read)
+— in the browser, to choose which questions to show and to say how much of the piece is read. Nothing
+new is stored or sent. The page's bullet still gives only the outline-and-margin purpose; a wording
+that adds the quiz is proposed to Greg in
+[260930e § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).
+
 ## Shelf topics
 
 **Added 2026-09-29**, with [shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement):
