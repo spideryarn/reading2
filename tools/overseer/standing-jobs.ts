@@ -273,7 +273,7 @@ export const AUTHORISED_HASHES: Readonly<Record<StandingJobId, string>> = {
  */
 export const AUTHORISED_DOCUMENTS: Readonly<Record<StandingJobId, readonly JobDocument[]>> = {
   "get-ready-to-deploy": [{ path: "docs/reusable/get-ready-to-deploy.md", sha256: "97564b2f4077ed18484738227cbad0d4ad7551589bed3d554e4bcf2aa2ed4a85" }],
-  "feedback-sweep": [{ path: "docs/project/feedback-reports.md", sha256: "ba2df0bb29ee433636098b3b354fa41915bfd205b01a2121027316e6dc26ac5c" }],
+  "feedback-sweep": [{ path: "docs/project/feedback-reports.md", sha256: "698918e4cc1873ce41e35b83a61c2e8c278d14d7c3397bc8528e450ed9958c47" }],
   "schedule-fixture": [{ path: "tools/overseer/schedule-fixture.md", sha256: "e8909b6f5002c060cca16a158d710a77a8881d5b3ad1b79c8e3cc46bab94928b" }],
 };
 
