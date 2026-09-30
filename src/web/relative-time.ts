@@ -30,7 +30,18 @@ const DAY = 24 * HOUR;
  * and a string, and it is also the reason this cannot be tested against exact
  * English: a different locale says something else, correctly.
  */
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+const relative = {
+  long: new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }),
+  /* `3d ago`, `3h ago` — Greg's own examples for the changelog, 2026-09-30,
+     and the form that fits its contents list's fixed-width date column.
+     **English, not the viewer's locale**, unlike `long`: locales are free to
+     have no narrow form, and `en-GB` — Greg's own — says "3 days ago" and
+     "3 hr ago", which neither matches what he asked for nor fits the column.
+     The page it is for is written in English anyway. GPT Sol, 2026-09-30. */
+  narrow: new Intl.RelativeTimeFormat("en", { numeric: "auto", style: "narrow" }),
+};
+
+export type RelativeStyle = keyof typeof relative;
 
 /** `12 Aug 2026`. */
 function absolute(t: number): string {
@@ -51,6 +62,26 @@ function absolute(t: number): string {
  * does nothing.
  */
 export function timeAgo(iso: string | undefined, now: number): string | undefined {
+  const ago = relativeAgo(iso, now);
+  if (ago !== undefined || !iso) return ago;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? undefined : absolute(t);
+}
+
+/**
+ * `timeAgo`'s relative half: `undefined` past the threshold, where `timeAgo`
+ * would hand back a date.
+ *
+ * For a caller whose absolute date is not `timeAgo`'s. The changelog's is UTC,
+ * so that a release's date does not depend on who is reading it
+ * (ChangelogPage.tsx § `formatVersionStamp`), where `timeAgo`'s is the viewer's
+ * own zone. Exposing the threshold as an absence keeps it decided in one place.
+ */
+export function relativeAgo(
+  iso: string | undefined,
+  now: number,
+  style: RelativeStyle = "long",
+): string | undefined {
   if (!iso) return undefined;
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return undefined;
@@ -60,12 +91,13 @@ export function timeAgo(iso: string | undefined, now: number): string | undefine
      rendered, because "in 4 seconds" next to an article you just opened reads
      as a bug in a way that "just now" does not. */
   const ago = Math.max(0, now - t);
+  const format = relative[style];
 
   if (ago < MINUTE) return "just now";
-  if (ago < HOUR) return relative.format(-Math.round(ago / MINUTE), "minute");
-  if (ago < DAY) return relative.format(-Math.round(ago / HOUR), "hour");
-  if (ago < ABSOLUTE_AFTER_DAYS * DAY) return relative.format(-Math.round(ago / DAY), "day");
-  return absolute(t);
+  if (ago < HOUR) return format.format(-Math.round(ago / MINUTE), "minute");
+  if (ago < DAY) return format.format(-Math.round(ago / HOUR), "hour");
+  if (ago < ABSOLUTE_AFTER_DAYS * DAY) return format.format(-Math.round(ago / DAY), "day");
+  return undefined;
 }
 
 /** `25 Aug 2026, 14:02` — where precision is the point, and the tooltip has room. */
