@@ -114,6 +114,26 @@ describe("registering one", () => {
     expect(commands[0]).toHaveProperty("expectedTailId", null);
   });
 
+  it("names the conversation's own kind, so a Remember conversation Live began is stored as one", () => {
+    /* SPIDERYARN-READING2-70. The conversation Remember opens with is in
+       `base` from `thread.begun` and nowhere else, so this is the only place
+       its kind is known when the first spoken exchange creates it. */
+    const remembered: ChatState = {
+      ...initialState(SLUG),
+      base: [{ ...thread("spya-thra01"), kind: "remember" }],
+      loadPhase: "ready",
+    };
+    expect(twice(remembered, started({ expectedTailId: null })).commands[0]).toHaveProperty(
+      "kind",
+      "remember",
+    );
+    expect(twice(withTypedTurn(), started()).commands[0]).toHaveProperty("kind", "chat");
+    /* A conversation this tab does not have: no opinion, the server's default. */
+    expect(
+      twice(withTypedTurn(), started({ threadId: "spya-other1" })).commands[0],
+    ).not.toHaveProperty("kind");
+  });
+
   it("carries passages, tools and interrupted only when there is something to say", () => {
     const bare = twice(withTypedTurn(), started()).commands[0] as Record<string, unknown>;
     expect(bare).not.toHaveProperty("passages");

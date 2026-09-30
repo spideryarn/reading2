@@ -279,6 +279,10 @@ differs is an empty state, a box six rows tall instead of one, and one `<select>
 `ConversationBand` in `modes/conversation/ConversationModes.tsx` with one `useChat`, rather than a
 second chat state machine.
 
+**Live works in a Remember conversation too, and is saved as one** — including when it is the
+first thing said in the empty conversation Remember opens with. Spoken rows carry no stance.
+[live-conversation.md](live-conversation.md) has the rule and the bug that prompted it.
+
 The composer's microphone is **the existing** `useDictationField` ([dictation.md](dictation.md)) —
 same hook, same two-pass transcription, same priming with this article's glossary — with a label
 beside it and first place in the row. Greg:

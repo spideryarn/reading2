@@ -352,12 +352,10 @@ function scriptFor(stage: Stage, article: Article): string[] {
       ];
     case "quiz":
       /* **One question**, anchored to a real block with a real quote, and one
-         question only. The spread rule starts at `SPREAD_FROM` questions, so a
-         batch of one is required to carry no particular band and this stub
-         cannot fail on a spread rule that has nothing to do with hashing — see
-         tests/quiz.test.ts, which asks the rule itself.
+         question only — enough for a path, and nothing in the stage asks for
+         more since the band-spread gate went on 2026-09-30.
 
-         The question still has to survive `toQuestions`, and that is deliberate
+         The question has to survive `toQuestions`, and that is deliberate
          rather than incidental: `buildQuiz` throws when nothing is left, so a
          stub whose block id or quote stopped resolving fails loudly instead of
          writing an empty quiz. An empty one would carry a perfectly good
@@ -369,8 +367,6 @@ function scriptFor(stage: Stage, article: Article): string[] {
             {
               question: "What does the piece say about this passage?",
               referenceAnswer: "It says the thing the quoted sentence says. Then it moves on.",
-              band: "easy",
-              value: 4,
               evidence: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
             },
           ],

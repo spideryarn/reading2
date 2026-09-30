@@ -374,6 +374,33 @@ export interface SpokenTurn {
    * typing anything, and that case is real.
    */
   expectedTailId: string | null;
+  /**
+   * **The kind this conversation is, as the tab that began it knows it.**
+   *
+   * Used only when this write *creates* the thread, and refused if it
+   * contradicts an existing one — the rule `withTurn` has, and for the same
+   * reason: a thread is one kind for life. Absent means chat.
+   *
+   * It has to come from the browser because the thread it names may exist
+   * nowhere else yet: Remember opens straight into an empty conversation that is
+   * only in the tab, so pressing Live there makes the first spoken exchange the
+   * write that creates it. Before this field that write always made a chat, and
+   * Remember's arrival rule, which counts threads of its own kind, then hid it
+   * behind a fresh empty conversation — SPIDERYARN-READING2-70,
+   * docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md.
+   */
+  kind?: SpokenKind;
+}
+
+/**
+ * The kinds a spoken exchange may create. Not `candidates`: a referee's
+ * candidates conversation has no Live control, and a spoken turn creating one
+ * would be a mode nobody has designed.
+ */
+export type SpokenKind = Extract<ThreadKind, "chat" | "remember">;
+
+export function isSpokenKind(value: unknown): value is SpokenKind {
+  return value === "chat" || value === "remember";
 }
 
 /**
@@ -407,8 +434,15 @@ export function withSpokenTurn(
   spoken: SpokenTurn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
-  const { threadId, expectedTailId } = spoken;
+  const { threadId, expectedTailId, kind } = spoken;
   const existing = threads.find((t) => t.id === threadId);
+
+  /* **A thread is one kind for life**, checked before the tail so that a
+     contradiction says what is actually wrong. An identical kind passes, so a
+     replayed request still meets the tail guard below and nothing else. */
+  if (existing && kind && existing.kind !== kind) {
+    throw new ChatConflict("That conversation is already a different kind.");
+  }
 
   /* **The guard, and it runs before anything is minted.** `null` means the
      caller believes there is nothing here yet — which is true both for a thread
@@ -447,13 +481,17 @@ export function withSpokenTurn(
     /* Same rule as `withTurn`: the client's id is honoured only if it is one of
        ours and free, so a duplicate cannot append to a stranger's thread. */
     id: isSpideryarnId(threadId) && !ids.has(threadId) ? threadId : mintUniqueId(ids),
-    title: "New chat",
+    /* Usually replaced by the first transcription below. An empty reader
+       transcription is valid, though, so this can become the lasting title and
+       must describe the kind the exchange is creating. Mirrors the local-only
+       placeholders in src/web/useChat.ts. */
+    title: kind === "remember" ? "Remembering" : "New chat",
     createdAt: at,
     updatedAt: at,
-    /* Always `chat`. Live conversation has no Remember stance and no anchor —
-       and a spoken Remember turn is a mode nobody has designed, so inventing one here
-       by passing a kind through would be deciding it by accident. */
-    kind: "chat",
+    /* The kind the tab began it as — Remember, when Live was pressed in the
+       empty conversation Remember opens with. The rows themselves carry no
+       stance, as spoken turns into an existing Remember thread never have. */
+    kind: kind ?? "chat",
     messages: [],
   };
   const thread: ChatThread = {

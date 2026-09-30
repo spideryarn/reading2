@@ -269,7 +269,7 @@ the sequence.
 
 **Why this beats the obvious version.** The wait is the idea, and it is the only animation in this
 set that contains genuine stillness. The ordering detail is worth taking from the doc too:
-[§ The order](../project/quiz.md#the-order-and-why-it-is-not-ease-value) is lexicographic —
+[the quiz's old order](260831al-review-quiz-sub-mode.md) was lexicographic (until 2026-09-30, when the quiz became a path) —
 band (`easy` → `medium` → `hard`), *then* value — and blending the two was the bug a review caught,
 because the blend opens with the hardest question in the batch. So the visual order here should
 start with the letters that are cheapest to look at and end with the awkward ones, not run in DOM

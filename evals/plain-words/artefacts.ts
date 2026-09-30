@@ -303,7 +303,7 @@ async function plan(): Promise<void> {
       const q = await loadQuiz(SLUG);
       console.log(`stored quiz: ${q.quiz.questions.length} questions${q.stale ? " (stale)" : ""}`);
       for (const [i, x] of q.quiz.questions.entries()) {
-        console.log(`\n[${i}] (${x.band}) ${x.question}\n    ref: ${x.referenceAnswer}\n    evidence: ${JSON.stringify(x.evidence)}`);
+        console.log(`\n[${i}] ${x.premise ? `(${x.premise}) ` : ""}${x.question}\n    ref: ${x.referenceAnswer}\n    evidence: ${JSON.stringify(x.evidence)}`);
       }
     } catch (err) {
       console.log(`stored quiz: none (${(err as Error).message})`);

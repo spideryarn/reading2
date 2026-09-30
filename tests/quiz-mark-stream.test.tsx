@@ -101,8 +101,6 @@ const QUIZ: Quiz = {
       question: "What does the piece claim?",
       referenceAnswer: "It claims a thing. Then it argues for it.",
       evidence: [{ blockId: "spya-aaaaaa", quote: "a quoted passage", start: 0 }],
-      band: "easy",
-      value: 5,
     },
   ],
   dropped: {

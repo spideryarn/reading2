@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatMessage, ChatThread, Citation, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, Citation, ThreadKind, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -827,6 +827,13 @@ export type ChatCommand =
       passages?: { blockIds: string[]; why: string }[];
       tools?: ToolRun[];
       interrupted?: boolean;
+      /**
+       * The kind of the conversation as this tab has it, which is the only
+       * place a conversation Remember began and nobody has written to yet
+       * exists. The server uses it only when this exchange creates the thread.
+       * `SpokenTurn.kind` in src/chat.ts; SPIDERYARN-READING2-70.
+       */
+      kind?: Extract<ThreadKind, "chat" | "remember">;
     }
   /** Ask about one conversation, because the screen is wrong about it. */
   | { type: "repair"; opId: OpId; slug: string; threadId: string }

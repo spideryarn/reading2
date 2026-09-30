@@ -1,0 +1,134 @@
+{
+  "arm": "before",
+  "slug": "greatwork-spya-yw4d3t",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:52:48.409Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "What three qualities does the article say the work you choose to pursue needs to have?",
+      "referenceAnswer": "It needs to be something you have a natural aptitude for, something you have a deep interest in, and something that offers scope to do great work.",
+      "evidence": [
+        "spya-aeqwcs"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "According to the article, what is the actual way to figure out what to work on?",
+      "referenceAnswer": "By working: if you're not sure what to do, guess, pick something, and get going, since you can't tell what most kinds of work are like except by doing them.",
+      "evidence": [
+        "spya-ntdmun"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "What kind of problems does the author say are undervalued and worth pursuing?",
+      "referenceAnswer": "Unfashionable problems, including ones that seem already fully explored or that just don't seem as important as they actually are, tend to be undervalued and are good to pursue.",
+      "evidence": [
+        "spya-hnvhgs",
+        "spya-wyq84c"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "What trick does the author use to get himself over the difficulty of starting work each day?",
+      "referenceAnswer": "He lies to himself, telling himself he'll 'just read over what I've got so far,' which usually gets him working within minutes once he spots something to fix.",
+      "evidence": [
+        "spya-c6es2t",
+        "spya-ymfnrp"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What advantages does the author say young people have, and how does he suggest they best use their time?",
+      "referenceAnswer": "The advantages of youth are energy, time, optimism, and freedom. He suggests using time in slightly frivolous ways, like learning something out of pure curiosity or building something just because it seems cool, rather than wasting it entirely or being overly cautious.",
+      "evidence": [
+        "spya-sw6ay5",
+        "spya-pnxut9"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What is the difference between per-day and per-project procrastination, and why is per-project procrastination more dangerous?",
+      "referenceAnswer": "Per-day procrastination is putting off work for a day, while per-project procrastination means delaying an ambitious project year after year. It's more dangerous because it disguises itself as work — you stay busy on something else, so it never triggers the usual alarm that idleness does.",
+      "evidence": [
+        "spya-e9jhjz",
+        "spya-q0jujr"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "What does the author mean by 'affectation,' and why does it hurt the quality of your work?",
+      "referenceAnswer": "Affectation means pretending someone other than your real self is doing the work, adopting a fake, impressive-seeming persona. It hurts your work because any energy spent on seeming a certain way is energy taken away from actually being good.",
+      "evidence": [
+        "spya-kyybds",
+        "spya-dh709x"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does the author say ambitious people don't need to worry much about whether their chosen work offers enough scope for greatness?",
+      "referenceAnswer": "He argues that ambitious people are already too conservative about this criterion, so in practice they overestimate how much scope for greatness they need and don't need to worry about it.",
+      "evidence": [
+        "spya-ktet4z"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why does the author think aiming to be the best works better than merely aiming to be good?",
+      "referenceAnswer": "He suggests ambition may be a case where almost all errors go one direction, with people falling short rather than overshooting, so setting your sights on being the best is needed just to end up good; being good alone is too vague a target.",
+      "evidence": [
+        "spya-tyvegp"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "How does the article connect strictness and rule-breaking as both being necessary to notice new ideas?",
+      "referenceAnswer": "Broken assumptions leave clues where they clash with reality, and noticing those clues requires being stricter than most people, who prefer to ignore them. But actually fixing a broken model means breaking the old rules everyone assumes, so on questions that truly matter, only people willing to break rules can be genuinely strict about the truth.",
+      "evidence": [
+        "spya-hsstwz",
+        "spya-xeu6p8",
+        "spya-xkh302"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "Why does the author say educational systems create a problem for ambitious people trying to figure out what to work on?",
+      "referenceAnswer": "Schools expect people to commit to a field long before they can know what it's really like, and offer no systematic help in figuring this out, leaving each person to find their path largely through luck and curiosity.",
+      "evidence": [
+        "spya-kg58at",
+        "spya-cvtr02"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "Why does the author say it's a good sign when an early version of a new project gets dismissed as a 'toy'?",
+      "referenceAnswer": "He says being called a toy means the project already has everything a genuinely new idea needs except scale, and scale tends to follow naturally once the idea is good.",
+      "evidence": [
+        "spya-qhhdgd"
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ]
+}

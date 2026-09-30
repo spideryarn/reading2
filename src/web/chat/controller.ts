@@ -566,6 +566,7 @@ export class ChatController {
         ...(command.passages ? { passages: command.passages } : {}),
         ...(command.tools ? { tools: command.tools } : {}),
         ...(command.interrupted ? { interrupted: true } : {}),
+        ...(command.kind ? { kind: command.kind } : {}),
       })
       .then(
         (outcome) => {

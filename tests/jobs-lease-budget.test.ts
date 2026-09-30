@@ -21,6 +21,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
+import { QUIZ_MAX_TOKENS } from "../src/quiz.js";
+import { deadlineFor } from "../src/token-budget.js";
 import { DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -287,5 +289,27 @@ describe("the job lease and the platform's kill", () => {
       "a budget at or over the claimant's deadline can never be met, so the table has " +
         "stopped saying anything about this step",
     ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
+
+  /**
+   * **The quiz's token ceiling has to be reachable inside one claim, and its
+   * reservation has to cover what the step has been measured to take.**
+   *
+   * A token allowance is also a length of time: at `STREAM_TOKENS_PER_SECOND` a
+   * call that uses its whole `max_tokens` runs for `deadlineFor(max)`. Give the
+   * quiz more room than a claim lasts and the extra is unusable — the job is
+   * killed first and the paid call is lost, which is the failure the room was
+   * meant to prevent. GPT Sol's D1 on
+   * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md, which
+   * caught a 78k ceiling (1,027 s) against the 740 s claim.
+   *
+   * The reservation's floor is the slowest `quiz/5` run measured, 452 s on *A
+   * landscape of consciousness* (evals/results/quiz-build-up/after-3/).
+   */
+  it("fits the quiz's token ceiling inside a claim, and reserves what it was measured to take", () => {
+    const claimMs = LEASE_MS - DEADLINE_MARGIN_MS;
+    expect(deadlineFor(QUIZ_MAX_TOKENS), "a quiz that uses its whole allowance outlives the claim").toBeLessThan(claimMs);
+    expect(STEP_BUDGET_MS.quiz, "the quiz reservation is under its slowest measured run").toBeGreaterThanOrEqual(452_000);
+    expect(STEP_BUDGET_MS.quiz).toBeLessThan(claimMs);
   });
 });

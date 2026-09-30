@@ -1,0 +1,134 @@
+{
+  "arm": "before-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:51:26.306Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "What does the presence of synergistic information in a target neuron's activity suggest about how that neuron combines its inputs?",
+      "referenceAnswer": "It suggests the neuron does not simply sum or add up its inputs, as a basic threshold model would predict, but is instead sensitive to the specific joint patterns across multiple source neurons. This synergistic information is only visible when the sources are considered together, reflecting a kind of integrative computation not reducible to any single input.",
+      "evidence": [
+        "spya-e94ury",
+        "spya-sp50v3"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "How does transfer entropy differ from mutual information in what it can tell us about two neurons?",
+      "referenceAnswer": "Mutual information measures the undirected statistical dependence between two neurons' activity, similar to a nonlinear correlation, without any notion of time-directed flow. Transfer entropy measures how much a source neuron's past activity reduces uncertainty about a target neuron's future activity beyond what the target's own past already explains, capturing directed information propagation (effective connectivity) rather than just functional similarity.",
+      "evidence": [
+        "spya-f6sbgx",
+        "spya-p4pyuy"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "What historical limitation, besides lack of analytical tools, had held back the study of neural information processing, and how was it overcome?",
+      "referenceAnswer": "A lack of sufficient data was a major limitation, since detecting synergistic dynamics requires large amounts of data to accurately estimate multivariate statistical dependencies. This was largely overcome in the last decade by new electrical and optical recording technologies capable of capturing hundreds or thousands of neurons at sub-millisecond resolution.",
+      "evidence": [
+        "spya-s9kmxa",
+        "spya-s9kmxa"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What important limitation do the authors highlight about interpreting statistical synergy found through PID?",
+      "referenceAnswer": "They caution that PID reveals statistical dependencies between neurons but does not by itself explain the biological or mechanistic reasons why particular neurons turn out to be synergy-dominated or redundancy-dominated. Determining what biological features (like neurotransmitter systems or architecture) produce these patterns is left as future work.",
+      "evidence": [
+        "spya-spdx0y"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "Why is a redundancy function necessary to complete the PID decomposition for two source neurons and a target?",
+      "referenceAnswer": "With two sources you only have three known mutual information values (the joint and two marginals) but four unknown partial information terms (redundancy, two unique terms, and synergy), leaving the system underdetermined. Defining any one of these unknowns, most commonly redundancy, lets the other three be solved for algebraically.",
+      "evidence": [
+        "spya-bgsd4n"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "In the cortical culture recordings, how did the amount of synergy in rich-club triads compare to the rest of the network?",
+      "referenceAnswer": "Triads located inside the rich club had about 2.7 times more synergy per triad than triads outside it, and even though rich-club neurons made up less than 40% of the network, their triads accounted for roughly 88% of all the network's synergistic information processing.",
+      "evidence": [
+        "spya-fud8q3",
+        "spya-fud8q3"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "How did the number of recurrent connections between source neurons, versus feedback connections from the target back to the sources, relate to synergy in a triad?",
+      "referenceAnswer": "More recurrent connections between the two source neurons were associated with greater synergy, with triads having two recurrent connections showing about 50% more synergy than the simplest triads. Feedback connections from the target back to the sources were not strongly predictive and, if anything, tended to correlate with slightly reduced synergy.",
+      "evidence": [
+        "spya-sd9fzd",
+        "spya-sd9fzd"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "In the primate study, how did the balance between synergy and redundancy shift during the movement execution phase of the task?",
+      "referenceAnswer": "Even though overall brain activity was generally synergy-dominated, the relative amount of redundant information increased dramatically during movement execution (the reach-and-grasp action). This was interpreted as the brain duplicating the 'move' signal to ensure it reaches distant muscles reliably, reducing the risk of a single corrupted signal causing errors.",
+      "evidence": [
+        "spya-t8fayf",
+        "spya-t8fayf"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "What new kind of analysis does 'local' PID make possible that the standard, expected-value version of PID cannot?",
+      "referenceAnswer": "Local PID decomposes information sharing for every individual configuration of source and target states rather than averaging over the whole probability distribution, allowing a time-resolved 'informational time series.' This has already been used to show that neuronal avalanches have distinct computational profiles that change over the course of a single avalanche.",
+      "evidence": [
+        "spya-mczhkp"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why did synergy fail to increase indefinitely as the source neurons' activity became more mutually correlated at longer timescales?",
+      "referenceAnswer": "Once the similarity between source neurons passed a certain point (about 7% of the maximum possible mutual information), the shared information became increasingly redundant rather than synergistic, so redundancy grew steeply while synergy actually declined. This meant highly correlated inputs mostly duplicated information rather than combining to reveal new joint patterns.",
+      "evidence": [
+        "spya-ybmve2",
+        "spya-cs9fdy"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "Why is it practically impossible to compute a complete PID for a neuron with a large number of upstream parent neurons?",
+      "referenceAnswer": "The number of distinct partial information atoms in the lattice grows according to the Dedekind numbers, which explode combinatorially with the number of parents. For example, just six parent neurons already produce over 7.8 million atoms, and Dedekind numbers beyond nine are not even known, making a full decomposition for realistic numbers of inputs computationally intractable.",
+      "evidence": [
+        "spya-aby2dp",
+        "spya-aby2dp"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "What caveat about the method used to build the effective networks complicates interpretation of the in vitro cortical culture PID findings?",
+      "referenceAnswer": "The functional networks used to identify triads were built using bivariate transfer entropy, a method known to overestimate the statistical significance of individual connections between pairs of neurons. This means some of the network structure (and the triads drawn from it) used in the synergy analyses may not be fully accurate.",
+      "evidence": [
+        "spya-j4cy9j"
+      ],
+      "band": "hard",
+      "value": 3
+    }
+  ]
+}
