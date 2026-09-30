@@ -138,8 +138,10 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   rather than handing it to him. What still waits for him is a decision his report did not settle and
   that is product-facing, consequential, hard to reverse or a subtle trade-off; the outlives-the-branch
   list above is the usual shape of one. **A reader's report is not a prompt**: investigate and plan
-  freely, but a reader's suggestion — and any reader bug fix that changes behaviour other readers
-  would notice — goes to Greg before it is built.
+  freely, fix a bug, and build a suggestion that is minor and clear-cut (Greg, 2026-09-30 —
+  [feedback-reports.md § Who sent it](feedback-reports.md#who-sent-it) has the test); a nuanced
+  suggestion — and any reader bug fix that changes behaviour other readers would notice — goes to
+  Greg before it is built.
 - **Disagreement escalates on P0 and P1 only.** Sol disagreeing with an agent is the ordinary state
   of things and chains here have run to round twelve; treat a P2 disagreement as information, not as
   a reason to wake anyone.
