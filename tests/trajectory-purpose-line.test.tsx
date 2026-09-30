@@ -19,6 +19,8 @@ import type { Job, Trajectory } from "../src/types.js";
 import type { UseTrajectory } from "../src/web/useTrajectory.js";
 import type { TrajectoryView } from "../src/web/modes/trajectory/TrajectoryMode.js";
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 /* jsdom has no `CSS.escape`, which `useFollow` uses; trajectory-panel.test.tsx does the same. */
 globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
 
@@ -243,6 +245,39 @@ describe("the purpose line in Trajectory", () => {
     expect(ensured).toBe(1);
     expect(line()?.textContent).toContain("Reading for:");
     expect(line()?.textContent).toContain("how they handled missing data");
+  });
+
+  it("submits only once when the plan button is pressed twice before re-render", async () => {
+    let answer!: (r: Response) => void;
+    patchReply = new Promise((resolve) => {
+      answer = resolve;
+    });
+    await drawOwner(owner());
+    await type("the method");
+    const button = planButton()!;
+    await act(async () => {
+      button.click();
+      button.click();
+    });
+    expect(patches()).toHaveLength(1);
+    expect(ensured).toBe(0);
+    await act(async () => {
+      answer(new Response(JSON.stringify({ purpose: "the method" }), { status: 200 }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(ensured).toBe(1);
+  });
+
+  it("does not show one article's saved purpose on the next article", async () => {
+    await drawOwner(owner());
+    await type("the first article's method");
+    await press(planButton()!);
+    expect(line()?.textContent).toContain("the first article's method");
+
+    readerBody = { purpose: null };
+    await drawOwner(owner({ slug: "another-route" }));
+    expect(line()?.textContent).not.toContain("the first article's method");
+    expect(box()).not.toBeNull();
   });
 
   it("keeps the draft and asks for nothing when the save fails", async () => {

@@ -17,7 +17,7 @@
  * when a route is ready. And never when the purpose could not be read: a reader
  * told "you have not said" types over the sentence they already wrote.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_PURPOSE_CHARS } from "../types.js";
@@ -40,6 +40,18 @@ export function PurposeLine({ owner, bannerUp }: Props) {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* State disables the visible control; the ref closes the smaller gap before
+     React re-renders, when two clicks could otherwise send two PATCHes and call
+     `ensure()` twice. */
+  const planning = useRef(false);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+      planning.current = false;
+    };
+  }, []);
 
   if (read.state !== "ready" || read.purposeFailed) return null;
   const purpose = saved ?? read.purpose;
@@ -70,17 +82,21 @@ export function PurposeLine({ owner, bannerUp }: Props) {
   const text = draft.trim();
   const plan = async () => {
     /* Never an empty draft: `savePurpose(slug, null)` erases (plan F1). */
-    if (text === "" || busy) return;
+    if (text === "" || busy || planning.current) return;
+    planning.current = true;
     setSaving(true);
     setError(null);
     let stored: string | null;
     try {
       stored = await savePurpose(owner.slug, text);
     } catch (err) {
+      if (!live.current) return;
+      planning.current = false;
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setSaving(false);
       return;
     }
+    if (!live.current) return;
     setSaved(stored);
     setSaving(false);
     await owner.ensure();

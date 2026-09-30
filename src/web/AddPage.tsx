@@ -121,6 +121,8 @@ const UPLOAD_WAIT_CODE = codeOfMessage(UPLOAD_STILL_ARRIVING.message);
 interface Completion {
   key: string;
   slug: string;
+  /** Which `/add/` address produced it, so an older address cannot finish this one. */
+  source: string;
 }
 
 /**
@@ -192,7 +194,7 @@ function offerAutoModes(
 
 export function AddPage({ source: origin }: { source: AddSource }) {
   const queue = useJobs("watches-queue");
-  const [started, setStarted] = useState<string | null>(null);
+  const [started, setStarted] = useState<{ id: string; source: string } | null>(null);
   const url = origin.kind === "url" ? origin.url : "";
   /**
    * **This tab's transfer, if it is the one this address is about.**
@@ -350,7 +352,27 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   const claimed = useRef<string | null>(null);
   /* The retention-path `{article}` answer to this page's own POST, recorded
      rather than acted on — see `completion` below. */
-  const [articleAnswer, setArticleAnswer] = useState<string | null>(null);
+  const [articleAnswer, setArticleAnswer] = useState<{ slug: string; source: string } | null>(null);
+
+  /* The component is reused when the address after `/add/` changes. A purpose
+     typed for the old article must not follow it to the new one, and an old
+     save answering later must not open the old article over the new page. This
+     is keyed only by the source, not `attempt`: Retry is still the same add and
+     deliberately keeps the draft. */
+  const sourceRef = useRef(wanted);
+  sourceRef.current = wanted;
+  const draftSource = useRef(wanted);
+  useEffect(() => {
+    /* StrictMode repeats effect setup for the same mount; that is not a new
+       address and must not release the terminal once-guard. */
+    if (draftSource.current === wanted) return;
+    draftSource.current = wanted;
+    draftRef.current = "";
+    focusedRef.current = false;
+    setDraft("");
+    setPhase({ kind: "running" });
+    claimed.current = null;
+  }, [wanted]);
 
   /**
    * Whether the engine is the one driving this address.
@@ -417,10 +439,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          show and nothing to wait for, so this is a completion arriving a step
          earlier — recorded, and decided with the other two below. */
       if ("article" in queued) {
-        setArticleAnswer(queued.article);
+        setArticleAnswer({ slug: queued.article, source: wanted });
         return;
       }
-      setStarted(queued.id);
+      setStarted({ id: queued.id, source: wanted });
     });
     /* The two plain strings, never `origin` itself. That object is a fresh
        literal on every render of the component above, so depending on it would
@@ -441,8 +463,8 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    */
   const queuedJobId = mine?.phase.kind === "queued" ? mine.phase.job.id : null;
   useEffect(() => {
-    if (queuedJobId) setStarted(queuedJobId);
-  }, [queuedJobId]);
+    if (queuedJobId) setStarted({ id: queuedJobId, source: wanted });
+  }, [queuedJobId, wanted]);
 
   /* The file turned out to be an article the reader already has, and retention
      has taken its job — `queueAnUpload` answers 200 `{article}`. Nothing to
@@ -512,7 +534,11 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     };
   }, [stillArriving, uploadId]);
 
-  const job = queue.jobs.find((j) => j.id === started) ?? null;
+  /* State updates run after render, so an old `started` can still be present in
+     the first render for a new address. The source tag makes it inert during
+     that render instead of letting its completed job reopen the old article. */
+  const startedId = started?.source === wanted ? started.id : null;
+  const job = queue.jobs.find((j) => j.id === startedId) ?? null;
 
   /**
    * **The three ways an add finishes, as one value.** A job reaching `done`, the
@@ -524,19 +550,31 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    */
   const completion: Completion | null =
     job?.status === "done"
-      ? { key: `job:${job.id}`, slug: job.slug }
+      ? { key: `job:${job.id}`, slug: job.slug, source: wanted }
       : alreadyArticle
-        ? { key: `article:${alreadyArticle}`, slug: alreadyArticle }
-        : articleAnswer
-          ? { key: `article:${articleAnswer}`, slug: articleAnswer }
+        ? { key: `article:${wanted}:${alreadyArticle}`, slug: alreadyArticle, source: wanted }
+        : articleAnswer?.source === wanted
+          ? {
+              key: `article:${wanted}:${articleAnswer.slug}`,
+              slug: articleAnswer.slug,
+              source: wanted,
+            }
           : null;
   const completionKey = completion?.key ?? null;
   const completionSlug = completion?.slug ?? null;
+  /* Written during render so an old save callback is fenced as soon as a new
+     completion (or no completion for a new address) is on screen, before the
+     deciding effect below has had a chance to run. */
+  const activeCompletionKey = useRef<string | null>(completionKey);
+  activeCompletionKey.current = completionKey;
 
   useEffect(() => {
     if (completionKey === null || completionSlug === null) return;
     if (claimed.current === completionKey) return;
-    const finished = { key: completionKey, slug: completionSlug };
+    const finished = { key: completionKey, slug: completionSlug, source: wanted };
+    /* A different completion supersedes any save still in flight for the old
+       one. Its promise callback checks this guard before doing anything. */
+    claimed.current = null;
     /* **Nothing said, nothing to wait for** — exactly the page before 260930e. */
     if (draftRef.current.trim() === "" && !focusedRef.current) {
       claimed.current = completionKey;
@@ -546,7 +584,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     }
     /* Otherwise wait, indefinitely. A blur or a pause is not a decision. */
     setPhase({ kind: "ready", completion: finished, error: null });
-  }, [completionKey, completionSlug]);
+  }, [completionKey, completionSlug, wanted]);
 
   /**
    * **Save and open**: the purpose first and awaited, then the modes, then the
@@ -559,7 +597,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    * cannot see from here. Empty means "leave it alone", always.
    */
   const saveAndOpen = (): void => {
-    if (phase.kind !== "ready" || claimed.current === phase.completion.key) return;
+    if (
+      phase.kind !== "ready" ||
+      phase.completion.source !== wanted ||
+      claimed.current === phase.completion.key
+    )
+      return;
     const done = phase.completion;
     claimed.current = done.key;
     const text = draftRef.current;
@@ -571,12 +614,24 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     setPhase({ kind: "saving", completion: done });
     savePurpose(done.slug, text).then(
       () => {
+        if (
+          claimed.current !== done.key ||
+          activeCompletionKey.current !== done.key ||
+          sourceRef.current !== done.source
+        )
+          return;
         setPhase({ kind: "opened" });
         openArticle(done, autoModesRef.current, runRef.current);
       },
       /* Back to *ready* with the draft intact, and nothing queued: a mode
          written without the purpose is what the reader has just declined. */
       (e: Error) => {
+        if (
+          claimed.current !== done.key ||
+          activeCompletionKey.current !== done.key ||
+          sourceRef.current !== done.source
+        )
+          return;
         claimed.current = null;
         setPhase({ kind: "ready", completion: done, error: e.message });
       },
@@ -584,7 +639,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   };
 
   const openWithoutIt = (): void => {
-    if (phase.kind !== "ready" || claimed.current === phase.completion.key) return;
+    if (
+      phase.kind !== "ready" ||
+      phase.completion.source !== wanted ||
+      claimed.current === phase.completion.key
+    )
+      return;
     claimed.current = phase.completion.key;
     setPhase({ kind: "opened" });
     openArticle(phase.completion, autoModesRef.current, runRef.current);
@@ -702,7 +762,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           arriving in consecutive sentences. GPT Sol, 2026-09-03, finding 3. */}
       {ok && (
         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
-          {textHasGone(mine, origin.kind === "upload", started !== null)
+          {textHasGone(mine, origin.kind === "upload", startedId !== null)
             ? DIRECT_ADD_SENT_TEXT_AWAY
             : ADDING_SENDS_TEXT_AWAY}
         </p>
@@ -837,7 +897,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           job={job}
           queue={queue}
           onHide={() => navigate(LIBRARY_HREF)}
-          onRetried={(replacement) => setStarted(replacement.id)}
+          onRetried={(replacement) => setStarted({ id: replacement.id, source: wanted })}
         />
       )}
 

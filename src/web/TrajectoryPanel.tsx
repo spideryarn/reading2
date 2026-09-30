@@ -591,7 +591,13 @@ export function TrajectoryPanel({ access, view, away }: Props) {
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
               run would race a press). TrajectoryPurpose.tsx. */}
-          {owner && <PurposeLine owner={owner} bannerUp={bannerReason(owner) !== null} />}
+          {owner && (
+            <PurposeLine
+              key={owner.slug}
+              owner={owner}
+              bannerUp={bannerReason(owner) !== null}
+            />
+          )}
 
           {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
 

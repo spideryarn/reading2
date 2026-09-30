@@ -113,8 +113,8 @@ const URL_SOURCE = { kind: "url", url: "https://example.com/a-paper" } as const;
 const UPLOAD_SOURCE = { kind: "upload", uploadId: UPLOAD_ID } as const;
 const EXPECTED_RUNS = () => autoModeRequests().map((steps) => `run:${steps.join(",")}`);
 
-const makeJob = (id: string, status: Job["status"]): Job =>
-  ({ id, slug: SLUG, status, steps: [] }) as unknown as Job;
+const makeJob = (id: string, status: Job["status"], slug = SLUG): Job =>
+  ({ id, slug, status, steps: [] }) as unknown as Job;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -383,6 +383,60 @@ describe("while the save is in flight", () => {
     await settle();
     expect(runs()).toEqual(EXPECTED_RUNS());
     expect(navigations).toEqual([`/read/${SLUG}`]);
+  });
+});
+
+describe("when the address changes before the old completion is opened", () => {
+  const OTHER_SOURCE = { kind: "url", url: "https://example.com/another-paper" } as const;
+  const OTHER_SLUG = "another-paper";
+
+  async function readyFirstArticle(): Promise<void> {
+    addResult = makeJob("job-1", "running");
+    jobs = [addResult];
+    render(URL_SOURCE);
+    await settle();
+    type("the first article's evidence");
+    jobs = [makeJob("job-1", "done")];
+    render();
+    await settle();
+    expect(button("Save and open")).toBeTruthy();
+  }
+
+  it("does not carry the old article's purpose into the new add", async () => {
+    await readyFirstArticle();
+    addResult = makeJob("job-2", "running", OTHER_SLUG);
+    jobs = [makeJob("job-1", "done"), addResult];
+    render(OTHER_SOURCE);
+    await settle();
+    expect(box().value).toBe("");
+
+    jobs = [makeJob("job-1", "done"), makeJob("job-2", "done", OTHER_SLUG)];
+    render();
+    await settle();
+    expect(patches()).toEqual([]);
+    expect(navigations).toEqual([`/read/${OTHER_SLUG}`]);
+  });
+
+  it("ignores the old save when it answers after the new add has begun", async () => {
+    let answer: (r: Response) => void = () => {};
+    patchAnswer = () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      });
+    await readyFirstArticle();
+    press("Save and open");
+    await settle();
+
+    addResult = makeJob("job-2", "running", OTHER_SLUG);
+    jobs = [makeJob("job-1", "done"), addResult];
+    render(OTHER_SOURCE);
+    await settle();
+    answer(new Response(JSON.stringify({ purpose: "the first article's evidence" }), { status: 200 }));
+    await settle();
+
+    expect(runs()).toEqual([]);
+    expect(navigations).toEqual([]);
+    expect(box().value).toBe("");
   });
 });
 
