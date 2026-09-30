@@ -311,19 +311,9 @@ recurring form.
 - **[feedback-reports.md](feedback-reports.md)**, a couple of times a day. Read the queue in full
   first, check `gjd-remote ls` for an `fb<short-id>` prefix before dispatching anything — that list
   is the claim register and it fails in the safe direction — and never more than three at a time.
-  **Look for the same idea under a different id, too** (Greg, 2026-09-30, report 6F: *"I find myself
-  suggesting it again because I can't remember whether I've already suggested it"*). Search its
-  distinctive words in `gjd-remote ls`, `npx tsx scripts/overseer-queue.ts list` and
-  `docs/user-feedback/`, then inspect each lead with `show <id>` or its note. Before dispatch, put
-  repeats in one entry. If its owner is live, SendMessage it the new report id for the final
-  `reports:` header; failed delivery leaves the repeat unresolved. **Add to every brief:** *"Before
-  building, quickly check (a cheap subagent is fine) docs/plans/, docs/user-feedback/,
-  `git log --oneline -200` and `gjd-remote ls`, opening matches rather than trusting their names. On
-  dev: end Shipped and name the commit. Another session owns it: SendMessage that session this
-  report's id for its note's `reports:` header, then stop without writing a second note."* The owner records both ids and the real ending; the sweep reads that note
-  for its Sentry update. This belongs in [feedback-reports.md § The run](feedback-reports.md#the-run),
-  and is here only because that file is pinned and re-pinning is Greg's
-  ([260930g](../plans/260930g-check-for-prior-work-before-building-a-feedback-report.md) § For Greg).
+  **Look for the same idea under a different id, too**, and put the prior-work check in every brief
+  (Greg, 2026-09-30, report 6F: *"I find myself suggesting it again because I can't remember
+  whether I've already suggested it"*) — both are in [feedback-reports.md § The run](feedback-reports.md#the-run).
   Since 2026-09-10 a tmux loop (`feedback-sweep-loop`, started with `scripts/tmux-job.ts` from the
   Overseer's scratchpad, the same shape as the dashboard-refresh loop) runs one sweep every three
   hours as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
