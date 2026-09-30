@@ -279,8 +279,28 @@ no P0; four fixed in place — the sharing inventory counted an invalid Simple a
 and comments still saying Summary had no prompt (S2-2), sharing-wire tests that skipped keys (S2-3),
 direct tests for the passage card, Depth restoration and the switch's semantics (S2-4).
 
-**Not done: a browser check.** The shared local database carries another session's migration
-(`reader_arrivals`, ledger row 1790779383987) that is on no branch yet, so `npm run db:migrate`
-refuses to apply this one, and a dev server on this code cannot read an article without the
-column. Hand-applying the SQL around the ledger would break the next `db:migrate` for everyone, so
-it waits. The panel, the switch, arming and the visitor path are covered by the tests above.
+**Browser check, done after the merge** (the other session's `reader_arrivals` landed on `dev`, so
+this migration was regenerated after it, as `20260930163700_simple_summary.sql`, and applied
+locally). Sonnet subagent, Playwright, on `entropy-24-00930-spya-pywwkq`: all eight checks passed.
+Summary opens on Gists and spends nothing. Arriving on `?summary=simple` shows *Write it* and spends
+nothing. One press made four paragraphs in 14 s, each with two or three chips. A chip's hover shows
+its passage, and a click scrolls there and sets `?at=`. Gists and back is instant, and so is a
+reload. The tooltip reads as written. At 400px there is no horizontal scroll. The only console
+errors are Citations' and Crossrefs' own 404s.
+[Done](260930i-shot-simple-done.png), [narrow](260930i-shot-narrow.png).
+
+**A fidelity slip survives `high`.** On that paper the fourth paragraph says synergy *"grows with
+more feedback loops between source neurons"*, the "recurrent → feedback loops" substitution the
+probe caught at `medium` and thought `high` had fixed. It is one article and one run, so it is
+only a signal. But it is the failure plain words are most prone to: an everyday word standing in
+for a term of art, with the opposite meaning. Worth Greg's eye when he reads one, and the next
+prompt change should target it (keep the author's term beside the plain one where the two differ).
+
+**Full suite, once, through `tmux-job`** after the last merge: 1,257 files passed, 5 failed. Re-run
+alone: `worktree-sweep` passed (contention). The three fleet suites fail on the missing
+`tools/fleet/web/dist` in a fresh worktree, which is not this work. `metadata-page-order` was real:
+a test that arrived from `dev` (6Z) in the merge, with a sharing fixture lacking the new
+`simpleSummary` key, which `asPublicArtefacts` rightly refuses. The key was added, and the file
+now passes 31 of 31.
+
+**Landed on `dev`, not deployed.**
