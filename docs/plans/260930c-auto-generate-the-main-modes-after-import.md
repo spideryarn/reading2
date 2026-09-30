@@ -82,23 +82,27 @@ the owner opens the article, which this flow does straight away.
      of Quotes. Carrying Quotes and Ideas in its own job makes it correct in any order. Normally it
      is younger, waits for the two jobs because it writes what they write, then skips both steps as
      current. It is also exactly the request the Trajectory panel posts when it has neither
-     (`precededBy`, src/web/useTrajectory.ts), so opening the mode while it is queued joins this job
-     (same work key) instead of adding a second. The dependency is read from `STEP_READS` in
-     auto-modes.ts. That is a copy of `STEP_SHARING`'s `reads`, because src/sharing-steps.ts takes a
-     type from src/store/ and the browser may not import it, even for a type. A test keeps the two
-     copies equal.
-2. **`AddPage.tsx`** — the tick box, under the progress card while the job is queued or running;
-   and in the `done` effect, when ticked, `void queueAutoModes(...)` **and navigate at once**. The
-   POSTs are not awaited before navigating: the router is client-side, so the fetches carry on, and
-   the reader gets the article without waiting on five round trips. The job engine is app-wide, so
-   the jobs are driven from the reading view.
-3. **The copy** says what it does and that it costs: *"Generate the main modes when it's ready"*,
-   with a line naming them. No price in the bar, per the house rule in `MODE_CATALOG.how`.
+     (`precededBy`, src/web/useTrajectory.ts), so opening it before either prerequisite finishes
+     joins this job. If one or both reads are ready by then, the panel can post a narrower,
+     differently keyed row; it waits behind this job and its Trajectory step skips as current, so it
+     is redundant queue bookkeeping rather than a second paid run. The dependency is read from
+     `STEP_READS` in auto-modes.ts. That is a copy of `STEP_SHARING`'s `reads`, because
+     src/sharing-steps.ts takes a type from src/store/ and the browser may not import it, even for a
+     type. A test keeps the two copies equal.
+2. **`AddPage.tsx`** — the tick box throughout the live add, including a file transfer before its job
+   exists; and at completion, when ticked, `void queueAutoModes(...)` **and navigate at once**. Both
+   a job reaching `done` and an upload answered as an existing article take that path. The POSTs are
+   not awaited before navigating: the router is client-side, so the fetches carry on, and the reader
+   gets the article without waiting on five round trips. The job engine is app-wide, so the jobs are
+   driven from the reading view.
+3. **The copy** says what it does and that it costs: *"Generate the main modes as soon as it
+   opens"*, with a line naming them, saying Trajectory follows Quotes and Ideas, and saying these are
+   paid model calls. No price in the bar, per the house rule in `MODE_CATALOG.how`.
 
 Nothing on the server changes. `POST /api/jobs` with `{ slug, steps }` is the route every mode
 press already uses, spends no billing slot (docs/project/billing.md: only a request carrying a `url`
-does), and de-duplicates on the work key, so opening Quotes while its auto job is queued joins that
-job rather than making a second one.
+does), and de-duplicates on the work key. Tweets, Glossary, Quotes and Ideas therefore join their
+matching auto job; Trajectory has the dynamic-prerequisite qualification above.
 
 ### What the reader waits on, honestly
 
@@ -200,11 +204,36 @@ Verdict *build with changes*. Every finding taken:
 - **P1** — relying on job age for Trajectory is unsound across instances. Fixed by the request shape
   above.
 - **P2** — the failure states listed in the table above.
-- **P3** — opening Trajectory would have added a second job. Fixed by the same shape.
+- **P3** — opening Trajectory with neither prerequisite would have added a second job. Fixed by the
+  same shape; the narrower request after a prerequisite becomes ready is recorded above and does not
+  repeat the paid Trajectory step.
 - **P4** — a lost POST goes unreported. The four independent POSTs now go together, to shorten the
   window, and the gap is recorded above. Making it durable is Deferred 2.
 
 Sol also confirmed the derived list, that a bare-slug job spends no ingest slot, and that nothing
 caps a reader's active jobs beyond the machine-wide three.
 
-(GPT Sol on the code: to be filled.)
+**GPT Sol on the code** (`gpt-5.6-sol`, high, `workspace-write`, on 07076c5c; exit 0, answer file
+fresh). **Its answer file holds only a closing summary, not the numbered findings.** The findings
+are its diff, which I read line by line and kept whole:
+
+- **The box is offered for the whole add**, including an upload still transferring before its job
+  exists (`offerAutoModes`), not only once a job row appears. An upload can take minutes, and that
+  is when the reader is watching.
+- **An upload answered as an article the reader already has** now honours the box too, both the
+  engine's `article` phase and the posting effect's `{ article }` answer, through one once-guard
+  (`queueModesOnce`). Without this, the box promised work that that completion path skipped. One
+  consequence: reloading an old `/add/upload/<id>` with the box ticked queues the five jobs, the same
+  as re-adding a URL. Each skips if its artefact is current.
+- The checkbox's handler writes the ref in the gesture, so a completion that arrives as a promise
+  cannot read the previous render's choice.
+- Copy: *"… are prepared in the background, with Trajectory after Quotes and Ideas. This uses paid
+  model calls."*
+- Tests added for the transfer state, a URL job already `done` on first render, StrictMode's repeated
+  effects, and the existing-article upload.
+- **Reported, not fixed:** opening Trajectory after Quotes *or* Ideas is already ready makes the
+  panel post a narrower request with a different work key. That row waits behind the auto job and
+  its Trajectory step skips as current, so it adds a row but no second paid run. Recorded in
+  auto-modes.ts.
+
+Gates after its changes: the six neighbouring suites (60 tests) and `npm run typecheck` pass.

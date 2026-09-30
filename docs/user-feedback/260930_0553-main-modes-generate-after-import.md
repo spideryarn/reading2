@@ -23,9 +23,10 @@ status write).
 
 What we did: Greg's simpler version. The add page now has a tick box, on by default, while the
 import runs. When the import finishes it opens the article and starts Tweets, Glossary, Quotes, Ideas
-and Trajectory side by side. Trajectory is queued last and waits for Quotes and Ideas. A mode you open
-while its job is running shows the job's progress. Structure and Summary were already there when the
-article opened, because the import builds them.
+and Trajectory in the background. Tweets, Glossary, Quotes and Ideas are queued together; Trajectory
+is queued last and waits for Quotes and Ideas. A mode you open while its job is running shows the
+job's progress. Structure and Summary were already there when the article opened, because the import
+builds them.
 
 Two things for Greg:
 

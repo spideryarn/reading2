@@ -10,7 +10,7 @@
  * the page queues them on `done` only when the box is ticked, and opens the
  * article either way.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,6 +38,7 @@ Object.defineProperty(window, "localStorage", {
 
 const runs: { slug: string; steps: StepName[] }[] = [];
 let jobs: Job[] = [];
+let addResult: Job | null = null;
 const queue: UseJobs = {
   get jobs() {
     return jobs;
@@ -46,7 +47,7 @@ const queue: UseJobs = {
   error: null,
   driverFailures: {},
   lastFailure: () => null,
-  add: async () => null,
+  add: async () => addResult,
   addUpload: async () => null,
   run: async (request) => {
     runs.push({ slug: request.slug, steps: request.steps });
@@ -107,12 +108,13 @@ describe("queueAutoModes", () => {
     runs.length = 0;
   });
 
-  it("gives Trajectory's job the steps it reads, the same shape its panel posts", () => {
-    /* The panel posts `[...precededBy, "trajectory"]` (useStepJob.ts), and the
-       work key hashes the step list — so this shape is what makes opening the
-       mode join the job instead of adding a second. It is also what keeps a
-       Trajectory job that lands in the line first from refusing for want of
-       Quotes (GPT Sol, P1). */
+  it("gives Trajectory's job the shape its panel posts when both prerequisites are absent", () => {
+    /* The panel posts `[...precededBy, "trajectory"]` (useStepJob.ts). With
+       neither prerequisite present this is the same work key; after one becomes
+       ready the panel may post a narrower row, which serialises behind this job
+       and skips rather than paying for Trajectory twice. Carrying both here is
+       what keeps a job that lands first from refusing for want of Quotes (Sol
+       P1). */
     expect(autoModeRequests()).toEqual([
       ["tweets"],
       ["glossary"],
@@ -181,8 +183,18 @@ describe("the add page", () => {
   function render(status: Job["status"]): void {
     jobs = [job(status)];
     transfer = { uploadId: UPLOAD_ID, filename: "p.pdf", bytes: 1, phase: { kind: "queued", job: job(status) } };
+    renderSource({ kind: "upload", uploadId: UPLOAD_ID });
+  }
+
+  function renderSource(source: Parameters<typeof AddPage>[0]["source"]): void {
     act(() => {
-      root.render(createElement(AddPage, { source: { kind: "upload", uploadId: UPLOAD_ID } }));
+      root.render(createElement(AddPage, { source }));
+    });
+  }
+
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
   }
 
@@ -192,6 +204,9 @@ describe("the add page", () => {
     window.localStorage.clear();
     runs.length = 0;
     navigations.length = 0;
+    jobs = [];
+    addResult = null;
+    transfer = null;
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -208,15 +223,69 @@ describe("the add page", () => {
     expect(box()?.checked).toBe(true);
   });
 
+  it("offers the box while an upload is still transferring, before its job exists", () => {
+    transfer = {
+      uploadId: UPLOAD_ID,
+      filename: "p.pdf",
+      bytes: 10,
+      phase: { kind: "sending", sent: 4 },
+    };
+    renderSource({ kind: "upload", uploadId: UPLOAD_ID });
+    expect(box(), "no box while the file was still transferring").not.toBeNull();
+  });
+
   it("queues the modes and opens the article when it is done", async () => {
     render("running");
     render("done");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settle();
     expect(navigations).toHaveLength(1);
     expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
     expect(runs.every((r) => r.slug === "a-paper")).toBe(true);
+  });
+
+  it("queues when the returned URL job is already done on the first render", async () => {
+    const finished = job("done");
+    jobs = [finished];
+    addResult = finished;
+    renderSource({ kind: "url", url: "https://example.com/a-paper" });
+    await settle();
+    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+    expect(navigations).toEqual(["/read/a-paper"]);
+  });
+
+  it("queues each mode only once under StrictMode's repeated effects", async () => {
+    const finished = job("done");
+    jobs = [finished];
+    transfer = {
+      uploadId: UPLOAD_ID,
+      filename: "p.pdf",
+      bytes: 1,
+      phase: { kind: "queued", job: finished },
+    };
+    act(() => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(AddPage, { source: { kind: "upload", uploadId: UPLOAD_ID } }),
+        ),
+      );
+    });
+    await settle();
+    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+  });
+
+  it("queues the modes when an engine-owned upload resolves to an existing article", async () => {
+    transfer = {
+      uploadId: UPLOAD_ID,
+      filename: "p.pdf",
+      bytes: 1,
+      phase: { kind: "article", slug: "a-paper" },
+    };
+    renderSource({ kind: "upload", uploadId: UPLOAD_ID });
+    await settle();
+    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+    expect(navigations).toEqual(["/read/a-paper"]);
   });
 
   it("opens the article and queues nothing when unticked", async () => {
@@ -224,9 +293,7 @@ describe("the add page", () => {
     act(() => box()?.click());
     expect(box()?.checked).toBe(false);
     render("done");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settle();
     expect(navigations).toHaveLength(1);
     expect(runs).toEqual([]);
     expect(readAutoModes(), "the untick was not remembered").toBe(false);

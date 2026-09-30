@@ -67,7 +67,7 @@ export function autoModesDetail(): string {
   const names = autoModes().map(({ mode }) => MODE_LABEL[mode]);
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
-  return `${list}, side by side, so they are ready when you open them. Each is a model call.`;
+  return `${list} are prepared in the background, with Trajectory after Quotes and Ideas. This uses paid model calls.`;
 }
 
 /**
@@ -89,13 +89,17 @@ export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
  *
  * So Trajectory's job is `["quotes", "ideas", "trajectory"]` — the same steps
  * the Trajectory panel posts when it has neither (`precededBy`,
- * src/web/useTrajectory.ts), so opening the mode joins this job rather than
- * making a second one (same work key). And its correctness does not depend on
- * job age, which it would otherwise: `created_at` comes from the app server's
- * clock, so two POSTs can land in the line out of order (GPT Sol, P1 of the plan
- * review). Normally the Quotes and Ideas jobs are older, this job waits for
- * them (it writes what they write), and its first two steps then skip as
- * current. If the Quotes job failed, this job tries Quotes once more itself.
+ * src/web/useTrajectory.ts). If one of those reads has become ready by the time
+ * the panel opens, the panel can post a narrower, differently keyed job; the
+ * article line keeps it behind this one and its Trajectory step then skips as
+ * current, so it is a redundant row rather than a second paid run.
+ *
+ * This job's correctness does not depend on age, which it would otherwise:
+ * `created_at` comes from the app server's clock, so two POSTs can land in the
+ * line out of order (GPT Sol, P1 of the plan review). Normally the Quotes and
+ * Ideas jobs are older, this job waits for them (it writes what they write),
+ * and its first two steps then skip as current. If the Quotes job failed, this
+ * job tries Quotes once more itself.
  */
 export function autoModeRequests(): StepName[][] {
   return autoModeSteps().map((step) => {
