@@ -103,6 +103,7 @@ import {
 } from "./messages.js";
 import { pdfFigureMarkerValue } from "./assets.js";
 import { pdfFigureRef } from "./pdf-figures.js";
+import { BACK_ATTR, CONTAINER_ATTR, mintNoteId, NOTE_ATTR, REF_ATTR } from "./notes.js";
 import { RESERVED_ATTRS } from "./reserved.js";
 import { whyUnusable } from "./store/artifacts.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
@@ -1785,7 +1786,7 @@ export function renderHtml(
      caption (GPT Sol, plan review of 260930e, F3). A block keeps the place of
      its first piece, so a paragraph a figure interrupted comes out whole, before
      the figure. */
-  const blocks: { record: PdfRecord; text: string; uncertain: boolean }[] = [];
+  const blocks: RenderBlock[] = [];
   const blockOf = new Map<number, number>();
   for (const [i, record] of records.entries()) {
     if (!RENDERED.has(record.type)) continue;
@@ -1804,14 +1805,18 @@ export function renderHtml(
       /* Join, with a space — the model was told to mend hyphenation itself, so
          what arrives here is two halves of a sentence, not two halves of a word. */
       const block = blocks[into]!;
+      block.pieces.push({ page: record.page, start: block.text.length + 1 });
       block.text = `${block.text} ${text}`;
       block.uncertain ||= record.uncertain;
       blockOf.set(i, into);
       continue;
     }
     blockOf.set(i, blocks.length);
-    blocks.push({ record, text, uncertain: record.uncertain });
+    blocks.push({ record, text, uncertain: record.uncertain, pieces: [{ page: record.page, start: 0 }] });
   }
+
+  const notes = collectNotes(records);
+  const markers = findMarkers(blocks, notes);
 
   const parts: string[] = [];
   let list: "ul" | null = null;
@@ -1820,7 +1825,7 @@ export function renderHtml(
      record skipped for having no text never had one. The ordinal is an input to
      the ref, so it has to mean the same thing here and in the manifest. */
   const ordinals = new Map<number, number>();
-  for (const { record, text, uncertain } of blocks) {
+  for (const [b, { record, text, uncertain }] of blocks.entries()) {
     if (record.type === "listitem" && !list) {
       parts.push("<ul>");
       list = "ul";
@@ -1834,10 +1839,14 @@ export function renderHtml(
     const html =
       record.type === "figure" || record.type === "table"
         ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}><figcaption>${escapeHtml(text)}</figcaption></figure>`
-        : `<${tag}${cls}>${escapeHtml(text)}</${tag}>`;
+        : `<${tag}${cls}>${withMarkers(text, markers.filter((m) => m.block === b))}</${tag}>`;
     parts.push(html);
   }
   if (list) parts.push("</ul>");
+  if (notes.length) {
+    const section = renderNotes(notes, markers, Math.min(...records.map((r) => r.page)));
+    if (section) parts.push(section);
+  }
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>
@@ -1847,6 +1856,282 @@ ${parts.join("\n")}
 </article>
 </body></html>
 `;
+}
+
+/** A rendered block, and where each record joined into it starts in its text. */
+interface RenderBlock {
+  record: PdfRecord;
+  text: string;
+  uncertain: boolean;
+  pieces: { page: number; start: number }[];
+}
+
+// ─────────────────────────────────────────────────────────── the notes
+
+/*
+ * **A PDF's footnotes, in the note shape a web article's already have.**
+ *
+ * src/notes.ts rewrites every web footnote into one canonical form — a marker
+ * `<sup><a …note-ref>` in the prose, and the notes in one container `<ol>` at
+ * the end — and everything after it is built on that: stage 3 makes the note
+ * blocks `supplement` and keeps a citing paragraph's id stable across
+ * renumbering, and the reading view previews a marker as the whole note and
+ * sets the notes apart with a way back (docs/project/links.md § A footnote
+ * marker). So the PDF renderer writes the same markup and gets all of it,
+ * rather than growing a second mechanism.
+ *
+ * **Why the stamps are safe to write here** is the argument `pdfFigure` makes in
+ * src/reserved.ts: this is a document we build ourselves out of `escapeHtml`'d
+ * model text, and every attribute value is an id we mint, so nothing arriving
+ * could carry a forged one.
+ *
+ * **The transcription does not say which digits are markers** — rule 1 of the
+ * prompt copies `1` and `¹` alike — so that is found in code, and the prompt did
+ * not change: no import pays for it and no cached chunk goes stale.
+ * docs/plans/260930k-pdf-footnotes-shown-and-linked.md has the survey behind
+ * the rules, and the options passed over.
+ */
+
+interface PdfNote {
+  /** `mintNoteId` of the whole note as printed — the id both its marker and its list item carry. */
+  id: string;
+  /** The printed label — `13`, `³`, `*` — or null when the note opens with none we recognise. */
+  label: string | null;
+  /** The note as printed, label and all: what the reader sees when nothing links to it. */
+  text: string;
+  /** The same without its label, for when a marker draws the number. */
+  body: string;
+  /** The page it starts on, which is where its marker is. */
+  page: number;
+  uncertain: boolean;
+}
+
+/**
+ * A note's leading label: up to three digits, superscript digits, or the
+ * classic symbols — then a space, a full stop and a space, or straight into a
+ * word (`3It is important`, `1Max Planck`). Not `1-2:` (a verse range), not
+ * `1970 was`, and not a letter (`a To test`), which prose could not be searched for.
+ */
+const NOTE_LABEL = /^(\d{1,3}|[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}|[*†‡§¶]{1,3})(?:\.?\s+|(?=\p{L}))/u;
+
+/** The prose a marker may sit in. Captions and headings are left alone. */
+const CITING: ReadonlySet<RecordType> = new Set<RecordType>(["paragraph", "quote", "listitem"]);
+
+/** The footnote records, as notes. A record marked `continues` joins the note before it. */
+function collectNotes(records: readonly PdfRecord[]): PdfNote[] {
+  const notes: Omit<PdfNote, "id">[] = [];
+  /* The page of the last note's last piece, which a continuation must be on or next to. */
+  let lastPage = 0;
+  for (const record of records) {
+    if (record.type !== "footnote") continue;
+    const text = record.text.trim();
+    if (!text) continue;
+    const last = notes.at(-1);
+    if (record.continues && last && record.page >= lastPage && record.page - lastPage <= 1) {
+      last.text = `${last.text} ${text}`;
+      last.body = `${last.body} ${text}`;
+      last.uncertain ||= record.uncertain;
+      lastPage = record.page;
+      continue;
+    }
+    lastPage = record.page;
+    const label = NOTE_LABEL.exec(text);
+    const body = label ? text.slice(label[0].length).trim() : "";
+    notes.push({
+      label: label && body ? label[1]! : null,
+      text,
+      body: body || text,
+      page: record.page,
+      uncertain: record.uncertain,
+    });
+  }
+  /* Minted once every continuation has joined, from the note's prose **without
+     its label** — as the web path mints from prose and not the number, and so
+     that whether a marker was found, which a better matcher could change, never
+     changes the id (GPT Sol, plan review F4). */
+  const taken = new Set<string>();
+  return notes.map((note) => ({ ...note, id: mintNoteId(note.body, taken) }));
+}
+
+const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/** The spellings a label can have in the prose: `13` and `¹³`, whichever the note used. */
+function markerSpellings(label: string): string[] {
+  const plain = [...label]
+    .map((c) => {
+      const i = SUPERSCRIPT_DIGITS.indexOf(c);
+      return i < 0 ? c : String(i);
+    })
+    .join("");
+  if (!/^\d+$/.test(plain)) return [label];
+  return [plain, [...plain].map((d) => SUPERSCRIPT_DIGITS[Number(d)]!).join("")];
+}
+
+/** What a marker is glued to: a letter, a closing bracket or quote, or a sentence's punctuation. */
+const GLUED_TO = /[\p{L}\p{Pe}\p{Pf}.,;:!?"'’]/u;
+
+/**
+ * Where a marker cannot be: in maths, `\(…\)` or `\[…\]`, which is drawn from
+ * its TeX later and would be broken by a tag inside it.
+ *
+ * **Not a `[…]`**, though a citation list looks like the obvious thing to fence
+ * off. `[24,25,31]` is already refused number by number — the first follows a
+ * bracket, which nothing is glued to, and the rest follow a comma after a digit
+ * — while a humanities paper's editorial bracket holds real markers (Kuhn,
+ * `[bare/naked grain/ kernel35]`), which the fence cost.
+ */
+function forbiddenSpans(text: string): [number, number][] {
+  return [...text.matchAll(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/g)].map((m) => [
+    m.index,
+    m.index + m[0].length,
+  ]);
+}
+
+/** The first place in `text[from, to)` where `label` is written as a marker. */
+function candidatesIn(text: string, label: string, from: number, to: number): { start: number; end: number }[] {
+  const spans = forbiddenSpans(text);
+  const found: { start: number; end: number }[] = [];
+  for (const spelling of markerSpellings(label)) {
+    /* A superscript is a marker by its shape; plain digits have to be told
+       apart from the numbers and names they look like. */
+    const plain = /^\d+$/.test(spelling);
+    for (let at = text.indexOf(spelling, from); at >= 0 && at + spelling.length <= to; at = text.indexOf(spelling, at + 1)) {
+      const end = at + spelling.length;
+      const before = text[at - 1] ?? "";
+      if (!GLUED_TO.test(before)) continue;
+      if (/[\p{N}\p{L}]/u.test(text[end] ?? "")) continue;
+      if (spans.some(([s, e]) => at >= s && at < e)) continue;
+      if (plain) {
+        /* `2.7`, `1,000`: after a full stop or a comma, a digit before that means a number. */
+        if ((before === "." || before === ",") && /\p{N}/u.test(text[at - 2] ?? "")) continue;
+        /* `CO2`, `BRCA1`, `CD4`, `H1`: a digit on a capital is a name or a
+           formula far more often than a marker. The real ones in the survey sit
+           on a lower-case word (`nonphysicalists13`) or on punctuation. */
+        if (/\p{Lu}/u.test(before)) continue;
+      }
+      found.push({ start: at, end });
+    }
+  }
+  return found.sort((a, b) => a.start - b.start);
+}
+
+/** One marker found in the prose: where it is, which note it cites, and the two ids that tie them. */
+interface Marker {
+  block: number;
+  start: number;
+  end: number;
+  note: number;
+  noteId: string;
+  markerId: string;
+}
+
+/**
+ * Which note each marker is, found in the prose.
+ *
+ * **Two kinds of note, two cursors**, each only moving forward, and one set of
+ * claimed places shared by both so no marker is taken twice. A paper can print
+ * footnotes and endnotes both, and then the notes arrive `1, 3, …, 2` while the
+ * markers read `1, 2, 3`: one cursor would have walked past marker 2 on its way
+ * to 3 (GPT Sol, plan review F1).
+ *
+ * - **A footnote** looks on its own page, and links only when exactly one
+ *   unclaimed place there reads as its marker. Two means we cannot say which,
+ *   and a missed link costs less than a wrong one (F2).
+ * - **An endnote** — a note on a page with no citing prose at all, the notes
+ *   section after the references, as MDPI prints them — looks from its cursor
+ *   through every page up to its own and takes the first. Uniqueness over a
+ *   whole paper would link almost nothing; the cursor is what keeps it in step.
+ *
+ * A note whose marker is not found is still listed, unlinked.
+ */
+function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]): Marker[] {
+  if (!notes.length) return [];
+  /* Every piece of citing prose, in document order, with its span of its block's text. */
+  const pieces: { block: number; page: number; start: number; end: number }[] = [];
+  for (const [b, block] of blocks.entries()) {
+    if (!CITING.has(block.record.type)) continue;
+    block.pieces.forEach((piece, k) => {
+      const next = block.pieces[k + 1];
+      pieces.push({ block: b, page: piece.page, start: piece.start, end: next ? next.start - 1 : block.text.length });
+    });
+  }
+  const pagesWithProse = new Set(pieces.map((p) => p.page));
+
+  const markers: Marker[] = [];
+  const claimed = new Set<string>();
+  const cursors = { footnote: { piece: 0, offset: 0 }, endnote: { piece: 0, offset: 0 } };
+  for (const [n, note] of notes.entries()) {
+    if (note.label === null) continue;
+    const kind = pagesWithProse.has(note.page) ? "footnote" : "endnote";
+    const cursor = cursors[kind];
+    const found: { piece: number; start: number; end: number }[] = [];
+    for (let k = cursor.piece; k < pieces.length; k++) {
+      const piece = pieces[k]!;
+      if (piece.page > note.page) break;
+      if (kind === "footnote" && piece.page !== note.page) continue;
+      const from = k === cursor.piece ? Math.max(piece.start, cursor.offset) : piece.start;
+      for (const c of candidatesIn(blocks[piece.block]!.text, note.label, from, piece.end)) {
+        if (!claimed.has(`${piece.block}:${c.start}`)) found.push({ piece: k, ...c });
+      }
+      if (kind === "endnote" && found.length) break;
+    }
+    const pick = kind === "endnote" ? found[0] : found.length === 1 ? found[0] : undefined;
+    if (!pick) continue;
+    const block = pieces[pick.piece]!.block;
+    claimed.add(`${block}:${pick.start}`);
+    markers.push({ block, start: pick.start, end: pick.end, note: n, noteId: note.id, markerId: `spya-noteref-${markers.length + 1}` });
+    cursors[kind] = { piece: pick.piece, offset: pick.end };
+  }
+  return markers;
+}
+
+/** A block's text, escaped, with its markers written in as links to their notes. */
+function withMarkers(text: string, markers: readonly Marker[]): string {
+  let out = "";
+  let at = 0;
+  for (const m of [...markers].sort((a, b) => a.start - b.start)) {
+    out += escapeHtml(text.slice(at, m.start));
+    out += `<sup><a ${REF_ATTR}="${m.noteId}" id="${m.markerId}" href="#${m.noteId}">${escapeHtml(text.slice(m.start, m.end))}</a></sup>`;
+    at = m.end;
+  }
+  return out + escapeHtml(text.slice(at));
+}
+
+/** The notes, at the end, in the one container stage 3 reads them from. */
+/**
+ * The notes, at the end, in the one container stage 3 reads them from — or
+ * nothing, when there are none to show.
+ *
+ * **The number beside a note** is drawn by the reading view from the first
+ * marker that cites it (src/web/notes-view.ts). A note nothing cites has no
+ * marker, so a numeric label goes on the `<li>` as its standard `value` — which
+ * the view falls back to before counting — and comes off the text either way,
+ * so the reader never sees `3  3 The note`. A symbol has no `value` to go in,
+ * so an uncited `†` note keeps it in its text.
+ *
+ * **An uncited note on the article's first page is left out, as before.** The
+ * front-matter pass never sees a `footnote` record (its window is `RENDERED`
+ * only), so an affiliation, a correspondence address or an equal-contribution
+ * line printed as a footnote on page 1 arrives here as a note — and its marker
+ * is in the byline, which is not prose we search, so it is never cited. A real
+ * page-1 footnote whose marker we miss is lost from the list, which is where it
+ * was before this change (GPT Sol, plan review F3).
+ */
+function renderNotes(notes: readonly PdfNote[], markers: readonly Marker[], firstPage: number): string {
+  const items: string[] = [];
+  for (const [n, note] of notes.entries()) {
+    const { id } = note;
+    const marker = markers.find((m) => m.note === n);
+    if (!marker && note.page === firstPage) continue;
+    const number = note.label === null ? null : markerSpellings(note.label)[0]!;
+    const value = !marker && number !== null && /^\d+$/.test(number) ? ` value="${Number(number)}"` : "";
+    const shown = marker || value ? note.body : note.text;
+    const cls = note.uncertain ? ' class="pdf-uncertain"' : "";
+    const back = marker ? ` <a ${BACK_ATTR}="${id}" href="#${marker.markerId}">↩</a>` : "";
+    items.push(`<li id="${id}" ${NOTE_ATTR}="${id}"${value}${cls}>${escapeHtml(shown)}${back}</li>`);
+  }
+  if (!items.length) return "";
+  return `<section ${CONTAINER_ATTR}=""><ol>\n${items.join("\n")}\n</ol></section>`;
 }
 
 /**
