@@ -146,3 +146,17 @@ A *Just find it* link (above). Reading the paper itself stays 5G's proposed stag
   reader can watch the quick check find nothing and then read "matched … by the first check". The
   provenance now says **"an earlier quick check"**, true whether the match came from this press or
   a previous one.
+- **The browser check found the reading stopped by the quote guard** on its one real press, and a
+  reproduction with the production request
+  (`scripts/probes/260930d-quote-stop-repro.ts`) found it was not a fluke: **4 of 5 real calls
+  stopped**, none of them the matcher missing article words. The model quoted its own phrase
+  ("throw more chips at it"), the source's wording as if it were the article's, the paper's own term,
+  and a result's title — the old prompt allowed quotation marks for the article's words and the
+  work's title, and the model generalised. One call also ended `length` after ~500 characters.
+  **Fixed in the prompt, not the guard**: no quotation marks at all (the row's checked quote is
+  already on screen), and the answer ceiling 1,500 → 3,000 tokens. Prompt version 4. **Re-run on the
+  same three rows, seven calls: 0 stopped, 7 `stop` finishes**, every answer paraphrased with its
+  source named ([260930d-quote-stop-rerun.log](260930d-quote-stop-rerun.log)); repeat presses on one
+  article cost 4–6¢ against 13–15¢ for the first, so the article cache now hits between presses —
+  the follow-up 260930a left open. This bears on 5Q as well: *Investigate* as shipped this morning
+  would have been stopped on most presses.

@@ -29,7 +29,7 @@ import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } 
  * the second part's layout, or anything here changes what an answer would say**
  * — it is inside the fingerprint, so a bump detaches every stored answer.
  */
-export const CITATION_INVESTIGATE_VERSION = "citation-investigate/3";
+export const CITATION_INVESTIGATE_VERSION = "citation-investigate/4";
 
 /** Each citing passage sent, in characters — *Look it up*'s `PASSAGE_CAP`. */
 export const INVESTIGATE_PASSAGE_CAP = 1_200;

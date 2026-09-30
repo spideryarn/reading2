@@ -292,6 +292,19 @@ async function drain(stream: AsyncGenerator<InvestigateEvent>) {
 }
 
 describe("the request", () => {
+  it("forbids quotation marks outright, and leaves room for the answer (260930d reproduction)", async () => {
+    const h = harness({ deltas: ["Does it back the claim?\nIt does."] });
+    await drain((await h.investigate(SLUG, ID, null)).stream());
+    const body = h.runs[0]?.request as unknown as { max_tokens?: number; messages: { role: string; content: unknown }[] };
+    const system = String(body.messages.find((m) => m.role === "system")?.content);
+    /* 4 of 5 real calls were stopped by the guard when the prompt allowed
+       quotation marks for the article's words and the work's title: the model
+       then quoted its own phrases, the paper's terms and result titles too. */
+    expect(system).toContain("NO QUOTATION MARKS AT ALL");
+    expect(system).not.toContain("Use quotation marks only for");
+    expect(body.max_tokens).toBeGreaterThanOrEqual(3000);
+  });
+
   it("is its own job, pins Exa with the probe's caps and max_characters, and caches the article", async () => {
     const h = harness({ deltas: ["Does it back the claim?\nIt does."] });
     const { stream } = await h.investigate(SLUG, ID, "About the reader: a physicist");
@@ -362,7 +375,7 @@ describe("the request", () => {
       expect(second, "the second part invites the claim again").not.toMatch(/Describe a result as this work/);
     }
     expect(CITATION_INVESTIGATE_VERSION, "the prompt changed, so stored answers must detach").toBe(
-      "citation-investigate/3",
+      "citation-investigate/4",
     );
   });
 
@@ -437,7 +450,7 @@ describe("what is kept", () => {
       searches: 1,
       searchesFrom: "server_tool_use_details",
       at: "2026-09-30T12:00:00.000Z",
-      promptVersion: "citation-investigate/3",
+      promptVersion: "citation-investigate/4",
     });
     expect(h.finished).toEqual(["lease-1"]);
   });

@@ -124,8 +124,13 @@ export const INVESTIGATE_MAX_RESULTS = 5;
  * actually had. Accepted under `require_parameters` (the probe's `maxchars`).
  */
 export const INVESTIGATE_MAX_CHARACTERS = MAX_EVIDENCE_EXCERPT;
-/** The answer ceiling — explain's. The prompt asks for under about 250 words. */
-export const ANSWER_TOKENS = 1_500;
+/**
+ * The answer ceiling. The prompt asks for under about 250 words (~700 tokens), but
+ * 1,500 — explain's — ended one real call `length` after ~500 characters
+ * (plan 260930d, the quote-stop reproduction), so the searches and whatever the
+ * model spends before its prose share this. 3,000 costs at most ~2¢ more.
+ */
+export const ANSWER_TOKENS = 3_000;
 
 /**
  * **The allowance, from the probe's measured cost** (the plan § The probe):
@@ -203,8 +208,8 @@ only mention it, say what they say about it.
 Never say whether you found the work itself, and never say that any result is
 the work, is the paper, or hosts it: the reader is told that separately. Refer
 to each result by its site and what it is: a page on gwern.net, the abstract
-on arxiv.org, a summary on nature.com. Give a result's own title only without
-quotation marks, unless it is exactly the work's title.
+on arxiv.org, a summary on nature.com. Give a result's own title, or the work's,
+as plain words, never inside quotation marks.
 
 WHAT TO WRITE
 
@@ -228,20 +233,18 @@ For you
   matters for this reader given what they have said. Leave this part out
   entirely, lead and all, when there is no such section.
 
-QUOTATION MARKS: ONLY FOR THE ARTICLE'S OWN WORDS
+NO QUOTATION MARKS AT ALL
 
-Never quote a search result, abstract, page or paper, not even a short phrase,
-and never put words from them inside quotation marks. Paraphrase, and name the
-site the point came from. The reader cannot check a quotation from a page they
-have not seen.
+Do not use quotation marks of any kind, for anything: not for a search result,
+abstract, page or paper, not for a title or a term, not for a phrase of your
+own, and not for the article's words either. Write titles and terms as plain
+words, paraphrase what a source says and name the site it came from, and when
+you point to the article's wording, describe it rather than copying it. The
+reader cannot check a quotation from a page they have not seen, and the one
+checked quotation this row has is already shown to them above your reading.
 
-Use quotation marks only for:
-- words of the article being read, copied exactly as it has them;
-- the work's own title, exactly as given below;
-- when the details below give verified passages from a matched result, those
-  passages, copied exactly.
-Anything else in quotation marks stops your answer. No block quotes, and no
-line that begins with ">".
+Any quotation mark stops your answer. No block quotes, and no line that begins
+with ">".
 
 WHAT IT MUST NOT DO
 
@@ -289,7 +292,7 @@ export function investigatePart(
       ...(matched.title ? [`Its title: ${matched.title}`] : []),
     );
     if (matched.quotes.length > 0) {
-      lines.push("Passages verified to be in that result's extract, which you may quote exactly:");
+      lines.push("Passages verified to be in that result's extract (the reader already sees these; paraphrase, do not quote):");
       for (const q of matched.quotes) lines.push(`"""`, q, `"""`);
     }
   } else {
