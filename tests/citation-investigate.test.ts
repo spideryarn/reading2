@@ -175,7 +175,7 @@ interface Harness {
   save?: (inv: CitationInvestigation) => Promise<void>;
   rows?: CitedWork[];
   /** The list every read after the first answers — the list made again while step 1 ran. `undefined`: unchanged. */
-  rowsAfter?: CitedWork[] | ((savedFinds: CitationFind[]) => CitedWork[]);
+  rowsAfter?: CitedWork[] | ((savedFinds: CitationFind[], removedFindAts: string[]) => CitedWork[]);
   /** What the first step's model call answers, or throws. */
   lookupReply?: unknown | Error;
   saveFind?: (find: CitationFind) => Promise<void>;
@@ -202,13 +202,14 @@ function harness(h: Harness) {
   const policies: RatePolicy[] = [];
   const lookupCalls: AiRequestBody[] = [];
   const savedFinds: CitationFind[] = [];
+  const removedFindAts: string[] = [];
   let reads = 0;
   const listed = h.rows ?? [work(h.lookup ? { lookup: h.lookup } : {})];
   const deps: InvestigateCitationDeps = {
     reader: {
       loadCitations: async () => {
         reads += 1;
-        const after = typeof h.rowsAfter === "function" ? h.rowsAfter(savedFinds) : h.rowsAfter;
+        const after = typeof h.rowsAfter === "function" ? h.rowsAfter(savedFinds, removedFindAts) : h.rowsAfter;
         const rows = reads > 1 && after !== undefined ? after : listed;
         return { citations: citationsOf(rows), stale: false, outdated: false };
       },
@@ -216,7 +217,10 @@ function harness(h: Harness) {
     },
     finds: {
       /* The store: a find saved by step 1 is the one read back. */
-      load: async () => savedFinds.at(-1) ?? h.find ?? null,
+      load: async () => {
+        const found = savedFinds.at(-1) ?? h.find ?? null;
+        return found && !removedFindAts.includes(found.at) ? found : null;
+      },
       save: async (_slug, _id, find) => {
         if (h.saveFind) await h.saveFind(find);
         savedFinds.push(find);
@@ -270,6 +274,7 @@ function harness(h: Harness) {
     policies,
     lookupCalls,
     savedFinds,
+    removedFindAts,
     taken: () => buckets.length,
   };
 }
@@ -353,7 +358,7 @@ describe("the request", () => {
       expect(system).toMatch(/by its site/);
       expect(system, "the old instruction to describe a result as this work").not.toMatch(/describe a result as this work/i);
       expect(system, "the old instruction to say the work itself was not found").not.toMatch(/work itself was not found/);
-      const second = (messages[1]?.content as { text: string }[])[1]?.text ?? "";
+      const second = (messages[1]?.content as { text: string }[] | undefined)?.[1]?.text ?? "";
       expect(second, "the second part invites the claim again").not.toMatch(/Describe a result as this work/);
     }
     expect(CITATION_INVESTIGATE_VERSION, "the prompt changed, so stored answers must detach").toBe(
@@ -639,6 +644,19 @@ describe("step 1, the lookup — when it runs (P-2)", () => {
     expect(h.buckets).toEqual(["citation-investigate"]);
     expect(h.finished).toEqual(["lease-1"]);
   });
+
+  it("can free the allowance when the admitted client never starts the stream", async () => {
+    const h = harness({ deltas: ["An answer."] });
+    const admitted = await h.investigate(SLUG, ID, null);
+    expect(h.finished).toEqual([]);
+
+    await admitted.release();
+    await admitted.release();
+
+    expect(h.lookupCalls).toHaveLength(0);
+    expect(h.runs).toHaveLength(0);
+    expect(h.finished).toEqual(["lease-1"]);
+  });
 });
 
 describe("step 1, the lookup — what it hands on", () => {
@@ -664,6 +682,42 @@ describe("step 1, the lookup — what it hands on", () => {
     expect(frame?.type === "lookup" ? frame.response : null).toEqual(fromRoute);
     expect(h.savedFinds).toEqual(findSaved);
     expect(h.savedFinds[0]?.lookup?.state).toBe("assessed");
+  });
+
+  it("keeps /find's allowance scoped to the provider call, not the later save", async () => {
+    let saveStarted: (() => void) | undefined;
+    const saving = new Promise<void>((resolve) => {
+      saveStarted = resolve;
+    });
+    let letSaveFinish: (() => void) | undefined;
+    const saveGate = new Promise<void>((resolve) => {
+      letSaveFinish = resolve;
+    });
+    const finished: string[] = [];
+    const find = makeFindCitation({
+      reader: {
+        loadCitations: async () => ({ citations: citationsOf([work()]), stale: false, outdated: false }),
+        loadArticle: async () => ARTICLE,
+      },
+      finds: {
+        save: async () => {
+          saveStarted?.();
+          await saveGate;
+        },
+      },
+      allowance: {
+        take: async () => ({ kind: "allowed", id: "find-lease" }),
+        finish: async (id) => void finished.push(id),
+      },
+      call: async () => ({ json: FOUND_ANSWER, answeredBy: "anthropic/claude-sonnet-5", generationId: null }),
+      now: () => "2026-09-30T12:00:00.000Z",
+    });
+
+    const pending = find(SLUG, ID);
+    await saving;
+    expect(finished).toEqual(["find-lease"]);
+    letSaveFinish?.();
+    await pending;
   });
 
   it("feeds a found page into the matched branch and the quote guard, read back from the store (P-3)", async () => {
@@ -710,6 +764,34 @@ describe("step 1, the lookup — what it hands on", () => {
     expect(h.saved[0]?.matchedHost).toBeNull();
     const second = secondPart(h.runs);
     expect(second).toContain("No search result has been matched to this work.");
+  });
+
+  it("keeps an older code-identified match when a later quick check finds no page (260930d review, C-2 overruled)", async () => {
+    const unreadable = { ...LOOKUP, state: "unreadable" as const } as CitationLookup;
+    const oldFind: CitationFind = {
+      url: PAPER_PAGE.url,
+      host: "arxiv.org",
+      searches: 1,
+      model: "m",
+      at: unreadable.at,
+      lookup: unreadable,
+    };
+    const h = harness({
+      deltas: ["An answer."],
+      lookup: unreadable,
+      find: oldFind,
+      lookupReply: NO_MATCH_ANSWER,
+      rowsAfter: (_saved, removed) => [work(removed.includes(unreadable.at) ? {} : { lookup: unreadable })],
+    });
+
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+
+    expect(error).toBeNull();
+    /* Look it up never deleted a find on a no-match, and the merged press does
+       not either: that page passed code's identity check, and one search that
+       came back empty is not evidence against it. */
+    const second = secondPart(h.runs);
+    expect(second).toContain("A first check matched one search result to this work:");
   });
 });
 
@@ -760,6 +842,24 @@ describe("step 1, the lookup — when it fails (P-5)", () => {
     expect(h.finished).toEqual(["lease-1"]);
   });
 
+  it.each(["fetch failed", "terminated"])(
+    "does not mistake a store TypeError(%s) for undici failing the provider call",
+    async (message) => {
+      const broken = new TypeError(message);
+      const h = harness({
+        deltas: ["An answer."],
+        lookupReply: FOUND_ANSWER,
+        saveFind: async () => {
+          throw broken;
+        },
+      });
+      const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+      expect(error).toBe(broken);
+      expect(h.runs).toHaveLength(0);
+      expect(h.finished).toEqual(["lease-1"]);
+    },
+  );
+
   it("fails the press on a bug in the call, rather than calling it the provider's", async () => {
     const bug = new TypeError("Cannot read properties of undefined (reading 'choices')");
     const h = harness({ deltas: ["An answer."], lookupReply: bug });
@@ -770,6 +870,25 @@ describe("step 1, the lookup — when it fails (P-5)", () => {
 });
 
 describe("between the steps: the list is read again (P-3)", () => {
+  it("does not skip the lookup when the assessed reading is no longer current at the re-read", async () => {
+    const find = { url: "https://arxiv.org/abs/2001.08361", host: "arxiv.org", searches: 1, model: "m", at: "x", lookup: LOOKUP };
+    const h = harness({
+      deltas: ["An answer."],
+      lookup: LOOKUP,
+      find,
+      lookupReply: FOUND_ANSWER,
+      rowsAfter: (finds) => {
+        const replacement = finds.at(-1)?.lookup;
+        return [work(replacement ? { lookup: replacement } : {})];
+      },
+    });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.lookupCalls).toHaveLength(1);
+    expect(types(events)).toEqual(["stage:finding", "lookup", "stage:reading", "delta", "done"]);
+    expect(secondPart(h.runs)).toContain("A first check matched one search result to this work:");
+  });
+
   it("sends the why the list has after step 1, not the one it had at the press", async () => {
     const h = harness({
       deltas: ["An answer."],

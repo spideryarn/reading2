@@ -823,6 +823,7 @@ function WorkRow({
             stage: investigate.stage,
             draft: investigate.draft,
             failed: investigate.failed,
+            lookupAt: work.lookup?.at ?? null,
           })}
           busy={investigate.running !== null}
           lookup={work.lookup}

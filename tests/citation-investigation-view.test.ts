@@ -92,9 +92,10 @@ describe("investigationProvenance", () => {
     );
   });
 
-  /* Plan 260930d P-4: the row's lookup matched a page, and this search did
-     not return it. `matchedHost` is null, so without the lookup the line would
-     say "could not confirm" right under a row showing a code-matched page. */
+  /* Plan 260930d P-4: the row's lookup matched a page, but this search did
+     not return a usable extract from it. `matchedHost` is null both when the
+     page is absent and when its result has an empty extract, so the copy must
+     not claim which happened. */
   const UNMATCHED = {
     sources: [src("https://example.org/a"), src("https://example.com/b")],
     extractsRead: 2,
@@ -108,10 +109,10 @@ describe("investigationProvenance", () => {
     "It was instructed not to quote them. ";
 
   it.each(["assessed", "unreadable"] as const)(
-    "a %s lookup whose page this search did not return: says the first check matched it, and this search did not",
+    "a %s lookup whose page this search did not yield as an extract: says only what the evidence proves",
     (state) => {
       expect(investigationProvenance(UNMATCHED, { state, host: "arxiv.org" })).toBe(
-        `${STEM}The first check matched a page on arxiv.org; this search's own results did not include it.`,
+        `${STEM}The first check matched a page on arxiv.org; this search did not return an extract from it.`,
       );
     },
   );

@@ -127,3 +127,16 @@ A *Just find it* link (above). Reading the paper itself stays 5G's proposed stag
   names *Look it up* (the button is gone); prompt version 3, which hides investigations stored
   under version 2 until pressed again — a deliberate cost of being honest about which prompt wrote
   them. Tests were written after the code; four mutations each turned them red.
+- **Code review** — [260930d-citations-one-button-code-review-sol.md](260930d-citations-one-button-code-review-sol.md),
+  *approve with the fixes made*: C-1 (a current reading that went stale on the re-read now re-runs
+  step 1), C-3 (only the provider boundary brands a network error, so a store failure is never
+  taken for "the quick check failed"), C-4 (an admitted press that is never iterated releases its
+  allowance), C-5 (`/find` frees its slot straight after the call again), C-6/C-7 (the client
+  drops derived fields at `finding` and on a `lookup` frame, and the server reattaches what is
+  current), C-8 (copy for a matched page whose extract was empty), C-9 (the tip promises only what
+  the code does), C-10 (lint). **C-2 overruled**: on a no-match Sol deleted the row's earlier
+  stored find so that an older `unreadable` match would not be credited. *Look it up* never deleted
+  on a no-match; that page passed code's identity check, and one empty search is not evidence
+  against it — deleting it would also take a correct link off an unlinked row. The delete, and the
+  store method it added, are removed; the test now pins the older match being kept and credited
+  (red first). Gates after: typecheck 0; 20 files, 779 tests (Postgres included); build 0.

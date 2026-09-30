@@ -406,7 +406,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        - "Investigate … first searches … Then it writes a longer reading":
          since plan 260930d *Look it up* is the first step of the one
          *Investigate* press (src/citation-investigate.ts), skipped when the
-         row already has a current reading, and the reading after it is
+         row already has a current checked reading, and the reading after it is
          written from search extracts (plan 260930a).
        The sentence is about the mode, not the press: *Investigate* is on a
        row, owner-only, and the sentence says whose it is. No

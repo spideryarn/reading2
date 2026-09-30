@@ -140,7 +140,18 @@ no card section.
 
 ## Look it up on the web
 
-Every owner row offers **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
+**Since 2026-09-30 there is no *Look it up* button: it is the first step of *Investigate*'s one
+press** (§ [Investigate](#investigate-a-closer-look-at-one-work-on-demand)), asked for through the
+Feedback button (SPIDERYARN-READING2-75):
+
+> In Citations mode, can we amalgamate "Look it up" and "Investigate" buttons to get the best of
+> both worlds?
+
+Everything below still describes that step — the call, its identity rule, its checked quotes, its
+store — and `POST …/find` still answers it on its own for a tab opened before the change. Where this
+section says *Look it up*, read *the quick check*.
+
+Every owner row offered **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
 it*, offered only on a row with no link, until 2026-09-29, when it also began reading what it
 finds (§ [It reads the search extract](#it-reads-the-search-extract-never-the-work)). **It explains itself in a `ControlTip` rather than a `title`** since
 2026-09-16, asked for through the Feedback button (SPIDERYARN-READING2-3K): *"make it clearer what
@@ -238,7 +249,15 @@ Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), fo
 > deeper dive, i.e. don't do it automatically for every single paper every time we run Citations
 > mode.
 
-Every owner row has **Investigate** beside *Look it up*. One press is one streamed answer, written
+Every owner row has **Investigate**, the one button since 2026-09-30
+([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)). A press
+first runs *Look it up*'s quick check — unless the row already has a current reading that checked
+out — so code, not the model, decides which search result is the work, and the row's link and
+checked quote land first. A provider failure there stops the press before the larger call is paid
+for; finding nothing does not, and the reading goes on unconfirmed. The row and the article are
+then read again, and the reading is written from that. The quick check can land while the reading
+fails, and the row says so. One allowance covers both calls: one at a time, 8 an hour and 20 a day
+per reader, 55 a day across everyone. Then, as before, one streamed answer, written
 from a few web searches and kept on the row: *does it back the claim*, *how else it bears on this
 article*, and *for you* when the reader has written a profile or *why you're reading this one*.
 Nothing runs for every row. The design, its two plan reviews, the probe and the code reviews are
@@ -266,8 +285,9 @@ never reaches a visitor, and it is in all three exports. A failed *Investigate a
 earlier answer in place, and the row says so.
 
 **Bounded** by its own allowance bucket, `citation-investigate`: one at a time, 8 an hour and 20 a
-day per reader, and 60 a day across everyone. These numbers come from the probe: $0.12 a press on
-average and $0.15 at worst, budgeted at $0.30 against a $20-a-day ceiling. Exa is pinned, with 8
+day per reader, and 55 a day across everyone. These numbers come from the probe: $0.12 a press on
+average and $0.15 at worst, budgeted at $0.30, plus the quick check's ~3¢ since the two were merged
+— 55 × $0.33 is about $18, under a $20-a-day ceiling. Exa is pinned, with 8
 results of at most 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)).
 It is the `citation-investigate` job on the gateway.
 

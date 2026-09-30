@@ -949,11 +949,15 @@ describe("Investigate", () => {
     /* Plan 260930d: both steps, in order. */
     expect(card.what).toMatch(/^First it searches the web for this work's own page/);
     expect(card.what).toMatch(/Then it writes a longer reading/);
+    expect(card.what).toMatch(/unless it already has a current checked reading/);
+    expect(card.what).not.toMatch(/unless it has already/);
     expect(card.how).toMatch(/costs money/i);
     expect(card.how).toMatch(/extracts/i);
     expect(card.how).toMatch(/may be an abstract or part of a paper/i);
     expect(card.how).toMatch(/never fetches the paper itself/i);
-    expect(card.how).toMatch(/Both results are kept on this row/);
+    expect(card.how).toMatch(/When the quick check finds a matching page, its result is kept on this row/);
+    expect(card.how).toMatch(/The longer reading is kept on this row when it finishes/);
+    expect(card.how).not.toMatch(/Both results are kept/);
     expect(copy).not.toMatch(/verif|confirm|model call|not the paper|reads the paper/i);
   });
 
@@ -999,7 +1003,13 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([CENTRAL]),
-        investigateFailed: { id: CENTRAL.id, message: "This answer tried to quote a source directly.", previousAt: null, lookupKept: false },
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "This answer tried to quote a source directly.",
+          previousAt: null,
+          previousLookupAt: null,
+          lookupKept: false,
+        },
         investigate: async () => {
           pressed++;
         },
@@ -1020,7 +1030,13 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([had]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at, lookupKept: false },
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "It stopped.",
+          previousAt: INVESTIGATION.at,
+          previousLookupAt: null,
+          lookupKept: false,
+        },
       }),
     );
     const r = row(CENTRAL.id);
@@ -1034,7 +1050,13 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([{ ...CENTRAL, lookup: ASSESSED }]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null, lookupKept: true },
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "It stopped.",
+          previousAt: null,
+          previousLookupAt: null,
+          lookupKept: true,
+        },
       }),
     );
     const r = row(CENTRAL.id);
@@ -1046,12 +1068,36 @@ describe("Investigate", () => {
     expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
   });
 
+  it("says the quick check was kept when its frame was lost but the failure re-read attached it", async () => {
+    await draw(
+      owner({
+        citations: artefact([{ ...CENTRAL, lookup: ASSESSED }]),
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "It stopped.",
+          previousAt: null,
+          previousLookupAt: null,
+          lookupKept: false,
+        },
+      }),
+    );
+    expect([...row(CENTRAL.id).querySelectorAll(".cite-inv-previous")].map((n) => n.textContent)).toEqual([
+      INVESTIGATE_LOOKUP_KEPT,
+    ]);
+  });
+
   it("claims the earlier investigation is still shown only when one still attaches after the re-read", async () => {
     /* The new match detached the earlier answer: nothing stored on the row. */
     await draw(
       owner({
         citations: artefact([{ ...CENTRAL, lookup: ASSESSED }]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at, lookupKept: true },
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "It stopped.",
+          previousAt: INVESTIGATION.at,
+          previousLookupAt: null,
+          lookupKept: true,
+        },
       }),
     );
     let said = [...row(CENTRAL.id).querySelectorAll(".cite-inv-previous")].map((n) => n.textContent);
@@ -1061,7 +1107,13 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([{ ...CENTRAL, lookup: ASSESSED, investigation: INVESTIGATION }]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at, lookupKept: true },
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "It stopped.",
+          previousAt: INVESTIGATION.at,
+          previousLookupAt: null,
+          lookupKept: true,
+        },
       }),
     );
     said = [...row(CENTRAL.id).querySelectorAll(".cite-inv-previous")].map((n) => n.textContent);
@@ -1074,7 +1126,13 @@ describe("Investigate", () => {
     await draw(
       owner({
         citations: artefact([kept]),
-        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null, lookupKept: false },
+        investigateFailed: {
+          id: CENTRAL.id,
+          message: "It stopped.",
+          previousAt: null,
+          previousLookupAt: null,
+          lookupKept: false,
+        },
       }),
     );
     const r = row(CENTRAL.id);
@@ -1112,14 +1170,14 @@ describe("Investigate", () => {
     expect(r.querySelector(".cite-inv-prov")?.textContent).toMatch(/We could not confirm that any result is this work itself\.$/);
   });
 
-  it("on a looked-up row whose page this search did not return, says so rather than 'could not confirm'", async () => {
+  it("on a looked-up row with no matching extract, says so rather than 'could not confirm'", async () => {
     await draw(owner({ citations: artefact([{ ...LOOKED, investigation: INVESTIGATION }]) }));
     const r = row(LOOKED.id);
     await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
     const prov = r.querySelector(".cite-inv-prov")?.textContent ?? "";
     expect(prov).toBe(investigationProvenance(INVESTIGATION, ASSESSED));
     expect(prov).toMatch(
-      /The first check matched a page on arxiv\.org; this search's own results did not include it\.$/,
+      /The first check matched a page on arxiv\.org; this search did not return an extract from it\.$/,
     );
     expect(prov).not.toMatch(/could not confirm/);
     /* The lookup's own reading is still drawn once, by the row. */

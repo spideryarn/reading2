@@ -77,8 +77,8 @@ function sourceHosts(sources: readonly { url: string }[]): string[] {
  *
  * - the first check's page was among this answer's own extracts
  *   (`matchedHost` non-null, which only the server can say);
- * - the first check matched a page, but this search did not return it —
- *   `matchedHost` is null and the row's `lookup` is one that identified a page
+ * - the first check matched a page, but this search did not return an extract
+ *   from it — `matchedHost` is null and the row's `lookup` identified a page
  *   (`assessed` or `unreadable`, as `matchedPageOf` in
  *   src/citation-investigate-context.ts decides). **Read from the row, not
  *   stored**: an investigation attaches only while its fingerprint matches,
@@ -103,7 +103,7 @@ export function investigationProvenance(
     inv.matchedHost !== null
       ? `One result (${inv.matchedHost}) was matched to the work by the first check.`
       : firstCheckHost !== null
-        ? `The first check matched a page on ${firstCheckHost}; this search's own results did not include it.`
+        ? `The first check matched a page on ${firstCheckHost}; this search did not return an extract from it.`
         : "We could not confirm that any result is this work itself.";
   return [
     returned,
@@ -176,6 +176,8 @@ export interface InvestigateFailureHere {
   message: string;
   /** The stored investigation's `at` when the press was made, or null for none. */
   previousAt: string | null;
+  /** The attached lookup's `at` when the press was made, or null for none. */
+  previousLookupAt: string | null;
   /** The press's first step stored a page before the failure (plan 260930d P-4). */
   lookupKept: boolean;
 }
@@ -207,6 +209,8 @@ export function investigationViewOf(
     stage?: InvestigateStage | null;
     draft: string | null;
     failed: InvestigateFailureHere | null;
+    /** The lookup still attached after the failure re-read, or null for none. */
+    lookupAt: string | null;
   },
 ): InvestigationView {
   if (here.running) {
@@ -219,7 +223,9 @@ export function investigationViewOf(
        A stored answer newer than the one there at the press is that answer:
        draw it, not the failure. */
     if (stored !== undefined && stored.at !== here.failed.previousAt) return { kind: "kept", investigation: stored };
-    return { kind: "failed", message: here.failed.message, previous: stored ?? null, lookupKept: here.failed.lookupKept };
+    const lookupKept =
+      here.failed.lookupKept || (here.lookupAt !== null && here.lookupAt !== here.failed.previousLookupAt);
+    return { kind: "failed", message: here.failed.message, previous: stored ?? null, lookupKept };
   }
   return stored === undefined ? { kind: "none" } : { kind: "kept", investigation: stored };
 }
@@ -265,14 +271,14 @@ export function InvestigateButton({
         <ControlTip
           head={label}
           /* Each clause bounded by what the code does (plan 260930d): the
-             first step is *Look it up* (src/citation-find.ts), skipped when
-             the row already has a current reading — "unless it has already";
+             first step is *Look it up* (src/citation-find.ts), skipped only
+             for a current assessed lookup — "a current checked reading";
              "passages code found" is `verifyQuote`; no search count is
              promised (the provider's); what is read is extracts — neither
              step fetches a page; the profile part is the prompt's *For you*,
              only with a profile; both are stored per row. */
-          what="First it searches the web for this work's own page, unless it has already, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Then it writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
-          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it never fetches the paper itself. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. Both results are kept on this row; a new reading replaces the old one only if it finishes."
+          what="First it searches the web for this work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Then it writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
+          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it never fetches the paper itself. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. When the quick check finds a matching page, its result is kept on this row. The longer reading is kept on this row when it finishes; a new one replaces the old one only then."
           tap={reveal.tap}
         />
       }

@@ -461,18 +461,27 @@ export class LookupCallFailed extends Error {
 }
 
 /**
- * **Did the lookup's call fail for a reason outside our code?** A
- * `LookupCallFailed` (above), or the network under `openRouterJson`: Node's
- * `fetch` (undici) rejects every DNS, connection and TLS failure as the one
- * `TypeError("fetch failed")`, and a body cut off mid-read as
- * `TypeError("terminated")` — src/fetch.ts § How it fails. Matched on the exact
- * message as well as the class, because a `TypeError` is also what a bug
- * throws, and a bug must fail the press rather than read as a provider outage.
- * `callOnce` rethrows these unchanged, so `/find` still answers them as it did.
+ * A transport failure known to have come from the lookup's model call. Kept
+ * separate from an arbitrary `TypeError` so a store or programming failure
+ * with undici's terse message cannot be mistaken for the provider (P-5).
+ * `/find` unwraps it again, preserving that route's old error exactly.
+ */
+class LookupTransportFailed extends Error {
+  constructor(readonly original: TypeError) {
+    super(original.message, { cause: original });
+    this.name = "LookupTransportFailed";
+  }
+}
+
+/**
+ * **Did the lookup's call fail for a reason outside our code?** Either the
+ * provider/deadline/unreadable `LookupCallFailed`, or an undici failure branded
+ * by `callOnce` at the model-call boundary. The boundary matters: a store can
+ * also throw `TypeError("fetch failed")` or `TypeError("terminated")`, and that
+ * is our failure, not a reason to show the quick-check copy (P-5).
  */
 export function isLookupCallFailure(err: unknown): boolean {
-  if (err instanceof LookupCallFailed) return true;
-  return err instanceof TypeError && (err.message === "fetch failed" || err.message === "terminated");
+  return err instanceof LookupCallFailed || err instanceof LookupTransportFailed;
 }
 
 /**
@@ -501,6 +510,9 @@ async function callOnce(
       throw new LookupCallFailed(504, tookTooLong(Math.round(ctx.timeoutMs / 1000)).message);
     }
     ctx.line.error({ ...errorFields(err), model: ctx.model, ms }, "a citation find failed");
+    if (err instanceof TypeError && (err.message === "fetch failed" || err.message === "terminated")) {
+      throw new LookupTransportFailed(err);
+    }
     throw err;
   }
 }
@@ -585,6 +597,8 @@ export interface CitationLookupDeps {
   readonly call?: FindCitationDeps["call"];
   readonly now?: () => string;
   readonly timeoutMs?: number;
+  /** `/find` releases its fetch allowance when the provider call ends. Investigate owns a longer, two-call lease. */
+  readonly callFinished?: () => Promise<void>;
 }
 
 /**
@@ -597,9 +611,8 @@ export interface CitationLookupDeps {
  * allowance first** — this is a billed web search, and nothing here counts it.
  *
  * `listed` is the row as the list has it now; `article` is the article it
- * belongs to. A call failure throws `LookupCallFailed`, or the raw network
- * error (`isLookupCallFailure` recognises both); a save failure throws
- * whatever the store threw.
+ * belongs to. A call failure is branded for `isLookupCallFailure`; a save
+ * failure throws whatever the store threw.
  */
 export async function runCitationLookup(
   deps: CitationLookupDeps,
@@ -630,12 +643,17 @@ export async function runCitationLookup(
   const line = log("model").child({ slug, entryId });
 
   const started = Date.now();
-  const answered = await sendAndRead(lookupRequest(context, model), work.title, {
-    call: send,
-    model,
-    timeoutMs,
-    line,
-  });
+  let answered: FoundWorkPage & { json: unknown };
+  try {
+    answered = await sendAndRead(lookupRequest(context, model), work.title, {
+      call: send,
+      model,
+      timeoutMs,
+      line,
+    });
+  } finally {
+    await deps.callFinished?.();
+  }
   const { reading, model: used } = answered;
 
   const kept = reading.verdict.kind === "kept" ? reading.verdict.page : null;
@@ -717,12 +735,23 @@ export function makeFindCitation(
       log("model").child({ slug, entryId }).warn({ why: allowance.kind }, "citation find: allowance spent");
       throw refusedBy(allowance.kind);
     }
+    let released = false;
+    const release = async () => {
+      if (released) return;
+      released = true;
+      await deps.allowance.finish(allowance.id);
+    };
     try {
-      return await runCitationLookup(deps, slug, entryId, listed, article);
+      return await runCitationLookup({ ...deps, callFinished: release }, slug, entryId, listed, article);
+    } catch (err) {
+      /* `callOnce` brands undici's two otherwise-indistinguishable TypeErrors
+         so Investigate can classify only errors from the provider boundary.
+         This compatibility route still exposes the raw error it exposed before. */
+      if (err instanceof LookupTransportFailed) throw err.original;
+      throw err;
     } finally {
       /* Frees the concurrency slot whatever happened; the fill still counts. */
-      await deps.allowance.finish(allowance.id);
+      await release();
     }
   };
 }
-

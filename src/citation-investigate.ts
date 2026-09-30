@@ -475,6 +475,12 @@ export interface InvestigateCitationDeps {
   readonly stallMs?: number;
 }
 
+export interface InvestigationRun {
+  stream(): AsyncGenerator<InvestigateEvent>;
+  /** Release admission if the HTTP client has already gone and never starts `stream`. Idempotent. */
+  release(): Promise<void>;
+}
+
 /**
  * **Every refusal that costs nothing, then the allowance, then a stream** —
  * so the route can answer a 404 or a 429 as JSON before a header, and
@@ -482,7 +488,7 @@ export interface InvestigateCitationDeps {
  */
 export function makeInvestigateCitation(
   deps: InvestigateCitationDeps,
-): (slug: string, entryId: string, profile: string | null) => Promise<{ stream: () => AsyncGenerator<InvestigateEvent> }> {
+): (slug: string, entryId: string, profile: string | null) => Promise<InvestigationRun> {
   const run = deps.run ?? runStream;
   const now = deps.now ?? (() => new Date().toISOString());
   const timeoutMs = deps.timeoutMs ?? INVESTIGATE_TIMEOUT_MS;
@@ -524,6 +530,7 @@ export function makeInvestigateCitation(
      * whose fingerprint matches the list as it is now.
      */
     const findFirst = row.lookup?.state !== "assessed";
+    let lookupRan = false;
 
     /**
      * ***Look it up*, as the first step** — `runCitationLookup`, the very
@@ -532,7 +539,7 @@ export function makeInvestigateCitation(
      * stops the press, so nothing more is spent; a failed save, or anything
      * else, is the press's failure as it is `/find`'s.
      */
-    async function* findTheWork(): AsyncGenerator<InvestigateEvent> {
+    async function* findTheWork(listed: CitedWork, article: Article): AsyncGenerator<InvestigateEvent> {
       yield { type: "stage", stage: "finding" };
       let response: FindCitationResponse;
       try {
@@ -545,8 +552,8 @@ export function makeInvestigateCitation(
           },
           slug,
           entryId,
-          row,
-          firstArticle,
+          listed,
+          article,
         );
       } catch (err) {
         if (!isLookupCallFailure(err)) throw err;
@@ -554,6 +561,12 @@ export function makeInvestigateCitation(
         line.warn({ ...errorFields(err) }, "citation investigate: the first step's call failed; stopping");
         throw new Error(CITATION_INVESTIGATE_LOOKUP_FAILED.message);
       }
+      /* **A no-match stores nothing and removes nothing**, as *Look it up*
+         never did. An earlier page that passed code's identity check (an
+         `unreadable` reading) is still that work's page, and one search that
+         came back empty is not evidence against it — so it stays, and the
+         re-read below may credit it. GPT Sol's review deleted it here (C-2);
+         overruled in the plan's review log. */
       yield { type: "lookup", response };
     }
 
@@ -587,13 +600,25 @@ export function makeInvestigateCitation(
       );
       const request = investigateRequest({ meta: article.meta, blocks: article.blocks, context, profile, matched, model });
       const allowed = allowedQuoteTexts(article.blocks, context, matched);
-      return { matched, model, contextHash, request, allowed };
+      return { work, article, matched, model, contextHash, request, allowed };
     }
 
     async function* stream(): AsyncGenerator<InvestigateEvent> {
       try {
-        if (findFirst) yield* findTheWork();
-        const prepared = await prepare();
+        if (findFirst) {
+          lookupRan = true;
+          yield* findTheWork(row, firstArticle);
+        }
+        let prepared = await prepare();
+        /* The assessed lookup that justified skipping can stop being current
+           before the required re-read lands. In that narrow race it no longer
+           justifies a skip: run the lookup against the fresh row and article,
+           then re-read once more before building the paid reading (P-2/P-3). */
+        if (!findFirst && prepared.work.lookup?.state !== "assessed") {
+          lookupRan = true;
+          yield* findTheWork(prepared.work, prepared.article);
+          prepared = await prepare();
+        }
         yield { type: "stage", stage: "reading" };
         yield* reading(prepared);
       } finally {
@@ -740,7 +765,7 @@ export function makeInvestigateCitation(
             searchesFrom: end.searchesFrom,
             extractsRead: provenance.extractsRead,
             longestExtractWords: provenance.longestExtractWords,
-            lookedUpFirst: findFirst,
+            lookedUpFirst: lookupRan,
             matched: matched !== null,
             matchRead: provenance.matchedHost !== null,
             inputTokens: end.usage?.prompt_tokens ?? null,
@@ -757,6 +782,6 @@ export function makeInvestigateCitation(
       yield { type: "done", investigation };
     }
 
-    return { stream };
+    return { stream, release: freeLease };
   };
 }

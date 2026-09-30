@@ -1937,10 +1937,16 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  */
 async function streamCitationInvestigation(slug: string, entryId: string, res: ServerResponse): Promise<void> {
   const profile = await resolveProfile(slug);
-  const { stream } = await investigateCitation(slug, entryId, profile);
+  const { stream, release } = await investigateCitation(slug, entryId, profile);
 
-  const { frame } = sse(res);
+  let frame: ReturnType<typeof sse>["frame"] | null = null;
   try {
+    const connection = sse(res);
+    frame = connection.frame;
+    /* The reader can leave during the owner/profile reads above. Admission was
+       already taken so 429/503 could stay an ordinary JSON response; do not
+       start either paid call for a socket that will never iterate the stream. */
+    if (!connection.alive()) return;
     for await (const event of stream()) {
       switch (event.type) {
         case "stage":
@@ -1967,9 +1973,15 @@ async function streamCitationInvestigation(slug: string, entryId: string, res: S
     }
   } catch (err) {
     captureFailure(err, { route: "citation-investigate", slug });
-    frame("error", { error: sayToReader(err, { route: "citation-investigate", slug }) });
+    frame?.("error", { error: sayToReader(err, { route: "citation-investigate", slug }) });
   } finally {
-    res.end();
+    /* Usually the generator has already released it. This is the path for a
+       client gone before iteration, and is idempotent on every other path. */
+    try {
+      await release();
+    } finally {
+      res.end();
+    }
   }
 }
 

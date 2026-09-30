@@ -88,6 +88,8 @@ export interface InvestigateFailure {
   id: string;
   message: string;
   previousAt: string | null;
+  /** The lookup attached when this press began, to recognise one attached by the failure re-read. */
+  previousLookupAt: string | null;
   /**
    * The press's first step found and stored a page before the failure (plan
    * 260930d P-4): the row shows the new lookup, and says the quick check was
@@ -239,9 +241,13 @@ export interface CitationsRead {
    * actual reference and citing-passage text, which `CitedWork` does not carry,
    * so no client comparison can decide whether the lookup is still current.
    * The caller therefore refreshes and lets `attachLookups` be the one authority
-   * for attaching it. tests/citations-find-late-reply.test.tsx.
+   * for attaching it. A found frame first removes the old lookup and
+   * investigation, because the server has replaced the find they came from;
+   * only that read may put either back. tests/citations-find-late-reply.test.tsx.
    */
   applyFound(id: string, found: FoundPatch): void;
+  /** Hide lookup-derived fields while a replacement lookup is in flight. */
+  detachDerived(id: string): void;
   /**
    * **The second narrow write**, for *Investigate*'s `done` (plan 260930a):
    * the stored investigation onto the row with that id, and nothing else of
@@ -329,6 +335,21 @@ export function useCitationsRead(slug: string): CitationsRead {
     [],
   );
 
+  const detachDerived = useCallback((id: string) => {
+    setCitations((current) =>
+      current
+        ? {
+            ...current,
+            citations: current.citations.map((w) => {
+              if (w.id !== id) return w;
+              const { lookup: _lookup, investigation: _investigation, ...unattached } = w;
+              return unattached;
+            }),
+          }
+        : current,
+    );
+  }, []);
+
   const applyInvestigation = useCallback((id: string, investigation: CitationInvestigation) => {
     setCitations((current) =>
       current
@@ -340,15 +361,16 @@ export function useCitationsRead(slug: string): CitationsRead {
     );
   }, []);
 
-  return { status, citations, stale, outdated, error, reload, refresh, applyFound, applyInvestigation };
+  return { status, citations, stale, outdated, error, reload, refresh, applyFound, detachDerived, applyInvestigation };
 }
 
-/** One row, with the link half of a *Look it up* answer. Lookup attachment belongs to the fresh server read. */
+/** Safe link fields now; derived attachments only after the fresh server read. */
 function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
+  const { lookup: _lookup, investigation: _investigation, ...unattached } = w;
   /* A link the article gave always wins; only our own rows move. */
   const relink = (w.linkFrom === "search" || w.linkFrom === "web") && link.linkFrom === "web";
-  if (!relink) return w;
-  return { ...w, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) };
+  if (!relink) return unattached;
+  return { ...unattached, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) };
 }
 
 /**
@@ -358,7 +380,8 @@ function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
  * why the fetch moved up there, and what this hook still has to do on mount.
  */
 export function useCitations(slug: string, read: CitationsRead): UseCitations {
-  const { status, citations, stale, outdated, error, reload, refresh, applyFound, applyInvestigation } = read;
+  const { status, citations, stale, outdated, error, reload, refresh, applyFound, detachDerived, applyInvestigation } =
+    read;
   const [findNote, setFindNote] = useState<FindNote | null>(null);
   /**
    * Revalidate on mount, behind whatever is on screen.
@@ -432,7 +455,9 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
       const controller = new AbortController();
       investigateLive.current = controller;
       const mine = () => investigateLive.current === controller;
-      const previousAt = citationsNow.current?.citations.find((w) => w.id === id)?.investigation?.at ?? null;
+      const previousWork = citationsNow.current?.citations.find((w) => w.id === id);
+      const previousAt = previousWork?.investigation?.at ?? null;
+      const previousLookupAt = previousWork?.lookup?.at ?? null;
       setInvestigating(id);
       setInvestigateStage(null);
       setInvestigateFailed(null);
@@ -440,6 +465,32 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
       setFindNote(null);
       let opened = false;
       let lookupKept = false;
+
+      const receiveStage = (data: unknown) => {
+        const stage = (data as { stage?: unknown } | null)?.stage;
+        if (stage !== "finding" && stage !== "reading") return;
+        setInvestigateStage(stage);
+        /* This step may replace the row's lookup. Hide its verdict and
+           anything derived from it until a server re-read proves what still
+           attaches — even if the lookup frame itself is lost. */
+        if (stage === "finding") detachDerived(id);
+      };
+
+      const receiveLookup = (data: unknown) => {
+        const answer = data as FindCitationResponse | null;
+        if (answer?.outcome === "no-match") {
+          if (typeof answer.message === "string") setFindNote({ id, kind: "no-match", message: answer.message });
+          return;
+        }
+        if (answer?.outcome !== "found" || !answer.work) return;
+        /* Stored by the server before this frame was sent. Patch only the
+           link fields, then re-read: `applyFound` above has why. */
+        lookupKept = true;
+        const { url, linkFrom, found } = answer.work;
+        applyFound(id, { link: { url, linkFrom, ...(found ? { found } : {}) } });
+        void refresh();
+      };
+
       try {
         const res = await apiFetch(
           `/api/citations/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/investigate`,
@@ -463,24 +514,8 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
           },
           other: (name, data) => {
             if (!mine()) return;
-            if (name === "stage") {
-              const stage = (data as { stage?: unknown } | null)?.stage;
-              if (stage === "finding" || stage === "reading") setInvestigateStage(stage);
-              return;
-            }
-            if (name !== "lookup") return;
-            const answer = data as FindCitationResponse | null;
-            if (answer?.outcome === "no-match" && typeof answer.message === "string") {
-              setFindNote({ id, kind: "no-match", message: answer.message });
-              return;
-            }
-            if (answer?.outcome !== "found" || !answer.work) return;
-            /* Stored by the server before this frame was sent. Patch only the
-               link fields, then re-read: `applyFound` above has why. */
-            lookupKept = true;
-            const { url, linkFrom, found } = answer.work;
-            applyFound(id, { link: { url, linkFrom, ...(found ? { found } : {}) } });
-            void refresh();
+            if (name === "stage") receiveStage(data);
+            if (name === "lookup") receiveLookup(data);
           },
         });
         if (mine()) {
@@ -498,6 +533,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
           id,
           message: err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
           previousAt,
+          previousLookupAt,
           lookupKept,
         });
         if (opened) await refresh();
@@ -509,7 +545,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
         }
       }
     },
-    [slug, applyFound, applyInvestigation, refresh],
+    [slug, applyFound, detachDerived, applyInvestigation, refresh],
   );
 
   /* Another article, or the band going, stops reading — useGlossary.ts's
