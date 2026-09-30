@@ -1,0 +1,101 @@
+
+=== entropy-24-00930-spya-bmvfyb — 3 rows, made
+  [spya-sgtamf] doi.org — Computation is concentrated in rich clubs of local cortical networks
+  [spya-h2e0hd] www.quantamagazine.org — Ninth Dedekind Number Found by Two Independent Groups | Quanta Magazine
+  [spya-ds78c3] www.scientificamerican.com — Mathematicians Discover Long-Sought 'Dedekind Number' | Scientific American
+  THEME Dedekind numbers — Both sources agree that only the ninth Dedekind number has so far been calculated and that finding the next ones remains extremely hard, matching the article's claim that numbers past the ninth are still unknown.
+        spya-h2e0hd, spya-ds78c3
+  KEY spya-sgtamf responds — It restates the exact figure that '20% of the neurons account for 70% of the information propagation' in cortical networks, directly backing up the article's specific statistic.
+
+=== nagel-bat — 4 rows, made
+  [spya-tbvasb] philarchive.org — KINDS AND CONSCIOUS EXPERIENCE: IS THERE ANYTHING THAT IT IS LIKE TO BE SOMETHING?
+  [spya-caqy7c] homepages.uc.edu — Quining Qualia
+  [spya-m2hd34] www.mdpi.org — Wiederorientierung in Bats and the Nature of Animal Consciousness
+  [spya-fmbh4k] fojournal.org — Thomas Nagel Revisited - Future Observatory Journal
+  THEME skepticism about "what it's like" — Both papers doubt the core idea that conscious experience can be captured by asking what it's like to be a creature: one says the claim may not even make sense at the level of a whole creature, the other says the whole notion of a private, unanalyzable subjective feel needs proof before it can be used at all.
+        spya-tbvasb, spya-caqy7c
+  KEY spya-caqy7c dissents — Dennett's 'Quining Qualia' directly rejects the private, non-functional subjective residue that Nagel's claim depends on, explicitly targeting the bat example and demanding proof it isn't a mistake to invoke such properties.
+
+=== constitution — 6 rows, made
+  [spya-dnbasd] www.lawfaremedia.org — The Code Is Not the Law: Why Claude’s Constitution Misleads | Lawfare
+  [spya-x9yeq2] www.lawfaremedia.org — The Code Is Not the Law: Why Claude’s Constitution Misleads | Lawfare
+  [spya-rrff3h] www.lesswrong.com — Claude's Constitution — LessWrong
+  [spya-pdmhpb] www.ox.ac.uk — Expert Comment: In Claude We Trust? Evaluating the New Constitution | University of Oxford
+  [spya-x25qac] www.anthropic.com — Exploring model welfare \ Anthropic
+  [spya-r4z2yg] dailynous.com — Philosophers and Anthropic’s Claude - Daily Nous
+  THEME Model welfare and emotions — Anthropic's own research page and outside reporting both build on the constitution's claim that Claude may have functional emotions, with Anthropic describing a dedicated welfare research program and Daily Nous citing behavioral evidence (apparent distress, stated preferences) that seems to back this up.
+        spya-x25qac, spya-r4z2yg
+  KEY spya-x9yeq2 dissents — It directly disputes the article's choice of the word 'constitution,' saying the term borrows public law's legitimacy for 'what remains a corporate product.'
+  KEY spya-r4z2yg responds — It reports on Anthropic's own Claude 4 system-card assessment, offering concrete behavioral evidence (apparent distress, self-reported preferences) that tests the article's claim about Claude's functional emotions.
+
+=== bf03197835-spya-qfwsw2 — 6 rows, made
+  [spya-qbwy8p] pmc.ncbi.nlm.nih.gov — Occasion Setting - PMC
+  [spya-d38p45] pmc.ncbi.nlm.nih.gov — Occasion Setting - PMC
+  [spya-e5napm] exa.ai — The effects of intertrial and feature-target intervals on operant serial feature-positive discrimination learning
+  [spya-gjmxpr] exa.ai — FOOD DELIVERY AS A CONDITIONAL STIMULUS: FEATURE‐LEARNING AND MEMORY IN PIGEONS1
+  [spya-fbf2pz] escholarship.org — Occasion Setting
+  [spya-g3k28e] www.sciencedirect.com — Temporal control in Pavlovian occasion setting
+  THEME release vs occasion setting — Several sources say the data go against Konorski's idea that the second stimulus is just a stored response being 'released' by the first, and instead show the leading stimulus turns on or off a separate, learned link between the second stimulus and the reward.
+        spya-qbwy8p, spya-d38p45, spya-e5napm
+  THEME simultaneous vs serial discrimination — Multiple later papers repeat the finding that when the two stimuli appear together the animal just links the first stimulus to reward, but when they appear one after another it instead uses a more flexible strategy where the first stimulus controls whether the second one's own reward link is expressed.
+        spya-e5napm, spya-g3k28e, spya-fbf2pz
+  KEY spya-d38p45 responds — This review directly takes up Konorski's 'release' claim and states that Ross and Holland's data instead show the leading stimulus controls a separate target-reward link, engaging the article's central claim head-on.
+  KEY spya-gjmxpr origin — This is the original Bottjer and Hearst pigeon study that the article cites, reporting that pigeons learned faster when an early food delivery reliably signaled the next reward, the finding the article's description depends on.
+
+=== arxiv-2508-spya-wrzxkg — 6 rows, made
+  [spya-wgjpbf] aclanthology.org — Fodor and Pylyshyn’s Systematicity Challenge Still Stands - ACL Anthology
+  [spya-fgcvjq] arxiv.org — Fodor and Pylyshyn’s Legacy – Still No Human-like Systematic Compositionality in Neural Networks
+  [spya-e00hu9] transacl.org — How much do language models copy from their training data? Evaluating linguistic novelty in text generation using RAVEN
+							| Transactions of the Association for Computational Linguistics
+  [spya-k2sw2k] arxiv.org — Is Child-Directed Speech Effective Training Data for Language Models?
+  [spya-m648ep] arxiv.org — Children, but not language models, show accelerating returns in word learning
+  [spya-vg47kj] arxiv.org — Language Models Learn Rare Phenomena from Less ...
+  THEME meta-learning and compositionality — Two papers re-examine the Lake & Baroni meta-learning system the article credits with human-like rule learning, and both argue it fails to show real systematic, human-like compositionality once tested more closely.
+        spya-wgjpbf, spya-fgcvjq
+  THEME human vs. model data efficiency — Both sources agree children need far less language input than models to become fluent, though one adds that this gap may stem from children's learning speed accelerating over time rather than just different starting biases.
+        spya-k2sw2k, spya-m648ep
+  THEME novel or rare structure generalization — Both papers find evidence that language models can produce or learn grammatical structures beyond what they were directly shown, supporting the idea that these models can generalize productively and not just copy.
+        spya-e00hu9, spya-vg47kj
+  KEY spya-fgcvjq dissents — It directly re-examines the same meta-learning-for-compositionality work the article cites and argues that most of the 'novel' test cases actually overlapped with training, so the claimed human-like rule composition is not demonstrated.
+  KEY spya-e00hu9 origin — This is the study the article's specific 67% figure about novel GPT-2 sentence structures comes from, and it also adds that models can still sometimes copy very long passages verbatim.
+
+=== pnas-202123432-spya-rekvg9 — 6 rows, made
+  [spya-sekkyt] www.nature.com — Augmenting hippocampal–prefrontal neuronal synchrony ...
+  [spya-r3akau] www.nature.com — Hippocampo-cortical coupling mediates memory consolidation during sleep | Nature Neuroscience
+  [spya-ttuqve] academic.oup.com — Memory Sources Associated with REM and NREM Dream Reports ...
+  [spya-ctwgsy] academic.oup.com — Memory Sources Associated with REM and NREM Dream Reports ...
+  [spya-z5crqg] proceedings.neurips.cc — Continual Learning with Deep Generative Replay
+  [spya-c4nt8v] arxiv.org — (no title)
+  THEME hippocampal-cortical synchrony and memory — Two studies found that artificially strengthening the timed coordination between hippocampal and cortical/thalamic brain rhythms during sleep, in humans and in rats, led to better next-day memory recall.
+        spya-sekkyt, spya-r3akau
+  THEME generative replay for continual learning — Two papers show that neural networks using generative replay (a generated stand-in for old data) can learn new tasks one after another without losing earlier knowledge, and later comparisons found this approach outperformed rival methods.
+        spya-z5crqg, spya-c4nt8v
+  KEY spya-sekkyt responds — It directly tests the article's claim in humans by using brain stimulation to boost hippocampal-cortical synchrony during sleep and reports this causally improved memory consolidation.
+  KEY spya-ctwgsy dissents — It complicates the claim that REM dreams draw more on semantic memory, finding no difference under a strict definition and only a weak, length-dependent REM advantage under a looser one.
+
+=== arxiv-1811-spya-vw9rn6 — 3 rows, made
+  [spya-gq2kgf] www.pnas.org — A mathematical theory of semantic development in deep ...
+  [spya-zbtyut] arxiv.org — [1706.05806] SVCCA: Singular Vector Canonical Correlation ...
+  [spya-peqzj7] journals.plos.org — Deep Supervised, but Not Unsupervised, Models May Explain ...
+  THEME representational similarity across networks/species — Multiple sources say that different trained networks—or brains and networks—can end up with matching patterns of representational similarity (RSMs) even though their individual units differ.
+        spya-gq2kgf, spya-peqzj7
+  THEME aligning networks via transformations — Both sources describe ways to match up different networks' internal representations through a transformation (orthogonal rotation or canonical correlation), showing the representations line up despite surface differences.
+        spya-gq2kgf, spya-zbtyut
+  KEY spya-gq2kgf origin — This is the theoretical paper the article's claim is drawn from, showing that under specific conditions (hierarchical data, small-norm weight start, slow learning) different networks' representational similarity matrices become identical up to an orthogonal transformation.
+
+=== dongetal25-spya-vfmvmm — 4 rows, made
+  [spya-upr0e8] arxiv.org — Human-inspired Episodic Memory for Infinite Context LLMs
+  [spya-anscsv] em-llm.github.io — Human-inspired Episodic Memory for Infinite Context LLMs
+  [spya-psehsf] aclanthology.org — Active Retrieval Augmented Generation
+  [spya-gfzxzb] arxiv.org — Active Retrieval Augmented Generation
+  KEY spya-upr0e8 origin — This is the original EM-LLM paper, describing how it splits the stream of incoming tokens into event-like memory chunks based on a surprise signal, which is the claim the article attributes to it.
+
+=== what-if-we-had-bigger-brains-imagining-minds-beyond-ours — 5 rows, made
+  [spya-nzc95s] www.cambridge.org — The magical number 4 in short-term memory: A reconsideration of mental storage capacity
+  [spya-f73jjy] discuss.ardupilot.org — Can a large drone be flown without a flight controller? - ArduCopter - ArduPilot Discourse
+  [spya-jyccev] discuss.ardupilot.org — Can a large drone be flown without a flight controller? - ArduCopter - ArduPilot Discourse
+  [spya-du8jmv] www.cell.com — Multi-level control of adaptive camouflage by European cuttlefish: Current Biology
+  [spya-tkndgv] royalsocietypublishing.org — Identifying the structure in cuttlefish visual signals | Philosophical Transactions of the Royal Society B | The Royal Society
+  THEME cuttlefish pattern count — Two studies disagree on whether cuttlefish skin displays form just a small, fixed set of body patterns (as the article claims) or are built from many independently controllable parts that combine into far more variety.
+        spya-du8jmv, spya-tkndgv
+  KEY spya-du8jmv dissents — It reports that cuttlefish skin patterns arise from about 30 separately controllable components combining in many ways, which the passage says 'are not easily accommodated by a model' of just a few fixed body patterns, directly challenging the article's claim of only a small number of distinct patterns.

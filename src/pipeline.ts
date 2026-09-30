@@ -4467,6 +4467,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           claimsKept: claims.counts.keptRows,
           claimsOverCap: claims.counts.omittedOverCap,
           claimsLost: claims.counts.lost,
+          /* The third call's outcome, so a `failed` is visible in the logs
+             rather than only as a missing box on screen (plan 260930j). */
+          synthesis: run.debate.synthesis?.kind ?? null,
+          themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
+          keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
         },
         `debate ${ctx.slug}: ${direct.counts.keptRows} direct, ${claims.counts.keptRows} on its claims`,
       );

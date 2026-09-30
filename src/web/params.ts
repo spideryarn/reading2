@@ -1335,6 +1335,25 @@ export const bearsParam = createParser<DebateBears>({
 }).withOptions({ history: "replace" });
 
 /**
+ * **Which of Debate's threads narrows the list** — `?debatethread=<theme id>` or
+ * `?debatethread=key` for the key sources (plan 260930j, SPIDERYARN-READING2-6M).
+ *
+ * Not `?thread=`, which is the open conversation and survives a mode switch
+ * like every parameter. A theme id is a `mintId`, so anything that is neither
+ * that shape nor `key` parses to `null`. A well-formed id this debate does not
+ * have — a link from before a re-run — gets through here and is read as *no
+ * filter* by `selectedThread` (debate-threads.ts). `replace`, like `?bears=`:
+ * it narrows a list rather than moving to a new view.
+ */
+/** `?debatethread=key` — the key sources. A theme is its own id, which never spells this. Here rather than in debate-threads.ts so this eager file does not pull that one into every reader's first download (tests/eager-client-graph.test.ts). */
+export const KEY_THREAD = "key";
+
+export const debateThreadParam = createParser<string>({
+  parse: (v) => (v === KEY_THREAD || isSpideryarnId(v) ? v : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
+
+/**
  * **Which criteria are painting the prose** — `?crits=a,b` and `?crits=none`.
  *
  * `parseAsIdList` unchanged, which is the whole point of it being a value

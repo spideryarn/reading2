@@ -5315,7 +5315,95 @@ export interface Debate {
   /** About what it claims. */
   claims: DebateGroup<ClaimDebateRow>;
   elapsedMs: number;
+  /**
+   * **What the sources keep coming back to, and which of them matter most** —
+   * a third, search-free call over the rows both passes *kept*
+   * (src/debate-themes.ts; SPIDERYARN-READING2-6M, plan 260930j).
+   *
+   * **Absent means the debate was searched before 2026-09-30**, not that the
+   * call failed: a failure is stored as `{kind: "failed"}`, so the two cannot
+   * be confused. Read it through `readStoredSynthesis` (src/debate-synthesis.ts), never directly — JSONB
+   * comes back unchecked.
+   *
+   * **Owner-only.** The public DTO builds a visitor's debate field by field
+   * (src/public/dto.ts § `publicDebate`) and does not carry this one; widening
+   * that boundary is Greg's call, not an unattended run's.
+   */
+  synthesis?: DebateSynthesis;
 }
+
+/**
+ * **Why a source is one of the key ones** — Greg's three reasons, in his words:
+ * *"the critical papers that really responded or moved things forward or take
+ * a different view"* (2026-09-30, SPIDERYARN-READING2-6M).
+ *
+ * - `responds` — it takes this piece, or the claim it answers, on directly;
+ * - `advances` — it moves the question on: new evidence, a new method, a next step;
+ * - `dissents` — it takes a different view from the one the piece takes;
+ * - `origin` — it is the original work the claim comes from. Not one of Greg's
+ *   three, and added after the first measured pass (plan 260930j): offered only
+ *   three, the model filed *"the original study behind the article's 67%
+ *   figure"* under `responds`, which is false — a source is not a reply.
+ *
+ * A closed set, like `DebateBears`, so the panel draws a word it chose rather
+ * than whatever the model typed.
+ */
+export type DebateKeyRole = "responds" | "advances" | "dissents" | "origin";
+
+const KEY_ROLE_MEMBERS: { [K in DebateKeyRole]: true } = {
+  responds: true,
+  advances: true,
+  dissents: true,
+  origin: true,
+};
+
+export function isDebateKeyRole(value: unknown): value is DebateKeyRole {
+  return typeof value === "string" && Object.hasOwn(KEY_ROLE_MEMBERS, value);
+}
+
+/**
+ * **One thread several sources pick up.** `rowIds` are ids of rows in this same
+ * artefact, and at least two of them are from **different works** — two copies
+ * of one paper do not turn that paper's point into something several sources
+ * keep saying.
+ */
+export interface DebateTheme {
+  /**
+   * `mintId`, fresh on every run like the rows' own ids — what `?debatethread=`
+   * names, so the address points at a theme rather than at a position in the
+   * list.
+   */
+  id: string;
+  /** A short name for it, in the sources' own key term. The model's words. */
+  label: string;
+  /** One plain sentence on what they say about it. The model's words. */
+  gist: string;
+  rowIds: string[];
+}
+
+/** **One row picked out as a key source**, and the one-line reason. */
+export interface DebateKeySource {
+  rowId: string;
+  role: DebateKeyRole;
+  /** Why, in a sentence. The model's words, labelled as such on screen. */
+  why: string;
+}
+
+/**
+ * The outcome of the synthesis call, **every state named** so the panel never
+ * has to guess what an empty list meant.
+ *
+ * - `made` — the call ran and answered. Either list may be empty: a debate
+ *   whose sources share no thread has no themes, and that is an answer.
+ * - `too-few` — fewer kept rows than a theme needs, so nothing was asked.
+ * - `failed` — the call ran and its answer was refused or unreadable. The rows
+ *   are kept anyway: they cost two web searches, and nothing about them
+ *   depends on this call.
+ */
+export type DebateSynthesis =
+  | { kind: "made"; themes: DebateTheme[]; key: DebateKeySource[] }
+  | { kind: "too-few"; rows: number }
+  | { kind: "failed" };
 
 /**
  * **Is this value a debate document at all?** — the one shallow shape check,

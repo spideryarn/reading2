@@ -153,6 +153,8 @@ function paint(o: UseDebate, level: IdentificationLevel | null = "named") {
         relevance: null,
         onRelevance: () => {},
         articleYear: null,
+        thread: null,
+        onThread: () => {},
       }),
     );
   });
@@ -255,6 +257,8 @@ describe("the panel draws a row stored under the old vocabulary", () => {
           relevance: null,
           onRelevance: () => {},
           articleYear: null,
+          thread: null,
+          onThread: () => {},
         }),
       );
     });

@@ -25,7 +25,7 @@
 import { useQueryState } from "nuqs";
 import type { BlockId } from "../../../types.js";
 import type { PublicDebate } from "../../../public-types.js";
-import { bearsParam, debateOrderParam, nameParam } from "../../params.js";
+import { bearsParam, debateOrderParam, debateThreadParam, nameParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
 import { DebatePanel } from "../../DebatePanel.js";
@@ -83,6 +83,8 @@ export function DebateBand({
   const [order, setOrder] = useQueryState("debateby", debateOrderParam);
   /* `?bears=`, the relevance bar — null is untouched, `loosely` in the panel. */
   const [relevance, setRelevance] = useQueryState("bears", bearsParam);
+  /* `?debatethread=`, the thread narrowing the list — plan 260930j. */
+  const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
   return (
     <DebatePanel
       access={{ kind: "owner", owner: debate }}
@@ -95,6 +97,8 @@ export function DebateBand({
       relevance={relevance}
       onRelevance={setRelevance}
       articleYear={articleYear}
+      thread={thread}
+      onThread={setThread}
     />
   );
 }
@@ -128,6 +132,9 @@ export function VisitorDebateBand({
   /* Read for symmetry: a visitor's rows carry no `bears` (the public DTO does
      not pass it), so *prioritised* is never drawn and this bar never shows. */
   const [relevance, setRelevance] = useQueryState("bears", bearsParam);
+  /* Read for symmetry too: a visitor's debate carries no synthesis (the public
+     DTO does not pass it), so there are no threads for this to name. */
+  const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
   return (
     <DebatePanel
       access={{ kind: "visitor", debate }}
@@ -140,6 +147,8 @@ export function VisitorDebateBand({
       relevance={relevance}
       onRelevance={setRelevance}
       articleYear={articleYear}
+      thread={thread}
+      onThread={setThread}
     />
   );
 }
