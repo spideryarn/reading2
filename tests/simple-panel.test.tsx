@@ -101,6 +101,8 @@ vi.mock("../src/web/useJobs.js", async () => {
 const { SIMPLE_FOOT, SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
   "../src/web/SimplePanel.js"
 );
+const { BlockLinkProvider } = await import("../src/web/BlockLinkCard.js");
+const { SummaryPanel } = await import("../src/web/SummaryPanel.js");
 const { SummarySubModeToggle } = await import("../src/web/modes/summary/SummaryMode.js");
 const { useSimple } = await import("../src/web/useSimple.js");
 const { resetActivations } = await import("../src/web/activation.js");
@@ -126,6 +128,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 async function settle(): Promise<void> {
@@ -192,6 +195,39 @@ describe("the Simple view", () => {
       door?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     });
     expect(jumps).toEqual([LATER]);
+  });
+
+  it("opens the cited passage's card from a paragraph door", async () => {
+    class FakeResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const index = new Map([
+      [EARLY, { text: "The opening evidence for the first paragraph.", section: "The question" }],
+      [MIDDLE, { text: "The second piece of evidence.", section: "The question" }],
+      [LATER, { text: "The passage explaining why it matters.", section: "Why it matters" }],
+    ]);
+    await act(async () => {
+      root.render(
+        <BlockLinkProvider index={index}>
+          <SimplePanel
+            access={{ kind: "owner", owner: owner() }}
+            onJump={(id: BlockId) => void jumps.push(id)}
+          />
+        </BlockLinkProvider>,
+      );
+    });
+    const door = host.querySelector<HTMLAnchorElement>(`a.block-ref[data-block-link="${LATER}"]`);
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      door?.focus();
+      await Promise.resolve();
+    });
+    const card = document.querySelector<HTMLElement>(".tooltip-anchor");
+    expect(card?.textContent).toContain("Why it matters");
+    expect(card?.textContent).toContain("The passage explaining why it matters.");
   });
 
   it("renders a paragraph's markup as the characters, never as HTML", async () => {
@@ -352,5 +388,42 @@ describe("arriving at Simple without pressing it", () => {
     await settle();
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
+  });
+});
+
+describe("Simple and the Gists depth", () => {
+  it("hides Depth under Simple and restores the chosen depth on returning to Gists", async () => {
+    const onDeep = vi.fn();
+    await act(async () => {
+      root.render(
+        createElement(SummaryPanel, {
+          root: null,
+          deep: 2,
+          onDeep,
+          atRow: null,
+          onJump: () => {},
+          simple: createElement("div", { "data-simple": "" }, "Simple body"),
+        }),
+      );
+    });
+    expect([...host.querySelectorAll("legend")].some((legend) => legend.textContent === "Depth")).toBe(false);
+
+    await act(async () => {
+      root.render(
+        createElement(SummaryPanel, {
+          root: null,
+          deep: 2,
+          onDeep,
+          atRow: null,
+          onJump: () => {},
+          simple: null,
+        }),
+      );
+    });
+    const sections = [...host.querySelectorAll<HTMLButtonElement>(".summ-pill")].find(
+      (button) => button.textContent === "sections",
+    );
+    expect(sections?.getAttribute("aria-pressed")).toBe("true");
+    expect(onDeep).not.toHaveBeenCalled();
   });
 });

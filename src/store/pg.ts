@@ -2546,12 +2546,14 @@ function personalisedSteps(revision: {
  * **Which artefacts a shared link would carry** — presence, and nothing else.
  *
  * The same question `src/store/public-reader.ts` answers by reading the column:
- * `publicArticle` spreads an artefact in when it is not null and never asks
- * whether it is current. So this is one `!== null` per public artefact, deliberately, and
+ * `publicArticle` ordinarily spreads an artefact in when it is not null and
+ * never asks whether it is current. So this is presence, deliberately, and
  * **not** `stages[].done` — which is `status === "done" && isCurrent(step)` a
  * few hundred lines below, and which calls a stale glossary absent while every
- * visitor is reading it. src/types.ts § PublicArtefacts says the same thing at
- * the type.
+ * visitor is reading it. Simple is the one stronger boundary: its public DTO
+ * refuses malformed paragraphs, so this inventory applies the same shared
+ * validator before promising that a visitor receives it. src/types.ts §
+ * PublicArtefacts says the same thing at the type.
  *
  * `Record<keyof PublicArtefacts, …>` rather than an object literal, so another
  * artefact joining the public payload is a red compiler here rather than a row
@@ -2581,7 +2583,13 @@ export function shareableArtefacts(revision: {
     sketch: revision.sketch,
     trajectory: revision.trajectory,
     faq: revision.faq,
-    simpleSummary: revision.simpleSummary,
+    /* Public DTOs omit an unusable Simple rather than publishing an empty or
+       malformed band. The owner's inventory must answer the same question or
+       it promises that a shared link contains something the link withholds. */
+    simpleSummary:
+      revision.simpleSummary && isSimpleParagraphs(revision.simpleSummary.paragraphs)
+        ? revision.simpleSummary
+        : null,
     citations: revision.citations,
     debate: revision.debate,
   };

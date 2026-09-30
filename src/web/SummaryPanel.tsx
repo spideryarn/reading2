@@ -69,14 +69,13 @@
  * never writes the root into `closed`, which would otherwise outlive the Depth
  * buttons and leave `parts` drawing an empty outline; see `clearOverride`.
  *
- * ## Nothing here is generated on demand
+ * ## Nothing in the Gists view is generated on demand
  *
- * Every line of prose in this panel is a **gist**, written by stage 4 as part
- * of building the tree (src/hierarchy.ts). So this panel costs nothing, is never
- * empty on an article that has a tree, and has no run button, no job, no
- * staleness and no reader-profile provenance — the three things a panel that
- * spends has to carry, and the reason `GlossaryPanel` and `IdeasPanel` are
- * three times the size of this one.
+ * Every line of prose in the Gists view is a **gist**, written by stage 4 as
+ * part of building the tree (src/hierarchy.ts). So that view costs nothing, is
+ * never empty on an article that has a tree, and has no run button, job,
+ * staleness or reader-profile provenance. Simple is supplied as the `simple`
+ * body below and owns those states in `SimplePanel`.
  */
 import { type MouseEvent, type ReactNode, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";

@@ -259,6 +259,19 @@ function summaryChip(label: string): string {
 }
 
 describe("Summary's Gists | Simple switch", () => {
+  it("is a labelled group of focusable pressed-state controls", () => {
+    mountSummaryToggle("gists");
+    const group = host.querySelector("fieldset.summ-views");
+    const buttons = [...(group?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    expect(group?.querySelector("legend")?.textContent).toBe("View");
+    expect(buttons.map((button) => [button.type, button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+      ["button", "Gists", "true"],
+      ["button", "Simple", "false"],
+    ]);
+    act(() => buttons[1]?.focus());
+    expect(document.activeElement).toBe(buttons[1]);
+  });
+
   it("arms Simple when Simple is pressed, and moves to it", () => {
     const changes = mountSummaryToggle("gists");
     expect(armed("simple")).toBe(false);

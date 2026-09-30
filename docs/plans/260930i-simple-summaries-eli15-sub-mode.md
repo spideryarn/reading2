@@ -263,3 +263,24 @@ Entropy paper; `dongetal25` is not on this box), ~$0.70 in all —
 - The artefact kind is `simple` (every kind is named for its step, and a test derives a URL from
   it); the column is `simple_summary`, the public key `simpleSummary`. Drop counts are logged and
   reported, not stored.
+
+**Stage 1 code review, GPT Sol** ([review](260930i-simple-summaries-eli15-sub-mode-stage1-review-sol.md)):
+no P0; five fixed in place — one shared validator for a stored Simple at the store, the owner GET
+and the public DTO (S1-1), duplicate ids past the cap (S1-2), `simple_summary` in the public
+projection assertion (S1-3), export bytes asserted (S1-4), request tests (S1-5).
+
+**Stage 2, built** (client): `Gists | Simple` in Summary's band, `?summary=simple`, `useSimple` and
+`SimplePanel`, the visitor half from the public payload, `ModeBoundary`/`bandTarget`/last-view, and
+`PublicArtefacts.simpleSummary` for the sharing inventory. The switch uses the Depth row's pill look,
+labelled *View*, because it sits directly above Depth.
+
+**Stage 2 code review, GPT Sol** ([review](260930i-simple-summaries-eli15-sub-mode-stage2-review-sol.md)):
+no P0; four fixed in place — the sharing inventory counted an invalid Simple as shared (S2-1), docs
+and comments still saying Summary had no prompt (S2-2), sharing-wire tests that skipped keys (S2-3),
+direct tests for the passage card, Depth restoration and the switch's semantics (S2-4).
+
+**Not done: a browser check.** The shared local database carries another session's migration
+(`reader_arrivals`, ledger row 1790779383987) that is on no branch yet, so `npm run db:migrate`
+refuses to apply this one, and a dev server on this code cannot read an article without the
+column. Hand-applying the SQL around the ledger would break the next `db:migrate` for everyone, so
+it waits. The panel, the switch, arming and the visitor path are covered by the tests above.

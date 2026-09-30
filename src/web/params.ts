@@ -954,10 +954,11 @@ export const confParam = createParser<number>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
-   One control now: `deep`, how far down the tree the panel goes. There was a
-   second, `len`, which chose between three generated lengths — it went on
-   2026-08-31 along with the stage that wrote the two paid ones
-   (docs/plans/260831s-gist-only-summaries.md). What is left is free and on the tree.
+   Two controls now: `summary`, which chooses Gists or Simple, and `deep`, how
+   far down the tree the Gists view goes. There was a `len` control, which chose
+   between three generated lengths — it went on 2026-08-31 along with the stage
+   that wrote the two paid ones (docs/plans/260831s-gist-only-summaries.md).
+   What remains of that older design is free and on the tree.
 
    **What is NOT in the URL, and why.** The panel also lets you open and close
    individual sections — including opening one part's sections *past* the depth

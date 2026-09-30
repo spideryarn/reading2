@@ -289,11 +289,11 @@ bracketed hint as a finished line, and `bareWords` strips that bracket **before*
 punctuation so the gist-echo check still catches a gist re-asked in the new shape. Both halves are
 held by `tests/summaries-eval.test.ts`, which used to assert the defect and now asserts the fix.
 
-### There is no prompt that generates Summary mode, and that is the whole story
+### There is no prompt that generates the Gists view, and that is the whole story
 
 The literal request cannot be carried out, because the sentence in this panel is the **`gist`** that
-stage 4 writes onto every internal node — this feature has no stage, no artefact and no prompt of
-its own (§ top of this file). And that gist is rendered in ten other places: the granularity-zoom
+stage 4 writes onto every internal node — the Gists view has no stage, artefact or prompt of its
+own (§ top of this file). And that gist is rendered in ten other places: the granularity-zoom
 columns, the spine tooltips, the masthead, the shelf card on [the library](library.md) and
 [the public shelf](public-shelf.md), the outline rows, the diagram cards, the fisheye.
 
