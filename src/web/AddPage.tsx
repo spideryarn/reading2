@@ -68,6 +68,7 @@ import { useJobs } from "./useJobs.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { AUTO_MODES_LABEL, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } from "./auto-modes.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -384,10 +385,34 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 
   const job = queue.jobs.find((j) => j.id === started) ?? null;
 
+  /**
+   * **Generate the main modes once it is in** — Greg's tick box, on unless this
+   * browser was last told otherwise (src/web/auto-modes.ts).
+   *
+   * Read through refs in the `done` effect so that effect keeps depending on
+   * the job alone. `queuedModesFor` is the once-guard, keyed on the job id:
+   * StrictMode runs the effect twice in development, and the server would
+   * de-duplicate the second set but the log would still say it was asked.
+   */
+  const [autoModes, setAutoModes] = useState(readAutoModes);
+  const autoModesRef = useRef(autoModes);
+  autoModesRef.current = autoModes;
+  const runRef = useRef(queue.run);
+  runRef.current = queue.run;
+  const queuedModesFor = useRef<string | null>(null);
+
   useEffect(() => {
     if (job?.status !== "done") return;
+    /* **Not awaited.** The router is client-side, so the POSTs carry on after
+       the page is gone, and the app-wide job engine drives what they queue from
+       the reading view. Waiting for five round trips before opening the
+       article would spend the one thing Greg asked this to save. */
+    if (autoModesRef.current && queuedModesFor.current !== job.id) {
+      queuedModesFor.current = job.id;
+      void queueAutoModes(runRef.current, job.slug);
+    }
     navigate(readHref(job.slug), { replace: true });
-  }, [job?.status, job?.slug]);
+  }, [job?.status, job?.slug, job?.id]);
 
   /* The tab, naming what is being added — the host for an address, the filename
      for an upload. The filename only exists once the first poll has come back,
@@ -625,6 +650,27 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           standing disclaimer under a finished import. */}
       {job && (job.status === "queued" || job.status === "running") && (
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">{KEEP_A_TAB_OPEN}</p>
+      )}
+
+      {/* Offered while the import runs, which is when Greg said he wanted it,
+          and read at the moment it finishes — so it can be changed right up to
+          then. src/web/auto-modes.ts. */}
+      {job && (job.status === "queued" || job.status === "running") && (
+        <label className="tw:mt-3 tw:flex tw:items-start tw:gap-2 tw:text-sm">
+          <input
+            type="checkbox"
+            className="tw:mt-0.5"
+            checked={autoModes}
+            onChange={(event) => {
+              setAutoModes(event.target.checked);
+              writeAutoModes(event.target.checked);
+            }}
+          />
+          <span>
+            {AUTO_MODES_LABEL}
+            <span className="tw:block tw:text-muted-foreground">{autoModesDetail()}</span>
+          </span>
+        </label>
       )}
 
       {job?.status === "done" && <Done job={job} />}

@@ -143,6 +143,7 @@ import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
 import type { RememberView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
+import type { StepName } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
 
 /**
@@ -332,6 +333,25 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
  */
 export function modeGenerates(mode: Mode): boolean {
   return MODE_TARGET[mode].kind !== "none";
+}
+
+/**
+ * **The pipeline step this mode makes**, or `null` when it makes none or the
+ * answer depends on the press.
+ *
+ * The second thing `MODE_TARGET` may be asked, for the add page's *generate the
+ * main modes* box (src/web/auto-modes.ts): it needs the step names themselves,
+ * not the one bit `modeGenerates` gives. Derived for `modeGenerates`'s reason —
+ * a second list of "the step each mode makes" would be the copy nobody watches.
+ *
+ * `delegated` is `null` because the step is the press's, not the mode's
+ * (Diagram's picture comes from `?diagram=`); the two stream targets are `null`
+ * because they have no job row. docs/plans/260930c-auto-generate-the-main-modes-after-import.md.
+ */
+export function modeStep(mode: Mode): StepName | null {
+  const row = MODE_TARGET[mode];
+  if (row.kind !== "fixed" && row.kind !== "arrival") return null;
+  return row.target === "claims" || row.target === "candidates" ? null : row.target;
 }
 
 /**
