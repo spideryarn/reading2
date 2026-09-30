@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { HUE_STOPS } from "../src/web/topic-colour.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const css = readFileSync(path.join(root, "styles/colourscales.css"), "utf8");
@@ -51,6 +52,27 @@ function lightness(hex: string): number {
   const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
   const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
   return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+}
+
+/**
+ * OKLab's a and b for an sRGB colour, as chroma and hue angle in degrees — the
+ * same matrices as `lightness` above, carried one step further.
+ */
+function chromaHue(hex: string): { c: number; h: number } {
+  const toLinear = (byte: number) => {
+    const c = byte / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const r = toLinear(Number.parseInt(hex.slice(1, 3), 16));
+  const g = toLinear(Number.parseInt(hex.slice(3, 5), 16));
+  const b = toLinear(Number.parseInt(hex.slice(5, 7), 16));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  const h = (Math.atan2(B, A) * 180) / Math.PI;
+  return { c: Math.hypot(A, B), h: h < 0 ? h + 360 : h };
 }
 
 /**
@@ -307,5 +329,47 @@ describe("the categorical palette (--cat-*)", () => {
        difference. This is the check that we have not accidentally done that. */
     const Ls = rgbs.map((r) => lightness(r.hex));
     expect(Math.max(...Ls) - Math.min(...Ls)).toBeGreaterThan(0.15);
+  });
+});
+
+describe("the hue ring (--hue-*), for topics that are near each other", () => {
+  /* The ring is produced by scripts/generate-hue-ring.ts, and its whole content
+     is two relationships: one lightness, and hue climbing evenly from red to
+     violet without wrapping. A hand edit that breaks either still renders fine,
+     so both are measured here. */
+  const ring = triples("hue");
+
+  it("has one stop per HUE_STOPS, each also spelled as a colour", () => {
+    expect(ring).toHaveLength(HUE_STOPS);
+    for (let i = 0; i < HUE_STOPS; i++) {
+      expect(css, `--hue-${i}`).toContain(`--hue-${i}: rgb(var(--hue-${i}-rgb));`);
+    }
+  });
+
+  it("sits at one lightness, well clear of the page", () => {
+    const Ls = ring.map(lightness);
+    expect(Math.max(...Ls) - Math.min(...Ls)).toBeLessThan(0.01);
+    for (const [i, L] of Ls.entries()) {
+      expect(Math.abs(L - 0.76), `--hue-${i} lightness`).toBeLessThan(0.005);
+    }
+  });
+
+  it("is vivid at every stop without exceeding the generator's chroma cap", () => {
+    for (const [i, hex] of ring.entries()) {
+      expect(chromaHue(hex).c, `--hue-${i} (${hex})`).toBeGreaterThan(0.11);
+      // Encoding to integer sRGB can lift the measured value just above 0.16.
+      expect(chromaHue(hex).c, `--hue-${i} (${hex})`).toBeLessThan(0.162);
+    }
+  });
+
+  it("runs in even hue steps from 25° to 290°", () => {
+    const hs = ring.map((hex) => chromaHue(hex).h);
+    expect(Math.abs(hs[0]! - 25)).toBeLessThan(1);
+    expect(Math.abs(hs[hs.length - 1]! - 290)).toBeLessThan(1);
+    const expectedStep = (290 - 25) / (HUE_STOPS - 1);
+    for (let i = 1; i < hs.length; i++) {
+      const step = hs[i]! - hs[i - 1]!;
+      expect(Math.abs(step - expectedStep), `--hue-${i} step`).toBeLessThan(1);
+    }
   });
 });

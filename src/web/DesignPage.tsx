@@ -274,7 +274,7 @@ const SWATCHES: { group: string; names: string[] }[] = [
 ];
 
 /**
- * The three colour scales — docs/project/colour-scales.md.
+ * The colour scales — docs/project/colour-scales.md.
  *
  * On this page rather than only in a stylesheet because **a colour scale cannot
  * be reviewed one value at a time.** What is wrong with a ramp is always a
@@ -289,7 +289,10 @@ const SWATCHES: { group: string; names: string[] }[] = [
  * can quietly disagree with the one the app is using, which would make this
  * section worse than not having it.
  */
-const SCALES: { name: string; tokens: string[]; note: string }[] = [
+/* `dense`: too many steps for a labelled chip each (the hue ring's 32 ran off
+   the side of the column), so the chips shrink to fit and each label is only
+   the step's number. */
+const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[] = [
   {
     name: "Categorical — one per saved search",
     tokens: ["--cat-0", "--cat-1", "--cat-2", "--cat-3", "--cat-4", "--cat-5", "--cat-6", "--cat-7"],
@@ -333,6 +336,19 @@ const SCALES: { name: string; tokens: string[]; note: string }[] = [
       "overwhelmingly is, so to a deuteranope this is a scale that gets darker in the middle and " +
       "says nothing about which side you are on. Only use it where something other than the hue " +
       "already tells the reader which end is which.",
+  },
+  {
+    name: "Hue ring — the shelf's topics, near means related",
+    /* 32 is HUE_STOPS in topic-colour.ts, not imported: that module is on the
+       reader's eager graph, and this page is lazy (tests/eager-client-graph.test.ts).
+       tests/colour-scales.test.ts holds the stylesheet to HUE_STOPS. */
+    tokens: Array.from({ length: 32 }, (_, i) => `--hue-${i}`),
+    dense: true,
+    note:
+      "One lightness, hue climbing from red to violet and stopping short of red again. Neighbouring " +
+      "stops should read as related shades and the two ends as clearly different. Not " +
+      "colour-blind safe: at one lightness a dichromat loses most of the relatedness cue. The " +
+      "label still identifies the topic and the control still works without its colour.",
   },
 ];
 
@@ -615,7 +631,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
       <section>
         <h2>Colour scales</h2>
         <p className="design-note">
-          The three palettes that are not the brand — see{" "}
+          The palettes that are not the brand — see{" "}
           <code className="design-token">docs/project/colour-scales.md</code>. No contrast ratios
           here, deliberately: none of these is ever text, and a ratio against{" "}
           <code className="design-token">--page</code> would be a number that looks like a verdict
@@ -626,11 +642,13 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <div key={scale.name}>
             <h3>{scale.name}</h3>
             <p className="design-note">{scale.note}</p>
-            <div className="design-scale">
+            <div className={scale.dense ? "design-scale design-scale-dense" : "design-scale"}>
               {scale.tokens.map((token) => (
                 <div key={token} className="design-scale-step">
                   <div className="design-scale-chip" style={{ background: `var(${token})` }} />
-                  <code className="design-token">{token.replace("--", "")}</code>
+                  <code className="design-token">
+                    {scale.dense ? token.replace(/^--.*-/, "") : token.replace("--", "")}
+                  </code>
                 </div>
               ))}
             </div>

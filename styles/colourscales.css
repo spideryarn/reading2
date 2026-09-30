@@ -1,5 +1,5 @@
 /*
- * Colour scales — three of them, and only one is in use today.
+ * Colour scales — four of them.
  *
  * The reasoning, the sources and the honest list of what is weak about each
  * live in docs/project/colour-scales.md. This file is the values.
@@ -8,11 +8,12 @@
  * `@layer app` — see docs/project/design-css-overview.md § The four files. It is
  * a file of its own rather than more of tokens.css because tokens.css is the
  * palette this app *wears* and these are palettes it *uses*: one hue means "the
- * brand", eight mean "these are different things", nine mean "this much of it".
+ * brand", eight mean "these are different things", nine mean "this much of it",
+ * and a ring of thirty-two means "near each other, related".
  * Different jobs, and mixing them would make the brand file look like a set of
  * options.
  *
- * Three rules hold across all three scales.
+ * Three rules hold across all of them.
  *
  * **Dark ground, unconditionally.** Every value here is picked against
  * `--background` (`oklch(0.145 0 0)`), which is near-black, and several of them
@@ -383,4 +384,89 @@
     --div-rg-6: rgb(var(--div-rg-6-rgb));
     --div-rg-7: rgb(var(--div-rg-7-rgb));
     --div-rg-8: rgb(var(--div-rg-8-rgb));
+
+    /* ==================================================================
+       HUE RING — 32 stops at one lightness, red to violet.
+       Means "near these, related; far from these, not". In use: the shelf's
+       topics (src/web/topic-colour.ts), where neighbouring stops go to topics
+       that pick out the same articles.
+
+       Generated, not hand-picked: `npx tsx scripts/generate-hue-ring.ts`
+       prints this block. OKLCH L 0.76 throughout (the lightness of the lifted
+       categorical hues on this page), hue 25° to 290° in even steps, and at
+       each step the most chroma sRGB can show there, up to 0.16. The arc stops
+       short of 360° so its two ends do not meet back at red.
+
+       **Not colour-blind safe, and not pretending to be.** A rainbow at one
+       lightness is exactly the scale a dichromat reads least of, and what it
+       carries here (relatedness) is carried by nothing else. It is a
+       supplementary cue: the topic's label is always drawn, and the topic
+       works the same without the colour. docs/project/colour-scales.md.
+       ================================================================== */
+
+    --hue-0-rgb: 255 138 130;     /* h 25.0  C 0.142 */
+    --hue-1-rgb: 255 140 115;     /* h 33.5  C 0.144 */
+    --hue-2-rgb: 255 142 97;      /* h 42.1  C 0.149 */
+    --hue-3-rgb: 255 144 73;      /* h 50.6  C 0.159 */
+    --hue-4-rgb: 250 149 52;      /* h 59.2  C 0.160 */
+    --hue-5-rgb: 243 154 30;      /* h 67.7  C 0.160 */
+    --hue-6-rgb: 233 161 3;       /* h 76.3  C 0.159 */
+    --hue-7-rgb: 222 167 2;       /* h 84.8  C 0.155 */
+    --hue-8-rgb: 211 173 1;       /* h 93.4  C 0.155 */
+    --hue-9-rgb: 198 179 1;       /* h 101.9  C 0.159 */
+    --hue-10-rgb: 183 185 29;     /* h 110.5  C 0.160 */
+    --hue-11-rgb: 167 191 52;     /* h 119.0  C 0.160 */
+    --hue-12-rgb: 148 195 72;     /* h 127.6  C 0.160 */
+    --hue-13-rgb: 128 200 91;     /* h 136.1  C 0.160 */
+    --hue-14-rgb: 105 203 109;    /* h 144.7  C 0.160 */
+    --hue-15-rgb: 77 206 127;     /* h 153.2  C 0.160 */
+    --hue-16-rgb: 36 208 145;     /* h 161.8  C 0.160 */
+    --hue-17-rgb: 4 207 163;      /* h 170.3  C 0.149 */
+    --hue-18-rgb: 5 205 178;      /* h 178.9  C 0.138 */
+    --hue-19-rgb: 5 203 192;      /* h 187.4  C 0.132 */
+    --hue-20-rgb: 0 202 204;      /* h 196.0  C 0.129 */
+    --hue-21-rgb: 2 200 215;      /* h 204.5  C 0.129 */
+    --hue-22-rgb: 0 198 227;      /* h 213.1  C 0.133 */
+    --hue-23-rgb: 0 196 240;      /* h 221.6  C 0.140 */
+    --hue-24-rgb: 2 193 254;      /* h 230.2  C 0.151 */
+    --hue-25-rgb: 76 188 255;     /* h 238.7  C 0.139 */
+    --hue-26-rgb: 104 184 255;    /* h 247.3  C 0.129 */
+    --hue-27-rgb: 123 180 255;    /* h 255.8  C 0.124 */
+    --hue-28-rgb: 138 176 255;    /* h 264.4  C 0.122 */
+    --hue-29-rgb: 151 171 255;    /* h 272.9  C 0.122 */
+    --hue-30-rgb: 164 167 255;    /* h 281.5  C 0.125 */
+    --hue-31-rgb: 176 162 255;    /* h 290.0  C 0.132 */
+
+    --hue-0: rgb(var(--hue-0-rgb));
+    --hue-1: rgb(var(--hue-1-rgb));
+    --hue-2: rgb(var(--hue-2-rgb));
+    --hue-3: rgb(var(--hue-3-rgb));
+    --hue-4: rgb(var(--hue-4-rgb));
+    --hue-5: rgb(var(--hue-5-rgb));
+    --hue-6: rgb(var(--hue-6-rgb));
+    --hue-7: rgb(var(--hue-7-rgb));
+    --hue-8: rgb(var(--hue-8-rgb));
+    --hue-9: rgb(var(--hue-9-rgb));
+    --hue-10: rgb(var(--hue-10-rgb));
+    --hue-11: rgb(var(--hue-11-rgb));
+    --hue-12: rgb(var(--hue-12-rgb));
+    --hue-13: rgb(var(--hue-13-rgb));
+    --hue-14: rgb(var(--hue-14-rgb));
+    --hue-15: rgb(var(--hue-15-rgb));
+    --hue-16: rgb(var(--hue-16-rgb));
+    --hue-17: rgb(var(--hue-17-rgb));
+    --hue-18: rgb(var(--hue-18-rgb));
+    --hue-19: rgb(var(--hue-19-rgb));
+    --hue-20: rgb(var(--hue-20-rgb));
+    --hue-21: rgb(var(--hue-21-rgb));
+    --hue-22: rgb(var(--hue-22-rgb));
+    --hue-23: rgb(var(--hue-23-rgb));
+    --hue-24: rgb(var(--hue-24-rgb));
+    --hue-25: rgb(var(--hue-25-rgb));
+    --hue-26: rgb(var(--hue-26-rgb));
+    --hue-27: rgb(var(--hue-27-rgb));
+    --hue-28: rgb(var(--hue-28-rgb));
+    --hue-29: rgb(var(--hue-29-rgb));
+    --hue-30: rgb(var(--hue-30-rgb));
+    --hue-31: rgb(var(--hue-31-rgb));
 }

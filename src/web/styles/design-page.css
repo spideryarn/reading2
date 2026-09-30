@@ -223,6 +223,10 @@
   align-items: center;
   gap: 0.25rem;
 }
+/* A scale with too many steps to label each one (the hue ring's 32) shrinks
+   to fit the column and labels each step with its number alone. */
+.design-scale-dense .design-scale-step { flex: 1 1 0; min-width: 0; }
+.design-scale-dense .design-token { font-size: 0.6rem; }
 .design-scale-chip {
   width: 100%;
   height: 3rem;

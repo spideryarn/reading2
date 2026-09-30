@@ -17,8 +17,10 @@
  *
  * It draws the topics it is handed, in the order handed — every topic worth
  * offering, in the server's rank order, is ShelfTerms.tsx's call (plan 260928d
- * § Stage 2, the state machine; the zeros dropped since plan 260929a). **The colour is decoration only**: the label is always
- * drawn, and every swatch and bar is `aria-hidden`.
+ * § Stage 2, the state machine; the zeros dropped since plan 260929a).
+ * **The colour is a supplementary visual cue**: the label is always drawn,
+ * and every swatch and bar is `aria-hidden`; a reader who cannot distinguish
+ * its hue loses the relatedness cue but not the control.
  *
  * **Compact table-like rows**, chosen over cards and two-line rows from
  * screenshots at desktop and phone widths (plan 260928d § Stage 2): the bars
@@ -45,7 +47,7 @@ export function ShelfTermsDetail({
 }: {
   /** The topics to draw, in the order to draw them. */
   terms: readonly ShelfTerm[];
-  /** Each topic's palette slot — the same one its pill's dot wears. */
+  /** Each topic's hue-ring stop — the same one its pill's dot wears. */
   slotOf: (key: string) => number;
   /** The live count, from the one formula in shelf-narrow.ts. */
   count: (key: string) => number;

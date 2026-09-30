@@ -1,7 +1,8 @@
 # Colour scales
 
-**Three palettes that are not the brand.** `--spideryarn-orange` says *this is us*; these say
-*these are different things*, *this much of it*, and *which side of the middle*. The values live in
+**Palettes that are not the brand.** `--spideryarn-orange` says *this is us*; these say
+*these are different things*, *this much of it*, *which side of the middle*, and — the hue ring,
+since 2026-09-30 — *near each other, related*. The values live in
 [`styles/colourscales.css`](../../styles/colourscales.css) and are documented inline; this page is
 the reasoning, the sources, and the honest account of what each one gets wrong.
 
@@ -28,6 +29,7 @@ two of those neither can be changed.
 | **Sequential (hot)** | `--heat-0` … `--heat-8` | this much of it, and it is hot | ready, unused |
 | **Sequential (neutral)** | `--vir-0` … `--vir-8` (+ `-rgb`) | this much of it | in use — how far through the article a paragraph is |
 | **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` (+ `-rgb`) | which side of the middle | in use — how a referee's for/against criterion cuts, in the panel row **and** in the prose |
+| **Hue ring** | `--hue-0` … `--hue-31` (+ `-rgb`) | near each other, related | in use — the shelf's topics ([shelf-terms.md](shelf-terms.md)) |
 
 ## Two rules that apply to all three
 
@@ -464,6 +466,29 @@ from −2 to +9, putting the neutral colour at the *data* midpoint (+3.5) means 
 neutral value is drawn in the "negative" colour. The pivot belongs at the value that means neither,
 which is almost always zero, and the ends are then asymmetric — which is honest, and looks it.
 
+## Hue ring
+
+**Thirty-two stops at one lightness, red to violet**, for things whose *position* on a line
+means something and whose neighbours should look like shades of each other. Its one user is the
+shelf's topics: topics that pick out the same articles are laid out side by side and take
+neighbouring stops ([shelf-terms.md § Colour](shelf-terms.md#colour-says-which-topics-are-related),
+report 5N, plan [260930b](../plans/260930b-shelf-topic-colours-by-relatedness.md)).
+
+- **Generated**, by `npx tsx scripts/generate-hue-ring.ts`, which prints the CSS block: OKLCH
+  L 0.76 throughout (where the lifted categorical hues sit), hue 25° to 290° in even steps, and the
+  most chroma sRGB holds at each step, capped at 0.16. That gives 0.12 in the blues and 0.16 in
+  the oranges and greens.
+- **An open arc, not a wheel.** It stops short of 360°, so the first stop and the last are red and
+  violet, not two reds. A layout that wraps (two dimensions to an angle) was weighed and deferred in
+  the plan.
+- **Measured**, in [`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts): one
+  lightness to within 0.01, chroma above 0.11 at every stop, and hue climbing at every step.
+- **It is exactly the rainbow this page warns against, used for the one job a rainbow is for.**
+  Hue at one lightness has no order a reader can see, and a dichromat sees little of it. Here that
+  is acceptable because nothing is read off it as a quantity. It only says "these two are near
+  each other", and the thing coloured is always labelled. It is not colour-blind safe, and the doc
+  that uses it says so.
+
 ## What is not decided
 
 - **No `cividis`.** (Nuñez, Anderton & Renslow, PLOS ONE 2018) — the one built specifically so that
@@ -496,7 +521,7 @@ which is almost always zero, and the ends are then asymmetric — which is hones
 - [search.md](search.md) — the one feature using the categorical set, and what the colour is *for*
 - [design-css-overview.md](design-css-overview.md) — where this file sits in the cascade, and the
   `oklab`-not-`oklch` trap
-- **`/design`** ([`DesignPage.tsx`](../../src/web/DesignPage.tsx)) — all three scales rendered
+- **`/design`** ([`DesignPage.tsx`](../../src/web/DesignPage.tsx)) — every scale rendered
   against the real ground. Look at it after touching any value here;
   [browser-testing.md](browser-testing.md) is emphatic that a screenshot is not evidence about
   colour

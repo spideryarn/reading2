@@ -123,7 +123,7 @@ row is for choosing the next filter, and a chip that leads to an empty shelf is 
 topic stays at zero, or it could not be removed. Until 2026-09-29 such a chip was greyed and
 disabled in place, on the argument that a row reshuffling under the pointer is worse than a dead
 chip; Greg's report weighed it the other way. The order is still the server's rank order — the
-survivors keep their places relative to each other, and each keeps its rank's colour.
+survivors keep their places relative to each other, and each keeps its colour.
 
 **The zeros go first, then the first twelve** (`availableTopics` in
 [`shelf-narrow.ts`](../../src/web/shelf-narrow.ts); GPT Sol R5 on plan
@@ -174,11 +174,38 @@ route is not cached — which is the accepted limit.
   on it. Chosen over cards and two-line rows from screenshots, plan
   [260928d](../plans/260928d-shelf-topics-diversity-coverage-and-detail-view.md) § Stage 2.
 
-**Colour is decoration, keyed to rank**: a topic's colour is its position in the server's order
-mapped onto the categorical palette ([colour-scales.md](colour-scales.md)) — the seven colour-blind-safe
-hues first, the neutral grey skipped, repeating after fifteen. The same colour is the dot on its pill
-and the swatch on its row. Stable across reloads; it changes when the shelf changes enough to re-rank
-the topic. The label is always drawn, and swatches and bars are `aria-hidden`.
+## Colour says which topics are related
+
+> It strikes me that it would actually be great if they were coloured semantically somehow. […]
+> Then you would naturally find that similar topics would get similar colours, and it would be
+> easier to see which topics are related and which stand out.
+>
+> — Greg, 2026-09-29
+
+**Topics that pick out the same articles get neighbouring hues**, and a topic that shares nothing
+with the rest gets a hue of its own. It is worked out in the browser from the member lists the route
+already sends, with no model and nothing stored
+([`topic-colour.ts`](../../src/web/topic-colour.ts)):
+
+1. Two topics are close when their article sets overlap: binary cosine, `|A∩B| / √(|A|·|B|)`.
+2. Average-link clustering puts them in a line with related topics side by side. At each join the
+   half holding the better server rank goes first, so the top topic is always at the red end.
+3. The gap between neighbours grows with how far apart they were when joined, so a cluster packs
+   into a few shades and unrelated topics spread across the arc. Then each topic takes the nearest
+   of the 32 stops on the hue ring, red to violet at one lightness
+   ([colour-scales.md § Hue ring](colour-scales.md#hue-ring)).
+
+It is computed over **every topic the server chose, from their full member lists**, never the live
+counts, so a colour does not move as you choose topics, search or hide zeros. It is the same on every
+reload and changes when the topics or their articles do. The same colour is the dot on its pill and
+the swatch and bar on its row. Why a dendrogram's order and not MDS, which was Greg's suggestion: plan
+[260930b](../plans/260930b-shelf-topic-colours-by-relatedness.md).
+
+**The colour is a supplementary cue, not the only carrier.** The label is always drawn and swatches
+and bars are `aria-hidden`, so every topic works without its colour. But relatedness itself is carried
+only by hue, and the ring is not colour-blind safe, so a reader who cannot see hue differences loses
+that signal. Copies of one work count as separate articles here, as the counts do, so they can
+strengthen an apparent overlap that the chooser treats as one work.
 
 **Titles, not copies.** A row and a tooltip name articles **one per title** — the first slug of each —
 so three copies of one piece are named once. Only the naming is deduplicated; every count stays
@@ -216,7 +243,7 @@ while articles are still being read, a topic can be absent from one answer and p
 | the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
 | one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
 | the More-detail rows: swatch, chip, count bar, links | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
-| a topic's colour from its rank | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
+| a topic's colour from the articles it shares with the others | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
 | where it is wired into the page | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 
 ## Measuring a real shelf
@@ -230,7 +257,8 @@ it Greg runs it with his owner uuid and the production `DATABASE_URL` in the she
 
 ## What v1 does not do
 
-- No embeddings, no clustering library; the one model call judges candidates and never writes one.
+- No embeddings, no clustering library (the colours' clustering is thirty lines of our own); the
+  one model call judges candidates and never writes one.
 - No editing of topics — hide, rename or pin. Zotero-style "hide this automatic tag" is the obvious v2.
 - The generic-word list is hand-written, so weak topics such as *window* and *message* survive.
 - Near-synonyms (*neural nets* / *neural networks*) can both appear, and near-copies of one article
