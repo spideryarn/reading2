@@ -266,6 +266,7 @@ import {
    header before calling it from anywhere else, because the scope handling in it
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
+import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -313,7 +314,10 @@ import {
   listJobs,
   retryJob,
 } from "./jobs.js";
-import { describeAdminMiss, isAdmin } from "./admin.js";
+import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
+import { costCategoryOf } from "./cost-categories.js";
+import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
+import { ownedArticleIdentity } from "./store/pg.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
@@ -429,6 +433,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    src/types.ts § feedback. */
 import {
   EARLIER_FEEDBACK_LIMIT,
+  EARLIER_FEEDBACK_SHOWS,
   type EarlierFeedbackPage,
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
@@ -5953,7 +5958,17 @@ async function transcribeDictation(
   const drop = () => gone.abort();
   res.on("close", drop);
   try {
-    const result = await transcribe(audio, sent.format, where, gone.signal);
+    /* **Attributed to the article when the dictation is going into one**, so
+       its cost reaches that article's figure on the metadata page. The slug is
+       in the body rather than the path, so the route table cannot do this for
+       it. Unattributed until 2026-09-30 —
+       docs/plans/260930f-article-cost-on-the-metadata-page.md. */
+    const format = sent.format;
+    const run = () => transcribe(audio, format, where, gone.signal);
+    const result =
+      where.kind === "article"
+        ? await withSpendAttribution({ articleSlug: where.slug }, run)
+        : await run();
     return { text: result.text, ms: result.ms };
   } finally {
     res.off("close", drop);
@@ -6879,6 +6894,8 @@ interface ExactAuthRoute {
   kind: "exact";
   method: AuthRouteMethod;
   path: string;
+  /** An exact path has no capture, so its article, if any, is the handler's to say. */
+  article: Exclude<ArticleAttribution, "first-capture">;
   handler: (context: AuthRouteContext) => Promise<void>;
 }
 
@@ -6908,8 +6925,28 @@ interface PatternAuthRoute {
   kind: "pattern";
   method: AuthRouteMethod;
   pattern: RegExp;
+  article: ArticleAttribution;
   handler: (context: AuthRouteContext, captures: RegExpExecArray) => Promise<void>;
 }
+
+/**
+ * **Which article a row's model spend belongs to**, answered on every row so
+ * nobody has to remember it — docs/project/cost-tracking.md.
+ *
+ * - `"first-capture"`: the article's slug is capture 1, and
+ *   `dispatchAuthRoute` attributes any spend inside the handler to it.
+ * - `"handler"`: the slug arrives some other way — a query parameter, the
+ *   body — and the handler wraps its own call in `withSpendAttribution`.
+ * - `"none"`: nothing to attribute — the path names no article (a job, an
+ *   upload, a live session), or the route never calls a model.
+ *
+ * Required, not optional, because optional is the "remember to" rule it
+ * replaces: link previews and dictation were each the route that forgot. The
+ * compiler makes a new row answer; it cannot make it answer right, which is
+ * what review is for. Greg, 2026-09-30 (SPIDERYARN-READING2-68); GPT Sol asked
+ * for it on the exact routes too.
+ */
+type ArticleAttribution = "first-capture" | "handler" | "none";
 
 /**
  * One row of the table: exact or pattern, and never both.
@@ -7048,6 +7085,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/admin/users",
+    article: "none",
     handler: async ({ request: { res } }) => {
       /* **Said on the response as well as meant by the client.** The offline
          cache in src/web/lib/api.ts keeps to an allowlist that this route is
@@ -7067,6 +7105,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/admin/feedback",
+    article: "none",
     handler: async ({ request: { res, query } }) => {
       /* `private, no-store`, and here it is not belt and braces the way it is on
          the users list. That one carries counts; this one carries what other
@@ -7111,6 +7150,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const [, owner = "", id = ""] = captures;
       if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
@@ -7126,6 +7166,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)\/screenshot$/,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const [, owner = "", id = ""] = captures;
       /* The shapes in the pattern are not the rules. These are, and they run
@@ -7156,6 +7197,57 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **What one article has cost**, for the metadata page's admin section —
+     Greg, 2026-09-30 (SPIDERYARN-READING2-68). Behind the namespace gate like
+     its siblings; this row adds no check of its own, because the gate is the
+     check. docs/project/cost-tracking.md.
+
+     **Only for an article the administrator owns** — the ambient owner, through
+     `articleIdForOwned`, so anybody else's slug is the same 404 every
+     owner-scoped route gives. The admin pages show money about *accounts* and
+     do not follow identifiers into other people's articles (admin.md § What it
+     deliberately does not show); a per-article breakdown of a stranger's
+     article would say which features they used on it. Widening this to other
+     people's public articles is Greg's decision, and deferred in the plan. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/articles\/([\w.%-]+)\/cost$/,
+    article: "first-capture",
+    handler: async ({ user, request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      /* The ownership check, and the id and creation time the query keys on
+         (src/store/ai-calls-spend-pg.ts § `belongsTo`). */
+      const found = await ownedArticleIdentity(slug);
+      const article = { ...found, slug, ownerId: user.id };
+      res.setHeader("Cache-Control", "private, no-store");
+      const [groups, silentLiveSessions] = await Promise.all([
+        spendForArticle(article),
+        silentLiveSessionsForArticle(article),
+      ]);
+      const cost: ArticleCost = {
+        slug,
+        lines: groups.map((g) => ({
+          scopeKind: g.scopeKind,
+          job: g.job,
+          stepName: g.stepName,
+          category: costCategoryOf(g),
+          calls: g.calls,
+          creditsNanos: g.creditsNanos,
+          byokNanos: g.byokNanos,
+          computedNanos: g.computedNanos,
+          computedCalls: g.computedCalls,
+          unpricedCalls: g.unpricedCalls,
+          nonOkCalls: g.nonOkCalls,
+          firstAt: g.firstAt.toISOString(),
+          lastAt: g.lastAt.toISOString(),
+        })),
+        silentLiveSessions,
+      };
+      send(res, 200, cost);
+    },
+  },
+
   /* An EXACT match, which is what this row has always been for: a stray
      `/api/library/anything` must 404 rather than quietly serve the whole shelf.
      The shelf takes `?archived=1`, which is why it was the first route moved
@@ -7164,6 +7256,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/library",
+    article: "none",
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
          meaning "no", and a loose check would hand them the archive. */
@@ -7185,6 +7278,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/library/search",
+    article: "none",
     handler: async ({ request: { res, query } }) => {
       send(res, 200, await searchTheLibrary(query));
     },
@@ -7201,6 +7295,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/library/terms",
+    article: "none",
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
       const archived = query.get("archived") === "1";
@@ -7226,6 +7321,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PATCH",
     pattern: SHELF_ENTRY_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       send(res, 200, await patchShelf(slugPart(captures, 1), await readBody(req)));
     },
@@ -7252,6 +7348,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: SHELF_ENTRY_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await shelfStore.destroy(slugPart(captures, 1)));
     },
@@ -7263,6 +7360,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/models",
+    article: "none",
     handler: async ({ request: { res } }) => {
       send(res, 200, modelsInUse());
     },
@@ -7278,6 +7376,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: "/api/transcribe",
+    article: "handler",
     handler: async ({ request: { req, res } }) => {
       send(res, 200, await transcribeDictation(req, res));
     },
@@ -7296,6 +7395,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: FEEDBACK_PATH,
+    article: "none",
     handler: async ({ user, request: { req, res } }) => {
       await fileFeedback(req, res, user);
     },
@@ -7307,20 +7407,36 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than four fields still sends four. */
+     day hands back more than four fields still sends four — and a fifth,
+     `shipped`, which is ours: whether this build carries a note saying a change
+     for the report shipped. `?show=shipped|unshipped` narrows by the same map,
+     in the query, so the cap applies after the filter; any other value is a
+     400 rather than the whole list passed off as the filtered one.
+     docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md. */
   {
     kind: "exact",
     method: "GET",
     path: FEEDBACK_PATH,
-    handler: async ({ request: { res } }) => {
+    article: "none",
+    handler: async ({ request: { res, query } }) => {
       res.setHeader("Cache-Control", "private, no-store");
-      const page = await feedbackStore.listMine(EARLIER_FEEDBACK_LIMIT);
+      const show = query.get("show") ?? "all";
+      if (!EARLIER_FEEDBACK_SHOWS.some((known) => known === show)) {
+        throw httpError(400, `show must be one of ${EARLIER_FEEDBACK_SHOWS.join(", ")}`);
+      }
+      const page = await feedbackStore.listMine(
+        EARLIER_FEEDBACK_LIMIT,
+        show === "all"
+          ? undefined
+          : { ids: shippedFeedbackIds(), keep: show === "shipped" ? "in" : "out" },
+      );
       const answer: EarlierFeedbackPage = {
         reports: page.reports.map(({ id, createdAt, kind, body }) => ({
           id,
           createdAt,
           kind,
           body,
+          shipped: isFeedbackShipped(id),
         })),
         more: page.more,
       };
@@ -7332,6 +7448,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: READER_PATH,
+    article: "none",
     handler: async ({ request: { res, query } }) => {
       /* **`?slug=` answers a different question, and the panels need that one.**
          Without it this says only whether the *global* box is written, and a
@@ -7406,6 +7523,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "PATCH",
     path: READER_PATH,
+    article: "none",
     handler: async ({ request: { req, res } }) => {
       send(res, 200, await patchReader(await readBody(req)));
     },
@@ -7419,6 +7537,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/library\/([\w.%-]+)\/open$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await shelfStore.recordOpen(slugPart(captures, 1));
       // 204: there is nothing worth reading back, and a body would invite
@@ -7432,6 +7551,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/article\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await loadArticle(slugPart(captures, 1)));
     },
@@ -7464,6 +7584,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/link-preview",
+    article: "none",
     handler: async ({ request: { res, query } }) => {
       /* **A bad slug is a 400**, which is the one thing this route says out
          loud about the request itself: it is malformed rather than a
@@ -7504,6 +7625,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/link-summary",
+    article: "handler",
     handler: async ({ request: { res, query } }) => {
       const at = query.get("slug") ?? "";
       if (!isSlug(at)) throw httpError(400, "Not a slug");
@@ -7511,7 +7633,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          exactly what "the client did not say which mention" means here — a
          client from before this existed, and a chat link, which sits in no
          block at all. */
-      await streamLinkSummary(at, query.get("url"), query.get("block"), res);
+      /* The slug is a query parameter, so the route table's own attribution
+         cannot see it — wrapped here. Unattributed until 2026-09-30. */
+      await withSpendAttribution({ articleSlug: at }, () =>
+        streamLinkSummary(at, query.get("url"), query.get("block"), res),
+      );
     },
   },
 
@@ -7537,6 +7663,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PUT",
     pattern: /^\/api\/article\/([\w.%-]+)\/visibility$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const asked = parseVisibilityRequest(await readBody(req));
       send(
@@ -7565,6 +7692,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/article\/([\w.%-]+)\/reset$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const asked = parseResetRequest(await readBody(req));
       const slug = slugPart(captures, 1);
@@ -7583,6 +7711,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/source\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await sendSource(res, slugPart(captures, 1));
     },
@@ -7608,6 +7737,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/asset\/([\w.%-]+)\/([0-9a-f]{64})\.(png|jpeg|gif)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await sendArticleAsset(res, slugPart(captures, 1), part(captures, 2), part(captures, 3));
     },
@@ -7628,6 +7758,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/export\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await sendExport(res, slugPart(captures, 1));
     },
@@ -7640,6 +7771,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/metadata\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await articleMetadata(slugPart(captures, 1)));
     },
@@ -7656,6 +7788,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/tweets\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -7668,6 +7801,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: GLOSSARY_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -7680,6 +7814,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: GLOSSARY_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await deleteGlossary(slugPart(captures, 1)));
     },
@@ -7696,6 +7831,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       await withSpendAttribution({ articleSlug: at }, () =>
@@ -7720,6 +7856,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/glossary\/([\w.%-]+)\/ask$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const at = slugPart(captures, 1);
       /* **Only `term` is read off the body, and it is the only thing there is
@@ -7763,6 +7900,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/ideas\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -7778,6 +7916,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/quotes\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -7807,6 +7946,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/timeline\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* **No `withProfileChanged`**, unlike its five neighbours, and that is
          the decision rather than an omission: this artefact was never written
@@ -7829,6 +7969,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
          omission: this artefact was never written for a profile, so there is no
@@ -7851,6 +7992,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/faq\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
          written for a profile. `FaqResponse` in src/types.ts has two fields. */
@@ -7869,6 +8011,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/crossrefs\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* No `withProfileChanged`: not written for a profile. */
       send(res, 200, await loadCrossrefs(slugPart(captures, 1)));
@@ -7883,6 +8026,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/trajectory\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       /* **Not `withProfileChanged`**, whose rule calls an artefact written
@@ -7912,6 +8056,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/debate\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
          is reading does not change what the web said, so there is no third
@@ -7934,6 +8079,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/citations\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s reason: this artefact is
          not written for a profile, so there is no third staleness fact.
@@ -7977,6 +8123,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/citations\/([\w.%-]+)\/([\w.%-]+)\/find$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       send(
@@ -8000,6 +8147,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/citations\/([\w.%-]+)\/([\w.%-]+)\/investigate$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       await withSpendAttribution({ articleSlug: at }, () =>
@@ -8027,6 +8175,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/source-guess\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       send(res, 200, await withSpendAttribution({ articleSlug: at }, () => guessSource(at)));
@@ -8041,6 +8190,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: READING_TIME_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, { seconds: await readingTimeStore.read(slugPart(captures, 1)) });
     },
@@ -8053,6 +8203,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: READING_TIME_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const slug = slugPart(captures, 1);
       const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
@@ -8066,6 +8217,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/quiz\/([\w.%-]+)\/mark$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* One of the handful of endpoints here that does not answer with JSON —
          it writes its own headers and ends the response. It is still reached
@@ -8089,6 +8241,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/sketch\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -8129,6 +8282,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/illustrated\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -8157,6 +8311,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.(jpeg|png)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* `slugPart` on the slug for the reason the `source` route gives — the
          pattern allows `%` and `.` — and `part` is not used at all on the hash,
@@ -8189,6 +8344,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/arc\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await loadArc(slugPart(captures, 1)));
     },
@@ -8221,6 +8377,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/similar\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -8275,6 +8432,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/projection\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -8297,6 +8455,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: COMMENTS_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const slug = slugPart(captures, 1);
       const comments = await sweepOrphaned(slug);
@@ -8319,6 +8478,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: COMMENTS_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* **Making a comment is free and answers with JSON.** Until 2026-08-28
          this path was `answer`, which spends a model call and streams; the two
@@ -8338,6 +8498,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* The one endpoint here that does not answer with JSON — it writes its
          own headers and ends the response. It is still reached through `send`
@@ -8364,6 +8525,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PATCH",
     pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/mark$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* **Both fields, always, and a half body is a 400.** `tidyMark` reads an
          absent key as "no placement", which is right on the create path and
@@ -8392,6 +8554,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PATCH",
     pattern: ONE_COMMENT_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       const raw = fields(await readBody(req));
@@ -8429,6 +8592,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: ONE_COMMENT_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
@@ -8440,6 +8604,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: CHAT_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res, query } }, captures) => {
       const slug = slugPart(captures, 1);
       const threads = await sweepChat(slug);
@@ -8466,6 +8631,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: CHAT_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* The one branch that does not call `send`. It writes its own headers and
          ends the response itself, so there is nothing for `send` to do — but
@@ -8488,6 +8654,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await cancelChat(slug, id, await readBody(req)));
@@ -8498,6 +8665,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/chat\/([\w.%-]+)\/live-tool$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* Attributed like every other paid call this article causes. A tool run
          may embed or search, and "what has this piece cost me" should not stop
@@ -8529,6 +8697,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await liveChatToken(slug, id, await readBody(req)));
@@ -8555,6 +8724,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/live\/([\w-]+)\/connected$/,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await liveConnected(part(captures, 1)));
     },
@@ -8564,6 +8734,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/live\/([\w-]+)\/usage$/,
+    article: "none",
     handler: async ({ request: { req, res } }, captures) => {
       /* **Not wrapped in `withSpendAttribution`, and that is deliberate.** That
          helper puts an article on rows the *collector* writes — the calls made
@@ -8579,6 +8750,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/live\/([\w-]+)\/close$/,
+    article: "none",
     handler: async ({ request: { req, res } }, captures) => {
       send(res, 200, await liveClose(part(captures, 1), await readBody(req)));
     },
@@ -8588,6 +8760,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* **The spend attribution the streaming route has, for the half of a live
          session this server can see.** It buys nothing today: the realtime rows
@@ -8610,6 +8783,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       // The slug becomes a directory; the ids are only ever matched in a Map.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
@@ -8621,6 +8795,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PATCH",
     pattern: ONE_THREAD_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       // Slug becomes a directory; the thread id is only ever matched in a list.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
@@ -8634,6 +8809,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: ONE_THREAD_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       /* Under the conversation's turn order, like the writes in `streamChat`.
@@ -8662,6 +8838,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: SEARCHES_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       send(res, 200, { runs: await sweepSearches(slug) });
@@ -8672,6 +8849,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: SEARCHES_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* The third endpoint in this file that does not answer with JSON — see
          `answer`, which writes its own headers and ends the response. It is
@@ -8688,6 +8866,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PATCH",
     pattern: ONE_RUN_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       // Slug becomes a directory; the run id is only ever matched against a list.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
@@ -8713,6 +8892,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: ONE_RUN_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
@@ -8737,6 +8917,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: CRITERIA_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       /* Both halves in one response, and read close together, for the reason
@@ -8754,6 +8935,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: CRITERIA_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* The fourth endpoint in this file that does not answer with JSON — see
          `answer` and `search`. It is still reached through `send` for its
@@ -8770,6 +8952,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "PATCH",
     pattern: ONE_CRITERION_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       // Slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
@@ -8794,6 +8977,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: ONE_CRITERION_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, { criteria: await refereeCriteriaStore.remove(slug, id) });
@@ -8804,6 +8988,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: REFEREE_CLAIMS_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       /* Both halves in one response, and read close together, for the reason
@@ -8825,6 +9010,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: REFEREE_CLAIMS_PATTERN,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* The sixth endpoint in this file that does not answer with JSON. It still
          reaches `send` for its failures: `loadArticle` throws its 404 and
@@ -8854,6 +9040,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/referee\/scan\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       /* **Ask whose article this is before reading a byte of it**, exactly as
@@ -8890,6 +9077,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/referee\/mirror\/([\w.%-]+)$/,
+    article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       /* The fifth endpoint in this file that does not answer with JSON. It
          still reaches `send` for its failures: `loadArticle` throws its 404
@@ -8909,6 +9097,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: JOBS_PATH,
+    article: "none",
     handler: async ({ request: { res } }) => {
       send(res, 200, { jobs: (await listJobs()).map(publicJob) });
     },
@@ -8918,6 +9107,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: "/api/uploads",
+    article: "none",
     handler: async ({ request: { req, res } }) => {
       // 201: a record now exists that did not before, and the body says where
       // to put the bytes. Nothing has been queued and nothing has been read.
@@ -8943,6 +9133,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: UPLOAD_PATTERN,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const id = part(captures, 1);
       const stopped = await cancelUpload(id, currentOwnerId());
@@ -8954,6 +9145,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: UPLOAD_PATTERN,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const id = part(captures, 1);
       const found = await readUpload(id, currentOwnerId());
@@ -8969,6 +9161,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: JOBS_PATH,
+    article: "none",
     handler: async ({ request: { req, res } }) => {
       // 202, not 200: the work has been accepted and has not been done. The
       // body is the receipt to poll, which is the only thing there is to say
@@ -9062,6 +9255,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "GET",
     pattern: JOB_PATTERN,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const found = await getJob(part(captures, 1));
       if (!found) throw httpError(404, "No such job");
@@ -9073,6 +9267,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "DELETE",
     pattern: JOB_PATTERN,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       if (!(await forgetJob(part(captures, 1)))) throw httpError(404, "No such job");
       send(res, 200, { forgotten: part(captures, 1) });
@@ -9083,6 +9278,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const [id, action] = [part(captures, 1), part(captures, 2)];
       /* **Retry is the second front door to a new ingest**, and it never passes
@@ -9131,6 +9327,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "pattern",
     method: "POST",
     pattern: /^\/api\/jobs\/([\w.%-]+)\/advance$/,
+    article: "none",
     handler: async ({ request: { res } }, captures) => {
       const advanced = await advanceJob(part(captures, 1));
       if (!advanced) throw httpError(404, "No such job");
@@ -9186,6 +9383,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: "/api/billing/checkout",
+    article: "none",
     handler: async ({ request: { req, res } }) => {
       const asked = parseCheckoutRequest(await readBody(req));
       send(res, 200, await startCheckout(currentOwnerId(), asked));
@@ -9202,6 +9400,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: "/api/billing/portal",
+    article: "none",
     handler: async ({ request: { res } }) => {
       send(res, 200, await openPortal(currentOwnerId()));
     },
@@ -9224,6 +9423,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "POST",
     path: "/api/billing/confirm",
+    article: "none",
     handler: async ({ request: { req, res } }) => {
       const body = fields(await readBody(req));
       const sessionId = body.sessionId;
@@ -9246,6 +9446,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     kind: "exact",
     method: "GET",
     path: "/api/billing/usage",
+    article: "none",
     handler: async ({ request: { res } }) => {
       send(res, 200, await readBillingSummary(currentOwnerId()));
     },
@@ -9280,6 +9481,26 @@ function assertDispatchableRoutes(routes: readonly AuthRoute[]): void {
 assertDispatchableRoutes(AUTH_ROUTES);
 
 /**
+ * **Capture 1 as a slug, for the ledger only — or `null`, and never a throw.**
+ *
+ * This is accounting, not validation, and it must not become validation: the
+ * handler's own `slugPart` is what answers 400, at the point in the handler
+ * where the route contract pins it (§ [DECODE] above). So a capture that does
+ * not decode or is not a slug attributes nothing and the handler runs exactly
+ * as it would have. The decoded value goes to `withSpendAttribution` and
+ * nowhere else. Nor is it authorisation: a stranger's slug is refused by the
+ * handler's owner-scoped lookup before any model is called.
+ */
+function attributableSlug(captures: RegExpExecArray): string | null {
+  try {
+    const value = decodeURIComponent(captures[1] ?? "");
+    return isSlug(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * **First match wins, the handler is awaited, and then this returns whether it
  * answered.**
  *
@@ -9298,9 +9519,13 @@ assertDispatchableRoutes(AUTH_ROUTES);
  * next one does. § [LIFETIME].
  *
  * **No decoding, no normalisation, no trailing-slash tolerance, no `Allow`.**
- * The method is compared, the path is compared, and nothing else happens here.
+ * The method is compared, the path is compared, and nothing else happens here —
+ * with one exception that does not reach the handler: a row that answers
+ * `article: "first-capture"` has capture 1 decoded by `attributableSlug` above,
+ * for the spend ledger and nothing else.
  */
-async function dispatchAuthRoute(
+/** Exported for tests/route-spend-attribution.test.ts, which drives it with rows of its own. */
+export async function dispatchAuthRoute(
   routes: readonly AuthRoute[],
   context: AuthRouteContext,
 ): Promise<boolean> {
@@ -9314,7 +9539,16 @@ async function dispatchAuthRoute(
     }
     const captures = route.pattern.exec(path);
     if (captures === null) continue;
-    await route.handler(context, captures);
+    const slug = route.article === "first-capture" ? attributableSlug(captures) : null;
+    if (slug === null) await route.handler(context, captures);
+    else {
+      /* The handler call awaited inside the wrapper, not returned from it: the
+         route contract (`assertHandlersAwaited`) reads this function's syntax
+         and refuses any handler call that is not the operand of an `await`. */
+      await withSpendAttribution({ articleSlug: slug }, async () => {
+        await route.handler(context, captures);
+      });
+    }
     return true;
   }
   return false;

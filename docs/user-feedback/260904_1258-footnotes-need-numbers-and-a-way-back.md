@@ -1,3 +1,7 @@
+---
+reports: spya-safz04
+ending: shipped
+---
 # Footnotes: number them, and give me a way back
 
 **[SPIDERYARN-READING2-14](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-14)** · reported

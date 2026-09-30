@@ -1,3 +1,7 @@
+---
+reports: spya-h3ac82
+ending: shipped
+---
 # PDF transcription glitches: survey production, add the cases, fix the post-processing
 
 SPIDERYARN-READING2-69, from Greg (admin), a suggestion. The time in the file name is when this

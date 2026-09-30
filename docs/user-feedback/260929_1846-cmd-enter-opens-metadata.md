@@ -1,3 +1,7 @@
+---
+reports: spya-kh58z7
+ending: shipped
+---
 # ⌘-Enter opens the Metadata page from the article
 
 SPIDERYARN-READING2-5F (`spya-kh58z7`), from Greg (admin). The time in the file name is when this

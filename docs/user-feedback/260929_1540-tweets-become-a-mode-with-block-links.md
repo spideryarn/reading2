@@ -1,3 +1,7 @@
+---
+reports: spya-v6rjvy
+ending: shipped
+---
 # Tweets become a mode, with a wide band and a link from each post to its passage
 
 SPIDERYARN-READING2-5A (report `spya-v6rjvy`), from Greg (admin), sent from `/read/<slug>/tweets`.

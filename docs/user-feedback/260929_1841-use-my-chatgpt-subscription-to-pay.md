@@ -1,3 +1,7 @@
+---
+reports: spya-ddpn5x
+ending: awaiting
+---
 # Use my ChatGPT subscription to pay, for a cheaper price
 
 SPIDERYARN-READING2-5J (`spya-ddpn5x`), from Greg (admin), filed from the Feedback dialog. The time

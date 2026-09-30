@@ -58,6 +58,8 @@ let mirrored: { id: string; sentryEventId: string | null }[] = [];
 let attempted: string[] = [];
 /** Every `listMine` limit the route asked for. */
 let listed: number[] = [];
+/** The id filter each `listMine` was given — `undefined` for the whole list. */
+let listFilters: unknown[] = [];
 /** The request owner in force when each `listMine` began. */
 let listOwners: string[] = [];
 /** What the fake `listMine` answers with — deliberately loose, see § GET. */
@@ -84,6 +86,17 @@ function storedReport(input: NewFeedback): FeedbackReport {
   };
 }
 
+/* The notes' endings, fixed here rather than read from docs/user-feedback/, so
+   a note's header changing cannot move this file's answers. */
+vi.mock("../src/feedback-endings.generated.js", () => ({
+  FEEDBACK_NOTE_ENDINGS: {
+    "spya-k3m9qt": "shipped",
+    "spya-dec1ne": "declined",
+    "spya-wa1t00": "awaiting",
+    "spya-sh1pd2": "shipped",
+  },
+}));
+
 vi.mock("../src/store/index.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/store/index.js")>();
   return {
@@ -94,8 +107,9 @@ vi.mock("../src/store/index.js", async (importActual) => {
         return answer ?? { kind: "created", report: storedReport(input) };
       },
       read: async () => null,
-      listMine: async (limit: number) => {
+      listMine: async (limit: number, filter?: unknown) => {
         listed.push(limit);
+        listFilters.push(filter);
         /* The real store resolves this at the start of its query. Doing the
            same here proves this route reached it only after the gate installed
            the signed-in reader's owner. */
@@ -311,6 +325,7 @@ beforeEach(() => {
   mirrored = [];
   attempted = [];
   listed = [];
+  listFilters = [];
   listOwners = [];
   listAnswer = { reports: [], more: false };
   hooks.clear();
@@ -332,7 +347,7 @@ afterEach(() => {
  * spread" a thing this file can see rather than a thing the store happens to do.
  */
 describe("GET /api/feedback", () => {
-  it("answers the reader's own list, four fields a report, and never caches it", async () => {
+  it("answers the reader's own list, five fields a report, and never caches it", async () => {
     listAnswer = {
       reports: [
         {
@@ -357,6 +372,7 @@ describe("GET /api/feedback", () => {
           createdAt: "2026-09-12T10:45:00.000Z",
           kind: "suggestion",
           body: "A tab of what I sent before",
+          shipped: true,
         },
       ],
       more: true,
@@ -364,6 +380,45 @@ describe("GET /api/feedback", () => {
     /* The cap is the server's, not a query parameter somebody can raise. */
     expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
     expect(listOwners).toEqual([TEST_OWNER]);
+  });
+
+  it("says shipped only for a report whose note says shipped — not declined, not waiting, not unknown", async () => {
+    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x" });
+    listAnswer = {
+      reports: [row("spya-k3m9qt"), row("spya-dec1ne"), row("spya-wa1t00"), row("spya-unkn0w")],
+      more: false,
+    };
+    const reply = await call(undefined, { method: "GET" });
+    const reports = (reply.body as { reports: { id: string; shipped: boolean }[] }).reports;
+    expect(reports.map((r) => [r.id, r.shipped])).toEqual([
+      ["spya-k3m9qt", true],
+      ["spya-dec1ne", false],
+      ["spya-wa1t00", false],
+      ["spya-unkn0w", false],
+    ]);
+    expect(listFilters, "no ?show= is the whole list").toEqual([undefined]);
+  });
+
+  it("narrows by the shipped ids in the query, in for shipped and out for unshipped", async () => {
+    expect((await call(undefined, { method: "GET", path: "/api/feedback?show=shipped" })).status).toBe(200);
+    expect((await call(undefined, { method: "GET", path: "/api/feedback?show=unshipped" })).status).toBe(
+      200,
+    );
+    expect((await call(undefined, { method: "GET", path: "/api/feedback?show=all" })).status).toBe(200);
+    const shipped = ["spya-k3m9qt", "spya-sh1pd2"];
+    expect(listFilters).toEqual([{ ids: shipped, keep: "in" }, { ids: shipped, keep: "out" }, undefined]);
+    expect(listed, "the cap applies within a filter too").toEqual([
+      EARLIER_FEEDBACK_LIMIT,
+      EARLIER_FEEDBACK_LIMIT,
+      EARLIER_FEEDBACK_LIMIT,
+    ]);
+    expect(listOwners).toEqual([TEST_OWNER, TEST_OWNER, TEST_OWNER]);
+  });
+
+  it("refuses a show it does not know, rather than passing the whole list off as filtered", async () => {
+    const reply = await call(undefined, { method: "GET", path: "/api/feedback?show=done" });
+    expect(reply.status).toBe(400);
+    expect(listed).toEqual([]);
   });
 
   it("sets no-store before awaiting the store, so a failed read is private too", async () => {

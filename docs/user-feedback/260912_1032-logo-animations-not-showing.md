@@ -1,3 +1,7 @@
+---
+reports: spya-g2nd07
+ending: shipped
+---
 # The wordmark's animations were not showing
 
 **[SPIDERYARN-READING2-3P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3P)** · reported

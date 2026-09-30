@@ -1,3 +1,7 @@
+---
+reports: spya-fyaaxq, spya-yxcdxn
+ending: shipped
+---
 # Search opens prioritised, and every prioritised bar lets most entries in
 
 **[SPIDERYARN-READING2-3S](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3S)** · reported

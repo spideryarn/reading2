@@ -1,3 +1,7 @@
+---
+reports: spya-bhdst4
+ending: shipped
+---
 # Trajectory's rows should show the quote, not a quotation mark
 
 [SPIDERYARN-READING2-48](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-48) (2026-09-28

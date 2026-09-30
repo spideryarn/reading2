@@ -1,3 +1,7 @@
+---
+reports: spya-zhkutu
+ending: shipped
+---
 # The microphone spells "Spideryarn" wrong
 
 **[SPIDERYARN-READING2-11](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-11)** · reported

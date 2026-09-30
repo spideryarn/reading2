@@ -1,3 +1,7 @@
+---
+reports: spya-y60g38
+ending: shipped
+---
 # Sluggish mode switching on a really long article
 
 **[SPIDERYARN-READING2-1M](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1M)** · reported

@@ -1,3 +1,7 @@
+---
+reports: spya-csakjh
+ending: shipped
+---
 # The *Find it* button should say what it does
 
 **SPIDERYARN-READING2-3K**, 2026-09-12, from Greg (an admin, so trusted input —

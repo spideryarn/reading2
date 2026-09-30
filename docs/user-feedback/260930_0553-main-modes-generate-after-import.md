@@ -1,3 +1,7 @@
+---
+reports: spya-sufetx
+ending: shipped
+---
 # The main modes generate after an import
 
 SPIDERYARN-READING2-5Y (report `spya-sufetx`), from Greg (admin, verified by account id), in

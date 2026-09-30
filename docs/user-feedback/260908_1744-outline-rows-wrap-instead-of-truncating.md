@@ -1,3 +1,7 @@
+---
+reports: spya-gazstp
+ending: shipped
+---
 # Outline rows wrap instead of truncating
 
 **[SPIDERYARN-READING2-2Q](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2Q)** · report

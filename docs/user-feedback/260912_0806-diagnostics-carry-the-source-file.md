@@ -1,3 +1,7 @@
+---
+reports: spya-zv8dc6
+ending: shipped
+---
 # Extra diagnostics carry the source file
 
 **SPIDERYARN-READING2-32** · Greg (admin, so trusted — `scripts/feedback-reporter.ts` exit 0) ·

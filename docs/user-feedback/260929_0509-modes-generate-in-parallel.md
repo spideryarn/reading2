@@ -1,3 +1,7 @@
+---
+reports: spya-m0cp58
+ending: shipped
+---
 # Modes generate in parallel
 
 SPIDERYARN-READING2-4C, from Greg (admin), in production, build `cba650a3`, on

@@ -1,3 +1,7 @@
+---
+reports: spya-rntdzr
+ending: shipped
+---
 # A live Remember conversation vanished after leaving Remember mode
 
 SPIDERYARN-READING2-70, from Greg (admin, verified by account id), in production, on

@@ -1,3 +1,7 @@
+---
+reports: spya-vafkvw
+ending: shipped
+---
 # A jump should put what it links to in the middle of the page
 
 [SPIDERYARN-READING2-4M](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4M) (2026-09-29

@@ -1,3 +1,7 @@
+---
+reports: spya-cr2st2
+ending: shipped
+---
 # A more appreciative thank-you, and a Close with no delay
 
 **[SPIDERYARN-READING2-1N](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1N)** · reported

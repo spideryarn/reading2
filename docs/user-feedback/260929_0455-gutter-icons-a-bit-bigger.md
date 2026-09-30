@@ -1,3 +1,7 @@
+---
+reports: spya-m7xpxx
+ending: shipped
+---
 # The icons beside each paragraph, a bit bigger
 
 SPIDERYARN-READING2-4A, from Greg (admin), in production, build `cba650a3`, on

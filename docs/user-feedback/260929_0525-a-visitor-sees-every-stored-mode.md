@@ -1,3 +1,7 @@
+---
+reports: spya-ptm8bm
+ending: shipped
+---
 # A visitor sees every stored mode on a public article
 
 SPIDERYARN-READING2-56, from Greg (admin), in production, build `070a2503`, 2026-09-29 04:27:05Z,

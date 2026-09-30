@@ -1,3 +1,7 @@
+---
+reports: spya-fsryfr
+ending: shipped
+---
 # Dictation is slow on a weak connection
 
 **SPIDERYARN-READING2-39** · 2026-09-12 08:18Z · Greg (admin, established with

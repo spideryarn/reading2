@@ -5343,14 +5343,15 @@ export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
  * tab shows it** — `GET /api/feedback`.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * **Four fields, written out, and derived from nothing.** Not a `Pick` of
+ * **Five fields, written out.** Not a `Pick` of
  * `FeedbackReport` or of the admin row: a field added to either of those must
  * not widen what this response carries by itself. The email, the address, the
  * diagnostics and the screenshot stay behind — a list whose job is "what did I
  * say" has no use for them, and the address can carry the reader's own search
  * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
- * rule). Here rather than in src/store/contracts.ts because the dialog reads it,
- * and nothing under src/web/ may import the store.
+ * rule). Four come from the store; the route derives `shipped` from this build's
+ * note map. Here rather than in src/store/contracts.ts because the dialog reads
+ * it, and nothing under src/web/ may import the store.
  */
 export interface EarlierFeedback {
   id: string;
@@ -5358,6 +5359,15 @@ export interface EarlierFeedback {
   createdAt: string;
   kind: FeedbackKind | null;
   body: string;
+  /**
+   * **A change for this report has shipped, and is in the build answering.**
+   * Derived from the report's note in docs/user-feedback/, compiled into the
+   * server (src/feedback-ending.ts) — so on production it turns true only once
+   * the note, and the work before it, has been deployed. Not *declined* or
+   * *waiting*: this list's question is "did anything come of it".
+   * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
+   */
+  shipped: boolean;
 }
 
 /** The whole answer: the newest reports, and whether there were more than the cap. */
@@ -5366,6 +5376,15 @@ export interface EarlierFeedbackPage {
   /** `true` when the reader has filed more than `EARLIER_FEEDBACK_LIMIT`, so the list says so. */
   more: boolean;
 }
+
+/**
+ * **Which of them the Earlier tab asks for** — `GET /api/feedback?show=`, absent
+ * meaning `all`. Filtered on the server, not over the 50 the client holds: the
+ * reader most likely to filter has sent far more than 50, and the older ones
+ * are the likeliest not to have shipped.
+ */
+export const EARLIER_FEEDBACK_SHOWS = ["all", "shipped", "unshipped"] as const;
+export type EarlierFeedbackShow = (typeof EARLIER_FEEDBACK_SHOWS)[number];
 
 /**
  * **How many earlier reports the dialog lists.** No paging: a reader with fifty

@@ -1,3 +1,7 @@
+---
+reports: spya-wtm6qx
+ending: shipped
+---
 # Citations: an *Investigate* button for one cited work, on demand
 
 SPIDERYARN-READING2-5Q (`spya-wtm6qx`), from Greg (admin, verified by

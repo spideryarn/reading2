@@ -1,3 +1,7 @@
+---
+reports: spya-ygj9xz
+ending: shipped
+---
 # Summaries and the glossary should explain the jargon, in simpler words
 
 [SPIDERYARN-READING2-44](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-44) (2026-09-26

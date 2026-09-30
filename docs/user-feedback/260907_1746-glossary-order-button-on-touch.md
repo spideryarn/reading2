@@ -1,3 +1,7 @@
+---
+reports: spya-bwgdrh
+ending: shipped
+---
 # The glossary's order button, on a touch device
 
 **Sentry:** `SPIDERYARN-READING2-2J` · reported 2026-09-07 17:46 UTC, from

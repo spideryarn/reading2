@@ -350,9 +350,15 @@ Since 2026-09-06 stage 2 deletes some of the publisher's own chrome before Reada
 page. Other things here remove elements too — the note pass, Readability, the sanitiser — but
 [`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
 what the publisher called it**. The class is narrow on purpose — **platform-generated controls beside content, recognised by the
-platform's own selector, that contain no block-level descendants** — and there are four of them:
+platform's own selector, that contain no block-level descendants** — and there are five of them:
 MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
-`ul.reflinks`. `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
+`ul.reflinks`, and Springer Nature's *Full size image* button, `div.c-article-section__figure-link`.
+That last one is the entry that costs a reader something when it stays: it shares a wrapper with the
+figure's picture, a picture has no text, and Readability deletes the wrapper for being all link —
+every figure on a Nature page, until 2026-09-30. The selector alone is not proof: the narrowing also
+requires the one link's publisher-written `data-track-action="view figure"`, or the same class around
+a wholly linked author credit would delete the credit
+([260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md)). `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
 about the piece, and a reader may want them.
 
 **That "contains no block-level descendants" clause is a floor and not a proof**, and the module
@@ -387,7 +393,8 @@ worth knowing from here:
 Since 2026-09-08, stage 2 also runs a pass in the other direction:
 [`src/protect.ts`](../../src/protect.ts) adds **class tokens** to a handful of elements before
 Readability sees the page, and Readability reads the class attribute in order to answer exactly the
-question the tokens answer. It deletes nothing, moves nothing and rewrites no text. It runs **last**
+question the tokens answer. It deletes nothing and rewrites no text; since 2026-09-30 one rule, C,
+also **moves** — below. It runs **last**
 in `prepareDocument`, after the note and callout passes, so a token we invent cannot reach a
 recogniser that reads the publisher's own class names.
 
@@ -398,6 +405,29 @@ element's weight to 25, above `_cleanConditionally`'s *"low weight and a little 
 diagnosis is
 [260904e § C3](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md); the rules, the
 narrowings and what each is answerable for are on `protectAuthoredStructure`.
+
+**Rule C is the one that moves, and it is about pictures.** A picture has no text, so a `div`
+holding a figure's picture is judged by whatever text is left in it — on Substack, a caption with a
+*"Source: https://…"* link — and `_cleanConditionally` deletes it on its link density, picture and
+all: nine of twenty-three figures on one post. No token can help (the high-weight bar is 0.5, and two
+of the nine were over it), so rule C unwraps such a `div` before Readability sees it, **only where
+Readability's own two link rules would delete it**, asked with Readability's arithmetic copied and
+pinned. The gate also mirrors the branches around that arithmetic: hidden and unlikely descendants
+are gone before density is measured, a negative weight is already a different deletion, a
+list-dominated low-weight `div` is exempt, an allowed video returns early, and a `div` converted to
+`p` is never in the conditional `div` pass. Text in elements cleaned before divs, such as a
+`footer`, is gone before density is measured too. It is under the same fallback as the tokens, and it
+guarantees nothing about a figure outside the article Readability selects. The reasoning, GPT Sol's
+page that needs the fallback, and the production numbers are in
+[260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md).
+
+The gate mirrors Readability's first pass, when class weighting is on. A parse shorter than 500
+characters is retried with successively weaker flags, including one with class weighting off; on
+that retry a positive wrapper between 0.2 and 0.5 density can be deleted even though rule C left it
+alone. The 2026-09-30 code review reproduced that as an accepted 536-character article. Fixing it
+means either moving every such wrapper on ordinary pages that never retry, or adding a second-pass
+decision around a private Readability state, so it remains a named limit rather than hidden inside
+the first-pass claim.
 
 **Two tokens, one job each, and that is a P0 rather than a style.** `spya-keep-column` is in
 `okMaybeItsACandidate` and deliberately in neither `positive` nor `negative`, so it defeats a

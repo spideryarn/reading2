@@ -286,6 +286,21 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   article became up to 200 requests. `GATE` admits two at a time *across the process* — not two per
   article, which is the same unbounded number wearing a limit's name.
 
+## An image the step never sees
+
+**The manifest can only speak for the images stage 2 kept.** A picture Readability threw away is in
+no `entries` and no failure, so a survey of manifests reads it as an article with fewer images, not
+as a loss. The first production survey (2026-09-30,
+[260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md)) found every
+production image failure in the manifests was either the fixed 415 of
+[260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md) or a PDF
+figure. The one new loss was invisible to them: a Nature article with 8 figures and 0 pictures, a
+Substack post with 23 and 14, because Readability deleted each picture's wrapper for being mostly
+link. The cure lives in stage 2 —
+[content-extraction.md § The one thing this pipeline protects](content-extraction.md#the-one-thing-this-pipeline-protects)
+— and **the check that finds the next one** is comparing the pictures in the live source's figures
+with the ones stage 2 keeps, which is how these were found.
+
 ## Freshness
 
 `assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image

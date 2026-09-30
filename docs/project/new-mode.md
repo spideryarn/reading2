@@ -276,6 +276,25 @@ A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming
 it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
 change.
 
+## Its cost
+
+**Nothing to add, if the mode spends through a pipeline step or an article route** —
+[cost-tracking.md](cost-tracking.md) is the three rules that make that true. A step's spend is
+attributed to the article by `runStep`, and its `(step, job)` pair becomes its own line in the
+**What it cost** section of the metadata page (administrator only); `npm run cost` counts the same
+calls by job and category.
+
+Two things to check:
+
+- **A new route answers `article` in the route table** — `"first-capture"` when the slug is capture 1;
+  the compiler makes you answer, but it cannot make you answer right. A slug that arrives in the
+  query or the body is `"handler"`, and wrapped by hand with `withSpendAttribution`.
+- **A new `AiJob` gets a row in `JOB_DISPOSITION`** ([`src/cost-categories.ts`](../../src/cost-categories.ts)),
+  or its spend is shown in the `unknown` category. The compiler asks for this one too.
+
+Then generate the mode once on a local article and open the metadata page: the mode's line should
+be there.
+
 ## Retiring a mode
 
 The checklist above read backwards, plus two things adding never needs. Outline was the first to go,

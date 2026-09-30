@@ -1,3 +1,7 @@
+---
+reports: spya-xa64uq
+ending: shipped
+---
 # Quotes marked in every mode
 
 **[SPIDERYARN-READING2-2P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2P)** · reported

@@ -1,3 +1,7 @@
+---
+reports: spya-z9wwam
+ending: shipped
+---
 # Deeper passes should add detail; no "go round again" button
 
 [SPIDERYARN-READING2-51](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-51) (2026-09-29

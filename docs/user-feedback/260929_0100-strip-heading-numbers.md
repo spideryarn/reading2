@@ -1,3 +1,7 @@
+---
+reports: spya-ydhg7h
+ending: shipped
+---
 # The article's own heading numbers, stripped where we number
 
 SPIDERYARN-READING2-4Q (suggestion), from Greg (admin), in production, build `cba650a3`, on

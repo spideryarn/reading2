@@ -1,3 +1,7 @@
+---
+reports: spya-mcsgxu
+ending: shipped
+---
 # The Glossary's kind labels — `concept`, `work` — are distracting
 
 [SPIDERYARN-READING2-4H](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4H) (2026-09-29

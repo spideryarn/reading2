@@ -15,6 +15,10 @@
 --
 -- Nothing narrows: `'crossrefs'` is only ADDED and every existing name stays,
 -- so there is no `revision_step_runs` row this can fail to validate against.
+--
+-- Regenerated on 2026-09-30 after 20260930102351_ai_calls_article_index
+-- landed on dev with a later stamp than the first draft of this file
+-- (docs/project/database.md § Repairing a fork). The DDL is unchanged.
 
 ALTER TABLE "spideryarn"."revision_step_runs" DROP CONSTRAINT "revision_step_runs_step";--> statement-breakpoint
 ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "crossrefs" jsonb;--> statement-breakpoint

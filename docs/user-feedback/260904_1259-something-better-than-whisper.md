@@ -1,3 +1,7 @@
+---
+reports: spya-kbzzk8
+ending: declined
+---
 # Is there something better than Whisper?
 
 **[SPIDERYARN-READING2-15](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-15)** · reported

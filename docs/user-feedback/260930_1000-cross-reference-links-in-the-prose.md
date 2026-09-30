@@ -13,6 +13,12 @@ session received the report. The session runs on a pool account, so it could not
 > And you'd have a cool tooltip, a rich tooltip that you could hover over that would preview that
 > linked-to block.
 
+**No `reports:`/`ending:` header**
+([260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md)). The brief did not carry
+the feedback row id, this session has no Sentry, and the production read to find the id was refused.
+The next sweep should add the header from the issue's `report_id` tag and re-run
+`scripts/feedback-endings.ts`. Until then the Earlier tab reads this report as *not shipped*.
+
 **Ending: Shipped.** It is on `dev`, not deployed. Resolve 5Z; the next feedback sweep does the
 Sentry status write. Two follow-ups are listed in
 [awaiting-approval.md](awaiting-approval.md), because each is an edit to a listed defence.

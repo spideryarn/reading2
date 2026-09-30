@@ -1,3 +1,7 @@
+---
+reports: spya-ed94jx
+ending: shipped
+---
 # Show only the Socratic question, not both
 
 **[SPIDERYARN-READING2-24](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-24)** · reported

@@ -396,6 +396,9 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through
   OpenRouter, why the seven pipeline stages kept Anthropic's Messages protocol instead of being
   translated into OpenAI's shape, and the four things on that path that fail without saying so.
+- **What each call cost, and how a new feature gets that tracked without anyone remembering to** —
+  the three rules, the article figure on the metadata page, and the paid check:
+  [cost-tracking.md](cost-tracking.md).
 - **Outgoing email** — today only Supabase's auth mail — goes through Resend from `hello@spideryarn.com`:
   [email.md](email.md).
 - Test article: `output/noema-mythology-of-conscious-ai.html` (Anil Seth, ~54 min, long and largely

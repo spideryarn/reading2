@@ -1,3 +1,7 @@
+---
+reports: spya-a353as
+ending: shipped
+---
 # The dock is there the whole time, on a landscape iPhone
 
 **[SPIDERYARN-READING2-2F](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2F)** · reported

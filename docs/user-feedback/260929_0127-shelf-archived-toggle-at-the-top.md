@@ -1,3 +1,7 @@
+---
+reports: spya-ch8u3a
+ending: shipped
+---
 # Shelf: the archived toggle belongs at the top, beside Unread
 
 [SPIDERYARN-READING2-4V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4V) (2026-09-29

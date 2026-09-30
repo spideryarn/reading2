@@ -1,3 +1,7 @@
+---
+reports: spya-tes039
+ending: shipped
+---
 # *Start again* is the first row of the re-run section
 
 SPIDERYARN-READING2-65, from Greg (admin — `scripts/feedback-reporter.ts` exits 0 for the

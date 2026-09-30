@@ -1,3 +1,7 @@
+---
+reports: spya-sdxwwa
+ending: shipped
+---
 # Remove Hierarchy mode; Structure is enough
 
 SPIDERYARN-READING2-4B, from Greg (admin), in production, build `cba650a3`, on

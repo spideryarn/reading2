@@ -1,3 +1,7 @@
+---
+reports: spya-tvhk2j
+ending: shipped
+---
 # Always indicate citations in the main text
 
 **SPIDERYARN-READING2-3M**, 2026-09-12, from Greg (an admin, so trusted input —
