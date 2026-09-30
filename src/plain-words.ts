@@ -105,6 +105,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
   "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",
   "src/ai-call.ts": "the wire every OpenRouter call goes through, not a prompt",
+  "src/stream-run.ts": "sends whatever request its caller built — explain's prompt carries the rule in src/explain.ts",
   "src/embeddings.ts": "asks for vectors, not words",
   "src/pipeline.ts":
     "only builds the PDF front-matter and authors readers, whose prompts are src/pdf-frontmatter.ts and src/pdf-authors.ts",
@@ -112,5 +113,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/spend-declarations.ts": "names a model call inside a string, and makes none",
   "scripts/spike-book-structure.ts": "a one-off spike that sends production's own hierarchy prompt",
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
+  "scripts/probes/260930a-investigate-probe.ts":
+    "a one-off probe; its prompt, in scripts/probes/260930a-investigate-prompt.ts, carries plainWords(\"explain\")",
   "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",
 };
