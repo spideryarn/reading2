@@ -37,7 +37,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,8 +54,10 @@ import {
   codeMayNotHaveShipped,
   deployBranchProblem,
   describeRedirect,
+  failingTestsFromReport,
   findSecretsInBundle,
   GATE_FIXTURE_ROOT,
+  GATE_TOOLING_BUILDS,
   judgeClientBuild,
   judgeDeployments,
   stagedTooLong,
@@ -206,7 +208,11 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+  return {
+    code: r.status ?? 1,
+    out: `${r.stdout ?? ""}${r.stderr ?? ""}`,
+    captureProblem: r.error ? r.error.message : null,
+  };
 }
 
 const tail = (s: string, n = 25) => s.trimEnd().split("\n").slice(-n).join("\n");
@@ -734,7 +740,7 @@ function gatesAt(sha: string): void {
        whole recipe; now there is one of it and this reads it rather than
        repeating it. */
     const unmask = maskPrunedRoots(wt);
-    let built;
+    let built: ReturnType<typeof run>;
     try {
       built = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
     } finally {
@@ -743,6 +749,13 @@ function gatesAt(sha: string): void {
       unmask();
     }
     gate("build", built.code === 0, () => explainBuildFailure(built.out));
+
+    /* What the tests need built beyond what ships. After `unmask()`, because
+       these are not Vercel builds and the pruning is about Vercel's upload. */
+    for (const b of GATE_TOOLING_BUILDS) {
+      const r = run("npm", ["run", "--silent", b.script], { cwd: wt, env: BUILD_ENV });
+      gate(b.gate, r.code === 0, () => tail(r.out, 20));
+    }
 
     /* Only the tests need the personal state, so only they get it. */
     const envLocal = path.join(ROOT, ".env.local");
@@ -804,8 +817,17 @@ function gatesAt(sha: string): void {
     const tc = run("npm", ["run", "--silent", "typecheck"], { cwd: wt, env: BUILD_ENV });
     gate("typecheck", tc.code === 0, () => tail(tc.out, 20));
 
-    const t = run("npm", ["run", "--silent", "test"], { cwd: wt });
-    gate("test", t.code === 0, () => tail(t.out, 30));
+    /* vitest's own `json` reporter beside its usual one, so a red gate can name
+       every failing test rather than the last two of 24. The report lives in
+       the temp directory; what must outlive it is kept by `testGateFailure`. */
+    const reportPath = path.join(dir, "vitest.json");
+    const t = run(
+      "npm",
+      ["run", "--silent", "test", "--", "--reporter=default", "--reporter=json", `--outputFile.json=${reportPath}`],
+      { cwd: wt },
+    );
+    if (t.code !== 0) testGateReport = testGateFailure(t.out, reportPath, wt, sha, t.captureProblem);
+    gate("test", t.code === 0, () => (testGateReport ?? []).join("\n"));
   } finally {
     /* Both, in this order: unregister, then take the temp directory. A worktree
        left registered makes the next run fail on a path that has gone.
@@ -829,6 +851,70 @@ function gatesAt(sha: string): void {
     }
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * What a red `test` gate says, printed at the gate and again in the summary:
+ * where the whole output was kept, and every failing test by name.
+ *
+ * The output goes to `logs/deploy/` in this tree, because the gate worktree it
+ * came from is deleted before the run ends — and without it, finding out which
+ * tests failed meant running the whole suite again. The list is what
+ * `--force-gate=test` needs: it is allowed only for reds that are not the
+ * release's, named in the report (docs/project/overseer.md § Deploying).
+ */
+let testGateReport: string[] | null = null;
+
+function testGateFailure(
+  out: string,
+  reportPath: string,
+  wt: string,
+  sha: string,
+  captureProblem: string | null,
+): string[] {
+  const lines: string[] = [];
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const logPath = path.join(ROOT, "logs", "deploy", `${stamp}-${sha.slice(0, 8)}-test.log`);
+  try {
+    mkdirSync(path.dirname(logPath), { recursive: true });
+    writeFileSync(logPath, out);
+    lines.push(
+      captureProblem
+        ? `         vitest output capture was incomplete (${captureProblem}); captured output: ${path.relative(ROOT, logPath)}`
+        : `         full vitest output: ${path.relative(ROOT, logPath)}`,
+    );
+  } catch (err) {
+    const extent = captureProblem ? "captured part of the vitest output" : "full vitest output";
+    lines.push(`         could not keep the ${extent} (${(err as Error).message}); its tail:`, tail(out, 30));
+  }
+
+  let reportJson: string | null = null;
+  let reportReadProblem: string | null = null;
+  if (existsSync(reportPath)) {
+    try {
+      reportJson = readFileSync(reportPath, "utf8");
+    } catch (err) {
+      reportReadProblem = `vitest's JSON report could not be read (${(err as Error).message})`;
+    }
+  }
+  const listed = failingTestsFromReport(reportJson, wt);
+  if (!listed.ok) {
+    lines.push(
+      `         could not list the failing tests: ${reportReadProblem ?? listed.why}. The last lines of output:`,
+      tail(out, 30),
+    );
+  } else if (listed.failing.length === 0) {
+    /* vitest exits non-zero for an unhandled error outside any test, and for a
+       refusal to start; neither is a failing test, and "none" would read as
+       green. */
+    lines.push("         vitest failed but its report names no failing test (an unhandled error?). Its last lines:", tail(out, 30));
+  } else {
+    lines.push(
+      `         failures named by vitest's JSON report (${listed.failing.length}; suite-hook and unhandled errors are not represented in JSON):`,
+      ...listed.failing.map((f) => `           ${f}`),
+    );
+  }
+  return lines;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1621,6 +1707,14 @@ function summarise(previous: string | null): void {
     const what = didDeploy ? "DEPLOYED" : "CHECKED";
     say(`${RED}${what} WITH ${forced.join(", ").toUpperCase()} GATE(S) FORCED${OFF}`);
     say(`${DIM}An override is a debt entry, not a workflow. docs/plans/260827v-deploy-pipeline.md${OFF}`);
+    say();
+  }
+
+  /* Again here, forced or not, because a forced run prints the whole deploy
+     after the gate, and the report has to name these reds. */
+  if (testGateReport) {
+    say("The test gate was red:");
+    for (const line of testGateReport) say(line);
     say();
   }
 

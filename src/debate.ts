@@ -146,6 +146,7 @@ import type {
   BlockId,
   ClaimDebateRow,
   Debate,
+  DebateBears,
   DebateCounts,
   DebateGroup,
   DebateLean,
@@ -164,7 +165,7 @@ import { sameTarget, webLinks } from "./urls.js";
    tests/client-imports.test.ts will not let `src/web/` import this file — it is
    a stage with a CLI and two model calls in it. Re-exported rather than
    imported by every server caller so the stage still has one name for them. */
-import { anyLost, distinctSources, isDebateDocument } from "./types.js";
+import { anyLost, distinctSources, isDebateBears, isDebateDocument } from "./types.js";
 /* The model-free half of group one's evidence: what this page shares with this
    article, both ways round. src/shingles.ts. */
 import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
@@ -190,8 +191,10 @@ export type {
  * literal — a fixture that hardcodes the version tests the fixture.
  *
  * `debate/2`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `debate/3`, 2026-09-29: each row also says how much the passage `bears` on its target — `directly`, `partly` or `loosely` — so a reader can order the list by relevance (SPIDERYARN-READING2-5P; docs/plans/260929h-debate-mode-clearer-sources-and-orders.md, stage 2). The stage also asked for the work's `title`, `authors` and `year`, checked against the page's extract, and dropped them before shipping: measured, they verified on 1 row of 11, because the search engine's extract is a passage from the middle of the page and the page's head is almost never in it (the plan's § The measurement, as it runs).
  */
-export const PROMPT_VERSION = "debate/2";
+export const PROMPT_VERSION = "debate/3";
 
 /* ------------------------------------------------------------ the four caps --
    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
@@ -649,6 +652,25 @@ export function locate(haystack: string, quote: string): string | null {
   return span ? haystack.slice(span.start, span.end) : null;
 }
 
+/**
+ * **How much the quoted passage bears on the row's target — `bears`, or
+ * nothing** (`debate/3`; docs/plans/260929h-debate-mode-clearer-sources-and-orders.md).
+ *
+ * Checked against nothing, because it is a judgment and the client labels it
+ * as one. **Out of vocabulary is absent, never a default stop**, unlike
+ * `relation` and `lean`: those have an honest "cannot tell" member to fall to
+ * and this has none, so a default would file a row in a band the model never
+ * chose. See `DebateRowBase.bears`.
+ *
+ * Its own function, called from `readShared`, so the one place a row gains the
+ * field is tested on its own (Sol's F3: a typed field nothing reads is a field
+ * that is never there).
+ */
+export function readBearsField(row: Record<string, unknown>): { bears?: DebateBears } {
+  const bears = str(row.bears);
+  return isDebateBears(bears) ? { bears } : {};
+}
+
 /* ------------------------------------------------------------ reading a group -- */
 
 /**
@@ -812,6 +834,8 @@ function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdi
       lean: LEANS.has(str(row.lean)) ? (str(row.lean) as DebateLean) : "cannot-tell",
       applies,
       ...(limits === "" ? {} : { limits }),
+      /* A judgment, never checked; absent rather than defaulted. */
+      ...readBearsField(row),
     },
   };
 }
@@ -1088,8 +1112,8 @@ find drops the whole row — not the quote, the row — and retyping a phrase fr
 memory is the commonest way that happens. If the extract you were shown does not
 contain a sentence worth quoting, leave the page out.`;
 
-const READING = `"relation", "lean", "applies" and "limits" are YOUR READING of the passage
-you quoted, and are shown to the reader as such.
+const READING = `"relation", "lean", "applies", "limits" and "bears" are YOUR READING of the
+passage you quoted, and are shown to the reader as such.
 
   relation  what the QUOTED PASSAGE does to this row's target:
             disputes | qualifies | extends | corroborates | unclear
@@ -1098,6 +1122,10 @@ you quoted, and are shown to the reader as such.
   applies   how the outside piece bears on that target, in a sentence or two
   limits    where it does NOT bear on it — OPTIONAL, and only where there is a
             real mismatch. Omit the row rather than invent a limitation.
+  bears     how much the QUOTED PASSAGE bears on this row's target:
+            directly  it tests or responds to exactly this
+            partly    it bears on part of it, or on something close to it
+            loosely   same topic, little direct bearing
 
 THE ONE MISTAKE TO AVOID, AND IT IS AN EASY ONE
 
@@ -1182,7 +1210,8 @@ Say nothing else. Answer with one fenced block and close it:
     "relation": "disputes",
     "lean": "leans-against",
     "applies": "what it says about this article",
-    "limits": "optional"
+    "limits": "optional",
+    "bears": "directly"
   }
 ]
 \`\`\`
@@ -1247,7 +1276,8 @@ Say nothing else. Answer with one fenced block and close it:
     "relation": "qualifies",
     "lean": "neither",
     "applies": "how it bears on that claim",
-    "limits": "optional"
+    "limits": "optional",
+    "bears": "partly"
   }
 ]
 \`\`\`

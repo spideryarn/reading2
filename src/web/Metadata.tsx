@@ -248,6 +248,7 @@ import type {
   ArticleSharing,
   LibraryEntry,
   Meta,
+  SourceGuess,
   StageState,
   StepName,
   Visibility,
@@ -278,6 +279,7 @@ import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { CARD } from "./card.js";
 import { ProfileBox } from "./ProfileBox.js";
+import { GuessedSourceLink } from "./Masthead.js";
 import { PageContents } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
@@ -794,7 +796,7 @@ export function Metadata({
             is `hasShelfRow` rather than a fresh test, because the link it gates
             is the same private `GET /api/source/:slug` the masthead gates, and
             this page already has one answer to *is this yours*. */}
-        <Origin meta={meta} slug={slug} owner={hasShelfRow} />
+        <Origin meta={meta} slug={slug} owner={hasShelfRow} guess={article.sourceGuess} />
         {/* **The two identifiers are gone from here**, to `TechnicalDetails` at
             the foot of the page. They were the third line under the title on
             every visit, in mono, and Greg on 2026-09-03 said the thing a header
@@ -1974,7 +1976,18 @@ function Questions({
  * bytes and refuses everyone else, so an ungated control could only ever open a
  * blank tab and fail.
  */
-function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolean }) {
+function Origin({
+  meta,
+  slug,
+  owner,
+  guess,
+}: {
+  meta: Meta;
+  slug: string;
+  owner: boolean;
+  /** `Article.sourceGuess`, drawn under the upload sentence — `GuessedLine`. */
+  guess: SourceGuess | undefined;
+}) {
   const source = webSource(meta);
   if (source) {
     return (
@@ -2018,28 +2031,64 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
      address was recorded" about a row that recorded one. */
   const unfollowable = Boolean(meta.url && !isWebUrl(meta.url));
   return (
-    <p className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
-      {uploaded ? (
-        <Upload size={12} className="tw:shrink-0" aria-hidden="true" />
-      ) : (
-        <FileQuestion size={12} className="tw:shrink-0" aria-hidden="true" />
-      )}
-      <span>
-        {uploaded
-          ? "Uploaded from a file — there is no web address to go back to."
-          : unfollowable
-            ? "The address recorded for this article is not one a browser can follow."
-            : "No web address was recorded for this article."}
-      </span>
-      {/* Only for a PDF: `GET /api/source/:slug` serves what stage 1 stored,
-          and an uploaded HTML document has nothing a reader would want opened
-          as a document. `slug` is the route's, never `meta.slug` — an address
-          with no article of its own is answered with the fixture's meta, and
-          this link must be about the address the reader is standing on. */}
-      {uploaded && owner && (
-        <span className="tw:text-highlight">
-          <SourceLink slug={slug}>View the original</SourceLink>
+    <>
+      <p className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+        {uploaded ? (
+          <Upload size={12} className="tw:shrink-0" aria-hidden="true" />
+        ) : (
+          <FileQuestion size={12} className="tw:shrink-0" aria-hidden="true" />
+        )}
+        <span>
+          {uploaded
+            ? "Uploaded from a file — there is no web address to go back to."
+            : unfollowable
+              ? "The address recorded for this article is not one a browser can follow."
+              : "No web address was recorded for this article."}
         </span>
+        {/* Only for a PDF: `GET /api/source/:slug` serves what stage 1 stored,
+            and an uploaded HTML document has nothing a reader would want opened
+            as a document. `slug` is the route's, never `meta.slug` — an address
+            with no article of its own is answered with the fixture's meta, and
+            this link must be about the address the reader is standing on. */}
+        {uploaded && owner && (
+          <span className="tw:text-highlight">
+            <SourceLink slug={slug}>View the original</SourceLink>
+          </span>
+        )}
+      </p>
+      {uploaded && <GuessedLine guess={guess} />}
+    </>
+  );
+}
+
+/**
+ * **What we found when we looked for an upload on the web** — the line under
+ * the upload sentence. docs/plans/260929g-canonical-link-for-an-uploaded-paper.md
+ * § Shown how.
+ *
+ * Unlike the masthead, this page also says a settled **no**: it is the page a
+ * reader opens to ask where something came from, and *we looked and found
+ * nothing we could be sure of* is an answer to that. While a search is under
+ * way, or nobody has looked, it says nothing — the reading view is what asks
+ * (src/web/useSourceGuess.ts), and this line fills in when the answer is
+ * layered onto the payload.
+ *
+ * Owner-only by construction: this page is unreachable for a visitor, and a
+ * visitor's payload carries no guess (Origin's header, src/types.ts).
+ */
+function GuessedLine({ guess }: { guess: SourceGuess | undefined }) {
+  if (guess === undefined || guess.status === "searching") return null;
+  return (
+    <p className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-1.5 tw:text-xs tw:text-muted-foreground">
+      {guess.status === "none" ? (
+        "We looked for it on the web and found no page we could be sure was this paper."
+      ) : (
+        <>
+          <span>
+            {guess.kind === "canonical" ? "Probably the original:" : "A page that matches this paper:"}
+          </span>
+          <GuessedSourceLink guess={guess} className="origin-link origin-guess" />
+        </>
       )}
     </p>
   );

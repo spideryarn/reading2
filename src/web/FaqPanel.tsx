@@ -30,8 +30,20 @@
  * are propositions nobody asks. Nothing here marks the reader or states a
  * proposition, and no copy in this file should read as if it did.
  *
- * No scores, no threshold bar, no marks in the prose and no `?faq=` selection in
- * v1 — `selectPassages` answers `NOTHING` (src/web/reader/passages.ts).
+ * ## A prioritised order and a bar, since `faq/4`
+ *
+ * Every question carries the model's `difficulty` and `centrality`, and the
+ * default order is *prioritised*: what survives the bar on
+ * `centrality × (1 − difficulty)`, the most central and approachable first —
+ * Greg's *"start with a few that are a little bit more high level"*
+ * (SPIDERYARN-READING2-5D). *Reading order* is one tap away. The rule is in
+ * src/web/faq-order.ts; the two raw scores are drawn on each row in the
+ * prioritised order, never the compound. A list from before `faq/4` has no
+ * scores, so it offers neither control and is drawn in reading order, as it
+ * always was. docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
+ *
+ * Still no marks in the prose and no `?faq=` selection — `selectPassages`
+ * answers `NOTHING` (src/web/reader/passages.ts).
  */
 import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,9 +51,23 @@ import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
+import {
+  barMax,
+  canPrioritise,
+  effectiveOrder,
+  FAQ_BAR_DEFAULT,
+  type FaqOrder,
+  faqNote,
+  orderQuestions,
+  priorityOf,
+  scoresOf,
+  visibleQuestions,
+} from "./faq-order.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
+import { ScoreBars } from "./ScoreBars.js";
+import { ThresholdSlider } from "./ThresholdSlider.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
@@ -95,15 +121,29 @@ export type FaqAccess =
 
 interface Props {
   access: FaqAccess;
+  /** `?faqby=`. `prioritised` is the default, and falls back when the list has no scores to gate. */
+  order: FaqOrder;
+  onOrder(order: FaqOrder): void;
+  /** `?faqbar=`, or null for "nobody has touched it" — which is `FAQ_BAR_DEFAULT`. */
+  bar: number | null;
+  onBar(bar: number | null): void;
   onJump(id: BlockId): void;
 }
 
-export function FaqPanel({ access, onJump }: Props) {
+/** Stable, so an absent list does not hand the ordering helpers a new array each render. */
+const NO_QUESTIONS: readonly FaqQuestion[] = [];
+
+export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, onBar, onJump }: Props) {
   useRenderCount("FaqPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
   const faq = access.kind === "owner" ? access.owner.faq : access.faq;
-  const questions = faq?.questions ?? [];
+  const questions = faq?.questions ?? NO_QUESTIONS;
+  /* One answer for the order in force, passed down, so the list, the pressed
+     button, the slider and the bars on each row cannot disagree. */
+  const order = effectiveOrder(questions, chosenOrder);
+  const bar = chosenBar ?? FAQ_BAR_DEFAULT;
+  const shown = orderQuestions(questions, order, bar);
   /* A visitor's FAQ arrived with the page, so it is ready by construction. */
   const ready = faq !== null && (owner === null || owner.status === "ready");
   /* The owner's alone: `dropped` does not cross (src/public-types.ts § PublicFaq). */
@@ -200,11 +240,21 @@ export function FaqPanel({ access, onJump }: Props) {
 
           {questions.length === 0 && <p className="gloss-quiet">{FAQ_NONE}</p>}
 
+          {/* Only when the list can be prioritised at all: a list from before
+              `faq/4` has no scores, and a control that would visibly do
+              nothing is worse than none (GlossaryPanel.tsx § SortBar). */}
+          {canPrioritise(questions) && <OrderBar order={order} onOrder={onOrder} />}
+
+          {/* Only in the order it belongs to. */}
+          {order === "prioritised" && (
+            <FaqBarSlider questions={questions} bar={bar} moved={chosenBar !== null} onBar={onBar} />
+          )}
+
           {questions.length > 0 && (
             <div className="tl-scroll">
               <ol className="tl-list faq-list">
-                {questions.map((q) => (
-                  <QuestionRow key={q.id} question={q} onJump={onJump} />
+                {shown.map((q) => (
+                  <QuestionRow key={q.id} question={q} prioritised={order === "prioritised"} onJump={onJump} />
                 ))}
               </ol>
             </div>
@@ -215,10 +265,92 @@ export function FaqPanel({ access, onJump }: Props) {
   );
 }
 
-function QuestionRow({ question, onJump }: { question: FaqQuestion; onJump(id: BlockId): void }) {
+/* --------------------------------------------------------------- controls -- */
+
+function OrderBar({ order, onOrder }: { order: FaqOrder; onOrder(order: FaqOrder): void }) {
+  const options: { key: FaqOrder; label: string; title: string }[] = [
+    {
+      key: "prioritised",
+      label: "prioritised",
+      title:
+        "The most central and approachable questions first — the threshold below decides how many",
+    },
+    { key: "document", label: "reading order", title: "Every question, in the order the piece raises it" },
+  ];
   return (
-    <li className="tl-item faq-item" data-faq-id={question.id}>
-      <h2 className="faq-question">{question.question}</h2>
+    /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+       list, not form controls — GlossaryPanel.tsx § SortBar says why. */
+    <div className="gloss-sort" role="group" aria-label="Order the questions by">
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
+          aria-pressed={order === option.key}
+          title={option.title}
+          onClick={() => onOrder(option.key)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FaqBarSlider({
+  questions,
+  bar,
+  moved,
+  onBar,
+}: {
+  questions: readonly FaqQuestion[];
+  bar: number;
+  moved: boolean;
+  onBar(bar: number | null): void;
+}) {
+  /* One pass, and every number here comes out of it — threshold.ts. */
+  const { visible, hiddenCount } = visibleQuestions(questions, bar);
+  return (
+    <ThresholdSlider
+      id="faq-bar"
+      value={bar}
+      max={barMax(questions, bar)}
+      defaultValue={FAQ_BAR_DEFAULT}
+      moved={moved}
+      visible={visible.length}
+      total={questions.length}
+      noun="questions"
+      title="How high a question has to score to stay on screen: its centrality × (1 − its difficulty), so central, approachable questions score highest. Left shows more, right fewer."
+      note={faqNote(hiddenCount, questions.length)}
+      onChange={onBar}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ a row -- */
+
+function QuestionRow({
+  question,
+  prioritised,
+  onJump,
+}: {
+  question: FaqQuestion;
+  /** Draw the scores this row was placed by — only in the order that used them. */
+  prioritised: boolean;
+  onJump(id: BlockId): void;
+}) {
+  const scores = prioritised ? scoresOf(question) : [];
+  const unscored = prioritised && priorityOf(question) === undefined;
+  return (
+    <li
+      className="tl-item faq-item"
+      data-faq-id={question.id}
+      {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
+    >
+      <div className="faq-question-row">
+        <h2 className="faq-question">{question.question}</h2>
+        {scores.length > 0 && <ScoreBars className="faq-scores" scores={scores} />}
+      </div>
       {/* In the order the artefact stores them, which is document order
           (src/faq.ts). Each is the article's own words — `.gloss-part-senseHere`
           is the solid rule Ideas and the Glossary draw for exactly that, reused

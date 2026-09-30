@@ -34,6 +34,16 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  CITE_NOT_READ,
+  CITE_PAGE_FOUND,
+  CITE_QUOTE_LABEL,
+  CITE_VERDICT_LABEL,
+  CITE_WHY_LABEL,
+  citeReadAssessed,
+  citeReadNotIdentified,
+  verdictText,
+} from "../src/web/CitationsPanel.js";
 import { ProseHoverCard } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
@@ -383,5 +393,111 @@ describe("resting on a citation", () => {
     row.innerHTML = `<p>A claim <mark class="cite" data-cite="spya-zzzzzz">(Nobody 1999)</mark> here.</p>`;
     hover(row.querySelector("mark.cite") as HTMLElement);
     expect(card()).toBe(null);
+  });
+});
+
+/* Plan 260929g stage 1: the card says what the band says about whether we read
+   the work, from the same strings, so the two surfaces cannot drift. */
+describe("what the card says we have read", () => {
+  const read = () => card()?.querySelector(".prose-card-cite-read")?.textContent;
+
+  it("says we have not read the work, and labels why as the article's", () => {
+    paint();
+    hover(cite(0));
+    expect(read()).toBe(CITE_NOT_READ);
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
+    /* A searched row too: a Scholar search is not the work either. */
+    hover(cite(1));
+    expect(read()).toBe(CITE_NOT_READ);
+  });
+
+  it("after Find it, says only that a page matching the title was found", () => {
+    const found: CitedWork = {
+      ...KAPLAN,
+      url: "https://arxiv.org/abs/2001.08361",
+      linkFrom: "web",
+      found: { title: "Scaling Laws", host: "arxiv.org", searches: 1, model: "test", at: "2026-09-29T09:00:00.000Z" },
+    };
+    paint([TULVING, found, BROADBENT]);
+    hover(cite(1));
+    expect(read()).toBe(CITE_PAGE_FOUND);
+    expect(read()).not.toMatch(/verif|confirm|from the (paper|work)/i);
+  });
+});
+
+/* Plan 260929g stage 2 — Greg's *"in the tool tip"*: after *Look it up*, the
+   card says the band's line for the lookup's state and, when an extract was
+   assessed, the verdict labelled as the AI's reading plus one quote labelled as
+   the extract's. No button: a press that spends money does not belong on a
+   surface that opens because a pointer rested. */
+describe("what the card says after Look it up", () => {
+  const read = () => card()?.querySelector(".prose-card-cite-read")?.textContent;
+  const base = {
+    host: "arxiv.org",
+    searches: 1,
+    model: "test",
+    at: "2026-09-29T09:00:00.000Z",
+    contextHash: "ctx",
+    evidenceHash: "ev",
+  };
+  const SUPPORT = "we find that loss scales as a power law with model size";
+  const DOES = "we study empirical scaling laws for language model performance";
+
+  it("shows the verdict as the AI's reading, and the first quote as the extract's", () => {
+    const looked: CitedWork = {
+      ...TULVING,
+      lookup: {
+        ...base,
+        state: "assessed",
+        excerptWords: 310,
+        verdict: { support: "partly", quote: SUPPORT },
+        paperDoes: { says: "It measures how loss falls as models grow.", quote: DOES },
+      },
+    };
+    paint([looked, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    expect(read()).toBe(citeReadAssessed(310, "arxiv.org"));
+    const verdict = card()?.querySelector(".prose-card-cite-verdict");
+    expect(verdict?.querySelector(".prose-card-label")?.textContent).toBe(CITE_VERDICT_LABEL);
+    expect(verdict?.querySelector(".prose-card-cite-verdict-text")?.textContent).toBe(verdictText("partly"));
+    const quotes = [...(card()?.querySelectorAll(".prose-card-cite-quote") ?? [])];
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]?.querySelector("blockquote")?.textContent).toContain(SUPPORT);
+    expect(quotes[0]?.querySelector("figcaption")?.textContent).toBe(CITE_QUOTE_LABEL);
+    /* No button on the card. */
+    expect(card()?.querySelector("button.cite-find")).toBeNull();
+    expect(card()?.textContent).not.toMatch(/Look it up/);
+  });
+
+  it("falls back to what the work does, with its quote, when the extract doesn't show the claim", () => {
+    const looked: CitedWork = {
+      ...TULVING,
+      lookup: {
+        ...base,
+        state: "assessed",
+        excerptWords: 120,
+        verdict: { support: "not-in-extract" },
+        paperDoes: { says: "It measures how loss falls as models grow.", quote: DOES },
+      },
+    };
+    paint([looked, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    const said = card()?.querySelector(".prose-card-cite-verdict-text")?.textContent ?? "";
+    expect(said).toBe(verdictText("not-in-extract"));
+    expect(said).not.toMatch(/does not support|doesn't support/i);
+    const quotes = [...(card()?.querySelectorAll(".prose-card-cite-quote") ?? [])];
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]?.querySelector("blockquote")?.textContent).toContain(DOES);
+    expect(card()?.querySelector(".prose-card-cite-does")?.textContent).toContain(
+      "It measures how loss falls as models grow.",
+    );
+  });
+
+  it("says a lookup that read nothing read nothing, and shows no verdict", () => {
+    paint([{ ...TULVING, lookup: { ...base, state: "not-identified" } }, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    expect(read()).toBe(citeReadNotIdentified("arxiv.org"));
+    expect(card()?.querySelector(".prose-card-cite-verdict")).toBeNull();
+    expect(card()?.querySelector(".prose-card-cite-quote")).toBeNull();
   });
 });

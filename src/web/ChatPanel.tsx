@@ -92,8 +92,11 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
 import { LiveStatus } from "./live/LiveStatus.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
+import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
+import { isSendEnter } from "./key-chord.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
@@ -1741,7 +1744,7 @@ function EditQuestion({
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Escape") onCancel();
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (isSendEnter(e)) {
             e.preventDefault();
             if (canAsk) onDone(value);
           }
@@ -1971,6 +1974,7 @@ export function Composer({
     box,
     context: { kind: "article", slug },
     transcribe: sendForTranscription,
+    keep: keepDictation(`chat:${slug}`),
   });
 
   // A Live ticket can still be pending before Live claims the microphone.
@@ -2021,6 +2025,8 @@ export function Composer({
     if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
     onSend(question);
   };
+  /** Every state `submit` refuses, so the Send button can say so before a press. */
+  const unavailable = busy || dictate.readOnly || dictate.dictation.armed || value.trim() === "";
 
   return (
     <form
@@ -2074,7 +2080,7 @@ export function Composer({
              drawer winning rather than this stopping it. Found by a GPT-5.6
              review, 2026-08-26. */
           e.stopPropagation();
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (isSendEnter(e)) {
             e.preventDefault();
             void submit();
           }
@@ -2107,19 +2113,35 @@ export function Composer({
           <Square size={14} fill="currentColor" />
         </button>
       ) : (
-        <button
-          type="submit"
-          className="chat-send"
-          /* `armed` beside `readOnly` for the reason `submit` above gives — and
-             a button the guard would refuse must not look pressable, or the
-             reader presses Send while talking and nothing at all happens. */
-          disabled={busy || dictate.readOnly || dictate.dictation.armed || value.trim() === ""}
-          title="Send (Enter)"
+        /* The keys on a card rather than an OS `title` — Greg, 2026-09-29:
+           *"Add a tooltip to the send-message button with keyboard shortcuts."* */
+        <Tooltip
+          placement="top"
+          keepSide
+          className="tip-soon"
+          content={<ControlTip head="Send" what="Enter to send." how="Shift+Enter for a new line." />}
         >
-          {/* 18 in the 36px box (--control-h); the stroke stays the house 1.75.
-              docs/plans/260912c-send-button-icon-and-primary-style.md. */}
-          {busy ? <LoaderCircle className="cmt-spinner" size={18} /> : <SendHorizontal size={18} />}
-        </button>
+          <button
+            type="submit"
+            className="chat-send"
+            aria-label="Send"
+            /* `armed` beside `readOnly` for the reason `submit` above gives — and
+               a button the guard would refuse must not look pressable, or the
+               reader presses Send while talking and nothing at all happens.
+
+               **`aria-disabled`, not `disabled`**, so the card still opens: an
+               empty box is exactly when a reader wonders how to send, and a
+               natively disabled button is no reliable tooltip trigger
+               (docs/project/tooltips.md § the shelf's action row). The click is
+               stopped here, and `submit` refuses the same states anyway. */
+            aria-disabled={unavailable || undefined}
+            onClick={unavailable ? (e) => e.preventDefault() : undefined}
+          >
+            {/* 18 in the 36px box (--control-h); the stroke stays the house 1.75.
+                docs/plans/260912c-send-button-icon-and-primary-style.md. */}
+            {busy ? <LoaderCircle className="cmt-spinner" size={18} /> : <SendHorizontal size={18} />}
+          </button>
+        </Tooltip>
       )}
       {dictate.dictation.supported &&
         (remember ? (

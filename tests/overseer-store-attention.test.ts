@@ -20,7 +20,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { inboxLines } from "../scripts/overseer.js";
-import { runOverseer } from "../tools/overseer/daemon.js";
+import { type DaemonOptions, runOverseer } from "../tools/overseer/daemon.js";
+import { heldOpen, tickAfter, ticks, until } from "./helpers/overseer-until.js";
 
 import type { AttentionList } from "../tools/fleet/wire.js";
 import { MAX_ASKS_CHARS, MIN_ASKS_CHARS } from "../tools/overseer/attention-classify.js";
@@ -490,42 +491,60 @@ describe("the whole path: does the list actually reach current.json", () => {
   // the real daemon against a scratch store with an injected source and an
   // injected runner, and reads the bytes back off disk.
 
-  function abortAfter(ms: number): AbortController {
+  /**
+   * Runs the daemon until `done` holds, then for one more heartbeat tick so
+   * `current.json` carries what the last pass decided — never for a fixed time;
+   * tests/helpers/overseer-until.ts says why.
+   */
+  async function runUntil(
+    root: string,
+    attention: DaemonOptions["attention"],
+    what: string,
+    done: () => boolean,
+  ): Promise<void> {
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), ms).unref?.();
-    return controller;
-  }
-
-  async function heldOpen(signal: AbortSignal): Promise<void> {
-    await new Promise<void>((resolve) => {
-      if (signal.aborted) resolve();
-      else signal.addEventListener("abort", () => resolve());
-    });
-  }
-
-  test("a list produced by the pass is on disk when the daemon stops", async () => {
-    const root = tempRoot();
-    const controller = abortAfter(700);
-    let passes = 0;
-    await runOverseer({
+    const running = runOverseer({
       root,
       baseUrl: "http://127.0.0.1:1",
       signal: controller.signal,
       tickMs: 100,
       log: () => {},
       source: async function* () {
+        yield* [];
         await heldOpen(controller.signal);
       },
+      ...(attention === undefined ? {} : { attention }),
+    });
+    await until(what, done);
+    await tickAfter(root);
+    controller.abort();
+    await running;
+  }
+
+  /** A pass that counts how many times it has finished, thrown or not. */
+  function counted(intervalMs: number, run: () => Promise<AttentionList>) {
+    let finished = 0;
+    return {
       attention: {
-        intervalMs: 60,
+        intervalMs,
         run: async () => {
-          passes += 1;
-          return LIST;
+          try {
+            return await run();
+          } finally {
+            finished += 1;
+          }
         },
       },
-    });
+      finished: () => finished,
+    };
+  }
 
-    expect(passes).toBeGreaterThan(0);
+  test("a list produced by the pass is on disk when the daemon stops", async () => {
+    const root = tempRoot();
+    const pass = counted(60, async () => LIST);
+    await runUntil(root, pass.attention, "an attention pass", () => pass.finished() > 0);
+
+    expect(pass.finished()).toBeGreaterThan(0);
     const read = readCheckpoint(root);
     expect(read.kind).toBe("checkpoint");
     if (read.kind !== "checkpoint") return;
@@ -536,17 +555,7 @@ describe("the whole path: does the list actually reach current.json", () => {
     // With no OPENROUTER_API_KEY the runner is absent, and this is what the page
     // then draws: *nothing has looked*, which is not *nothing needs you*.
     const root = tempRoot();
-    const controller = abortAfter(400);
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: controller.signal,
-      tickMs: 100,
-      log: () => {},
-      source: async function* () {
-        await heldOpen(controller.signal);
-      },
-    });
+    await runUntil(root, undefined, "a first heartbeat tick", () => ticks(root) > 0);
     const read = readCheckpoint(root);
     if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
     expect(read.checkpoint.attention.kind).toBe("unknown");
@@ -557,23 +566,10 @@ describe("the whole path: does the list actually reach current.json", () => {
     // true twenty minutes ago while the probe was broken, with its own
     // `scannedAt` the only clue and nobody reading it.
     const root = tempRoot();
-    const controller = abortAfter(700);
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: controller.signal,
-      tickMs: 100,
-      log: () => {},
-      source: async function* () {
-        await heldOpen(controller.signal);
-      },
-      attention: {
-        intervalMs: 60,
-        run: async () => {
-          throw new Error("tmux went away");
-        },
-      },
+    const pass = counted(60, async () => {
+      throw new Error("tmux went away");
     });
+    await runUntil(root, pass.attention, "a thrown attention pass", () => pass.finished() > 0);
     const read = readCheckpoint(root);
     if (read.kind !== "checkpoint") throw new Error("expected a checkpoint");
     expect(read.checkpoint.attention.kind).toBe("unknown");
@@ -586,29 +582,20 @@ describe("the whole path: does the list actually reach current.json", () => {
     // afternoon at the gateway. Overlapping passes would double the bill and race
     // each other's memory file for no benefit at all.
     const root = tempRoot();
-    const controller = abortAfter(700);
     let inFlight = 0;
     let overlapped = false;
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: controller.signal,
-      tickMs: 100,
-      log: () => {},
-      source: async function* () {
-        await heldOpen(controller.signal);
-      },
-      attention: {
-        intervalMs: 30,
-        run: async () => {
-          inFlight += 1;
-          if (inFlight > 1) overlapped = true;
-          await new Promise((resolve) => setTimeout(resolve, 150));
-          inFlight -= 1;
-          return LIST;
-        },
-      },
+    const pass = counted(30, async () => {
+      inFlight += 1;
+      if (inFlight > 1) overlapped = true;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      inFlight -= 1;
+      return LIST;
     });
+    /* Three slow passes on a 30 ms interval, counted: each spans several
+       intervals that could have started a second one, so "never overlapped" is
+       said over chances that really came, not over however few a starved box
+       fitted into a fixed window. */
+    await runUntil(root, pass.attention, "three slow attention passes", () => pass.finished() >= 3);
     expect(overlapped).toBe(false);
   });
 });

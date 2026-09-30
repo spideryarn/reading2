@@ -221,6 +221,26 @@ export const ARTICLE_TABLE_COVERAGE = {
         "penny and it is meaningless outside the card it is drawn on.",
     },
   },
+  /* An uploaded paper's guessed web address, and the claim that found it —
+     docs/plans/260929g-canonical-link-for-an-uploaded-paper.md. */
+  upload_source_guesses: {
+    rollback: {
+      exported: false,
+      why:
+        "Our guess at where an uploaded paper lives on the web, and the claim " +
+        "bookkeeping that found it (a token, a count of attempts). Nothing the reader " +
+        "wrote and nothing the pipeline produced: it is looked for again the next " +
+        "time the article is opened on a database that has no row for it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "A guess, not a fact about the piece — we show it with a question mark — " +
+        "and it is not part of the article's data in the sense docs/project/export.md " +
+        "means: the reader uploaded the file and has it. Deferred rather than refused: " +
+        "if readers ask for the guessed link in their export, it is one column.",
+    },
+  },
   checkpoints: {
     rollback: {
       exported: false,

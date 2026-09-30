@@ -1,0 +1,122 @@
+{
+  "arm": "before-2",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "faq/3",
+  "faqSha256": "9c6f7a31f99efcb35ef1416a62d7fd0dd25b6c6687ff88b4619fe2dc74a4e5eb",
+  "at": "2026-09-29T17:48:18.014Z",
+  "tokens": {
+    "input": 18557,
+    "output": 4195,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "questions": [
+    {
+      "id": "spya-rwgghr",
+      "question": "Given all these shortcomings, is there anywhere the classical connectionist model of the cortex still holds up?",
+      "passages": [
+        {
+          "blockId": "spya-amx5qf",
+          "quote": "The connectionist approach was foundational and remains a good account of feedforward processing in the sensory cortex.",
+          "start": 51
+        }
+      ]
+    },
+    {
+      "id": "spya-nrnyug",
+      "question": "If individual electric field effects on nearby neurons are so weak, how could they ever add up to real control over spiking?",
+      "passages": [
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Individual ephaptic interactions, when synchronized and summed across neurons, create effects large enough to shape and coordinate neuron spiking at the mesoscale (Goldwyn and Rinzel, 2016; Cunha et al., 2024).",
+          "start": 1426
+        }
+      ]
+    },
+    {
+      "id": "spya-untjpb",
+      "question": "Does spatial computing still need some neurons dedicated to representing context, even if not \"pure\" object neurons?",
+      "passages": [
+        {
+          "blockId": "spya-ee45vr",
+          "quote": "In this view, there is no requirement for specialized “context neurons” or “object neurons” with fixed tuning predicted by classical connectionists views of cortex.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-tyn8kg",
+      "question": "If traveling alpha/beta waves drive shifts in neural coding, shouldn't their pattern change with the specific sensory input, not just timing?",
+      "passages": [
+        {
+          "blockId": "spya-qaza0y",
+          "quote": "This hypothesis predicts that wave incidence should correlate with the overall temporal dynamics of population activity, but show little variation with specific sensory conditions.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-ya9u0t",
+      "question": "If moment-to-moment cognition is run by waves, what job is actually left for synapses to do?",
+      "passages": [
+        {
+          "blockId": "spya-jbtup9",
+          "quote": "synapses define the network’s structure, but moment to moment computation can be carried out by evolving wave patterns rather than by spikes alone",
+          "start": 14
+        },
+        {
+          "blockId": "spya-f0dqyd",
+          "quote": "Synaptic connections, shaped by experience, store long‑term information and define potential activity patterns.",
+          "start": 76
+        }
+      ]
+    },
+    {
+      "id": "spya-aeu455",
+      "question": "How can drugs acting on completely different molecular targets all end up causing the same loss of consciousness?",
+      "passages": [
+        {
+          "blockId": "spya-wnqgmn",
+          "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+          "start": 0
+        },
+        {
+          "blockId": "spya-k02vdw",
+          "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+          "start": 173
+        }
+      ]
+    },
+    {
+      "id": "spya-uxgw8q",
+      "question": "Isn't proposing that waves unify cortical activity into one state basically the same idea as Global Workspace Theory's broadcasting?",
+      "passages": [
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "We, however, emphasize how this integration occurs via dynamic field interactions rather than broadcasting of information (GW) and spikes alone (GWNT).",
+          "start": 221
+        }
+      ]
+    },
+    {
+      "id": "spya-bd9cfb",
+      "question": "If this theory rejects locating consciousness in one region, how does it differ from Integrated Information Theory's search for a \"hot zone\"?",
+      "passages": [
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "However, we locate its mechanisms not in a “hot zone,” but in the large‑scale wave dynamics that organize cortical computation.",
+          "start": 541
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "tooLong": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "overCap": 0,
+    "malformed": 0
+  }
+}

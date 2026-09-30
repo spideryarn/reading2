@@ -311,6 +311,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "live-upstream": "retry",
   "jb-slot-held": "bug",
   "cite-resting": "blocked",
+  "guess-resting": "blocked",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
@@ -4462,18 +4463,67 @@ export function debateWithheldOnSharedLink(search: string, n: number): string {
 }
 
 /**
- * **The order means nothing, said out loud.**
+ * **What the order on screen is, said out loud — one sentence per order.**
  *
- * Greg asked for *"ideally from authoritative sources"* and there is no honest
- * way to rank authority: any list we maintain is wrong per domain, and on an ML
- * paper the sharpest critique is routinely a pseudonymous blog. So the host
- * leads every row — the one authority signal a reader can judge, free — and
- * this says the position of a row carries no claim, because a reader looking at
- * a list will otherwise assume it does.
+ * A reader looking at a list assumes its order carries a claim, so each order
+ * says what it is, in the line after *"Searched on …"*. Since 2026-09-29 these
+ * replace `DEBATE_NO_RANKING` (*"no ranking … is applied"*), which became false
+ * the day the list gained an order bar (SPIDERYARN-READING2-5P,
+ * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F16).
+ *
+ * **None of them ranks by authority**, and that part of the old sentence still
+ * stands: there is no honest way to rank it — any list we maintain is wrong per
+ * domain, and on an ML paper the sharpest critique is routinely a pseudonymous
+ * blog. The site is on every row for the reader to judge. The two orders that
+ * rest on a model's judgment say so, because the order is then the model's
+ * reading, not a fact about the page.
  */
-export const DEBATE_NO_RANKING =
-  "These are in the order the search returned them — no ranking by prominence or authority is " +
-  "applied, and the site each one is on is the thing to judge them by.";
+export const DEBATE_ORDER_BY_CLAIM =
+  "Grouped under the claim in the piece each one answers, in the order the piece makes them.";
+
+/** …stance: the lean is the model's reading of each page, so the order is too. */
+export const DEBATE_ORDER_STANCE = "Most critical first — the lean is the AI's reading of each page.";
+
+/**
+ * …prioritised: how directly a page bears on its claim is a model's judgment,
+ * not a measure, and the sentence says whose. Whether the relevance bar is
+ * hiding anything is said beside the bar, in every state (`hiddenNote`).
+ */
+export const DEBATE_ORDER_PRIORITISED =
+  "Rows about this piece first, then the AI's judgment of how directly each bears on its claim.";
+
+/**
+ * …date: the year is what the AI read off each page (found in its extract, but
+ * not proven to be that page's own date — the plan's F2), and the undated ones
+ * go last.
+ */
+export const DEBATE_ORDER_DATE =
+  "Oldest first, by the year the AI read off each page; pages with no year come last.";
+
+/** The line over *prioritised*'s claim rows the AI gave no relevance to. Never hidden by the bar. */
+export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
+
+/** The line over *date*'s rows with no year found on the page. */
+export const DEBATE_UNDATED = "No year found on these pages";
+
+/**
+ * The line in `more` under a row's title, authors and year when any of them is
+ * the AI's reading (the plan's F2: found in the page's extract proves the words
+ * are on the page, not that they are *this* page's byline). `parts` names only
+ * the ones shown — *"Authors and year"* — so the engine's own title is never
+ * called the AI's.
+ */
+export function debateWorkFieldsNote(parts: readonly string[]): string {
+  const [first = "", ...rest] = parts;
+  const last = rest.pop();
+  const head = [first, ...rest].join(", ");
+  const list = last === undefined ? head : `${head} and ${last}`;
+  const subject = list.charAt(0).toUpperCase() + list.slice(1);
+  return (
+    `${subject} as the AI read ${parts.length === 1 ? "it" : "them"} off the page; ` +
+    `${parts.length === 1 ? "it was" : "each was"} found in the page's extract.`
+  );
+}
 
 /**
  * **What the quotation was checked against, which is not the page.**
@@ -4484,7 +4534,8 @@ export const DEBATE_NO_RANKING =
  * engine surfaced — which is not the same as the passages that matter.
  */
 /* **"here", not "below"**, and it is not a style preference: this sentence is
-   drawn twice, at the foot of the lists and on every ⓘ card, and in both places
+   drawn twice, at the foot of the list and inside every row's `more` (it was
+   the ⓘ card until 2026-09-29), and in both places
    the quotations it is about are *above* it. It said "below" while it sat in the
    panel head, and moving it left the word pointing at nothing. */
 export const DEBATE_EXTRACTS_ONLY =
@@ -5051,12 +5102,13 @@ export const CITATION_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was kept. The Scholar search is still there.";
 
 /**
- * The row already has a link — one the article gave, or a page found before.
- * The panel never offers *Find it* on such a row, so this is a stale tab or a
- * hand-made request, and asking again gets the same answer.
+ * `CITATION_NO_MATCH` for a row the article gave a link for — looked up for
+ * what its search extract says (plan 260929g R-3). The link stays whatever
+ * happens, so this says that rather than pointing at a Scholar search the row
+ * does not have.
  */
-export const CITATION_ALREADY_LINKED =
-  "This work already has a link, so there is nothing to look for. Reload to see it.";
+export const CITATION_LOOKUP_NO_MATCH =
+  "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
 /**
  * *Find it* refused by its allowance (src/citation-find.ts § `FIND_RATE_POLICY`)
@@ -5079,6 +5131,21 @@ export const CITATION_FIND_RESTING: ReaderFacingFailure = {
     "Find it has done as many searches as it can for today, so asking again today will get the " +
     "same answer. Try again tomorrow — the Scholar " +
     "search is still there. [cite-resting]",
+};
+
+/* ------------------------------------ an upload looking for its own page --
+   src/source-guess-run.ts. The request is fired when an owner opens an upload
+   and nobody waits on it, so these are rarely read — but a refusal is still
+   an answer, and a 503 reaches a reader only when it is coded. */
+export const SOURCE_GUESS_BUSY =
+  "We are already looking for where your uploaded papers came from. This one will be looked for next time you open it.";
+export const SOURCE_GUESS_LIMITED =
+  "We have looked for a lot of your uploads' web pages recently. This one will be looked for another time.";
+export const SOURCE_GUESS_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "We have done as many web searches for uploaded papers as we can for today, so opening it " +
+    "again today will get the same answer. It will be looked for another day. [guess-resting]",
 };
 
 /* ------------------------------------------ citations: reading the paper --

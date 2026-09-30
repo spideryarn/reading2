@@ -26,8 +26,8 @@
  * the left-hand end of the reading view's bottom bar (Dock.tsx § The word, and
  * which mechanism takes it away). Both spread `useLogoAnimation()` onto their
  * `<a>`, so there is one implementation of *when* an animation runs and one
- * class name for the stylesheet to key on. `ShelfSpider` uses the same hook on
- * the shelf's decorative mark-only `<span>`, and since 2026-09-29 so do the
+ * class name for the stylesheet to key on. `ShelfWordmark` uses the same hook on
+ * the shelf's spider and heading (letters too since 2026-09-30), and since 2026-09-29 so do the
  * marketing bar's home link and every `SiteFooter`, whose `Wordmark` draws the
  * same letters and mark as the two above (LogoGlyphs.tsx).
  *
@@ -127,7 +127,7 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
     id: "spya-i",
     reach: "letters",
     name: "Only the i",
-    blurb: "One letter rises a single pixel and stays there. Nothing else moves at all.",
+    blurb: "One letter rises a hair and stays there. Nothing else moves at all.",
   },
   {
     id: "spya-dawn",
@@ -191,7 +191,7 @@ export function pickLogoAnimation(
  *
  * Three different things take the word away: the 731px query on `.logo-text`,
  * the dock's fit ladder on `.dock-btn-label`, and a host with no letters (the
- * shelf's spider). All three leave a letter with no layout box, so this is the
+ * shelf's spider, until 2026-09-30). All three leave a letter with no layout box, so this is the
  * one question they all answer, and nothing here has to know which applies.
  *
  * **It is not general visibility.** `visibility: hidden`, `opacity: 0` and an
@@ -264,8 +264,8 @@ export function useLogoAnimation(
     /**
      * **A tap plays one**, for a host that is not a link. On the reading view
      * a tap on the wordmark goes home, so a finger gets an animation only from
-     * a hold; the shelf's spider is a picture, a tap there does nothing else,
-     * so the tap itself may be the request (Library.tsx § ShelfSpider).
+     * a hold; the shelf's wordmark is not a link, a tap there does nothing
+     * else, so the tap itself may be the request (Library.tsx § ShelfWordmark).
      *
      * Decided on the `click`, never on a short `pointerup`: the release is
      * heard on `window` wherever it happens, and a finger that slid off and
@@ -369,7 +369,7 @@ export function useLogoAnimation(
 
   return {
     /**
-     * Goes on the host alongside `logo`/`shelf-spider` and its per-site class.
+     * Goes on the host alongside `logo`/`shelf-wordmark` and its per-site class.
      *
      * **Two classes, not one.** The animation's own id carries its keyframes;
      * the bare `spya-anim` carries the handful of rules every animation needs

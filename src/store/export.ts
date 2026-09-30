@@ -805,6 +805,16 @@ export async function exportArticle(
         searches: row.searches,
         model: row.model,
         at: row.foundAt.toISOString(),
+        /* What *Look it up* read (plan 260929g R-6) — column for column, so
+           the rollback keeps a reading the read path would not attach. */
+        lookupState: row.lookupState,
+        lookupSupport: row.lookupSupport,
+        lookupSupportQuote: row.lookupSupportQuote,
+        lookupPaperDoes: row.lookupPaperDoes,
+        lookupPaperDoesQuote: row.lookupPaperDoesQuote,
+        lookupExcerptWords: row.lookupExcerptWords,
+        lookupContextHash: row.lookupContextHash,
+        lookupEvidenceHash: row.lookupEvidenceHash,
       };
     }
     await put("citation_finds", "citation-finds.json", { finds });

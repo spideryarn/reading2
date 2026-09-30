@@ -121,6 +121,13 @@ export interface TapeEvents {
   onBroken?(): void;
   /** Every advertised container refused before the tape captured a byte. */
   onUnavailable?(): void;
+  /**
+   * A chunk was accepted into part `index`, in order. The part's chunks joined
+   * are exactly the part's file, so a keeper that writes each one down holds
+   * everything but the last second if the page dies mid-sentence — plan
+   * 260929h. Never called for a chunk the tape refused.
+   */
+  onChunk?(index: number, chunk: Blob, mimeType: string): void;
 }
 
 /** A recording in progress. Exactly one of `stop` / `cancel` is called, once. */
@@ -478,9 +485,11 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
     }
   };
 
+  const mimeOf = (p: Part) => p.rec.mimeType || attempts[at]?.type || "audio/webm";
+
   const fileOf = (p: Part): MicRecording => {
     if (!p.file) {
-      const mimeType = p.rec.mimeType || attempts[at]?.type || "audio/webm";
+      const mimeType = mimeOf(p);
       p.file = {
         blob: new Blob(p.chunks, { type: mimeType }),
         mimeType,
@@ -540,6 +549,10 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
     }
     p.chunks.push(data);
     p.bytes += data.size;
+    /* `-1` only for a part not yet pushed — `open()` makes it current first —
+       and it will be pushed next, so its index is the length. */
+    const index = parts.indexOf(p);
+    events.onChunk?.(index < 0 ? parts.length : index, data, mimeOf(p));
     /* Only the part being recorded rotates. A part already closing is handing
        over its terminal chunk, which is its own and moves nothing. */
     if (verdict === "rotate" && p === current && p.state === "recording" && !stopping && !capped) {

@@ -37,7 +37,7 @@ import { createHash } from "node:crypto";
 
 import { canonicalKey, type StoredKind } from "../source.js";
 import { fsBlobs } from "./blobs-fs.js";
-import { supabaseBlobs } from "./blobs-supabase.js";
+import { StorageFailed, supabaseBlobs } from "./blobs-supabase.js";
 
 /** What `head` can say about an object without moving its bytes. */
 export interface BlobHead {
@@ -414,12 +414,14 @@ export async function storeRawSource(
   const first = (await store.head(key))
     ? ("already-there" as const)
     : await store.putIfAbsent(key, bytes, CONTENT_TYPE[kind]);
-  /* A successful create needs no read-back: we hashed the buffer we just wrote,
-     and no other writer can have been in the middle of the same key — that is
-     what create-only means. Only the dedup hit is unproven. */
+  /* A successful create needs no read-back: we hashed the buffer we just wrote.
+     Another writer of the same key may have written too — storage-api does not
+     make a concurrent create-only POST atomic, see `readBack` — but the key is
+     the hash, so what either wrote is these bytes. Only the dedup hit is
+     unproven. */
   if (first === "stored") return { sha256, key, outcome: "stored" };
 
-  const there = await store.get(key, { maxBytes: bytes.byteLength });
+  const there = await readBack(store, key, bytes.byteLength);
   if (there && createHash("sha256").update(there).digest("hex") === sha256) {
     return { sha256, key, outcome: "already-there" };
   }
@@ -430,6 +432,36 @@ export async function storeRawSource(
      corruption too. `there` being null means it vanished between the two calls,
      which is the same answer: what is at this name is not what the name says. */
   throw new CorruptObject(key);
+}
+
+/**
+ * `get`, retried on a Storage 5xx and on nothing else.
+ *
+ * storage-api (v1.69.11, seen on the local stack 2026-09-29) checks a
+ * create-only POST in a rolled-back transaction and then upserts, so two
+ * writers of one new key can both succeed — and the second deletes the first's
+ * version file inside its transaction, before its own row commits. A `get` in
+ * that gap reads the committed row, finds no file, and answers 500. Concurrent
+ * loads of one document meet here, so this is where the gap shows: two of four
+ * failed on the deploy gate at load 7–9.
+ * docs/postmortems/260930a-a-fixed-window-stands-in-for-a-condition.md.
+ *
+ * The retry cannot turn a wrong answer into a right one: `null` and a hash
+ * mismatch still reach `CorruptObject`, and a 4xx or a size refusal is thrown
+ * at once. A 5xx that lasts past the last wait is thrown too.
+ */
+const READ_BACK_RETRY_MS = [50, 200, 800] as const;
+
+async function readBack(store: RawSourceStore, key: string, maxBytes: number): Promise<Uint8Array | null> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await store.get(key, { maxBytes });
+    } catch (err) {
+      const wait = READ_BACK_RETRY_MS[attempt];
+      if (!(err instanceof StorageFailed && err.status >= 500 && err.status < 600) || wait === undefined) throw err;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
 }
 
 /**

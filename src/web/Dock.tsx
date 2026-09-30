@@ -241,8 +241,14 @@ import {
   type ArticleView,
   carriedSearch,
   LIBRARY_HREF,
+  navigate,
   readHref,
 } from "./router.js";
+/* **Is the reader writing, and is this our chord?** This file kept its own
+   copy of `isTyping` until 2026-09-29, because the only shared one lived in
+   keynav.ts and importing that drags the article's geometry into the bar's
+   import graph. key-chord.ts imports nothing, so that argument is answered. */
+import { isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
@@ -1222,32 +1228,6 @@ export function fitSignature(
 }
 
 /**
- * **Is the reader writing?** Then a chord that means something in a text box
- * is theirs, not ours.
- *
- * A second copy of `isTyping` in keynav.ts, and the duplication is deliberate:
- * that module reaches `position.ts` and `scroll.ts` — the article's geometry,
- * and another agent's ground — so importing it here to borrow four lines would
- * drag the whole reading machinery into the bottom bar's import graph, and into
- * every test that renders the bar. Four lines are cheaper than that edge, and
- * they cannot drift in a way that matters: this is the DOM's own vocabulary
- * rather than a policy of ours.
- *
- * `SELECT` is in the list for the reason PlaceOnCriterion gives: a native
- * dropdown is a control taking its own keys, whatever it looks like.
- */
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el || typeof el.tagName !== "string") return false;
-  return (
-    el.tagName === "INPUT" ||
-    el.tagName === "TEXTAREA" ||
-    el.tagName === "SELECT" ||
-    el.isContentEditable === true
-  );
-}
-
-/**
  * **⌘-K on a Mac, Ctrl-K everywhere else, and the four presses it refuses.**
  *
  * One `window` listener holding whether the command bar is open. A hook rather
@@ -1264,8 +1244,8 @@ function isTyping(target: EventTarget | null): boolean {
  *    the arrows keep — docs/project/keyboard.md § auto-repeat is ignored.
  *  - **Not while a text field has focus.** The chat box, the comment box, the
  *    search field and the referee's criteria are all places a reader is
- *    writing, and ⌘-K is a text-editing chord in several editors. `isTyping`
- *    above is the list.
+ *    writing, and ⌘-K is a text-editing chord in several editors. key-chord.ts
+ *    § `isTyping` is the list.
  *  - **Not over another native modal.** `showModal()` on a dialog while another
  *    modal dialog is showing stacks two in the top layer and traps focus in the
  *    newer one — the Feedback dialog, the Lightbox and the comment dialogs are
@@ -1284,7 +1264,7 @@ function isTyping(target: EventTarget | null): boolean {
  * anything would be a chord that quietly breaks a browser feature.
  */
 function useCommandBarChord(
-  /** Whether there is a band to change at all — off the reading view, there is not. */
+  /** Whether this reader gets a command bar at all — a visitor does not (`DockCommands`). */
   enabled: boolean,
   /** The drawer's own setter, so the drawer can be shut before the bar opens. */
   onPanel: ((next: Panel | null) => void) | undefined,
@@ -1312,12 +1292,12 @@ function useCommandBarChord(
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "k" && e.key !== "K") return;
       /* **Shift is rejected, not ignored.** Ctrl-Shift-K is Firefox's Web
          Console, and matching it here would both steal a browser feature and
-         `preventDefault()` it. Alt likewise. `e.key` is matched in both cases
-         for Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2. */
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.repeat) return;
+         `preventDefault()` it. Alt likewise, and either case of the letter for
+         Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2; the test
+         is key-chord.ts's now, so ⌘-Enter below cannot drift from it. */
+      if (!isModChord(e, "k")) return;
       if (isTyping(document.activeElement)) return;
       /* Checked here as well as inside `show`, because this one decides whether
          the press is *claimed* — calling `preventDefault()` and then declining
@@ -1334,6 +1314,51 @@ function useCommandBarChord(
      split twice for Biome's complexity ceiling. */
   const hide = useCallback(() => setOpen(false), []);
   return { open, show, hide };
+}
+
+/**
+ * **⌘-Enter on a Mac, Ctrl-Enter everywhere else, opens the Metadata page** —
+ * the same href the Metadata button below carries, so the chord and the button
+ * cannot disagree about where the reader lands or what `?at=` comes with them.
+ *
+ * > In the Reading view, if I hit Command Enter, that should open up the
+ * > Metadata mode.
+ * >
+ * > — Greg, 2026-09-29
+ *
+ * Ctrl rather than Alt off a Mac, the pairing ⌘-K already uses: Alt-Enter on a
+ * link is a download. docs/research/260929a-keyboard-shortcut-libraries.md.
+ * The ⌘-K rules, plus one of its own:
+ *
+ *  - **Not while typing.** ⌘/Ctrl-Enter already means *send* in five text
+ *    boxes (Feedback, Comment, Annotate, Quiz, Profile); skipping text fields
+ *    is what keeps them working.
+ *  - **Not on a focused link**, or anything inside one: there it is a
+ *    modified click, a new tab, and stealing it would break a browser feature
+ *    on every link in the prose. A focused *button* is app policy rather than
+ *    a browser fact — no button here binds a modified Enter — so the chord
+ *    wins there.
+ *  - Not over an open native `<dialog>`, and not once a handler nearer the
+ *    press has `preventDefault`ed it.
+ *
+ * `preventDefault()` only when claimed. Reading view only (`enabled`): on the
+ * metadata page there is nothing to toggle back to — plan 260929g,
+ * assumption 3.
+ */
+function useMetadataChord(enabled: boolean, href: string): void {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isModChord(e, "Enter") || e.defaultPrevented) return;
+      const focused = document.activeElement;
+      if (isTyping(focused) || focused?.closest("a[href]")) return;
+      if (document.querySelector("dialog[open]") !== null) return;
+      e.preventDefault();
+      navigate(href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, href]);
 }
 
 /**
@@ -1363,23 +1388,42 @@ function useCommandBarChord(
  * Dock button's conditional blur after a mouse click, the command bar's close
  * and clear. Neither is part of activating a mode, so neither is in here.
  *
- * `onMode?.()` rather than a guard, because this callback is only ever handed
- * to the two surfaces the bar draws when `onMode` is present — the optional
- * call is the compiler's price for the prop being optional at all, not a second
- * arrangement anything reaches.
+ * **Off the reading view there is no `onMode`, and a mode is the mode's link.**
+ * Since 2026-09-30 the command bar is drawn on the metadata page too (Greg,
+ * SPIDERYARN-READING2-66: *"The Cmd-k Command shortcut doesn't work in
+ * Metadata mode."*), and there its mode rows go exactly where
+ * `DockModeLinks` goes — `modeLinkHref`, the one href both use — and **arm
+ * nothing**, as that link arms nothing (activation.ts § arriving is not a
+ * press). Arming first would make the bar a cheaper door than the link beside
+ * it, under a Commands card that says it opens a mode *exactly as pressing
+ * that button here does*. docs/plans/260930a-….
  */
 function useActivateMode(
   slug: string,
+  search: string,
   diagram: DiagramKind,
   onMode: Props["onMode"],
 ): (next: Mode) => void {
   return useCallback(
     (next: Mode) => {
+      if (onMode === undefined) {
+        navigate(modeLinkHref(slug, search, next));
+        return;
+      }
       armActivationForMode(slug, next, { diagram });
-      onMode?.(next);
+      onMode(next);
     },
-    [slug, diagram, onMode],
+    [slug, search, diagram, onMode],
   );
+}
+
+/**
+ * **Where a mode is, from a page that is not the reading view** — the href
+ * `DockModeLinks` draws and the command bar's mode rows follow there, one
+ * function so the two doors cannot land in different places.
+ */
+function modeLinkHref(slug: string, search: string, mode: Mode): string {
+  return readHref(slug, withMode(search, mode), "article");
 }
 
 export function Dock({
@@ -1483,7 +1527,7 @@ export function Dock({
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, diagram, onMode);
+  const activateMode = useActivateMode(slug, search, diagram, onMode);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It
@@ -1554,9 +1598,14 @@ export function Dock({
    * being rewritten this week by somebody else.
    *
    * State on the bar as a whole rather than on `DockModes`: the bar is drawn on
-   * the metadata page too (and the tweets page until 2026-09-29), where there is no `onMode` and therefore
-   * nothing for a command to do, and all three parts of it — the listener, the
-   * button and the dialog — stand down there.
+   * the metadata page too, where there is no `onMode`. **All three parts of it —
+   * the listener, the button and the dialog — stood down there until
+   * 2026-09-30**, on the grounds that a command had nothing to do without a
+   * band. That was wrong twice over: the Dock there draws every mode as a link,
+   * and most of the bar's other rows are pages. Greg, SPIDERYARN-READING2-66:
+   * *"The Cmd-k Command shortcut doesn't work in Metadata mode."* So the one
+   * condition left is the visitor's, and a mode row there follows the mode's
+   * link — `useActivateMode`.
    *
    * **The two gates are inside `DockCommands` and `DockCommandBar` rather than
    * in a `&&` here**, which is Biome rather than taste and is the same reason
@@ -1566,7 +1615,12 @@ export function Dock({
    * component states the condition it is under, which is where it is readable
    * anyway.
    */
-  const commandBar = useCommandBarChord(onMode !== undefined && !isVisitor, onPanel);
+  const commandBar = useCommandBarChord(!isVisitor, onPanel);
+  /* One value for the Metadata button and its chord, so the two cannot send
+     the reader to different places. Keyed on `view` rather than `onMode`, unlike
+     ⌘-K: a visitor's reading view draws the Metadata button too. */
+  const metadataHref = readHref(slug, search, "metadata");
+  useMetadataChord(view === "article", metadataHref);
 
   /**
    * ## The drawer takes focus, and gives it back
@@ -1719,8 +1773,6 @@ export function Dock({
           agent's ground this week. 260906h § The command bar. Its own gate, and
           why the gate is inside it, are on `DockCommandBar` below. */}
       <DockCommandBar
-        mode={mode}
-        onMode={onMode}
         isVisitor={isVisitor}
         /* The list the Dock drew, not a second computation of it: requirement
            4 — *the bar lists exactly what the Dock lists* — is true by
@@ -1788,8 +1840,6 @@ export function Dock({
             could not — `useCommandBarChord` binds the window, not this
             button. */}
         <DockCommands
-          mode={mode}
-          onMode={onMode}
           isVisitor={isVisitor}
           onOpen={commandBar.show}
         />
@@ -1938,7 +1988,7 @@ export function Dock({
               the bar, which is the right end for it: it is the machinery behind
               the article rather than a way of reading it. */}
           <DockLink
-            href={readHref(slug, search, "metadata")}
+            href={metadataHref}
             current={view === "metadata"}
             icon={Info}
             label="Metadata"
@@ -2101,7 +2151,9 @@ const NOT_A_MODE = {
     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   metadata: {
-    what: "Where this article came from, what shape it is, and what the pipeline wrote",
+    /* The chord in the Commands card's own format. Said on the metadata page
+       too, where it does not fire — hence "from the article". */
+    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it from the article",
     /* **"Opening it spends nothing" — and the two wider claims that came
        before it were each false, a few hours apart.**
 
@@ -2456,7 +2508,7 @@ function DockModeLinks({
       {modes.map((m) => (
         <DockLink
           key={m.mode}
-          href={readHref(slug, withMode(search, m.mode), "article")}
+          href={modeLinkHref(slug, search, m.mode)}
           current={false}
           icon={m.icon}
           label={MODE_LABEL[m.mode]}
@@ -2733,20 +2785,9 @@ function DockFeedback({ signedIn }: { signedIn: boolean }) {
  * name.
  */
 function DockCommands({
-  mode,
-  onMode,
   isVisitor,
   onOpen,
 }: {
-  /**
-   * The two props that say there is a band to change. **They are read here
-   * rather than in a `&&` at the call site** for the reason `DockFeedback`
-   * gives: `Dock` is over Biome's cognitive-complexity ceiling and every extra
-   * conditional in its markup takes it further out. Off the reading view a
-   * command would have nothing to open, so there is no button.
-   */
-  mode: Mode | undefined;
-  onMode: Props["onMode"];
   /**
    * **A visitor gets no command bar**, and this is a capability gate rather
    * than a tidiness one. A visitor reading somebody else's shared document may
@@ -2761,7 +2802,7 @@ function DockCommands({
   isVisitor: boolean;
   onOpen(): void;
 }) {
-  if (mode === undefined || onMode === undefined || isVisitor) return null;
+  if (isVisitor) return null;
   return (
     <Tooltip
       placement="top"
@@ -2861,8 +2902,6 @@ function DockCommands({
  * somebody will one day try to clip.
  */
 function DockCommandBar({
-  mode,
-  onMode,
   isVisitor,
   modes,
   activateMode,
@@ -2870,8 +2909,6 @@ function DockCommandBar({
   openComments,
   bar,
 }: {
-  mode: Mode | undefined;
-  onMode: Props["onMode"];
   /** Owners only — `DockCommands` above carries the reasoning. */
   isVisitor: boolean;
   modes: readonly ModeUi[];
@@ -2885,15 +2922,13 @@ function DockCommandBar({
   /**
    * **Opening the Comments drawer**, bound to its panel here so that
    * `CommandBar` never learns a drawer has more than one side. Absent where
-   * there is no drawer — which today is nowhere the bar is mounted, since the
-   * reading view always passes one (Reader.tsx), and is written as an option
-   * anyway because the gate above is what makes that true rather than anything
-   * about this component.
+   * there is no drawer — the metadata page, since the bar was drawn there on
+   * 2026-09-30; the reading view always passes one (Reader.tsx).
    */
   openComments: (() => void) | undefined;
   bar: { open: boolean; show(): void; hide(): void };
 }) {
-  if (mode === undefined || onMode === undefined || isVisitor) return null;
+  if (isVisitor) return null;
   return (
     <CommandBar
       modes={modes.map((m) => m.mode)}

@@ -1008,7 +1008,7 @@ describe("the artefacts a shared link carries", () => {
    * panel prints it and a visitor's must not be sent it. Plan 260929c stage 2.
    */
   const FAQ: Faq = {
-    version: "faq/3",
+    version: "faq/4",
     generator: "some-model",
     slug: "noema",
     sourceHash: "abc123",
@@ -1017,6 +1017,17 @@ describe("the artefacts a shared link carries", () => {
         id: "q-one",
         question: "What does the measurement have to carry?",
         passages: [{ blockId: "spya-bbbbbb" as BlockId, quote: "the measurement", start: 4 }],
+        /* Scored, and one score zero: zero is a score, and a spread guarded
+           by truthiness would drop it on the way out (plan 260929g, Sol F7). */
+        difficulty: 0,
+        centrality: 0.85,
+      },
+      {
+        /* A question from before `faq/4`, with neither score: it must cross
+           without growing an `undefined` key. */
+        id: "q-two",
+        question: "Why would a copy not do?",
+        passages: [{ blockId: "spya-bbbbbb" as BlockId, quote: "a copy", start: 20 }],
       },
     ],
     dropped: { unknownIds: 1, unquoted: 2, tooLong: 0, duplicate: 0, unanchored: 3, overCap: 0, malformed: 0 },
@@ -1054,6 +1065,20 @@ describe("the artefacts a shared link carries", () => {
         url: "https://doi.org/10.1/abc",
         linkFrom: "doi",
         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
+        /* The owner's *Look it up* (plan 260929g R-6): every field set, each
+           string a sentinel that must not reach the wire. */
+        lookup: {
+          state: "assessed",
+          host: "lookup-host.example",
+          searches: 1,
+          model: "m",
+          at: "2026-09-29T10:00:00.000Z",
+          contextHash: "ctxhashsentinel0",
+          evidenceHash: "evihashsentinel0",
+          excerptWords: 310,
+          verdict: { support: "supports", quote: "lookup support quote sentinel from the extract" },
+          paperDoes: { says: "lookup paper does sentinel", quote: "lookup paper does quote sentinel from the extract" },
+        },
       },
       {
         id: "w-cred",
@@ -1573,6 +1598,8 @@ describe("the artefacts a shared link carries", () => {
     expect(pathsUnder("faq")).toEqual(
       [
         "questions",
+        "questions[].centrality",
+        "questions[].difficulty",
         "questions[].id",
         "questions[].passages",
         "questions[].passages[].blockId",
@@ -1582,6 +1609,8 @@ describe("the artefacts a shared link carries", () => {
       ].sort(),
     );
     expect(built.faq).toEqual({ questions: FAQ.questions });
+    expect(built.faq?.questions[0]).toMatchObject({ difficulty: 0, centrality: 0.85 });
+    expect(Object.keys(built.faq?.questions[1] ?? {}).sort()).toEqual(["id", "passages", "question"]);
     expect(JSON.stringify(built.faq)).not.toContain("dropped");
   });
 
@@ -1621,6 +1650,30 @@ describe("the artefacts a shared link carries", () => {
     expect(json).not.toContain("found.example");
     expect(json).not.toContain('"key"');
     expect(built.citations?.capped).toBe(true);
+  });
+
+  /**
+   * **The owner's lookup never crosses** (plan 260929g R-6): the reading, its
+   * quotes, its state, the page whose extract was read and the fingerprints
+   * are all the owner's paid activity. Checked on the whole payload, not only
+   * the citations key, so a lookup copied anywhere else would be caught too.
+   */
+  it("carries no part of a cited work's lookup, anywhere", () => {
+    const json = JSON.stringify(built);
+    for (const sentinel of [
+      '"lookup"',
+      "lookup-host.example",
+      "ctxhashsentinel0",
+      "evihashsentinel0",
+      "lookup support quote sentinel",
+      "lookup paper does sentinel",
+      "lookup paper does quote sentinel",
+      '"excerptWords"',
+      '"verdict"',
+    ]) {
+      expect(json, sentinel).not.toContain(sentinel);
+    }
+    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("lookup");
   });
 
   /**

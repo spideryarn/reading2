@@ -11,7 +11,7 @@ One line each: the date the report arrived, its Sentry short id, one sentence of
 proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
 in this directory records which, and the line comes off.
 
-- 2026-09-29 · SPIDERYARN-READING2-5J · Let readers pay for their own model calls (a ChatGPT plan is not open to paid hosted apps yet; connecting an OpenRouter account is) — first decision is whether Greg sends OpenAI's interest form · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
+- 2026-09-29 · SPIDERYARN-READING2-5J · Readers paying with their ChatGPT plan, at a quarter of the price. It needs OpenAI to admit us, and the plan says it is 6–9 weeks and genuinely complicated. Greg's decisions: whether to apply to OpenAI, and whether to run the ~$10–20 eval of GPT-6.1 Sol first · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
 
 ## Decisions resting with Greg from reports that DID ship
 
@@ -49,6 +49,7 @@ paragraph is the part still worth acting on.
 | report | the decision left | where it is set out |
 |---|---|---|
 | [5C](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5C) — navigation uses icons with tooltips, not text labels | Whether [design-css-overview.md](../project/design-css-overview.md) should carry a one-line pointer to the new rule. The rule itself is already written, in [icons.md § Navigation](../project/icons.md#navigation-an-icon-with-a-tooltip-not-a-text-label). design-css-overview.md is a rule doc, so the session didn't edit it; it put a before/after in its debrief instead. That debrief can't be found now, so whoever takes this up has to draft the line again | [note](260929_1436-trajectory-icons-question-first-sparkline-where-am-i.md) · [plan 260929f § 4](../plans/260929f-trajectory-snippets-in-place-sparkline-and-where-card.md) |
+| [5P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5P) — Debate rows lead with the title; orders and a relevance bar | Two decisions. **(1) Authors and year.** You asked for them. The page text the search returns almost never carries them (1 row in 11 verified), so the only reliable source is a bibliographic lookup: DOI or arXiv id from the address, else an OpenAlex title search. That is a new outside service. Whether to build it is yours to decide; the byline and date order are built and waiting. **(2) The public DTO.** The relevance judgment does not reach visitors, because `src/public/dto.ts` is a defence and this was an unattended run | [note](260929_2025-debate-mode-says-what-each-source-is.md) · [plan 260929h § Deferred](../plans/260929h-debate-mode-clearer-sources-and-orders.md) |
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic

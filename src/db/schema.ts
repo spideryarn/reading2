@@ -3650,6 +3650,30 @@ export const citationFinds = spideryarn.table(
     searches: integer("searches"),
     model: text("model").notNull(),
     foundAt: timestamp("found_at", { withTimezone: true }).notNull(),
+    /*
+     * **What *Look it up* read from the result's search extract** —
+     * docs/plans/260929g-check-a-cited-paper-supports-the-claim.md,
+     * src/citation-lookup.ts. All null on a find made before it existed, and
+     * the CHECKs below hold the shape `CitationLookup` has in src/types.ts, so
+     * no writer can store a verdict without its quote or a reading without
+     * its fingerprint. On a row the article linked, `url` above is the page
+     * whose extract was read and is never the row's link.
+     */
+    /** `CitationLookupState`: assessed, no-extract, not-identified, unreadable. */
+    lookupState: text("lookup_state"),
+    /** `CitationSupport`, only when assessed. */
+    lookupSupport: text("lookup_support"),
+    /** The extract's own words showing `supports`/`partly` — never the model's typing. */
+    lookupSupportQuote: text("lookup_support_quote"),
+    /** The AI's one sentence on what the work does, only with its quote. */
+    lookupPaperDoes: text("lookup_paper_does"),
+    lookupPaperDoesQuote: text("lookup_paper_does_quote"),
+    /** Words in the extract that was read. */
+    lookupExcerptWords: integer("lookup_excerpt_words"),
+    /** R-4: recomputed at read time; a lookup attaches only while it matches. */
+    lookupContextHash: text("lookup_context_hash"),
+    /** R-4: the result's URL, title and extract. Provenance only. */
+    lookupEvidenceHash: text("lookup_evidence_hash"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -3659,6 +3683,123 @@ export const citationFinds = spideryarn.table(
     ),
     check("citation_finds_searches", sql`${t.searches} is null or ${t.searches} >= 0`),
     check("citation_finds_url_scheme", sql`${t.url} ~ '^https?://'`),
+    check(
+      "citation_finds_lookup_state",
+      sql`${t.lookupState} is null or ${t.lookupState} in ('assessed', 'no-extract', 'not-identified', 'unreadable')`,
+    ),
+    check(
+      "citation_finds_lookup_support",
+      sql`${t.lookupSupport} is null or ${t.lookupSupport} in ('supports', 'partly', 'not-in-extract')`,
+    ),
+    /* A lookup always carries both fingerprints; no lookup carries neither. */
+    check(
+      "citation_finds_lookup_hashes",
+      sql`(${t.lookupState} is null) = (${t.lookupContextHash} is null) and (${t.lookupState} is null) = (${t.lookupEvidenceHash} is null)`,
+    ),
+    /* A verdict and an extract size exactly when assessed. */
+    check(
+      "citation_finds_lookup_assessed",
+      sql`(${t.lookupState} is not distinct from 'assessed') = (${t.lookupSupport} is not null) and (${t.lookupState} is not distinct from 'assessed') = (${t.lookupExcerptWords} is not null)`,
+    ),
+    /* `supports` and `partly` exactly when there is a quote showing it. */
+    check(
+      "citation_finds_lookup_support_quote",
+      sql`coalesce(${t.lookupSupport} in ('supports', 'partly'), false) = (${t.lookupSupportQuote} is not null)`,
+    ),
+    /* `paperDoes` only with its quote, and only on an assessed lookup. */
+    check(
+      "citation_finds_lookup_paper_does",
+      sql`(${t.lookupPaperDoes} is null) = (${t.lookupPaperDoesQuote} is null) and (${t.lookupPaperDoes} is null or ${t.lookupSupport} is not null)`,
+    ),
+    check(
+      "citation_finds_lookup_lengths",
+      sql`coalesce(char_length(${t.lookupPaperDoes}), 0) <= 240 and coalesce(char_length(${t.lookupSupportQuote}), 0) <= 400 and coalesce(char_length(${t.lookupPaperDoesQuote}), 0) <= 400 and coalesce(${t.lookupExcerptWords}, 0) >= 0`,
+    ),
+  ],
+);
+
+/**
+ * **Our guess at where an uploaded paper lives on the web** — one row per
+ * article, docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Stored
+ * where. Written by src/source-guess.ts through
+ * src/store/pg-source-guesses.ts; read onto the owner's article payload as
+ * `Article.sourceGuess`.
+ *
+ * **A claim as well as an answer.** `searching` is a live claim: whoever holds
+ * `claim_token` is the one searching, and the answer is written only
+ * `where status = 'searching' and claim_token = <theirs>`, so a writer that
+ * stalled past its claim and woke up cannot overwrite its successor's answer.
+ * A `searching` row whose `claimed_at` is older than the deadline plus a margin
+ * is reclaimable, and `attempts` counts the claims — at most two, after which
+ * the row is `none` with `why = 'attempts'`.
+ *
+ * **Not `final_url`, not `meta.url`**: those are the address the article was
+ * fetched from, and an upload has none. This is a guess, drawn as one.
+ *
+ * - **No `owner_id`**, like `reading_time`: only the article's owner ever
+ *   causes a write, and ownership is inherited through the article.
+ * - `url` on a `canonical` row is the one we built from a verified DOI or arXiv
+ *   id; on a `matching` row it is the search result's own address, never text
+ *   the model wrote (src/source-guess.ts § `isSamePaper`).
+ * - `why` is the logged no-match vocabulary, not reader copy.
+ */
+export const uploadSourceGuesses = spideryarn.table(
+  "upload_source_guesses",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    status: text("status").$type<"searching" | "found" | "none">().notNull(),
+    url: text("url"),
+    /** `url`'s host without `www.`, as the masthead prints it. */
+    host: text("host"),
+    kind: text("kind").$type<"canonical" | "matching">(),
+    matchedBy: text("matched_by").$type<"doi" | "arxiv" | "content">(),
+    why: text("why"),
+    /** The fencing token of the live claim; null once settled. */
+    claimToken: text("claim_token"),
+    attempts: integer("attempts").notNull().default(0),
+    /** Billed searches the provider reported — nullable, and null is not zero (as `citation_finds`). */
+    searches: integer("searches"),
+    model: text("model"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("upload_source_guesses_status", sql`${t.status} in ('searching', 'found', 'none')`),
+    check("upload_source_guesses_kind", sql`${t.kind} is null or ${t.kind} in ('canonical', 'matching')`),
+    check(
+      "upload_source_guesses_matched_by",
+      sql`${t.matchedBy} is null or ${t.matchedBy} in ('doi', 'arxiv', 'content')`,
+    ),
+    /* A constructed canonical link exists only because an identifier agreed;
+       a content match is only ever "a page that matches". */
+    check(
+      "upload_source_guesses_kind_matches",
+      sql`${t.kind} is null or (${t.kind} = 'canonical') = (${t.matchedBy} in ('doi', 'arxiv'))`,
+    ),
+    check("upload_source_guesses_url_scheme", sql`${t.url} is null or ${t.url} ~ '^https?://'`),
+    check("upload_source_guesses_attempts", sql`${t.attempts} between 0 and 2`),
+    check("upload_source_guesses_searches", sql`${t.searches} is null or ${t.searches} >= 0`),
+    /* Each status, and the columns it requires and forbids. */
+    check(
+      "upload_source_guesses_searching",
+      sql`${t.status} <> 'searching' or (${t.claimToken} is not null and ${t.claimedAt} is not null
+        and ${t.finishedAt} is null and ${t.url} is null and ${t.host} is null and ${t.kind} is null
+        and ${t.matchedBy} is null and ${t.why} is null)`,
+    ),
+    check(
+      "upload_source_guesses_found",
+      sql`${t.status} <> 'found' or (${t.url} is not null and ${t.host} is not null and ${t.kind} is not null
+        and ${t.matchedBy} is not null and ${t.why} is null and ${t.claimToken} is null
+        and ${t.finishedAt} is not null)`,
+    ),
+    check(
+      "upload_source_guesses_none",
+      sql`${t.status} <> 'none' or (${t.why} is not null and ${t.url} is null and ${t.host} is null
+        and ${t.kind} is null and ${t.matchedBy} is null and ${t.claimToken} is null
+        and ${t.finishedAt} is not null)`,
+    ),
   ],
 );
 
@@ -5091,7 +5232,7 @@ export const rateLimitEvents = spideryarn.table(
   (t) => [
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

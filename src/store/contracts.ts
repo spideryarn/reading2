@@ -71,6 +71,7 @@ import type {
   FeedbackKind,
   GlossaryLookup,
   CitationFind,
+  SourceGuess,
   GlossaryFound,
   QuotesFound,
   LibraryEntry,
@@ -1321,6 +1322,61 @@ export interface CitationFindStore {
   save(slug: string, entryId: string, find: CitationFind): Promise<void>;
 }
 
+/**
+ * **An uploaded paper's guessed web address: a claim, then an answer** — one
+ * row per article, src/store/pg-source-guesses.ts.
+ * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Decisions 2.
+ *
+ * Every method is owner-scoped: a slug the caller does not own is a 404 before
+ * anything is read or written.
+ */
+export interface SourceGuessStore {
+  /** The guess as the owner's payload carries it, or `undefined` when nobody has looked. */
+  read(slug: string): Promise<SourceGuess | undefined>;
+  /**
+   * **Take the search, or learn why not — in one statement**, so of two
+   * concurrent callers exactly one is `claimed`. A `searching` row older than
+   * `staleMs` is reclaimed; a claim that would be the third is refused, and the
+   * row settles as `none` (`why: "attempts"`).
+   */
+  claim(slug: string, opts: { staleMs: number }): Promise<SourceGuessClaim>;
+  /**
+   * Write the answer — **only while this token still holds the claim**
+   * (`where status = 'searching' and claim_token = $token`). `false` means a
+   * later claim has taken over and this answer was discarded.
+   */
+  finish(slug: string, token: string, outcome: SourceGuessOutcome): Promise<boolean>;
+  /**
+   * Give the claim back unanswered, so the next open may reclaim it at once.
+   * `refund` also takes back the attempt it counted — for a claim that spent
+   * nothing (the allowance refused it). Fenced by the token, like `finish`.
+   */
+  release(slug: string, token: string, opts: { refund: boolean }): Promise<boolean>;
+}
+
+/** At most this many claims per upload; the table's CHECK holds it too. */
+export const SOURCE_GUESS_MAX_ATTEMPTS = 2;
+
+export type SourceGuessClaim =
+  /** You are searching. `attempt` is 1 or 2; keep `token` for `finish`/`release`. */
+  | { kind: "claimed"; token: string; attempt: number }
+  /** Somebody else's claim is live. */
+  | { kind: "busy" }
+  /** Already answered — or just now settled as `none` by the attempt cap. */
+  | { kind: "settled"; guess: Extract<SourceGuess, { status: "found" | "none" }> };
+
+export type SourceGuessOutcome =
+  | {
+      status: "found";
+      url: string;
+      host: string;
+      kind: "canonical" | "matching";
+      matchedBy: "doi" | "arxiv" | "content";
+      searches: number | null;
+      model: string;
+    }
+  | { status: "none"; why: string; searches: number | null; model: string | null };
+
 export interface GlossaryLookupStore {
   load(slug: string): Promise<LookupsByTerm>;
   save(slug: string, termId: string, lookup: GlossaryLookup): Promise<LookupsByTerm>;
@@ -2256,9 +2312,16 @@ export type PreviewClaim =
  * `shelf-topics` is the model scoring a reader's candidate topics
  * (src/shelf-topics.ts): money, spent when the shelf changes rather than when
  * anybody presses anything, and bounded so a shelf that changes on every load
- * cannot spend on every load.
+ * cannot spend on every load. `upload-source-guess` is the same billed web
+ * search as `citation-find`, spent when an owner opens an upload rather than
+ * when they press anything (src/source-guess-run.ts), so it is bounded apart.
  */
-export type RateBucket = "link-preview-fetch" | "link-summary-fill" | "citation-find" | "shelf-topics";
+export type RateBucket =
+  | "link-preview-fetch"
+  | "link-summary-fill"
+  | "citation-find"
+  | "shelf-topics"
+  | "upload-source-guess";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

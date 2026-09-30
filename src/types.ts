@@ -1780,7 +1780,46 @@ export interface Article {
    * insist on.
    */
   visibility?: Visibility;
+
+  /**
+   * **Our guess at where an uploaded paper lives on the web** — `SourceGuess`
+   * below, off `upload_source_guesses`.
+   * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md.
+   *
+   * **A required key holding `SourceGuess | undefined`**, for `assets`' reason:
+   * a projection that forgot it would typecheck and the reader would simply
+   * never see a guess. `undefined` is the real answer *nobody has looked yet*
+   * (and every article that is not an upload).
+   *
+   * **Owner-only.** The public projection (src/public/dto.ts) is a hand-built
+   * allowlist and does not carry it; a visitor sees no guess (plan § Decisions
+   * 4).
+   */
+  sourceGuess: SourceGuess | undefined;
 }
+
+/**
+ * **What we found when we searched the web for an uploaded paper**, as the
+ * owner's reading view needs it. `searching` means a claim is live, or went
+ * stale and will be reclaimed on the next open; the client fires
+ * `POST /api/source-guess/:slug` whenever this is neither `found` nor `none`.
+ *
+ * `found.kind` is `canonical` when a DOI or arXiv id was verified and `url` is
+ * the link built from it (*probably the original*), and `matching` when the
+ * text agreed and `url` is the search result's own address (*a page that
+ * matches this paper*). src/source-guess.ts decides; the reasons for a `none`
+ * are logged, not shown.
+ */
+export type SourceGuess =
+  | {
+      status: "found";
+      url: string;
+      host: string;
+      kind: "canonical" | "matching";
+      matchedBy: "doi" | "arxiv" | "content";
+    }
+  | { status: "none" }
+  | { status: "searching" };
 
 /**
  * One article as the library lists it — see docs/project/library.md.
@@ -3755,6 +3794,13 @@ export interface CitedWork {
    * result's own, not the model's. Absent on every other row.
    */
   found?: CitationFound;
+  /**
+   * **What *Look it up* read from a search extract for this work** — attached
+   * at read time from `citation_finds` on any row, whatever its link, and only
+   * while its context fingerprint matches this list (src/citation-lookup.ts).
+   * Owner-only: never crosses the public boundary.
+   */
+  lookup?: CitationLookup;
 }
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
@@ -3771,18 +3817,93 @@ export interface CitationFound {
 
 /** One stored find: the page's address, plus what the row shows about it. */
 export interface CitationFind extends CitationFound {
-  /** The search result's own URL — one of the call's annotations, never the model's. */
+  /**
+   * The search result's own URL — one of the call's annotations, never the
+   * model's. **On a row the article linked, this is only the page whose
+   * extract was read**, and is never drawn as the row's link (`attachFinds`).
+   */
   url: string;
+  /** What the lookup read from that result's extract. Absent on finds made before it existed. */
+  lookup?: CitationLookup;
 }
 
 /**
+ * **The AI's reading of one search extract against what the article uses the
+ * work for.** Three verdicts and no "does not support": an extract that does
+ * not show a thing says nothing about the full paper (plan 260929g, Sol P-1).
+ */
+export type CitationSupport = "supports" | "partly" | "not-in-extract";
+
+/**
+ * Which of the things a lookup can have found (plan 260929g R-2):
+ *
+ * - `assessed` — a result that is this work, with an extract, read.
+ * - `no-extract` — a result that is this work, but the search gave no extract
+ *   of it. **Never shown as `not-in-extract`**: nothing was read.
+ * - `not-identified` — the result passed *Find it*'s looser title rule, so a
+ *   searched row may still link to it, but not the stricter rule for reading
+ *   it as this work (R-1). Nothing from it is shown.
+ * - `unreadable` — the result was this work but the model's reading of it was
+ *   malformed, and was dropped whole (R-5).
+ *
+ * *No matching result at all* is not a state: it stores nothing, and is a
+ * notice after the press.
+ */
+export type CitationLookupState = "assessed" | "no-extract" | "not-identified" | "unreadable";
+
+interface CitationLookupBase {
+  /** The result's host, without `www.` — *from arxiv.org*. */
+  host: string;
+  /** Billed searches the call reported; `null` when the provider did not say. */
+  searches: number | null;
+  model: string;
+  /** ISO 8601. */
+  at: string;
+  /**
+   * R-4: over every capped string sent, the identity rule, the prompt version
+   * and the model. A stored lookup is attached only while it equals the
+   * current list's (src/citation-lookup.ts § `lookupContextHash`).
+   */
+  contextHash: string;
+  /** R-4: over the result's URL, title and extract. Provenance only. */
+  evidenceHash: string;
+}
+
+/**
+ * **What *Look it up* read about one cited work** — private to the owner,
+ * attached to every kind of row, and independent of the row's link.
+ * src/citation-lookup.ts has every rule; each quote is the search extract's
+ * own characters, checked to be in it, and the verdict and `paperDoes.says`
+ * are the AI's reading of that extract, never the paper's words.
+ */
+export type CitationLookup =
+  | (CitationLookupBase & { state: Exclude<CitationLookupState, "assessed"> })
+  | (CitationLookupBase & {
+      state: "assessed";
+      /** Words in the extract that was read — *about 310 words*. */
+      excerptWords: number;
+      /** `supports` and `partly` always carry a quote from the extract that shows it. */
+      verdict:
+        | { support: Exclude<CitationSupport, "not-in-extract">; quote: string }
+        | { support: "not-in-extract" };
+      /** One sentence on what the work does, only with a quote from the extract that shows it. */
+      paperDoes?: { says: string; quote: string };
+    });
+
+/**
  * `POST /api/citations/:slug/:id/find`. **Two outcomes, and neither is an
- * error**: a page that matched and was kept (the work comes back upgraded to
- * `linkFrom: "web"`), or nothing that matched — stored nowhere, and the row's
- * Scholar search stays. A failed call is an HTTP error, not a third outcome.
+ * error**: a page that matched and was kept, or nothing that matched — stored
+ * nowhere, and the row stays as it was. A failed call is an HTTP error, not a
+ * third outcome.
+ *
+ * On `found`, **the link and the lookup are separate** (plan 260929g R-3):
+ * `work` is the row's link half — upgraded to `linkFrom: "web"` only when it
+ * was a searched row (`search`, or `web` found before), and otherwise exactly
+ * the row as it was, its `url` and `linkFrom` untouched. `lookup` is what was
+ * read, for any row. `work` carries no `lookup` of its own.
  */
 export type FindCitationResponse =
-  | { outcome: "found"; work: CitedWork }
+  | { outcome: "found"; work: CitedWork; lookup: CitationLookup }
   | { outcome: "no-match"; message: string };
 
 /**
@@ -4114,6 +4235,17 @@ export interface FaqQuestion {
   question: string;
   /** 1–3, deduplicated on `{blockId, start, end}`, in document order. */
   passages: FaqPassage[];
+  /**
+   * 0–1, the model's judgment: how much of the piece, and how much technical
+   * detail, a reader needs before this question makes sense. Low is a question
+   * anyone would ask on meeting the main claim; high is one that only arises
+   * inside a detail. **Optional, and absent on every list before `faq/4`** —
+   * such a list is drawn in reading order with no threshold
+   * (docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md).
+   */
+  difficulty?: number;
+  /** 0–1, the model's judgment: how much of the piece's argument turns on the answer. Optional as above. */
+  centrality?: number;
 }
 
 /**
@@ -4349,6 +4481,84 @@ interface DebateRowBase {
    * limitation.
    */
   limits?: string;
+  /*
+   * **What the work is — title, authors, year. Nothing writes these today.**
+   *
+   * They are the landing place for a bibliographic lookup (DOI, arXiv,
+   * OpenAlex) that Greg has not approved — a new outside service
+   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred).
+   * Stage 2 first asked the search model to copy them off the page and kept
+   * each only if the page's extract held it; measured, that verified on 1 row
+   * of 11, because the extract is a passage from the middle of the page and the
+   * page's head is almost never in it (the plan's § The measurement, as it
+   * runs). So the ask was dropped before shipping.
+   *
+   * **No stored row carries them yet**, and the client reads them defensively:
+   * its byline and its *date* order stay dormant until something writes them.
+   * Whatever does must say where each came from, and keep `title` (the search
+   * engine's) apart from `workTitle`.
+   */
+  /** The work's own title. Beside the engine's `title`, never replacing it. */
+  workTitle?: string;
+  /** The work's authors, as the source spells them. Never an empty list. */
+  authors?: string[];
+  /**
+   * The work's year of publication — a year and not a date (Sol's F1: a date we
+   * invented would sort as if it were known).
+   */
+  publishedYear?: number;
+  /**
+   * How much the quoted passage bears on this row's target — a model judgment
+   * in three named stops, never a score, and nothing verifies it.
+   *
+   * **Absent means unjudged, not `loosely`.** An answer outside the vocabulary
+   * is dropped rather than defaulted, unlike `relation` and `lean`: those have
+   * an honest "cannot tell" member to fall to, and this has none — so a
+   * default here would put a row in a relevance band the model never chose.
+   * Read it through `readStoredBears`.
+   */
+  bears?: DebateBears;
+}
+
+/**
+ * **How much a passage bears on its row's target** — the relevance stop the
+ * *prioritised* order sorts on (260929h).
+ *
+ * - `directly` — it tests or responds to exactly this;
+ * - `partly` — it bears on part of it, or on something close;
+ * - `loosely` — same topic, little direct bearing.
+ *
+ * Three words rather than a number for the reason the identification bar gave
+ * (src/web/debate-levels.ts): a reader shown *0.73* reads a measurement, and
+ * this is one model's judgment of a stranger's page.
+ */
+export type DebateBears = "directly" | "partly" | "loosely";
+
+/** Total by construction, as `LEAN_MEMBERS` is: omit a member and this stops compiling. */
+const BEARS_MEMBERS: { [K in DebateBears]: true } = {
+  directly: true,
+  partly: true,
+  loosely: true,
+};
+
+/** The three stops, strongest first — the order *prioritised* sorts in. */
+export const DEBATE_BEARS: readonly DebateBears[] = ["directly", "partly", "loosely"];
+
+/** Is this one of the three stops this build knows? */
+export function isDebateBears(value: unknown): value is DebateBears {
+  return typeof value === "string" && Object.hasOwn(BEARS_MEMBERS, value);
+}
+
+/**
+ * **A stored row's `bears`, or `null` when it has none this build can read** —
+ * every row from before `debate/3`, and anything a hand-edit left behind.
+ *
+ * `null` rather than a default stop, because "unjudged" is what those rows are:
+ * the prioritised order puts them last under a line that says so, and a
+ * default would quietly file them in a band.
+ */
+export function readStoredBears(row: { bears?: unknown }): DebateBears | null {
+  return isDebateBears(row.bears) ? row.bears : null;
 }
 
 /**

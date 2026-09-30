@@ -7,6 +7,7 @@ import { CALLBACK_HREF, settleAddress, watchHistoryWrites } from "./router.js";
 import { startPerf } from "./perf.js";
 import { watchConnection } from "./offline.js";
 import { watchUncaughtErrors } from "./log-buffer.js";
+import { sweepDictations } from "./dictation-keep.js";
 import { OfflineStrip } from "./OfflineStrip.js";
 import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
@@ -202,6 +203,16 @@ watchConnection();
  * See log-buffer.ts § watchUncaughtErrors.
  */
 watchUncaughtErrors();
+
+/**
+ * Delete kept dictations more than a week old — anybody's. Here rather than in
+ * a box, because a box may never be opened again, and "deleted after a week"
+ * has to be true of a recording nobody came back for. After the first paint,
+ * so nothing on the critical path waits on IndexedDB. A static import, because
+ * every dictation box already holds the module in the entry chunk.
+ * docs/plans/260929h-dictation-that-survives-a-closed-tab.md.
+ */
+setTimeout(() => void sweepDictations(), 5000);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

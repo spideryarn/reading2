@@ -50,7 +50,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, Meta } from "../src/types.js";
+import type { Article, Meta, SourceGuess } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -87,6 +87,7 @@ function article(meta: Partial<Meta>): Article {
     ],
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
     tree: {
       version: "t",
       generator: "t",
@@ -304,5 +305,137 @@ describe("the origin line under the title", () => {
     /* And it lands in the other branch rather than in neither: a `webSource`
        that returned `null` for everything would pass the two lines above. */
     expect(host.textContent).toContain(UPLOADED);
+  });
+});
+
+/**
+ * **A guessed web address for an upload** —
+ * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md § Shown how. After
+ * the *uploaded* words, the owner sees where we think the paper lives, with a
+ * question mark that is part of the link and a card saying how sure we are.
+ * Nothing for a visitor, and nothing until something is found.
+ */
+describe("a guessed address for an upload", () => {
+  const CANONICAL: SourceGuess = {
+    status: "found",
+    url: "https://doi.org/10.1234/abc.5678",
+    host: "doi.org",
+    kind: "canonical",
+    matchedBy: "doi",
+  };
+  const MATCHING: SourceGuess = {
+    status: "found",
+    url: "https://people.example.edu/~ada/paper.pdf",
+    host: "people.example.edu",
+    kind: "matching",
+    matchedBy: "content",
+  };
+
+  async function mountGuess(
+    guess: SourceGuess | undefined,
+    owner: boolean,
+    meta: Partial<Meta> = { source: "pdf" },
+  ) {
+    await act(async () => {
+      root.render(
+        createElement(Masthead, {
+          article: { ...article(meta), sourceGuess: guess },
+          slug: SLUG,
+          ...(owner ? { onRenamed: () => {} } : {}),
+        }),
+      );
+    });
+  }
+
+  const guessLink = () => host.querySelector<HTMLAnchorElement>("a.origin-guess");
+
+  /** Focus the link and read the card, which renders into a portal. */
+  async function cardText(): Promise<string> {
+    const a = guessLink();
+    if (!a) throw new Error("no guessed link to focus");
+    await act(async () => {
+      a.focus();
+    });
+    return document.body.textContent ?? "";
+  }
+
+  it.each([
+    ["canonical", CANONICAL, "doi.org", "/10.1234/abc.5678", "its DOI page"],
+    [
+      "matching",
+      MATCHING,
+      "people.example.edu",
+      "/~ada/paper.pdf",
+      "same title and text",
+    ],
+  ] as const)(
+    "draws a %s guess after the upload words, host first, with a ?",
+    async (_k, guess, hostName, path, tip) => {
+      await mountGuess(guess, true);
+
+      expect(host.textContent).toContain(UPLOADED);
+      const a = guessLink();
+      expect(a?.getAttribute("href")).toBe(guess.url);
+      expect(a?.getAttribute("target")).toBe("_blank");
+      expect(a?.getAttribute("rel")).toBe("noreferrer noopener");
+      /* The ? is inside the link, after the address. */
+      expect(a?.textContent).toBe(`${hostName}${path}?`);
+      /* No `title`: a touch device never shows one. The card is a ControlTip. */
+      expect(a?.hasAttribute("title")).toBe(false);
+      expect(await cardText()).toContain(tip);
+    },
+  );
+
+  it("says which identifier matched on a canonical arXiv guess", async () => {
+    await mountGuess(
+      {
+        ...CANONICAL,
+        url: "https://arxiv.org/abs/2401.01234",
+        host: "arxiv.org",
+        matchedBy: "arxiv",
+      },
+      true,
+    );
+    const card = await cardText();
+    expect(card).toContain("its arXiv page");
+    expect(card).toContain("can't be sure it's the original");
+  });
+
+  it("does not claim a first-author match when the safe authorless path may have been used", async () => {
+    await mountGuess(CANONICAL, true);
+    const card = await cardText();
+    expect(card).toContain("the title and identifier match");
+    expect(card).toContain("the first author or the paper's text confirms");
+    expect(card).not.toContain("first author and identifier all match");
+  });
+
+  it.each([
+    ["nobody has looked", undefined],
+    ["a search is under way", { status: "searching" } as const],
+    ["we looked and found nothing", { status: "none" } as const],
+  ])("draws nothing when %s", async (_n, guess) => {
+    await mountGuess(guess, true);
+
+    expect(host.textContent).toContain(UPLOADED);
+    expect(guessLink()).toBeNull();
+    expect(host.textContent).not.toContain("?");
+  });
+
+  it("draws nothing for a visitor, even with a guess in hand", async () => {
+    await mountGuess(CANONICAL, false);
+
+    expect(guessLink()).toBeNull();
+    expect(hrefs()).not.toContain(CANONICAL.url);
+  });
+
+  it("draws nothing on an article that was not uploaded", async () => {
+    await mountGuess(CANONICAL, true, {});
+    expect(guessLink()).toBeNull();
+  });
+
+  it("refuses an address that is not http(s)", async () => {
+    await mountGuess({ ...CANONICAL, url: "javascript:alert(1)" }, true);
+    expect(guessLink()).toBeNull();
+    expect(host.innerHTML).not.toContain("javascript:");
   });
 });

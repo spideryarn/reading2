@@ -117,6 +117,7 @@ function articleFrom(loaded: Loaded): Article {
     tree: loaded.tree,
     assets: undefined,
     navLabelStatus: "ready",
+    sourceGuess: undefined,
   };
 }
 

@@ -249,6 +249,7 @@ describe("declaredTables", () => {
       "revision_step_runs",
       "search_runs",
       "shelf_topic_scores",
+      "upload_source_guesses",
       "uploads",
     ]);
 
@@ -319,12 +320,13 @@ describe("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      /* Thirty-three since `shelf_topic_scores` arrived, 2026-09-29 (thirty-two
-         since `revision_phrase_runs`, 2026-09-28). A number here is
+      /* Thirty-four since `upload_source_guesses` arrived, 2026-09-29 (thirty-three
+         since `shelf_topic_scores` the same day, thirty-two since
+         `revision_phrase_runs`, 2026-09-28). A number here is
          a second copy of the list above and it is deliberate: it is what makes a
          table that reaches the *schema* and not the *database* say so, which is
          the whole of the drift guard. */
-      expect(report.declaredTables).toBe(33);
+      expect(report.declaredTables).toBe(34);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

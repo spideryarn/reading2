@@ -22,7 +22,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Citations, CitedWork, FindCitationResponse } from "../src/types.js";
+import type { BlockId, CitationLookup, Citations, CitedWork, FindCitationResponse } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,21 +65,50 @@ function artefact(row: CitedWork): Citations {
 
 /** What the GET answers **when it arrives**. Tests move it. */
 let listed: CitedWork = SEARCHED;
+/** The citing block's text, which the server fingerprints but the row does not carry. */
+let passage = "The original citing passage.";
 /** The find's reply, held until the test lets it go. */
 let releaseFind: (() => void) | null = null;
 /** Hold the next GET after it has captured its snapshot. */
 let holdGet = false;
 let releaseGet: (() => void) | null = null;
 
-const FOUND: FindCitationResponse = {
-  outcome: "found",
-  work: {
-    ...SEARCHED,
-    url: WEB,
-    linkFrom: "web",
-    found: { host: "example.org", searches: 1, model: "test", at: "2026-09-12T09:00:00.000Z" },
-  },
+/** A row the article linked by DOI from the start — Look it up is offered there too since plan 260929g. */
+const LINKED = work({ url: "https://doi.org/10.1000/linked", linkFrom: "doi" });
+
+/** What a find keeps as the link, on a row that is ours to link. */
+const FOUND_LINK = {
+  url: WEB,
+  linkFrom: "web" as const,
+  found: { host: "example.org", searches: 1, model: "test", at: "2026-09-12T09:00:00.000Z" },
 };
+
+/** What the lookup read, returned beside the link (plan 260929g R-3). */
+const LOOKUP: CitationLookup = {
+  state: "assessed",
+  host: "example.org",
+  searches: 1,
+  model: "test",
+  at: "2026-09-12T09:00:00.000Z",
+  contextHash: "ctx",
+  evidenceHash: "ev",
+  excerptWords: 200,
+  verdict: { support: "supports", quote: "a quotation the extract really contains, word for word" },
+};
+
+/**
+ * The route's answer for the row **as it was asked about**: a searched row
+ * comes back linked to the page, any other row exactly as it was, and the
+ * lookup separately. src/types.ts § `FindCitationResponse`.
+ */
+function foundFor(asked: CitedWork): FindCitationResponse {
+  const { lookup: _, ...bare } = asked;
+  return {
+    outcome: "found",
+    work: asked.linkFrom === "search" ? { ...bare, ...FOUND_LINK } : bare,
+    lookup: LOOKUP,
+  };
+}
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -91,14 +120,20 @@ function json(body: unknown): Response {
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: { method?: string }) => {
     if (init?.method === "POST" && input.endsWith("/find")) {
+      const asked = listed;
+      const askedPassage = passage;
       await new Promise<void>((go) => {
         releaseFind = go;
       });
       /* The real route stores before replying, and refuses to replace a link
-         the article supplied. Mirroring both halves is what lets the read-race
-         case below distinguish a stale GET from current server state. */
-      if (listed.linkFrom === "search") listed = FOUND.work;
-      return json(FOUND);
+         the article supplied; a later GET attaches the stored reading only
+         while the row's context still matches (`attachLookups`). Mirroring
+         those halves is what lets the read-race case below distinguish a
+         stale GET from current server state. */
+      const sameContext = listed.why === asked.why && listed.url === asked.url && passage === askedPassage;
+      if (listed.linkFrom === "search") listed = { ...listed, ...FOUND_LINK };
+      if (sameContext) listed = { ...listed, lookup: LOOKUP };
+      return json(foundFor(asked));
     }
     if (input === `/api/citations/${SLUG}`) {
       const snapshot = listed;
@@ -168,6 +203,7 @@ let root: Root;
 
 beforeEach(() => {
   listed = SEARCHED;
+  passage = "The original citing passage.";
   releaseFind = null;
   holdGet = false;
   releaseGet = null;
@@ -193,12 +229,12 @@ async function flush(): Promise<void> {
   }
 }
 
-async function open(): Promise<void> {
+async function open(expected: CitedWork["linkFrom"] = "search"): Promise<void> {
   await act(async () => {
     root.render(createElement(Harness));
   });
   await flush();
-  expect(hook?.citations?.citations[0]?.linkFrom).toBe("search");
+  expect(hook?.citations?.citations[0]?.linkFrom).toBe(expected);
 }
 
 /**
@@ -245,6 +281,9 @@ describe("a find whose reply arrives after the list was found again", () => {
     expect(row?.linkFrom).toBe("doi");
     expect(row?.url).toBe("https://doi.org/10.1000/xyz");
     expect(row?.found).toBeUndefined();
+    /* And not the reading either: it was judged as a searched row, and a DOI
+       changes the identity rule the server fingerprints (plan 260929g R-4). */
+    expect(row?.lookup).toBeUndefined();
   });
 
   it("still patches a row that is still searched", async () => {
@@ -257,14 +296,50 @@ describe("a find whose reply arrives after the list was found again", () => {
     expect(row?.linkFrom).toBe("web");
     expect(row?.url).toBe(WEB);
     expect(row?.found?.host).toBe("example.org");
+    expect(row?.lookup?.state).toBe("assessed");
+  });
+
+  it("drops a reading judged against a why the list no longer has, and keeps the link", async () => {
+    await open();
+    const pending = await press();
+
+    /* The re-run lands mid-press: same id, still a search, a different `why`. */
+    listed = work({ why: "A different use, written by the new list." });
+    await act(async () => {
+      onFinished?.({ slug: SLUG, status: "done", steps: [{ name: "citations" }] });
+    });
+    await flush();
+    expect(hook?.citations?.citations[0]?.why).toBe("A different use, written by the new list.");
+
+    await answer(pending);
+
+    const row = hook?.citations?.citations[0];
+    expect(row?.linkFrom).toBe("web");
+    expect(row?.url).toBe(WEB);
+    expect(row?.lookup).toBeUndefined();
+  });
+
+  it("does not patch a reading when citing text changed under the same stable block id", async () => {
+    await open();
+    const pending = await press();
+
+    /* Re-extraction preserves the block id and the citation row, but changes the
+       exact passage the server fingerprints. The client cannot see that text in
+       `CitedWork`; only a fresh GET can decide whether the stored lookup attaches. */
+    passage = "The citing passage was edited while the lookup was running.";
+    await answer(pending);
+
+    const row = hook?.citations?.citations[0];
+    expect(row?.linkFrom).toBe("web");
+    expect(row?.lookup).toBeUndefined();
   });
 
   it("repairs an older GET that lands after the found link was patched", async () => {
     await open();
 
     /* This reload reads the searched row now, but its reply stays in flight
-       across the POST. Without `armRefresh`, it lands last and silently puts
-       the Scholar row back on screen. */
+       across the POST. The post-write `refresh` must trail it; otherwise it
+       lands last and silently puts the Scholar row back on screen. */
     holdGet = true;
     let pendingRead: Promise<void> | undefined;
     await act(async () => {
@@ -286,5 +361,24 @@ describe("a find whose reply arrives after the list was found again", () => {
     const row = hook?.citations?.citations[0];
     expect(row?.linkFrom).toBe("web");
     expect(row?.url).toBe(WEB);
+    expect(row?.lookup?.state).toBe("assessed");
+  });
+});
+
+/* Plan 260929g R-3: every row may be looked up, and on a row the article
+   linked the page found is kept only for its extract. */
+describe("Look it up on a row the article linked", () => {
+  it("keeps the article's link exactly, and gains the reading", async () => {
+    listed = LINKED;
+    await open("doi");
+    const pending = await press();
+    await answer(pending);
+
+    const row = hook?.citations?.citations[0];
+    expect(row?.linkFrom).toBe("doi");
+    expect(row?.url).toBe("https://doi.org/10.1000/linked");
+    expect(row?.found).toBeUndefined();
+    expect(row?.lookup).toEqual(LOOKUP);
+    expect(hook?.findNote).toBeNull();
   });
 });

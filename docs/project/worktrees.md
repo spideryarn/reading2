@@ -196,6 +196,11 @@ weaker test and proves nothing.
 `api-dist/vercel.js` is missing until `npm run build` runs, which `tests/cold-start-lazy-imports.test.ts`
 and `tests/pdf-bundle-trace.test.ts` both say out loud rather than skipping. The bare-run half was not
 re-measured, so the 95 above is still the 2026-09-01 figure and the two numbers are no longer a pair.
+**And a second cause since** (seen 2026-09-29, not counted): the fleet tests that read the built
+dashboard client — `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route` — are red
+until `npm run build:fleet` runs, and say so. `worktree:setup` now names both builds rather than a
+count, and the deploy gate runs the ordinary `build` plus the extra `build:fleet` entry in
+`GATE_TOOLING_BUILDS` (`scripts/deploy-checks.ts`).
 The suite has grown 477 → 786 files in six days, which is why a bare count ages badly; what did not
 change is that `worktree:setup` is the difference between a suite that runs and one that cannot
 collect.

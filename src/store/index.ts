@@ -65,6 +65,7 @@
 
 import { log } from "../log.js";
 import { makeFindCitation } from "../citation-find.js";
+import { makeGuessSource } from "../source-guess-run.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
   AdminStore,
@@ -87,6 +88,7 @@ import type {
   SearchStore,
   ShelfStore,
   ShelfTermsStore,
+  SourceGuessStore,
   SourceStore,
   VisibilityStore,
 } from "./contracts.js";
@@ -103,6 +105,7 @@ import { pgLinkSummaryStore } from "./pg-link-summaries.js";
 import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgCitationFindStore } from "./pg-citation-finds.js";
+import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
@@ -531,6 +534,21 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
 export const findCitation = makeFindCitation({
   reader,
   finds: citationFindStore,
+  allowance: fetchAllowanceStore,
+});
+
+/** An uploaded paper's guessed web address — one row per article, a claim then an answer. */
+export const sourceGuessStore: SourceGuessStore = guarded("source-guesses", pgSourceGuessStore);
+
+/**
+ * **Look for an uploaded paper on the web, once** — `POST /api/source-guess/:slug`,
+ * src/source-guess-run.ts. `findCitation`'s parts: the reader decides ownership,
+ * the allowance bounds spend, and src/source-guess.ts decides what is kept.
+ * Below `fetchAllowanceStore` for the same reason.
+ */
+export const guessSource = makeGuessSource({
+  reader,
+  guesses: sourceGuessStore,
   allowance: fetchAllowanceStore,
 });
 

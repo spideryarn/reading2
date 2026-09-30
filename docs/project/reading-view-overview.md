@@ -122,8 +122,9 @@ readers never are.
   around the claims it makes. **The only mode whose content is not in the article at all**, which is
   why nearly everything the panel draws that is not a row is a disclosure. There is no `debate.md`
   yet; the plan is the reference:
-  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). Behind the switch
-  for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
+  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md), and for how a row
+  is laid out, the four orders and the relevance bar,
+  [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
   re-judged at the boundary and a refused row withheld and counted — only running a search is the
   owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
@@ -186,9 +187,10 @@ That is every band mode; `plain` is the only one that opens no band.
 ### The command bar
 
 **⌘/Ctrl-K, or the ⌘ button at the left-hand end of the bottom bar, and you type the name of what you
-want.** Most of what it offers is a mode, and Enter opens one **exactly as pressing its Dock button
-does** — same activation, same generate-on-open, same cost. It
-is an *additional door*, never a replacement: the Dock keeps every button it has, and the bar's
+want.** Most of what it offers is a mode. On the reading view, Enter opens one **exactly as pressing
+its Dock button does** — same activation, same generate-on-open, same cost; on Metadata it follows
+the mode link drawn there and arms nothing, as that link does. It is an *additional door*, never a
+replacement: the Dock keeps every button it has, and the bar's
 **mode rows** are exactly what the Dock lists, because the Dock hands it the list it just drew rather
 than computing a second one. The button sits **just after the wordmark** since 2026-09-08, on Greg's
 ask; the chord is bound to the window rather than to it, so it did not move with it.
@@ -199,16 +201,18 @@ product calls) and the two widenings he has made since. **It was modes only unti
 he asked for `/changelog` to be reachable from it as well as from the footer; on 2026-09-08 he named
 six more — Library, Feedback, Metadata, Tweets, Homepage, Profile — and left *"a few more
 likely/useful"* to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)).
-So there are now eight rows that are not modes — seven of them new that day — drawn below all of
-them, and they come in two shapes:
+The rows that are not modes are drawn below all of them, and come in two shapes:
 **pages**, where Enter goes there, and **actions**, where Enter does the thing — today Feedback,
 which opens the dialog, and Comments, which opens the drawer.
 
 **One of the rows is about the article you are standing on** — its Metadata (Tweets was the second
-until it became a mode on 2026-09-29, and is a mode row now) — and it exists only because the bar does: it is mounted on the reading view alone, for the owner, so
-there is always an article to name. The day it is offered anywhere else is the day those rows have to
-answer for themselves, and the answer written down for that day is *no row at all* rather than a row
-with nothing to point at.
+until it became a mode on 2026-09-29, and is a mode row now) — and it exists only because the bar does: it is mounted on the reading view and, since 2026-09-30,
+on the article's Metadata page, for the owner, so there is always an article to name. The day it is
+offered anywhere else is the day those rows have to answer for themselves, and the answer written
+down for that day is *no row at all* rather than a row with nothing to point at. **On the Metadata
+page a mode row is that mode's link**: it goes back to the article in that mode and arms nothing,
+as the Dock's link beside it does
+([260930a](../plans/260930a-cmd-k-on-metadata-page-and-full-wordmark-animations-on-the-shelf.md)).
 
 **What the original call refused is mostly still refused**, and where it is not, that is Greg's doing
 rather than a boundary quietly moving. It said a passage jump, a generation row, a chat and a model

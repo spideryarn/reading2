@@ -32,7 +32,7 @@
  *   that list and is written so that a new `DebateLosses` field stops it
  *   compiling. Nothing here re-lists them.
  * - **It ranks nothing and colours nothing.** These are report figures. The
- *   panel's ordering rule (`DEBATE_NO_RANKING`) is not this file's business.
+ *   panel's orders (src/web/debate-order.ts) are not this file's business.
  */
 import {
   type DebateCounts,

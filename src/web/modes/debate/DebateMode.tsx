@@ -25,10 +25,11 @@
 import { useQueryState } from "nuqs";
 import type { BlockId } from "../../../types.js";
 import type { PublicDebate } from "../../../public-types.js";
-import { nameParam } from "../../params.js";
+import { bearsParam, debateOrderParam, nameParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
 import { DebatePanel } from "../../DebatePanel.js";
+import { yearOf } from "../../debate-order.js";
 
 /**
  * The debate, and the fetch that belongs to it.
@@ -54,19 +55,46 @@ import { DebatePanel } from "../../DebatePanel.js";
  * a second component rather than a flag on this one because a hook cannot be
  * called conditionally.
  */
-export function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
+export function DebateBand({
+  slug,
+  onJump,
+  blockOrder,
+  publishedAt,
+}: {
+  slug: string;
+  onJump(id: BlockId): void;
+  /** Each block's position in the article, for *by claim* (DebatePanel § Props). */
+  blockOrder: ReadonlyMap<BlockId, number>;
+  /**
+   * The article's `Meta.publishedAt`, unread — the year for *date*'s marker is
+   * taken from it here, so `Reader` does not import the debate's ordering code.
+   */
+  publishedAt: unknown;
+}) {
   useRenderCount("DebateBand");
+  const articleYear = yearOf(publishedAt);
   const debate = useDebate(slug);
   /* Null is "nobody has touched the bar", which the panel resolves to
      `DEBATE_LEVEL_DEFAULT` — the same shape as `?bar=` in `QuotesBand`, so the
      default stays one word in one file. See `nameParam` in params.ts. */
   const [level, setLevel] = useQueryState("name", nameParam);
+  /* `?debateby=`, defaulting to `prioritised`; the panel draws what the rows
+     can support (debate-order.ts § `effectiveDebateOrder`). */
+  const [order, setOrder] = useQueryState("debateby", debateOrderParam);
+  /* `?bears=`, the relevance bar — null is untouched, `loosely` in the panel. */
+  const [relevance, setRelevance] = useQueryState("bears", bearsParam);
   return (
     <DebatePanel
       access={{ kind: "owner", owner: debate }}
       onJump={onJump}
       level={level}
       onLevel={setLevel}
+      order={order}
+      onOrder={setOrder}
+      blockOrder={blockOrder}
+      relevance={relevance}
+      onRelevance={setRelevance}
+      articleYear={articleYear}
     />
   );
 }
@@ -78,13 +106,40 @@ export function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId)
  * `/api/debate/:slug`, no job and no search — a second band rather than a flag
  * on the first, because a hook cannot be called conditionally
  * (src/web/reader-capability.ts; `VisitorTimelineBand` is the sibling). The
- * identification bar is the reader's own URL (`?name=`), so a visitor has it
- * too.
+ * identification bar and the order are the reader's own URL (`?name=`,
+ * `?debateby=`), so a visitor has both.
  */
-export function VisitorDebateBand({ debate, onJump }: { debate: PublicDebate; onJump(id: BlockId): void }) {
+export function VisitorDebateBand({
+  debate,
+  onJump,
+  blockOrder,
+  publishedAt,
+}: {
+  debate: PublicDebate;
+  onJump(id: BlockId): void;
+  blockOrder: ReadonlyMap<BlockId, number>;
+  /** A visitor's meta carries no `publishedAt`, so this is `undefined` today and there is no marker. */
+  publishedAt: unknown;
+}) {
   useRenderCount("VisitorDebateBand");
+  const articleYear = yearOf(publishedAt);
   const [level, setLevel] = useQueryState("name", nameParam);
+  const [order, setOrder] = useQueryState("debateby", debateOrderParam);
+  /* Read for symmetry: a visitor's rows carry no `bears` (the public DTO does
+     not pass it), so *prioritised* is never drawn and this bar never shows. */
+  const [relevance, setRelevance] = useQueryState("bears", bearsParam);
   return (
-    <DebatePanel access={{ kind: "visitor", debate }} onJump={onJump} level={level} onLevel={setLevel} />
+    <DebatePanel
+      access={{ kind: "visitor", debate }}
+      onJump={onJump}
+      level={level}
+      onLevel={setLevel}
+      order={order}
+      onOrder={setOrder}
+      blockOrder={blockOrder}
+      relevance={relevance}
+      onRelevance={setRelevance}
+      articleYear={articleYear}
+    />
   );
 }

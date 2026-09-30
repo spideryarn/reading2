@@ -11,6 +11,10 @@ The two meet at one seam: this sweep ends in an umbrella plan, and once you pick
 building that cluster is an ordinary job run the ordinary way. So this doc covers **what to look for
 and how to choose**; that one covers stages, briefs, reviews and commits.
 
+**Run it in a lull.** Start once the incoming work has been worked down (a feedback backlog, a
+feature push), not in the middle of it. With twenty sessions editing the same files, a sweep audits
+a moving tree, and its clusters collide with work in flight.
+
 ## The bar
 
 Long-term better: easier to understand, more reliable, easier to change six months from now. That is
@@ -66,6 +70,14 @@ finds the other's:
 **Then go deep on a few.** Take the two or three areas that came back richest and spend a strong
 model on each, reading properly rather than grepping. Depth is where a real cause gets separated
 from a symptom.
+
+**Write the depth up as investigation docs, one per area or lens, with the umbrella plan above
+them.** Each says what it looked at, what it found (with the evidence states below) and what it
+would do, ranked by ease and value. The umbrella links every one, clusters and scores across them,
+and is the only one the next reader has to open first. **Split the depth between two model
+families**, the strongest Claude and the strongest GPT (Opus and GPT Astra, or Sol), and have each
+doc reviewed by the other family: they find different things, and a finding both families reach
+independently is worth more than one either reached twice.
 
 Give every agent the same brief: cite `file:line`, say how you know, and say what you looked at and
 what you skipped — the last two feed the scope line and the evidence states below.
@@ -136,7 +148,9 @@ search wherever else the project keeps prose, not only the docs directory.
 
 Measure — run whatever static analysis the project has, count lines and complexity — but hold the
 numbers loosely, and rank by **churn × complexity**, the file that is both big and edited every
-week. A deepening in code nobody touches is a refactor you will never cash in.
+week. A deepening in code nobody touches is a refactor you will never cash in. **Bug history is the
+third axis:** the files that fix commits and postmortems keep naming are hotspots whatever their
+size (`git log --format= --name-only --grep=fix`, counted per file, is a cheap first cut).
 
 Size is weak evidence: across ~45 postmortems in the codebase this was written for, **not one names
 file length as the cause** — the mechanism is always a missing check or a shared assumption.
@@ -161,7 +175,10 @@ codebase, and they are where the highest-leverage rework usually hides. Three qu
   tests over mocks that have drifted from the thing they stand in for; write the edge case that
   subsumes the easy ones. **Fewer, richer tests is a win, and deleting tests counts as
   improvement** — a suite that is slow, flaky or vacuous hides real failures. Success is "catches
-  the real bug", never coverage or test count.
+  the real bug", never coverage or test count. **Where a test was hard to write,** because the logic
+  sits inside a route, a component or a timer with no seam, that is a finding too: pulling the
+  decision out into a plain function often makes it testable and simpler at once. So is a test that
+  fails only on a busy machine, which is waiting on a fixed time rather than on the thing it checks.
 - **When a class cannot be closed before it ships, would we notice?** Provider drift, rare races and
   environment-specific failures leak past every gate. Ask whether a production signal would have
   surfaced the last incident in hours rather than days: an error capture, an alert threshold, a
@@ -224,10 +241,19 @@ Tiers that have worked, and a good default:
 finding a grep can never produce. If it is not sound, that is a Tier 3 item — named and sized, not
 started.
 
+**Look for product simplifications too.** Sometimes the cheapest way to delete a code path is a
+small product change: dropping a rarely used option, merging two near-identical modes, a default
+that makes a setting unnecessary. **A tiny one you may just make** and note in the plan. Anything
+bigger, anything that changes what a user sees in a way they would notice, or anything with a real
+trade-off, goes in the umbrella as a **proposal for the product owner**, explained plainly with what
+it removes and what it costs, and is not built until it has been discussed.
+
 **If you were asked only to audit, stop once the umbrella doc is reviewed**: found, verified, scored
 and reviewed, with nothing built, is a complete deliverable rather than an abandoned run. Otherwise
 do one or more clusters — and if you run them in parallel, the constraint is **non-overlapping file
-sets**, not independent ideas.
+sets**, not independent ideas. Take them in order of **ease and value** together, each investigation
+doc (or cluster) becoming its own [engineering-manager.md](engineering-manager.md) run, and stagger
+the rest rather than starting them all at once.
 
 ## Stages that can stop
 

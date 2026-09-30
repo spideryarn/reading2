@@ -26,6 +26,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { loadEnvLocal } from "../src/env.js";
 import { blobStore, CONTENT_TYPE, CorruptObject, storeRawSource } from "../src/store/blobs.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
+import { StorageFailed } from "../src/store/blobs-supabase.js";
 import { canonicalKey } from "../src/source.js";
 
 loadEnvLocal();
@@ -203,5 +204,77 @@ describe("a document that is already in the bucket", () => {
     };
 
     await expect(storeRawSource(good, "pdf", racing)).rejects.toThrow(CorruptObject);
+  });
+});
+
+/**
+ * **Two writers of one new document, and a 500 for an object that exists.**
+ *
+ * storage-api does not make a create-only POST atomic: two writers of the same
+ * new key can both succeed, and the second deletes the first's file before its
+ * own row commits. A `get` in that gap — the loser of the race reading back to
+ * verify — answers 500. On the deploy gate at load 7–9 that failed two of four
+ * concurrent loads of one document (tests/load-article-serialisation.test.ts);
+ * 16 writers on the local stack reproduce it in about one trial in five.
+ * docs/postmortems/260930a-a-fixed-window-stands-in-for-a-condition.md.
+ *
+ * So the read-back retries a 5xx, a few times, and nothing else.
+ */
+describe("a read-back that meets a Storage 5xx", () => {
+  const good = pdf("written by two people at once");
+  const key = canonicalKey(sha(good), "pdf");
+
+  /** Present to `head`, and `get` answers with each of `answers` in turn, then the bytes. */
+  function flaky(answers: Error[]) {
+    let gets = 0;
+    const store: RawSourceStore = {
+      async head() {
+        return { bytes: good.byteLength, contentType: CONTENT_TYPE.pdf };
+      },
+      async get(k) {
+        expect(k).toBe(key);
+        const answer = answers[gets];
+        gets += 1;
+        if (answer) throw answer;
+        return good;
+      },
+      async putIfAbsent() {
+        return "already-there";
+      },
+      async remove() {},
+    };
+    return { store, gets: () => gets };
+  }
+
+  it("retries a 500 and verifies the object it then reads", async () => {
+    const { store, gets } = flaky([new StorageFailed("get", 500, "Internal Server Error")]);
+    const result = await storeRawSource(good, "pdf", store);
+    expect(result.outcome).toBe("already-there");
+    expect(gets()).toBe(2);
+  });
+
+  it("does not retry a refusal", async () => {
+    const { store, gets } = flaky([new StorageFailed("get", 400, "bad request")]);
+    await expect(storeRawSource(good, "pdf", store)).rejects.toThrow("Storage get failed (400)");
+    expect(gets()).toBe(1);
+  });
+
+  it("does not retry a status outside the 5xx range", async () => {
+    const { store, gets } = flaky([new StorageFailed("get", 600, "not an HTTP server error")]);
+    await expect(storeRawSource(good, "pdf", store)).rejects.toThrow("Storage get failed (600)");
+    expect(gets()).toBe(1);
+  });
+
+  it("does not retry an object too large to be ours, which is corruption, not weather", async () => {
+    const { store, gets } = flaky([new Error("the object is larger than its limit")]);
+    await expect(storeRawSource(good, "pdf", store)).rejects.toThrow("larger than its limit");
+    expect(gets()).toBe(1);
+  });
+
+  it("gives up on a 500 that does not go away, and says so", async () => {
+    const down = () => new StorageFailed("get", 503, "Service Unavailable");
+    const { store, gets } = flaky([down(), down(), down(), down()]);
+    await expect(storeRawSource(good, "pdf", store)).rejects.toThrow("Storage get failed (503)");
+    expect(gets()).toBe(4);
   });
 });

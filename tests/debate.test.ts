@@ -1185,7 +1185,7 @@ describe("what the prompts insist on", () => {
 
 describe("the stamp and the failure copy", () => {
   it("has a prompt version that is one constant", () => {
-    expect(PROMPT_VERSION).toBe("debate/2");
+    expect(PROMPT_VERSION).toBe("debate/3");
   });
 
   /**

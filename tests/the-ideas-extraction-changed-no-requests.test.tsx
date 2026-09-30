@@ -367,6 +367,7 @@ const OWNED: Article = {
   tree: ARTICLE.tree,
   assets: undefined,
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   meta: {
     ...ARTICLE.meta,
     ...PDF_META,

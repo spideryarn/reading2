@@ -30,8 +30,10 @@ import {
   FAQ_SYSTEM,
   MAX_PASSAGES,
   MAX_QUESTIONS,
+  MAX_QUESTION_CHARS,
   MAX_QUOTE_CHARS,
   PROMPT_VERSION,
+  SCORE_CHARS,
   buildFaq,
   emptyDropped,
   generateFaq,
@@ -40,6 +42,7 @@ import {
   verifyPassage,
 } from "../src/faq.js";
 import { plainWords } from "../src/plain-words.js";
+import { noDifficultyCentralityDrops } from "../src/score-fields.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
@@ -289,6 +292,80 @@ describe("turning the model's answer into questions", () => {
 });
 
 /* ------------------------------------------------------- the empty answers -- */
+
+/* ------------------------------------------------------------- the scores -- */
+
+describe("the two scores on a question (faq/4, plan 260929g)", () => {
+  const scored = (question: string, quote: { blockId: string; quote: string }, extra: object) => ({
+    ...q(question, [quote]),
+    ...extra,
+  });
+  const onA = { blockId: A.id, quote: "Entropy in a closed system never decreases." };
+  const onB = { blockId: B.id, quote: "A fridge can lower its local entropy" };
+
+  it("keeps a score in range, zero included, and leaves the key off when there is none", () => {
+    const scores = noDifficultyCentralityDrops();
+    const out = toQuestions(
+      [
+        scored("Why does entropy not fall?", onA, { difficulty: 0, centrality: 1 }),
+        scored("How can a fridge get colder?", onB, {}),
+      ],
+      blocks,
+      drops(),
+      scores,
+    );
+    expect(out[0]).toMatchObject({ difficulty: 0, centrality: 1 });
+    expect(Object.keys(out[1] ?? {}).sort()).toEqual(["id", "passages", "question"]);
+    expect(scores).toEqual({ difficultyAbsent: 1, difficultyRejected: 0, centralityAbsent: 1, centralityRejected: 0 });
+  });
+
+  it("refuses null, a string and an out-of-range number, and counts them as rejected", () => {
+    const scores = noDifficultyCentralityDrops();
+    const out = toQuestions(
+      [
+        scored("Why does entropy not fall?", onA, { difficulty: null, centrality: "high" }),
+        scored("How can a fridge get colder?", onB, { difficulty: 1.2, centrality: -0.1 }),
+      ],
+      blocks,
+      drops(),
+      scores,
+    );
+    for (const question of out) {
+      expect(question.difficulty).toBeUndefined();
+      expect(question.centrality).toBeUndefined();
+    }
+    expect(scores).toEqual({ difficultyAbsent: 0, difficultyRejected: 2, centralityAbsent: 0, centralityRejected: 2 });
+  });
+
+  it("gives a merged question the first occurrence's scores, never a later duplicate's", () => {
+    const scores = noDifficultyCentralityDrops();
+    const out = toQuestions(
+      [
+        scored("How can a fridge get colder?", onB, { difficulty: 0.2 }),
+        scored("how can a fridge get colder?", onA, { difficulty: 0.9, centrality: 0.7 }),
+      ],
+      blocks,
+      drops(),
+      scores,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]?.difficulty).toBe(0.2);
+    /* Not borrowed from the duplicate: the first one left it out, and the
+       counter below is the only place that fact is visible. */
+    expect(out[0]?.centrality).toBeUndefined();
+    expect(scores.centralityAbsent).toBe(1);
+  });
+
+  it("asks for both scores in the prompt and budgets for them in the answer", () => {
+    expect(FAQ_SYSTEM).toMatch(/"difficulty"/);
+    expect(FAQ_SYSTEM).toMatch(/"centrality"/);
+    expect(ANSWER_TOKENS).toBe(
+      400 +
+        MAX_QUESTIONS *
+          Math.ceil((MAX_QUESTION_CHARS + 40 + SCORE_CHARS + MAX_PASSAGES * (MAX_QUOTE_CHARS + 60)) / 3),
+    );
+  });
+});
 
 describe("the three empty outcomes", () => {
   const opts = () => ({ slug: "s", blocks, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped() });

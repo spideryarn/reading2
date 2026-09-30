@@ -707,8 +707,124 @@ export const GATE_FIXTURES = [
   "tests/fixtures/data-root/output/writes.blocks.json",
 ] as const;
 
+/**
+ * **Builds the test gate needs that the deploy does not ship**, each run as a
+ * gate of its own after `npm run build`.
+ *
+ * `npm run build` is Vercel's recipe and stays exactly that; the fleet
+ * dashboard is box tooling, never deployed, so it does not belong in it. But
+ * its tests read the built client, and the gate runs them in a fresh worktree
+ * where nothing has been built — so without this, three fleet tests were red
+ * at every commit and the test gate could not pass anywhere (2026-09-29). A
+ * separate gate rather than part of `build`, so a failure names the tooling
+ * rather than reading as a product build that will not ship.
+ *
+ * tests/deploy-checks.test.ts reads the suite's own "run `npm run build…`"
+ * hints and fails when one names a script missing from here.
+ */
+export const GATE_TOOLING_BUILDS: readonly { gate: string; script: string }[] = [
+  { gate: "fleet client build", script: "build:fleet" },
+];
+
 export function missingGateFixtures(exists: (relPath: string) => boolean): string[] {
   return GATE_FIXTURES.filter((rel) => !exists(rel));
+}
+
+/**
+ * **Every failing test, from vitest's own `json` reporter**, one line each:
+ * `tests/x.test.ts > describe > test`. A file that failed before any test ran
+ * (an import that throws) has no assertions, only a message, so it gets a line
+ * of its own or it would vanish from the list.
+ *
+ * Why the gate needs it: it used to print the last 30 lines of output, which
+ * named two failures out of 24, and the worktree holding the rest was deleted
+ * — so judging whether the reds were the release's or the busy box's meant a
+ * 35-minute re-run. `--force-gate=test` is only allowed for reds named in the
+ * report (docs/project/overseer.md § Deploying), which needs all of them.
+ *
+ * A missing or unreadable report is `ok: false`, never an empty list: vitest
+ * refusing to start writes no report, and "no failing tests" printed over that
+ * is the silent success this repo keeps finding. `root` is stripped so the
+ * lines name repo paths rather than a temporary directory that is gone.
+ */
+export function failingTestsFromReport(
+  reportJson: string | null,
+  root: string,
+): { ok: true; failing: string[] } | { ok: false; why: string } {
+  if (reportJson === null) return { ok: false, why: "vitest wrote no JSON report" };
+  let report: unknown;
+  try {
+    report = JSON.parse(reportJson);
+  } catch {
+    return { ok: false, why: "vitest's JSON report is not valid JSON" };
+  }
+  if (!isJsonObject(report)) return { ok: false, why: "vitest's JSON report is not an object" };
+  const files = report.testResults;
+  if (!Array.isArray(files)) return { ok: false, why: "vitest's JSON report has no testResults" };
+  if (!Number.isInteger(report.numFailedTests) || (report.numFailedTests as number) < 0) {
+    return { ok: false, why: "vitest's JSON report has no valid numFailedTests" };
+  }
+
+  const cleanRoot = root.replace(/[\\/]+$/, "");
+  const rel = (s: string) => s.split(`${cleanRoot}/`).join("").split(`${cleanRoot}\\`).join("");
+  const failing: string[] = [];
+  let failingTestCount = 0;
+  for (const file of files) {
+    if (!isVitestFileResult(file)) {
+      return { ok: false, why: "vitest's JSON report contains an invalid testResults entry" };
+    }
+    const name = rel(file.name);
+    const tests = file.assertionResults.filter((t) => t.status === "failed");
+    failingTestCount += tests.length;
+    for (const t of tests) failing.push([name, ...(t.ancestorTitles ?? []), t.title].join(" > "));
+    if (file.status === "passed" && tests.length > 0) {
+      return { ok: false, why: `vitest's JSON report calls ${name} passed but gives it failing tests` };
+    }
+    if (file.status === "failed" && tests.length === 0) {
+      /* The JSON reporter puts import/collection errors on the file, but a
+         beforeAll/afterAll error on its suite and leaves `message` empty. It
+         does not expose the suite error, so do not falsely call every such
+         entry a file-load failure. The full reporter output has the detail. */
+      const why = rel(file.message).split("\n")[0]?.trim() || "see full vitest output";
+      failing.push(`${name} > (failed outside a test: ${why})`);
+    }
+  }
+  if (failingTestCount !== report.numFailedTests) {
+    return {
+      ok: false,
+      why: `vitest's JSON report says ${report.numFailedTests} test(s) failed but names ${failingTestCount}`,
+    };
+  }
+  return { ok: true, failing };
+}
+
+/** The part of one entry in vitest's `json` report that the list reads. */
+interface VitestFileResult {
+  name: string;
+  status: string;
+  message?: string;
+  assertionResults?: { ancestorTitles?: string[]; title: string; status: string }[];
+}
+
+const ASSERTION_STATUSES = new Set(["passed", "failed", "skipped", "pending", "todo", "disabled"]);
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isVitestFileResult(value: unknown): value is Required<VitestFileResult> {
+  if (!isJsonObject(value)) return false;
+  if (typeof value.name !== "string" || (value.status !== "failed" && value.status !== "passed")) return false;
+  if (typeof value.message !== "string" || !Array.isArray(value.assertionResults)) return false;
+  return value.assertionResults.every(
+    (test) =>
+      isJsonObject(test) &&
+      typeof test.title === "string" &&
+      typeof test.status === "string" &&
+      ASSERTION_STATUSES.has(test.status) &&
+      Array.isArray(test.ancestorTitles) &&
+      test.ancestorTitles.every((title) => typeof title === "string"),
+  );
 }
 
 /**

@@ -45,7 +45,7 @@
  * See docs/plans/260826k-library-shelf-actions-and-search.md and
  * docs/plans/260826y-library-sorting.md.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
@@ -62,7 +62,7 @@ import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js
 import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
-import { LogoMark } from "./LogoGlyphs.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
@@ -79,6 +79,7 @@ import { ShelfTerms } from "./ShelfTerms.js";
 import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
+import { media } from "./media.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
@@ -91,6 +92,7 @@ import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
+import { layoutViewportWidth } from "./reader/measure.js";
 
 export function Library({
   readerId,
@@ -442,16 +444,14 @@ export function Library({
               top-left of the logged-in Homepage next to the wordmark"*.
 
               **Deliberately not `HomeLogo`**: this is home, so there is
-              nothing to link to (App.tsx says why). **The spider animates,
-              the heading does not** — § ShelfSpider below.
+              nothing to link to (App.tsx says why). **Spider and heading
+              animate as one wordmark** since 2026-09-30 — § ShelfWordmark
+              below.
 
               `items-center` in its own row so the glyph centres on the word
               while the header's outer flex keeps its baseline alignment for the
               links opposite. */}
-          <div className="tw:flex tw:items-center tw:gap-2.5">
-            <ShelfSpider />
-            <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
-          </div>
+          <ShelfWordmark />
           {/* One group, so that once the first card is up its neighbour opens
               instantly as the pointer runs along the row — Tooltip.tsx. The
               delays are the ones the dock and the metadata cards use, because
@@ -906,7 +906,54 @@ function ShowAllRows({ total, onShowAll }: { total: number; onShowAll: () => voi
 /* The cards' own matcher — `filterEntries` — lives in shelf-narrow.ts since
    2026-09-28, so the archived list is searched by the same rule. */
 
+/**
+ * **Does the search box take the focus as the shelf arrives?**
+ *
+ * > When I open the logged-in Spideryarn homepage with the shelf, let's put
+ * > the focus by default on the search box.
+ * >
+ * > — Greg, 2026-09-29
+ *
+ * Yes, unless one of four readers would be worse off for it:
+ *
+ *  - **a finger is the primary pointer** — the on-screen keyboard would cover
+ *    half the shelf they came to look at. `pointer`, not `any-pointer`, so a
+ *    touchscreen laptop with a trackpad still gets it; and `media()` answers
+ *    `false` where it cannot tell, so an unknown pointer gets it too;
+ *  - **the page arrived with a query in it** — they are reading results, and a
+ *    stray key would change their query;
+ *  - **something else already has the focus** — the shelf takes it from nobody;
+ *  - **the box is not wholly on screen** — scroll restoration is manual
+ *    (main.tsx), so Back from far down an article can mount the shelf scrolled,
+ *    and typing into a box you cannot see is worse than no focus. Scrolling to
+ *    it would yank the page instead.
+ *
+ * docs/plans/260929g-shelf-search-focus-and-metadata-chord.md § Part A.
+ */
+function takesFocusOnArrival(input: HTMLInputElement, arrivingQuery: string): boolean {
+  if (media("(pointer: coarse)") || arrivingQuery !== "") return false;
+  const active = document.activeElement;
+  if (active !== null && active !== document.body) return false;
+  const box = input.getBoundingClientRect();
+  return (
+    box.top >= 0 &&
+    box.right <= layoutViewportWidth() &&
+    box.bottom <= window.innerHeight &&
+    box.left >= 0
+  );
+}
+
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  /* **Decided once, on mount**, from the query the page arrived with: clearing
+     a query must not re-grab the focus, and neither must the shelf's data
+     landing. Back from an article remounts the shelf, so it asks again — that
+     is arriving too. `preventScroll`, so arriving never moves the page. */
+  const arrivingQuery = useRef(value);
+  useEffect(() => {
+    const el = input.current;
+    if (el && takesFocusOnArrival(el, arrivingQuery.current)) el.focus({ preventScroll: true });
+  }, []);
   return (
     <div className="tw:mb-4">
       <div className="tw:relative">
@@ -915,6 +962,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
           className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
         />
         <input
+          ref={input}
           type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -1236,39 +1284,55 @@ function Tip({ children }: { children: ReactNode }) {
 }
 
 /**
- * **The spider beside the shelf's heading, which plays the wordmark's
- * animations on a hover and on a tap.**
+ * **The spider and the name at the top of the shelf, which play the whole
+ * wordmark set on a hover and on a tap.**
  *
- * Greg, 2026-09-12: *"they should show up on hover or … [a tap] wherever the
- * logo is present"*. Until then this was a plain `<img>`, left still on the
- * grounds that the set is calibrated in pixels against a 0.82rem word and a
- * 20px spider. That argument is about the letters, and there are none here:
- * `lettersDrawn` finds no `.logo-letter`, so only the six animations that
- * reach the mark are ever drawn (logo-animation.ts § pickLogoAnimation), and
- * they sit on `.logo-mark`, which is a box exactly the spider whatever its
- * size. The heading beside it is an `<h1>` and is left alone.
+ * > We don't seem to get the fun logo animations for the logo in the top left
+ * > of the logged in homepage.
+ * >
+ * > — Greg, 2026-09-30, SPIDERYARN-READING2-6D
  *
- * **Still left alone on 2026-09-29**, when the other wordmarks gained the
- * letters (LogoGlyphs.tsx). The heading is `text-3xl`, and the letter
- * animations move by fixed pixels tuned for a 13px word — a 2px pluck and an
- * 8px abseil read as half a gesture at 30px. GPT Sol's review of
- * docs/plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md,
- * finding 1. Scaling the set to its host is the way to change that, and it is
- * a stylesheet project of its own rather than a reuse.
+ * **One host round both, since then.** From 2026-09-15 the hook sat on the
+ * spider alone and the `<h1>` beside it was plain text, so pointing at the word
+ * did nothing and only the spider's six animations could ever be drawn here —
+ * `lettersDrawn` asks the host for a `.logo-letter` (logo-animation.ts §
+ * pickLogoAnimation). The heading was kept out of the 2026-09-29 spread
+ * (LogoGlyphs.tsx) deliberately: the letter moves were fixed pixels tuned for a
+ * 13px word and read as half a gesture at 30px. They are measured in the word's
+ * own size now (styles/logo-animations.css § `--logo-px`), which was the named
+ * way to change that.
+ * docs/plans/260930a-cmd-k-on-metadata-page-and-full-wordmark-animations-on-the-shelf.md.
+ *
+ * **The heading is still a heading**: `LogoLetters` puts ten spans inside it
+ * with no whitespace between them, so its text, and its accessible name, is
+ * still "Spideryarn". It keeps its own face, size and colour; Dawn's glow turns
+ * it orange for a moment and back, as it does the footer's.
  *
  * **A tap plays one here, where on the reading view it goes home**, because
  * here it does nothing else — `{ tap: true }`, decided on the click.
  *
- * **Decorative, not a `<button>`.** A tab stop whose only effect is a hover
- * flourish is noise to a keyboard or screen-reader reader, so it stays out of
- * the accessibility tree and out of the tab order; `alt=""` for the reason
- * HomeLogo.tsx gives — the name is right beside it.
+ * **Not a `<button>`.** A tab stop whose only effect is a flourish is noise to a
+ * keyboard or screen-reader reader, so the host adds nothing to the
+ * accessibility tree; the spider is `alt=""` and hidden, for the reason
+ * HomeLogo.tsx gives — the name is right beside it. `shelf-wordmark` carries the
+ * long-press lines a `.logo` would (styles/dock.css).
  */
-function ShelfSpider() {
+export function ShelfWordmark() {
   const anim = useLogoAnimation({ tap: true });
   return (
-    <span className={`shelf-spider ${anim.className}`} aria-hidden="true" {...anim.handlers}>
-      <LogoMark size={28} />
-    </span>
+    <div
+      className={`shelf-wordmark tw:flex tw:items-center tw:gap-2.5 ${anim.className}`}
+      {...anim.handlers}
+    >
+      <span className="tw:inline-flex" aria-hidden="true">
+        <LogoMark size={28} />
+      </span>
+      {/* A wrapper round the ten letters and nothing else, because the stagger
+          is `:nth-child` over exactly those (LogoGlyphs.tsx). The `<h1>` is
+          that wrapper. */}
+      <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">
+        <LogoLetters />
+      </h1>
+    </div>
   );
 }

@@ -17,9 +17,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import type { ScanCoverage, UsageAccount, UsageReport } from "../tools/fleet/wire.js";
-import { runOverseer } from "../tools/overseer/daemon.js";
+import { type DaemonOptions, runOverseer } from "../tools/overseer/daemon.js";
 import { readCheckpoint } from "../tools/overseer/store.js";
 import { clockFrom } from "./helpers/fixture-clock.js";
+import { heldOpen, tickAfter, ticks, until } from "./helpers/overseer-until.js";
 
 /** Just after the fixtures' own `collectedAt`s: the daemon's clock starts here, not at today. */
 const FIXTURE_NOW = "2026-09-08T12:31:00.000Z";
@@ -77,46 +78,65 @@ function report(over: Partial<UsageReport> = {}): UsageReport {
   };
 }
 
-function abortAfter(ms: number): AbortController {
+
+/**
+ * Runs the daemon until `done` holds, then for one more heartbeat tick so
+ * `current.json` carries what the last pass decided — never for a fixed time;
+ * tests/helpers/overseer-until.ts says why.
+ */
+async function runUntil(
+  root: string,
+  usage: DaemonOptions["usage"],
+  what: string,
+  done: () => boolean,
+): Promise<void> {
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms).unref?.();
-  return controller;
+  const running = runOverseer({
+    root,
+    baseUrl: "http://127.0.0.1:1",
+    signal: controller.signal,
+    now: clockFrom(FIXTURE_NOW),
+    tickMs: 100,
+    log: () => {},
+    source: async function* () {
+      yield* [];
+      await heldOpen(controller.signal);
+    },
+    ...(usage === undefined ? {} : { usage }),
+  });
+  await until(what, done);
+  await tickAfter(root);
+  controller.abort();
+  await running;
 }
 
-async function heldOpen(signal: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve) => {
-    if (signal.aborted) resolve();
-    else signal.addEventListener("abort", () => resolve());
-  });
+/** A usage runner that counts the passes it has finished, thrown or not. */
+function counted(run: () => Promise<UsageReport>): { usage: NonNullable<DaemonOptions["usage"]>; finished: () => number } {
+  let finished = 0;
+  return {
+    usage: {
+      intervalMs: 60,
+      run: async () => {
+        try {
+          return await run();
+        } finally {
+          finished += 1;
+        }
+      },
+    },
+    finished: () => finished,
+  };
 }
 
 describe("the whole path: does a usage report reach current.json", () => {
   test("a report produced by the pass is on disk when the daemon stops", async () => {
     const root = tempRoot();
-    const controller = abortAfter(700);
-    let passes = 0;
     const produced = report();
+    const pass = counted(async () => produced);
 
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: controller.signal,
-      now: clockFrom(FIXTURE_NOW),
-      tickMs: 100,
-      log: () => {},
-      source: async function* () {
-        await heldOpen(controller.signal);
-      },
-      usage: {
-        intervalMs: 60,
-        run: async () => {
-          passes += 1;
-          return produced;
-        },
-      },
-    });
+    await runUntil(root, pass.usage, "a usage pass", () => pass.finished() > 0);
 
-    expect(passes).toBeGreaterThan(0);
+    expect(pass.finished()).toBeGreaterThan(0);
     const read = readCheckpoint(root);
     expect(read.kind).toBe("checkpoint");
     if (read.kind !== "checkpoint") return;
@@ -127,19 +147,8 @@ describe("the whole path: does a usage report reach current.json", () => {
     // The state on a box where somebody passed `--no-usage`. What the page draws
     // is *nothing has looked* — which is not *this account has plenty of room*.
     const root = tempRoot();
-    const controller = abortAfter(400);
 
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: controller.signal,
-      now: clockFrom(FIXTURE_NOW),
-      tickMs: 100,
-      log: () => {},
-      source: async function* () {
-        await heldOpen(controller.signal);
-      },
-    });
+    await runUntil(root, undefined, "a first heartbeat tick", () => ticks(root) > 0);
 
     const read = readCheckpoint(root);
     expect(read.kind).toBe("checkpoint");
@@ -154,25 +163,11 @@ describe("the whole path: does a usage report reach current.json", () => {
     // failure this stage exists to refuse — a plausible number with nothing in it
     // announcing that it is void.
     const root = tempRoot();
-    const controller = abortAfter(700);
-
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: controller.signal,
-      now: clockFrom(FIXTURE_NOW),
-      tickMs: 100,
-      log: () => {},
-      source: async function* () {
-        await heldOpen(controller.signal);
-      },
-      usage: {
-        intervalMs: 60,
-        run: async () => {
-          throw new Error("~/.claude.json went away");
-        },
-      },
+    const pass = counted(async () => {
+      throw new Error("~/.claude.json went away");
     });
+
+    await runUntil(root, pass.usage, "a thrown usage pass", () => pass.finished() > 0);
 
     const read = readCheckpoint(root);
     expect(read.kind).toBe("checkpoint");
@@ -193,35 +188,18 @@ describe("the whole path: does a usage report reach current.json", () => {
       rateLimits: { kind: "none", coverage: completeCoverage({ transcriptsOpened: 0 }) },
     });
 
-    // First run: one complete scan, which lands.
-    const first = abortAfter(500);
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: first.signal,
-      tickMs: 100,
-      now: clockFrom(FIXTURE_NOW),
-      log: () => {},
-      source: async function* () {
-        await heldOpen(first.signal);
-      },
-      usage: { intervalMs: 60, run: async () => good },
-    });
+    // First run: one complete scan, which lands. Asserted, not assumed: under
+    // load a fixed window once ended before it did, and the second run then had
+    // nothing to defend, so the partial won and this test blamed the carry rule.
+    const first = counted(async () => good);
+    await runUntil(root, first.usage, "the good pass", () => first.finished() > 0);
+    const landed = readCheckpoint(root);
+    if (landed.kind !== "checkpoint") throw new Error("no checkpoint after the first run");
+    expect(landed.checkpoint.usage).toEqual({ kind: "report", report: good });
 
     // Second run: the store restores the report, and every scan is incomplete.
-    const second = abortAfter(500);
-    await runOverseer({
-      root,
-      baseUrl: "http://127.0.0.1:1",
-      signal: second.signal,
-      tickMs: 100,
-      now: clockFrom(FIXTURE_NOW),
-      log: () => {},
-      source: async function* () {
-        await heldOpen(second.signal);
-      },
-      usage: { intervalMs: 60, run: async () => partial },
-    });
+    const second = counted(async () => partial);
+    await runUntil(root, second.usage, "an incomplete pass", () => second.finished() > 0);
 
     const read = readCheckpoint(root);
     expect(read.kind).toBe("checkpoint");

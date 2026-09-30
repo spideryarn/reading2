@@ -393,12 +393,22 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          `openrouter:web_search` on Exa; `readFind` keeps a URL only if it is
          one of the call's own annotations and `pageNamesTitle` says the result
          names the work; stored in `citation_finds` and drawn as `linkFrom:
-         "web"`, "found on the web" (CitationsPanel.tsx § Source). A row the
-         article gave a link for never offers it (`attachFinds`).
-       The sentence is about the mode, not the press: *Find it* is on a row,
-       owner-only, and nothing here claims a visitor can press it. No price —
-       new-mode.md § The card on the button. docs/plans/260911g-citations-mode.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search, and a Find it that searches the web for the work and keeps a page only if a result is plainly the work's own, marked as found on the web. How influential a work is comes from the model's memory, not from a citation count.",
+         "web"`, "found on the web" (CitationsPanel.tsx § Source). Since plan
+         260929g it is *Look it up*, on every row: a row the article gave a
+         link for keeps that link whatever is found (`attachFinds` upgrades
+         only searched rows).
+       - "reads that result's search extract … never the full work … quotes
+         only words found in it": src/citation-lookup.ts — the same one call
+         answers from the chosen result's `excerpt`, each quote is kept only
+         if `verifyQuote` finds it in that excerpt, and the row labels the
+         verdict as the AI's reading of the extract (CitationsPanel.tsx §
+         readNoteOf, LookupReading).
+       The sentence is about the mode, not the press: *Look it up* is on a
+       row, owner-only, and the sentence says whose it is. No
+       price — new-mode.md § The card on the button.
+       docs/plans/260911g-citations-mode.md,
+       docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
+    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Look it up on any row, which searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: ["references", "bibliography", "sources", "works cited"],
@@ -448,12 +458,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          nothing else (src/types.ts) — docs/plans/260916d-faq-mode.md § The one
          product call. This is the half a press would not tell somebody who
          expects an FAQ to have answers under it.
-       - "in reading order, not by how often they are asked": `inReadingOrder`
-         in src/faq.ts sorts each row by its earliest surviving passage, and no
-         frequency or priority score exists on `FaqQuestion`.
+       - "the broadest, most central first; reading order is one tap away":
+         since `faq/4` every question carries the model's `difficulty` and
+         `centrality` (src/types.ts), and the default order is
+         `orderQuestions` in src/web/faq-order.ts — highest
+         `centrality × (1 − difficulty)` first, under a threshold. The stored
+         order is still reading order (`inReadingOrder`, src/faq.ts), which
+         the *reading order* button shows and a list without scores falls back
+         to. No frequency score exists: nobody's asking is counted.
        Not the band foot's "checked against it" sentence, which is already on
        screen (GPT Sol D3). About the mode, not the press, and no price. */
-    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself, in reading order rather than by how often anyone asks it.",
+    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first, and reading order is one tap away.",
     /* Not `questions`: `question` is Chat's, and a prefix of it would tie the two
        in the command bar. `faq` itself is this mode's label, which an alias may
        not repeat (tests/mode-catalog.test.ts). */

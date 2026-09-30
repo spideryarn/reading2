@@ -521,9 +521,11 @@ second is the one that settles it: ⌘/Ctrl+Enter is what sends in most of this
 app's multi-line boxes, and **iOS inserts a newline whatever the key is
 labelled** — so the promise would be broken by the platform rather than by us.
 [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) had already written the
-same decision down as a trap worth naming. The two chat composers are the
-exception in the other direction: Enter there really does send
-([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)), so they say so.
+same decision down as a trap worth naming. The three chat-style boxes — chat's
+composer and its edit-a-question box ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)),
+and Referee's Candidates box ([`CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx))
+— are the exception in the other direction: Enter there really does send, so they
+say so ([keyboard.md § Enter in a text box](keyboard.md#enter-in-a-text-box)).
 
 **A promise with nothing behind it is worse than no promise.** The two boxes
 that filter as you type — the shelf's search and the article search in words

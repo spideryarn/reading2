@@ -595,6 +595,14 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **An uploaded paper looking for its own page** (src/source-guess.ts) — the
+     same request as `citations-find` through the same `findWorkPage`, so the
+     same policy for the same reason. */
+  "upload-source-guess": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **The one job with no `provider` block, and it used to be the one job whose
      `provider` block mattered most.**
 
@@ -837,6 +845,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "link-summary": { effort: "low" },
   "citations-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
+  },
+  "upload-source-guess": {
+    providerDefault: "Not measured. One uploaded paper's title and a web search, not the article.",
   },
   pdf: {
     providerDefault:

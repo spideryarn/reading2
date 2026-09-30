@@ -41,6 +41,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { BlockId, GlossaryEntry } from "../types.js";
 import { measureRow } from "./keynav.js";
+/* Typing somewhere? Then a g is a letter. This file's stricter version, which
+   honours a contenteditable host, is now the one every shortcut shares. */
+import { isTyping } from "./key-chord.js";
 
 /** The key. Lower-case only: Shift+G, ⌘G and the rest belong to somebody else. */
 export const TERM_JUMP_KEY = "g";
@@ -66,18 +69,6 @@ interface Origin {
   linkIndex: number | null;
   /** The term this paragraph's last G landed on, so the next one moves on. */
   termId: string;
-}
-
-/** Typing somewhere? Then a g is a letter. keynav.ts § `isTyping`, same list. */
-function isTyping(el: Element | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
-  if (el.isContentEditable === true) return true;
-  /* jsdom has no `isContentEditable`, and a future composer may put the event
-     target below its editing host. Honour the nearest explicit value; `false`
-     starts a non-editable island inside an editor. */
-  const host = el.closest<HTMLElement>("[contenteditable]");
-  return host !== null && host.getAttribute("contenteditable")?.toLowerCase() !== "false";
 }
 
 /**
@@ -136,7 +127,7 @@ function isOurKey(e: KeyboardEvent): boolean {
   /* During IME composition some browsers still expose the physical letter;
      keyCode 229 is the older composition sentinel used by the same engines. */
   if (e.isComposing || e.keyCode === 229) return false;
-  if (e.defaultPrevented || isTyping(e.target as Element | null)) return false;
+  if (e.defaultPrevented || isTyping(e.target)) return false;
   /* A native modal owns the keyboard; the article is inert behind it. */
   return document.querySelector("dialog[open]") === null;
 }

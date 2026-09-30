@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHARED_WITH_YOU } from "../src/messages.js";
-import type { Arc, Article, ChatThread, ThreadSummary } from "../src/types.js";
+import type { Arc, Article, ChatThread, SourceGuess, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
@@ -440,6 +440,7 @@ const OWNED: Article = {
   tree: ARTICLE.tree,
   assets: undefined,
   navLabelStatus: "ready",
+  sourceGuess: undefined,
   meta: {
     ...ARTICLE.meta,
     ...PDF_META,
@@ -490,6 +491,9 @@ let served: PublicArticle;
  * they disagree.
  */
 let publicArticle: () => Response;
+
+/** What `POST /api/source-guess/:slug` answers — reset in `beforeEach`. */
+let guessAnswer: SourceGuess = { status: "none" };
 
 /**
  * **The conversations the server already holds for this article.**
@@ -561,6 +565,9 @@ function reply(url: string, method: string): Response {
      store in `loadError` and every case here reading the same `on: false` for
      the wrong reason — docs/reusable/silent-success.md, one layer out. */
   if (url === "/api/reader") return json({ experimentalSince });
+  /* An upload's search for its own page (src/web/useSourceGuess.ts): answers
+     what `guessAnswer` holds, so the owner case can watch the line fill in. */
+  if (method === "POST" && url === `/api/source-guess/${SLUG}`) return json(guessAnswer);
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: storedChats });
@@ -617,6 +624,7 @@ beforeEach(() => {
   served = ARTICLE;
   storedChats = [];
   notBuilt = null;
+  guessAnswer = { status: "none" };
   experimentalSince = null;
   /* **The switch's store is a module singleton**, so it keeps the last test's
      session the way it keeps a session between page views — which is the point
@@ -3174,6 +3182,37 @@ describe("the same address, as the owner", () => {
     expect(trace.filter((r) => r.url.startsWith("/api/public/"))).toEqual([]);
     // The other half of the capability check — see the visitor test above.
     expect(host.textContent).not.toContain("View only");
+    /* The fixture has a web address, so it does not look for one. */
+    expect(trace.filter((r) => r.url.startsWith("/api/source-guess/"))).toEqual([]);
+  });
+
+  /**
+   * **An owner's upload asks once where it lives on the web, and the answer
+   * fills the masthead in without a reload** — src/web/useSourceGuess.ts,
+   * mounted in `OwnedArticle`. Through the real `App`, because the class is
+   * "the hook is wired to what draws it", which a unit test of either half
+   * cannot see. A visitor on an upload is the no-POST case at the top of this
+   * file: a `PublicArticle` carries neither `filename` nor `sourceGuess`.
+   */
+  it("asks once where an upload lives on the web, and draws the answer", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    const { url: _url, ...uploaded } = OWNED.meta;
+    owned = () => json({ ...OWNED, meta: { ...uploaded, filename: "paper.pdf" } });
+    guessAnswer = {
+      status: "found",
+      url: "https://arxiv.org/abs/2401.01234",
+      host: "arxiv.org",
+      kind: "canonical",
+      matchedBy: "arxiv",
+    };
+    await open();
+
+    expect(
+      trace.filter((r) => r.method === "POST" && r.url === `/api/source-guess/${SLUG}`),
+    ).toHaveLength(1);
+    const link = host.querySelector<HTMLAnchorElement>("a.origin-guess");
+    expect(link?.getAttribute("href")).toBe("https://arxiv.org/abs/2401.01234");
+    expect(link?.textContent).toBe("arxiv.org/abs/2401.01234?");
   });
 });
 

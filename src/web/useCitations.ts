@@ -13,8 +13,9 @@
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
  * file is only the parse, the 404 branch and the verbs.
  *
- * The third verb is **`find`**, stage 3's *Find it on the web*: one POST for one
- * searched row, `POST /api/citations/:slug/:id/find` (src/citation-find.ts).
+ * The third verb is **`find`**, stage 3's *Find it on the web*, *Look it up*
+ * since plan 260929g: one POST for one row (any row, since that plan),
+ * `POST /api/citations/:slug/:id/find` (src/citation-find.ts).
  * Not a job — a reader-triggered call answering in seconds, like the glossary's
  * *Check the web* — and **one at a time**, so a second press cannot start a
  * second paid search while the first is out.
@@ -39,7 +40,13 @@
  * docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Citations, CitationsResponse, CitedWork, FindCitationResponse, Job } from "../types.js";
+import type {
+  Citations,
+  CitationsResponse,
+  CitedWork,
+  FindCitationResponse,
+  Job,
+} from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -96,9 +103,10 @@ export interface UseCitations {
   /** What the last *Find it* that found nothing, or failed, said — and on which row. */
   findNote: FindNote | null;
   /**
-   * **Look for one searched work's own page on the web.** A found page is
-   * patched onto that row — its link fields only — and is stored on the
-   * server, so a reload shows it too. src/citation-find.ts.
+   * ***Look it up*** — any row since plan 260929g stage 2. What came back is
+   * patched onto that row: its link fields, only on a searched row, and its
+   * `lookup`, only while the row is still the one that was asked about. Both
+   * are stored on the server, so a reload shows them too. src/citation-find.ts.
    */
   find(id: string): Promise<void>;
 }
@@ -182,11 +190,24 @@ export interface CitationsRead {
    *
    * A read already in flight is the opposite ordering hazard: it may have read
    * the old Scholar row before the POST stored this link, then land afterwards
-   * and erase the patch. `applyFound` arms one trailing repair only in that
-   * case, through `useOrderedRead.armRefresh`; it does not add an unconditional
-   * post-find GET.
+   * and erase the patch. The caller follows every successful POST with
+   * `refresh()`, which trails such a read.
+   *
+   * ## And the lookup, on its own rule (plan 260929g stage 2)
+   *
+   * *Look it up* answers with the link half and the `lookup` separately (R-3).
+   * Only the link is safe to patch from that reply. The server fingerprints the
+   * actual reference and citing-passage text, which `CitedWork` does not carry,
+   * so no client comparison can decide whether the lookup is still current.
+   * The caller therefore refreshes and lets `attachLookups` be the one authority
+   * for attaching it. tests/citations-find-late-reply.test.tsx.
    */
-  applyFound(id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">): void;
+  applyFound(id: string, found: FoundPatch): void;
+}
+
+/** What one *Look it up* answer patches, split as the server split it. */
+export interface FoundPatch {
+  link: Pick<CitedWork, "url" | "linkFrom" | "found">;
 }
 
 export function useCitationsRead(slug: string): CitationsRead {
@@ -237,7 +258,7 @@ export function useCitationsRead(slug: string): CitationsRead {
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
      it, and only the newest reply commits. src/web/useOrderedRead.ts. */
-  const { reload, refresh, armRefresh } = useOrderedRead(load);
+  const { reload, refresh } = useOrderedRead(load);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `CitationsBand`'s own mount
@@ -247,30 +268,28 @@ export function useCitationsRead(slug: string): CitationsRead {
   }, [reload]);
 
   const applyFound = useCallback(
-    (id: string, link: Pick<CitedWork, "url" | "linkFrom" | "found">) => {
-      /* The POST has already stored this link, but a GET that began before it
-         may still be carrying the old searched row. Let that request land — it
-         may also carry newly regenerated works — then repair its stale snapshot
-         with one trailing read. This is `useGlossaryRead.patchEntry`'s race,
-         and `armRefresh` costs nothing when no read is in flight. */
-      armRefresh();
+    (id: string, found: FoundPatch) => {
       setCitations((current) =>
         current
           ? {
               ...current,
-              citations: current.citations.map((w) =>
-                w.id === id && w.linkFrom === "search"
-                  ? { ...w, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) }
-                  : w,
-              ),
+              citations: current.citations.map((w) => (w.id === id ? patchFound(w, found) : w)),
             }
           : current,
       );
     },
-    [armRefresh],
+    [],
   );
 
   return { status, citations, stale, outdated, error, reload, refresh, applyFound };
+}
+
+/** One row, with the link half of a *Look it up* answer. Lookup attachment belongs to the fresh server read. */
+function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
+  /* A link the article gave always wins; only our own rows move. */
+  const relink = (w.linkFrom === "search" || w.linkFrom === "web") && link.linkFrom === "web";
+  if (!relink) return w;
+  return { ...w, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) };
 }
 
 /**
@@ -290,7 +309,6 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
      to another article must not patch that article's list. */
   const slugNow = useRef(slug);
   slugNow.current = slug;
-
   /**
    * Revalidate on mount, behind whatever is on screen.
    *
@@ -330,21 +348,21 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
           `/api/citations/${encodeURIComponent(asked)}/${encodeURIComponent(id)}/find`,
           { method: "POST" },
         );
-        /* The 404, the 409 and every failed call are JSON errors, and
-           `readJson` throws their sentence. */
+        /* The 404 and every failed call are JSON errors, and `readJson`
+           throws their sentence. (The 409 for a linked row went in plan
+           260929g: every row may be looked up.) */
         const answer = await readJson<FindCitationResponse>(res);
         if (slugNow.current !== asked) return;
         if (answer.outcome === "no-match") {
           setFindNote({ id, kind: "no-match", message: answer.message });
           return;
         }
-        /* The patch itself is `CitationsRead.applyFound`, up in the read half,
-           because that is where the list lives since 2026-09-16 — and its
-           docstring carries the two rules that used to be written here: the
-           link fields only, and only a row that is still a search. The POST
-           stays down here, which is the whole point of the split. */
+        /* Patch only the link fields. A fresh read attaches the lookup after
+           recomputing its fingerprint from the current block text; the client
+           cannot mirror that check because the row carries ids, not the text. */
         const { url, linkFrom, found } = answer.work;
-        applyFound(id, { url, linkFrom, ...(found ? { found } : {}) });
+        applyFound(id, { link: { url, linkFrom, ...(found ? { found } : {}) } });
+        void refresh();
       } catch (err) {
         if (slugNow.current !== asked) return;
         setFindNote({ id, kind: "failed", message: (err as Error).message });
@@ -353,7 +371,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
         setFinding(null);
       }
     },
-    [slug, applyFound],
+    [slug, applyFound, refresh],
   );
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read

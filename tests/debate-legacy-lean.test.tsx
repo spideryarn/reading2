@@ -147,6 +147,12 @@ function paint(o: UseDebate, level: IdentificationLevel | null = "named") {
         onJump: () => {},
         level,
         onLevel: () => {},
+        order: "prioritised",
+        onOrder: () => {},
+        blockOrder: new Map(),
+        relevance: null,
+        onRelevance: () => {},
+        articleYear: null,
       }),
     );
   });
@@ -229,6 +235,31 @@ describe("the panel draws a row stored under the old vocabulary", () => {
     const debate = artefact({ direct: [legacyDirect("")], claims: [] });
     expect(() => paint(owner(debate))).not.toThrow();
     expect(host.textContent ?? "").toContain(LEAN_APPEARANCE["cannot-tell"].label);
+  });
+
+  /* Stance sorts on the lean (since 2026-09-29, `?debateby=stance`), so an old
+     row has to sort where its `valence` says rather than as `undefined`. */
+  it("puts a legacy negative first in stance order", () => {
+    const positive = { ...legacyClaim("positive"), id: "spya-c7w2d3" } as ClaimDebateRow;
+    const negative = { ...legacyClaim("negative"), id: "spya-c7w2d4", claimQuote: "another" } as ClaimDebateRow;
+    act(() => {
+      root.render(
+        createElement(DebatePanel, {
+          access: { kind: "owner", owner: owner(artefact({ direct: [], claims: [positive, negative] })) },
+          onJump: () => {},
+          level: "named",
+          onLevel: () => {},
+          order: "stance",
+          onOrder: () => {},
+          blockOrder: new Map(),
+          relevance: null,
+          onRelevance: () => {},
+          articleYear: null,
+        }),
+      );
+    });
+    const leans = [...host.querySelectorAll(".dbt-item .dbt-lean")].map((l) => l.textContent);
+    expect(leans).toEqual([LEAN_APPEARANCE["leans-against"].label, LEAN_APPEARANCE["leans-for"].label]);
   });
 
   /* The positive control for this block: the labels are distinguishable, so
