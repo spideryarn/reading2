@@ -1,7 +1,7 @@
 # Articles whose images did not import, and the figures Readability deletes with their wrapper
 
 **[SPIDERYARN-READING2-6A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6A)** · 2026-09-30 ·
-status: *stage 1 built* — plan reviewed by GPT Sol, *build with changes*, all seven findings taken
+status: *shipped on `dev`* — plan and code reviewed by GPT Sol; production re-runs and cause 4 are Greg's
 
 Greg, 2026-09-30:
 
@@ -263,3 +263,20 @@ retry above is a known gap. The simpler alternative is to go back to the three-l
 let the prose fallback carry safety alone. Then `kept` becomes an estimate and says so, and a few
 more wrappers get moved for nothing. Either is defensible. The fuller mirror shipped because this file's
 audit line has always been held to what really happened.
+
+## Gates, and what is left
+
+The full suite, run once on the tree merged with `origin/dev` (2026-09-30 10:04): 26,691 passed, 4
+failed, in 5 files. All five are the fresh-worktree build checks, *"has a build to inspect"* and the
+fleet server's wiring tests. After `npm run build` and `npm run build:fleet`, those five files passed
+alone, 112 of 112. Typecheck exit 0; lint clean on the touched files.
+
+**For Greg** (none of it has been run):
+
+1. The production re-runs in § *What production needs*. The three web articles only gain their
+   figures once this code is deployed. The storage, locator and no-manifest re-runs work on today's
+   production.
+2. Cause 4: whether PDF pages with two figures are worth the pairing work the earlier plans
+   deferred.
+3. The code review's P2 (Readability's weight-off retry on very short pages), and whether rule C's
+   gate should stay the full mirror or go back to the three-line estimate (§ *Code review*).
