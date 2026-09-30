@@ -4,11 +4,12 @@
  * horizontal handler (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Keys, Sol F5).
  *
- * While Trajectory is the mode, ← / → step its stops; everywhere else they are
- * the browser's (they moved the stride across Hierarchy's gist columns until
- * 2026-09-29). The existing guards hold for
- * both: no modifiers, not while typing, not when a widget nearer the keypress
- * has already handled it, and no auto-repeat. ↑ / ↓ are untouched either way.
+ * While Trajectory is the mode, ← / → step its stops; while Remember's Quiz
+ * half is showing, they step its questions; everywhere else they are the
+ * browser's (they moved the stride across Hierarchy's gist columns until
+ * 2026-09-29). The existing guards hold for both: no modifiers, not while
+ * typing, not when a widget nearer the keypress has already handled it, and no
+ * auto-repeat. ↑ / ↓ are untouched either way.
  *
  * A DOM test for keynav-handled.test.ts's reason: the listener is on `window`,
  * so what decides is a real event travelling up a real DOM.
@@ -103,7 +104,7 @@ function press(
   return event;
 }
 
-describe("with a horizontal handler (Trajectory)", () => {
+describe("with a horizontal handler (Trajectory or Quiz)", () => {
   beforeEach(async () => {
     await mount(true);
   });

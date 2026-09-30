@@ -384,9 +384,9 @@ export function useArrowNav(
    */
   enabled = true,
   /**
-   * **← / → for a mode that has a sideways of its own** — Trajectory's stops,
-   * and nothing else yet (docs/project/keyboard.md § ← / → in Trajectory; the
-   * plan's § Keys, Sol F5). While it is given, ← / → go to it, after every
+   * **← / → for a mode that has a sideways of its own** — Trajectory's stops
+   * or Quiz's questions (docs/project/keyboard.md § ← / → in Trajectory and
+   * § ← / → in Quiz). While it is given, ← / → go to it, after every
    * guard below has passed; it answers whether it took the key, and `false` —
    * the end of the route, which does not wrap — hands the key back to the
    * browser, the concession ↑ / ↓ make at the ends of the article. `null` or

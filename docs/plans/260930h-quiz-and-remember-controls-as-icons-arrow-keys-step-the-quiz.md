@@ -119,6 +119,14 @@ full into
 5. **P3, icon sizes — not taken; its premise is wrong.** It says the icons inherit Lucide's 24px
    default, but `<LucideProvider size={16}>` in `main.tsx` sets 16, and the 390px screenshot shows it.
 
+## Code review
+
+GPT Sol, `--sandbox workspace-write`, on 4136fef4: **no functional findings.** It checked the
+handler's lifecycle (Recall → Quiz, mode switches, a replaced batch, remount order), the refusal
+rules, the dialog guard, the `IconButton` + `Tooltip` row, and whether each new test can fail. One
+P3, fixed by it: comments in four files pointed at a section called "← / → in Trajectory and Quiz",
+which the docs never used. Its focused run: 7 files, 118 tests passed; typecheck passed.
+
 ## Browser check
 
 A Sonnet subagent, Playwright on the box, at 348c8573 plus the working tree, before the review

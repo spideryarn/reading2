@@ -1148,7 +1148,7 @@ describe("only what you have read, across a new batch", () => {
 
 /**
  * **← and → step the path** — SPIDERYARN-READING2-71; keyboard.md § ← / → in
- * Trajectory and Quiz. The panel hands `Reader` one handler, which `useArrowNav`
+ * Quiz. The panel hands `Reader` one handler, which `useArrowNav`
  * calls after its own guards (no modifier, not typing, no drawer). What is
  * tested here is the half only the panel knows: that the handler is the
  * buttons' own rule, that it answers `false` when it took nothing — so the key

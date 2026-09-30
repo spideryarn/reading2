@@ -1033,7 +1033,7 @@ export function Reader({
   const [trajectoryControl, setTrajectoryControl] = useState<TrajectoryControl | null>(null);
   /* **The quiz's ← / →**, handed up by `QuizPanel` while it is mounted and
      `null` once it is not — so Recall, or any other mode, leaves ← / → with the
-     browser (keyboard.md § ← / → in Trajectory and Quiz). One stable function
+     browser (keyboard.md § ← / → in Quiz). One stable function
      for the panel's life; the setter wraps it because a function passed to a
      state setter is an updater. */
   const [quizKeys, setQuizKeys] = useState<((dir: -1 | 1) => boolean) | null>(null);

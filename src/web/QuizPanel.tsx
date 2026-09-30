@@ -576,7 +576,7 @@ export function QuizPanel({
 
   /**
    * **← / → step the path** — SPIDERYARN-READING2-71; docs/project/keyboard.md
-   * § ← / → in Trajectory and Quiz. The buttons' own rules, so the keys can do
+   * § ← / → in Quiz. The buttons' own rules, so the keys can do
    * no more than the buttons, plus one the buttons do not have: **a key will not
    * throw away words that have not been marked.** The textarea stops its own
    * key presses, so this is the reader who typed, clicked somewhere else, and
