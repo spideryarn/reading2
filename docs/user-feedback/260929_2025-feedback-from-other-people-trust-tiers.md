@@ -68,7 +68,7 @@ You answered that decision, relayed by the Overseer:
 > that it does? In other words, how can we close this so that the agents can tell
 > definitively/confidently/unfakeably which Feedback reports are indeed from me.
 
-**Ending: Shipped** on `dev` (the commit is named in the plan's § Reviews and status). **Only the
+**Ending: Shipped** on `dev` as 5170b6e8 and de9b5f8e, merged in d74bded7 (2026-10-01). **Only the
 wording for `feedback-reports.md` waits for you.**
 
 - Sentry already carries your address twice, but every field in a Sentry event can be typed by
