@@ -12,6 +12,9 @@ account, so trusted) · Owner docs: [email.md](../project/email.md),
 >
 > — Greg, 2026-09-30
 
+**Status: built and on `dev`, not deployed.** Deploying applies one additive migration
+(`20260930144303_reader_arrivals`). Note: [260930_1515](../user-feedback/260930_1515-email-the-admin-on-sign-up-and-plan-upgrade.md).
+
 ## What exists
 
 - Resend is already the provider, with one key (`RESEND_API_KEY`, in Vercel's three environments,
@@ -181,3 +184,13 @@ no P0. Taken:
 
 - Plan: GPT Sol, read-only — [260930i-…-review-sol.md](260930i-email-admin-on-sign-up-and-plan-upgrade-review-sol.md).
 - Code: GPT Sol, fixing inside the stage — [260930i-…-code-review-sol.md](260930i-email-admin-on-sign-up-and-plan-upgrade-code-review-sol.md). Its fixes were read, the database suites its sandbox could not reach were run, and the ordering test was seen to fail with the queue disabled.
+
+## The full suite
+
+One run after the code review, on the tree merged with `dev`: 6 files red of 1,261. Three were this
+work, and fixed: `db-schema-drift` needed the new table in its list and count, and the environment
+sweeps (`env-reads-are-literal`, `env-names-are-inventoried`) refused `src/email.ts` reading the whole
+of `process.env`. It now reads its five names literally; `RESEND_API_KEY` joined the health report
+(`breaks: null`) and the two optional switches joined the allowlist. The other three were the fleet
+suites finding no `tools/fleet/web/dist` in a fresh worktree; after `npm run build:fleet` all three
+passed. Each red file was re-run alone and passed.

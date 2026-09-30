@@ -196,6 +196,16 @@ const ALLOWED: readonly AllowGroup[] = [
     names: ["PGAPPNAME", "SENTRY_FORCE_LOCAL", "SPIDERYARN_OWNER_EMAIL"],
   },
   {
+    /* src/email.ts, 260930i. `SPIDERYARN_ADMIN_EMAIL` redirects the admin's
+       notices and defaults in code to hello@, so its absence is the ordinary
+       case and a health line would invite setting what needs no setting.
+       `SPIDERYARN_EMAIL_SEND=1` lets a non-production process send, for one
+       deliberate manual check; production sends without it, and it is ignored
+       under vitest. */
+    why: "Optional email switches whose defaults are the right answer on a deployment",
+    names: ["SPIDERYARN_ADMIN_EMAIL", "SPIDERYARN_EMAIL_SEND"],
+  },
+  {
     /* **`SPIDERYARN_BASE_URL` was an `EXPECTED` entry for a few hours on
        2026-09-07 and moving it here is the interesting one.** It is where
        Stripe returns a reader after Checkout, and the production table in

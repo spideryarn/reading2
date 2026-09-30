@@ -65,11 +65,35 @@ export type SendResult =
  */
 export interface EmailDeps {
   readonly fetch?: typeof fetch;
-  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly env?: EmailEnv;
 }
 
 /** Why this environment will not send, or `null` if it will. */
-function whyNotSend(env: Readonly<Record<string, string | undefined>>): string | null {
+/** The five names this module reads, and nothing else. */
+export interface EmailEnv {
+  readonly VERCEL_ENV?: string | undefined;
+  readonly NODE_ENV?: string | undefined;
+  readonly RESEND_API_KEY?: string | undefined;
+  readonly SPIDERYARN_EMAIL_SEND?: string | undefined;
+  readonly SPIDERYARN_ADMIN_EMAIL?: string | undefined;
+}
+
+/**
+ * Read one name at a time, never the whole of `process.env`: the environment
+ * inventory (tests/env-names-are-inventoried.test.ts) can only see a literal
+ * `process.env.NAME`.
+ */
+function realEnv(): EmailEnv {
+  return {
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    NODE_ENV: process.env.NODE_ENV,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    SPIDERYARN_EMAIL_SEND: process.env.SPIDERYARN_EMAIL_SEND,
+    SPIDERYARN_ADMIN_EMAIL: process.env.SPIDERYARN_ADMIN_EMAIL,
+  };
+}
+
+function whyNotSend(env: EmailEnv): string | null {
   const optedIn = env.SPIDERYARN_EMAIL_SEND === "1" && env.NODE_ENV !== "test";
   if (!optedIn && env.VERCEL_ENV !== "production") return "not production";
   if (!env.RESEND_API_KEY) return "no RESEND_API_KEY";
@@ -85,7 +109,7 @@ function whyNotSend(env: Readonly<Record<string, string | undefined>>): string |
  */
 export async function sendEmail(email: Email, label: string, deps: EmailDeps = {}): Promise<SendResult> {
   try {
-    const env = deps.env ?? process.env;
+    const env = deps.env ?? realEnv();
     const skip = whyNotSend(env);
     if (skip) {
       /* Info for "not production", which is every dev machine all day; warn for
@@ -127,7 +151,7 @@ export async function sendEmail(email: Email, label: string, deps: EmailDeps = {
 }
 
 /** Where admin notifications go. */
-export function adminAddress(env: Readonly<Record<string, string | undefined>> = process.env): string {
+export function adminAddress(env: EmailEnv = realEnv()): string {
   return env.SPIDERYARN_ADMIN_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL;
 }
 
@@ -138,7 +162,7 @@ export async function notifyAdmin(
   deps: EmailDeps = {},
 ): Promise<SendResult> {
   return await sendEmail(
-    { to: adminAddress(deps.env ?? process.env), subject: message.subject, text: message.text },
+    { to: adminAddress(deps.env ?? realEnv()), subject: message.subject, text: message.text },
     `admin: ${label}`,
     deps,
   );
