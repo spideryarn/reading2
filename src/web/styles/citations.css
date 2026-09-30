@@ -132,3 +132,113 @@
   font-family: var(--font-ui);
   font-size: 0.72rem;
 }
+
+/* ---- *Investigate* ---------------------------------------------------------
+   Plan 260930a; CitationInvestigation.tsx. The button sits beside *Look it up*
+   and is the same quiet `.gloss-btn`. Under the row: the wait, the words as
+   they arrive (plain text, paragraphs by blank lines, as the glossary's lookup
+   draws its draft — `white-space: pre-wrap`), the failure in the band's error
+   colour, or the kept answer — folded to its first part, three lines, so the
+   list stays a list. Labels reuse `.cite-lookup-label`. Every long thing wraps
+   anywhere: a source's title or host at 288px must not push the band wide. */
+.cite-investigate { font-size: 0.74rem; }
+
+.cite-inv { margin: 0.3rem 0 0; }
+.cite-inv-wait,
+.cite-inv-previous,
+.cite-inv-prov,
+.cite-inv-offer,
+.cite-inv-foot {
+  margin: 0.2rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+.cite-inv-draft,
+.cite-inv-text {
+  margin: 0.1rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cite-inv-part + .cite-inv-part { margin-top: 0.35rem; }
+.cite-inv-lead {
+  margin: 0.15rem 0 0;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+/* Folded: the first part's paragraph, three lines, then an ellipsis. The text
+   stays in the accessibility tree; only the paint is cut (debate.css §
+   `.dbt-title` does the same). */
+.cite-inv-part.folded .cite-inv-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.cite-inv-error {
+  margin: 0.2rem 0 0;
+  color: var(--highlight-ink);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* The two text buttons: *Read all* and *Investigate again*. Link-quiet, in
+   the line's ink, underlined so they read as pressable. */
+.cite-inv-toggle,
+.cite-inv-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cite-inv-toggle { margin-top: 0.2rem; }
+.cite-inv-toggle:hover,
+.cite-inv-again:hover { color: var(--ink); }
+.cite-inv-toggle:focus-visible,
+.cite-inv-again:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cite-inv-again[aria-disabled="true"],
+.cite-investigate[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+
+.cite-inv-sources {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.cite-inv-sources li + li { margin-top: 0.15rem; }
+.cite-inv-sources a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  color: var(--highlight-ink);
+}
+.cite-inv-source-title { color: var(--ink-faint); }
+
+/* A finger gets the house control height on every *Investigate* control —
+   docs/project/controls.md § The numbers; `pointer: coarse` for the reason
+   narrow-window.css gives. */
+@media (pointer: coarse) {
+  .cite-investigate,
+  .cite-inv-toggle,
+  .cite-inv-again { min-height: var(--control-h); }
+}

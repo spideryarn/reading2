@@ -193,6 +193,10 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
     finding: null,
     findNote: null,
     find: async () => {},
+    investigating: null,
+    investigateDraft: null,
+    investigateFailed: null,
+    investigate: async () => {},
     ...over,
   };
 }
@@ -806,5 +810,220 @@ describe("what a row says after Look it up", () => {
     expect(copy).toMatch(/not the full work/i);
     expect(copy).toMatch(/link the article gave never changes/i);
     expect(copy).not.toMatch(/verif|confirm|real link|from the paper/i);
+  });
+});
+
+/* ------------------------------------------------------------ Investigate --
+   Plan 260930a stage 2. The button on every owner row, the answer streaming
+   into its row, a failure that replaces the whole streamed text, the kept
+   answer folded to its first part, and what was read said by code. */
+
+const { INVESTIGATE_OFFER_LOOKUP, INVESTIGATE_PREVIOUS_KEPT, INVESTIGATE_WAIT, investigationProvenance } =
+  await import("../src/web/CitationInvestigation.js");
+
+const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
+  answer:
+    "Does it back the claim?\nThe abstract on arxiv.org says the model does this.\n\nHow else it bears on this article\nIt also extends the method in a second direction.",
+  sources: [
+    { url: "https://arxiv.org/abs/1234", title: "The paper's page" },
+    { url: "https://www.nature.com/articles/x" },
+  ],
+  extractsRead: 2,
+  longestExtractWords: 310,
+  matchedHost: null,
+  searches: 1,
+  searchesFrom: "usage.server_tool_use.web_search_requests",
+  model: "test",
+  at: "2026-09-30T09:00:00.000Z",
+  contextHash: "ctx",
+  promptVersion: "1",
+};
+
+function investigateButton(id: string): HTMLButtonElement {
+  const el = row(id).querySelector<HTMLButtonElement>(".cite-investigate");
+  if (!el) throw new Error(`no Investigate button on row ${id}`);
+  return el;
+}
+
+describe("Investigate", () => {
+  it("is on every owner row beside Look it up, and presses for its own row", async () => {
+    const pressed: string[] = [];
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, FAMOUS]),
+        investigate: async (id) => {
+          pressed.push(id);
+        },
+      }),
+    );
+    for (const id of [CENTRAL.id, FAMOUS.id]) {
+      const b = investigateButton(id);
+      expect(b.textContent).toBe("Investigate");
+      expect(b.closest(".cite-meta")?.querySelector(".cite-find")).not.toBeNull();
+      expect(b.hasAttribute("title"), "the button fell back to a title attribute").toBe(false);
+    }
+    await act(async () => investigateButton(FAMOUS.id).click());
+    expect(pressed).toEqual([FAMOUS.id]);
+  });
+
+  it("is on no visitor row", async () => {
+    await act(async () =>
+      root.render(
+        createElement(CitationsPanel, {
+          access: {
+            kind: "visitor",
+            citations: {
+              capped: false,
+              citations: [
+                {
+                  id: "spya-v2w3x4",
+                  title: "Public",
+                  why: "What the piece uses it for.",
+                  mentions: [],
+                  citedAt: [FIRST],
+                  firstCited: FIRST,
+                  citedInBody: true,
+                  url: "https://doi.org/10.1000/xyz",
+                  linkFrom: "doi",
+                },
+              ],
+            },
+          },
+          order: "document",
+          onOrder: () => {},
+          bar: null,
+          onBar: () => {},
+          onJump: () => {},
+        }),
+      ),
+    );
+    expect(row("spya-v2w3x4").querySelector(".cite-investigate")).toBeNull();
+    expect(row("spya-v2w3x4").querySelector(".cite-inv")).toBeNull();
+  });
+
+  it("its card says what it does, that it costs, that it reads extracts not the paper, and that it is kept", async () => {
+    await draw(owner({ citations: artefact([CENTRAL]) }));
+    const card = await cardFor(investigateButton(CENTRAL.id));
+    expect(card.head).toBe("Investigate");
+    expect(earnsItsHover(card), "the Investigate card does not earn its hover").toBeNull();
+    const copy = `${card.head} ${card.body}`;
+    expect(copy).toMatch(/searches the web/i);
+    expect(copy).toMatch(/profile/i);
+    expect(card.how).toMatch(/costs money/i);
+    expect(card.how).toMatch(/extracts/i);
+    expect(card.how).toMatch(/not the paper itself/i);
+    expect(card.how).toMatch(/kept on this row/i);
+    expect(copy).not.toMatch(/verif|confirm|model call|reads the paper/i);
+  });
+
+  it("streams into the pressed row only, says what the wait is first, and holds every other row", async () => {
+    await draw(owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id }));
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_WAIT);
+    expect(investigateButton(CENTRAL.id).textContent).toBe("Investigating…");
+    expect(investigateButton(FAMOUS.id).getAttribute("aria-disabled")).toBe("true");
+
+    let pressed = 0;
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, FAMOUS]),
+        investigating: CENTRAL.id,
+        investigateDraft: { id: CENTRAL.id, text: "Does it back the claim?\nThe abs" },
+        investigate: async () => {
+          pressed++;
+        },
+      }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")).toBeNull();
+    expect(row(CENTRAL.id).querySelector(".cite-inv-draft")?.textContent).toBe("Does it back the claim?\nThe abs");
+    expect(row(FAMOUS.id).querySelector(".cite-inv")).toBeNull();
+    await act(async () => investigateButton(FAMOUS.id).click());
+    expect(pressed, "a second Investigate started while one was out").toBe(0);
+  });
+
+  it("on a failure, shows the sentence in place of everything that streamed, and offers it again", async () => {
+    let pressed = 0;
+    await draw(
+      owner({
+        citations: artefact([CENTRAL]),
+        investigateFailed: { id: CENTRAL.id, message: "This answer tried to quote a source directly.", previousAt: null },
+        investigate: async () => {
+          pressed++;
+        },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-draft")).toBeNull();
+    expect(r.querySelector(".cite-inv-error")?.textContent).toContain("This answer tried to quote a source directly.");
+    expect(r.querySelector(".cite-inv-previous")).toBeNull();
+    const again = r.querySelector<HTMLButtonElement>(".cite-inv-again");
+    expect(again?.textContent).toBe("Investigate again");
+    await act(async () => again?.click());
+    expect(pressed).toBe(1);
+  });
+
+  it("on a failed Investigate again, restores the previous answer and says the new one was not kept", async () => {
+    const had = { ...CENTRAL, investigation: INVESTIGATION };
+    await draw(
+      owner({
+        citations: artefact([had]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: INVESTIGATION.at },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-error")?.textContent).toContain("It stopped.");
+    expect(r.querySelector(".cite-inv-previous")?.textContent).toBe(INVESTIGATE_PREVIOUS_KEPT);
+    expect(r.querySelector(".cite-inv-text")?.textContent).toBe("The abstract on arxiv.org says the model does this.");
+  });
+
+  it("draws a newer stored answer rather than the failure, since an error does not prove nothing was kept", async () => {
+    const kept = { ...CENTRAL, investigation: INVESTIGATION };
+    await draw(
+      owner({
+        citations: artefact([kept]),
+        investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null },
+      }),
+    );
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv-error")).toBeNull();
+    expect(r.querySelector(".cite-inv-text")).not.toBeNull();
+  });
+
+  it("folds a kept answer to its first part, and opens to every part, what was read, the sources and the date", async () => {
+    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: INVESTIGATION }]) }));
+    const r = row(CENTRAL.id);
+    expect(investigateButton(CENTRAL.id).textContent).toBe("Investigate again");
+    expect([...r.querySelectorAll(".cite-inv-lead")].map((n) => n.textContent)).toEqual(["Does it back the claim?"]);
+    expect(r.querySelector(".cite-inv-prov")).toBeNull();
+    const toggle = r.querySelector<HTMLButtonElement>(".cite-inv-toggle");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+
+    await act(async () => toggle?.click());
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect([...r.querySelectorAll(".cite-inv-lead")].map((n) => n.textContent)).toEqual([
+      "Does it back the claim?",
+      "How else it bears on this article",
+    ]);
+    expect(r.querySelector(".cite-inv-prov")?.textContent).toBe(investigationProvenance(INVESTIGATION));
+    const links = [...r.querySelectorAll<HTMLAnchorElement>(".cite-inv-sources a")];
+    expect(links.map((a) => a.textContent)).toEqual(["arxiv.org", "nature.com"]);
+    for (const a of links) {
+      expect(a.getAttribute("target")).toBe("_blank");
+      expect(a.getAttribute("rel")).toContain("noopener");
+    }
+    expect(r.querySelector(".cite-inv-sources")?.textContent).toContain("The paper's page");
+    expect(r.querySelector(".cite-inv-foot")?.textContent).toMatch(/^Investigated .+ · Investigate again$/);
+    /* No Look it up reading on this row, so the view offers it — as a line, not a second button. */
+    expect(r.querySelector(".cite-inv-offer")?.textContent).toBe(INVESTIGATE_OFFER_LOOKUP);
+    expect(r.querySelectorAll(".cite-find")).toHaveLength(1);
+  });
+
+  it("does not offer Look it up on a row that has its reading already", async () => {
+    await draw(owner({ citations: artefact([{ ...LOOKED, investigation: INVESTIGATION }]) }));
+    const r = row(LOOKED.id);
+    await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
+    expect(r.querySelector(".cite-inv-prov")).not.toBeNull();
+    expect(r.querySelector(".cite-inv-offer")).toBeNull();
+    /* The lookup's own reading is still drawn once, by the row. */
+    expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
   });
 });
