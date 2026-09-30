@@ -149,3 +149,17 @@ the rules above where they disagree.
    Remember, *here* and orphan rows move nothing and push nothing, as for comments. In Remember,
    both still move nothing, but the deliberate switch to Chat pushes one entry so Back returns to
    Remember; nuqs batches that mode change with the thread and any away jump.
+
+## Browser check, 2026-09-30
+
+A Sonnet subagent with Playwright against this worktree's own dev server, `/read/fowler-phrenology`,
+signed in as the local admin. It pressed "?" on a paragraph ~4600px down, closed the dialog with its
+X, scrolled to the top and opened Comments. It found a *Question* row for that paragraph, last in
+reading order, and the count went 4 → 5. Pressing the row opened the conversation and scrolled
+to the paragraph; one Back returned to the open drawer at the top. Focus landed on the Comments
+button after closing. From Remember mode, pressing the row switched to Chat mode on that thread. No
+console errors that were ours.
+
+**What it showed that the tests did not:** three "?" conversations on one paragraph (left over from
+earlier local testing) draw three identical rows, since there is no preview. That is the case for the
+deferred live preview, or for folding a paragraph's questions into one row. Not built.
