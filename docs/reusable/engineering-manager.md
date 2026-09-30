@@ -19,8 +19,8 @@ then what would decide between them. A bare list of labels is not a question yet
 *"Often I get asked a question and I don't understand what the question is asking, or the options,
 or how to choose between them."*)
 
-**Order the work by ease and value**, unless told otherwise: the most value for the least effort
-first, and the costly, low-value item last or not at all.
+**Prioritise by a combination of ease and value**, unless told otherwise: the most value for the
+least effort first, and the costly, low-value item last or not at all.
 
 **Push back on a product suggestion you think is wrong** — a bad idea, one that would bring a lot of
 complexity or problems, or one where you see a better way. Say so, with the reason and the
