@@ -22,7 +22,7 @@
  *
  * *Statistics*, and not *every number on it*, which was the draft and is
  * overbroad in the same breath as a correction — the read-time stat divides by
- * a flat `WPM` this repo chose (reading-time.ts), and a rerun confirmation
+ * a flat `WPM` this repo chose (reading-time.ts), and a rerun row's cost note
  * quotes a fixed wait. Neither comes from an artefact. GPT Sol, 2026-09-08.
  *
  * That is narrower than *nothing here is generated*, which is what this line
@@ -231,6 +231,7 @@ import {
   Paintbrush,
   PenLine,
   RefreshCw,
+  RotateCcw,
   Route,
   ScanLine,
   Tag,
@@ -1248,9 +1249,11 @@ function SharingSection({
  *
  * One section since 2026-09-29, when Greg asked for *Generate it again* and
  * *Start this article again* to be amalgamated, shut by default and moved above
- * Archive — docs/plans/260929b-one-place-to-re-run-ai-processing.md. The reset
- * is a block inside it rather than a section of its own; ./ResetArticle.tsx is
- * the control, unchanged.
+ * Archive — docs/plans/260929b-one-place-to-re-run-ai-processing.md. Since
+ * 2026-09-30 the reset is the first row of the modes' own card rather than a
+ * subheading and a card under it, and the mode rows run on one press —
+ * docs/plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md.
+ * ./ResetArticle.tsx is the reset's control.
  *
  * Greg, 2026-09-06, declining a library-wide backfill and asking for this in the
  * same breath:
@@ -1330,12 +1333,35 @@ function RerunSection({
           shipped while the placeholder it replaces did not is that a button
           saying *regenerate this* needs no such claim. And no timing: the rows
           are not one speed, so a *"takes a minute or two"* here would be wrong
-          about the Sketch, which says its own wait in its own confirm. */}
+          about the Sketch, which says its own wait beside its name. */}
       <p className="tw:mt-0 tw:mb-3 tw:text-xs tw:text-ink-faint">
-        Ask for any of these to be written again. It costs you nothing, and what is here now stays
+        Ask for any mode to be written again. It costs you nothing, and what is here now stays
         until the new run succeeds.
       </p>
       <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+        {/* **The whole article first, as a row of the same card** since
+            2026-09-30 — Greg, SPIDERYARN-READING2-65: *"amalgamate the "Start
+            the whole article again" into the run-it-again section above, e.g.
+            as a button at the top"*. It was a subheading and a second card
+            under the modes. First because it is the widest press here, and
+            the one a reader who has come to start over is looking for; the
+            intro line above is about the modes, and this row says what it does
+            in its own. Still behind the experimental switch. */}
+        {reset && (
+          <div className="tw:px-4 tw:py-3">
+            <ResetArticle
+              slug={slug}
+              provenance={provenance}
+              onFinished={onFinished}
+              lead={
+                <>
+                  <Chip icon={RotateCcw} />
+                  <span className="tw:text-foreground">Whole article</span>
+                </>
+              }
+            />
+          </div>
+        )}
         {METADATA_RERUN_STEPS.map((step) => (
           <RerunRow
             key={step}
@@ -1350,16 +1376,6 @@ function RerunSection({
           />
         ))}
       </div>
-      {reset && (
-        <>
-          <h3 className="tw:mt-6 tw:mb-3 tw:text-sm tw:font-medium tw:text-ink">
-            Start the whole article again
-          </h3>
-          <div className={`${CARD} tw:p-4`}>
-            <ResetArticle slug={slug} provenance={provenance} onFinished={onFinished} />
-          </div>
-        </>
-      )}
     </Section>
   );
 }
@@ -1387,138 +1403,87 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
 };
 
 /**
- * **What the confirm says, and it is the sentence that has to be true of every
- * row it appears under.**
+ * **The four rows for which "another model call" is not the whole story**,
+ * said under the mode's name, before the press, because nothing else on this
+ * page says it.
  *
- * *"The result changes only if the run succeeds"* rather than *"what is here now
- * is replaced"*, because replacement is false for the glossary — and because
- * this is the draft-then-publish guarantee said where it is worth something
- * instead of left in the database docs: a step writes into a draft revision and
- * the draft replaces the live artefact only on success (`failRevision`,
- * src/store/pg-revisions.ts). A single-step re-run is therefore binary — either
- * the new artefact is published or the reader keeps exactly what they had.
+ * Until 2026-09-30 these were the four special sentences in an inline confirm
+ * that every press went through; Greg asked for the confirm to go (below, at
+ * `RerunRow`). The glossary's says **both** outcomes: a run appends when
+ * `existingFor` (src/glossary.ts) accepts the old list — same source, prompt
+ * version and reader profile — and writes a new list when there is no old one
+ * or any of those three differ. Nothing on this page knows which in advance
+ * (GPT Sol's two code reviews). The old confirm, and the *Find more terms*
+ * label, promised the append every time.
+ *
+ * The Sketch's figures are `SKETCH_PRICE` and `SKETCH_WAIT` from
+ * ./sketch-cost.ts, so this page and the Sketch panel cannot name two different
+ * prices. Debate is **up to** two separately metered calls — pass B runs only if
+ * pass A succeeded (src/debate.ts) — and its price is a **range and not a
+ * number**: a completed live run cost $0.3527 against a ceiling measured with
+ * no article in the prompt, and per-pass cost varied 2.4× with how much the
+ * model chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
+ * § Stage 3½ § 1. It reaches a reader here and nowhere else, so it is inline
+ * rather than a shared constant; the ~$0.27 in comments across `src/` is the
+ * superseded ceiling. Trajectory refuses before any model call when there are
+ * no Quotes (src/pipeline.ts), which is worth knowing before pressing rather
+ * than learning from the failure.
+ *
+ * Each is also the button's accessible description (`describedBy` on
+ * `JobProgress`), because a sibling `<span>` is not read to somebody who
+ * reaches the button by keyboard.
  */
-const RERUN_CONFIRM = "Another model call. The result changes only if the run succeeds.";
-/**
- * **The glossary's own, because forcing that step appends.**
- *
- * `generateGlossary` (src/glossary.ts) adds a batch of terms rather than
- * replacing the list, which is why `src/pipeline.ts` names it as the reason
- * glossary is in `FORCE_ONLY_WHEN_NAMED` at all. Changing only the *button* to
- * say *Find more terms* would leave the confirmation lying — found by a
- * cross-family review of the plan, and the reason there are two variants rather
- * than a label swap.
- */
-const RERUN_CONFIRM_GLOSSARY = "Another model call. New terms are added only if the run succeeds.";
-/**
- * The one row where *"another model call"* understates the press by an order of
- * magnitude — `SKETCH_PRICE` and `SKETCH_WAIT` from ./sketch-cost.ts, so this
- * page and the Sketch panel cannot name two different prices.
- */
-const RERUN_CONFIRM_SKETCH = `${RERUN_CONFIRM} It is the slowest one here — ${SKETCH_WAIT} — and it costs ${SKETCH_PRICE}.`;
-/**
- * Trajectory can refuse before it calls a model when Quotes do not exist, so
- * the generic promise of *another model call* is too strong. This is also why
- * the plan review narrowed the row's cost to *at most* one call.
- */
-const RERUN_CONFIRM_TRAJECTORY =
-  "Up to one model call. It needs Quotes first; if they are missing, the run refuses and says so. " +
-  "The result changes only if the run succeeds.";
-/**
- * **The one row where *"another model call"* is not even the right number.**
- *
- * Debate makes **two separately metered calls** and not one call producing two
- * lists — src/debate.ts § *Two groups, two passes, one atomic step*, which says
- * why the split is load-bearing rather than incidental. Pass B runs only if
- * pass A succeeded, so a failure costs one rather than two; *up to* is doing
- * real work in the sentence.
- *
- * **The price is a range and not a number, and this said “up to about $0.27”
- * until 2026-09-07.** ⟨Sol, F12.⟩ That ceiling is
- * docs/plans/260905f-debate-mode-stage-0-spike-results.md § The spend ceiling,
- * and the *same document* corrects it twenty-seven lines further down —
- * § Stage 3½ § 1, *“The cost figure is a range, and the plan's ceiling was too
- * low”*: a completed live run cost **$0.3527**, because the ceiling was
- * measured with probes **carrying no article** while pass B sends the whole
- * thing. Per-pass cost varied **2.4×** ($0.0725 to $0.1780) with how much the
- * model chose to search, so any single figure is a sample. That section asks
- * for the words this constant now uses: *$0.20–0.40 for a completed run on a
- * short article*, rising with length, said as a range.
- *
- * Left here rather than only in the plan, because the next person to want a
- * Debate price will grep for one and the first hit is what they will take —
- * which is exactly how the wrong number got here.
- *
- * `src/step-order.ts` calls the step the second dearest thing in the app; on
- * **this** page it is the dearest of the rows, which is the comparison the
- * reader in front of it can act on, and the Sketch's row next door is what
- * makes that legible.
- *
- * **Inline rather than a constant beside `SKETCH_PRICE`.** That leaf exists
- * because three surfaces render the sketch's price to a reader and must not
- * disagree; this figure reaches a reader here and nowhere else, while the
- * ~$0.27 that appears a dozen times in `src/` is prose in comments that a
- * constant could not have collected anyway. A shared home would look like one
- * without being one. ⟨Sol, F9 — the generic sentence understated the press.⟩
- *
- * *"only if the run succeeds"* is word for word the clause the other three
- * carry: it is the draft-then-publish guarantee, and it is true here too.
- */
-const RERUN_CONFIRM_DEBATE =
-  "Two model calls, not one: it searches the open web, and it is the dearest thing " +
-  "on this page — $0.20–0.40 for a completed run on a short article, and more on a " +
-  "long one. The result changes only if the run succeeds.";
-
-/** Only the rows for which the generic one-call confirmation is not true. */
-const SPECIAL_RERUN_CONFIRM: Partial<Record<MetadataRerunStep, string>> = {
-  glossary: RERUN_CONFIRM_GLOSSARY,
-  sketch: RERUN_CONFIRM_SKETCH,
-  trajectory: RERUN_CONFIRM_TRAJECTORY,
-  debate: RERUN_CONFIRM_DEBATE,
+const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
+  glossary:
+    /* *Up to date* is doing the work: `existingFor` refuses the old list when
+       there is none, or the source, the prompt version or the reader profile
+       differs — GPT Sol's second review listed the branches, and a note naming
+       all four was too long to be read as a note. */
+    "Adds more terms to an up-to-date list; otherwise writes a new one",
+  sketch: `${SKETCH_PRICE}, ${SKETCH_WAIT}`,
+  debate: "Up to two calls: $0.20–0.40 on a short article, more on a long one",
+  trajectory: "Needs Quotes first; without them it stops before any model call",
 };
 
 /**
- * One row: the mode's name, and a control that asks before it spends anything.
+ * One row: the mode's name, and a button that runs it.
  *
  * **A component per row rather than a loop of hooks**, because each row owns its
  * own `useStepJob` and `provenance` is null before the fetch lands — a `.map` of
  * hooks inside the section would change the hook count between renders the
  * moment anything about the row list came off the request.
  *
- * ## Two clicks, and the confirm is the whole answer to the objection
+ * ## One press, since 2026-09-30
  *
- * A re-run costs the reader nothing — `POST /api/jobs` spends a slot only for a
- * request carrying a `url`, and ours is a bare slug (src/routes.ts;
- * docs/project/billing.md) — and costs **us** a model call. Nothing rate-limits
- * job creation, and Greg declined a per-reader spend cap on 2026-09-06 on the
- * strength of a **global** monthly cap at OpenRouter, whose failure mode is
- * every reader losing every paid feature until the month turns. So a one-click
- * repeatable paid button, on a page full of them, is the wrong shape.
+ * > In Metadata when I click "Run it" or "Run it again" for a mode, don't
+ * > include the confirmation step. Just do it.
+ * >
+ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-64)
  *
- * The pattern came from the former `Rewrite` in ./Tweets.tsx — an inline
- * confirm row, no dialog, nothing blocked, and a `busy` that survives the round
- * trip so a press cannot look ignored. Copied rather than imported: that
- * component was welded to the thread page's layout.
+ * From 2026-09-07 the first press only opened an inline confirm, and the Retry
+ * went through the same one. What it guarded, checked before it went
+ * (docs/plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md):
+ * **no reader's slot** — `POST /api/jobs` reserves one only for a `url` or an
+ * upload, and a re-run is a bare slug (docs/project/billing.md); **nothing of the
+ * reader's** — a step writes a draft that replaces the live artefact only on
+ * success; and **our money, against a slip of the finger only** — a script calls
+ * the route and a person clicks twice, and it was never on
+ * docs/project/security-map.md. So it went for every reader, not only for Greg.
+ * The per-reader limiter that would actually bound this is designed and
+ * deliberately not built — docs/project/ai-gateway.md § What stops a reader
+ * spending our money.
  *
- * **On every row, including the ones the pill says have not run.** The uniform
- * rule is one code path, and the branch it saves would live in the one place a
- * mistake costs money.
+ * **A double click still posts once.** The synchronous `pressing` ref below
+ * closes the gap before React commits; `start` then keeps `starting` true from
+ * the POST through the poll that first carries the job, and `JobProgress` draws
+ * a status instead of the button throughout. Retry has the same two layers in
+ * `useStepJob`: a ref before the commit, then `starting` until its job appears.
  *
  * ## Everything after the press is `JobProgress`
  *
  * Running, failed, stalled, Retry and the gap between the POST and the first
- * poll that sees the job — all of it is already right in that component, so the
- * two things this row hands it that are its own are `onRun` and a wrapped
- * `retry`, both of which open the confirm instead of spending anything.
- *
- * **The Retry went straight through until 2026-09-07, and that was the two-click
- * rule with a hole in it.** ⟨Sol, F10, on the built code.⟩ `retryJob` carries the
- * original force forward — `force: forceForRetry(old.steps)`, src/jobs.ts —
- * so the new job forces the same paid step, and the button that buys it sits
- * under a failure at the moment a reader is most likely to press without
- * reading. One click, one forced paid step, no sentence. It is not the shelf
- * card's shape either: there a Retry resumes a many-stage ingest that mostly
- * worked.
+ * poll that sees the job — all of it is already right in that component, and
+ * this row hands it the run and the step's own failure unchanged.
  */
 function RerunRow({
   slug,
@@ -1538,97 +1503,43 @@ function RerunRow({
     onFinished,
     "watches-queue",
   );
-  /**
-   * **Which press the confirm is standing in front of**, or null for no confirm.
-   *
-   * A boolean called `asking` until 2026-09-07, and the boolean was the bug:
-   * with only one paid press to guard it left the *other* one — Retry — no way
-   * of routing through the same sentence. Three states, one confirm row, and
-   * the Yes button dispatches on this.
-   */
-  const [pending, setPending] = useState<null | "run" | "retry">(null);
-  /**
-   * **A confirm may not outlive the state it was opened over.** ⟨Sol, F14.⟩
-   *
-   * Two ways it can, and both were reachable: a job arriving from another tab
-   * (or the CLI) while the reader is still reading the sentence, and the
-   * failure a Retry stands over clearing underneath it — `useStepJob` sets
-   * `failed` to null and nothing here noticed, so `failed?.retry?.()` became a
-   * button whose only effect was to close itself. A press that does nothing and
-   * says nothing is the failure this repo names most often.
-   *
-   * **An active job wins over both kinds of confirm**, not just the retry. The
-   * confirm asks whether to buy a run; a job in the polled list means the run
-   * the reader is being asked about is *already happening*, and drawing the
-   * question over it costs them the progress, the Stop button and the stall
-   * warning for as long as they take to answer. `job` is only ever a queued or
-   * running row (src/web/useStepJob.ts § `job`), so this cannot be tripped by a
-   * finished one.
-   *
-   * **`job`, deliberately, and never `starting`.** `starting` is the gap
-   * between our own POST and the first poll that sees it — so keying on it
-   * would tear the confirm away between the click on Yes and the answer, which
-   * is the state `busy` exists to hold on screen.
-   */
-  const obsolete =
-    pending !== null && (job !== null || (pending === "retry" && !failed?.retry));
-  /* Cleared rather than only hidden, so that a job finishing does not bring a
-     question the reader never answered back out from behind it. Asking again is
-     one press, and it is the press they would have made. */
-  useEffect(() => {
-    if (obsolete) setPending(null);
-  }, [obsolete]);
-  /* What is actually drawn. Derived rather than waited for, because the effect
-     above lands a render later and that render is the one showing the confirm
-     over the live job. */
-  const asking = obsolete ? null : pending;
-  /* The round trip. `start` resolves when the POST has been answered, not when
-     the job has, and until then there is nothing in the polled list — so
-     without this the confirm row would come and go under a press that had
-     already landed. */
-  const [busy, setBusy] = useState(false);
-  /**
-   * **Where focus goes when the confirm opens**, and it went to `BODY`
-   * until 2026-09-07 ⟨Sol, F13⟩: the press unmounts the button it was on, and
-   * nothing here caught it. A reader who could not see the sentence therefore
-   * had to go looking for the control that had replaced the one they pressed,
-   * and would meet Yes with no idea what it was standing over.
-   */
-  const yesRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (asking) yesRef.current?.focus();
-  }, [asking]);
-  /**
-   * **The id the sentence is reachable by**, keyed on the step because a dozen of
-   * these rows are on screen at once and a fixed id would give the reader
-   * whichever row happened to be first in the document.
-   */
-  const confirmId = `rerun-confirm-${step}`;
+  /* **One press, one run.** `starting` takes the button away on the next
+     commit, but two click events can reach this handler before it — two paid
+     runs, now nothing asks first. Held for the POST's round trip; after that
+     `starting` holds until the job is polled, and the button is long gone.
+     Here and not in `useStepJob.start`, which other panels call twice on
+     purpose — see `inFlight` there. */
+  const pressing = useRef(false);
+  const run = async () => {
+    if (pressing.current) return;
+    pressing.current = true;
+    try {
+      /* Forced, and forced **by name**. The step's own freshness check
+         would otherwise skip an artefact that is, by construction,
+         current — a run that looks like it worked and changed nothing.
+         `useStepJob` turns this into `force: [step]`, never a positional
+         force, so nothing after it in `STEP_ORDER` is swept in. */
+      await start({ force: true });
+    } finally {
+      pressing.current = false;
+    }
+  };
 
   const Icon = STAGE_ICONS[step];
-  /* *Find more terms* for the glossary, in the words its own panel already uses,
-     because forcing that step appends. Otherwise off `done`, so the button and
-     the `ran` / `not run` pill in Technical details cannot contradict each
-     other — and `undefined` reads as "not that we know of". */
-  const label = step === "glossary" ? "Find more terms" : done ? "Run it again" : "Run it";
-  const confirm = SPECIAL_RERUN_CONFIRM[step] ?? RERUN_CONFIRM;
-  /* **The same sentence for a Retry as for a run, and that is not laziness.**
-     `JobProgress`'s Retry says *"skipping the stages that already worked"* in
-     its tooltip, which is true of an ingest and vacuous here: our job has one
-     step, so there is nothing else in it that could have worked. A retry of it
-     *is* a re-run, and it forces the same step, so it buys exactly what the run
-     buys and the confirm can honestly say the same thing. Only the Yes button's
-     words differ, so the reader can tell which press they are agreeing to. */
-  const yes =
-    asking === "retry" ? "Yes, try again" : step === "glossary" ? "Yes, find more" : "Yes, run it";
-  /* Retry, routed through the confirm instead of straight to the retry route —
-     see § the Retry in this component's header. The original `failed.retry` is
-     read at click time below, off this render's `failed`, so nothing here has to
-     hold a stale copy of it. `retry: null` (a POST that never became a job)
-     stays null, because that is what tells `JobProgress` to draw the run button
-     instead — and that one already asks. */
-  const failedAsking =
-    failed?.retry ? { ...failed, retry: () => setPending("retry") } : failed;
+  /* Off `done`, so the button and the `ran` / `not run` pill in Technical
+     details cannot contradict each other — and `undefined` reads as "not that
+     we know of". **The glossary too, since 2026-09-30.** It said *Find more
+     terms* whatever its state, and then off `done`, and both were a guess at
+     whether this press appends or rewrites — which `existingFor`
+     (src/glossary.ts) decides from the source, the prompt version and the
+     reader profile, none of which `done` tracks exactly (GPT Sol, both
+     reviews of 260930e). So it gets the plain label, and its note says the
+     two outcomes rather than predicting one. */
+  const label = done ? "Run it again" : "Run it";
+  const note = RERUN_COST_NOTE[step];
+  /* Keyed on the step: a dozen rows share the page, and a fixed id would
+     describe every button with whichever note came first. */
+  const noteId = `rerun-note-${step}`;
 
   return (
     <div
@@ -1636,108 +1547,52 @@ function RerunRow({
          would pass whatever the list happened to be — is never the way in. The
          same argument `data-section` on this page's headings makes.
 
-         **It is not what tells the buttons apart**, and reading it that way
-         is how the missing accessible names went unnoticed: every actionable
-         control in the row now carries the mode's name in its own `aria-label`,
-         and the tests assert on those. */
+         **It is not what tells the buttons apart**: every actionable control in
+         the row carries the mode's name in its own `aria-label` (`about`,
+         below), and the tests assert on those. */
       data-rerun-step={step}
       className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-3 tw:text-sm"
     >
       <Chip icon={Icon} />
       <span className="tw:text-foreground">{RERUN_LABEL[step]}</span>
+      {/* **On its own line under the name, at every width** — `order-last` and
+          `basis-full` in a wrapping row, indented by the chip and its gap
+          (24px + 12px) so it sits under the name. Beside the name, a 390px
+          screen pushed only these rows' buttons onto a line of their own,
+          out of step with every other row (browser check, 2026-09-30). */}
+      {note && (
+        <span
+          id={noteId}
+          className="tw:order-last tw:-mt-1 tw:basis-full tw:pl-9 tw:text-xs tw:text-ink-faint"
+        >
+          {note}
+        </span>
+      )}
       {/* A `div` and not a `span`: `JobProgress` draws a `div` for its starting
           row and its running band, and a block element inside phrasing content
           is invalid markup that nothing here would ever go red over. */}
       <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
-        {asking ? (
-          <>
-            <span id={confirmId} className="tw:text-xs tw:text-muted-foreground">
-              {confirm}
-            </span>
-            <Button
-              type="button"
-              ref={yesRef}
-              variant="outline"
-              size="xs"
-              disabled={busy}
-              /* **What the press costs, said to the reader who cannot see it.**
-                 The sentence beside this button is a plain sibling `<span>`,
-                 which a screen reader announces on its way past and not at all
-                 to somebody navigating by button list — so without this, Yes
-                 announced its own words and nothing about two model calls or
-                 the price, and the two-click rule bought nothing for exactly
-                 the reader who can least afford a surprise. ⟨Sol, F13.⟩
-
-                 **On Yes and not on Cancel.** A description is read after the
-                 name every time the control is reached, and Cancel spends
-                 nothing: repeating the price on it would be noise on the safe
-                 button. The guarded press carries it. */
-              aria-describedby={confirmId}
-              /* Every actionable control in this row carries the mode's name,
-                 because the name itself is a sibling `<span>` and a screen
-                 reader's button list does not read those — a dozen rows of *Yes,
-                 run it* and *Cancel* otherwise. The visible words come first, so
-                 saying them still matches. ⟨Sol, F11.⟩ */
-              aria-label={`${busy ? "Starting…" : yes} — ${RERUN_LABEL[step]}`}
-              onClick={async () => {
-                setBusy(true);
-                if (asking === "retry") {
-                  /* The failure's own retry, taken from this render rather than
-                     from the wrapper handed to `JobProgress`. It returns void —
-                     `queue.retry` is fired and not awaited (src/web/useStepJob.ts)
-                     — so there is no round trip to hold `busy` across, unlike the
-                     branch below. */
-                  failed?.retry?.();
-                } else {
-                  /* Forced, and forced **by name**. The step's own freshness check
-                     would otherwise skip an artefact that is, by construction,
-                     current — a run that looks like it worked and changed
-                     nothing. `useStepJob` turns this into `force: [step]`, never a
-                     positional force, so nothing after it in `STEP_ORDER` is
-                     swept in. */
-                  await start({ force: true });
-                }
-                setBusy(false);
-                setPending(null);
-              }}
-            >
-              {busy ? "Starting…" : yes}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              aria-label={`Cancel — ${RERUN_LABEL[step]}`}
-              onClick={() => setPending(null)}
-            >
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <JobProgress
-            job={job}
-            starting={starting}
-            failed={failedAsking}
-            stalled={stalled}
-            /* Opens the confirm rather than starting a run — the two-click rule,
-               kept in the one place the button is actually drawn. */
-            onRun={async () => setPending("run")}
-            onCancel={cancel}
-            label={label}
-            step={step}
-            icon={<RefreshCw size={13} />}
-            /* What the band's own two buttons are about, for their accessible
-               names — see `about` in JobProgress.tsx. Ten bands on one page is
-               the case that prop exists for. */
-            about={RERUN_LABEL[step]}
-            /* Only ever shown for the moment before the step reports a label of
-               its own, so it says the neutral thing rather than guessing a verb
-               — the pipeline's own are *Writing the arc*, *Finding the terms*,
-               *Drawing the argument*, and none of those generalises. */
-            runningLabel={`Working on the ${RERUN_LABEL[step].toLowerCase()}`}
-          />
-        )}
+        <JobProgress
+          job={job}
+          starting={starting}
+          failed={failed}
+          stalled={stalled}
+          onRun={run}
+          onCancel={cancel}
+          label={label}
+          step={step}
+          icon={<RefreshCw size={13} />}
+          /* What the band's own buttons are about, for their accessible
+             names — see `about` in JobProgress.tsx. A dozen bands on one page
+             is the case that prop exists for. */
+          about={RERUN_LABEL[step]}
+          describedBy={note ? noteId : undefined}
+          /* Only ever shown for the moment before the step reports a label of
+             its own, so it says the neutral thing rather than guessing a verb
+             — the pipeline's own are *Writing the arc*, *Finding the terms*,
+             *Drawing the argument*, and none of those generalises. */
+          runningLabel={`Working on the ${RERUN_LABEL[step].toLowerCase()}`}
+        />
       </div>
     </div>
   );

@@ -14,22 +14,19 @@
  * Five things here are about money or about a lost artefact rather than about
  * React:
  *
- *  - **The first press asks and posts nothing.** The confirm step is the whole
- *    answer to *"a one-click repeatable paid button on a page full of them is
- *    the wrong shape"*, and a test that only checked the second press would pass
- *    over a button that had lost the first.
- *  - **The second press posts exactly `{ slug, steps: [step], force: [step] }`.**
- *    A positional force would cascade over everything after it (`cascadeForce`,
- *    src/jobs.ts) and buy calls nobody pressed for; a *missing* force would run
- *    a step that skips itself as current, which reads exactly like a run that
- *    worked and changed nothing.
- *  - **The confirm row survives the round trip.** Without `busy` the plain
- *    button comes back between the press and the POST being answered, so the
- *    press looks ignored and gets made twice — docs/reusable/silent-success.md.
- *  - **The glossary says something different, in both places.** Forcing that
- *    step *appends* (src/glossary.ts § `generateGlossary`), so a row labelled
- *    *Run it again* over a confirm promising a replacement would be wrong twice
- *    about one press.
+ *  - **One press posts exactly `{ slug, steps: [step], force: [step] }`**, and
+ *    asks nothing first — since 2026-09-30, when Greg asked for the confirm to
+ *    go (SPIDERYARN-READING2-64). A positional force would cascade over
+ *    everything after it (`cascadeForce`, src/jobs.ts) and buy calls nobody
+ *    pressed for; a *missing* force would run a step that skips itself as
+ *    current, which reads exactly like a run that worked and changed nothing.
+ *  - **A double press posts once.** With no confirm, `starting` is the only
+ *    thing between a double click and two paid runs.
+ *  - **The Sketch and Debate rows say their price before the press**, which
+ *    the confirm used to be the only place to say.
+ *  - **The glossary's note says it may add or rewrite**, because which one a
+ *    forced run does is `existingFor`'s decision (src/glossary.ts), not the
+ *    page's to predict.
  *  - **The completion read trails an outstanding GET rather than joining it.**
  *    The last test drives the interleaving `useOrderedRead` exists for, through
  *    the page, so it is about the callback the rows were really handed.
@@ -157,6 +154,11 @@ let retries: string[];
 /** Resolves a held `POST /api/jobs`; set only while `holdPost` is true. */
 let releasePost: (() => void) | undefined;
 let holdPost = false;
+/** Resolves a held `POST /api/jobs/:id/retry`; set only while `holdRetry` is true. */
+let releaseRetry: (() => void) | undefined;
+let holdRetry = false;
+/** The retry route's next answer, varied by refusal tests. */
+let retryAnswer: () => Response;
 /**
  * Held `GET /api/metadata/:slug` answers, oldest first — each already carrying
  * the stages as they stood **when it was asked for**, which is what makes the
@@ -221,6 +223,9 @@ beforeEach(() => {
   retries = [];
   releasePost = undefined;
   holdPost = false;
+  releaseRetry = undefined;
+  holdRetry = false;
+  retryAnswer = () => json(madeJob("job-retried", "quotes"));
   heldMetadata = [];
   holdMetadata = false;
   metadataReads = 0;
@@ -240,7 +245,11 @@ beforeEach(() => {
     const retried = /^\/api\/jobs\/([^/]+)\/retry$/.exec(url);
     if (retried && method === "POST") {
       retries.push(retried[1] ?? "");
-      return Promise.resolve(json(madeJob("job-retried", "quotes")));
+      const answer = retryAnswer();
+      if (!holdRetry) return Promise.resolve(answer);
+      return new Promise<Response>((go) => {
+        releaseRetry = () => go(answer);
+      });
     }
     if (url === "/api/jobs" && method === "POST") {
       const body = JSON.parse(String(init?.body ?? "{}")) as { steps?: StepName[] };
@@ -353,63 +362,54 @@ describe("the Re-run AI processing section", () => {
   );
 
   it.each(["faq", "citations"])(
-    "asks first on the %s row, with the one-call sentence, then forces that step alone",
+    "runs the %s row on one press, forcing that step alone",
     async (step) => {
       await open();
       await press(button(step, "Run it again"));
-
-      expect(posts).toEqual([]);
-      expect(row(step)?.textContent).toContain(
-        "Another model call. The result changes only if the run succeeds.",
-      );
-
-      await press(button(step, "Yes, run it"));
       expect(posts).toEqual([{ slug: SLUG, steps: [step], force: [step] }]);
     },
   );
 
-  it("asks before it spends anything", async () => {
+  /**
+   * **One press, since 2026-09-30** — Greg, SPIDERYARN-READING2-64: *"don't
+   * include the confirmation step. Just do it."* What the confirm guarded, and
+   * why it went for every reader, is `RerunRow`'s header in Metadata.tsx.
+   *
+   * The payload is the half that still matters: a positional force would
+   * cascade over everything after it (`cascadeForce`, src/jobs.ts) and buy
+   * calls nobody pressed for; a missing force would run a step that skips
+   * itself as current, which reads exactly like a run that worked and changed
+   * nothing.
+   */
+  it("posts one step and one forced name on the first press, and asks nothing", async () => {
     await open();
     await press(button("ideas", "Run it again"));
-
-    expect(posts).toEqual([]);
-    expect(row("ideas")?.textContent).toContain(
-      "Another model call. The result changes only if the run succeeds.",
-    );
-    /* Only that row asked. A confirm that opened on every row would be a
-       page-wide state pretending to belong to a row. */
-    expect(row("quotes")?.textContent).not.toContain("Another model call");
-  });
-
-  it("posts one step and one forced name on the second press", async () => {
-    await open();
-    await press(button("ideas", "Run it again"));
-    await press(button("ideas", "Yes, run it"));
 
     expect(posts).toEqual([{ slug: SLUG, steps: ["ideas"], force: ["ideas"] }]);
+    expect(button("ideas", "Yes"), "a confirm is still drawn").toBeUndefined();
+    expect(row("ideas")?.textContent).not.toContain("model call");
   });
 
   /**
-   * The gap between the press and the POST being answered — a real round trip,
-   * during which the queue has nothing to report yet.
-   *
-   * `busy` is what holds the confirm row up across it, so the reader is still
-   * looking at the sentence they agreed to with *Starting…* under it. Without it
-   * the row swaps to something else mid-flight, and the second press guarded
-   * below is one nothing is stopping.
+   * **With the confirm gone, a synchronous ref closes the gap before React can
+   * commit `starting`.** After that commit, `JobProgress` draws a status in
+   * place of the button until polling carries the returned job — so there is
+   * no second button after the POST answers either.
    */
-  it("keeps the confirm row up for the whole round trip", async () => {
+  it("posts once however soon the second press comes", async () => {
     holdPost = true;
     await open();
-    await press(button("timeline", "Run it again"));
-    await act(async () => button("timeline", "Yes, run it")?.click());
+    const run = button("timeline", "Run it again");
+    /* Both events before React can commit the first one's state, as the Retry
+       test below does: two separate `act` calls would click a detached button
+       the second time and pass without any latch. */
+    await act(async () => {
+      run?.click();
+      run?.click();
+    });
 
-    const midFlight = row("timeline")?.textContent ?? "";
-    expect(midFlight, "the confirm row went away mid-flight").toContain("Another model call");
-    expect(midFlight).toContain("Starting");
-    expect(button("timeline", "Run it again")).toBeUndefined();
-
-    /* And a second press on it must not buy a second run. */
+    expect(row("timeline")?.textContent).toContain("Starting");
+    expect(button("timeline", "Run it again"), "the button stayed up mid-flight").toBeUndefined();
     for (const b of [...(row("timeline")?.querySelectorAll("button") ?? [])]) {
       await act(async () => b.click());
     }
@@ -417,45 +417,124 @@ describe("the Re-run AI processing section", () => {
 
     await act(async () => releasePost?.());
     await settle();
+    expect(row("timeline")?.textContent).toContain("Starting");
+    expect(
+      button("timeline", "Run it again"),
+      "the button returned after the POST but before the job appeared in polling",
+    ).toBeUndefined();
     expect(posts).toHaveLength(1);
   });
 
   /**
-   * Forcing the glossary **appends** a batch of terms. A row labelled *Run it
-   * again* over a confirm promising a replacement would be wrong twice about
-   * one press, which is why the label and the sentence move together.
+   * **The glossary gets the plain label, and a note that says both outcomes.**
+   * Forcing it appends when `existingFor` (src/glossary.ts) accepts the old
+   * list — same source, prompt version and reader profile — and rewrites it
+   * otherwise. *Find more terms* promised the append every time, and keying
+   * the label on `done` guessed wrong both ways, because `done` tracks the
+   * model and not the profile (GPT Sol, both reviews, 2026-09-30).
    */
-  it("says what the glossary really does, in the button and in the confirm", async () => {
+  it("labels the glossary like any mode and says it may add or rewrite", async () => {
+    await open();
+    expect(button("glossary", "Find more terms")).toBeUndefined();
+    expect(row("glossary")?.textContent).toContain(
+      "Adds more terms to an up-to-date list; otherwise writes a new one",
+    );
+    await press(button("glossary", "Run it again"));
+    expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
+  });
+
+  it("says Run it over a glossary that has never run", async () => {
+    ran = new Set<StepName>(["arc"]);
     await open();
     expect(button("glossary", "Run it again")).toBeUndefined();
-    await press(button("glossary", "Find more terms"));
-
-    expect(row("glossary")?.textContent).toContain("New terms are added only if the run succeeds.");
-    expect(row("glossary")?.textContent).not.toContain("The result changes only if");
+    expect(button("glossary", "Run it")).toBeTruthy();
   });
 
   /**
-   * `SKETCH_PRICE` and `SKETCH_WAIT`, because *"another model call"* understates
-   * this press by an order of magnitude.
+   * `SKETCH_PRICE` and `SKETCH_WAIT`, beside the name and before any press:
+   * the confirm used to be the only place on this page that said them.
    */
-  it("names the price and the wait on the sketch row", async () => {
+  it("names the price and the wait on the sketch row before anything is pressed", async () => {
     await open();
-    await press(button("sketch", "Run it again"));
 
     const text = row("sketch")?.textContent ?? "";
     expect(text).toContain("about $0.20");
     expect(text).toContain("about two minutes");
+    expect(posts).toEqual([]);
   });
 
-  it("says Trajectory may refuse before buying its one model call", async () => {
+  /**
+   * **Debate is two separately metered calls, not one** (src/debate.ts § *Two
+   * groups, two passes, one atomic step*), and the dearest press on this page —
+   * $0.20–0.40 for a completed run on a short article, rising with length
+   * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § Stage 3½ § 1).
+   *
+   * **The range, not the ceiling.** *Up to about $0.27* came from that spike's
+   * § The spend ceiling, which § Stage 3½ corrects further down: the probes
+   * carried no article, and a completed live run cost $0.3527 ⟨Sol, F12⟩.
+   */
+  it("names up to two calls and the price range on the debate row", async () => {
     await open();
-    await press(button("trajectory", "Run it again"));
 
-    const text = row("trajectory")?.textContent ?? "";
-    expect(text).not.toContain("Another model call.");
-    expect(text).toContain("Up to one model call");
-    expect(text).toContain("needs Quotes first");
-    expect(text).toContain("only if the run succeeds");
+    const text = row("debate")?.textContent ?? "";
+    /* *Up to*: pass B runs only if pass A succeeded (src/debate.ts). */
+    expect(text).toContain("Up to two calls");
+    expect(text).toContain("$0.20–0.40 on a short article, more on a long one");
+    expect(text, "the debate row quotes the disproven ceiling").not.toContain("$0.27");
+  });
+
+  it("says Trajectory needs Quotes before anything is pressed", async () => {
+    await open();
+    expect(row("trajectory")?.textContent).toContain(
+      "Needs Quotes first; without them it stops before any model call",
+    );
+  });
+
+  it("puts a note on the glossary, sketch, debate and trajectory rows and on no other", async () => {
+    await open();
+    const noted = new Set(["glossary", "sketch", "debate", "trajectory"]);
+    for (const step of METADATA_RERUN_STEPS) {
+      expect(
+        host.querySelector(`#rerun-note-${step}`) !== null,
+        `${step}'s note`,
+      ).toBe(noted.has(step));
+      expect((row(step)?.textContent ?? "").includes("$"), `${step}'s price`).toBe(
+        step === "sketch" || step === "debate",
+      );
+    }
+  });
+
+  /**
+   * **The note is the button's accessible description**, asserted on the
+   * resolved text rather than the attribute: an `aria-describedby` naming an id
+   * that does not exist looks identical to a right one from outside. A sibling
+   * `<span>` is not read to somebody reaching the button by keyboard, and with
+   * the confirm gone this is the only place the price is said. ⟨Sol, plan
+   * review F4, 2026-09-30.⟩
+   */
+  it("describes the Run and Retry buttons with the note, so a screen reader hears the price", async () => {
+    await open();
+    const run = button("debate", "Run it again");
+    const ids = (run?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    expect(ids, "Run is not described by anything").not.toEqual([]);
+    const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
+    expect(described).toContain("$0.20–0.40");
+    expect(button("quotes", "Run it again")?.hasAttribute("aria-describedby")).toBe(false);
+
+    await press(run);
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "debate", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+    const retry = button("debate", "Retry");
+    const retryIds = (retry?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    const retryDescription = retryIds
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    expect(retryDescription).toContain("$0.20–0.40");
   });
 
   /**
@@ -522,64 +601,19 @@ describe("the Re-run AI processing section", () => {
   });
 
   /**
-   * **Debate is two separately metered calls, not one** (src/debate.ts § *Two
-   * groups, two passes, one atomic step*), and it is the dearest press on this
-   * page — $0.20–0.40 for a completed run on a short article, rising with
-   * length (docs/plans/260905f-debate-mode-stage-0-spike-results.md § Stage 3½
-   * § 1). The generic *"another model call"* was therefore wrong about the
-   * number **and** silent about the price — a confirmation that understates
-   * what it is asking for is worse than none, because the reader has been told
-   * something.
+   * **A Retry goes straight through too, and to the retry route.**
    *
-   * **And the first price this test pinned was itself the wrong one.** It
-   * asserted *up to about $0.27*, taken from § The spend ceiling of that same
-   * document, whose § Stage 3½ corrects it twenty-seven lines later — so the
-   * test agreed with the code about a figure both had got from a superseded
-   * section. A number asserted in two places is not a number checked twice.
+   * It asked first from 2026-09-07 ⟨Sol, F10⟩, because `retryJob` carries the
+   * original force forward and so re-buys the forced step. That is exactly what
+   * the run buys, so since 2026-09-30 it is one press like the run — asking on
+   * one and not the other would be a rule with no reason behind it.
    *
-   * Asserted as *not the generic sentence* as well as *these words*: a variant
-   * that got added and never wired to the row would pass the second half alone.
+   * What still matters is **where** it goes: `/api/jobs/:id/retry`, and **not**
+   * `POST /api/jobs`, which would be a different job.
    */
-  it("says two calls and the price on the debate row, not the generic sentence", async () => {
-    await open();
-    await press(button("debate", "Run it again"));
-
-    const text = row("debate")?.textContent ?? "";
-    expect(text, "debate is still getting the generic confirm").not.toContain(
-      "Another model call.",
-    );
-    expect(text).toContain("Two model calls");
-    /* **The range, not the ceiling.** “Up to about $0.27” came from the spike's
-       § The spend ceiling, and § Stage 3½ § 1 of the same document corrects it
-       twenty-seven lines further down: the probes carried no article, a
-       completed live run cost $0.3527, and per-pass cost varied 2.4×. A
-       confirmation that understates the purchase it guards is worse than none.
-       ⟨Sol, F12.⟩ */
-    expect(text, "the debate row still quotes the disproven ceiling").not.toContain("$0.27");
-    expect(text).toContain("$0.20–0.40");
-    /* The draft-then-publish clause is the one thing every variant must keep. */
-    expect(text).toContain("only if the run succeeds");
-  });
-
-  /**
-   * **A Retry after a failure buys the forced step again, so it asks first.**
-   *
-   * `retryJob` carries the original force into the new job —
-   * `force: forceForRetry(old.steps)`, src/jobs.ts — and our job forced a paid
-   * step, so a Retry wired straight to `failed.retry` is a one-click re-buy at
-   * the moment a reader is least likely to read. That is the two-click rule with
-   * a hole in it, and it was there until 2026-09-07 ⟨Sol, F10⟩.
-   *
-   * Both halves matter. The first press must post **nothing** — a test that only
-   * checked the second would pass over a Retry that had lost its confirm. The
-   * second must reach `/api/jobs/:id/retry` and **not** `POST /api/jobs`: routing
-   * the confirmed retry into `start` instead would be a different job, dropping
-   * whatever the failed one had done.
-   */
-  it("asks before a Retry, and then retries the job rather than starting a new one", async () => {
+  it("retries the failed job on one press rather than starting a new one", async () => {
     await open();
     await press(button("quotes", "Run it again"));
-    await press(button("quotes", "Yes, run it"));
     expect(posts).toHaveLength(1);
 
     /* The job the press made, come back failed. No `failureKind`, so
@@ -595,20 +629,72 @@ describe("the Re-run AI processing section", () => {
     expect(button("quotes", "Retry"), "no Retry offered after a retryable failure").toBeTruthy();
 
     await press(button("quotes", "Retry"));
-    expect(retries, "Retry went straight to the retry route").toEqual([]);
+    expect(retries, "Retry did not reach the retry route").toEqual(["job-1"]);
     expect(posts, "Retry started a new job").toHaveLength(1);
-    expect(row("quotes")?.textContent).toContain("The result changes only if the run succeeds.");
-
-    await press(button("quotes", "Yes, try again"));
-    expect(retries, "the confirmed retry never reached the retry route").toEqual(["job-1"]);
-    expect(posts, "the confirmed retry started a new job instead").toHaveLength(1);
   });
 
   /**
-   * **The accessible name is what tells nine identical buttons apart**, and until
-   * 2026-09-07 nothing did: the mode's name is a sibling `<span>`, which a screen
-   * reader's button list does not read, so the list was eight *Run it again*
-   * controls and an ambiguous *Yes, run it* ⟨Sol, F11⟩.
+   * **And a double click on Retry sends one retry.** Until 2026-09-30 a Retry
+   * was fired and forgotten (`void queue.retry(id)`), so its button stayed up
+   * until a poll found the new job — harmless behind a confirm, two paid
+   * retries without one. ⟨Sol, plan review F1.⟩
+   */
+  it("sends one retry however soon the second press comes", async () => {
+    await open();
+    await press(button("quotes", "Run it again"));
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+
+    holdRetry = true;
+    const retry = button("quotes", "Retry");
+    /* Both events before React can commit the first one's state update. Two
+       separate `act` calls only click a detached old button the second time and
+       stay green without a synchronous request latch. */
+    await act(async () => {
+      retry?.click();
+      retry?.click();
+    });
+    expect(button("quotes", "Retry"), "Retry stayed up mid-flight").toBeUndefined();
+    expect(row("quotes")?.textContent).toContain("Starting");
+    for (const b of [...(row("quotes")?.querySelectorAll("button") ?? [])]) {
+      await act(async () => b.click());
+    }
+    expect(retries).toEqual(["job-1"]);
+
+    await act(async () => releaseRetry?.());
+    await settle();
+    expect(retries).toEqual(["job-1"]);
+    expect(posts).toHaveLength(1);
+  });
+
+  it("restores Retry instead of leaving Starting stuck when the retry is refused", async () => {
+    retryAnswer = () => json({ error: "That job cannot be tried again." }, 409);
+    await open();
+    await press(button("quotes", "Run it again"));
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+
+    await press(button("quotes", "Retry"));
+
+    expect(retries).toEqual(["job-1"]);
+    expect(row("quotes")?.textContent).not.toContain("Starting");
+    expect(button("quotes", "Retry"), "the refused action left no way to try again").toBeTruthy();
+  });
+
+  /**
+   * **The accessible name is what tells a dozen identical buttons apart**, and
+   * until 2026-09-07 nothing did: the mode's name is a sibling `<span>`, which a
+   * screen reader's button list does not read ⟨Sol, F11⟩.
    *
    * Asserted on the name and not on `data-rerun-step`. That attribute is how the
    * *tests* find a row, and reading it as if it were a distinction the reader
@@ -633,130 +719,5 @@ describe("the Re-run AI processing section", () => {
     expect(new Set(names).size, `two rows share a name: ${names.join(", ")}`).toBe(
       METADATA_RERUN_STEPS.length,
     );
-
-    /* And the confirm's own two, which are rendered here rather than by
-       JobProgress and are just as indistinguishable without one. */
-    await press(button("ideas", "Run it again"));
-    const confirmNames = [...(row("ideas")?.querySelectorAll("button") ?? [])].map((b) => {
-      const name = b.getAttribute("aria-label") ?? "";
-      expect(name, `no accessible name on ${b.textContent}`).not.toBe("");
-      expect(name.startsWith(b.textContent ?? "…"), `${name} does not start with its own text`).toBe(
-        true,
-      );
-      return name;
-    });
-    expect(confirmNames).toEqual(["Yes, run it — Ideas", "Cancel — Ideas"]);
-  });
-
-  /**
-   * **The two-click rule is worth nothing to a reader who never hears the
-   * sentence**, and until 2026-09-07 that was every screen-reader user
-   * ⟨Sol, F13⟩. The Run button they pressed is unmounted by the press, so focus
-   * fell to `BODY`; the confirm sentence is an unlabelled, non-live sibling
-   * `<span>`, so nothing announced it; and Yes carried an `aria-label` and no
-   * `aria-describedby`, so navigating to it said *Yes, run it — Debate* and
-   * neither *two model calls* nor the price.
-   *
-   * **Asserted on the resolved description rather than on the attribute**,
-   * because the attribute is a promise and the text is what the reader is told:
-   * an `aria-describedby` pointing at an id that does not exist looks identical
-   * to a correct one from the outside, and a dozen rows on one page is exactly the
-   * shape that produces a duplicated id.
-   */
-  it("moves focus to Yes and describes it with the sentence that names the cost", async () => {
-    await open();
-    await press(button("debate", "Run it again"));
-
-    const yes = button("debate", "Yes, run it");
-    expect(document.activeElement, "focus was left outside the confirm").toBe(yes);
-
-    const ids = (yes?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
-    expect(ids, "Yes is not described by anything").not.toEqual([]);
-    const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
-    expect(described, "the description does not say what the press buys").toContain(
-      "Two model calls",
-    );
-    expect(described, "the description does not say the price").toContain("$0.20–0.40");
-  });
-
-  /**
-   * **A confirm may not outlive the state it was opened over** ⟨Sol, F14⟩.
-   *
-   * Two separate harms, and the second is the worse one. Pressing Yes on a
-   * retry whose failure has gone reaches `failed?.retry?.()`, does nothing and
-   * closes the row — a silent no-op, which is the failure this repo writes up
-   * most often. And until that press the confirm is drawn *instead of*
-   * `JobProgress`, so a reader with a job running in another tab has no
-   * progress, no Stop and no stall warning.
-   *
-   * Three interleavings, because the state can go stale in three ways and only
-   * one of them was ever considered.
-   */
-  it("gives a job that arrives under an open confirm the row back", async () => {
-    await open();
-    await press(button("quotes", "Run it again"));
-    expect(posts, "the ask posted something").toHaveLength(0);
-
-    /* Another tab, or the CLI: `useStepJob` finds the job in the polled queue
-       rather than remembering the click, so this is a run of ours in every way
-       that matters here. Two lists because the engine treats the first one it
-       ever sees as a baseline. */
-    await act(async () => jobEngine.receive([]));
-    await act(async () => jobEngine.receive([madeJob("job-elsewhere", "quotes", "running")]));
-    await settle();
-
-    expect(button("quotes", "Yes, run it"), "the confirm outlived the job that answered it")
-      .toBeFalsy();
-    expect(button("quotes", "Stop"), "the live job has no Stop button").toBeTruthy();
-    expect(posts, "the row started a second job").toHaveLength(0);
-  });
-
-  it("gives a job that arrives under an open Retry confirm the row back", async () => {
-    await open();
-    await press(button("quotes", "Run it again"));
-    await press(button("quotes", "Yes, run it"));
-    await act(async () => jobEngine.receive([]));
-    await act(async () => {
-      jobEngine.receive([
-        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
-      ]);
-    });
-    await settle();
-    await press(button("quotes", "Retry"));
-    expect(button("quotes", "Yes, try again"), "the Retry did not ask").toBeTruthy();
-
-    /* The other tab pressed Retry first: the failure is replaced by a live job. */
-    await act(async () => jobEngine.receive([madeJob("job-retried", "quotes", "running")]));
-    await settle();
-
-    expect(button("quotes", "Yes, try again"), "an obsolete confirm hid a live job").toBeFalsy();
-    expect(button("quotes", "Stop"), "the live job has no Stop button").toBeTruthy();
-    expect(retries, "we retried a job that was already running").toEqual([]);
-  });
-
-  it("closes an obsolete Retry confirm when the failure it stands over has cleared", async () => {
-    await open();
-    await press(button("quotes", "Run it again"));
-    await press(button("quotes", "Yes, run it"));
-    await act(async () => jobEngine.receive([]));
-    await act(async () => {
-      jobEngine.receive([
-        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
-      ]);
-    });
-    await settle();
-    await press(button("quotes", "Retry"));
-    expect(button("quotes", "Yes, try again"), "the Retry did not ask").toBeTruthy();
-
-    /* The failure clears with no job to replace it — the job succeeded on its
-       retry elsewhere. `failed` goes null, so `failed.retry` is gone and the
-       Yes standing over it could only be a no-op. */
-    await act(async () => jobEngine.receive([madeJob("job-1", "quotes", "done")]));
-    await settle();
-
-    expect(button("quotes", "Yes, try again"), "a Yes that can only do nothing is reachable")
-      .toBeFalsy();
-    expect(button("quotes", "Run it again"), "the row lost its control altogether").toBeTruthy();
-    expect(retries, "something was retried").toEqual([]);
   });
 });

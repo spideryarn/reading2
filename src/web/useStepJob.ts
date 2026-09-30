@@ -466,6 +466,19 @@ export function useStepJob<S extends StepName>(
    * that question would be a render for nothing.
    */
   const startedId = useRef<string | null>(null);
+  /* State removes the button on the next commit; this ref closes the smaller
+     window before that commit, when two click events can still invoke the same
+     Retry handler — two paid retries, since Metadata's rows stopped asking
+     first on 2026-09-30. It stays held after the POST answers until the
+     returned job is present in the queue, matching `starting` rather than only
+     the request, and a refusal releases it. GPT Sol's code review.
+
+     **Retry only, not `start`.** `start` is called twice on purpose — a mode
+     that starts itself and then a press before the first job is polled
+     (tests/modes-that-start-themselves.test.tsx, tests/step-job-force.test.tsx
+     both went red with it there). Metadata's run button latches in `RerunRow`
+     instead, where one press is the whole of what it means. */
+  const inFlight = useRef(false);
   const [starting, setStarting] = useState(false);
 
   /**
@@ -505,6 +518,7 @@ export function useStepJob<S extends StepName>(
     if (!seen) return;
     /* It exists, so the request is no longer merely in flight. */
     setStarting(false);
+    inFlight.current = false;
     startedId.current = null;
     if (seen.status === "queued" || seen.status === "running") return;
     if (seen.status === "done" && !announced.current.has(id)) onFinished();
@@ -574,6 +588,43 @@ export function useStepJob<S extends StepName>(
   );
 
   /**
+   * **A Retry holds *Starting…* across its round trip, as `start` does.**
+   *
+   * It was `void queue.retry(id)` until 2026-09-30, which left the failure —
+   * and so its Retry button — on screen until a poll found the new job: a
+   * double click sent two retries. Harmless while the Metadata page asked
+   * before every Retry; not once it stopped asking (Greg, SPIDERYARN-READING2-64,
+   * docs/plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md,
+   * found by GPT Sol's plan review).
+   *
+   * `starting` wins over `failed` in `JobProgress`, so setting it before the
+   * `await` takes the button away at once. The route answers with the new
+   * job, and it becomes the watched one exactly as a started job does, so the
+   * effect above clears `starting` when the list carries it. `watchedId` is
+   * left alone until then: on a refused retry the old failure, and its Retry,
+   * come back as they were.
+   */
+  const retry = useCallback(
+    async (id: string) => {
+      /* React commits a discrete click promptly in the browser, but the action
+         itself must still be single-flight: two events can reach this closure
+         before that commit removes the button. */
+      if (inFlight.current) return;
+      inFlight.current = true;
+      setStarting(true);
+      const next = await queue.retry(id);
+      if (next) {
+        setWatchedId(next.id);
+        startedId.current = next.id;
+        return;
+      }
+      inFlight.current = false;
+      setStarting(false);
+    },
+    [queue],
+  );
+
+  /**
    * **A failed POST does not mean the request never landed.** `queue.run`
    * returns null for *any* throw, and `readJson` throws on a 4xx or a 5xx
    * (src/web/useJobs.ts § `act`) — so a job the server received and **refused**,
@@ -629,7 +680,7 @@ export function useStepJob<S extends StepName>(
       ? {
           message: stopped.message,
           retryable: stopped.retryable,
-          retry: () => void queue.retry(stopped.id),
+          retry: () => void retry(stopped.id),
         }
       : null;
 

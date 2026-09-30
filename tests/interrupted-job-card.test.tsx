@@ -66,7 +66,7 @@ const queue: UseJobs = {
   run: async () => null,
   reset: async () => null,
   cancel: async () => undefined,
-  retry: async () => undefined,
+  retry: async () => null,
   forget: async () => undefined,
 };
 

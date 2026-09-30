@@ -13,6 +13,8 @@
  *    it is off, present when it is on.
  *  - **The first press asks and posts nothing.** A reset re-reads the article
  *    and can detach comments on maths, so a one-click control is the wrong shape.
+ *    The mode rows beside it lost their confirm on 2026-09-30; this one keeps
+ *    it, because what it guards is the reader's and not a model call of ours.
  *  - **Yes posts exactly `{ regenerate: false }` or `{ regenerate: true }`** to
  *    `/api/article/<slug>/reset` — the server rejects any other field, and the
  *    client may not name steps.
@@ -323,6 +325,27 @@ describe("the Start this article again section", () => {
       "Re-run AI processing",
     );
     expect(order.indexOf("Re-run AI processing")).toBe(order.indexOf("Archive this article") - 1);
+  });
+
+  /**
+   * **The first row of the modes' own card**, since 2026-09-30 — Greg,
+   * SPIDERYARN-READING2-65: *"amalgamate the "Start the whole article again"
+   * into the run-it-again section above, e.g. as a button at the top"*. It was
+   * a subheading and a second card under the mode rows.
+   */
+  it("is the first row of the mode rows' card, with no heading of its own", async () => {
+    await open();
+    const firstMode = host.querySelector<HTMLElement>("[data-rerun-step]");
+    expect(firstMode, "no mode rows").toBeTruthy();
+    const list = firstMode?.parentElement;
+    expect(list?.contains(card() ?? null), "the reset is not in the modes' card").toBe(true);
+    expect(list?.firstElementChild?.contains(card() ?? null), "the reset is not the first row").toBe(
+      true,
+    );
+    expect(card()?.textContent).toContain("Whole article");
+    const section = card()?.closest("[data-section]");
+    const headings = [...(section?.querySelectorAll("h3") ?? [])].map((h) => h.textContent);
+    expect(headings).not.toContain("Start the whole article again");
   });
 
   it("names the extras this article has beside the checkbox, and no others", async () => {

@@ -55,7 +55,7 @@ const queue: UseJobs = {
   },
   reset: async () => null,
   cancel: async () => {},
-  retry: async () => {},
+  retry: async () => null,
   forget: async () => {},
 };
 vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => queue, useJobSession: () => {} }));
