@@ -574,6 +574,37 @@ export function useStepJob<S extends StepName>(
   );
 
   /**
+   * **A Retry holds *Starting…* across its round trip, as `start` does.**
+   *
+   * It was `void queue.retry(id)` until 2026-09-30, which left the failure —
+   * and so its Retry button — on screen until a poll found the new job: a
+   * double click sent two retries. Harmless while the Metadata page asked
+   * before every Retry; not once it stopped asking (Greg, SPIDERYARN-READING2-64,
+   * docs/plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md,
+   * found by GPT Sol's plan review).
+   *
+   * `starting` wins over `failed` in `JobProgress`, so setting it before the
+   * `await` takes the button away at once. The route answers with the new
+   * job, and it becomes the watched one exactly as a started job does, so the
+   * effect above clears `starting` when the list carries it. `watchedId` is
+   * left alone until then: on a refused retry the old failure, and its Retry,
+   * come back as they were.
+   */
+  const retry = useCallback(
+    async (id: string) => {
+      setStarting(true);
+      const next = await queue.retry(id);
+      if (next) {
+        setWatchedId(next.id);
+        startedId.current = next.id;
+        return;
+      }
+      setStarting(false);
+    },
+    [queue],
+  );
+
+  /**
    * **A failed POST does not mean the request never landed.** `queue.run`
    * returns null for *any* throw, and `readJson` throws on a 4xx or a 5xx
    * (src/web/useJobs.ts § `act`) — so a job the server received and **refused**,
@@ -629,7 +660,7 @@ export function useStepJob<S extends StepName>(
       ? {
           message: stopped.message,
           retryable: stopped.retryable,
-          retry: () => void queue.retry(stopped.id),
+          retry: () => void retry(stopped.id),
         }
       : null;
 

@@ -805,16 +805,27 @@ what saying it would still take, and for why `hierarchy` — the workaround the 
 names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
 free `labels` successor that would restore them is not built.
 
-**Two clicks, not one.** A re-run spends no billing slot — `POST /api/jobs` takes one only for a
-request carrying a `url` ([billing.md](billing.md)) — so the only cost is ours, and there is no
-per-reader spend cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
-The confirm is where the price is said, and it is the same answer the thread page's `Rewrite` button (since removed) reached
-for the same reason. **Three of the nine rows say something of their own** and the other six take the
-default, and each difference is a fact about the step rather than decoration: the glossary's, because
-forcing it **appends** rather than replaces; the sketch's, because it is two minutes and about $0.20;
-and the debate's, because it is **two separately metered calls** and the dearest thing on the page. A
-generic *"another model call"* is a true sentence about those six and a false one about debate, which
-is the gap a cross-family review of the built code walked through.
+**One click, since 2026-09-30.** From 2026-09-07 every press, and every Retry, opened an inline
+confirm first; Greg asked for it to go:
+
+> In Metadata when I click "Run it" or "Run it again" for a mode, don't include the confirmation
+> step. Just do it.
+
+What it guarded was checked first
+([260930e](../plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md)).
+A re-run spends no billing slot — `POST /api/jobs` takes one only for a request carrying a `url`
+([billing.md](billing.md)) — and nothing of the reader's, since a step publishes only on success. The
+only cost is ours, there is no per-reader spend cap
+([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)), and a second
+click never bounded that anyway: a script calls the route. So it went for every reader. **What the
+confirm said still has to be said somewhere**, and each piece has a home: the glossary's *appends* is
+its button, *Find more terms* — shown only over a current glossary, because a stale one is rewritten
+rather than appended to, and there it says *Run it again*; the sketch's price and wait, debate's **up
+to two separately metered calls** at $0.20–0.40 on a short article, and Trajectory's *needs Quotes
+first* are a faint note under those three rows' names, which is also each button's accessible
+description. A Retry is one press too, and holds *Starting…* across its round trip so a double
+click sends one. The whole-article reset, the first row of the same card, keeps its
+confirm — it removes the extras and can move comments, which is the reader's to agree to.
 
 ### A reader can start an article again, and have its modes made again after it
 

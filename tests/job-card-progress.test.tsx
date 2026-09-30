@@ -74,7 +74,7 @@ function posed(over: Partial<UseJobs> = {}): UseJobs {
     run: async () => null,
     reset: async () => null,
     cancel: async () => undefined,
-    retry: async () => undefined,
+    retry: async () => null,
     forget: async () => undefined,
     ...over,
   };
