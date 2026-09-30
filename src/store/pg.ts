@@ -39,6 +39,7 @@ import {
   articleRevisions,
   articles,
   citationFinds,
+  citationInvestigations,
   comments as commentsTable,
   glossaryLookups,
   revisionBlocks,
@@ -83,7 +84,15 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
 import { lookupContext, lookupContextHash } from "../citation-lookup.js";
-import { lookupFromRow } from "./citation-lookup-row.js";
+import { findFromRow } from "./citation-lookup-row.js";
+import {
+  attachInvestigations,
+  investigateArticleKey,
+  investigateContext,
+  investigateContextHash,
+} from "../citation-investigate-context.js";
+import { investigationFromRow } from "./citation-investigation-row.js";
+import { renderProfile } from "../profile.js";
 import {
   attachFinds,
   attachLookups,
@@ -3566,27 +3575,15 @@ const rawPgArticleReader: ArticleReader = {
        `attachFinds` upgrades only `search` rows: a link the article gave always
        wins over one we went looking for. docs/plans/260911g-citations-mode.md
        § Stage 3. */
-    const [blocks, stored] = await Promise.all([
+    const [blocks, stored, investigated] = await Promise.all([
       blockHashInputs(found.revision.id),
       getDb().select().from(citationFinds).where(eq(citationFinds.articleId, found.article.id)),
+      getDb()
+        .select()
+        .from(citationInvestigations)
+        .where(eq(citationInvestigations.articleId, found.article.id)),
     ]);
-    const finds = new Map<string, CitationFind>(
-      stored.map((row) => {
-        const lookup = lookupFromRow(row);
-        return [
-          row.entryId,
-          {
-            url: row.url,
-            ...(row.title ? { title: row.title } : {}),
-            host: row.host,
-            searches: row.searches,
-            model: row.model,
-            at: row.foundAt.toISOString(),
-            ...(lookup ? { lookup } : {}),
-          },
-        ];
-      }),
-    );
+    const finds = new Map<string, CitationFind>(stored.map((row) => [row.entryId, findFromRow(row)]));
     /* **A lookup attaches only to the list it was made against** (plan
        260929g R-4): its fingerprint is recomputed here from the row as the
        artefact now has it and this revision's block texts — the same
@@ -3597,9 +3594,36 @@ const rawPgArticleReader: ArticleReader = {
     const withLookups = attachLookups(citations, finds, (work) =>
       lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
     );
+    const withFinds = attachFinds(withLookups, finds);
+    /* **Investigate's answers, the same way and after `attachFinds`** — the
+       row the call was made from is the upgraded one, so that is the row the
+       fingerprint is recomputed over, with the reader's profile as it is now
+       (the call's `resolveProfile`: the global box and this article's
+       purpose). The profile is read only when there is something to attach.
+       docs/plans/260930a-citations-investigate-one-work-on-demand.md § Staleness. */
+    let withInvestigations = withFinds;
+    if (investigated.length > 0) {
+      const profile = renderProfile({
+        profile: await pgReaderStore.readProfile(),
+        purpose: shelfFrom(found.article).purpose ?? null,
+      });
+      const articleKey = investigateArticleKey(blocks);
+      const investigateModel = modelFor("citation-investigate");
+      withInvestigations = attachInvestigations(
+        withFinds,
+        new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),
+        (work) =>
+          investigateContextHash(
+            investigateContext(work, (id) => text.get(id)),
+            articleKey,
+            profile,
+            investigateModel,
+          ),
+      );
+    }
     const tree = found.revision.tree as Tree | null;
     return {
-      citations: attachFinds(withLookups, finds),
+      citations: withInvestigations,
       /* Judged on the artefact as stored — `sourceHash` is the article's, and
          a find changes nothing about which article the list describes. */
       stale:

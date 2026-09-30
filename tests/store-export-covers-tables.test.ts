@@ -505,6 +505,25 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         lookupEvidenceHash: "fedcba9876543210",
       });
     },
+    /* Citations' *Investigate* (plan 260930a): the sentinel is the answer. */
+    citation_investigations: async () => {
+      await db.insert(schema.citationInvestigations).values({
+        articleId: ARTICLE_ID,
+        entryId: "spya-nvg234",
+        ownerId: owner(),
+        answer: sentinel("citation_investigations"),
+        sources: [{ url: "https://example.org/a-cited-paper", title: "A cited paper" }],
+        extractsRead: 1,
+        longestExtractWords: 310,
+        matchedHost: null,
+        searches: 1,
+        searchesFrom: "server_tool_use_details",
+        model: "test",
+        contextHash: "0123456789abcdef",
+        promptVersion: "citation-investigate/1",
+        at: new Date(),
+      });
+    },
     /* On the block `beforeAll` gave an identity row: the composite foreign key
        refuses an id the article never had. The sentinel is the number. */
     reading_time: async () => {
@@ -611,6 +630,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   referee_claims: {},
   glossary_lookups: {},
   citation_finds: {},
+  citation_investigations: {},
   reading_time: {},
 };
 
@@ -648,6 +668,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   referee_claims: (parsed) => [at(parsed, "run")],
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
   citation_finds: (parsed) => listAt(parsed, "finds"),
+  citation_investigations: (parsed) => listAt(parsed, "investigations"),
   reading_time: (parsed) => listAt(parsed, "blocks"),
 };
 
@@ -687,6 +708,7 @@ await pgReady({
     "spideryarn.referee_claims",
     "spideryarn.glossary_lookups",
     "spideryarn.citation_finds",
+    "spideryarn.citation_investigations",
     "spideryarn.reading_time",
   ],
 });

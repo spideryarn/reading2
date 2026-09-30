@@ -52,6 +52,7 @@ import {
   chatThreads,
   checkpoints,
   citationFinds,
+  citationInvestigations,
   comments,
   glossaryLookups,
   ingestEvents,
@@ -908,6 +909,20 @@ describe("destroying an article", () => {
           searches: 1,
           model: "test/model",
           foundAt: now,
+        }),
+      citation_investigations: () =>
+        db.insert(citationInvestigations).values({
+          articleId: GONE_ARTICLE,
+          entryId: mintId(),
+          ownerId: owner,
+          answer: "Does it back the claim? It does.",
+          extractsRead: 1,
+          longestExtractWords: 12,
+          searchesFrom: "server_tool_use_details",
+          model: "test/model",
+          contextHash: "0123456789abcdef",
+          promptVersion: "citation-investigate/1",
+          at: now,
         }),
       ingest_events: () =>
         db.insert(ingestEvents).values({ ownerId: owner, articleId: GONE_ARTICLE, slug: GONE_SLUG }),

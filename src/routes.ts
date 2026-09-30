@@ -40,6 +40,7 @@
  *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
+ *   POST   /api/citations/:slug/:id/investigate   look into one cited work on the web, and keep the answer → SSE
  *   POST   /api/source-guess/:slug   an upload looks for its own page on the web, once → SourceGuess
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
  *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
@@ -151,6 +152,7 @@ import {
   loadDebate,
   loadCitations,
   findCitation,
+  investigateCitation,
   guessSource,
   loadTimeline,
   loadTweets,
@@ -390,6 +392,7 @@ import type {
   FeedbackKind,
   LibraryEntry,
   GlossaryResponse,
+  InvestigateCitationDone,
   Job,
   LibrarySearchResponse,
   ShelfState,
@@ -1904,6 +1907,45 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
   } catch (err) {
     captureFailure(err, { route: "glossary-lookup", slug });
     frame("error", { error: sayToReader(err, { route: "glossary-lookup", slug }) });
+  } finally {
+    res.end();
+  }
+}
+
+/**
+ * **Look into one cited work, a few words at a time, and keep the answer** —
+ * `POST /api/citations/:slug/:id/investigate`, SSE out. Citations'
+ * *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ *
+ * `streamTermLookup`'s shape exactly: the 404 and the allowance's 429/503 are
+ * decided by `investigateCitation` before a header is written, then any number
+ * of `delta` and exactly one `done` (`{ investigation }`, **written only after
+ * it is stored**) or `error` (`{ error }`). Every delta has already passed the
+ * quote guard (src/investigate-quote-guard.ts); a stop is an `error` carrying
+ * the guard's sentence, and the client replaces the whole streamed answer
+ * with it.
+ *
+ * **`gone` is not passed to the model call**, for the glossary lookup's
+ * reason: the answer is kept either way, so closing the band must not throw a
+ * paid answer away. Nothing is read off the body — the work is found by id.
+ */
+async function streamCitationInvestigation(slug: string, entryId: string, res: ServerResponse): Promise<void> {
+  const profile = await resolveProfile(slug);
+  const { stream } = await investigateCitation(slug, entryId, profile);
+
+  const { frame } = sse(res);
+  try {
+    for await (const event of stream()) {
+      if (event.type === "delta") {
+        frame("delta", { text: event.text });
+        continue;
+      }
+      const done: InvestigateCitationDone = { investigation: event.investigation };
+      frame("done", done);
+    }
+  } catch (err) {
+    captureFailure(err, { route: "citation-investigate", slug });
+    frame("error", { error: sayToReader(err, { route: "citation-investigate", slug }) });
   } finally {
     res.end();
   }
@@ -7847,6 +7889,25 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         await withSpendAttribution({ articleSlug: at }, () =>
           findCitation(at, slugPart(captures, 2)),
         ),
+      );
+    },
+  },
+
+  /* **Look into one cited work on the web, and keep the answer** — Citations'
+     *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+     SSE, `streamCitationInvestigation` above. Owner-only (the reader seam is
+     owner-scoped), rate-limited on its own `citation-investigate` bucket after
+     the free refusals (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`).
+     Nothing is read off the body. The pattern ends `/investigate`, so it cannot
+     collide with `/find`. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/citations\/([\w.%-]+)\/([\w.%-]+)\/investigate$/,
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      await withSpendAttribution({ articleSlug: at }, () =>
+        streamCitationInvestigation(at, slugPart(captures, 2), res),
       );
     },
   },

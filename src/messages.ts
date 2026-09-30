@@ -311,6 +311,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "live-upstream": "retry",
   "jb-slot-held": "bug",
   "cite-resting": "blocked",
+  /* Citations' *Investigate* — src/citation-investigate.ts. */
+  "cite-quoted": "retry",
+  "cite-no-extract": "retry",
+  "cite-unfinished": "retry",
+  "cite-investigate-resting": "blocked",
   "guess-resting": "blocked",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
@@ -5131,6 +5136,56 @@ export const CITATION_FIND_RESTING: ReaderFacingFailure = {
     "Find it has done as many searches as it can for today, so asking again today will get the " +
     "same answer. Try again tomorrow — the Scholar " +
     "search is still there. [cite-resting]",
+};
+
+/* --------------------------------------------- Citations' *Investigate* --
+   src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+   Every one of these reaches the reader as the whole of what they see in place
+   of the answer: the client replaces the streamed text on an error. */
+
+/**
+ * **The quote guard stopped the answer** (src/investigate-quote-guard.ts): it
+ * put quotation marks round words we could not find in the article, the work's
+ * title or *Look it up*'s verified quotes. The wording is the plan's. `retry`,
+ * because a fresh answer usually paraphrases where this one quoted.
+ */
+export const CITATION_INVESTIGATE_QUOTED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This answer tried to quote a source directly, which we can't check, so it was stopped and not kept. " +
+    "Investigating again usually gets one that says it in its own words. [cite-quoted]",
+};
+
+/** The search came back with no extract to read, so an answer could only have been from memory. */
+export const CITATION_INVESTIGATE_NOTHING_READ: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The web search came back with nothing to read about this work, so no answer was kept. " +
+    "Trying again may find more. [cite-no-extract]",
+};
+
+/**
+ * The stream ended some way other than a clean finish — an unrecognised stop,
+ * a request for a tool, or a reader-side abort. Only a finished answer is kept.
+ */
+export const CITATION_INVESTIGATE_UNFINISHED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The answer stopped before it was clearly finished, so none of it is kept. Trying again starts " +
+    "a fresh one. [cite-unfinished]",
+};
+
+/** *Investigate* refused by its allowance (`INVESTIGATE_RATE_POLICY`) — one sentence per reason. */
+export const CITATION_INVESTIGATE_BUSY =
+  "Another Investigate is still running. Wait for it to finish, then try this one.";
+export const CITATION_INVESTIGATE_LIMITED =
+  "You have investigated a lot of works recently. Try again in a while — Look it up is still there.";
+/** The 503 of the three, so it carries a code, as `CITATION_FIND_RESTING` does. */
+export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Investigate has done as many as it can for today, so asking again today will get the same " +
+    "answer. Try again tomorrow — Look it up is still there. [cite-investigate-resting]",
 };
 
 /* ------------------------------------ an upload looking for its own page --

@@ -31,6 +31,7 @@ import {
   chatMessages,
   chatThreads,
   citationFinds,
+  citationInvestigations,
   comments as commentsTable,
   glossaryLookups,
   readingTime,
@@ -181,6 +182,13 @@ export const ARTICLE_TABLE_COVERAGE = {
   citation_finds: {
     rollback: { exported: true, into: "citation-finds.json" },
     bundle: { exported: true, into: "augmentations/citation-finds.json" },
+  },
+  /* Citations' *Investigate* — one kept answer per cited work, reader state
+     beside the `citations` artefact exactly as `citation_finds` is.
+     docs/plans/260930a-citations-investigate-one-work-on-demand.md. */
+  citation_investigations: {
+    rollback: { exported: true, into: "citation-investigations.json" },
+    bundle: { exported: true, into: "augmentations/citation-investigations.json" },
   },
   /* Seconds spent per block — reader state keyed on block ids, so it travels
      with them. docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
@@ -553,6 +561,7 @@ export interface ArticleRows {
   readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
+  readonly citationInvestigations: readonly (typeof citationInvestigations.$inferSelect)[];
   readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
 }
 
@@ -751,6 +760,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(citationFinds)
     .where(eq(citationFinds.articleId, article.id))
     .orderBy(asc(citationFinds.entryId));
+  const investigations = await tx
+    .select()
+    .from(citationInvestigations)
+    .where(eq(citationInvestigations.articleId, article.id))
+    .orderBy(asc(citationInvestigations.entryId));
   const secondsRead = await tx
     .select()
     .from(readingTime)
@@ -770,6 +784,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     refereeClaims: claims,
     glossaryLookups: lookups,
     citationFinds: finds,
+    citationInvestigations: investigations,
     readingTime: secondsRead,
   };
 }
