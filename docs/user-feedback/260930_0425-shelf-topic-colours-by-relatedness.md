@@ -1,3 +1,7 @@
+---
+reports: spya-t0exj8
+ending: shipped
+---
 # Shelf topics are coloured by which articles they share
 
 **[SPIDERYARN-READING2-5N](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5N)** · from an

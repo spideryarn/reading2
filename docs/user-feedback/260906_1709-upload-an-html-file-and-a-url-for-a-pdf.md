@@ -1,3 +1,7 @@
+---
+reports: spya-vr6m34
+ending: shipped
+---
 # Upload an HTML file, and a URL for a PDF
 
 **Sentry:** `SPIDERYARN-READING2-2A` · reported 2026-09-06 17:09 UTC, from `/`, `kind=suggestion`,

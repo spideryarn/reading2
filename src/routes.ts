@@ -264,6 +264,7 @@ import {
    header before calling it from anywhere else, because the scope handling in it
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
+import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -427,6 +428,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    src/types.ts § feedback. */
 import {
   EARLIER_FEEDBACK_LIMIT,
+  EARLIER_FEEDBACK_SHOWS,
   type EarlierFeedbackPage,
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
@@ -7305,20 +7307,35 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than four fields still sends four. */
+     day hands back more than four fields still sends four — and a fifth,
+     `shipped`, which is ours: whether this build carries a note saying a change
+     for the report shipped. `?show=shipped|unshipped` narrows by the same map,
+     in the query, so the cap applies after the filter; any other value is a
+     400 rather than the whole list passed off as the filtered one.
+     docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md. */
   {
     kind: "exact",
     method: "GET",
     path: FEEDBACK_PATH,
-    handler: async ({ request: { res } }) => {
+    handler: async ({ request: { res, query } }) => {
       res.setHeader("Cache-Control", "private, no-store");
-      const page = await feedbackStore.listMine(EARLIER_FEEDBACK_LIMIT);
+      const show = query.get("show") ?? "all";
+      if (!EARLIER_FEEDBACK_SHOWS.some((known) => known === show)) {
+        throw httpError(400, `show must be one of ${EARLIER_FEEDBACK_SHOWS.join(", ")}`);
+      }
+      const page = await feedbackStore.listMine(
+        EARLIER_FEEDBACK_LIMIT,
+        show === "all"
+          ? undefined
+          : { ids: shippedFeedbackIds(), keep: show === "shipped" ? "in" : "out" },
+      );
       const answer: EarlierFeedbackPage = {
         reports: page.reports.map(({ id, createdAt, kind, body }) => ({
           id,
           createdAt,
           kind,
           body,
+          shipped: isFeedbackShipped(id),
         })),
         more: page.more,
       };

@@ -1,3 +1,7 @@
+---
+reports: spya-dmuaqw
+ending: shipped
+---
 # The top of the Glossary band takes up too much room on a phone
 
 [SPIDERYARN-READING2-4G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4G) (2026-09-29

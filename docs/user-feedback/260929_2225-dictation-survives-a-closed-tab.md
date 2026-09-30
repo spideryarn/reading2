@@ -1,3 +1,7 @@
+---
+reports: spya-bukkzu
+ending: shipped
+---
 # A closed tab no longer loses a dictation
 
 SPIDERYARN-READING2-5M (`spya-bukkzu`), from Greg (admin, verified by account id), filed from the

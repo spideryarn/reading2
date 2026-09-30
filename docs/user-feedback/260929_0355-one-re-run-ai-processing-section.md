@@ -1,3 +1,7 @@
+---
+reports: spya-dkm0ue
+ending: shipped
+---
 # One "Re-run AI processing" section on Metadata
 
 SPIDERYARN-READING2-4Z, from Greg (admin), in production, build `43f99ecb`, on

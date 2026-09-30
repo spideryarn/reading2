@@ -1,3 +1,7 @@
+---
+reports: spya-bqwm97
+ending: shipped
+---
 # "couldn't upload PDF"
 
 **[SPIDERYARN-READING2-V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-V)** · reported

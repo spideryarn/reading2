@@ -1,3 +1,7 @@
+---
+reports: spya-jejbpz
+ending: shipped
+---
 # Metadata's *Run it* runs on one press
 
 SPIDERYARN-READING2-64, from Greg (admin — `scripts/feedback-reporter.ts` exits 0 for the

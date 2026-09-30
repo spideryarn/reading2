@@ -1,3 +1,7 @@
+---
+reports: spya-pjede5
+ending: shipped
+---
 # Feedback from other people: fix bugs, build the clear-cut, ask about the nuanced, report abuse
 
 SPIDERYARN-READING2-5K (`spya-pjede5`), from Greg (admin — `feedback-reporter.ts` exited 0 on the

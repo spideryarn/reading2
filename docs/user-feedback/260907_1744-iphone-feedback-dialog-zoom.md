@@ -1,3 +1,7 @@
+---
+reports: spya-e3jcck
+ending: shipped
+---
 # The Feedback dialog zooms in on an iPhone
 
 **Sentry:** `SPIDERYARN-READING2-2H` · reported 2026-09-07 17:44 UTC, from

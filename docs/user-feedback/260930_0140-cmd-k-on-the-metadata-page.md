@@ -1,3 +1,7 @@
+---
+reports: spya-xw9bd4
+ending: shipped
+---
 # ⌘-K did nothing on the Metadata page
 
 **[SPIDERYARN-READING2-66](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-66)** · from an

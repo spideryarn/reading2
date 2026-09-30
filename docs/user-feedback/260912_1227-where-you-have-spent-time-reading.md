@@ -1,3 +1,8 @@
+---
+reports: spya-d3a7bf
+ending: shipped
+parts: 2
+---
 # The spine now shows where you have spent time reading
 
 **[SPIDERYARN-READING2-41](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-41)** · reported

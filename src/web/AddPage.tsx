@@ -69,6 +69,9 @@ import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { AUTO_MODES_LABEL, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } from "./auto-modes.js";
+import { MAX_PURPOSE_CHARS } from "../types.js";
+import { savePurpose } from "./purpose.js";
+import { Button } from "@/components/ui/button";
 
 /**
  * Which of the two origins this page is starting.
@@ -108,17 +111,55 @@ const ARRIVAL_POLL_MS = 3000;
  */
 const UPLOAD_WAIT_CODE = codeOfMessage(UPLOAD_STILL_ARRIVING.message);
 
-/** Queue this completion's modes once, across repeated effects and callbacks. */
-function queueModesOnce(
-  on: boolean,
-  queuedFor: { current: string | null },
-  run: UseJobs["run"],
-  completion: string,
-  slug: string,
-): void {
-  if (!on || queuedFor.current === completion) return;
-  queuedFor.current = completion;
-  void queueAutoModes(run, slug);
+/**
+ * One way the add finished, and the article it became.
+ *
+ * `key` names *which* finish — `job:<id>` or `article:<slug>` — and is what the
+ * once-guard compares, because StrictMode and a double press both arrive as
+ * the same finish twice.
+ */
+interface Completion {
+  key: string;
+  slug: string;
+  /** Which `/add/` address produced it, so an older address cannot finish this one. */
+  source: string;
+}
+
+/**
+ * **Between "the import is running" and "the article is open".**
+ *
+ * Since 260930e the page can stop between the two: a reader who has typed why
+ * they are reading is asked whether to save it before the modes are queued,
+ * because each job freezes the profile when it is posted — a purpose saved
+ * afterwards reaches none of them. A union rather than booleans so that
+ * *saving* and *ready* cannot both be true, and so both carry the completion
+ * they are about.
+ *
+ * `running` covers everything before a completion, failed imports included.
+ * docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md
+ * § Stage 1; GPT Sol's F2.
+ */
+type Phase =
+  | { kind: "running" }
+  | { kind: "ready"; completion: Completion; error: string | null }
+  | { kind: "saving"; completion: Completion }
+  | { kind: "opened" };
+
+/**
+ * **The terminal act, and the only place the page leaves.** Queue the modes if
+ * the box is ticked, then open the article.
+ *
+ * Not awaited: the router is client-side, so the POSTs carry on after the page
+ * is gone, and the app-wide job engine drives what they queue from the reading
+ * view. Waiting for five round trips before opening the article would spend the
+ * one thing Greg asked this to save. `replace`, so Back leaves the reading view
+ * for wherever the reader came from rather than for a finished import.
+ *
+ * Callers take the once-guard (`claimed`) first; this does not check it.
+ */
+function openArticle(completion: Completion, generate: boolean, run: UseJobs["run"]): void {
+  if (generate) void queueAutoModes(run, completion.slug);
+  navigate(readHref(completion.slug), { replace: true });
 }
 
 /** Whether the file-owning tab still has a live add rather than an outcome. */
@@ -153,7 +194,7 @@ function offerAutoModes(
 
 export function AddPage({ source: origin }: { source: AddSource }) {
   const queue = useJobs("watches-queue");
-  const [started, setStarted] = useState<string | null>(null);
+  const [started, setStarted] = useState<{ id: string; source: string } | null>(null);
   const url = origin.kind === "url" ? origin.url : "";
   /**
    * **This tab's transfer, if it is the one this address is about.**
@@ -285,7 +326,53 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   autoModesRef.current = autoModes;
   const runRef = useRef(queue.run);
   runRef.current = queue.run;
-  const queuedModesFor = useRef<string | null>(null);
+
+  /**
+   * **Why the reader is reading this**, asked while the import runs — the one
+   * moment answering costs nothing extra (plan 260930e § Stage 1).
+   *
+   * Read through refs at completion for the reason `autoModesRef` is: one of the
+   * three completions arrives in a promise made by the posting effect, which
+   * would otherwise see the draft as it was when the request went out (Sol's
+   * F2). Focus counts, because a reader with the caret in an empty box may be
+   * about to type, and navigating out from under them is not a decision they
+   * made.
+   */
+  const [draft, setDraft] = useState("");
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const focusedRef = useRef(false);
+  const [phase, setPhase] = useState<Phase>({ kind: "running" });
+  /**
+   * **The once-guard on the terminal decision**, holding the completion's key.
+   * Synchronous, so StrictMode's second effect, or Save and Open-without pressed
+   * in one frame, find it taken before anything has re-rendered. Released only
+   * by a failed save, which puts the reader back at *ready*.
+   */
+  const claimed = useRef<string | null>(null);
+  /* The retention-path `{article}` answer to this page's own POST, recorded
+     rather than acted on — see `completion` below. */
+  const [articleAnswer, setArticleAnswer] = useState<{ slug: string; source: string } | null>(null);
+
+  /* The component is reused when the address after `/add/` changes. A purpose
+     typed for the old article must not follow it to the new one, and an old
+     save answering later must not open the old article over the new page. This
+     is keyed only by the source, not `attempt`: Retry is still the same add and
+     deliberately keeps the draft. */
+  const sourceRef = useRef(wanted);
+  sourceRef.current = wanted;
+  const draftSource = useRef(wanted);
+  useEffect(() => {
+    /* StrictMode repeats effect setup for the same mount; that is not a new
+       address and must not release the terminal once-guard. */
+    if (draftSource.current === wanted) return;
+    draftSource.current = wanted;
+    draftRef.current = "";
+    focusedRef.current = false;
+    setDraft("");
+    setPhase({ kind: "running" });
+    claimed.current = null;
+  }, [wanted]);
 
   /**
    * Whether the engine is the one driving this address.
@@ -319,6 +406,9 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     posted.current = want;
     setStarted(null);
     setFailure(null);
+    setArticleAnswer(null);
+    setPhase({ kind: "running" });
+    claimed.current = null;
     /* On `uploadId` rather than on `origin.kind`, so the effect reads only
        plain strings it also depends on — and so the union narrows, which
        `origin.kind === "upload"` does not do for a field read inside a
@@ -346,21 +436,13 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          reload of `/add/upload/<id>` after retention has taken the ingest's job
          record away is answered with the article the file became rather than
          with a job — `queueAnUpload` in src/routes.ts. There is no card to
-         show and nothing to wait for, so this is the same navigation the
-         `done` effect below does, arriving a step earlier. */
+         show and nothing to wait for, so this is a completion arriving a step
+         earlier — recorded, and decided with the other two below. */
       if ("article" in queued) {
-        const completion = `article:${queued.article}`;
-        queueModesOnce(
-          autoModesRef.current,
-          queuedModesFor,
-          runRef.current,
-          completion,
-          queued.article,
-        );
-        navigate(readHref(queued.article), { replace: true });
+        setArticleAnswer({ slug: queued.article, source: wanted });
         return;
       }
-      setStarted(queued.id);
+      setStarted({ id: queued.id, source: wanted });
     });
     /* The two plain strings, never `origin` itself. That object is a fresh
        literal on every render of the component above, so depending on it would
@@ -381,26 +463,13 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    */
   const queuedJobId = mine?.phase.kind === "queued" ? mine.phase.job.id : null;
   useEffect(() => {
-    if (queuedJobId) setStarted(queuedJobId);
-  }, [queuedJobId]);
+    if (queuedJobId) setStarted({ id: queuedJobId, source: wanted });
+  }, [queuedJobId, wanted]);
 
   /* The file turned out to be an article the reader already has, and retention
      has taken its job — `queueAnUpload` answers 200 `{article}`. Nothing to
-     watch, so this is the same navigation the `done` effect below does,
-     arriving earlier. `replace`, for the reason that effect gives. */
+     watch: it is a completion, decided below with the other two. */
   const alreadyArticle = mine?.phase.kind === "article" ? mine.phase.slug : null;
-  useEffect(() => {
-    if (!alreadyArticle) return;
-    const completion = `article:${alreadyArticle}`;
-    queueModesOnce(
-      autoModesRef.current,
-      queuedModesFor,
-      runRef.current,
-      completion,
-      alreadyArticle,
-    );
-    navigate(readHref(alreadyArticle), { replace: true });
-  }, [alreadyArticle]);
 
   /**
    * **Waiting for a transfer this page cannot see.**
@@ -465,18 +534,121 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     };
   }, [stillArriving, uploadId]);
 
-  const job = queue.jobs.find((j) => j.id === started) ?? null;
+  /* State updates run after render, so an old `started` can still be present in
+     the first render for a new address. The source tag makes it inert during
+     that render instead of letting its completed job reopen the old article. */
+  const startedId = started?.source === wanted ? started.id : null;
+  const job = queue.jobs.find((j) => j.id === startedId) ?? null;
+
+  /**
+   * **The three ways an add finishes, as one value.** A job reaching `done`, the
+   * engine's upload answered with an existing article, and this page's own POST
+   * answered the same way. Each used to queue and navigate by itself; now they
+   * only *say* the add is finished, and the one effect below decides what that
+   * means — so the rule about the purpose box cannot be kept by two of them and
+   * forgotten by the third (Sol's F2).
+   */
+  const completion: Completion | null =
+    job?.status === "done"
+      ? { key: `job:${job.id}`, slug: job.slug, source: wanted }
+      : alreadyArticle
+        ? { key: `article:${wanted}:${alreadyArticle}`, slug: alreadyArticle, source: wanted }
+        : articleAnswer?.source === wanted
+          ? {
+              key: `article:${wanted}:${articleAnswer.slug}`,
+              slug: articleAnswer.slug,
+              source: wanted,
+            }
+          : null;
+  const completionKey = completion?.key ?? null;
+  const completionSlug = completion?.slug ?? null;
+  /* Written during render so an old save callback is fenced as soon as a new
+     completion (or no completion for a new address) is on screen, before the
+     deciding effect below has had a chance to run. */
+  const activeCompletionKey = useRef<string | null>(completionKey);
+  activeCompletionKey.current = completionKey;
 
   useEffect(() => {
-    if (job?.status !== "done") return;
-    /* **Not awaited.** The router is client-side, so the POSTs carry on after
-       the page is gone, and the app-wide job engine drives what they queue from
-       the reading view. Waiting for five round trips before opening the
-       article would spend the one thing Greg asked this to save. */
-    const completion = `job:${job.id}`;
-    queueModesOnce(autoModesRef.current, queuedModesFor, runRef.current, completion, job.slug);
-    navigate(readHref(job.slug), { replace: true });
-  }, [job?.status, job?.slug, job?.id]);
+    if (completionKey === null || completionSlug === null) return;
+    if (claimed.current === completionKey) return;
+    const finished = { key: completionKey, slug: completionSlug, source: wanted };
+    /* A different completion supersedes any save still in flight for the old
+       one. Its promise callback checks this guard before doing anything. */
+    claimed.current = null;
+    /* **Nothing said, nothing to wait for** — exactly the page before 260930e. */
+    if (draftRef.current.trim() === "" && !focusedRef.current) {
+      claimed.current = completionKey;
+      setPhase({ kind: "opened" });
+      openArticle(finished, autoModesRef.current, runRef.current);
+      return;
+    }
+    /* Otherwise wait, indefinitely. A blur or a pause is not a decision. */
+    setPhase({ kind: "ready", completion: finished, error: null });
+  }, [completionKey, completionSlug, wanted]);
+
+  /**
+   * **Save and open**: the purpose first and awaited, then the modes, then the
+   * article — so every mode is written for it from the start (`patchShelf`
+   * commits before it answers, and each job resolves the profile when it is
+   * posted; plan § Stage 1 says where that fails open).
+   *
+   * **An empty draft is never sent** (Sol's F1, a P0). `null` clears the stored
+   * purpose, and on a re-add this box starts empty over a sentence the reader
+   * cannot see from here. Empty means "leave it alone", always.
+   */
+  const saveAndOpen = (): void => {
+    if (
+      phase.kind !== "ready" ||
+      phase.completion.source !== wanted ||
+      claimed.current === phase.completion.key
+    )
+      return;
+    const done = phase.completion;
+    claimed.current = done.key;
+    const text = draftRef.current;
+    if (text.trim() === "") {
+      setPhase({ kind: "opened" });
+      openArticle(done, autoModesRef.current, runRef.current);
+      return;
+    }
+    setPhase({ kind: "saving", completion: done });
+    savePurpose(done.slug, text).then(
+      () => {
+        if (
+          claimed.current !== done.key ||
+          activeCompletionKey.current !== done.key ||
+          sourceRef.current !== done.source
+        )
+          return;
+        setPhase({ kind: "opened" });
+        openArticle(done, autoModesRef.current, runRef.current);
+      },
+      /* Back to *ready* with the draft intact, and nothing queued: a mode
+         written without the purpose is what the reader has just declined. */
+      (e: Error) => {
+        if (
+          claimed.current !== done.key ||
+          activeCompletionKey.current !== done.key ||
+          sourceRef.current !== done.source
+        )
+          return;
+        claimed.current = null;
+        setPhase({ kind: "ready", completion: done, error: e.message });
+      },
+    );
+  };
+
+  const openWithoutIt = (): void => {
+    if (
+      phase.kind !== "ready" ||
+      phase.completion.source !== wanted ||
+      claimed.current === phase.completion.key
+    )
+      return;
+    claimed.current = phase.completion.key;
+    setPhase({ kind: "opened" });
+    openArticle(phase.completion, autoModesRef.current, runRef.current);
+  };
 
   /* The tab, naming what is being added — the host for an address, the filename
      for an upload. The filename only exists once the first poll has come back,
@@ -494,6 +666,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      all of those states, especially the minutes-long file transfer; showing it
      only once a job row appeared made the upload path needlessly different. */
   const showAutoModes = offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
+  /* Waiting on the reader's choice, with the add finished. The tick box stays
+     up through this too: it is read at the press, so it can still be changed. */
+  const deciding = phase.kind === "ready" || phase.kind === "saving";
+  /* **Drawn from the phase, not from `offerAutoModes`** (Sol's F4): that is
+     false for a finished job and for an existing-article answer, which are
+     exactly when the box has to stay. While running it also stays over a failed
+     job, whose card has a Retry that may yet finish it (F3). */
+  const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
@@ -582,7 +762,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           arriving in consecutive sentences. GPT Sol, 2026-09-03, finding 3. */}
       {ok && (
         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
-          {textHasGone(mine, origin.kind === "upload", started !== null)
+          {textHasGone(mine, origin.kind === "upload", startedId !== null)
             ? DIRECT_ADD_SENT_TEXT_AWAY
             : ADDING_SENDS_TEXT_AWAY}
         </p>
@@ -709,7 +889,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </p>
       )}
 
-      {job && <JobCard job={job} queue={queue} onHide={() => navigate(LIBRARY_HREF)} />}
+      {/* `onRetried`: a retry is a new job with a new id, and this page watches
+          one id — without following it, a retried import that succeeds never
+          opens (Sol's F3, watched red in tests/add-page-purpose.test.tsx). */}
+      {job && (
+        <JobCard
+          job={job}
+          queue={queue}
+          onHide={() => navigate(LIBRARY_HREF)}
+          onRetried={(replacement) => setStarted({ id: replacement.id, source: wanted })}
+        />
+      )}
 
       {/* **The tab is the worker, said where somebody is watching it work.**
           `pump` in src/jobs.ts returns immediately on Vercel, so the only
@@ -725,7 +915,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       {/* Offered for the whole add — including a file transfer before its job
           exists — and read at the moment it finishes, so it can be changed
           right up to then. src/web/auto-modes.ts. */}
-      {showAutoModes && (
+      {(showAutoModes || deciding) && (
         <label className="tw:mt-3 tw:flex tw:items-start tw:gap-2 tw:text-sm">
           <input
             type="checkbox"
@@ -748,7 +938,50 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </label>
       )}
 
-      {job?.status === "done" && <Done job={job} />}
+      {showPurpose && (
+        <PurposeBox
+          value={draft}
+          onChange={(value) => {
+            /* In the gesture as well as at render, for the reason the tick box
+               writes its ref: a completion can land before the re-render. */
+            draftRef.current = value;
+            setDraft(value);
+          }}
+          onFocusChange={(focused) => {
+            focusedRef.current = focused;
+          }}
+          onShortcut={saveAndOpen}
+        />
+      )}
+
+      {deciding && (
+        <div className="tw:mt-3">
+          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
+            Ready. Saving it first means the modes are written for it from the start.
+          </p>
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+            <Button type="button" size="sm" disabled={phase.kind === "saving"} onClick={saveAndOpen}>
+              {phase.kind === "saving" ? "Saving…" : "Save and open"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={phase.kind === "saving"}
+              onClick={openWithoutIt}
+            >
+              Open without it
+            </Button>
+          </div>
+          {phase.kind === "ready" && phase.error !== null && (
+            <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-destructive" role="alert">
+              Not saved — {phase.error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
 
       <p className="tw:mt-6 tw:mb-0 tw:text-sm">
         <Link href={LIBRARY_HREF} className="tw:text-muted-foreground tw:hover:text-highlight">
@@ -756,6 +989,69 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </Link>
       </p>
     </main>
+  );
+}
+
+/**
+ * **"Why are you reading this?"** — a plain textarea in `ProfileBox`'s clothes.
+ *
+ * Not `ProfileBox` itself (Sol's F5): that commits on blur and on the shortcut
+ * alike, and here a blur must do nothing — a reader tabbing away mid-import has
+ * not decided anything. It also brings dictation, which the add page has never
+ * loaded (plan § What this passes over).
+ *
+ * Capped rather than counted past: the server refuses more than
+ * `MAX_PURPOSE_CHARS`, and a refusal after the import is a worse place to learn
+ * that than the box.
+ */
+function PurposeBox({
+  value,
+  onChange,
+  onFocusChange,
+  onShortcut,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onFocusChange: (focused: boolean) => void;
+  onShortcut: () => void;
+}) {
+  return (
+    <div className="prof-box tw:mt-4">
+      <div className="prof-box-head">
+        <label className="prof-box-label" htmlFor="add-purpose">
+          Why are you reading this?
+        </label>
+      </div>
+      <textarea
+        id="add-purpose"
+        className="prof-box-input"
+        rows={2}
+        maxLength={MAX_PURPOSE_CHARS}
+        placeholder="e.g. I want to know how they handled missing data"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => onFocusChange(true)}
+        onBlur={() => onFocusChange(false)}
+        onKeyDown={(e) => {
+          /* ⌘/Ctrl+Enter is Save and open once the import is in, and nothing
+             before it — there is nothing to open yet. Plain Enter is a newline. */
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            onShortcut();
+          }
+        }}
+      />
+      <div className="prof-box-foot">
+        <p className="prof-box-hint">
+          Optional. Shapes the quotes, ideas, glossary and the reading route — for this article
+          only. Never what the article says. You can change it later on the article's Metadata
+          page.
+        </p>
+        <span className="prof-count">
+          {value.length} / {MAX_PURPOSE_CHARS}
+        </span>
+      </div>
+    </div>
   );
 }
 

@@ -1,3 +1,7 @@
+---
+reports: spya-xz7ajs
+ending: shipped
+---
 # Citations mode — every work the piece cites, linked and prioritised
 
 [SPIDERYARN-READING2-2Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2Y), report

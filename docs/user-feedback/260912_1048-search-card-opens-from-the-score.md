@@ -1,3 +1,7 @@
+---
+reports: spya-dc6ab9
+ending: shipped
+---
 # A search result's card opens from the score, and pressing the result goes there
 
 Sentry `SPIDERYARN-READING2-3T`, 2026-09-12 10:48Z, kind `suggestion`, from Greg (an admin).

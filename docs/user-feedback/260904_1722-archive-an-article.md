@@ -1,3 +1,7 @@
+---
+reports: spya-p3gz7v
+ending: shipped
+---
 # Let me archive an article, and maybe delete one
 
 **[SPIDERYARN-READING2-19](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-19)** · reported

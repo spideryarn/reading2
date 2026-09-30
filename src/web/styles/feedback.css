@@ -220,6 +220,15 @@
   font-size: 0.8rem;
   color: var(--ink-soft);
 }
+/* All · Shipped · Not shipped sits in a `.fb-kind` fieldset, and its
+   `.fb-show-button` chips share the Problem / Suggestion rules below, so
+   "pressed" looks the same everywhere in the dialog. */
+/* A word in the meta line, not a badge: the colour says "good news" without
+   shouting over what the reader wrote. */
+.fb-earlier-shipped {
+  color: var(--highlight);
+  font-weight: 600;
+}
 .fb-earlier:focus-visible {
   outline: 1px solid var(--highlight);
   outline-offset: -1px;
@@ -342,7 +351,8 @@
   font-size: 0.78rem;
   line-height: 1.9;
 }
-.fb-kind-button {
+.fb-kind-button,
+.fb-show-button {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -355,11 +365,14 @@
   font-size: 0.78rem;
   cursor: pointer;
 }
-.fb-kind-button:hover { color: var(--ink); border-color: var(--ink-faint); }
-.fb-kind-button:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+.fb-kind-button:hover,
+.fb-show-button:hover { color: var(--ink); border-color: var(--ink-faint); }
+.fb-kind-button:focus-visible,
+.fb-show-button:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
 /* The pressed one is the state, so it is the attribute that carries the look —
    one source of truth for "chosen", shared by the screen reader and the eye. */
-.fb-kind-button[aria-pressed="true"] {
+.fb-kind-button[aria-pressed="true"],
+.fb-show-button[aria-pressed="true"] {
   color: var(--highlight);
   border-color: var(--highlight);
   background: color-mix(in oklch, var(--highlight) 12%, transparent);

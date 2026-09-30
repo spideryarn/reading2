@@ -1,3 +1,7 @@
+---
+reports: spya-a868zs
+ending: shipped
+---
 # Structure mode's rows had no hover card
 
 [SPIDERYARN-READING2-3N](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3N) (2026-09-12

@@ -261,7 +261,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
-import { forgetSummaries } from "./link-facts.js";
+import { savePurpose } from "./purpose.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -565,18 +565,19 @@ export function Metadata({
   /* Blur, or Cmd/Ctrl+Enter — the same moment `TitleEditor` on the shelf
      commits at, and no debounce, because there is no debounce anywhere in this
      client and this is not the place to introduce one. */
-  function savePurpose(): void {
+  function commitPurpose(): void {
     if (purposeDraft === null || purposeSaved === null) return;
     if (purposeDraft === purposeSaved) return;
     const sending = purposeDraft;
     setPurposeError(null);
-    apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ purpose: sending === "" ? null : sending }),
-    })
-      .then((r) => readJson<{ purpose: string | null }>(r))
-      .then((body) => {
+    /* Here, and only here, an empty box means **clear it**: this box was seeded
+       with the stored sentence, so the reader can see what they are erasing.
+       The add page's box cannot, and never sends an empty one (src/web/purpose.ts).
+
+       `savePurpose` also forgets the link cards' summaries, which were written
+       from the sentence being replaced. */
+    savePurpose(slug, sending === "" ? null : sending)
+      .then((purpose) => {
         /* The server's answer, not what was typed: it trims and settles line
            endings, and the box must show the string that was actually stored —
            otherwise every prompt carries something the reader cannot see.
@@ -585,16 +586,9 @@ export function Metadata({
            deliberately does not carry it, because only this page renders it and
            putting it on the card would send it with every card on the homepage.
            src/routes.ts § patchShelf. */
-        const stored = body.purpose ?? "";
+        const stored = purpose ?? "";
         setPurposeSaved(stored);
         setPurposeDraft(stored);
-        /* **The link cards' summaries were written from this sentence.** They
-           are cached per tab in front of a server that would have noticed
-           (src/web/link-facts.ts § `forgetSummaries`), so without this the
-           reader edits their purpose, goes back to the article, hovers a link
-           they hovered before, and reads the answer written for the sentence
-           they just replaced. */
-        forgetSummaries();
       })
       .catch((e: Error) => setPurposeError(e.message));
   }
@@ -1024,7 +1018,7 @@ export function Metadata({
               hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
               value={purposeDraft ?? ""}
               onChange={setPurposeDraft}
-              onCommit={savePurpose}
+              onCommit={commitPurpose}
               max={MAX_PURPOSE_CHARS}
               disabled={purposeDraft === null}
               rows={2}

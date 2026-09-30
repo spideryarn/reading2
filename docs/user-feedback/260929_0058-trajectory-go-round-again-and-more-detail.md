@@ -1,3 +1,7 @@
+---
+reports: spya-sc9s8p
+ending: shipped
+---
 # "Go round again — More" was one button doing two things
 
 [SPIDERYARN-READING2-4N](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4N) (2026-09-29

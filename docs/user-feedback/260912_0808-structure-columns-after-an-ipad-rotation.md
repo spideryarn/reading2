@@ -1,3 +1,7 @@
+---
+reports: spya-ebdfrt, spya-ftvnk3
+ending: shipped
+---
 # Structure mode on a landscape iPad, and a rotation that breaks the render
 
 [SPIDERYARN-READING2-33](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-33) (2026-09-12

@@ -1,3 +1,7 @@
+---
+reports: spya-y8va9d
+ending: shipped
+---
 # The microphone asks for permission twice on an iPhone
 
 **[SPIDERYARN-READING2-2R](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2R)** · report

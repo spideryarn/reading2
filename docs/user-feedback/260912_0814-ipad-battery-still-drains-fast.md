@@ -1,3 +1,7 @@
+---
+reports: spya-m0mcqb
+ending: shipped
+---
 # The iPad battery still drains fast
 
 **[SPIDERYARN-READING2-36](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-36)** · reported

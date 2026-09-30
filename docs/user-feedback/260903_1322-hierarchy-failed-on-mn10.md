@@ -1,3 +1,7 @@
+---
+reports: spya-n3a4ty
+ending: shipped
+---
 # Building the hierarchy failed on MN10
 
 **[SPIDERYARN-READING2-S](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-S)** · reported

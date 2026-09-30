@@ -1,3 +1,7 @@
+---
+reports: spya-cuxy49
+ending: shipped
+---
 # Quotes: Find more, a fade that carries priority, and important over striking
 
 **[SPIDERYARN-READING2-2W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2W)** · reported

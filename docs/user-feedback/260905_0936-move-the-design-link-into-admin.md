@@ -1,3 +1,7 @@
+---
+reports: spya-tm8pjw
+ending: shipped
+---
 # Move the Design link into /admin
 
 **[SPIDERYARN-READING2-1T](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1T)** · reported

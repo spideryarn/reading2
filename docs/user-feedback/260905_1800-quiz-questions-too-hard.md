@@ -1,3 +1,7 @@
+---
+reports: spya-ps33a7
+ending: shipped
+---
 # The quiz questions are too hard
 
 **[SPIDERYARN-READING2-21](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-21)** · reported

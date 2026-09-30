@@ -1,3 +1,7 @@
+---
+reports: spya-y8w885
+ending: shipped
+---
 # The blue chip in the gutter opened a new conversation instead of the ones it counted
 
 **[SPIDERYARN-READING2-1Q](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Q)** · problem ·

@@ -1,3 +1,7 @@
+---
+reports: spya-qdene8
+ending: shipped
+---
 # Shelf search cannot find an archived article, and the Archived chip is ambiguous
 
 SPIDERYARN-READING2-72, from Greg (admin), on `/?archived=1`. The time in the file name is when this
