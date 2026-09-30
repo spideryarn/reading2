@@ -113,6 +113,7 @@ import {
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "../illustrated.js";
 import type { Illustrated } from "../illustrated-plate.js";
+import { figuresFingerprint } from "../illustrated-figures.js";
 import {
   deriveLibraryScalars,
   describeArticle,
@@ -775,7 +776,9 @@ const REVISION_READ_POLICY: Record<
      — `sendArticleAsset` (src/routes.ts) looks a hash up in this manifest and
      rebuilds the storage key from what it finds, so the manifest *is* the
      authorisation for handing over the bytes. GPT Sol, I-5. */
-  assets: { article: "value", metadata: "value", assets: "value" },
+  /* `illustrated` too: the paper's stored figures are in that artefact's
+     fingerprint (src/illustrated-figures.ts § `figuresFingerprint`). */
+  assets: { article: "value", metadata: "value", assets: "value", illustrated: "value" },
 
   /* Each artefact goes to the one read that returns it, and to the metadata
      page, which asks of every artefact "would we write this again today".
@@ -1262,6 +1265,9 @@ export const REVISION_PROJECTIONS = {
     id: articleRevisions.id,
     illustrated: articleRevisions.illustrated,
     sketch: articleRevisions.sketch,
+    /* The manifest, because the paper's stored figures are in the
+       fingerprint (`figuresFingerprint`, src/illustrated-figures.ts). */
+    assets: articleRevisions.assets,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
@@ -2051,7 +2057,11 @@ function sketchIsCurrent(
  * it. Here it is inherited from the Sketch besides, so a guess would be wrong
  * twice over.
  */
-function illustratedIsCurrent(revision: { illustrated: unknown; sketch: unknown }): boolean {
+function illustratedIsCurrent(revision: {
+  illustrated: unknown;
+  sketch: unknown;
+  assets: unknown;
+}): boolean {
   const found = revision.illustrated as Illustrated | null;
   const sketch = revision.sketch as Sketch | null;
   /* An empty plate list counts as none, the same rule `SHAPE` and
@@ -2067,7 +2077,13 @@ function illustratedIsCurrent(revision: { illustrated: unknown; sketch: unknown 
       ...profile,
     },
     {
-      inputHash: illustratedFingerprint(sketch),
+      /* The paper's stored figures too, as the step stamps them —
+         `figuresFingerprint`, src/illustrated-figures.ts. */
+      inputHash: illustratedFingerprint(
+        sketch,
+        undefined,
+        figuresFingerprint(revision.assets as Assets | null),
+      ),
       promptVersion: ILLUSTRATED_PROMPT_VERSION,
       model: CAPABLE_MODEL,
       ...profile,
@@ -3800,7 +3816,11 @@ const rawPgArticleReader: ArticleReader = {
        else. */
     const stale =
       !sketch ||
-      illustratedIsStale(illustrated, sketch) ||
+      illustratedIsStale(
+        illustrated,
+        sketch,
+        figuresFingerprint(found.revision.assets as Assets | null),
+      ) ||
       !tree ||
       sketchIsStale(sketch, blocks, tree, citedMetaFingerprintOf(found.revision));
     return {

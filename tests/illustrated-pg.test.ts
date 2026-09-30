@@ -274,6 +274,51 @@ describe("the illustrated artefact through Postgres", () => {
     expect(found.stale, "an illustration of a superseded scene must read as stale").toBe(true);
   }, 60_000);
 
+  /**
+   * **The paper's figures are in the fingerprint** — GPT Sol's plan review of
+   * 260930f, finding 2: a paper painted before stage 4.5 recovered its figures
+   * would otherwise go on reporting its figureless picture as current once they
+   * arrived. Two runs, identical but for how the stored hash was computed, so
+   * the only thing deciding is the `assets` column this read now takes.
+   */
+  it("reads as stale when the paper's figures arrived after it was painted, and not when they were in it", async () => {
+    const manifest = {
+      version: "assets/2",
+      sourceHash: "x",
+      fetchedAt: "2026-09-30T00:00:00Z",
+      entries: [],
+      pdfFigures: [
+        {
+          ref: `pdffig1-${"fedcba9876543210".repeat(2)}.3.1`,
+          page: 3,
+          status: "stored",
+          sha256: "b".repeat(64),
+          ext: "png",
+          contentType: "image/png",
+          bytes: 100,
+          width: 800,
+          height: 600,
+        },
+      ],
+    };
+    for (const withFigures of [false, true]) {
+      const dir = await makeFixture((fp) => {
+        const sketch = sketchFixture(fp);
+        const illustrated = illustratedFor(sketch);
+        if (withFigures) {
+          illustrated.sourceHash = illustratedFingerprint(sketch, undefined, `${"b".repeat(64)}.png`);
+        }
+        return { sketch, illustrated };
+      });
+      await writeFile(path.join(dir, "assets.json"), JSON.stringify(manifest, null, 2));
+      await loadArticleIntoPg(SLUG, { root: ROOT });
+      const found = await pgArticleReader.loadIllustrated(SLUG);
+      expect(found.stale, withFigures ? "painted with the figures" : "painted before them").toBe(
+        !withFigures,
+      );
+    }
+  }, 120_000);
+
   it("404s for an article that has never been painted", async () => {
     const dir = await makeFixture((fp) => {
       const sketch = sketchFixture(fp);

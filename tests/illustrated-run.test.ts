@@ -741,3 +741,161 @@ describe("drawWithGateway", () => {
     ]);
   });
 });
+
+/**
+ * **The article's own figures** — Greg, 2026-09-30 (SPIDERYARN-READING2-5X):
+ * "make sure we feed in the figures from the paper".
+ * docs/plans/260930f-illustrated-diagram-draws-on-the-paper-figures.md.
+ */
+describe("generateIllustrated with the article's own figures", () => {
+  const FIGURES = [
+    {
+      label: "FIGURE A",
+      block: "spya-aaaaaa",
+      caption: "Figure 1. The ladder of nature.",
+      sha256: "a".repeat(64),
+      ext: "png" as const,
+      dataUrl: "data:image/png;base64,QUFB",
+      bytes: 3,
+    },
+    {
+      label: "FIGURE B",
+      block: "spya-cccccc",
+      caption: "Figure 2. The jar.",
+      sha256: "b".repeat(64),
+      ext: "png" as const,
+      dataUrl: "data:image/png;base64,QkJC",
+      bytes: 3,
+    },
+  ];
+
+  /** A brief whose compositions name the given labels — which is what attaches them. */
+  function withFigures(byScene: Record<string, readonly string[]>): unknown {
+    return {
+      ...BRIEF,
+      plates: BRIEF.plates.map((p) => {
+        const plate = p as { sceneId: string; prompt: string };
+        const labels = byScene[plate.sceneId];
+        return labels ? { ...plate, prompt: `${plate.prompt} With ${labels.join(" and ")} inset.` } : plate;
+      }),
+    };
+  }
+
+  it("lists the figures for the brief, and hands a plate's figures to the illustrator after the style plate", async () => {
+    answerWith(withFigures({ overview: ["FIGURE B", "FIGURE A"], "zoom-1": ["FIGURE A"] }));
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw, figures: FIGURES });
+
+    const request = streamMessage.mock.calls[0]?.[1] as
+      | { messages: { content: string }[] }
+      | undefined;
+    const user = request?.messages[0]?.content;
+    expect(user).toContain("=== THE ARTICLE'S OWN FIGURES ===");
+    expect(user).toContain('- FIGURE A [spya-aaaaaa]: "Figure 1. The ladder of nature."');
+
+    /* The overview: no style plate, its two figures in the order the brief
+       named them. */
+    expect(calls[0]?.references).toEqual([
+      { dataUrl: "data:image/png;base64,QkJC" },
+      { dataUrl: "data:image/png;base64,QUFB" },
+    ]);
+    expect(calls[0]?.prompt).toContain('- Image 1: FIGURE B — "Figure 2. The jar."');
+    expect(calls[0]?.prompt).toContain("- Image 2: FIGURE A");
+    expect(calls[0]?.prompt).toContain("Copy none of a");
+    /* A zoom plate: the style plate first, then its figure, and the envelope
+       numbers them the same way. */
+    expect(calls[1]?.references).toHaveLength(2);
+    expect(calls[1]?.references?.[1]).toEqual({ dataUrl: "data:image/png;base64,QUFB" });
+    expect(calls[1]?.prompt).toContain("- Image 1: an earlier plate of this same set");
+    expect(calls[1]?.prompt).toContain("- Image 2: FIGURE A");
+    /* A plate that named none gets the style plate alone and no figure paragraph. */
+    expect(calls[2]?.references).toHaveLength(1);
+    expect(calls[2]?.prompt).not.toContain("Images attached");
+
+    expect(run.draws.map((d) => d.figures)).toEqual([2, 1, 0]);
+    expect(run.illustrated.plates[0]?.figures).toEqual([
+      { label: "FIGURE B", block: "spya-cccccc", sha256: "b".repeat(64), ext: "png" },
+      { label: "FIGURE A", block: "spya-aaaaaa", sha256: "a".repeat(64), ext: "png" },
+    ]);
+    expect(run.report.faults).toEqual([]);
+  });
+
+  it("drops a figure that was not offered, and says so", async () => {
+    answerWith(withFigures({ overview: ["FIGURE C", "FIGURE A"] }));
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw, figures: FIGURES });
+    expect(calls[0]?.references).toEqual([{ dataUrl: "data:image/png;base64,QUFB" }]);
+    expect(run.report.faults.map((f) => f.what).join("\n")).toContain(
+      "the composition names FIGURE C, which was not offered",
+    );
+  });
+
+  it("faults a figure whose trusted offer no longer matches at attachment time", async () => {
+    answerWith(withFigures({ overview: ["FIGURE A"] }));
+    let reads = 0;
+    const drifting = { ...FIGURES[0]! };
+    Object.defineProperty(drifting, "label", {
+      enumerable: true,
+      get: () => (++reads < 3 ? "FIGURE A" : "FIGURE B"),
+    });
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({
+      article: ARTICLE,
+      sketch: SKETCH,
+      draw,
+      figures: [drifting],
+    });
+    expect(calls[0]?.references).toBeUndefined();
+    expect(run.illustrated.plates[0]?.figures).toBeUndefined();
+    expect(run.report.faults.map((f) => f.what)).toContain(
+      "FIGURE A no longer matches the offered figure — not attached",
+    );
+  });
+
+  /**
+   * **An article with no figures is today's plate, to the byte** — the brief
+   * gets no figure section and every image call the envelope and references it
+   * had before paper figures became an input.
+   */
+  it("sends exactly what it sent before when there are no figures", async () => {
+    const { draw, calls } = drawer();
+    await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
+    const request = streamMessage.mock.calls[0]?.[1] as
+      | { messages: { content: string }[] }
+      | undefined;
+    const user = request?.messages[0]?.content;
+    expect(user).not.toContain("OWN FIGURES");
+    expect(calls[0]?.references).toBeUndefined();
+    expect(calls[1]?.references).toHaveLength(1);
+    const captions = [{ where: "A gilded ladder.", title: "THE LADDER" }];
+    expect(calls[0]?.prompt).toBe(imagePrompt("A vellum page for overview.", captions));
+    expect(calls[1]?.prompt).toBe(imagePrompt("A vellum page for zoom-1.", captions));
+  });
+
+  it("keeps the figure instructions out of the brief request when there are none", async () => {
+    const { draw } = drawer();
+    await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
+    const request = JSON.stringify(streamMessage.mock.calls[0]?.[1]);
+    expect(request).not.toContain("FIGURE");
+    expect(request).not.toContain('\\"figures\\"');
+  });
+
+  it("hashes the figures into the fingerprint only when there are some", () => {
+    expect(inputFingerprint(SKETCH, PLATE_REQUEST, "")).toBe(inputFingerprint(SKETCH));
+    expect(inputFingerprint(SKETCH, PLATE_REQUEST, `${"a".repeat(64)}.png`)).not.toBe(
+      inputFingerprint(SKETCH),
+    );
+    expect(inputFingerprint(SKETCH, PLATE_REQUEST, `${"a".repeat(64)}.png`)).not.toBe(
+      inputFingerprint(SKETCH, PLATE_REQUEST, `${"b".repeat(64)}.png`),
+    );
+  });
+
+  it("faults a brief that names figures when none were offered", async () => {
+    answerWith(withFigures({ overview: ["FIGURE A"] }));
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
+    expect(calls[0]?.references).toBeUndefined();
+    expect(run.illustrated.plates[0]?.figures).toBeUndefined();
+    expect(run.report.faults).toHaveLength(1);
+  });
+});

@@ -143,8 +143,32 @@ import type { BlockId } from "./types.js";
  * It also feeds `inputFingerprint`, so a bump marks every stored plate stale.
  *
  * `illustrated/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). It had no plain-words wording before.
+ *
+ * **Not bumped for the paper's own figures, 2026-09-30, and that is deliberate.**
+ * An article with no stored figures is sent byte for byte what it was sent
+ * before — the figure instructions live in `renderPrompt`'s figure section,
+ * which is absent then — so a bump would mark every such picture stale for a
+ * question nobody asked it. An article *with* figures is asked something new,
+ * and `inputFingerprint` (src/illustrated.ts) says so for exactly those: the
+ * figures are in its hash. docs/plans/260930f-illustrated-diagram-draws-on-the-paper-figures.md.
  */
 export const ILLUSTRATED_VERSION = "illustrated/4";
+
+/**
+ * **How many of the article's figures one plate may be handed.** With the
+ * style plate that is four references, well inside the fourteen the images
+ * endpoint takes, and few enough that each one is a scene rather than wallpaper.
+ */
+export const MAX_PLATE_FIGURES = 3;
+
+/**
+ * **And how many bytes of figure, together, before base64.** One figure may be
+ * 4 MB (src/illustrated-figures.ts); three of them plus the style plate would
+ * be a request body nobody has sent this endpoint. The corpus's figures are
+ * well under a megabyte each, so this only bites on an outlier, and then the
+ * later figure is dropped and counted rather than the call failing.
+ */
+export const MAX_PLATE_FIGURE_BYTES = 6 * 1024 * 1024;
 
 /**
  * **How many plates one run may draw**, and it is one character to change.
@@ -308,6 +332,35 @@ export interface PlateCaption {
   title: string;
 }
 
+/**
+ * **One of the paper's own figures, handed to the illustrator for this
+ * plate.** `label` is the name the brief and the image prompt used for it
+ * (`FIGURE A`, src/illustrated-figures.ts), which means something only inside
+ * one run; `sha256` and `ext` name the stored object that was actually sent,
+ * and `block` is where it sits in the article. All three come from **our**
+ * offer, never from the model — the model writes the label and nothing else.
+ */
+export interface PlateFigure {
+  label: string;
+  block: BlockId;
+  sha256: string;
+  ext: "png" | "jpeg";
+}
+
+/** What the run offered for one label — the same list `renderPrompt` printed. */
+export interface OfferedFigure {
+  block: BlockId;
+  sha256: string;
+  ext: "png" | "jpeg";
+  /** Of the bytes, for `MAX_PLATE_FIGURE_BYTES`. */
+  bytes: number;
+}
+
+/** `FIGURE A` to `FIGURE Z` — the only shape a stored label may have. */
+const FIGURE_LABEL = /^FIGURE [A-Z]$/;
+/** Also sees casing and plural drift, so a named-but-unattached figure is faulted. */
+const FIGURE_MENTION = /\bFIGURES?\s+[A-Z]\b/gi;
+
 /** Everything about a plate the brief model writes, before anybody draws it. */
 export interface IllustratedPlateBrief {
   /** The Sketch scene this plate is of. `scenes[0]`'s id is the overview. */
@@ -333,6 +386,12 @@ export interface IllustratedPlateBrief {
    * `readVignettes`.
    */
   lettering?: PlateCaption[];
+  /**
+   * **The article's own figures this plate incorporates**, in the order the
+   * brief named them — absent when it uses none, which is every plate of an
+   * article without stored figures.
+   */
+  figures?: PlateFigure[];
 }
 
 /**
@@ -377,8 +436,16 @@ export interface IllustratedImage {
 
 /** The same plate, now with the picture that was drawn for it. */
 export function plateDrawn(plate: IllustratedPlate, image: IllustratedImage): IllustratedPlate {
-  const { sceneId, title, prompt, vignettes, lettering } = plate;
-  return { sceneId, title, prompt, vignettes, ...(lettering ? { lettering } : {}), image };
+  const { sceneId, title, prompt, vignettes, lettering, figures } = plate;
+  return {
+    sceneId,
+    title,
+    prompt,
+    vignettes,
+    ...(lettering ? { lettering } : {}),
+    ...(figures ? { figures } : {}),
+    image,
+  };
 }
 
 /**
@@ -388,9 +455,17 @@ export function plateDrawn(plate: IllustratedPlate, image: IllustratedImage): Il
  * already inside the bound a re-read enforces.
  */
 export function plateFailed(plate: IllustratedPlate, why: string): IllustratedPlate {
-  const { sceneId, title, prompt, vignettes, lettering } = plate;
+  const { sceneId, title, prompt, vignettes, lettering, figures } = plate;
   const failed = why.trim().slice(0, MAX_FAILED_CHARS) || "the plate could not be drawn";
-  return { sceneId, title, prompt, vignettes, ...(lettering ? { lettering } : {}), failed };
+  return {
+    sceneId,
+    title,
+    prompt,
+    vignettes,
+    ...(lettering ? { lettering } : {}),
+    ...(figures ? { figures } : {}),
+    failed,
+  };
 }
 
 export interface Illustrated {
@@ -465,6 +540,15 @@ export interface IllustratedReadOptions {
    * the model's own ordering, which is silent.
    */
   sceneIds: readonly string[];
+  /**
+   * **The figures the brief was offered**, by label — the same list
+   * `renderPrompt` printed. Absent or empty means none were offered, and then
+   * any `figures` a model writes is faulted and dropped rather than trusted.
+   *
+   * Only the model path reads it: a stored plate's figures are what the
+   * illustrator was actually handed, and are read back as a record.
+   */
+  figures?: ReadonlyMap<string, OfferedFigure>;
 }
 
 /** Whose words these are. See the header: the two are not the same question. */
@@ -788,6 +872,13 @@ function readPlate(
     vignettes: trust === "stored" || lettering ? vignettes : vignettes.map(({ title: _t, ...r }) => r),
     ...(lettering ? { lettering } : {}),
   };
+  /* From a model, read off the composition; `raw.figures` is not asked for
+     and not read. From storage, the record. */
+  const figures =
+    trust === "model"
+      ? figuresNamedIn(prompt.ok, opts, faults, where)
+      : readStoredFigures(raw.figures, faults, where);
+  if (figures.length > 0) brief.figures = figures;
 
   if (vignettes.length === 0) {
     /* **The anchor floor.** From a model, a plate nothing in the article
@@ -992,6 +1083,114 @@ function readTitle(
     return "";
   }
   return title.ok;
+}
+
+/**
+ * **The figures a plate's composition names** — the offered labels that
+ * appear in its `prompt`, in the order they first appear.
+ *
+ * **Read off the composition, not off a list beside it**, and a real run is
+ * why. On 2026-09-30 the brief wrote "the article's own three overlapping
+ * circles diagram (FIGURE A redrawn in this hand)" into the overview's
+ * composition and never wrote the separate `figures` field it had been asked
+ * for — so the illustrator was told to draw a figure it was not handed, and
+ * drew one from the caption. That is the lettering lesson again (`lettersFor`):
+ * the composition is what gets drawn, so what it names is what must be
+ * attached. Deriving the list from it makes *named but not handed* something
+ * only the caps below can produce, and each of those is faulted.
+ *
+ * Labels match **exactly as offered**, case and all — this file drops rather
+ * than repairs (GPT Sol's plan review, finding 10). The block and the object
+ * are **ours**, from the offer, never the model's. Past `MAX_PLATE_FIGURES` or
+ * `MAX_PLATE_FIGURE_BYTES`, or a label that was never offered, is faulted: the
+ * composition still names it and the illustrator is not handed it, which is
+ * the gap this exists to close, so it must be counted where it happens.
+ */
+function figuresNamedIn(
+  prompt: string,
+  opts: IllustratedReadOptions,
+  faults: IllustratedFault[],
+  where: string,
+): PlateFigure[] {
+  const kept: PlateFigure[] = [];
+  const seen = new Set<string>();
+  let bytes = 0;
+  for (const match of prompt.matchAll(FIGURE_MENTION)) {
+    const label = match[0];
+    if (seen.has(label)) continue;
+    seen.add(label);
+    /* Do not silently turn `figure a` or `FIGURES A` into an offered label.
+       They still name a figure the composition will try to draw, so ignoring
+       them would recreate the named-but-not-handed gap this function closes. */
+    if (!FIGURE_LABEL.test(label)) {
+      faults.push({
+        where,
+        what: `the composition names ${JSON.stringify(label)}, which is not an exact offered label — not attached`,
+      });
+      continue;
+    }
+    const offered = opts.figures?.get(label);
+    if (offered === undefined) {
+      faults.push({ where, what: `the composition names ${label}, which was not offered — not attached` });
+      continue;
+    }
+    if (kept.length >= MAX_PLATE_FIGURES) {
+      faults.push({ where, what: `${label} is past the ${MAX_PLATE_FIGURES}-figure cap — not attached` });
+      continue;
+    }
+    if (bytes + offered.bytes > MAX_PLATE_FIGURE_BYTES) {
+      faults.push({ where, what: `${label} would take the plate past its figure-byte budget — not attached` });
+      continue;
+    }
+    bytes += offered.bytes;
+    kept.push({ label, block: offered.block, sha256: offered.sha256, ext: offered.ext });
+  }
+  return kept;
+}
+
+/**
+ * **A stored plate's figures, read back as the record** of what the
+ * illustrator was actually handed; a malformed entry is dropped and faulted.
+ */
+function readStoredFigures(raw: unknown, faults: IllustratedFault[], where: string): PlateFigure[] {
+  if (missing(raw)) return [];
+  if (!Array.isArray(raw)) {
+    faults.push({ where, what: "figures is not a list — dropped" });
+    return [];
+  }
+  const looked = raw.slice(0, MAX_PLATE_FIGURES);
+  if (raw.length > looked.length) {
+    faults.push({
+      where,
+      what: `${raw.length - looked.length} figure(s) past the ${MAX_PLATE_FIGURES}-figure cap were not read`,
+    });
+  }
+  const kept: PlateFigure[] = [];
+  const labels = new Set<string>();
+  for (const [k, entry] of looked.entries()) {
+    const label = isObj(entry) ? str(entry.label) : "";
+    const block = isObj(entry) ? str(entry.block) : "";
+    const sha256 = isObj(entry) ? str(entry.sha256) : "";
+    const ext = isObj(entry) && (entry.ext === "png" || entry.ext === "jpeg") ? entry.ext : null;
+    if (
+      !FIGURE_LABEL.test(label) ||
+      !block ||
+      FORBIDDEN.test(block) ||
+      block.length > MAX_NODE_CHARS ||
+      !/^[0-9a-f]{64}$/.test(sha256) ||
+      !ext
+    ) {
+      faults.push({ where: `${where}.figures[${k}]`, what: "not a figure record — dropped" });
+      continue;
+    }
+    if (labels.has(label)) {
+      faults.push({ where: `${where}.figures[${k}]`, what: "the same figure label again — dropped" });
+      continue;
+    }
+    labels.add(label);
+    kept.push({ label, block, sha256, ext });
+  }
+  return kept;
 }
 
 /** How many vignettes a plate claimed, even when the plate itself is rubbish. */
