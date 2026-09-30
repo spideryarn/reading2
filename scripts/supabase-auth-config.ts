@@ -3,6 +3,11 @@
  *
  *     npx tsx scripts/supabase-auth-config.ts show
  *     npx tsx scripts/supabase-auth-config.ts apply [--dry-run]
+ *     npx tsx scripts/supabase-auth-config.ts smtp [--dry-run]
+ *
+ * `apply` writes the Google sign-in settings; `smtp` writes the outgoing-mail
+ * settings (Resend, since 2026-09-29 — docs/project/email.md). They are
+ * separate commands so that fixing one never re-sends the other's secret.
  *
  * Written on 2026-08-27, when "Continue with Google" on www.spideryarn.com
  * returned `{"msg":"Unsupported provider: provider is not enabled"}` — the
@@ -15,7 +20,7 @@
  * Six clicks in a browser leave nothing behind. Nothing to re-run after a
  * project is restored from backup, nothing to read back, nothing to diff, and
  * nothing that says *what* was set when somebody asks in a month. `show` prints
- * the four settings this app depends on; `apply` writes them and then re-reads
+ * the settings this app depends on; each writing command then re-reads
  * them from the server rather than reporting its own intentions.
  *
  * ## Why not `supabase config push`
@@ -29,13 +34,13 @@
  *
  * ## The field names were read, not remembered
  *
- * `external_google_enabled`, `external_google_client_id`,
- * `external_google_secret`, `site_url` and `uri_allow_list` all come from the
- * live OpenAPI document at https://api.supabase.com/api/v1-json, schema
- * `UpdateAuthConfigBody`. That matters because the API takes a partial object
- * and **ignores keys it does not know** — an invented field name produces a
- * 200, a success message, and no change at all. Which is the pattern in
- * docs/reusable/silent-success.md, with a login on the end of it.
+ * Every key written below — the Google, SMTP and email-rate-limit fields —
+ * comes from the live OpenAPI document at
+ * https://api.supabase.com/api/v1-json, schema `UpdateAuthConfigBody`. That
+ * matters because the API takes a partial object and **ignores keys it does not
+ * know** — an invented field name produces a 200, a success message, and no
+ * change at all. Which is the pattern in docs/reusable/silent-success.md, with
+ * a login on the end of it.
  *
  * Two shapes in there are worth knowing and are easy to get backwards:
  *
@@ -144,7 +149,38 @@ const WATCHED = [
   "external_email_enabled",
   "disable_signup",
   "mailer_autoconfirm",
+  "smtp_host",
+  "smtp_port",
+  "smtp_user",
+  "smtp_pass",
+  "smtp_admin_email",
+  "smtp_sender_name",
+  "rate_limit_email_sent",
 ] as const;
+
+/**
+ * Outgoing auth mail — confirmations, password resets, magic links — through
+ * Resend's SMTP relay rather than Supabase's built-in sender.
+ *
+ * The built-in one is capped at 2 emails an hour for the whole project (read
+ * from the live config, 2026-09-29), with `mailer_autoconfirm` off, so the
+ * third email sign-up in an hour got no confirmation at all. 30 an hour is
+ * Supabase's own default once custom SMTP is on, and sits well inside Resend's
+ * free-plan 100 a day.
+ *
+ * Values from https://resend.com/docs/send-with-supabase-smtp. The password is
+ * a Resend API key; the user is the literal string `resend`.
+ */
+const SMTP = {
+  smtp_host: "smtp.resend.com",
+  smtp_port: "465",
+  smtp_user: "resend",
+  /* The site's one contact address (docs/project/website-text.md), so a
+     reader who replies to a confirmation reaches a person. */
+  smtp_admin_email: "hello@spideryarn.com",
+  smtp_sender_name: "Spideryarn",
+  rate_limit_email_sent: 30,
+};
 
 function envFromProd(name: string): string | undefined {
   let text: string;
@@ -228,10 +264,14 @@ async function api(
   return JSON.parse(text) as Record<string, unknown>;
 }
 
+function isSecret(key: string): boolean {
+  return key.endsWith("_secret") || key === "smtp_pass";
+}
+
 /** Secrets are never printed, but their presence is a thing worth knowing. */
 function display(key: string, value: unknown): string {
   if (value === undefined || value === null || value === "") return "<unset>";
-  if (key.endsWith("_secret")) return "<set>";
+  if (isSecret(key)) return "<set>";
   if (key === "external_google_client_id") {
     const id = String(value);
     return `${id.slice(0, 12)}… (${id.length} chars)`;
@@ -249,11 +289,46 @@ function report(config: Record<string, unknown>): void {
   }
 }
 
+function googleBody(): Record<string, unknown> {
+  const clientId = process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID;
+  const secret = process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET;
+  if (!clientId || !secret) {
+    die(
+      "\nNo SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / _SECRET in .env.local.\n" +
+        "They are the OAuth client shared with the old app — docs/plans/260826w-auth-supabase.md.",
+    );
+  }
+
+  return {
+    external_google_enabled: true,
+    external_google_client_id: clientId,
+    external_google_secret: secret,
+    /* Explicitly false, not merely omitted. The local stack sets it true
+       because GoTrue's nonce check cannot succeed against a container, and this
+       is the one place where copying that across would be silent and wrong. */
+    external_google_skip_nonce_check: false,
+    site_url: SITE_URL,
+    uri_allow_list: ALLOW_LIST.join(","),
+  };
+}
+
+function smtpBody(): Record<string, unknown> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    die(
+      "\nNo RESEND_API_KEY in .env.local.\n" +
+        "It is the sending-only key scoped to spideryarn.com —\n" +
+        "docs/project/email.md.",
+    );
+  }
+  return { ...SMTP, smtp_pass: key };
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   const dryRun = process.argv.includes("--dry-run");
-  if (command !== "show" && command !== "apply") {
-    die("Usage: npx tsx scripts/supabase-auth-config.ts <show|apply> [--dry-run]");
+  if (command !== "show" && command !== "apply" && command !== "smtp") {
+    die("Usage: npx tsx scripts/supabase-auth-config.ts <show|apply|smtp> [--dry-run]");
   }
 
   const token = process.env.SUPABASE_ACCESS_TOKEN;
@@ -280,26 +355,7 @@ async function main(): Promise<void> {
 
   if (command === "show") return;
 
-  const clientId = process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID;
-  const secret = process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET;
-  if (!clientId || !secret) {
-    die(
-      "\nNo SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / _SECRET in .env.local.\n" +
-        "They are the OAuth client shared with the old app — docs/plans/260826w-auth-supabase.md.",
-    );
-  }
-
-  const body = {
-    external_google_enabled: true,
-    external_google_client_id: clientId,
-    external_google_secret: secret,
-    /* Explicitly false, not merely omitted. The local stack sets it true
-       because GoTrue's nonce check cannot succeed against a container, and this
-       is the one place where copying that across would be silent and wrong. */
-    external_google_skip_nonce_check: false,
-    site_url: SITE_URL,
-    uri_allow_list: ALLOW_LIST.join(","),
-  };
+  const body = command === "smtp" ? smtpBody() : googleBody();
 
   console.log("\nwriting:");
   for (const [key, value] of Object.entries(body)) {
@@ -324,22 +380,22 @@ async function main(): Promise<void> {
   /**
    * Did each field land?
    *
-   * Two of the six cannot be compared as strings and saying so is the point.
-   * A secret is never returned by a GET at all — comparing it would report
-   * failure on the one field most likely to be right. And `uri_allow_list` is a
-   * *set* that happens to travel as a comma-separated string: an API free to
-   * trim, reorder or dedupe it would otherwise make this shout about a write
-   * that worked perfectly, and a check that cries wolf is a check that gets
-   * ignored the day it is right.
+   * Secrets cannot be compared literally, and `uri_allow_list` is a *set* that
+   * happens to travel as a comma-separated string. An API free to trim, reorder
+   * or dedupe the latter would otherwise make this shout about a write that
+   * worked perfectly, and a check that cries wolf is a check that gets ignored
+   * the day it is right. Ordinary scalar fields compare through `String` because
+   * GET has returned both JSON numbers and strings for numeric configuration.
    */
   const landed = (key: string, sent: unknown): boolean => {
     /* A secret's *value* never comes back, but its presence does — and checking
        presence is the difference between "we cannot verify this" and "we did
        not look". A field name the API ignored leaves this empty, which is the
        failure this whole read-back exists for. What no GET can prove is that
-       the secret is the RIGHT one; only an actual OAuth exchange does that,
-       which is step 6 of the plan. Sol's finding. */
-    if (key.endsWith("_secret")) {
+       the secret is the RIGHT one; only the corresponding end-to-end operation
+       does that — a Google sign-in or an auth email sent by Supabase. Sol's
+       original finding. */
+    if (isSecret(key)) {
       const got = after[key];
       return typeof got === "string" && got !== "";
     }
@@ -370,8 +426,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log("\nAll six settings read back as written — the secret by presence only.");
-  console.log("Now: ./scripts/check-remote-auth.sh   (google must flip to ON)");
+  console.log(
+    `\nAll ${Object.keys(body).length} settings read back as written — the secret by presence only.`,
+  );
+  console.log(
+    command === "smtp"
+      ? "Now send a real one: request a password reset, and look for it in Resend's Emails log."
+      : "Now: ./scripts/check-remote-auth.sh   (google must flip to ON)",
+  );
 }
 
 /* Only when run, never when imported — tests/supabase-auth-config.test.ts imports
