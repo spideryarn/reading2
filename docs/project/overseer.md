@@ -150,9 +150,8 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   the report is not an admin's: a reader's row, or, when it says there is no row or that the id was
   copied, a forged or misattributed event to report to Greg. Exit 2 is not trusted and not a classification: handle the report under the
   reader rules, and say in its note that provenance could not be checked. The old `--user-id` form
-  now exits 2. Until Greg approves the new wording in feedback-reports.md, this supersedes that
-  doc's admin test
-  ([261001a](../plans/261001a-unfakeable-admin-feedback-reports.md)).
+  now exits 2. The rule is
+  [feedback-reports.md § Classifying an admin and proving provenance](feedback-reports.md#classifying-an-admin-and-proving-provenance).
 - **Disagreement escalates on P0 and P1 only.** Sol disagreeing with an agent is the ordinary state
   of things and chains here have run to round twelve; treat a P2 disagreement as information, not as
   a reason to wake anyone.
