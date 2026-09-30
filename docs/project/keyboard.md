@@ -201,6 +201,10 @@ reason. `tests/keynav-horizontal.test.ts` pins both halves — the handler takes
 one the stride still moves. The plan is
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md) § Keys (Sol F5).
 
+The band's ‹ › and the door's *Next stop ›* name their key on their cards (*Or press ← (not while typing in a box).*), since
+2026-09-30 — every shortcut belongs on its control's card:
+[tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
+
 ## The aim is visible before you press anything
 
 An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
@@ -616,6 +620,8 @@ thing the usability research is unambiguous about.
 
 ## See also
 
+- [tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card) —
+  the rule that a control with a key says so in its tooltip, and its one home
 - [touch.md](touch.md) — the swipe version of this, and why it stops at the prose column
 - [web-client.md](web-client.md) — the reading view and where every piece of its code lives
 - [granularity-zoom.md](granularity-zoom.md#interaction) — the feature the keys navigate

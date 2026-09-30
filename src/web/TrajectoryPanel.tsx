@@ -45,7 +45,7 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   BadgeQuestionMark,
   BookA,
@@ -68,7 +68,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { PurposeLine } from "./TrajectoryPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
-import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { CardQuestion, CardTarget, StopCard } from "./stop-card.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
@@ -303,95 +303,147 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
     (here === null ? " · position unavailable" : ` · about ${Math.round(here * 100)}% through the article`);
   return (
     <div className="traj-head">
-      <div className="traj-stepper">
-        {/* Enabled on stop 1 too, where it goes to stop 1's passage again —
-            ← does the same (SPIDERYARN-READING2-4K), and the keys may not do
-            more than the buttons. */}
-        <button
-          type="button"
-          className="traj-arrow"
-          aria-label={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
-          title={view.position <= 1 ? "Back to stop 1" : undefined}
-          disabled={view.position < 1}
-          onClick={() => view.onStep(-1)}
+      {/* **Each arrow names its key on its card** — Greg, SPIDERYARN-READING2-74:
+          *"Add tooltips for the previous and next buttons … especially showing
+          the keyboard shortcuts."* The rule: docs/project/tooltips.md § A
+          shortcut is named on its card. Hover and focus cards: a finger's tap
+          steps at once, on purpose (plan 260930h, Sol F3). The copy promises no
+          scroll — a stale route's stop may have lost its block (Sol F1). */}
+      <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+        <div className="traj-stepper">
+          {/* Enabled on stop 1 too, where it goes to stop 1's passage again —
+              ← does the same (SPIDERYARN-READING2-4K), and the keys may not do
+              more than the buttons. */}
+          <StepTip
+            head={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
+            what={view.position <= 1 ? "Back to the first stop's passage." : "Back one stop along the route."}
+            keyName="←"
+          >
+            <button
+              type="button"
+              className="traj-arrow"
+              aria-label={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
+              disabled={view.position < 1}
+              onClick={() => view.onStep(-1)}
+            >
+              <ChevronLeft size={20} />
+            </button>
+          </StepTip>
+          {/* **The route as a line** instead of "Stop k of N" (Greg,
+              SPIDERYARN-READING2-5C): a real button, so a keyboard and a finger
+              reach its tooltip, which holds the number (Sol, 260929f F6). The
+              number is also a status line for a screen reader, spoken on a step. */}
+          <Tooltip content={<p>{said}</p>} placement="bottom" open={sparkOpen} onOpenChange={setSparkOpen}>
+            <button
+              type="button"
+              className="traj-spark"
+              aria-label={said}
+              aria-expanded={sparkOpen}
+              onClick={() => setSparkOpen((was) => !was)}
+            >
+              <RouteSpark positions={view.rows.map((r) => r.position)} current={view.position - 1} />
+            </button>
+          </Tooltip>
+          <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            Stop {view.position} of {total}
+          </span>
+          <StepTip head="Next stop" what="On to the next stop along the route." keyName="→">
+            <button
+              type="button"
+              className="traj-arrow"
+              aria-label="Next stop"
+              disabled={view.position >= total}
+              onClick={() => view.onStep(1)}
+            >
+              <ChevronRight size={20} />
+            </button>
+          </StepTip>
+        </div>
+      </TooltipGroup>
+      {/* **The depth control and the (i) are one group that does not wrap**
+          (SPIDERYARN-READING2-73), so a head too narrow for one row breaks
+          before the depths and never leaves the (i) alone on a row of its own —
+          the row Greg asked to have back. trajectory.css § .traj-head-end. */}
+      <div className="traj-head-end">
+        {view.depths.length > 1 && (
+          <fieldset className="traj-depths" aria-label="How deep">
+            {view.depths.map((d) => (
+              <button
+                key={d.depth}
+                type="button"
+                className={`traj-depth${d.depth === view.depth ? " on" : ""}`}
+                aria-pressed={d.depth === view.depth}
+                onClick={() => {
+                  if (d.depth !== view.depth) view.onDepth(d.depth);
+                }}
+              >
+                <span>{d.label}</span>
+                <span className="traj-depth-n">{d.count}</span>
+              </button>
+            ))}
+          </fieldset>
+        )}
+        {/* **Where the passages come from**, said once and out of the way — the
+            two foot sentences Greg asked to move into a tooltip
+            (SPIDERYARN-READING2-52). Controlled, as Quotes' *Why this one* is,
+            so a tap toggles it on a touch device with no hover; hover and focus
+            open it too. */}
+        <Tooltip
+          content={
+            <>
+              {about.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </>
+          }
+          placement="bottom"
+          open={aboutOpen}
+          onOpenChange={setAboutOpen}
+          className="traj-about-card"
         >
-          <ChevronLeft size={20} />
-        </button>
-        {/* **The route as a line** instead of "Stop k of N" (Greg,
-            SPIDERYARN-READING2-5C): a real button, so a keyboard and a finger
-            reach its tooltip, which holds the number (Sol, 260929f F6). The
-            number is also a status line for a screen reader, spoken on a step. */}
-        <Tooltip content={<p>{said}</p>} placement="bottom" open={sparkOpen} onOpenChange={setSparkOpen}>
           <button
             type="button"
-            className="traj-spark"
-            aria-label={said}
-            aria-expanded={sparkOpen}
-            onClick={() => setSparkOpen((was) => !was)}
+            className={`traj-about${aboutOpen ? " on" : ""}`}
+            aria-label="About this route"
+            aria-expanded={aboutOpen}
+            onClick={() => setAboutOpen((was) => !was)}
           >
-            <RouteSpark positions={view.rows.map((r) => r.position)} current={view.position - 1} />
+            <Info size={16} />
           </button>
         </Tooltip>
-        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          Stop {view.position} of {total}
-        </span>
-        <button
-          type="button"
-          className="traj-arrow"
-          aria-label="Next stop"
-          disabled={view.position >= total}
-          onClick={() => view.onStep(1)}
-        >
-          <ChevronRight size={20} />
-        </button>
       </div>
-      {view.depths.length > 1 && (
-        <fieldset className="traj-depths" aria-label="How deep">
-          {view.depths.map((d) => (
-            <button
-              key={d.depth}
-              type="button"
-              className={`traj-depth${d.depth === view.depth ? " on" : ""}`}
-              aria-pressed={d.depth === view.depth}
-              onClick={() => {
-                if (d.depth !== view.depth) view.onDepth(d.depth);
-              }}
-            >
-              <span>{d.label}</span>
-              <span className="traj-depth-n">{d.count}</span>
-            </button>
-          ))}
-        </fieldset>
-      )}
-      {/* **Where the passages come from**, said once and out of the way — the
-          two foot sentences Greg asked to move into a tooltip
-          (SPIDERYARN-READING2-52). Controlled, as Quotes' *Why this one* is,
-          so a tap toggles it on a touch device with no hover; hover and focus
-          open it too. */}
-      <Tooltip
-        content={
-          <>
-            {about.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </>
-        }
-        placement="bottom"
-        open={aboutOpen}
-        onOpenChange={setAboutOpen}
-        className="traj-about-card"
-      >
-        <button
-          type="button"
-          className={`traj-about${aboutOpen ? " on" : ""}`}
-          aria-label="About this route"
-          aria-expanded={aboutOpen}
-          onClick={() => setAboutOpen((was) => !was)}
-        >
-          <Info size={16} />
-        </button>
-      </Tooltip>
     </div>
+  );
+}
+
+/**
+ * **A step control's card**: what it does, and its key — Trajectory's ‹ › and
+ * the door's *Next stop ›* (plan 260930h). "Not while typing" because the keys
+ * go through keynav's guards and hovering a button does not blur a text box
+ * (Sol F2); docs/project/tooltips.md § A shortcut is named on its card.
+ */
+function StepTip({
+  head,
+  what,
+  keyName,
+  placement = "bottom",
+  children,
+}: {
+  head: string;
+  what: string;
+  keyName: "←" | "→";
+  placement?: "top" | "bottom";
+  children: ReactElement<Record<string, unknown>>;
+}) {
+  return (
+    <Tooltip
+      placement={placement}
+      keepSide
+      className="tip-soon"
+      content={<ControlTip head={head} what={what} how={`Or press ${keyName} (not while typing in a box).`} />}
+    >
+      {children}
+    </Tooltip>
   );
 }
 
@@ -947,9 +999,11 @@ export function TrajectoryDoor({
           </button>
         )}
         {door?.kind === "next" && (
-          <button type="button" className="traj-door-btn" onClick={onNext}>
-            Next stop ›
-          </button>
+          <StepTip head="Next stop" what="On to the next stop along the route." keyName="→" placement="top">
+            <button type="button" className="traj-door-btn" onClick={onNext}>
+              Next stop ›
+            </button>
+          </StepTip>
         )}
         {door?.kind === "end" && door.deeper && (
           <button
