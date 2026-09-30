@@ -27,7 +27,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import { modeGenerates, resetActivations } from "../src/web/activation.js";
+import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
 import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
@@ -76,6 +76,26 @@ function reading(props: Record<string, unknown> = {}): void {
         view: "article",
         mode: "plain",
         onMode: () => {},
+        experimental: EXPERIMENTAL_OFF,
+        ...props,
+      }),
+    );
+  });
+}
+
+/**
+ * **The Dock as the metadata page mounts it** — Metadata.tsx: no `mode`, no
+ * `onMode`, no drawer. An owner's page; a visitor's goes through
+ * PublicPages.tsx with `visitor` set.
+ */
+function metadataPage(props: Record<string, unknown> = {}): void {
+  history.replaceState(null, "", "/read/a-piece/metadata?at=spya-k3m9qt");
+  act(() => {
+    root.render(
+      // biome-ignore lint/suspicious/noExplicitAny: the metadata page's Dock is missing the reading view's props on purpose
+      createElement(Dock as any, {
+        slug: "a-piece",
+        view: "metadata",
         experimental: EXPERIMENTAL_OFF,
         ...props,
       }),
@@ -326,23 +346,18 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
   });
 
   /**
-   * Off the reading view there is no band a command could change, so there is
-   * no bar and no button — the same condition the mode segment itself is under.
+   * **Off the reading view the bar is still drawn**, since 2026-09-30. Greg,
+   * SPIDERYARN-READING2-66: *"The Cmd-k Command shortcut doesn't work in
+   * Metadata mode."* It used to stand down wherever there was no `onMode`, on
+   * the grounds that a command had nothing to do there — but the Dock on the
+   * metadata page draws every mode as a link back to the article, and most of
+   * the bar's other rows are pages. So the bar is there too, and its mode rows
+   * do what those links do: § off the reading view, below.
    */
-  it("is not drawn at all where the bar has no `onMode`", () => {
-    history.replaceState(null, "", "/read/a-piece/metadata");
-    act(() => {
-      root.render(
-        // biome-ignore lint/suspicious/noExplicitAny: the point of this test is the arm with props missing
-        createElement(Dock as any, {
-          slug: "a-piece",
-          view: "metadata",
-          experimental: EXPERIMENTAL_OFF,
-        }),
-      );
-    });
-    expect(host.querySelector(".dock-commands")).toBeNull();
-    expect(host.querySelector("dialog.cmdbar")).toBeNull();
+  it("is drawn on the metadata page, where there is no `onMode`", () => {
+    metadataPage();
+    expect(host.querySelector(".dock-commands")).not.toBeNull();
+    expect(host.querySelector("dialog.cmdbar")).not.toBeNull();
   });
 });
 
@@ -852,19 +867,10 @@ describe("⌘/Ctrl-K", () => {
     expect(dialog().open).toBe(false);
   });
 
-  it("is not listened for where the bar has no `onMode`", () => {
-    history.replaceState(null, "", "/read/a-piece/metadata");
-    act(() => {
-      root.render(
-        // biome-ignore lint/suspicious/noExplicitAny: as above — this arm is missing props on purpose
-        createElement(Dock as any, {
-          slug: "a-piece",
-          view: "metadata",
-          experimental: EXPERIMENTAL_OFF,
-        }),
-      );
-    });
-    expect(chord()).toBe(false);
+  it("is listened for on the metadata page too", () => {
+    metadataPage();
+    expect(chord()).toBe(true);
+    expect(dialog().open).toBe(true);
   });
 });
 
@@ -1170,5 +1176,87 @@ describe("the Commands button's place in the bar", () => {
       expect(button.hasAttribute(attr), `it claims ${attr}`).toBe(false);
     }
     expect(button.getAttribute("aria-haspopup")).toBe("dialog");
+  });
+});
+
+/**
+ * **Off the reading view — the metadata page — a mode row is the mode's link.**
+ *
+ * SPIDERYARN-READING2-66. The Dock there draws every mode as a link back to
+ * the article in that mode (Dock.tsx § `DockModeLinks`), and the bar's mode row
+ * goes to exactly the same place. **It arms nothing**, as that link arms
+ * nothing: arriving is not a press (activation.ts), and a bar that generated
+ * where the link beside it does not would be a cheaper door than the one it
+ * sits next to, under a card promising the opposite.
+ * docs/plans/260930a-cmd-k-on-metadata-page-and-full-wordmark-animations-on-the-shelf.md.
+ */
+describe("off the reading view", () => {
+  it("goes to the article in that mode on Enter, keeping the rest of the query", () => {
+    metadataPage();
+    openBar();
+    type("glossary");
+    expect(listed()[0]).toBe(MODE_LABEL.glossary);
+    press("Enter");
+    expect(location.pathname).toBe("/read/a-piece");
+    const params = new URLSearchParams(location.search);
+    expect(params.get("mode")).toBe("glossary");
+    expect(params.get("at")).toBe("spya-k3m9qt");
+    expect(dialog().open).toBe(false);
+  });
+
+  it("arms nothing on the way, as the mode's link beside it arms nothing", () => {
+    metadataPage();
+    openBar();
+    type("glossary");
+    press("Enter");
+    expect(pendingActivation("a-piece", "glossary")).toBeNull();
+  });
+
+  it("still navigates a page row", () => {
+    metadataPage();
+    openBar();
+    type("changelog");
+    press("Enter");
+    expect(location.pathname).toBe("/changelog");
+  });
+
+  it("offers no Comments action where the metadata page has no drawer", () => {
+    metadataPage();
+    openBar();
+    type("comments");
+    expect(listed()).not.toContain("Comments");
+  });
+
+  /* Production mounts the metadata page inside `FeedbackHost` (App.tsx), so the
+     one action row it has should work there. GPT Sol, reviewing the plan. */
+  it("opens the Feedback dialog from the metadata page", () => {
+    history.replaceState(null, "", "/read/a-piece/metadata");
+    act(() => {
+      root.render(
+        createElement(
+          FeedbackHost,
+          null,
+          // biome-ignore lint/suspicious/noExplicitAny: as `metadataPage` above
+          createElement(Dock as any, {
+            slug: "a-piece",
+            view: "metadata",
+            experimental: EXPERIMENTAL_OFF,
+          }),
+        ),
+      );
+    });
+    expect(chord()).toBe(true);
+    type("feedback");
+    expect(listed()).toEqual(["Feedback"]);
+    press("Enter");
+    expect(document.querySelector("dialog.fb-dialog")?.hasAttribute("open")).toBe(true);
+    expect(location.pathname).toBe("/read/a-piece/metadata");
+  });
+
+  it("gives a visitor on the metadata page neither the button nor the chord", () => {
+    metadataPage({ visitor: true });
+    expect(host.querySelector(".dock-commands")).toBeNull();
+    expect(host.querySelector("dialog.cmdbar")).toBeNull();
+    expect(chord()).toBe(false);
   });
 });

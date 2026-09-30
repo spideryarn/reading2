@@ -327,8 +327,8 @@ export function SiteFooter({
   const kind = here ?? route.kind;
   const links = LINKS.filter((l) => l.here !== kind);
   /* A tap plays one, because a tap on the wordmark here does nothing else — it
-     is not a link (below). The shelf's spider makes the same call
-     (Library.tsx § ShelfSpider). */
+     is not a link (below). The shelf's wordmark makes the same call
+     (Library.tsx § ShelfWordmark). */
   const anim = useLogoAnimation({ tap: true });
 
   return (
@@ -424,7 +424,7 @@ export function SiteFooter({
           {/* **The spider animates here too**, since it joined the wordmark on
               2026-09-29: Greg, 2026-09-12, *"wherever the logo is present"*.
               A plain span, not a button: a tab stop whose only effect is a
-              flourish is noise (ShelfSpider says the same). Not `aria-hidden`
+              flourish is noise (ShelfWordmark says the same). Not `aria-hidden`
               either, unlike the shelf's spider, because this one holds the
               words. `self-start` so the hover target is the wordmark and not
               the whole column's width. */}

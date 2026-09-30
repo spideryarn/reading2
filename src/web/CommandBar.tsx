@@ -1,9 +1,9 @@
 /**
  * **Type a word, press Enter, be in that mode** — or on that page, or with that
- * dialog open. Spotlight for the fourteen modes, and for the eight rows that
- * are not modes: **seven of them arrived on 2026-09-08** and `What’s new` was
- * already there, which is the arithmetic this sentence got wrong at first and
- * GPT Sol caught.
+ * dialog open. Spotlight for the modes and for the page and action rows beside
+ * them. Most of those other rows arrived on 2026-09-08; their exact count now
+ * depends on whether this Dock has an article, a Comments drawer and a Feedback
+ * host.
  *
  * Greg asked for it on 2026-09-05:
  *
@@ -34,11 +34,14 @@
  *     jump and an "ask this article" would each need the bar to grow an
  *     *argument*, and it has one text box and it is the filter.
  *
- *     The half of the call that has never changed: a mode row's Enter opens it
- *     **exactly as pressing its Dock button does** — same activation, same
- *     generate-on-open, same cost. A non-mode row can spend too: Tweets was plain
- *     navigation to the thread page (until it became a mode, 2026-09-29), which wrote on owner arrival when empty,
- *     and the row wore the `generates` marker for that consequence.
+ *     On the reading view, a mode row's Enter opens it **exactly as pressing
+ *     its Dock button does** — same activation, same generate-on-open, same
+ *     cost. On the Metadata page it follows the mode link drawn there and arms
+ *     nothing, which is likewise exactly what that surface's control does
+ *     (Dock.tsx § `useActivateMode`). A non-mode row can spend too: Tweets
+ *     was plain navigation to the thread page (until it became a mode,
+ *     2026-09-29), which wrote on owner arrival when empty, and the row wore
+ *     the `generates` marker for that consequence.
  *  2. It is reachable by **⌘/Ctrl-K and by a button in the Dock**, because
  *     ⌘-K does not exist on a phone. The Dock keeps every mode button it has —
  *     this is an additional door, never a replacement. **The button moved to
@@ -126,12 +129,12 @@ import { useVisualViewport } from "./useVisualViewport.js";
  * to keep in step.
  *
  * **It is optional even though today it is never absent.** The bar is mounted
- * only where there is a band to change — `mode !== undefined &&
- * onMode !== undefined && !isVisitor`, which is the reading view, for the owner
- * — so every reader who can open the bar is standing on an article. The option
- * is here because that is a fact about the *gate*, not about the rows: the day
- * the bar is offered on the shelf or the metadata page (260908e § Deliberately
- * deferred) is the day this is `undefined`, and the answer then is the one
+ * only by the Dock, for the owner — the reading view and, since 2026-09-30,
+ * the metadata page (SPIDERYARN-READING2-66) — so every reader who can open the
+ * bar is standing on an article. The option is here because that is a fact
+ * about the *gate*, not about the rows: the day the bar is offered on the shelf
+ * (260908e § Deliberately deferred) is the day this is `undefined`, and the
+ * answer then is the one
  * `besideTheModes` gives now — **no row at all**, rather than a row that has to
  * say something about an article that is not there.
  */

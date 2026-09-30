@@ -194,6 +194,12 @@ either links to it or makes a second one — in which case everything works and 
 [`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts) is the before-and-after
 reading. GPT Sol raised it; it is the one thing in that review no spec could settle.
 
+## Email
+
+Sign-up confirmations and password resets go out through Resend, not Supabase's built-in sender,
+since 2026-09-29 — the built-in one allowed 2 an hour for the whole project. The account, the DNS,
+the key and the script that configures Supabase are in [email.md](email.md).
+
 ## What auth is for here
 
 The gate exists because **a public site plus online ingest plus no login is an open proxy and an open

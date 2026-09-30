@@ -18,8 +18,9 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  * somebody deliberately adds it to this list.
  *
  * What is on it: the local Supabase stack's fixed demo credentials, the Google
- * OAuth pair that only works against that local stack, and the model-provider
- * keys the pipeline needs to do anything at all.
+ * OAuth pair that only works against that local stack, the model-provider keys
+ * the pipeline needs to do anything at all, and the deliberately approved
+ * sending-only Resend key.
  *
  * Deliberately NOT on it, and neither may be added without Greg saying so:
  *  - HETZNER_CLOUD_API_TOKEN — it can destroy this very box. A box that holds
@@ -160,6 +161,12 @@ export const ALLOWLIST: readonly string[] = [
      minted per machine by `stripe listen`, so the laptop's value would be
      wrong on the box, like the admin password. Greg's call, 2026-09-02. */
   "STRIPE_SECRET_KEY",
+  /* Resend, for outgoing email from spideryarn.com. Unlike the Stripe key
+     there is no test mode: this is a real sending key, so anything on the box
+     can send real mail as the domain — scoped to spideryarn.com and "sending
+     access" only, which cannot read logs or manage domains. Greg asked for it
+     on the box, 2026-09-29. docs/project/email.md. */
+  "RESEND_API_KEY",
 ];
 
 /**
@@ -459,7 +466,7 @@ export function buildEnvPayload(localText: string, allowance: EnvAllowance): Env
     `# Written by \`gjd-remote push-env\` from the laptop's ${ENV_BASENAME}.`,
     `# Only the keys ${allowance.source} are here, and`,
     `# every Supabase target in them is the LOCAL stack — checked, not assumed.`,
-    `# Paid model-provider keys ARE here; what is absent is production data.`,
+    `# Paid provider keys ARE here; what is absent is production data.`,
     `# Edits made on the box are overwritten by the next push.`,
     ``,
   ];

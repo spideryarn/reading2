@@ -79,12 +79,24 @@ The wordmark is drawn **twice**, with deliberately different inner markup:
 | `HomeLogo` | fixed top-left, shelf-adjacent pages | `.logo-text` | Geist Variable 600 |
 | `DockHome` | left end of the reading view's bottom bar | `.dock-btn-label` | Geist Variable |
 
-A third host since 2026-09-15, and not a wordmark: the spider beside the shelf's heading
-([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider), 28px, with no letters for anything to
-reach, so only the six mark animations ever run there (§ The trigger). **The heading was left plain
-on 2026-09-29, deliberately**: it is `text-3xl`, and the letter animations move by fixed pixels
-tuned for a 13px word, so at 30px they read as half a gesture. Making the set scale with its host is
-the way to change that, and it is its own piece of work.
+A third host since 2026-09-15: the top of the shelf ([`Library.tsx`](../../src/web/Library.tsx) §
+ShelfWordmark), a 28px spider beside the `text-3xl` heading. Until 2026-09-30 only the spider hosted
+the hook and the heading was plain text, so only the six mark animations ran there and pointing at
+the word did nothing. It had been left plain on purpose, because the letter moves were fixed pixels
+tuned for a 13px word and read as half a gesture at 30px. Greg asked for them anyway
+([6D](../user-feedback/260930_0140-shelf-wordmark-animations.md)):
+
+> We don't seem to get the fun logo animations for the logo in the top left of the logged in
+> homepage.
+>
+> — Greg, 2026-09-30
+
+So **the letter moves are measured in the word's own size now**: `--logo-px` in
+[`logo-animations.css`](../../src/web/styles/logo-animations.css) is one pixel of the 0.82rem wordmark
+in `em`, so the corner and the Dock move exactly as they did, and a bigger word moves in proportion.
+The heading spells its name with `LogoLetters`, and one host holds both
+([260930a](../plans/260930a-cmd-k-on-metadata-page-and-full-wordmark-animations-on-the-shelf.md)).
+The spider's own moves are still pixels against the 20px mark.
 
 **The letters and the mark are one component since 2026-09-29**: `LogoLetters` and `LogoMark` in
 [`LogoGlyphs.tsx`](../../src/web/LogoGlyphs.tsx). Every copy draws those and keeps its own wrapper,
@@ -201,8 +213,8 @@ that way. `tests/logo-animation.test.tsx` checks each `reach` against the styles
 selectors, so the tag cannot drift from what the rules actually touch.
 
 **A tap plays one only where a tap does nothing else.** On the reading view and in the corner a tap
-is the way home and stays so; a finger gets its animation from the hold. The shelf's spider
-([`Library.tsx`](../../src/web/Library.tsx) § ShelfSpider) is a picture and a heading, not a
+is the way home and stays so; a finger gets its animation from the hold. The shelf's wordmark
+([`Library.tsx`](../../src/web/Library.tsx) § ShelfWordmark) is a picture and a heading, not a
 link, so it takes
 `{ tap: true }` and a tap plays one — decided on the `click`, never a short `pointerup`, because the
 release is heard on `window` and a finger that slid off and lifted elsewhere is not a tap on it.

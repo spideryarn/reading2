@@ -102,6 +102,29 @@
    mark-only animations that a random draw is still worth something there.
    Recorded in docs/project/design-logo.md § What a phone sees. */
 
+/* **One pixel of the 0.82rem wordmark, in `em`** — so a letter's move written
+   `calc(var(--logo-px) * 2)` is the 2px it was tuned at in the corner and the
+   Dock (both 0.82rem = 13.12px), and grows with any bigger word. Since
+   2026-09-30, when the shelf's 30px heading took the letters (Greg,
+   SPIDERYARN-READING2-6D: *"We don't seem to get the fun logo animations for
+   the logo in the top left of the logged in homepage."*); in fixed pixels the
+   pluck and the sag were half a gesture at that size, which is why the heading
+   had been left without them.
+
+   **The `em` is the letter's, not the root's.** An unregistered custom property
+   carries its tokens unresolved, so `1em` is read wherever `var(--logo-px)` is
+   used — the letter, its pseudo-element, or a keyframe running on either —
+   against that element's own font size. Declared on `:root` only so that it
+   exists everywhere; the value it resolves to is decided at the use.
+
+   **Letters only.** Every length a letter moves by is in this unit, bar 1px
+   hairlines, which stay hairlines at any size; tests/logo-animation.test.tsx
+   fails on a plain `px` in any rule that reaches a letter. The spider's moves
+   are still pixels against the 20px mark. */
+:root {
+  --logo-px: calc(1em / 13.12);
+}
+
 /* The base every animation gets for free, applied by the hook as a second class
    alongside the animation's own id. See logo-animation.ts § className. */
 /* So a pseudo-element can be positioned against the whole wordmark: `.logo` is
@@ -272,11 +295,11 @@
    so it re-plucks. The +1px below the baseline is inside the dock's clip. */
 @keyframes spya-pluck {
   0%, 62%, 100% { transform: none; }
-  8% { transform: translateY(-2px); }
-  20% { transform: translateY(1px); }
-  31% { transform: translateY(-1px); }
-  42% { transform: translateY(0.5px); }
-  52% { transform: translateY(-0.3px); }
+  8% { transform: translateY(calc(var(--logo-px) * -2)); }
+  20% { transform: translateY(calc(var(--logo-px) * 1)); }
+  31% { transform: translateY(calc(var(--logo-px) * -1)); }
+  42% { transform: translateY(calc(var(--logo-px) * 0.5)); }
+  52% { transform: translateY(calc(var(--logo-px) * -0.3)); }
 }
 
 /* -- 3. Stronger Than Steel ----------------------------------------------
@@ -305,8 +328,8 @@
 }
 @keyframes spya-sag {
   0%, 100% { transform: none; }
-  30%, 50% { transform: translateY(calc(var(--sag) * 3px)); }
-  70% { transform: translateY(calc(var(--sag) * -0.6px)); }
+  30%, 50% { transform: translateY(calc(var(--sag) * var(--logo-px) * 3)); }
+  70% { transform: translateY(calc(var(--sag) * var(--logo-px) * -0.6)); }
 }
 
 /* -- 4. Misregistration --------------------------------------------------
@@ -339,8 +362,8 @@
 @keyframes spya-register {
   from {
     text-shadow:
-      -1.5px -0.5px 0 var(--chat-mark),
-      1.5px 0.5px 0 var(--highlight-ink);
+      calc(var(--logo-px) * -1.5) calc(var(--logo-px) * -0.5) 0 var(--chat-mark),
+      calc(var(--logo-px) * 1.5) calc(var(--logo-px) * 0.5) 0 var(--highlight-ink);
   }
   to {
     text-shadow:
@@ -409,8 +432,8 @@
 .spya-seam .logo-letter {
   transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.spya-seam .logo-letter:nth-child(-n + 6) { transform: translateX(-3px); }
-.spya-seam .logo-letter:nth-child(n + 7) { transform: translateX(3px); }
+.spya-seam .logo-letter:nth-child(-n + 6) { transform: translateX(calc(var(--logo-px) * -3)); }
+.spya-seam .logo-letter:nth-child(n + 7) { transform: translateX(calc(var(--logo-px) * 3)); }
 /* **"Reading" rides along with "yarn"** where the name is followed by it (the
    marketing bar and every footer, SiteBits.tsx § Wordmark). Without this the
    last four letters' 3px ate the word-gap and the bar read "Spider_yarnReading"
@@ -420,7 +443,7 @@
   display: inline-block;
 }
 .site-wordmark-host.spya-seam .site-wordmark-rest {
-  transform: translateX(3px);
+  transform: translateX(calc(var(--logo-px) * 3));
   /* Scoped to the active class, like the letters' transition above, so both
      parts snap home together when that class leaves. A resting transition
      made `yarn` close immediately while `Reading` drifted after it for 300ms. */
@@ -437,8 +460,8 @@
      to where a stitch would be and reads as one. Fable's own fallback, taken on
      the browser check's evidence, 2026-09-07. */
   top: 68%;
-  width: 6px;
-  height: 3px;
+  width: calc(var(--logo-px) * 6);
+  height: calc(var(--logo-px) * 3);
   /* **A curved hairline, not a straight one, and the curve is the whole
      point.** A flat 6px rule at x-height between two letters is an en dash:
      the wordmark read "Spider–yarn" and a reader would have taken it for
@@ -507,7 +530,7 @@
 }
 
 /* -- 8. Only the i -------------------------------------------------------
-   One letter — the `i`, third in the word — rises a single pixel with a tiny
+   One letter — the `i`, third in the word — rises one wordmark pixel with a tiny
    overshoot and stays up. Nothing else moves at all.
 
    Restraint as narrowness of scope rather than as low amplitude: a full-sized
@@ -518,7 +541,7 @@
 
    Reduced motion: snaps to the raised `i`. */
 .spya-i .logo-letter:nth-child(3) {
-  transform: translateY(-1px);
+  transform: translateY(calc(var(--logo-px) * -1));
   transition: transform 200ms cubic-bezier(0.22, 1.3, 0.36, 1);
 }
 
@@ -676,6 +699,11 @@
    `n` has no descender, so the visible ink has considerably more room than
    0.55px. Do not raise this without measuring it in the dock again.
 
+   **Every pixel in this entry is a pixel of the 0.82rem wordmark** since
+   2026-09-30 — `calc(var(--logo-px) * 8)` — so the Dock's measurement above
+   holds as it was at the default 16px root size, and the shelf's 30px heading
+   drops its `n` about 18px, in proportion (§ `--logo-px`).
+
    The thread is anchored 8px above the letter's own top and rides down with it,
    so it is pinned to where the letter *was* rather than to a coordinate that
    would have to be recomputed for the other typeface.
@@ -691,7 +719,7 @@
     animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   28%, 58% {
-    transform: translateY(8px);
+    transform: translateY(calc(var(--logo-px) * 8));
     animation-timing-function: ease-in-out;
   }
   84%, 100% { transform: none; }
@@ -707,9 +735,9 @@
      7px in the corner while that copy was Trebuchet). Anchored at the box top
      instead, the yarn stopped 7px above the letter hanging from it and the two
      read as unrelated marks. */
-  top: calc(0.5em - 8px);
+  top: calc(0.5em - calc(var(--logo-px) * 8));
   width: 1px;
-  height: 8px;
+  height: calc(var(--logo-px) * 8);
   background: var(--highlight);
   opacity: 0.6;
   /* **The resting state, and it is not decoration.** The guard runs this
