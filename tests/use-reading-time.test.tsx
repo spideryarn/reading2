@@ -23,6 +23,8 @@ let releaseGet: (() => void) | null = null;
 let holdNextPost = false;
 let releasePost: (() => void) | null = null;
 let gets = 0;
+/** When set, the opening GET rejects. */
+let failGet = false;
 let postCommitsToServer = false;
 
 vi.mock("../src/web/lib/api.js", () => ({
@@ -47,6 +49,7 @@ vi.mock("../src/web/lib/api.js", () => ({
       return new Response(null, { status: 204 });
     }
     gets += 1;
+    if (failGet) throw new TypeError("Failed to fetch");
     if (holdGet) {
       await new Promise<void>((resolve) => {
         releaseGet = resolve;
@@ -126,6 +129,7 @@ beforeEach(() => {
   holdNextPost = false;
   releasePost = null;
   gets = 0;
+  failGet = false;
   postCommitsToServer = false;
   visibility = "visible";
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
@@ -321,5 +325,41 @@ describe("useReadingTime", () => {
     window.dispatchEvent(new Event("pagehide"));
     expect(posts).toHaveLength(0);
     expect(latest.levels.size).toBe(0);
+  });
+});
+
+describe("useReadingTime's status — whether an empty map means read nothing", () => {
+  it("is loading until the opening read answers, then loaded", async () => {
+    mountRows([[A, 0, 800]]);
+    holdGet = true;
+    await render();
+    expect(latest.status).toBe("loading");
+    expect(latest.levels.size).toBe(0);
+    await act(async () => {
+      releaseGet?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest.status).toBe("loaded");
+  });
+
+  it("says failed, not loaded, when the opening read fails — an empty map is not read nothing", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 1000 };
+    failGet = true;
+    await render();
+    expect(latest.status).toBe("failed");
+  });
+
+  it("is off when switched off, and loading again when switched back on", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    expect(latest.status).toBe("loaded");
+    await render(false);
+    expect(latest.status).toBe("off");
+    holdGet = true;
+    await render(true);
+    /* A new run: the old run's "loaded" must not carry over into it. */
+    expect(latest.status).toBe("loading");
   });
 });

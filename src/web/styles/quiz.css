@@ -67,6 +67,21 @@
   color: var(--ink-faint);
 }
 
+/* "Only what I've read", and the share read. A setting above the question,
+   so small and quiet; the figure is a hint beside it, not a score.
+   docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md. */
+.quiz-only-read {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.88rem;
+  color: var(--ink-faint);
+}
+.quiz-only-read label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
 .quiz-question {
   margin: 0.4rem 0 0.7rem;
   font-size: 1.03rem;

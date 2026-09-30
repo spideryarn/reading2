@@ -12,6 +12,7 @@ proposed, and a link to the plan doc. When Greg answers, the work either happens
 in this directory records which, and the line comes off.
 
 - 2026-09-29 · SPIDERYARN-READING2-5J · Readers paying with their ChatGPT plan, at a quarter of the price. It needs OpenAI to admit us, and the plan says it is 6–9 weeks and genuinely complicated. Greg's decisions: whether to apply to OpenAI, and whether to run the ~$10–20 eval of GPT-6.1 Sol first · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
+- 2026-09-30 · SPIDERYARN-READING2-61 · **Shipped; only the privacy wording waits.** The quiz now reads the stored reading-time totals too, and the /privacy bullet names only the outline and margin as their purpose — one clause to add, and published wording is yours · [260930e § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md)
 
 ## Attempted abuse, not yet seen by Greg
 
