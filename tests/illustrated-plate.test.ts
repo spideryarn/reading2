@@ -27,6 +27,8 @@ import {
   ILLUSTRATED_VERSION,
   type Illustrated,
   MAX_DEPICTS_CHARS,
+  MAX_PLATE_FIGURE_BYTES,
+  MAX_PLATE_FIGURES,
   MAX_PLATES_READ,
   MAX_VIGNETTES,
   readModelBrief,
@@ -635,5 +637,135 @@ describe("readStoredIllustrated", () => {
     expect(report.faults.map((f) => f.what)).toContain(
       "no vignette survived — the picture has no rows under it",
     );
+  });
+});
+
+/**
+ * **A plate's figures** — 260930f, SPIDERYARN-READING2-5X.
+ * docs/plans/260930f-illustrated-diagram-draws-on-the-paper-figures.md.
+ */
+describe("a plate's figures", () => {
+  const offer = (block: BlockId, c: string, bytes = 1000) =>
+    ({ block, sha256: c.repeat(64), ext: "png", bytes }) as const;
+  const OFFERED = new Map([
+    ["FIGURE A", offer("spya-bbbbbb", "a")],
+    ["FIGURE B", offer("spya-cccccc", "b")],
+    ["FIGURE C", offer("spya-aaaaaa", "c")],
+    ["FIGURE D", offer("spya-aaaaaa", "d")],
+  ]);
+  const record = (label: string, block: BlockId, c: string) => ({
+    label,
+    block,
+    sha256: c.repeat(64),
+    ext: "png",
+  });
+
+  /** The composition is what gets drawn, so what it names is what is attached. */
+  const composing = (text: string) => ({ prompt: `A vellum page. ${text}` });
+
+  it("attaches the offered labels the composition names, in order, once each, up to the cap", () => {
+    const { illustrated, report } = readModelBrief(
+      brief(
+        [good()],
+        composing(
+          "At the top FIGURE B as an inset, FIGURE B again in the margin, FIGURE Z nowhere, " +
+            "a figure a in lower case, then FIGURE A, FIGURE C and FIGURE D below.",
+        ),
+      ),
+      { ...ONE, figures: OFFERED },
+    );
+    expect(illustrated.plates[0]?.figures).toEqual([
+      record("FIGURE B", "spya-cccccc", "b"),
+      record("FIGURE A", "spya-bbbbbb", "a"),
+      record("FIGURE C", "spya-aaaaaa", "c"),
+    ]);
+    expect(report.faults.map((f) => f.what)).toEqual([
+      "the composition names FIGURE Z, which was not offered — not attached",
+      'the composition names "figure a", which is not an exact offered label — not attached',
+      `FIGURE D is past the ${MAX_PLATE_FIGURES}-figure cap — not attached`,
+    ]);
+  });
+
+  it("faults a plural shorthand rather than silently drawing figures it did not attach", () => {
+    const { illustrated, report } = readModelBrief(
+      brief([good()], composing("Put FIGURES A AND B beside the conclusion.")),
+      { ...ONE, figures: OFFERED },
+    );
+    expect(illustrated.plates[0]?.figures).toBeUndefined();
+    expect(report.faults.map((f) => f.what)).toEqual([
+      'the composition names "FIGURES A", which is not an exact offered label — not attached',
+    ]);
+  });
+
+  it("ignores a figures field the model writes beside the composition", () => {
+    const { illustrated } = readModelBrief(brief([good()], { figures: ["FIGURE A"] }), {
+      ...ONE,
+      figures: OFFERED,
+    });
+    expect(illustrated.plates[0]).not.toHaveProperty("figures");
+  });
+
+  it("drops a figure that would take the plate past its byte budget", () => {
+    const big = new Map([
+      ["FIGURE A", offer("spya-bbbbbb", "a", MAX_PLATE_FIGURE_BYTES - 10)],
+      ["FIGURE B", offer("spya-cccccc", "b", 11)],
+      ["FIGURE C", offer("spya-aaaaaa", "c", 10)],
+    ]);
+    const { illustrated, report } = readModelBrief(
+      brief([good()], composing("FIGURE A, FIGURE B and FIGURE C in a row.")),
+      { ...ONE, figures: big },
+    );
+    expect(illustrated.plates[0]?.figures?.map((f) => f.label)).toEqual(["FIGURE A", "FIGURE C"]);
+    expect(report.faults.map((f) => f.what)).toEqual([
+      "FIGURE B would take the plate past its figure-byte budget — not attached",
+    ]);
+  });
+
+  it("reads a stored plate's figures back as the record, and drops a malformed one", () => {
+    const { illustrated, report } = readStoredIllustrated(
+      brief([good()], {
+        image: IMAGE,
+        figures: [
+          record("FIGURE A", "spya-zzzzzz", "e"),
+          { label: "Figure 1", block: "x", sha256: "e".repeat(64), ext: "png" },
+          { ...record("FIGURE B", "spya-zzzzzz", "e"), ext: "gif" },
+        ],
+      }),
+      ONE,
+    );
+    expect(illustrated.plates[0]?.figures).toEqual([record("FIGURE A", "spya-zzzzzz", "e")]);
+    expect(report.faults.map((f) => f.what)).toEqual([
+      "not a figure record — dropped",
+      "not a figure record — dropped",
+    ]);
+  });
+
+  it("keeps a stored figure record inside the same count and uniqueness bounds as a fresh brief", () => {
+    const { illustrated, report } = readStoredIllustrated(
+      brief([good()], {
+        image: IMAGE,
+        figures: [
+          record("FIGURE A", "spya-zzzzzz", "a"),
+          record("FIGURE A", "spya-zzzzzz", "a"),
+          record("FIGURE B", "spya-zzzzzz", "b"),
+          record("FIGURE C", "spya-zzzzzz", "c"),
+          record("FIGURE D", "spya-zzzzzz", "d"),
+        ],
+      }),
+      ONE,
+    );
+    expect(illustrated.plates[0]?.figures?.map((f) => f.label)).toEqual([
+      "FIGURE A",
+      "FIGURE B",
+    ]);
+    expect(report.faults.map((f) => f.what)).toEqual([
+      `2 figure(s) past the ${MAX_PLATE_FIGURES}-figure cap were not read`,
+      "the same figure label again — dropped",
+    ]);
+  });
+
+  it("has no figures field on a plate that names none", () => {
+    const { illustrated } = readModelBrief(brief([good()]), { ...ONE, figures: OFFERED });
+    expect(illustrated.plates[0]).not.toHaveProperty("figures");
   });
 });
