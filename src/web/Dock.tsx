@@ -163,7 +163,7 @@
    `useRef` came back on 2026-09-06, for the drawer's focus rather than the
    bar's — see § the drawer takes focus, and gives it back. The aliased type
    has not. */
-import { useCallback, useEffect, useRef, useId, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useId, useState, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
@@ -199,8 +199,8 @@ import {
    below for what a row here still holds, which is layout and nothing else. */
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
-import type { Comment } from "../types.js";
-import { passageOf } from "./comment-nav.js";
+import type { BlockId, Comment } from "../types.js";
+import { type AskedQuestion, type DrawerEntry, orderDrawer, passageOf } from "./comment-nav.js";
 import { armActivationForMode } from "./activation.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
@@ -283,6 +283,27 @@ export type DockExperimental = Pick<
   ExperimentalSetting,
   "on" | "signedIn" | "loaded" | "stale" | "saving" | "error" | "loadError" | "set" | "reload"
 >;
+
+/** The owner drawer's questions — `drawer.asked`. */
+export interface AskedList {
+  /** Any order; the drawer puts them in reading order with the comments. */
+  questions: AskedQuestion[];
+  /**
+   * Has the chat summaries' first fetch come back? The drawer does not say
+   * *"Nothing marked yet"* until both lists have — a reader with only questions
+   * would otherwise be told they have none while the list is in the air.
+   */
+  loaded: boolean;
+  /**
+   * The chat summaries' failed load, said in the drawer — otherwise a failure
+   * would read as *no questions asked*, which is this report's bug again.
+   */
+  error: string | null;
+  /** The article's blocks, for reading order. Index, never id (block-ids.md). */
+  blocks: { id: BlockId }[];
+  /** Open that conversation and bring its passage into view. */
+  onOpen(threadId: string): void;
+}
 
 interface Props {
   /**
@@ -441,6 +462,17 @@ interface Props {
     onPanel(next: Panel | null): void;
     /** Open a question's dialog and bring its passage into view. */
     onOpenComment(id: string): void;
+    /**
+     * **The questions the reader asked from a passage**, listed beside the
+     * comments and marked *Question* — the gutter's "?" and *Chat about this*.
+     * They are chats, stored as chats; this is only where they are shown.
+     * docs/plans/260930f-gutter-questions-listed-in-the-comments-drawer.md.
+     *
+     * Optional so a bar with no reading view behind it (and every test that
+     * paints one) is exactly what it was. Owner-only by being absent from the
+     * visitor arm, not by a visitor's list happening to be empty.
+     */
+    asked?: AskedList | undefined;
     /** Never set on this arm — see the visitor arm below. */
     visitor?: false;
   } | {
@@ -1177,7 +1209,15 @@ export function fitSignature(
    * reason: a caller that does not model failed writes should not have to say
    * it has none.
    */
-  own: { comments: Comment[]; error?: string | null } | null,
+  own: {
+    comments: Comment[];
+    error?: string | null;
+    /**
+     * The number the chip draws, when it is not just the comments — the asked
+     * questions are counted too (plan 260930f). GPT Sol, finding 5.
+     */
+    count?: number;
+  } | null,
   variant: ExperimentalVariant | null,
   feedback: boolean,
 ): string {
@@ -1191,7 +1231,7 @@ export function fitSignature(
    * was measured for. The reverse — an error clearing while a comment arrives —
    * is the same problem in the other direction.
    */
-  const count = own ? (own.error ? "!" : own.comments.length) : "";
+  const count = own ? (own.error ? "!" : (own.count ?? own.comments.length)) : "";
   /**
    * **Which mode is on, and not only which are drawn.**
    *
@@ -1447,6 +1487,22 @@ export function Dock({
   const isVisitor = visitor === true || drawer?.visitor === true;
   const pending = own?.comments.filter((c) => c.status === "pending").length ?? 0;
   /**
+   * **The drawer's rows: comments and asked questions, in one reading order.**
+   * Memoised on its three inputs, which change when a comment or a conversation
+   * is added or removed and not per streamed token (useChatAnchors.ts).
+   */
+  const comments = drawer?.comments;
+  /* The fields, not the `asked` object, which is built fresh on every render. */
+  const askedQuestions = own?.asked?.questions;
+  const askedBlocks = own?.asked?.blocks;
+  const entries = useMemo<DrawerEntry[]>(
+    () =>
+      askedQuestions && askedBlocks
+        ? orderDrawer(comments ?? [], askedQuestions, askedBlocks)
+        : (comments ?? []).map((item) => ({ kind: "comment" as const, item })),
+    [comments, askedQuestions, askedBlocks],
+  );
+  /**
    * A change that did not save, said on the button it is about — § the Comments
    * button, and the `error` field's own note on `Props`. Only the owner writes,
    * so `own` is the only arm that can carry one.
@@ -1538,7 +1594,17 @@ export function Dock({
      automatic/dynamic (so that we don't have to keep tweaking some
      constant)"*. */
   const { ref: dockRef, fitClass } = useDockFit(
-    fitSignature(visible, mode, onMode, drawer, own, toggle, feedback),
+    fitSignature(
+      visible,
+      mode,
+      onMode,
+      drawer,
+      /* The same number `CommentsChip` draws, so a question arriving that
+         takes the count from 9 to 10 re-measures the row. */
+      own ? { comments: own.comments, error: own.error, count: entries.length } : null,
+      toggle,
+      feedback,
+    ),
   );
 
   /**
@@ -1747,12 +1813,19 @@ export function Dock({
             )}
             {drawer && (
               <Questions
-                comments={drawer.comments}
+                entries={entries}
                 paragraphs={drawer.paragraphs}
                 onOpen={drawer.onOpenComment}
+                onOpenAsked={own?.asked?.onOpen}
                 access={
                   own
-                    ? { kind: "owner", loaded: own.loaded, loadError: own.loadError }
+                    ? {
+                        kind: "owner",
+                        loaded: own.loaded && (own.asked?.loaded ?? true),
+                        loadError: own.loadError,
+                        askedLoaded: own.asked?.loaded ?? true,
+                        askedError: own.asked?.error ?? null,
+                      }
                     : { kind: "visitor" }
                 }
               />
@@ -1948,7 +2021,11 @@ export function Dock({
                 />
               }
             >
-              <CommentsChip own={own} pending={pending} failed={commentError !== null} />
+              <CommentsChip
+                count={own ? entries.length : null}
+                pending={pending}
+                failed={commentError !== null}
+              />
             </DockTab>
           ) : (
             <DockLink
@@ -3086,11 +3163,15 @@ function DockLink({
  * the only place a fact lives (docs/project/tooltips.md).
  */
 function CommentsChip({
-  own,
+  count,
   pending,
   failed,
 }: {
-  own: { comments: Comment[] } | null;
+  /**
+   * How many rows the drawer holds — comments and asked questions both, so the
+   * number matches the list it opens. `null` for a visitor.
+   */
+  count: number | null;
   pending: number;
   failed: boolean;
 }) {
@@ -3104,10 +3185,8 @@ function CommentsChip({
   /* No count for a visitor — there is nothing to count, and a `0` would read as
      "you have none" rather than "these are not yours". Nor for an owner with
      none, for the same reason in the other direction. */
-  if (!own || own.comments.length === 0) return null;
-  return (
-    <span className={`dock-count${pending ? " pending" : ""}`}>{own.comments.length}</span>
-  );
+  if (count === null || count === 0) return null;
+  return <span className={`dock-count${pending ? " pending" : ""}`}>{count}</span>;
 }
 
 function DockTab({
@@ -3507,19 +3586,31 @@ function QuestionsLoading() {
  * sentence that tells them how to add one.
  */
 type QuestionsAccess =
-  | { kind: "owner"; loaded: boolean; loadError: string | null }
+  | {
+      kind: "owner";
+      /** Both lists — comments and, when present, asked questions. */
+      loaded: boolean;
+      loadError: string | null;
+      /** `false` only while the asked questions are still out. */
+      askedLoaded?: boolean;
+      askedError?: string | null;
+    }
   | { kind: "visitor" };
 
 function Questions({
-  comments,
+  entries,
   paragraphs,
   access,
   onOpen,
+  onOpenAsked,
 }: {
-  comments: Comment[];
+  /** Comments and asked questions, already in reading order — `orderDrawer`. */
+  entries: DrawerEntry[];
   paragraphs: ReadonlyMap<string, string>;
   access: QuestionsAccess;
   onOpen(id: string): void;
+  /** Absent when there are no asked rows to open, which is every visitor. */
+  onOpenAsked?: ((threadId: string) => void) | undefined;
 }) {
   /* Narrowed once, so the three reads below are the compiler checking one fact
      rather than three tests that could drift apart — the same move `own` makes
@@ -3544,7 +3635,7 @@ function Questions({
      load-error line. The old shared error was not a substitute — Dock suppressed
      it whenever `loadFailed` was true, to avoid calling a failed load a failed
      save. */
-  if (comments.length === 0 && !loaded) {
+  if (entries.length === 0 && !loaded) {
     return <QuestionsLoading />;
   }
 
@@ -3557,14 +3648,24 @@ function Questions({
 
      **With the load's own message after it**, `[code]` and all, as Search and
      Criteria print theirs: it is what a reader reporting this can quote. */
-  const couldNotLoad = loadFailed && (
-    <p className="dock-empty">
-      Couldn't load your comments. Reload to try again. {loadError}
-    </p>
+  const askedError = access.kind === "owner" ? (access.askedError ?? null) : null;
+  const couldNotLoad = (loadFailed || askedError !== null) && (
+    <>
+      {loadFailed && (
+        <p className="dock-empty">
+          Couldn't load your comments. Reload to try again. {loadError}
+        </p>
+      )}
+      {askedError !== null && (
+        <p className="dock-empty">
+          Couldn't load the questions you asked. Reload to try again. {askedError}
+        </p>
+      )}
+    </>
   );
-  if (couldNotLoad && comments.length === 0) return couldNotLoad;
+  if (couldNotLoad && entries.length === 0) return couldNotLoad;
 
-  if (comments.length === 0) {
+  if (entries.length === 0) {
     /* **Two sentences, because the second half of the owner's is an
        instruction a visitor cannot follow.** *"Select a sentence in the article
        to bookmark it"* is the right thing to say to somebody who can, and a
@@ -3585,27 +3686,66 @@ function Questions({
       </p>
     );
   }
+  /* **Rows known, questions still out**: the list so far, with the wait said
+     over it, so a list of comments is not read as everything the reader has —
+     the same reason `couldNotLoad` sits over a list. GPT Sol, finding 4. */
+  const askedStillOut = access.kind === "owner" && access.askedLoaded === false;
   return (
     <>
       {couldNotLoad}
+      {askedStillOut && <QuestionsLoading />}
       <ol className="dock-questions">
-        {comments.map((c) => (
+        {entries.map((entry) => {
+          const passage = (
+            /* A whole-block bookmark (or a "?" press) has no quote: it says what
+               it is, and shows the paragraph's opening so several can be told
+               apart. */
+            <span className="dock-question-quote">
+              {(() => {
+                const p = passageOf(entry.item, paragraphs.get(entry.item.blockId));
+                return p.whole ? (
+                  <>
+                    <em>Whole paragraph</em> — {p.text}
+                  </>
+                ) : (
+                  p.text
+                );
+              })()}
+            </span>
+          );
+          if (entry.kind === "asked") {
+            const q = entry.item;
+            /* **A question asked from the passage** — a chat, opened in the chat
+               dialog rather than the comment one. Marked so it reads as the
+               reader's question and not a note they wrote.
+
+               **No preview line, on purpose.** The summaries' `lastLine` is not
+               kept live: a conversation minted in this visit has none until a
+               reload, so the row would say *thinking…* under an answer the
+               reader has just read — the exact sequence in the report. The
+               title is no better: every "?" is *"Help me understand."* GPT
+               Sol's plan review, finding 2; plan 260930f § Deferred.
+
+               Keyed with a prefix because a thread id and a comment id come
+               from different tables. */
+            return (
+              <li key={`asked:${q.id}`}>
+                <button
+                  type="button"
+                  className="dock-question asked"
+                  onClick={() => onOpenAsked?.(q.id)}
+                >
+                  <span className="dock-question-kind">Question</span>
+                  {passage}
+                </button>
+              </li>
+            );
+          }
+          const c = entry.item;
+          return (
           <li key={c.id}>
             <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
-              {/* A whole-block bookmark has no quote: it says what it is, and
-                  shows the paragraph's opening so several can be told apart. */}
-              <span className="dock-question-quote">
-                {(() => {
-                  const passage = passageOf(c, paragraphs.get(c.blockId));
-                  return passage.whole ? (
-                    <>
-                      <em>Whole paragraph</em> — {passage.text}
-                    </>
-                  ) : (
-                    passage.text
-                  );
-                })()}
-              </span>
+              {passage}
               {/* **The reader's own words beat the model's**, which is the whole
                   ordering principle of this feature — and the list read as broken
                   without it: a comment somebody had written showed only the
@@ -3622,7 +3762,8 @@ function Questions({
               )}
             </button>
           </li>
-        ))}
+          );
+        })}
       </ol>
     </>
   );
