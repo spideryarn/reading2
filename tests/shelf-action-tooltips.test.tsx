@@ -57,6 +57,7 @@ const BASE: LibraryEntry = {
   sections: 5,
   comments: 0,
   opens: 0,
+  sourceReusable: true,
   has: { arc: false, tweets: false, glossary: false },
 };
 
@@ -382,28 +383,30 @@ describe("a control that cannot act", () => {
   });
 
   /**
-   * **And unavailable where there is no stored copy either** — `fetch` would
-   * run for want of its artefact and fail with "No source URL". The card must
-   * still open (aria-disabled, not disabled) and the click must stop here.
-   * GPT Sol's plan review, 2026-09-30.
+   * **And unavailable where there is no reusable stored copy** — `fetch` would
+   * run for want of its complete artefact and fail with "No source URL". The
+   * card must still open (aria-disabled, not disabled) and the click must stop
+   * here. GPT Sol's plan review, 2026-09-30.
    */
-  it("refuses the rebuild where there is no address and no stored copy", async () => {
+  it("refuses the rebuild where there is no address and no reusable stored copy", async () => {
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 202 }));
     vi.stubGlobal("fetch", fetchSpy);
     const heard = vi.fn();
     document.body.addEventListener("click", heard);
-    render({ ...NO_URL, noStoredSource: true });
+    render({ ...NO_URL, sourceReusable: false });
     const rerun = control("rerun");
     expect(rerun.getAttribute("aria-disabled")).toBe("true");
     expect(rerun.hasAttribute("disabled")).toBe(false);
-    expect(rerun.getAttribute("aria-label")).toBe("Rebuild (no web address and no stored copy)");
+    expect(rerun.getAttribute("aria-label")).toBe(
+      "Rebuild (no web address and no reusable stored copy)",
+    );
     act(() => {
       rerun.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(heard).not.toHaveBeenCalled();
     const card = await cardFor(control("rerun"));
-    expect(card.what).toMatch(/no stored copy/);
+    expect(card.what).toMatch(/no stored source can be safely reused/);
     document.body.removeEventListener("click", heard);
     vi.unstubAllGlobals();
   });
@@ -412,10 +415,10 @@ describe("a control that cannot act", () => {
    * A stored copy does not matter where there is a web address: the re-fetch
    * makes a new one.
    */
-  it("still re-fetches a web article even when we hold no stored copy", async () => {
+  it("still re-fetches a web article even when its stored copy is not reusable", async () => {
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 202 }));
     vi.stubGlobal("fetch", fetchSpy);
-    render({ ...FETCHED, noStoredSource: true });
+    render({ ...FETCHED, sourceReusable: false });
     await act(async () => {
       control("Re-fetch and rebuild").dispatchEvent(
         new MouseEvent("click", { bubbles: true, cancelable: true }),
@@ -510,7 +513,13 @@ describe("each card", () => {
    * easiest to pad. GPT Sol, 2026-09-05.
    */
   it("belongs to the control it was opened from, and says more than the label", async () => {
-    for (const entry of [FETCHED, NO_URL, NOT_WEB, SHARED, { ...NO_URL, noStoredSource: true as const }]) {
+    for (const entry of [
+      FETCHED,
+      NO_URL,
+      NOT_WEB,
+      SHARED,
+      { ...NO_URL, sourceReusable: false },
+    ]) {
       render(entry);
       for (const name of ["Edit title", "rerun", "Open the original", "Copy link", "Archive"]) {
         const where = `${name} on ${entry.visibility ?? "a private article"}/${entry.url ?? "no url"}`;

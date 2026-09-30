@@ -77,8 +77,15 @@ vi.mock("../src/log.js", async (importActual) => {
 });
 
 const { closeDb, getDb } = await import("../src/db/client.js");
-const { articleRevisions, articles, blockIdentities, comments, rawSources, revisionBlocks } =
-  await import("../src/db/schema.js");
+const {
+  articleRevisions,
+  articles,
+  blockIdentities,
+  comments,
+  rawSources,
+  revisionBlocks,
+  revisionStepRuns,
+} = await import("../src/db/schema.js");
 const { currentOwnerId } = await import("../src/owner.js");
 const { pgArticleReader } = await import("../src/store/pg.js");
 const { deriveLibraryScalars } = await import("../src/library-scalars.js");
@@ -89,8 +96,9 @@ import { type ScratchArticle, scratchArticleInPg } from "./helpers/scratch-artic
 /* ------------------------------------------------------------- the fixture -- */
 
 /**
- * **The stored source document the plain article has, and no other does** —
- * for `noStoredSource` (feedback 6B). A fixed digest of this file's own, so
+ * **The stored source document two articles share** — one with a completed
+ * `fetch` receipt and one deliberately without, for `sourceReusable`
+ * (feedback 6B). A fixed digest of this file's own, so
  * `onConflictDoNothing` makes the insert idempotent across runs; the row is
  * content-addressed and harmless to leave.
  */
@@ -383,13 +391,19 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
       },
       {
         /* **No title.** `metaFrom` must fall back to the first depth-1 heading,
-           which lives in a block this query is no longer allowed to read. */
+           which lives in a block this query is no longer allowed to read.
+
+           It has a raw-source reference but deliberately no completed `fetch`
+           row. `stepIsDone(fetch)` would not skip this state, so the shelf must
+           not offer a no-address rebuild over it. */
         id: R.untitled,
         articleId: A.untitled,
         status: "published",
         title: null,
         fetchedAt: new Date("2026-03-02T00:00:00.000Z"),
         tree: untitledTree,
+        rawSourceSha256: STORED_SHA,
+        rawSourceKind: "html",
         ...deriveLibraryScalars({ blocks: untitledBlocks, tree: untitledTree }),
       },
       {
@@ -450,6 +464,16 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
         rootGist: "Never seen.",
       },
     ]);
+
+    /* The other half of the raw manifest's doneness. `hasArtefacts` requires
+       this row as well as the source reference, and a new draft carries both. */
+    await db.insert(revisionStepRuns).values({
+      revisionId: R.plain,
+      stepName: "fetch",
+      inputHash: "fixture-no-input",
+      implementationVersion: "fixture",
+      status: "done",
+    });
 
     const row = (
       block: Block,
@@ -645,17 +669,22 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
   });
 
   /**
-   * **Whether we hold the source**, answered in Postgres — the shelf's rebuild
-   * is unavailable without it where there is no web address (feedback 6B,
+   * **Whether `fetch` will skip**, answered in Postgres — the shelf's rebuild
+   * is unavailable without both the source reference and its completed run
+   * where there is no web address (feedback 6B,
    * docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
-   * Marked only when absent, so an ordinary article carries no key.
+   * Explicit on every entry, so an unknown cannot be mistaken for reusable.
    */
-  it("marks the articles we hold no stored source for, and only those", async () => {
+  it("marks every article whose current revision cannot skip fetch, and only those", async () => {
     const entries = await pgArticleReader.listArticles({ archived: false });
     const by = new Map(entries.map((e) => [e.slug, e]));
     expect(by.get(SLUG.plain), "the fixture's plain article is missing").toBeDefined();
-    expect(by.get(SLUG.plain)).not.toHaveProperty("noStoredSource");
-    expect(by.get(SLUG.untitled)?.noStoredSource).toBe(true);
+    expect(by.get(SLUG.plain)?.sourceReusable).toBe(true);
+    expect(
+      by.get(SLUG.untitled)?.sourceReusable,
+      "a source reference without a completed fetch receipt was called reusable",
+    ).toBe(false);
+    expect(by.get(SLUG.unscalared)?.sourceReusable).toBe(false);
   });
 
   it("counts each article's comments, and zero for one that has none", async () => {

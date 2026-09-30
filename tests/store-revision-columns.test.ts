@@ -448,6 +448,14 @@ describe("the shelf's own query", () => {
   const shelfSql = (archived: boolean): string =>
     listArticlesQuery(new QueryBuilder() as never, { archived }).toSQL().sql;
 
+  it("matches fetch's skip condition, not merely the source reference", () => {
+    const sql = shelfSql(false);
+    expect(sql).toContain('"raw_source_kind" is not null');
+    expect(sql).toMatch(
+      /exists \(\s*select 1 from "spideryarn"\."revision_step_runs"[\s\S]*"step_name" = 'fetch'[\s\S]*"status" = 'done'/,
+    );
+  });
+
   it("looks at the four artefact columns and reads none of them", () => {
     const sql = shelfSql(false);
     for (const column of ["tree", "arc", "tweets", "glossary"] as const) {

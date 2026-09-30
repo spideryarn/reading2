@@ -424,15 +424,16 @@ const TIPS = {
     how: "A few minutes, and it may spend model calls. What you have written stays where the text did — notes are keyed to block ids, which are minted once and kept, so only a passage the new extraction rewrites can lose its marker.",
   },
   /**
-   * **Nothing to fetch and nothing to rebuild from** — an article imported
-   * before we kept source documents (`raw_source_kind` null, which
-   * src/db/schema.ts calls a real answer). Forcing `extract` here would make
-   * `fetch` run, since its artefact is missing, and fail with "No source URL":
-   * the dead button of 2026-08-27 once more. GPT Sol's plan review, 2026-09-30.
+   * **Nothing to fetch and no source the pipeline can safely reuse.** That is
+   * either no stored reference (`raw_source_kind` null, which src/db/schema.ts
+   * calls a real answer) or no completed `fetch` receipt beside it. Forcing
+   * `extract` in either state makes `fetch` run and fail with "No source URL":
+   * the dead button of 2026-08-27 once more. GPT Sol's plan and code reviews,
+   * 2026-09-30.
    */
-  rebuildNothing: {
+  rebuildUnavailable: {
     head: "Rebuild",
-    what: "There is no web address to fetch this article from, and we hold no stored copy of its source to work from instead.",
+    what: "There is no web address to fetch this article from, and no stored source can be safely reused instead.",
     how: "Everything already built from it is unaffected and stays on the shelf. The article's own metadata page shows what we do know about where it came from.",
   },
   open: {
@@ -576,12 +577,13 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
      2026-08-27 fix was about, reached by the other door, and the lesson is that
      "can we fetch it" and "can we link to it" were never two questions. */
   const hasWebUrl = Boolean(entry.url) && isWebUrl(entry.url ?? "");
-  /* **And whether there is anything to do at all.** With no web address the
-     rebuild is over the stored copy, and an article imported before we kept
-     them has none — forcing `extract` there would make `fetch` run, find no
-     address, and fail. `noStoredSource` is `raw_source_kind is null`, read in
-     Postgres (src/store/pg.ts § `hasRawSource`). GPT Sol's plan review. */
-  const canRerun = hasWebUrl || !entry.noStoredSource;
+  /* **And whether `fetch` will really skip.** With no web address the rebuild
+     is safe only when the current revision has both a stored-source reference
+     and a completed `fetch` run. `stepIsDone` / `hasArtefacts` require both;
+     `sourceReusable` is that exact answer from the shelf query. `=== true`
+     fails closed if an older server somehow omits the new field. A raw
+     reference alone is not enough. GPT Sol's plan review and code review. */
+  const canRerun = hasWebUrl || entry.sourceReusable === true;
   const rerun = useCallback(async () => {
     if (!canRerun) return;
     setRerunning(true);
@@ -810,7 +812,7 @@ export function Actions({
           id="rerun"
           armed={armed}
           onArm={setArmed}
-          tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildNothing}
+          tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildUnavailable}
           commits={canRerun && !rerunning}
         >
           {/* **The name says what the button will do** — re-fetch, rebuild
@@ -961,7 +963,7 @@ function rerunLabel(hasWebUrl: boolean, canRerun: boolean, rerunning: boolean): 
   if (hasWebUrl) return "Re-fetch and rebuild";
   return canRerun
     ? "Rebuild from the stored copy (nothing to fetch)"
-    : "Rebuild (no web address and no stored copy)";
+    : "Rebuild (no web address and no reusable stored copy)";
 }
 
 /**

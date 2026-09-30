@@ -51,6 +51,7 @@ const BASE: LibraryEntry = {
   sections: 5,
   comments: 0,
   opens: 0,
+  sourceReusable: true,
   has: { arc: false, tweets: false, glossary: false },
 };
 
@@ -384,15 +385,17 @@ describe("an unavailable item", () => {
   });
 
   /**
-   * **Nothing to fetch and no stored copy** — an article imported before we
-   * kept source documents. Forcing `extract` would make `fetch` run and fail,
-   * so the item is unavailable and says why. GPT Sol's plan review.
+   * **Nothing to fetch and no reusable stored copy.** Forcing `extract` would
+   * make `fetch` run and fail, so the item is unavailable and says why. GPT
+   * Sol's plan review and code review.
    */
-  it("with no address and no stored copy, is unavailable and queues nothing", async () => {
+  it("with no address and no reusable stored copy, is unavailable and queues nothing", async () => {
     const fetch = vi.fn(async () => new Response("{}", { status: 202 }));
     vi.stubGlobal("fetch", fetch);
-    const rerun = tapOpen({ ...NO_URL, noStoredSource: true }, "Rebuild");
-    expect(rerun.textContent?.trim()).toBe("Rebuild (no web address and no stored copy)");
+    const rerun = tapOpen({ ...NO_URL, sourceReusable: false }, "Rebuild");
+    expect(rerun.textContent?.trim()).toBe(
+      "Rebuild (no web address and no reusable stored copy)",
+    );
     expect(rerun.getAttribute("aria-disabled")).toBe("true");
     click(rerun);
     await act(async () => {

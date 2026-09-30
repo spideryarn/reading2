@@ -215,11 +215,12 @@ export function describeArticle(input: {
    */
   visibility?: Visibility;
   /**
-   * Whether we hold the source document (`raw_source_kind` is not null).
-   * Optional, and only an explicit `false` marks the entry — `noStoredSource`
-   * in src/types.ts.
+   * Whether a no-address rebuild can skip `fetch` and reuse the source.
+   * Required at this construction seam so a new caller cannot silently turn
+   * "unknown" into "safe to reuse"; tests that do not exercise the source
+   * path state their ordinary reusable fixture explicitly.
    */
-  sourceHeld?: boolean;
+  sourceReusable: boolean;
 }): LibraryEntry {
   const { slug, meta, scalars } = input;
   const shelf = input.shelf ?? { opens: 0 };
@@ -259,7 +260,7 @@ export function describeArticle(input: {
        `=== "public"`, so an absence and a private article are the same
        question answered the same way. */
     ...(input.visibility === "public" ? { visibility: "public" as const } : {}),
-    ...(input.sourceHeld === false ? { noStoredSource: true as const } : {}),
+    sourceReusable: input.sourceReusable,
     ...(input.fixture ? { fixture: true as const } : {}),
   };
 }

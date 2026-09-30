@@ -1898,16 +1898,18 @@ export interface LibraryEntry {
    */
   visibility?: "public";
   /**
-   * **Present, as `true`, only when we hold no copy of the source document** —
-   * `raw_source_kind` is null, which src/db/schema.ts calls "a real answer": an
-   * article imported before we kept them. The shelf's rebuild reads it: with no
-   * web address to re-fetch, a rebuild is over the stored copy, and here there
-   * is none (feedback 6B, docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
+   * Whether the pipeline can safely reuse the stored source document. A
+   * rebuild with no web address leaves `fetch` unforced, so this is exactly
+   * that step's skip condition on the current published revision: a
+   * `raw_source_kind` and a completed `fetch` run must both be present. Either
+   * missing means the job would attempt stage 1 and fail for want of an address
+   * (feedback 6B,
+   * docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
    *
-   * Absent in the ordinary case, like `visibility`, so every fixture and cached
-   * row that predates it still means "we hold it" — the common answer.
+   * Required so a cached row written before this fact existed is rejected,
+   * rather than silently treated as safe (`src/web/lib/cached-shelf.ts`).
    */
-  noStoredSource?: true;
+  sourceReusable: boolean;
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 

@@ -71,6 +71,7 @@ const ENTRY: LibraryEntry = {
   sections: 11,
   comments: 38,
   opens: 41,
+  sourceReusable: true,
   gist: "Slow reading is argued to be a skill that compounds rather than a luxury.",
   titleOverridden: true,
   has: { arc: true, tweets: true, glossary: false },
@@ -88,6 +89,7 @@ const BARE: LibraryEntry = {
   sections: 1,
   comments: 0,
   opens: 0,
+  sourceReusable: true,
   has: { arc: false, tweets: false, glossary: false },
 };
 

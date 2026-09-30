@@ -61,6 +61,7 @@ const BASE: LibraryEntry = {
   sections: 5,
   comments: 0,
   opens: 0,
+  sourceReusable: true,
   has: { arc: false, tweets: false, glossary: false },
 };
 

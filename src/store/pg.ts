@@ -440,11 +440,11 @@ const PRESENCE_OF = {
   hasArc: "arc",
   hasTweets: "tweets",
   hasGlossary: "glossary",
-  /* Whether we hold the source document, for the shelf's rebuild (feedback 6B).
-     The kind rather than the digest because the kind is what `readRaw`
-     (src/store/artifacts-pg.ts) needs to rebuild the manifest `fetch`'s skip
-     check looks for; `article_revisions_raw_source_both` keeps the two
-     together. */
+  /* Whether we hold the source document, one half of the shelf rebuild's skip
+     condition (feedback 6B). The kind rather than the digest because the kind
+     is what `readRaw` (src/store/artifacts-pg.ts) needs to rebuild the manifest;
+     `article_revisions_raw_source_both` keeps the two together. The completed
+     fetch receipt is selected separately by `listArticlesQuery`. */
   hasRawSource: "rawSourceKind",
 } as const satisfies Record<string, keyof typeof articleRevisions.$inferSelect>;
 
@@ -891,9 +891,9 @@ const REVISION_READ_POLICY: Record<
      but that reads the whole table rather than coming through here. */
   rawContentType: {},
   rawEncoding: {},
-  /* `library: "presence"` since 2026-09-30: the shelf's rebuild needs to know
-     whether there is a stored copy to rebuild from, and nothing else (feedback
-     6B; `LibraryEntry.noStoredSource`). */
+  /* `library: "presence"` since 2026-09-30: the shelf's rebuild needs this half
+     of `stepIsDone(fetch)` without reading the reference itself. The completed
+     run row is the other half (feedback 6B; `LibraryEntry.sourceReusable`). */
   rawSourceKind: { rawSource: "value", library: "presence" },
   rawSourceSha256: { rawSource: "value" },
   /* Raw-source provenance, arriving 2026-08-28 with another agent's
@@ -2100,6 +2100,19 @@ export function listArticlesQuery(
           order by ${revisionBlocks.ordinal}
           limit 1)
       end`.as("heading_title"),
+      /**
+       * The second half of `stepIsDone(fetch)`, beside `hasRawSource` in the
+       * revision projection. `hasArtefacts` requires a completed run row as
+       * well as a readable raw manifest; a raw-source reference on its own is
+       * not enough. Correlated to the current published revision selected by
+       * this query, and returned only as a boolean.
+       */
+      fetchDone: sql<boolean>`exists (
+        select 1 from ${revisionStepRuns}
+        where ${revisionStepRuns.revisionId} = ${articleRevisions.id}
+          and ${revisionStepRuns.stepName} = 'fetch'
+          and ${revisionStepRuns.status} = 'done'
+      )`.as("fetch_done"),
     })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
@@ -2687,9 +2700,10 @@ const rawPgArticleReader: ArticleReader = {
              TypeScript cannot see the guarantee for. `describeArticle` keeps
              the key only when it says `public`. */
           visibility: row.article.visibility as Visibility,
-          /* Presence, in Postgres, like `has` above: whether the shelf's
-             rebuild has a stored copy to work from (feedback 6B). */
-          sourceHeld: row.revision.hasRawSource,
+          /* Exactly the condition under which `stepIsDone(fetch)` can skip on
+             the draft copied from this current revision: the raw manifest is
+             readable and its completed run row is carried with it. */
+          sourceReusable: row.revision.hasRawSource && row.fetchDone,
         }),
       );
     }

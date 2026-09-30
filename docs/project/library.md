@@ -210,12 +210,14 @@ each made by deleting the control. The cost only shows across cards:
 So all five are always drawn, and the precondition decides whether the button *works* rather than
 whether it exists. Since 2026-09-30 the re-fetch without an address becomes a rebuild from the
 stored copy (above), and says so — one card for both absences, since they do the same thing. It is
-unavailable only when we hold **no stored copy** either (`LibraryEntry.noStoredSource`,
-`raw_source_kind is null`: an article imported before we kept them), because `fetch` would then run
-for want of its artefact and fail. **Open the original**'s card and accessible name say **which**
-absence it is: no address recorded at all, versus an address we will not follow. No card says *why* there is no address
-— "you uploaded this" is a claim assembled from a gap in our own files, and a revision can be
-published with no `requested_url` and no `final_url`, which is the same refusal
+unavailable only when the pipeline has **no reusable stored copy**
+(`LibraryEntry.sourceReusable === false`): `stepIsDone(fetch)` needs both a raw-source reference and
+a completed `fetch` run on the current published revision, and a new draft carries both. Without
+either, `fetch` runs for want of its complete artefact and fails. **Open the original**'s card and
+accessible name say **which** absence it is: no address recorded at all, versus an address we will
+not follow. No card says *why* there is no address — "you uploaded this" is a claim assembled from
+a gap in our own files, and a revision can be published with no `requested_url` and no `final_url`,
+which is the same refusal
 [`Metadata.tsx`](../../src/web/Metadata.tsx) § `uploaded` makes.
 
 **One test decides both buttons, not two.** Re-fetch was gated on "has a URL" and the link on "has a
