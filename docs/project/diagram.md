@@ -2007,6 +2007,42 @@ from, each row jumping the article to its block. Labelled, visible, and every
 destination checked. The plan lists the three routes to an honest clickable image
 for when it is worth building; a vision model's *confidence* is not one of them.
 
+### The paper's own figures go in
+
+<a id="figures"></a>
+
+> For the illustrated diagrams, make sure we feed in the figures from the paper, and perhaps it can
+> try and sort of create or incorporate those somehow as part of the montage.
+>
+> — Greg, 2026-09-30 (SPIDERYARN-READING2-5X)
+
+When a paper has figures stored by [stage 4.5](article-images.md), the brief is shown a list of
+them — `FIGURE A`, `FIGURE B`, …, each with its caption and block — and asked to draw the ones that
+carry the argument into the montage: as an inset, a cartouche, a panel held in a scene,
+recognisably that figure but in the plate's own hand. The illustrator is then **handed the actual
+pictures** as `input_references`, after the style plate, with a paragraph in the envelope saying
+which attachment is which. [`src/illustrated-figures.ts`](../../src/illustrated-figures.ts) finds
+and loads them; the design and its review are
+[260930f](../plans/260930f-illustrated-diagram-draws-on-the-paper-figures.md).
+
+Four things to know before touching it:
+
+- **A plate's figures are the labels its composition names**, not a list the model writes beside
+  it. The first real run asked for such a list, and the brief wrote "FIGURE A redrawn in this hand"
+  into the composition and never filled in the list — so the illustrator was told to draw a figure
+  it was never handed, and drew one from the caption. The composition is what gets drawn, so what
+  it names is what gets attached: the same reasoning as [captions](#lettering).
+- **PDF figures only.** A web `<img>` might be a portrait or a banner, and its caption is usually a
+  separate block; that is deferred, not forgotten.
+- **An article without stored figures is sent exactly what it was sent before.** The instructions
+  live in a section of the user message that is absent then, and the figures enter
+  `inputFingerprint` only when there are some — so `ILLUSTRATED_VERSION` did not move and no
+  existing picture went stale over a question nobody put to it. A paper whose figures arrive after
+  it was painted *does* read stale, at all three freshness sites.
+- **The rules about a figure are prompt text, like every rule on this plate.** Draw it
+  recognisably, take no style from it, copy none of its lettering — nothing checks the pixels. Up
+  to three figures and 6 MB of them a plate; a figure past either is faulted, not sent.
+
 ### The wire, and what it costs
 
 It goes through **OpenRouter** like everything else —
@@ -2077,6 +2113,7 @@ about the bytes exactly as the storage key is.
 | the brief's schema and its two readers | [`src/illustrated-plate.ts`](../../src/illustrated-plate.ts) |
 | the two calls, and what it was painted from | [`src/illustrated.ts`](../../src/illustrated.ts) |
 | a plate's bytes, validated and content-addressed | [`src/illustrated-image.ts`](../../src/illustrated-image.ts) |
+| the paper's own figures, found and loaded | [`src/illustrated-figures.ts`](../../src/illustrated-figures.ts) |
 | the step | `illustrated` in [`src/pipeline.ts`](../../src/pipeline.ts) |
 | the routes | `/api/illustrated/:slug` and `/api/illustrated/:slug/:hash.(jpeg\|png)`, [`src/routes.ts`](../../src/routes.ts) |
 | the read, and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
