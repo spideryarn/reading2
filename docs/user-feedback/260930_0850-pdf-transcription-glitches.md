@@ -53,7 +53,7 @@ Plan: [260930e](../plans/260930e-pdf-transcription-glitches.md).
 >
 > — Greg, 2026-09-30, on re-rendering the articles already on the shelf
 
-**Ending: Shipped** — on `dev`, not deployed. A newly imported PDF now shows its footnotes in a
+**Ending: Shipped** — on `dev` as `ebee390c` (and its review fix, `bbccf08c`), not deployed. A newly imported PDF now shows its footnotes in a
 Notes list at the end, and a marker in the prose (`…nonphysicalists13`) opens the same hover card a
 web article's footnote does. Both came from one change, because the PDF renderer now writes the note
 markup the web path already had. No prompt change, so no import costs more. On every cached
