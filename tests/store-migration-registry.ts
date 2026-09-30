@@ -2628,6 +2628,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds one article, writes a citations artefact, and drives *Investigate*
      through the route; the provider is a stubbed, streamed `fetch`. */
   "tests/citation-investigate-route.test.ts": "private-postgres",
+  /* Seeds six articles for two owners — private, public, archived, unreadable —
+     and reads Citations' in-Spideryarn candidates back as each. No model is called. */
+  "tests/cited-in-spideryarn-pg.test.ts": "private-postgres",
   /* Seeds three articles and drives the reading-time GET and POST through the
      route, reading rows back out of `reading_time`. No model is called. */
   "tests/reading-time-route.test.ts": "private-postgres",
@@ -3161,6 +3164,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/ai-calls-spend-pg.test.ts": {
     "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
+  },
+  /* Two readers, each owning private and public articles, so one's citations
+     can be shown never to match the other's private one. 260930b. */
+  "tests/cited-in-spideryarn-pg.test.ts": {
+    "00000000-0000-4000-8000-00000c17e0a1": { kind: "seeded" },
+    "00000000-0000-4000-8000-00000c17e0b2": { kind: "seeded" },
   },
   /* Two readers, both owning articles, so one's request can be shown to
      leave the other's alone. 260928a stage 2. */

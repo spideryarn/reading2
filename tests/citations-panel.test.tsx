@@ -1118,3 +1118,38 @@ describe("a finger's first press on a paid button reveals its card; the second p
     });
   }
 });
+
+/* ------------------------------------ already an article here, plan 260930b -- */
+
+describe("a row whose work is already an article here", () => {
+  it("links to the reader's own copy in this tab, and says how it matched in the tooltip", async () => {
+    const owned = work({
+      ...CENTRAL,
+      inSpideryarn: { slug: "my-copy-spya-a2b3c4", whose: "yours", matchedBy: "doi", title: "My copy" },
+    });
+    await draw(owner({ citations: artefact([owned, FAMOUS]) }));
+    const a = row(owned.id).querySelector<HTMLAnchorElement>(".cite-here a");
+    expect(a?.textContent).toBe("In your library");
+    expect(a?.getAttribute("href")).toBe("/read/my-copy-spya-a2b3c4");
+    expect(a?.getAttribute("target")).toBeNull();
+    expect(a?.title).toContain("My copy");
+    expect(a?.title).toContain("the same DOI");
+    /* A DOI match is identity, so the row does not repeat the title. */
+    expect(row(owned.id).querySelector(".cite-here-how")).toBeNull();
+    /* A matched article does not mean we read the cited work: 5G's line stands. */
+    expect(row(owned.id).querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+    expect(row(FAMOUS.id).querySelector(".cite-here")).toBeNull();
+  });
+
+  it("names the article a title match found, on the row, so the reader can check it", async () => {
+    const shared = work({
+      ...CENTRAL,
+      inSpideryarn: { slug: "theirs-spya-d5e6f7", whose: "public", matchedBy: "title", title: "Central, as shared" },
+    });
+    await draw(owner({ citations: artefact([shared]) }));
+    const line = row(shared.id).querySelector(".cite-here");
+    expect(line?.querySelector("a")?.textContent).toBe("On the public shelf");
+    expect(line?.querySelector(".cite-here-how")?.textContent).toContain("matched by title");
+    expect(line?.querySelector(".cite-here-how")?.textContent).toContain("Central, as shared");
+  });
+});

@@ -108,6 +108,7 @@ import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgCitationFindStore } from "./pg-citation-finds.js";
 import { pgCitationInvestigationStore } from "./pg-citation-investigations.js";
+import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgReaderStore } from "./pg-reader.js";
@@ -241,6 +242,10 @@ export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
 export const loadDebate = reader.loadDebate.bind(reader);
 export const loadCitations = reader.loadCitations.bind(reader);
+/* The articles a cited work may be matched to: the reader's own and public ones
+   only. Owner's GET /api/citations only — docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
+const citedInSpideryarn = guarded("cited-in-spideryarn", pgCitedInSpideryarnStore);
+export const citedCandidates = citedInSpideryarn.citedCandidates.bind(citedInSpideryarn);
 /* The one read whose answer is bytes. See `ArticleReader.loadSource` in
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);

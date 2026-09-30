@@ -3808,6 +3808,28 @@ export interface CitedWork {
    * crosses the public boundary.
    */
   investigation?: CitationInvestigation;
+  /**
+   * **This work is already an article here, and one the reader may open** —
+   * their own, or a public one. Attached at read time by the owner's
+   * `GET /api/citations` only (src/store/cited-in-spideryarn.ts), never stored,
+   * never on a visitor's list. docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
+   */
+  inSpideryarn?: CitedInSpideryarn;
+}
+
+/**
+ * How a cited work was matched to an article here, strongest first. `title` is
+ * the weakest — the same words, not the same identity — and the row says so.
+ */
+export type CitedMatchedBy = "doi" | "arxiv" | "address" | "title";
+
+export interface CitedInSpideryarn {
+  slug: string;
+  /** `yours` — the reader owns it; `public` — somebody shared it. */
+  whose: "yours" | "public";
+  matchedBy: CitedMatchedBy;
+  /** The matched article's title as the reader would see it on that shelf. */
+  title: string;
 }
 
 /**

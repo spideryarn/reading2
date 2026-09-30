@@ -271,6 +271,38 @@ average and $0.15 at worst, budgeted at $0.30 against a $20-a-day ceiling. Exa i
 results of at most 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)).
 It is the `citation-investigate` job on the gateway.
 
+## Already an article here
+
+Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5R):
+
+> In Citations mode, we should also do a check to see if any of the cited-items are already present
+> as articles in Spideryarn (on the user's shelf or in public articles), and if so, provide a special
+> link to them.
+
+A row whose work is already an article the reader can open gets one more line under its title:
+**In your library** or **On the public shelf**, a link to our page in the same tab, with the
+article's title and how it matched in the tooltip. A title match also names the matched article on
+the row, because the same words are not the same identity and that is the one to check.
+The design and GPT Sol's review of it are
+[260930b](../plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md).
+
+**Never another reader's private article, not even its existence.** The candidates are one query,
+[`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts), whose `where` is *mine or
+public*, readable and not archived, with the owner taken from the request rather than passed in. Of
+a stranger's public article it matches only what its public page already publishes — the extracted
+title and byline, never the owner's rename, and the source address only as `publicSourceUrl` passes
+it, never the address it was requested from.
+
+**Matching**, strongest first ([`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts)): the
+work's DOI or arXiv id is the one the article's address *is* (a `doi.org` or `arxiv.org` path, parsed
+by host); the same request target (`sameTarget`); or the same extracted title by the identity
+normaliser `keysOf` uses — four words not contradicted by the first author, or three with the author
+agreeing. The reader's own copy wins over a public one.
+
+It does not change *what we have read*: a copy here is not a reading of the work, so the row still
+says we have not read it. It is attached in the owner's `GET /api/citations` only — not in
+`loadCitations`, which chat, *Look it up* and *Investigate* also call — and never stored.
+
 ## Chat can read it
 
 Chat — typed, a passage question, and Live — can read the stored list through the
@@ -305,7 +337,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself. Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads. Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -314,6 +346,8 @@ the cap; real influence from a citation database; searching every unlinked row a
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
 [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Investigate's row) ·
+[`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
+[`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
 [`CitationsMode.tsx`](../../src/web/modes/citations/CitationsMode.tsx) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·

@@ -901,7 +901,7 @@ export function keysOf(work: Pick<CitedWork, "title" | "authors" | "year" | "url
  * words and stopwords, which is right for judging whether an anchor names a
  * title and wrong for identity — "Part 1" and "Part 2" are two works.
  */
-function keyWords(value: string): string {
+export function keyWords(value: string): string {
   return value
     .normalize("NFKC")
     .toLowerCase()

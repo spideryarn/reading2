@@ -151,6 +151,7 @@ import {
   loadTrajectory,
   loadDebate,
   loadCitations,
+  citedCandidates,
   findCitation,
   investigateCitation,
   guessSource,
@@ -359,6 +360,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
+import { type CitedCandidate, withCitedInSpideryarn } from "./cited-in-spideryarn.js";
 import { authoredSentence, sayToReader } from "./reader-sentence.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
@@ -7859,7 +7861,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **No `withProfileChanged`**, for `timeline`'s reason: this artefact is
          not written for a profile, so there is no third staleness fact.
          `CitationsResponse` in src/types.ts has two fields. */
-      send(res, 200, await loadCitations(slugPart(captures, 1)));
+      const slug = slugPart(captures, 1);
+      const found = await loadCitations(slug);
+      /* **Which works are already articles here** — the reader's own or a
+         public one, never another reader's private article (the `where` in
+         src/store/pg-cited-in-spideryarn.ts). Here and not in `loadCitations`,
+         which chat, *Look it up* and *Investigate* also call and none of them
+         needs. A failure costs the links, not the list.
+         docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
+      let candidates: CitedCandidate[] = [];
+      try {
+        candidates = await citedCandidates(slug);
+      } catch (error) {
+        log("store").warn(
+          { slug, ...errorFields(error) },
+          "could not match the citations to articles here",
+        );
+      }
+      send(res, 200, withCitedInSpideryarn(found, candidates));
     },
   },
 

@@ -33,8 +33,18 @@
  * not a citation count.
  */
 import { ScoreBars } from "./ScoreBars.js";
-import { BookText, ExternalLink, RotateCcw, Search, TriangleAlert } from "lucide-react";
-import { MAX_CITATIONS, type BlockId, type CitationLookup, type CitationSupport, type CitedWork } from "../types.js";
+import { BookOpen, BookText, ExternalLink, RotateCcw, Search, TriangleAlert } from "lucide-react";
+import {
+  MAX_CITATIONS,
+  type BlockId,
+  type CitationLookup,
+  type CitationSupport,
+  type CitedInSpideryarn,
+  type CitedMatchedBy,
+  type CitedWork,
+} from "../types.js";
+import { Link } from "./Link.js";
+import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
@@ -76,6 +86,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
   lookup?: CitedWork["lookup"];
   /** The owner's kept *Investigate* answer (plan 260930a). A public row cannot carry one. */
   investigation?: CitedWork["investigation"];
+  /** Already an article here, the reader's or a public one (plan 260930b). A public row cannot carry one. */
+  inSpideryarn?: CitedWork["inSpideryarn"];
 };
 
 /* ------------------------------------------------------------- the scores -- */
@@ -773,6 +785,7 @@ function WorkRow({
           work.title
         )}
       </p>
+      {work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && <p className="cite-by">{by}</p>}
       <p className="cite-why">
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
@@ -923,6 +936,37 @@ function WorkRow({
  * Debate's rule down the left (debate.css § `.dbt-quote`): a slice of a
  * stranger's page, which may never become markup.
  */
+/** How a work was matched to an article here, in the tooltip's words. */
+export const CITE_HERE_HOW: Record<CitedMatchedBy, string> = {
+  doi: "the same DOI",
+  arxiv: "the same arXiv id",
+  address: "the same address",
+  title: "the same title — check it is the same work",
+};
+
+/** The row's label for a work that is already an article here. */
+export function citeHereLabel(match: CitedInSpideryarn): string {
+  return match.whose === "yours" ? "In your library" : "On the public shelf";
+}
+
+/**
+ * **This work is already an article here** — SPIDERYARN-READING2-5R, plan
+ * 260930b. A link to *our* page, so `Link` and the same tab, not a link out.
+ * A title match names the article it matched, because that is the one a reader
+ * should check: the same words are not the same identity.
+ */
+function InSpideryarn({ match }: { match: CitedInSpideryarn }) {
+  return (
+    <p className="cite-here">
+      <Link href={readHref(match.slug)} title={`Open “${match.title}” here — matched by ${CITE_HERE_HOW[match.matchedBy]}`}>
+        <BookOpen size={11} aria-hidden="true" className="cite-here-icon" />
+        {citeHereLabel(match)}
+      </Link>
+      {match.matchedBy === "title" && <span className="cite-here-how"> · matched by title: “{match.title}”</span>}
+    </p>
+  );
+}
+
 function LookupReading({ work }: { work: ShownWork }) {
   const lookup = assessedOf(work);
   if (lookup === null) return null;
