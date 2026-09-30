@@ -39,6 +39,7 @@ import {
   articleRevisions,
   articles,
   citationFinds,
+  citationInvestigations,
   comments as commentsTable,
   glossaryLookups,
   revisionBlocks,
@@ -83,7 +84,16 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
 import { lookupContext, lookupContextHash } from "../citation-lookup.js";
-import { lookupFromRow } from "./citation-lookup-row.js";
+import { findFromRow } from "./citation-lookup-row.js";
+import {
+  attachInvestigations,
+  investigateArticleKey,
+  investigateContext,
+  investigateContextHash,
+  matchedPageOf,
+} from "../citation-investigate-context.js";
+import { investigationFromRow } from "./citation-investigation-row.js";
+import { renderProfile } from "../profile.js";
 import {
   attachFinds,
   attachLookups,
@@ -1442,6 +1452,23 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
  */
 async function blockHashInputs(revisionId: string): Promise<BlockFingerprint[]> {
   return blockHashQuery(getDb(), revisionId);
+}
+
+/** The title fallback `loadArticle` would put in `articleWithIds`'s head. */
+async function firstHeadingTitle(revisionId: string): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ text: revisionBlocks.text })
+    .from(revisionBlocks)
+    .where(
+      and(
+        eq(revisionBlocks.revisionId, revisionId),
+        eq(revisionBlocks.kind, "heading"),
+        eq(revisionBlocks.level, 1),
+      ),
+    )
+    .orderBy(asc(revisionBlocks.ordinal))
+    .limit(1);
+  return row?.text ?? null;
 }
 
 /**
@@ -3566,27 +3593,15 @@ const rawPgArticleReader: ArticleReader = {
        `attachFinds` upgrades only `search` rows: a link the article gave always
        wins over one we went looking for. docs/plans/260911g-citations-mode.md
        § Stage 3. */
-    const [blocks, stored] = await Promise.all([
+    const [blocks, stored, investigated] = await Promise.all([
       blockHashInputs(found.revision.id),
       getDb().select().from(citationFinds).where(eq(citationFinds.articleId, found.article.id)),
+      getDb()
+        .select()
+        .from(citationInvestigations)
+        .where(eq(citationInvestigations.articleId, found.article.id)),
     ]);
-    const finds = new Map<string, CitationFind>(
-      stored.map((row) => {
-        const lookup = lookupFromRow(row);
-        return [
-          row.entryId,
-          {
-            url: row.url,
-            ...(row.title ? { title: row.title } : {}),
-            host: row.host,
-            searches: row.searches,
-            model: row.model,
-            at: row.foundAt.toISOString(),
-            ...(lookup ? { lookup } : {}),
-          },
-        ];
-      }),
-    );
+    const finds = new Map<string, CitationFind>(stored.map((row) => [row.entryId, findFromRow(row)]));
     /* **A lookup attaches only to the list it was made against** (plan
        260929g R-4): its fingerprint is recomputed here from the row as the
        artefact now has it and this revision's block texts — the same
@@ -3597,9 +3612,56 @@ const rawPgArticleReader: ArticleReader = {
     const withLookups = attachLookups(citations, finds, (work) =>
       lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
     );
+    const withFinds = attachFinds(withLookups, finds);
+    /* **Investigate's answers, the same way and after `attachFinds`** — the
+       row the call was made from is the upgraded one, so that is the row the
+       fingerprint is recomputed over, with the reader's profile as it is now
+       (the call's `resolveProfile`: the global box and this article's
+       purpose). The profile is read only when there is something to attach.
+       docs/plans/260930a-citations-investigate-one-work-on-demand.md § Staleness. */
+    let withInvestigations = withFinds;
+    if (investigated.length > 0) {
+      const profile = renderProfile({
+        profile: await pgReaderStore.readProfile(),
+        purpose: shelfFrom(found.article).purpose ?? null,
+      });
+      /* Rebuild exactly the four head fields `loadArticle` handed the call.
+         The h1 query runs only for the old/no-metadata case and only when an
+         investigation exists to attach. A reader rename wins, as it does in
+         `loadArticle`; omitting it here kept a profiled answer visible under a
+         different TITLE than the model saw. */
+      const headingTitle =
+        found.revision.title === null && found.article.titleOverride === null
+          ? await firstHeadingTitle(found.revision.id)
+          : null;
+      const promptMeta = titleFor(
+        {
+          slug,
+          title: found.revision.title ?? headingTitle ?? slug,
+          ...(found.revision.byline === null ? {} : { byline: found.revision.byline }),
+          ...(found.revision.siteName === null ? {} : { siteName: found.revision.siteName }),
+          ...(found.revision.finalUrl === null ? {} : { url: found.revision.finalUrl }),
+        },
+        shelfFrom(found.article),
+      );
+      const articleKey = investigateArticleKey(promptMeta, blocks);
+      const investigateModel = modelFor("citation-investigate");
+      withInvestigations = attachInvestigations(
+        withFinds,
+        new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),
+        (work) =>
+          investigateContextHash(
+            investigateContext(work, (id) => text.get(id)),
+            articleKey,
+            profile,
+            matchedPageOf(work, finds.get(work.id) ?? null),
+            investigateModel,
+          ),
+      );
+    }
     const tree = found.revision.tree as Tree | null;
     return {
-      citations: attachFinds(withLookups, finds),
+      citations: withInvestigations,
       /* Judged on the artefact as stored — `sourceHash` is the article's, and
          a find changes nothing about which article the list describes. */
       stale:

@@ -274,6 +274,7 @@ const HOMES: Record<string, string> = {
   "referee-claims.json": "referee_claims (one row per article, claims stay JSONB)",
   "glossary-lookups.json": "glossary_lookups",
   "citation-finds.json": "citation_finds",
+  "citation-investigations.json": "citation_investigations",
   "reading-time.json": "reading_time",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
@@ -514,6 +515,14 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "citation_finds",
+    },
+  },
+  /* And again: a sentinel `citation_investigations` row (plan 260930a). */
+  "citation-investigations.json": {
+    why: "no committed article carries an investigation; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "citation_investigations",
     },
   },
   /* And again: a sentinel `reading_time` row, required back out of both. */

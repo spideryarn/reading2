@@ -38,12 +38,12 @@ import type {
   Job,
 } from "../types.js";
 import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
-import { ENDED_UNFINISHED, wentQuiet } from "../messages.js";
+import { wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { readEvents, STREAM_STALL_MS, StreamStalled } from "./lib/sse.js";
+import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
@@ -84,59 +84,6 @@ export interface LookFailure {
 export interface LookKept {
   id: string;
   name: string | null;
-}
-
-/**
- * **The glossary's two streams' terminal contract, in one function** —
- * `readMark` in src/web/useQuiz.ts, for the box and for *Check the web*.
- *
- * An optional `begin`, any number of `delta`, then exactly one `done` or
- * `error`. The result is returned **only** from a `done` that `done` accepts —
- * each caller checks its own shape, because this is the one object that becomes
- * a finished answer on screen and a malformed one is a failure, not an answer
- * with holes in it. An `error` frame throws its sentence, and so does the body
- * simply ending, which is the case the whole design is arranged against — a
- * stream that stops cleanly looks exactly like one that finished. A stall
- * throws `StreamStalled` from `readEvents`, and the caller words it.
- */
-async function readGlossaryStream<T>(
-  body: ReadableStream<Uint8Array>,
-  on: {
-    begin?(data: unknown): void;
-    delta(text: string): void;
-    done(data: unknown): T | undefined;
-  },
-): Promise<T> {
-  let text = "";
-  for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
-    if (event.name === "begin") {
-      on.begin?.(event.data);
-      continue;
-    }
-    if (event.name === "delta") {
-      const piece = (event.data as { text?: unknown } | null)?.text;
-      if (typeof piece === "string" && piece) {
-        text += piece;
-        on.delta(text);
-      }
-      continue;
-    }
-    if (event.name === "done") {
-      const result = on.done(event.data);
-      if (result === undefined) {
-        throw new Error(
-          "The answer arrived in a form this page could not read, so it is not shown as finished. " +
-            "Trying again starts a fresh answer.",
-        );
-      }
-      return result;
-    }
-    if (event.name === "error") {
-      const message = (event.data as { error?: unknown } | null)?.error;
-      throw new Error(typeof message === "string" && message ? message : ENDED_UNFINISHED.message);
-    }
-  }
-  throw new Error(ENDED_UNFINISHED.message);
 }
 
 /** The box's `begin` frame, if it is one: where the server found the term. */
@@ -705,7 +652,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
           throw new Error(`The server replied ${res.status}.`);
         }
         opened = true;
-        const done = await readGlossaryStream(res.body, {
+        const done = await readAnswerStream(res.body, {
           delta: (text) => {
             if (mine()) setLookDraft({ id, text });
           },
@@ -865,11 +812,11 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
           await readJson(res);
           throw new Error(`The server replied ${res.status}.`);
         }
-        /* **`asked` is what `readGlossaryStream` returns, and it returns only on a
+        /* **`asked` is what `readAnswerStream` returns, and it returns only on a
            `done` frame.** Every other ending throws, so the draft can never be
            promoted by accident. The generation check after each frame, not
            before the request: the reader can type while the words arrive. */
-        const answer = await readGlossaryStream(res.body, {
+        const answer = await readAnswerStream(res.body, {
           begin: (data) => {
             const found = asFound(data);
             if (found && current()) setAskDraft({ ...found, text: "" });

@@ -1,0 +1,338 @@
+/**
+ * **Investigate, through the route and Postgres** —
+ * `POST /api/citations/:slug/:id/investigate`, src/citation-investigate.ts,
+ * docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ *
+ * The rules are tests/citation-investigate.test.ts, with the runner and the
+ * stores injected. What only the real composition can show is here:
+ *
+ * 1. **`done` is written after the answer is stored, and a fresh read of the
+ *    list has it on the row** — code's provenance included.
+ * 2. **A list made again with a different `why` hides it**; putting it back
+ *    shows it again — the fingerprint is recomputed at read time.
+ * 3. **A source quoted in the stream ends in `error`**, with the guard's
+ *    sentence, and the stored answer is unchanged.
+ * 4. **Refusals are JSON before a header**: a 404 for an unknown id, a 429 for
+ *    a second press while one is running, and a stranger's slug is a 404 — none
+ *    of them calls the provider.
+ *
+ * The provider is `globalThis.fetch`, stubbed with a streamed body — nothing
+ * here spends.
+ */
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { and, eq } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { articleRevisions, articles, citationInvestigations, rateLimitEvents } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
+import { EVAL_OWNER_ID, runAsOwner } from "../src/owner.js";
+import type {
+  BlockId,
+  Citations,
+  CitationsResponse,
+  CitedWork,
+  InvestigateCitationDone,
+} from "../src/types.js";
+import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
+
+const SLUG = "test-citation-investigate-route";
+/* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. */
+const WORK = "spya-nvrt2a";
+const TITLE = "Scaling Laws for Neural Language Models";
+const WHY = "The curve the piece extrapolates from.";
+const EXTRACT = "We study empirical scaling laws for language model performance on the cross-entropy loss.";
+
+await pgReady({
+  suite: "tests/citation-investigate-route.test.ts",
+  tables: ["spideryarn.revision_blocks", "spideryarn.citation_investigations", "spideryarn.rate_limit_events"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { investigateCitation } = await import("../src/store/index.js");
+
+let article: ScratchArticle | undefined;
+const realFetch = globalThis.fetch;
+const noModel = (() => Promise.reject(new Error("no model in tests"))) as unknown as typeof fetch;
+
+const chunk = (data: unknown) => new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`);
+
+/**
+ * A streamed provider: `first`, then — once `finish` is called — `rest`, one
+ * annotation with an extract, the finish, the usage and `[DONE]`.
+ */
+function provider(first: string) {
+  let calls = 0;
+  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+  globalThis.fetch = ((_url: string) => {
+    calls += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: new ReadableStream<Uint8Array>({
+        start(c) {
+          controller = c;
+          c.enqueue(chunk({ model: "anthropic/claude-sonnet-5", choices: [{ delta: { content: first } }] }));
+        },
+      }),
+    } as unknown as Response);
+  }) as unknown as typeof fetch;
+  return {
+    calls: () => calls,
+    finish(rest: string) {
+      controller?.enqueue(
+        chunk({
+          choices: [
+            {
+              delta: {
+                content: rest,
+                annotations: [
+                  {
+                    type: "url_citation",
+                    url_citation: { url: "https://arxiv.org/abs/2001.08361", title: TITLE, content: EXTRACT },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+      controller?.enqueue(chunk({ choices: [{ finish_reason: "stop", delta: {} }] }));
+      controller?.enqueue(
+        chunk({
+          choices: [],
+          usage: { prompt_tokens: 10, completion_tokens: 5, server_tool_use_details: { web_search_requests: 1 } },
+        }),
+      );
+      controller?.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+      try {
+        controller?.close();
+      } catch {
+        // Cancelled already.
+      }
+    },
+  };
+}
+
+async function currentRevision(): Promise<string> {
+  const [row] = await getDb()
+    .select({ revision: articles.currentRevisionId })
+    .from(articles)
+    .where(eq(articles.id, article?.articleId ?? ""));
+  if (!row?.revision) throw new Error("the scratch article has no current revision");
+  return row.revision;
+}
+
+async function setWhy(why: string): Promise<void> {
+  const revision = await currentRevision();
+  const [rev] = await getDb()
+    .select({ citations: articleRevisions.citations })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revision));
+  const citations = rev?.citations as Citations;
+  const next = { ...citations, citations: citations.citations.map((w) => (w.id === WORK ? { ...w, why } : w)) };
+  await getDb().update(articleRevisions).set({ citations: next }).where(eq(articleRevisions.id, revision));
+}
+
+beforeAll(async () => {
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  const first = article.blocks[0]?.id as BlockId;
+  const work: CitedWork = {
+    id: WORK,
+    key: "arxiv:2001.08361",
+    title: TITLE,
+    authors: "Kaplan, J.",
+    year: "2020",
+    why: WHY,
+    mentions: [],
+    citedAt: [first],
+    firstCited: first,
+    citedInBody: true,
+    url: "https://arxiv.org/abs/2001.08361",
+    linkFrom: "arxiv",
+  };
+  const citations: Citations = {
+    version: "citations/4",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "test",
+    citations: [work],
+    capped: false,
+    generatedAt: "2026-09-30T00:00:00.000Z",
+    elapsedMs: 1,
+  };
+  await getDb().update(articleRevisions).set({ citations }).where(eq(articleRevisions.id, await currentRevision()));
+}, 120_000);
+
+afterAll(async () => {
+  globalThis.fetch = realFetch;
+  await getDb()
+    .delete(rateLimitEvents)
+    .where(and(eq(rateLimitEvents.ownerId, TEST_OWNER), eq(rateLimitEvents.bucket, "citation-investigate")));
+  await article?.remove();
+  await closeDb();
+});
+
+beforeEach(async () => {
+  globalThis.fetch = noModel;
+  /* This owner's presses from earlier runs would count against eight an hour. */
+  await getDb()
+    .delete(rateLimitEvents)
+    .where(and(eq(rateLimitEvents.ownerId, TEST_OWNER), eq(rateLimitEvents.bucket, "citation-investigate")));
+});
+
+function serve(method: string, url: string) {
+  const req = Object.assign(
+    (async function* () {
+      yield* [Buffer.from("{}")];
+    })(),
+    { method, url, headers: AUTHED_HEADERS },
+  ) as unknown as IncomingMessage;
+  let written = "";
+  let head = 0;
+  const res = {
+    statusCode: 0,
+    writableEnded: false,
+    destroyed: false,
+    setHeader() {},
+    writeHead(status: number) {
+      head = status;
+      (this as { statusCode: number }).statusCode = status;
+    },
+    flushHeaders() {},
+    on() {},
+    write(piece: string) {
+      written += piece;
+      return true;
+    },
+    end(piece?: string) {
+      if (piece) written += piece;
+      (this as { writableEnded: boolean }).writableEnded = true;
+    },
+  } as unknown as ServerResponse;
+  return {
+    req,
+    res,
+    status: () => head || (res as unknown as { statusCode: number }).statusCode,
+    body: () => written,
+  };
+}
+
+function frames(body: string): { name: string; data: unknown }[] {
+  return body
+    .split("\n\n")
+    .map((f) => {
+      const name = /^event: (.*)$/m.exec(f)?.[1];
+      const data = /^data: (.*)$/m.exec(f)?.[1];
+      return name && data ? { name, data: JSON.parse(data) as unknown } : null;
+    })
+    .filter((f): f is { name: string; data: unknown } => f !== null);
+}
+
+const terminals = (body: string) => frames(body).filter((f) => f.name === "done" || f.name === "error");
+
+async function until(ready: () => boolean): Promise<void> {
+  for (let i = 0; i < 400 && !ready(); i++) await new Promise((r) => setTimeout(r, 5));
+}
+
+const investigateUrl = (id = WORK) => `/api/citations/${SLUG}/${id}/investigate`;
+
+async function listed(): Promise<CitedWork | undefined> {
+  const call = serve("GET", `/api/citations/${SLUG}`);
+  await handleApi(call.req, call.res, acceptAny);
+  return (JSON.parse(call.body()) as CitationsResponse).citations.citations.find((w) => w.id === WORK);
+}
+
+async function storedAnswer(): Promise<string | undefined> {
+  const [row] = await getDb()
+    .select({ answer: citationInvestigations.answer })
+    .from(citationInvestigations)
+    .where(and(eq(citationInvestigations.articleId, article?.articleId ?? ""), eq(citationInvestigations.entryId, WORK)));
+  return row?.answer;
+}
+
+describe("POST /api/citations/:slug/:id/investigate", () => {
+  it("streams, writes `done` only once stored, and a fresh read has it on the row", async () => {
+    const stub = provider("Does it back the claim?\n");
+    const call = serve("POST", investigateUrl());
+    const handled = handleApi(call.req, call.res, acceptAny);
+    await until(() => call.body().includes("event: delta"));
+    expect(terminals(call.body())).toEqual([]);
+    stub.finish("The abstract on arxiv.org says it does.");
+    await handled;
+
+    const ends = terminals(call.body());
+    expect(ends.map((f) => f.name)).toEqual(["done"]);
+    const done = ends[0]?.data as InvestigateCitationDone;
+    expect(done.investigation).toMatchObject({
+      answer: "Does it back the claim?\nThe abstract on arxiv.org says it does.",
+      extractsRead: 1,
+      longestExtractWords: 13,
+      matchedHost: null,
+      searches: 1,
+      searchesFrom: "server_tool_use_details",
+      sources: [{ url: "https://arxiv.org/abs/2001.08361", title: TITLE }],
+    });
+    expect(stub.calls()).toBe(1);
+    expect(await storedAnswer()).toBe(done.investigation.answer);
+    expect((await listed())?.investigation).toEqual(done.investigation);
+  });
+
+  it("hides the answer when the list is made again with a different why, and shows it when put back", async () => {
+    expect((await listed())?.investigation).toBeDefined();
+    await setWhy("A different use of the same work.");
+    try {
+      expect((await listed())?.investigation).toBeUndefined();
+    } finally {
+      await setWhy(WHY);
+    }
+    expect((await listed())?.investigation).toBeDefined();
+  });
+
+  it("ends in `error` when the answer quotes a source, and keeps the stored answer", async () => {
+    const before = await storedAnswer();
+    const stub = provider('The abstract says "we find a smooth power law in every setting" plainly.');
+    const call = serve("POST", investigateUrl());
+    await handleApi(call.req, call.res, acceptAny);
+    const ends = terminals(call.body());
+    expect(ends.map((f) => f.name)).toEqual(["error"]);
+    expect((ends[0]?.data as { error?: string } | undefined)?.error).toMatch(/\[cite-quoted\]$/);
+    expect(call.body()).not.toContain("smooth power law");
+    expect(stub.calls()).toBe(1);
+    expect(await storedAnswer()).toBe(before);
+  });
+
+  it("refuses a second press while one is running with a JSON 429, before any header", async () => {
+    const stub = provider("Does it back the claim?\n");
+    const first = serve("POST", investigateUrl());
+    const running = handleApi(first.req, first.res, acceptAny);
+    await until(() => first.body().includes("event: delta"));
+
+    const second = serve("POST", investigateUrl());
+    await handleApi(second.req, second.res, acceptAny);
+    expect(second.status()).toBe(429);
+    expect(second.body()).not.toContain("event: ");
+    expect(stub.calls()).toBe(1);
+
+    stub.finish("It does.");
+    await running;
+  });
+
+  it("is a JSON 404 for an id the list does not have, with no call", async () => {
+    const call = serve("POST", investigateUrl("spya-n2t3h4"));
+    await handleApi(call.req, call.res, acceptAny);
+    expect(call.status()).toBe(404);
+    expect(call.body()).not.toContain("event: ");
+  });
+
+  it("is a 404 for somebody who does not own the article, with no call", async () => {
+    await expect(runAsOwner(EVAL_OWNER_ID, () => investigateCitation(SLUG, WORK, null))).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+});

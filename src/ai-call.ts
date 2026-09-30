@@ -603,6 +603,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Citations' *Investigate*** (src/citation-investigate.ts) — explain's
+     route and both of its reasons: the article is a cached first part, so the
+     `order` pin keeps it landing on the prefix it wrote, and the request pins
+     Exa and `max_characters` on the search tool, which an upstream that
+     dropped them would answer without. */
+  "citation-investigate": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **The one job with no `provider` block, and it used to be the one job whose
      `provider` block mattered most.**
 
@@ -848,6 +858,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   },
   "upload-source-guess": {
     providerDefault: "Not measured. One uploaded paper's title and a web search, not the article.",
+  },
+  "citation-investigate": {
+    providerDefault:
+      "Not measured. Explain's shape over the whole article with a few web searches; " +
+      "its ceiling is src/citation-investigate.ts § ANSWER_TOKENS.",
   },
   pdf: {
     providerDefault:

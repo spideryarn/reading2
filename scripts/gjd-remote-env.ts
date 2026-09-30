@@ -167,6 +167,13 @@ export const ALLOWLIST: readonly string[] = [
      access" only, which cannot read logs or manage domains. Greg asked for it
      on the box, 2026-09-29. docs/project/email.md. */
   "RESEND_API_KEY",
+  /* Google's Gemini API key. Nothing in the repo reads it yet (2026-09-29):
+     it is here so a box agent can reach for it the way Greg has offered it on
+     the laptop (docs/plans/260905c-dictation-filler-words-and-mic-offline.md).
+     A call made with it would bypass OpenRouter, which is a declared exception
+     in docs/project/ai-gateway.md, not a routing choice. Greg asked for it on
+     the box and in Vercel, 2026-09-29. */
+  "GOOGLE_API_KEY",
 ];
 
 /**
