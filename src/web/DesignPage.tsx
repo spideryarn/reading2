@@ -289,7 +289,10 @@ const SWATCHES: { group: string; names: string[] }[] = [
  * can quietly disagree with the one the app is using, which would make this
  * section worse than not having it.
  */
-const SCALES: { name: string; tokens: string[]; note: string }[] = [
+/* `dense`: too many steps for a labelled chip each (the hue ring's 32 ran off
+   the side of the column), so the chips shrink to fit and each label is only
+   the step's number. */
+const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[] = [
   {
     name: "Categorical — one per saved search",
     tokens: ["--cat-0", "--cat-1", "--cat-2", "--cat-3", "--cat-4", "--cat-5", "--cat-6", "--cat-7"],
@@ -340,11 +343,12 @@ const SCALES: { name: string; tokens: string[]; note: string }[] = [
        reader's eager graph, and this page is lazy (tests/eager-client-graph.test.ts).
        tests/colour-scales.test.ts holds the stylesheet to HUE_STOPS. */
     tokens: Array.from({ length: 32 }, (_, i) => `--hue-${i}`),
+    dense: true,
     note:
       "One lightness, hue climbing from red to violet and stopping short of red again. Neighbouring " +
       "stops should read as related shades and the two ends as clearly different. Not " +
-      "colour-blind safe: at one lightness a dichromat loses most of it, which is acceptable only " +
-      "because the topic's label always carries what the colour decorates.",
+      "colour-blind safe: at one lightness a dichromat loses most of the relatedness cue. The " +
+      "label still identifies the topic and the control still works without its colour.",
   },
 ];
 
@@ -638,11 +642,13 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <div key={scale.name}>
             <h3>{scale.name}</h3>
             <p className="design-note">{scale.note}</p>
-            <div className="design-scale">
+            <div className={scale.dense ? "design-scale design-scale-dense" : "design-scale"}>
               {scale.tokens.map((token) => (
                 <div key={token} className="design-scale-step">
                   <div className="design-scale-chip" style={{ background: `var(${token})` }} />
-                  <code className="design-token">{token.replace("--", "")}</code>
+                  <code className="design-token">
+                    {scale.dense ? token.replace(/^--.*-/, "") : token.replace("--", "")}
+                  </code>
                 </div>
               ))}
             </div>

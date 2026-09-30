@@ -51,8 +51,10 @@ matrix costs nothing to fetch, needs no server change and no stored state, and m
 **What was built:**
 
 - The projection: `src/web/topic-colour.ts`.
-- Where it is wired in: `ShelfTerms.tsx`, computed each render and not memoised. It is under a
-  millisecond, and a hook there would sit after an early return (Sol R4).
+- Where it is wired in: `ShelfTerms.tsx`, memoised against the full server term list so choosing a
+  topic, searching and changing views do not recompute it. The hook sits before the empty-list early
+  return, so both render paths call the same hooks. A review measured the deliberately heavy case
+  (30 topics × 300 member slugs) at several milliseconds, not under one millisecond.
 - The ring and its measurement: `tests/colour-scales.test.ts` checks one lightness, chroma above
   0.11, and hue climbing without wrapping.
 - The ring on `/design`.
@@ -81,7 +83,8 @@ was for. Also taken:
 
 - binary cosine rather than Jaccard (Jaccard's union makes the chooser's modest overlaps vanish);
 - 32 stops rather than 24, since up to ~30 topics;
-- no `useMemo` (R4);
+- no `useMemo` in the first build (R4); the code review added one after measuring the upper-bound
+  input rather than assuming it was under a millisecond;
 - `/design` and all the rank-colour prose updated (R7);
 - the accessibility wording corrected (R6);
 - the duplicate-copy mismatch named (R8).

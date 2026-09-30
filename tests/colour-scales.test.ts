@@ -349,21 +349,27 @@ describe("the hue ring (--hue-*), for topics that are near each other", () => {
   it("sits at one lightness, well clear of the page", () => {
     const Ls = ring.map(lightness);
     expect(Math.max(...Ls) - Math.min(...Ls)).toBeLessThan(0.01);
-    expect(Math.min(...Ls)).toBeGreaterThan(0.7);
+    for (const [i, L] of Ls.entries()) {
+      expect(Math.abs(L - 0.76), `--hue-${i} lightness`).toBeLessThan(0.005);
+    }
   });
 
-  it("is vivid at every stop", () => {
+  it("is vivid at every stop without exceeding the generator's chroma cap", () => {
     for (const [i, hex] of ring.entries()) {
       expect(chromaHue(hex).c, `--hue-${i} (${hex})`).toBeGreaterThan(0.11);
+      // Encoding to integer sRGB can lift the measured value just above 0.16.
+      expect(chromaHue(hex).c, `--hue-${i} (${hex})`).toBeLessThan(0.162);
     }
   });
 
-  it("climbs in hue at every step, and stops short of coming back round to red", () => {
+  it("runs in even hue steps from 25° to 290°", () => {
     const hs = ring.map((hex) => chromaHue(hex).h);
+    expect(Math.abs(hs[0]! - 25)).toBeLessThan(1);
+    expect(Math.abs(hs[hs.length - 1]! - 290)).toBeLessThan(1);
+    const expectedStep = (290 - 25) / (HUE_STOPS - 1);
     for (let i = 1; i < hs.length; i++) {
-      expect(hs[i]!, `--hue-${i} does not come after --hue-${i - 1}`).toBeGreaterThan(hs[i - 1]!);
+      const step = hs[i]! - hs[i - 1]!;
+      expect(Math.abs(step - expectedStep), `--hue-${i} step`).toBeLessThan(1);
     }
-    expect(hs[hs.length - 1]! - hs[0]!).toBeGreaterThan(240);
-    expect(hs[hs.length - 1]! - hs[0]!).toBeLessThan(300);
   });
 });

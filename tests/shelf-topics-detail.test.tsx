@@ -56,6 +56,8 @@ const countOf = (key: string) => 14 - KEYS.indexOf(key);
 let data: LibraryTermsResponse = DATA;
 let scopeSlugs: string[] = SLUGS;
 let titleOf = (slug: string): string | undefined => `Title of ${slug}`;
+let liveCountOf = (key: string): number =>
+  KEYS.includes(key) ? countOf(key) : (data.terms.find((t) => t.key === key)?.articles.length ?? 0);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -67,9 +69,7 @@ function Harness() {
     data,
     /* A topic of a test's own `data` counts all its articles: at zero it
        would not be drawn at all (plan 260929a, `availableTopics`). */
-    counts: new Map(
-      data.terms.map((t) => [t.key, KEYS.includes(t.key) ? countOf(t.key) : t.articles.length]),
-    ),
+    counts: new Map(data.terms.map((t) => [t.key, liveCountOf(t.key)])),
     selected,
     onToggle: (key: string) => {
       toggled.push(key);
@@ -106,6 +106,8 @@ afterEach(() => {
   data = DATA;
   scopeSlugs = SLUGS;
   titleOf = (slug) => `Title of ${slug}`;
+  liveCountOf = (key) =>
+    KEYS.includes(key) ? countOf(key) : (data.terms.find((t) => t.key === key)?.articles.length ?? 0);
 });
 
 const params = () => new URLSearchParams(location.search);
@@ -233,6 +235,20 @@ describe("More detail", () => {
     const stops = rows.map((r) => Number(r.querySelector("[data-topic-slot]")?.getAttribute("data-topic-slot")));
     for (let i = 1; i < stops.length; i++) expect(stops[i]).toBeGreaterThan(stops[i - 1]!);
     expect([stops[0], stops[stops.length - 1]]).toEqual([0, 31]);
+  });
+
+  it("keeps colours from the full term list when zero-count topics are hidden", async () => {
+    liveCountOf = (key) => (KEYS.indexOf(key) % 2 === 0 ? countOf(key) : 0);
+    await show("/?topicsView=detail");
+    const expected = topicHueStops(DATA.terms);
+    const rows = [...(detailList()?.querySelectorAll<HTMLElement>(":scope > li") ?? [])];
+    expect(rows).toHaveLength(7);
+    for (const row of rows) {
+      const key = row.querySelector("button[aria-pressed]")?.getAttribute("aria-label")?.split(" ")[0];
+      expect(row.querySelector("[data-topic-slot]")?.getAttribute("data-topic-slot"), key).toBe(
+        String(expected.get(key!)),
+      );
+    }
   });
 });
 

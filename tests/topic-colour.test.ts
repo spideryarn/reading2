@@ -64,6 +64,29 @@ describe("topicHueStops", () => {
     expect(spread(ai)).toBeLessThan(Math.min(...lone.map((s) => Math.min(...ai.map((a) => Math.abs(s - a))))));
   });
 
+  it("uses the average distance between clusters, not their closest member", () => {
+    /* The old fixtures have one distance within each cluster, so changing
+       average-link to single-link (the minimum cross-pair distance) left every
+       test green. These uneven sets distinguish the two: single-link orders
+       them t0,t4,t2,t1,t3 at stops 0,8,16,26,31. The exact answer also pins
+       which leaf owns each merge gap, its squared height and final rounding. */
+    const sets = [
+      ["0", "3", "5", "6"],
+      ["1", "2", "4", "5", "6"],
+      ["1"],
+      ["4", "5"],
+      ["0", "1", "2", "3"],
+    ];
+    const terms = sets.map((slugs, i) => topic(`t${i}`, slugs));
+    expect([...topicHueStops(terms)]).toEqual([
+      ["t0", 0],
+      ["t4", 6],
+      ["t1", 16],
+      ["t3", 20],
+      ["t2", 31],
+    ]);
+  });
+
   it("puts the server's top topic at the start of the arc", () => {
     for (const terms of [[...loners(5), ...cluster("ai", 4)], [...cluster("ai", 4), ...loners(5)]]) {
       expect(topicHueStops(terms).get(terms[0]!.key)).toBe(0);
@@ -86,9 +109,22 @@ describe("topicHueStops", () => {
     expect([...topicHueStops([topic("one", ["a"])])]).toEqual([["one", 0]]);
     const two = topicHueStops([topic("x", ["a", "b"]), topic("y", ["c"])]);
     expect([two.get("x"), two.get("y")]).toEqual([0, HUE_STOPS - 1]);
-    // A topic with no members is distance 1 from everything, not NaN.
+    // A topic with no members is distance 1 from everything, not NaN. The two
+    // identical non-empty topics still merge first and sit together.
     const empty = topicHueStops([topic("x", ["a"]), topic("none", []), topic("y", ["a"])]);
-    expect([...empty.values()].every((s) => Number.isInteger(s) && s >= 0 && s < HUE_STOPS)).toBe(true);
+    expect([...empty]).toEqual([
+      ["x", 0],
+      ["y", 3],
+      ["none", 31],
+    ]);
+  });
+
+  it("keeps the better-ranked occurrence when malformed input repeats a key", () => {
+    const stops = topicHueStops([topic("same", ["a"]), topic("other", ["b"]), topic("same", ["c"])]);
+    expect([...stops]).toEqual([
+      ["same", 0],
+      ["other", 31],
+    ]);
   });
 
   it("names a stop on the ring, never a colour", () => {

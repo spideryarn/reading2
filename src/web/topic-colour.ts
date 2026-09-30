@@ -56,8 +56,9 @@ interface TopicMembers {
 /** 1 − binary cosine over two member sets; 1 when either is empty. */
 function distance(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
   if (a.size === 0 || b.size === 0) return 1;
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
   let shared = 0;
-  for (const s of a) if (b.has(s)) shared++;
+  for (const s of small) if (large.has(s)) shared++;
   return 1 - shared / Math.sqrt(a.size * b.size);
 }
 
@@ -130,9 +131,30 @@ function dendrogramOrder(
  * Deterministic: the same terms give the same stops.
  */
 export function topicHueStops(terms: readonly TopicMembers[]): Map<string, number> {
-  const sets = terms.map((t) => new Set(t.articles.map((a) => a.slug)));
-  const d: number[][] = sets.map((a) => sets.map((b) => (a === b ? 0 : distance(a, b))));
-  const { order, gapAfter } = dendrogramOrder(terms.length, (i, j) => d[i]?.[j] ?? 1);
+  /* `chooseTerms` produces unique keys. Defensively keep the better-ranked
+     occurrence if malformed input repeats one; otherwise a phantom duplicate
+     would both overwrite its Map entry and distort every topic's spacing. */
+  const seen = new Set<string>();
+  const ranked = terms.filter((term) => {
+    if (seen.has(term.key)) return false;
+    seen.add(term.key);
+    return true;
+  });
+  const sets = ranked.map((t) => new Set(t.articles.map((a) => a.slug)));
+  /* The matrix is symmetric. Computing only its upper half matters more than
+     the clustering at shelf size because each distance scans article slugs. */
+  const d: number[][] = Array.from({ length: sets.length }, () => Array<number>(sets.length).fill(0));
+  for (let i = 0; i < sets.length; i++) {
+    for (let j = i + 1; j < sets.length; j++) {
+      const a = sets[i];
+      const b = sets[j];
+      if (!a || !b) continue;
+      const value = distance(a, b);
+      d[i]![j] = value;
+      d[j]![i] = value;
+    }
+  }
+  const { order, gapAfter } = dendrogramOrder(ranked.length, (i, j) => d[i]?.[j] ?? 1);
 
   /* Cumulative position along the line: GAP_FLOOR + height² per join. */
   const at: number[] = [];
@@ -140,13 +162,16 @@ export function topicHueStops(terms: readonly TopicMembers[]): Map<string, numbe
   for (const [k, leaf] of order.entries()) {
     at.push(total);
     if (k < order.length - 1) {
+      /* Every join records its gap, so this is always found. If it were not,
+         a full step is the harmless answer: this is decoration in the shelf's
+         render path, and a throw here would take the shelf down with it. */
       const h = gapAfter.get(leaf) ?? 1;
       total += GAP_FLOOR + h * h;
     }
   }
   const out = new Map<string, number>();
   for (const [k, leaf] of order.entries()) {
-    const key = terms[leaf]?.key;
+    const key = ranked[leaf]?.key;
     if (key === undefined) continue;
     const p = total > 0 ? (at[k] ?? 0) / total : 0;
     out.set(key, Math.round(p * (HUE_STOPS - 1)));

@@ -28,7 +28,7 @@
  * The counts come in already computed by the one formula in shelf-narrow.ts,
  * and a click goes back up as a key. docs/project/shelf-terms.md.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { useQueryState } from "nuqs";
 import type { LibraryTermsResponse } from "../types.js";
@@ -75,6 +75,11 @@ export function ShelfTerms({
   const [all, setAll] = useState(false);
   const [view, setView] = useQueryState("topicsView", libraryTopicsViewParam);
   const { terms, pending, scope } = data;
+  /* Selection, search and the two views all rerender this component without
+     changing the server answer. Keep the O(topics² × members + topics³)
+     projection tied to that answer, while still calling the hook on the empty
+     early-return path below. */
+  const hues = useMemo(() => topicHueStops(terms), [terms]);
 
   const reading = pending > 0 && (
     <span className="tw:text-xs tw:text-muted-foreground">
@@ -105,9 +110,7 @@ export function ShelfTerms({
   const chosen = new Set(selected);
   /* A topic's colour comes from which articles it shares with the other
      topics, over every topic the server chose (not only those drawn), so it
-     does not move as the view narrows. Not memoised: ~30 topics is well under
-     a millisecond, and a hook here would sit after the early return above. */
-  const hues = topicHueStops(terms);
+     does not move as the view narrows. */
   const slotOf = (key: string) => hues.get(key) ?? 0;
   /* **The server's rank order**, never re-sorted (plan 260928d): the chooser
      ranks for coverage, so the first few chips are the few that reach most of
