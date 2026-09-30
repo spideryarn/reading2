@@ -66,7 +66,7 @@ The /privacy bullet about reading time named the outline and margin as the only 
 used the totals too. Your answer (2026-10-01) was not to list which features use them, so the bullet
 now reads *"Some of Spideryarn's features use it — to show you where you have been, for example"*,
 and the page's date moved to 1 October. Nothing about what is kept changed. Shipped on `dev` in
-COMMIT_SHA — [261001a](../plans/261001a-privacy-reading-time-wording.md).
+`7a7785c6` — [261001a](../plans/261001a-privacy-reading-time-wording.md).
 
 ## What we did not build
 
