@@ -148,7 +148,7 @@ already near the top of some notes: several of those are article or session ids.
 - **No row id:** the wordmark note (`260929_0429-…`), relayed by the Overseer without a Sentry
   issue: `reports: none`.
 
-149 reports: 145 shipped, 3 declined, 1 awaiting (including this report's new note).
+154 reports: 150 shipped, 3 declined, 1 awaiting — including this report's own note, and five notes (61, 64, 65, 69, 6A) that landed on `dev` while this was being built, looked up the same way.
 
 **Nothing in the production database is touched**, so there is no command for Greg or the Overseer
 to run. Greg's permission to mark production rows is noted and not needed.
@@ -265,4 +265,20 @@ would still need deriving or a second column.
 
 ## Outcome
 
-(filled in at the end)
+**Shipped on `dev`, 2026-09-30, not deployed.** As designed above, with the plan review's changes.
+
+- GPT Sol code review (`gpt-5.6-sol`, high, workspace-write): **SHIP AFTER FIXES ABOVE**, three
+  fixed in place — the compiler imported its own output (so a missing or conflicted generated file
+  could not be regenerated; the endings list is now an import-free leaf,
+  `src/feedback-ending-values.ts`); a repeated header field or report id is refused (a repeated id
+  could have faked a split report's second part); stale counts and "four fields" comments. No
+  findings in the SQL, owner scoping, route, client sequencing, or the hidden-Write guards. Its
+  sandbox could not reach Postgres, so the store suite was run here afterwards: green.
+- Evidence the new store tests test something: flipping `= any(...)` to `<> any(...)` turned two of
+  them red; restored.
+- Gates: `npm run typecheck` exit 0; scoped suites (feedback-endings, -dialog, -route, -store,
+  admin-feedback-store, client-imports, doc-links) green after merging `origin/dev`. No full suite
+  run.
+- **Not browser-checked.** The dialog change is a row of three chips and one word in a meta line,
+  covered by jsdom tests; nobody has looked at it on a phone yet.
+- **Waiting on Greg:** § Proposed rule change, also on `awaiting-approval.md`.

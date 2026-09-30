@@ -21,7 +21,7 @@ and the tab filters **All · Shipped · Not shipped**, on the server, so the fil
 newest fifty. Nothing is marked in the database. Instead, the status comes from these notes: each
 note now starts with a short header naming its report and its ending. A script compiles the headers
 into the server. So on production a report reads as shipped only once the note, and the work before
-it, has been deployed. All 145 existing notes were given headers; 148 reports, 144 of them shipped.
+it, has been deployed. All 150 existing notes were given headers; 154 reports, 150 of them shipped.
 [260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
 
 **One thing waits on Greg:** adding the header to the rules in `feedback-reports.md`, which is a
