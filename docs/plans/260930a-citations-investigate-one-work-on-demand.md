@@ -98,10 +98,11 @@ Investigate only once Look it up has identified the work — is a product call l
 
 Under the answer, from what the call returned (Sol Q-2):
 
-> *We did not fetch or read the full paper. Web search returned extracts for N results (arxiv.org,
-> nature.com, …); the provider does not say whether an extract holds all of a short page. The AI was
-> asked to base what it says about the work on those extracts, and used this article [and your
-> profile and purpose] to relate them. It was instructed not to quote them.*
+> *Web search returned extracts for N results (arxiv.org, nature.com, …), the longest about W
+> words. We did not fetch any page ourselves; an extract may be an abstract or part of a paper's
+> text. The AI was asked to base what it says about the work on those extracts, and used this
+> article [and your profile and purpose] to relate them. It was instructed not to quote them.*
+> (Wording changed after the probe found one extract was most of a PDF — § The probe.)
 > plus one of the two identity lines above.
 
 - **At least one non-empty extract is required to store.** An answer with none is refused.
@@ -177,6 +178,33 @@ investigation was not kept; the previous one is still shown.*
 2. **Client.** The button, the streamed view, the stored view, the tip. Browser check in a
    subagent. GPT Sol code review.
 3. **Docs and note.** citations.md, ai-gateway.md's job line, the feedback note.
+
+## The probe (stage 1, step 1), 2026-09-30
+
+Six real streamed calls on four local articles, Exa pinned, `max_total_results: 8`,
+`max_results: 5`, the draft prompt. Full table and answers:
+[260930a-probe-results.md](260930a-probe-results.md); the script is
+`scripts/probes/260930a-investigate-probe.ts`. **$0.72 in all.**
+
+- **$0.120 a press on average, $0.153 worst** (a ~49k-token article). The model reads the article
+  twice per press (before and after its search), so cost scales with length: budget $0.30 for the
+  longest. First token 6.4 s, whole answer 13.7 s. 1–2 searches a call; every call ended `stop`.
+- **Exa and the cap honoured**; annotation `content` is present and non-empty on the streaming wire
+  (31 of 31, 94–9,998 characters). `max_characters` is accepted (not in our docs; tested): set
+  **`max_characters: 8000`** so the model's extract and ours (`MAX_EVIDENCE_EXCERPT`) agree.
+- **An extract can be most of a paper.** One was ~10k characters of the whole PDF. So the provenance
+  line must not say "we did not read the full paper". It says what was read and **how much**: *Web
+  search returned extracts for N results (hosts), the longest about W words. We did not fetch any
+  page ourselves; an extract may be an abstract or part of a paper's text.* The prompt forbids
+  claiming the full text (2 of 6 answers did) and opening with "I".
+- **Quote guard: 1 of 6 stopped, both causes false**: the work's own title in quotes (already
+  allowed by the plan) and an article quote with a comma inside the closing mark. Trailing
+  punctuation inside a span is stripped before matching.
+- **The article cache did not hit between two presses on one article 30 s apart.** Not a blocker (the
+  cost above is the uncached cost); a follow-up to compare with explain's `cacheReadTokens`.
+
+**Allowance**, from a maximum acceptable loss of $20 a day and $0.30 worst case: **global fuse 60 a
+day** ($18); **per reader 20 a day, 8 an hour, one at a time**.
 
 ## Assumptions (product calls taken the simple way)
 
