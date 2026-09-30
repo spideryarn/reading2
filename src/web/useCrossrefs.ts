@@ -29,18 +29,22 @@
  * The array is the response's own, so its identity holds until the next read
  * lands — TableView keys its prose cache on it.
  *
- * ## What it does not do
+ * ## It revalidates when a crossrefs job finishes
  *
- * **Revalidate.** The one read happens on mount. A crossrefs job that finishes
- * while this page is open — the after-import box's, or a Metadata re-run in
- * another tab — does not reach the prose until the page is reloaded or the
- * reader comes back from the metadata view, which remounts this. The glossary,
- * the quotes and the citations each have the same gap and name it; this one
- * has no band to close it from.
+ * The after-import box queues `crossrefs` while the article opens, so the
+ * ordinary first read is a 404 and the links arrive a minute later. A job for
+ * this article that writes `crossrefs` and reaches `done` while this page is
+ * open **refreshes** the read — `refresh`, never `reload`, because a reload
+ * joins a GET that may have read the database before the job wrote it
+ * (useStepJob.ts § The read half is next door). `useJobs` announces only jobs
+ * that finished after it began watching, so opening an article does not
+ * refetch once per historical job. `"quiet"`: this mount has no progress to
+ * show, so it does not keep the idle poll going on its own.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { Crossref, CrossrefsResponse } from "../types.js";
+import type { Crossref, CrossrefsResponse, Job } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { useJobs } from "./useJobs.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 
 /** What the prose may draw: the response's links when fresh, else null. */
@@ -81,10 +85,18 @@ export function useCrossrefs(slug: string): readonly Crossref[] | null {
      effect pass joins the first request instead of sending another — one GET
      per article view, which tests/the-ideas-extraction-changed-no-requests.test.tsx
      pins. */
-  const { reload } = useOrderedRead(load);
+  const { reload, refresh } = useOrderedRead(load);
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const onFinished = useCallback(
+    (job: Job) => {
+      if (job.slug === slug && job.steps.some((s) => s.name === "crossrefs")) void refresh();
+    },
+    [slug, refresh],
+  );
+  useJobs("quiet", onFinished);
 
   return read?.slug === slug ? read.links : null;
 }
