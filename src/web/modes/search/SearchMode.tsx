@@ -10,7 +10,7 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useQueryState } from "nuqs";
 import type { Article, BlockId } from "../../../types.js";
 import {
@@ -87,6 +87,22 @@ export function SearchBand({
 }) {
   useRenderCount("SearchBand");
   const { runs, loaded, loadError, ask, retry, remove, recolour, error } = useSearch(slug);
+  /* Only a request this tab started is known to be in flight. A `pending` row
+     loaded by the opening GET may belong to another process, or to one that
+     died inside the server's 90-second sweep grace; this tab receives no later
+     update in either case. Treating every persisted `pending` as live would
+     therefore refuse that question indefinitely. */
+  const started = useRef(new Map<string, string>());
+  const running = useMemo(
+    () => {
+      const pending = new Set(runs.filter((run) => run.status === "pending").map((run) => run.id));
+      for (const id of started.current.keys()) {
+        if (!pending.has(id)) started.current.delete(id);
+      }
+      return new Set(started.current.keys());
+    },
+    [runs],
+  );
   const { panel, setActive } = useSearchMode({
     runs,
     blocks,
@@ -106,6 +122,8 @@ export function SearchBand({
         loadError,
         error,
         onAsk: (criterion) => {
+          const question = criterion.trim();
+          if ([...started.current.values()].includes(question)) return;
           /* `ask` mints the id, so `?runs=` can name the search before the
              model has said anything — the same trick `?note=` and `?thread=`
              use.
@@ -113,11 +131,18 @@ export function SearchBand({
              And it switches itself on, which is the one exception to
              default-false: a search the reader just paid for and cannot see is
              not a result. */
-          const id = ask(criterion);
+          const id = ask(question);
+          started.current.set(id, question);
           setActive((ids) => [...ids, id]);
           onOpenHit(null);
         },
-        onRetry: retry,
+        running,
+        onRetry: (id) => {
+          const run = runs.find((candidate) => candidate.id === id);
+          if (!run || [...started.current.values()].includes(run.criterion.trim())) return;
+          started.current.set(id, run.criterion.trim());
+          retry(id);
+        },
         /* Straight through. Unlike every other write on this panel it does not
            touch `?runs=` or the open row: a colour changes what a mark looks
            like, never which marks are drawn or which one the reader is on. */
@@ -192,15 +217,13 @@ export function VisitorSearchBand({
  * being passed *in* here as optionals.
  *
  * **It takes an updater, not a list**, since several searches can be started
- * at once (docs/plans/260930f-parallel-searches.md): a write built from
- * `panel.active` appends to whatever that render saw. The updater gets nuqs's
- * latest value instead. **It does not make two asks in one React batch safe** —
- * nuqs refreshes that value inside a state updater, which a batch defers, so the
- * second call still sees the old list (tried in a test, 2026-09-30). What makes
- * that case unreachable is that every ask comes from a click or a keypress,
- * and React renders after each discrete event before the next arrives. The
- * duplicate-question refusal in `Box` leans on the same fact. GPT Sol raised
- * it reviewing the plan.
+ * at once (docs/plans/260930f-parallel-searches.md). nuqs itself does not
+ * compose two functional updates in one React batch: it refreshes the ref its
+ * updater reads from inside a React state updater, which the batch defers. So
+ * `activeRef` below advances synchronously before handing nuqs the concrete
+ * list. Ordinary clicks are separate discrete events, but correctness does not
+ * need to lean on React flushing between them. GPT Sol raised this in the plan
+ * review; the first version documented the hole instead of closing it.
  */
 function useSearchMode({
   runs,
@@ -243,6 +266,13 @@ function useSearchMode({
   const [run1] = useQueryState("run", runParam);
   const [runIds, setRunIds] = useQueryState("runs", runsParam);
   const active = useMemo(() => resolveRuns(runIds, run1), [runIds, run1]);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const setActive = (next: (ids: string[]) => string[]) => {
+    const ids = next(activeRef.current);
+    activeRef.current = ids;
+    void setRunIds(ids);
+  };
   const [order, setOrder] = useQueryState("order", orderParam);
   /* Null until the reader drags it — see confParam, and `gateParam` beside it,
      for why "nobody has touched this" has to stay distinguishable from "the
@@ -372,7 +402,7 @@ function useSearchMode({
       active,
       slots,
       onToggle: (id: string, on: boolean) => {
-        void setRunIds(on ? [...active, id] : active.filter((x) => x !== id));
+        setActive((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)));
         /* Whatever row was open may have belonged to the search just switched
            off, and a highlighted row pointing at a mark that is no longer drawn
            is the panel and the prose disagreeing. Cheap to clear, and the
@@ -387,11 +417,11 @@ function useSearchMode({
          The open row goes for the same reason it goes on a toggle — it may have
          belonged to a search that is no longer drawing anything. */
       onSolo: (id: string) => {
-        void setRunIds([id]);
+        setActive(() => [id]);
         onOpenHit(null);
       },
       onToggleAll: (on: boolean) => {
-        void setRunIds(on ? runs.map((r) => r.id) : []);
+        setActive(() => (on ? runs.map((r) => r.id) : []));
         onOpenHit(null);
       },
       found: results,
@@ -413,7 +443,6 @@ function useSearchMode({
       },
     },
     /* `?runs=`, for the owner's two verbs that write it. See the docblock. */
-    setActive: (next: (ids: string[]) => string[]) =>
-      void setRunIds((old) => next(resolveRuns(old, run1))),
+    setActive,
   };
 }

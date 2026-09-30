@@ -151,6 +151,8 @@ export type SearchAccess =
       loadError: string | null;
       /** A transport failure on a write. Model failures live on the run that failed. */
       error: string | null;
+      /** Requests this tab started and still has in flight, by run id. */
+      running: ReadonlySet<string>;
       onAsk(criterion: string): void;
       onRetry(id: string): void;
       /**
@@ -282,12 +284,15 @@ export function SearchPanel({
      already done by the time you have finished the keystroke. */
   const searching = runs.some((r) => active.includes(r.id) && r.status === "pending");
 
-  /* The questions still out, ticked or not, as `ask` sends them — trimmed. A
-     running search no longer holds Find (Greg, 2026-09-29: *"kick off multiple
-     searches in parallel"*), so this is the one thing that does: the draft stays
-     in the box after Find, and a second press on it unchanged would pay for the
-     same search twice. docs/plans/260930f-parallel-searches.md. */
-  const running = new Set(runs.filter((r) => r.status === "pending").map((r) => r.criterion.trim()));
+  /* Questions this tab still has out, ticked or not, as `ask` sends them —
+     trimmed. A persisted `pending` is not enough: after the opening GET it may
+     be another process's work or an orphan, and this tab receives no event
+     when either finishes. SearchMode owns the in-flight ids it started. */
+  const running = new Set(
+    runs
+      .filter((r) => r.status === "pending" && own?.running.has(r.id))
+      .map((r) => r.criterion.trim()),
+  );
 
   return (
     <ModeSurface label="Search this article" feature="srch">
@@ -338,6 +343,7 @@ export function SearchPanel({
           loaded={loaded}
           loadFailed={loadFailed}
           active={active}
+          running={running}
           slots={slots}
           onToggle={onToggle}
           onSolo={onSolo}
@@ -706,12 +712,18 @@ function SavedLoading() {
   );
 }
 
+function retryTitle(run: SearchRun, alreadyRunning: boolean): string {
+  if (alreadyRunning) return "Already searching for this question";
+  return run.error ?? "This search failed. Try it again.";
+}
+
 function Saved({
   access,
   runs,
   loaded,
   loadFailed,
   active,
+  running,
   slots,
   onToggle,
   onSolo,
@@ -724,6 +736,8 @@ function Saved({
   loaded: boolean;
   loadFailed: boolean;
   active: string[];
+  /** Criteria this tab is already searching for, trimmed. */
+  running: ReadonlySet<string>;
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
   onSolo(id: string): void;
@@ -806,6 +820,7 @@ function Saved({
         {sorted.map((run) => {
           const checked = active.includes(run.id);
           const slot = slots.get(run.id);
+          const retryAlreadyRunning = running.has(run.criterion.trim());
           return (
             <li
               key={run.id}
@@ -914,7 +929,8 @@ function Saved({
                   <button
                     type="button"
                     className="srch-icon"
-                    title={run.error ?? "This search failed. Try it again."}
+                    disabled={retryAlreadyRunning}
+                    title={retryTitle(run, retryAlreadyRunning)}
                     onClick={() => own.onRetry(run.id)}
                   >
                     <AlertTriangle size={13} />

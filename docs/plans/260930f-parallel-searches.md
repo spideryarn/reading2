@@ -46,9 +46,12 @@ workaround is the proof the rest of the stack copes.
    the box after Find — that is the current behaviour, and it is what lets a reader edit
    "arguments against X" into "arguments for X" without retyping (the same workflow ↺ exists for).
    With the busy gate gone, a second Enter or double-click on an unchanged box would spend a second
-   model call on an identical question. So `ready` also requires that no *pending* run (ticked or
-   not) has the same trimmed criterion. The button's tooltip says why when that is the reason it is
-   off. Case-sensitive, exact, trimmed — the same `criterion.trim()` `ask` sends.
+   model call on an identical question. So `ready` also requires that no run *this tab started and
+   is still waiting for* (ticked or not) has the same trimmed criterion. The retry button follows
+   the same rule. A persisted `pending` row cannot count: the opening GET may have left a fresh
+   orphan inside the 90-second sweep grace, and without polling it would wedge that question in
+   this tab until reload. The button's tooltip says why when that is the reason it is off.
+   Case-sensitive, exact, trimmed — the same `criterion.trim()` `ask` sends.
 
 No server change, no schema change, no change to streaming: each search still streams its own
 hits as they arrive.
@@ -94,30 +97,40 @@ POSTs held open so the first search is still pending:
   concurrent searches on one article, so it is accepted rather than fixed. The stronger fix is to
   leave `pending` rows out of the trim. (GPT Sol's plan review, finding 4.)
 
+- **A `begin` that answers with a different id stops the duplicate guard tracking that search.**
+  `SearchBand` records the id it minted; when `beginRun` resets an existing row instead
+  (`withRun` in `src/searches.ts`), `useSearch` swaps the row to the server's id and the minted one
+  drops out of `started` on the next render. The same question could then be asked again while it
+  runs. That needs the reset path and an impatient second press together, so it is noted, not fixed.
+
 ## Plan review (GPT Sol, 2026-09-30) and what was done
 
 [Review](260930f-parallel-searches-plan-review-sol.md): approve with changes.
 
-1. **P1: two asks before a render could untick the first.** `setActive` now takes an updater and
-   `onAsk`/`onDelete` use it. **It does not close the batched case**, and a test proved it: nuqs
-   refreshes the value the updater reads inside a React state updater, which a batch defers. The
-   case is unreachable anyway, because every ask is a click or a keypress and React renders after
-   each discrete event before the next one arrives. The duplicate refusal relies on the same fact.
-   Written into the `useSearchMode` docblock, so it does not read as a guarantee.
-2. **P2: one error banner shared by parallel searches.** Accepted as it is. A failed search's
-   message is on its row only as a tooltip, so the banner is the only place it is visible, and
-   scoping the banner away would hide it. A new search clearing an earlier failure's banner is
-   pre-existing behaviour, because a failed run was never `busy`. The new case is Q1 failing while
-   Q2 runs, and there the banner keeps saying Q1 failed after Q2 finishes, which is true.
+1. **P1: two asks before a render could untick the first.** `setActive` takes an updater, and every
+   active-set write now goes through a ref advanced synchronously before nuqs receives the concrete
+   list. nuqs's own functional updater does not close the batched case: it refreshes the ref it
+   reads inside a React state updater, which a batch defers. The first built version documented the
+   hole and relied on React flushing between discrete events; code review replaced that claim with
+   the accumulator and a test that performs two active-set writes in one batch.
+2. **P2: one error banner shared by parallel searches.** Accepted as it is. A *transport* failure
+   is stored on its row but its message is visible there only as a tooltip, so the shared banner is
+   the only place it can be read without hovering. (A model failure arrives as a `done` run and has
+   no banner; the first version of this paragraph blurred those two paths.) A new search clearing
+   an earlier transport failure's banner is pre-existing behaviour, because a failed run was never
+   `busy`. The new case is Q1's transport failing while Q2 runs, and there the banner keeps saying
+   Q1 failed after Q2 finishes, which is true and now tested.
 3. **P2: tests.** Added: hits interleaving across two streams before either `done`, each traced to
    its own search by the row's `found by …` label, with a "2 still searching" / "1 still searching"
-   count. Also one search failing while the other finishes, and the duplicate refused even when
-   the running search is unticked.
+   count. Also model and transport failures while the other search finishes, the duplicate refused
+   even when the running search is unticked, persisted pending rows not wedging the box, retry not
+   duplicating an in-flight criterion, and two active-set writes composing inside one React batch.
 4. **P2: `MAX_RUNS`.** Restated above with its visible failure.
 
 ## Outcome
 
-Built as planned plus the review's changes. `src/web/SearchPanel.tsx` (`running`, `ready`, the
-tooltip), `src/web/modes/search/SearchMode.tsx` (`setActive` updater),
-`tests/search-parallel-finds.test.tsx` (four cases; the first was red before the change), and
+Built as planned plus the reviews' changes. `src/web/SearchPanel.tsx` (`ready`, retry and the
+tooltips), `src/web/modes/search/SearchMode.tsx` (this tab's in-flight requests and the active-set
+accumulator), `tests/search-parallel-finds.test.tsx` (eight cases; the first was red before the
+change), and
 [search.md § Asking the next question before the last one answers](../project/search.md).

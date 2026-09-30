@@ -108,11 +108,11 @@ interface Posted {
   stream: ReturnType<typeof openStream>;
 }
 
-function server(): Posted[] {
+function server(saved: SearchRun[] = []): Posted[] {
   const posted: Posted[] = [];
   answer = (_url, init) => {
     const method = (init.method ?? "GET").toUpperCase();
-    if (method === "GET") return Promise.resolve(json({ runs: [] }));
+    if (method === "GET") return Promise.resolve(json({ runs: saved }));
     if (method === "POST") {
       const { id, criterion } = JSON.parse(String(init.body)) as { id: string; criterion: string };
       const stream = openStream();
@@ -278,6 +278,16 @@ describe("Search: several meaning-searches at once", () => {
     expect(host.textContent).not.toContain("still searching");
     expect(host.textContent).not.toContain("searching…");
     expect(ticked()).toEqual([FIRST, SECOND].sort());
+
+    // Active-set writes compose even if React batches them. nuqs's own
+    // functional updater does not advance its ref until React runs its queued
+    // state updater, so the mode keeps the synchronous accumulator.
+    const ticks = [...host.querySelectorAll<HTMLInputElement>('input[aria-label^="Also mark: "]')];
+    act(() => {
+      for (const tick of ticks) tick.click();
+    });
+    await flush();
+    expect(ticked(), "one batched untick resurrected the other search").toEqual([]);
   });
 
   it("lets one search fail while the other finishes", async () => {
@@ -300,6 +310,27 @@ describe("Search: several meaning-searches at once", () => {
     const failed = host.querySelector('.srch-icon[title*="ai-refused"]');
     expect(failed, "the failed search shows no failure on its row").not.toBeNull();
     expect(host.textContent).not.toContain("still searching");
+  });
+
+  it("keeps one search's transport failure visible while the other finishes", async () => {
+    const posted = server();
+    mount();
+    await flush();
+    type(FIRST);
+    enter();
+    type(SECOND);
+    enter();
+    await flush();
+    const [first, second] = posted as [Posted, Posted];
+
+    act(() => first.stream.end());
+    await flush();
+    finish(second);
+    await flush();
+
+    expect(foundBy()).toEqual([SECOND]);
+    expect(host.textContent).toContain("The search stopped arriving. Try again.");
+    expect(host.querySelector('.srch-icon[title*="stopped arriving"]')).not.toBeNull();
   });
 
   it("refuses a repeat of a running question even when it is not switched on", async () => {
@@ -332,7 +363,12 @@ describe("Search: several meaning-searches at once", () => {
     await flush();
 
     type(FIRST);
-    click(findButton());
+    // Both handlers see the same rendered `ready`; the controller's in-flight
+    // registry is what makes duplicate protection survive one React batch.
+    act(() => {
+      findButton().click();
+      findButton().click();
+    });
     await flush();
     expect(posted).toHaveLength(1);
 
@@ -357,5 +393,85 @@ describe("Search: several meaning-searches at once", () => {
     enter();
     await flush();
     expect(posted).toHaveLength(2);
+  });
+
+  it("does not mistake a pending row loaded from the server for a request this tab is watching", async () => {
+    const old = run("spya-q7w2er", FIRST, "pending");
+    const posted = server([old]);
+    mount();
+    await flush();
+
+    type(FIRST);
+    expect(findButton().disabled, "a persisted pending row wedged Find in this tab").toBe(false);
+    enter();
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual([FIRST]);
+
+    // Once this tab has actually sent it, the ordinary duplicate guard applies.
+    expect(findButton().disabled).toBe(true);
+    enter();
+    await flush();
+    expect(posted).toHaveLength(1);
+
+    finish(posted[0] as Posted);
+    await flush();
+    expect(
+      findButton().disabled,
+      "the persisted pending row kept blocking after this tab's request finished",
+    ).toBe(false);
+  });
+
+  it("refuses retry while this tab already has the same criterion in flight", async () => {
+    const message = "The model service was unavailable. Try again. [ai-500]";
+    const failed = { ...run("spya-r8x3tf", FIRST, "error"), error: message };
+    const posted = server([failed]);
+    mount();
+    await flush();
+
+    type(FIRST);
+    enter();
+    await flush();
+    expect(posted).toHaveLength(1);
+
+    const retry = must<HTMLButtonElement>('button.srch-icon[title="Already searching for this question"]');
+    expect(retry.disabled).toBe(true);
+    click(retry);
+    await flush();
+    expect(posted, "retry sent a second paid call for the same question").toHaveLength(1);
+
+    finish(posted[0] as Posted);
+    await flush();
+    const enabled = must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`);
+    expect(enabled.disabled).toBe(false);
+    click(enabled);
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual([FIRST, FIRST]);
+  });
+
+  it("keeps a legacy run seed when it appends, and removes that id on delete", async () => {
+    const legacyId = "spya-s9y4ug";
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&run=${legacyId}`);
+    const posted = server([{ ...run(legacyId, FIRST, "done"), hits: [] }]);
+    mount();
+    await flush();
+    expect(ticked()).toEqual([FIRST]);
+
+    type(SECOND);
+    enter();
+    await flush();
+    expect(ticked()).toEqual([FIRST, SECOND].sort());
+
+    const legacyRow = [...host.querySelectorAll<HTMLElement>(".srch-saved-row")].find((row) =>
+      row.textContent?.includes(FIRST),
+    );
+    const remove = legacyRow?.querySelector<HTMLButtonElement>('button[title="Delete this search"]');
+    if (!remove) throw new Error("the legacy search has no delete button");
+    click(remove);
+    await flush();
+    expect(ticked()).toEqual([SECOND]);
+
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 60)));
+    const ids = new URLSearchParams(location.search).get("runs")?.split(",");
+    expect(ids).toEqual([posted[0]?.id]);
   });
 });
