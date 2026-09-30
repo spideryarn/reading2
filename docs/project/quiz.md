@@ -30,6 +30,7 @@ Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation,
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),
 [`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) (whether a step's premise is shown, and it never sorts),
 [`src/web/read-filter.ts`](../../src/web/read-filter.ts) (which questions are about what you have read),
+[`src/web/quiz-sections.ts`](../../src/web/quiz-sections.ts) (the answers counted by section, and which to look at again),
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) (whether they got it right, asked in private),
 [`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
@@ -43,7 +44,8 @@ Tests: [`quiz.test.ts`](../../tests/quiz.test.ts),
 [`quiz-mark-stream.test.tsx`](../../tests/quiz-mark-stream.test.tsx),
 [`quiz-step-registration.test.ts`](../../tests/quiz-step-registration.test.ts),
 [`quiz-ladder.test.ts`](../../tests/quiz-ladder.test.ts),
-[`quiz-verdict.test.ts`](../../tests/quiz-verdict.test.ts).
+[`quiz-verdict.test.ts`](../../tests/quiz-verdict.test.ts),
+[`quiz-sections.test.ts`](../../tests/quiz-sections.test.ts).
 Eval: [`evals/quiz.ts`](../../evals/quiz.ts) — **read this before editing either prompt.**
 The plan, the spike and two cross-family reviews:
 [260831al](../plans/260831al-review-quiz-sub-mode.md) and
@@ -132,8 +134,10 @@ list again), and the plan names the trigger for doing more.
 The mark [may not say how the reader did](#what-a-mark-says-and-what-it-may-not), and the walk has
 to know. So the judgement is made by a **separate, small call that reads the finished mark** —
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) — and its one-word answer rides the terminal `done`
-frame. It is never rendered, never logged and never stored; the panel holds it in React state for
-the length of the visit.
+frame. The word is never rendered, never logged and never stored; the panel holds it in React state
+for the length of the visit. It may choose scaffolding and navigation — whether a premise is shown,
+and which sections [Where to look again](#where-to-look-again) names — but never a count, a score or
+a line of copy about how the reader did.
 
 **`QUIZ_MARK_SYSTEM` is deliberately untouched by this.** The obvious design was to have the marking
 prompt emit a hidden verdict of its own, one call instead of two; it was rejected because that prompt
@@ -318,6 +322,32 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
   pending the band says it is looking; if it failed, it walks every question and says so. With
   reading time off there is no tick-box at all.
 - The tick-box is per visit, not remembered.
+
+## Where to look again
+
+Greg, 2026-09-30 (SPIDERYARN-READING2-6R):
+
+> Score each quiz answer against the article's blocks, giving a rough per-section picture of what the
+> reader has got. That could steer your adaptive quiz (spya-jc2ub9) towards the sections they're
+> weakest on, not just adjust its difficulty. And somehow indicate to the reader which sections to
+> (re-)read next.
+
+**A join, not a model call.** Each verdict is counted against the sections its question's evidence
+blocks are in — the reading view's own Sections (`buildSections`, the level one above the leaves),
+so the names are the ones on the spine. Once an answer this visit has been judged wrong, a block
+under the step row names up to three sections, weakest first (the largest share of judged answers
+wrong). Each name jumps the prose there — the (re-)read — and an icon beside it goes back to that
+section's first missed question — the steer. The plan and GPT Sol's review are
+[260930i](../plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md).
+
+- **It names places and says nothing about the reader**: no count, no fraction, no "you got". No
+  verdict counts as neither, so a skip or a failed classifier never puts a section on the list.
+- **The path is still never reordered.** The steer is a jump back through `pick`, so the step shows
+  its premise, a jump to the question already open does nothing, and only questions the reading
+  filter lets the reader land on are offered.
+- **Per visit, like the verdicts it is made of**: nothing stored, logged or sent, so the privacy page
+  did not change. A stored per-section picture, new questions aimed at a weak section, and a
+  "read these next" list of unread sections are deferred, with the reasons, in the plan.
 
 ## What is deliberately not here
 

@@ -458,6 +458,9 @@ export function Reader({
      removal timer rather than retaining a detached prose cell for 1.2s. */
   useEffect(() => resetFlash, []);
   const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
+  /* The quiz's "Where to look again" names the same sections the reader sees
+     here — docs/plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md. */
+  const quizSections = useMemo(() => ({ sections, rowOf }), [sections, rowOf]);
   /**
    * **A jump that starts inside a band.** The same `jumpTo`, and then — where
    * the band lies over the whole article, which on a phone it does — the band
@@ -1783,6 +1786,7 @@ export function Reader({
             slug={slug}
             blocks={blockText}
             readSoFar={readSoFar}
+            sections={quizSections}
             onJump={bandJump}
             onMode={setMode}
             onQuizKeys={onQuizKeys}
