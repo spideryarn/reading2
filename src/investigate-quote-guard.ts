@@ -12,22 +12,41 @@
  * finished answer, by which time the reader had watched the unchecked quote
  * arrive (Sol's Q-1, the plan's P0).
  *
- * ## What is held, and what is released
+ * **The property, under any chunking of the stream:** no quote-shaped span that
+ * is not found in the allowed texts ever appears in the output. A false refusal
+ * costs the reader a retry; a leak shows them words we cannot vouch for. So
+ * where the two trade, this refuses.
  *
- * - From an opening `"`, `“` or `‘` (U+2018) to its close — `"` toggles, `“`
- *   closes on `”`, `‘` on `’`. **A `’` followed by a letter or digit is an
- *   apostrophe, not a close** (*what’s*). A mark after an `s` and before a
- *   blank is also held: `‘the dogs’ owners objected’` is a plural possessive,
- *   while `‘bigger is better’ here` is an unambiguous close and can keep
- *   streaming. If the `s’ ` is followed by a word, it remains inside the span;
- *   if the stream ends first, the safe answer is to stop rather than release
- *   an unchecked continuation. The narrow grammatical exceptions are forms
- *   of *be* and `as`: `‘fitness’ is …` and `‘fitness’ as …` cannot be plural
- *   possessives. Those stay held to the end (or another `’`) before the quoted
- *   term is released, so a later close still makes the whole span get checked.
- * - Any line whose first non-blank character is `>`, to the end of the line.
- * - Leading blanks on a line, until the first other character says whether the
- *   line is a block quote.
+ * ## The rules
+ *
+ * - **Straight `"` and curly `“…”`**: held from the opening mark to its close
+ *   (`"` toggles, `“` closes only on `”`), then checked.
+ * - **Block quotes**: a line whose first non-blank character is `>` is held to
+ *   the end of the line and checked. `\n`, `\r`, U+2028 and U+2029 all end a
+ *   line (Sol's G-1: a lone `\r` once let a `>` line through). Leading blanks
+ *   on a line are held until the first other character says which it is.
+ * - **Curly single quotes — the paragraph hold.** A `‘` (U+2018) in prose holds
+ *   everything from it to the end of the paragraph: a blank line (two line
+ *   breaks with only blanks between; `\r\n` counts as one break) or the end
+ *   of the stream. The held paragraph is then decided whole. For each `‘`, the
+ *   candidate closes are the `’` after it and before the next `‘` that are
+ *   not followed by a letter or digit (so *what’s* is not a close). No
+ *   candidate fails as `unclosed`; otherwise the span to the **farthest**
+ *   candidate must be found, or it fails as `not-found`. If every `‘` passes,
+ *   the paragraph is replayed through the other rules with `‘` as an ordinary
+ *   character, so a `"` or a `>` line inside it is still guarded.
+ * - A `’` with no `‘` before it in the paragraph is prose (*the authors’
+ *   claim*) and is never held.
+ *
+ * **Why the paragraph hold.** `’` is both an apostrophe and a closing mark, so
+ * `‘the dogs’ owners fabricated…’` (a leak if the first `’` is taken as the
+ * close and "the dogs" is allowed — Sol's C-1) and `‘fitness’ is …` (a false
+ * refusal if it is not — D-1, then G-2 and G-3) begin identically. Three rounds
+ * of grammatical special cases each produced a new edge. Waiting for the
+ * paragraph and taking the farthest close removes the guessing: the longest
+ * reading is always the one checked. The cost, accepted and tested, is that a
+ * quoted term followed later in the same paragraph by a plural possessive
+ * (`‘fitness’ and the authors’ claim`) is refused.
  *
  * A held span is released only if its words — trimmed, with trailing `, . ; :
  * ! ?` dropped (the probe's `"…what's possible,"` false positive) — are found
@@ -35,10 +54,10 @@
  * because this is a claim that the words were copied, not a best effort at
  * drawing a mark (src/quote-match.ts § `findQuote`). An empty pair is released.
  *
- * **A span not found, or still open past `QUOTE_SPAN_CAP` characters or at the
- * end of the stream, fails**, and the caller stops the answer there: the span
- * is never released and nothing is stored. After a failure the guard stays
- * failed.
+ * **A span not found, or still open past its cap (`QUOTE_SPAN_CAP` for a
+ * quote or a line, `PARAGRAPH_HOLD_CAP` for a paragraph hold) or at the end of
+ * the stream, fails**, and the caller stops the answer there: the span is
+ * never released and nothing is stored. After a failure the guard stays failed.
  *
  * What this does not guard, said plainly because the plan says it: straight
  * single quotes (left to the prompt — they are apostrophes far more often than
@@ -50,8 +69,11 @@
  */
 import { quoteFinder } from "./quote-match.js";
 
-/** The longest a held span may grow before it is refused as unclosed. */
+/** The longest a held quote or block-quote line may grow before it is refused as unclosed. */
 export const QUOTE_SPAN_CAP = 400;
+
+/** The longest a paragraph held for a `‘` may grow before it is refused as unclosed. */
+export const PARAGRAPH_HOLD_CAP = 2000;
 
 /** Why a stream was stopped — counted in the log line, never with the words. */
 export type QuoteStopCause = "not-found" | "unclosed";
@@ -76,38 +98,45 @@ type Mode =
   | "indent"
   | "straight"
   | "curly-double"
-  | "curly-single"
+  /** From a `‘` to the end of its paragraph. */
+  | "paragraph"
   | "blockquote";
 
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
-const WHITESPACE = /\s/u;
-const S_END = /[sS]/u;
 const TRAILING_PUNCTUATION = /[\s,.;:!?]+$/u;
-/** Words that cannot be the noun governed by a plural possessive. */
-const CLOSE_FOLLOWERS = ["as", "is", "are", "was", "were"] as const;
+const OPEN_SINGLE = "‘";
+const CLOSE_SINGLE = "’";
+
+function isLineBreak(c: string): boolean {
+  return c === "\n" || c === "\r" || c === " " || c === " ";
+}
+
+function isBlank(c: string): boolean {
+  return c === " " || c === "\t";
+}
 
 /**
  * @param allowed the texts a quotation may come from — the article's blocks,
  *   the work's title and reference entry, and in the matched branch *Look it
  *   up*'s two verified quotes.
  */
-export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE_SPAN_CAP): QuoteGuard {
+export function createQuoteGuard(
+  allowed: readonly string[],
+  cap: number = QUOTE_SPAN_CAP,
+  paragraphCap: number = PARAGRAPH_HOLD_CAP,
+): QuoteGuard {
   /* Prepared once per text: a long article is asked one question per span,
      and re-reducing every block each time is the cost quoteFinder exists to
      save. */
   const finders = allowed.filter((t) => t.trim() !== "").map((t) => quoteFinder(t, "spaced"));
 
   let mode: Mode = "text";
-  /** The characters held back — the opening mark included. */
+  /** The characters held back — the opening mark (or `‘`) included. */
   let held = "";
   /** A stream begins at the start of a line. */
   let atLineStart = true;
-  /** In `curly-single`: the last held character is a `’` that may be the close. */
-  let pendingClose = false;
-  /** Exclusive offsets of the still-plausible `’` closes in `held`. */
-  let curlyCloses: number[] = [];
-  /** An s-ending close followed by an unambiguous prose word. */
-  let proseClose: number | null = null;
+  /** In `paragraph`: a line break has been seen, with only blanks since. */
+  let blankLineOpen = false;
   let failed: Extract<GuardStep, { ok: false }> | null = null;
 
   function found(words: string): boolean {
@@ -122,56 +151,51 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
     const out = held;
     held = "";
     mode = "text";
-    pendingClose = false;
-    curlyCloses = [];
-    proseClose = null;
     return out;
   }
 
-  /** Classify the word after an ambiguous `s’ ` without depending on chunks. */
-  function closeFollower(suffix: string): "prefix" | "complete" | "no" {
-    const match = /^\s*([\p{L}\p{N}]*)(.*)$/us.exec(suffix);
-    if (!match) return "no";
-    const word = (match[1] ?? "").toLowerCase();
-    const after = match[2] ?? "";
-    if (word === "") return "prefix";
-    if (after === "") return CLOSE_FOLLOWERS.some((candidate) => candidate.startsWith(word)) ? "prefix" : "no";
-    return CLOSE_FOLLOWERS.includes(word as (typeof CLOSE_FOLLOWERS)[number]) ? "complete" : "no";
+  /** Every `‘` in a held paragraph, checked to its farthest candidate close. */
+  function checkSingles(paragraph: string): QuoteStopCause | null {
+    const chars = [...paragraph];
+    for (let open = 0; open < chars.length; open += 1) {
+      if (chars[open] !== OPEN_SINGLE) continue;
+      let close = -1;
+      for (let i = open + 1; i < chars.length && chars[i] !== OPEN_SINGLE; i += 1) {
+        if (chars[i] === CLOSE_SINGLE && !LETTER_OR_DIGIT.test(chars[i + 1] ?? "")) close = i;
+      }
+      if (close === -1) return "unclosed";
+      if (!found(chars.slice(open + 1, close).join(""))) return "not-found";
+    }
+    return null;
   }
 
   /**
-   * Settle a curly-single span at its last plausible close, then feed the
-   * characters after that close back through the guard. The replay matters:
-   * the suffix may contain another opening mark or a block quote and therefore
-   * cannot be released as an unchecked lump.
+   * Decide a held paragraph whole, then replay it through the other rules
+   * with `‘` as an ordinary character.
    */
-  function settleCurlyAndReplay(extra: string): GuardStep {
-    const close = curlyCloses.at(-1);
-    if (close === undefined) return fail("unclosed");
-    if (!found(held.slice(1, close - 1))) return fail("not-found");
-    const span = held.slice(0, close);
-    const suffix = held.slice(close);
-    /* A word after a possible close is the irreducibly ambiguous case:
-       `‘allowed words’ then` and `‘allowed words’ continuation’` have the same
-       prefix. Releasing the first interpretation can leak the second. */
-    if ((LETTER_OR_DIGIT.test(suffix) && proseClose !== close) || suffix.includes("‘")) return fail("unclosed");
+  function decideParagraph(): GuardStep {
+    const paragraph = held;
+    const cause = checkSingles(paragraph);
+    if (cause) return { ok: false, cause, text: "" };
     held = "";
     mode = "text";
-    pendingClose = false;
-    curlyCloses = [];
-    proseClose = null;
-    const rest = push(suffix + extra);
-    return rest.ok
-      ? { ok: true, text: span + rest.text }
-      : { ok: false, cause: rest.cause, text: span + rest.text };
+    atLineStart = false;
+    blankLineOpen = false;
+    let out = "";
+    for (const c of paragraph) {
+      const step = feed(c, true);
+      out += step.text;
+      if (!step.ok) return { ...step, text: out };
+    }
+    return { ok: true, text: out };
   }
 
   /**
    * One character in ordinary prose (or the first after an indent). Returns
    * what it adds to the output now.
    */
-  function prose(c: string): string {
-    if (atLineStart && (c === " " || c === "\t")) {
+  function prose(c: string, singlesChecked: boolean): string {
+    if (atLineStart && isBlank(c)) {
       mode = "indent";
       held += c;
       return "";
@@ -185,10 +209,13 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
     const indent = held;
     held = "";
     mode = "text";
-    atLineStart = c === "\n";
+    atLineStart = isLineBreak(c);
     if (c === '"') return open("straight", indent, c);
     if (c === "“") return open("curly-double", indent, c);
-    if (c === "‘") return open("curly-single", indent, c);
+    if (c === OPEN_SINGLE && !singlesChecked) {
+      blankLineOpen = false;
+      return open("paragraph", indent, c);
+    }
     return indent + c;
   }
 
@@ -198,107 +225,73 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
     return before;
   }
 
-  function fail(cause: QuoteStopCause, text = ""): GuardStep {
-    failed = { ok: false, cause, text: "" };
-    return { ok: false, cause, text };
+  /**
+   * One character through the rules. `singlesChecked` is true while a
+   * decided paragraph is replayed, so its `‘` do not open another hold.
+   */
+  function feed(c: string, singlesChecked: boolean): GuardStep {
+    switch (mode) {
+      case "text":
+      case "indent":
+        return { ok: true, text: prose(c, singlesChecked) };
+
+      case "blockquote": {
+        if (isLineBreak(c)) {
+          const line = settle(held.replace(/^[\s>]+/u, ""));
+          if (line === null) return { ok: false, cause: "not-found", text: "" };
+          atLineStart = true;
+          return { ok: true, text: line + c };
+        }
+        held += c;
+        return held.length > cap ? { ok: false, cause: "unclosed", text: "" } : { ok: true, text: "" };
+      }
+
+      case "paragraph": {
+        const previous = held.at(-1) ?? "";
+        held += c;
+        if (held.length > paragraphCap) return { ok: false, cause: "unclosed", text: "" };
+        if (isLineBreak(c)) {
+          /* `\r\n` is one break, not a blank line. */
+          if (c === "\n" && previous === "\r") return { ok: true, text: "" };
+          if (blankLineOpen) return decideParagraph();
+          blankLineOpen = true;
+        } else if (!isBlank(c)) {
+          blankLineOpen = false;
+        }
+        return { ok: true, text: "" };
+      }
+
+      case "straight":
+      case "curly-double": {
+        held += c;
+        if (held.length - 1 > cap) return { ok: false, cause: "unclosed", text: "" };
+        const closes = (mode === "straight" && c === '"') || (mode === "curly-double" && c === "”");
+        if (!closes) return { ok: true, text: "" };
+        const span = settle(held.slice(1, -1));
+        if (span === null) return { ok: false, cause: "not-found", text: "" };
+        atLineStart = false;
+        return { ok: true, text: span };
+      }
+
+      default: {
+        const never: never = mode;
+        throw new Error(`unhandled guard mode: ${String(never)}`);
+      }
+    }
+  }
+
+  function stop(step: Extract<GuardStep, { ok: false }>): GuardStep {
+    failed = { ok: false, cause: step.cause, text: "" };
+    return step;
   }
 
   function push(delta: string): GuardStep {
     if (failed) return failed;
     let out = "";
     for (const c of delta) {
-      if (mode === "text" || mode === "indent") {
-        out += prose(c);
-        continue;
-      }
-
-      if (mode === "blockquote") {
-        if (c === "\n") {
-          const line = settle(held.replace(/^[\s>]+/u, ""));
-          if (line === null) return fail("not-found", out);
-          out += line + c;
-          atLineStart = true;
-          continue;
-        }
-        held += c;
-        if (held.length > cap) return fail("unclosed", out);
-        continue;
-      }
-
-      if (mode === "curly-single" && pendingClose) {
-        const close = curlyCloses.at(-1);
-        if (close === undefined) return fail("unclosed", out);
-        const suffix = held.slice(close);
-        const before = held[close - 2] ?? "";
-        if (proseClose === close) {
-          /* Do not release yet: a later close would make this an inner
-             apostrophe, so the longer span must be checked as a whole. */
-          if (c === "‘") {
-            /* An explicit new opener settles the grammatical close. Replay
-               the held prose so its apostrophes are parsed in text mode, then
-               let this opener start its own guarded span. */
-            const resolved = settleCurlyAndReplay(c);
-            if (!resolved.ok) return { ...resolved, text: out + resolved.text };
-            out += resolved.text;
-            continue;
-          }
-          held += c;
-          if (c === "’") {
-            curlyCloses.push(held.length);
-          }
-          if (held.length - 1 > cap) return fail("unclosed", out);
-          continue;
-        }
-        if (S_END.test(before) && suffix !== "") {
-          const follower = closeFollower(suffix + c);
-          if (follower !== "no") {
-            held += c;
-            if (follower === "complete") proseClose = close;
-            if (held.length - 1 > cap) return fail("unclosed", out);
-            continue;
-          }
-        }
-        if (LETTER_OR_DIGIT.test(c) && (suffix === "" || (S_END.test(before) && suffix.trim() === ""))) {
-          /* A contraction (`what’s`) or a spaced plural possessive (`dogs’
-             owners`). This candidate is definitely not the close. */
-          curlyCloses.pop();
-          pendingClose = proseClose !== null && curlyCloses.includes(proseClose);
-        } else if (WHITESPACE.test(c) && S_END.test(before)) {
-          /* `laws’ ` could close a quote or begin a plural possessive. Hold the
-             blanks too, until the next non-blank character decides it. */
-          held += c;
-          if (held.length - 1 > cap) return fail("unclosed", out);
-          continue;
-        } else {
-          /* An ordinary close. Replay anything after it (including this
-             character) so a newline followed by `>` cannot bypass the
-             block-quote guard. */
-          const resolved = settleCurlyAndReplay(c);
-          if (!resolved.ok) return { ...resolved, text: out + resolved.text };
-          out += resolved.text;
-          continue;
-        }
-      }
-
-      held += c;
-      if (mode === "curly-single" && c === "’") {
-        curlyCloses.push(held.length);
-        pendingClose = true;
-      }
-      if (held.length - 1 > cap) {
-        return fail("unclosed", out);
-      }
-
-      const closes =
-        (mode === "straight" && c === '"') ||
-        (mode === "curly-double" && c === "”");
-      if (closes) {
-        const span = settle(held.slice(1, -1));
-        if (span === null) return fail("not-found", out);
-        out += span;
-        atLineStart = false;
-        continue;
-      }
+      const step = feed(c, false);
+      out += step.text;
+      if (!step.ok) return stop({ ...step, text: out });
     }
     return { ok: true, text: out };
   }
@@ -316,27 +309,18 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
       }
       case "blockquote": {
         const line = settle(held.replace(/^[\s>]+/u, ""));
-        return line === null ? fail("not-found") : { ok: true, text: line };
+        return line === null ? stop({ ok: false, cause: "not-found", text: "" }) : { ok: true, text: line };
       }
-      case "curly-single": {
-        const close = curlyCloses.at(-1);
-        if (
-          close !== undefined &&
-          S_END.test(held[close - 2] ?? "") &&
-          CLOSE_FOLLOWERS.includes(held.slice(close).trim().toLowerCase() as (typeof CLOSE_FOLLOWERS)[number])
-        ) {
-          proseClose = close;
-        }
-        const resolved = settleCurlyAndReplay("");
-        if (!resolved.ok) return resolved;
+      case "paragraph": {
+        const decided = decideParagraph();
+        if (!decided.ok) return stop(decided);
+        /* The replay may have left a quote or a block-quote line open. */
         const tail = end();
-        return tail.ok
-          ? { ok: true, text: resolved.text + tail.text }
-          : { ok: false, cause: tail.cause, text: resolved.text + tail.text };
+        return { ...tail, text: decided.text + tail.text };
       }
       case "straight":
       case "curly-double":
-        return fail("unclosed");
+        return stop({ ok: false, cause: "unclosed", text: "" });
       default: {
         const never: never = mode;
         throw new Error(`unhandled guard mode: ${String(never)}`);

@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { createQuoteGuard, type GuardStep, QUOTE_SPAN_CAP } from "../src/investigate-quote-guard.js";
+import { createQuoteGuard, type GuardStep, PARAGRAPH_HOLD_CAP, QUOTE_SPAN_CAP } from "../src/investigate-quote-guard.js";
 
 const ARTICLE = [
   "GPT-3's architecture is small & shallow compared to what's possible, and the curve keeps going.",
@@ -135,11 +135,14 @@ describe("the investigate quote guard", () => {
     }
   });
 
-  it("releases an unambiguous curly close followed by prose", () => {
+  it("holds a curly-single quote and the prose after it to the end of the paragraph, then releases it", () => {
+    /* Changed with the paragraph hold: this used to release at the first
+       unambiguous close. A later `’` could still widen the span, so nothing
+       after a `‘` is sent before the paragraph ends. */
     const guard = createQuoteGuard(ARTICLE);
     expect(guard.push("So ‘bigger is better’")).toEqual({ ok: true, text: "So " });
-    expect(guard.push(" it says.")).toEqual({ ok: true, text: "‘bigger is better’ it says." });
-    expect(guard.end()).toEqual({ ok: true, text: "" });
+    expect(guard.push(" it says.")).toEqual({ ok: true, text: "" });
+    expect(guard.end()).toEqual({ ok: true, text: "‘bigger is better’ it says." });
   });
 
   it("releases a verified curly-single quote containing a plural possessive", () => {
@@ -172,25 +175,30 @@ describe("the investigate quote guard", () => {
     }
   });
 
-  it("keeps later prose apostrophes and a second allowed quoted term separate from an s-ending term", () => {
-    const text = "It says ‘fitness’ is the authors’ term, while ‘loss’ is ours.";
+  it("refuses a later plural possessive after an s-ending term, but keeps two allowed quoted terms apart", () => {
+    /* Changed with the paragraph hold: `authors’` is the farthest close
+       before the next ‘, so "fitness’ is the authors" is checked and refused —
+       the documented false refusal. Without the possessive, both pass. */
     const allowed = ["The article defines fitness and loss precisely."];
-    for (const [split, result] of runsAcrossSplits(text, allowed).entries()) {
-      expect(result, `split ${split}`).toEqual({ released: text, failed: null });
+    const refused = "It says ‘fitness’ is the authors’ term, while ‘loss’ is ours.";
+    for (const [split, result] of runsAcrossSplits(refused, allowed).entries()) {
+      expect(result, `split ${split}`).toEqual({ released: "It says ", failed: { cause: "not-found" } });
+    }
+    const accepted = "It says ‘fitness’ is the term, while ‘loss’ is ours.";
+    for (const [split, result] of runsAcrossSplits(accepted, allowed).entries()) {
+      expect(result, `split ${split}`).toEqual({ released: accepted, failed: null });
     }
   });
 
-  it("refuses an ambiguous possessive prefix even when no later close arrives", () => {
-    const leak = run(["It says ‘the dogs’", " owners fabricated every result"], [
-      "The article discusses the dogs, but makes no such claim.",
-    ]);
-    expect(leak).toEqual({ released: "It says ", failed: { cause: "unclosed" } });
-  });
-
-  it("applies the cap while a possessive/close ambiguity remains held", () => {
-    const guard = createQuoteGuard(["the dogs"]);
-    expect(guard.push("‘the dogs’ ")).toEqual({ ok: true, text: "" });
-    expect(guard.push("x".repeat(QUOTE_SPAN_CAP))).toEqual({ ok: false, cause: "unclosed", text: "" });
+  it("releases an allowed quoted term followed by unquoted prose when no later close arrives", () => {
+    /* Changed with the paragraph hold: this was refused as ambiguous. With
+       no later `’`, the only quote-shaped span is ‘the dogs’, which is
+       allowed; "owners fabricated every result" is unquoted prose. */
+    const text = "It says ‘the dogs’ owners fabricated every result";
+    const allowed = ["The article discusses the dogs, but makes no such claim."];
+    for (const [split, result] of runsAcrossSplits(text, allowed).entries()) {
+      expect(result, `split ${split}`).toEqual({ released: text, failed: null });
+    }
   });
 
   it("leaves apostrophes and straight single quotes alone", () => {
@@ -247,5 +255,113 @@ describe("the investigate quote guard", () => {
     const text = `The abstract on arxiv.org says "${quote}" here.`;
     expect(run([text]).failed).toEqual({ cause: "not-found" });
     expect(run([text], [...ARTICLE, quote]).failed).toBeNull();
+  });
+});
+
+/**
+ * The paragraph hold for curly single quotes, and every line-break character
+ * as a block-quote boundary — the rules that replaced the C-1/D-1 `’`
+ * heuristics after the re-check (docs/plans/260930a-citations-investigate-guard-recheck-sol.md).
+ * Each case runs under every two-way split and character by character.
+ */
+describe("the investigate quote guard: paragraph hold and line breaks", () => {
+  const FITNESS = ["The article defines fitness precisely."];
+
+  function expectEverySplit(text: string, allowed: readonly string[], expected: ReturnType<typeof run>) {
+    for (const [split, result] of runsAcrossSplits(text, allowed).entries()) {
+      expect(result, `${JSON.stringify(text)}, split ${split}`).toEqual(expected);
+    }
+  }
+
+  it("guards a blockquote after a CR line ending (G-1)", () => {
+    const text = "Safe prose\r> fabricated line";
+    for (const chunks of [[text], ["Safe prose\r", "> fabricated line"], [...text]]) {
+      expect(run(chunks, [])).toEqual({ released: "Safe prose\r", failed: { cause: "not-found" } });
+    }
+    expectEverySplit(text, [], { released: "Safe prose\r", failed: { cause: "not-found" } });
+  });
+
+  it("guards a blockquote after U+2028, U+2029 and CRLF line endings", () => {
+    for (const lb of [" ", " ", "\r\n"]) {
+      const text = `Safe prose${lb}> fabricated line`;
+      expectEverySplit(text, [], { released: `Safe prose${lb}`, failed: { cause: "not-found" } });
+    }
+  });
+
+  it("accepts an s-ending quoted term followed by any word (G-2)", () => {
+    const text = "The article says ‘fitness’ means health.";
+    expectEverySplit(text, ["fitness"], { released: text, failed: null });
+  });
+
+  it("accepts an s-ending quoted term followed by long prose (G-3)", () => {
+    const text = `The article says ‘fitness’ is ${"ordinary prose ".repeat(35)}`;
+    expectEverySplit(text, ["fitness"], { released: text, failed: null });
+  });
+
+  it("accepts a title followed by a comma, and a sentence-final close", () => {
+    expectEverySplit("He cites ‘Principia’, then moves on.", ["Principia"], {
+      released: "He cites ‘Principia’, then moves on.",
+      failed: null,
+    });
+    expectEverySplit("It calls this ‘fitness’", FITNESS, { released: "It calls this ‘fitness’", failed: null });
+  });
+
+  it("refuses the plural-possessive attack: the farthest close covers the whole span (C-1)", () => {
+    expectEverySplit("It says ‘the dogs’ owners fabricated every result’ here.", ["the dogs"], {
+      released: "It says ",
+      failed: { cause: "not-found" },
+    });
+  });
+
+  it("refuses a quoted term followed by a plural possessive in the same paragraph — a documented false refusal", () => {
+    /* The farthest close after ‘ is authors’, so the span checked is
+       "fitness’ and the authors", which is not in the article. Accepted: it
+       costs a retry, and telling this apart from C-1 is what kept leaking. */
+    expectEverySplit("It says ‘fitness’ and the authors’ claim is narrow.", FITNESS, {
+      released: "It says ",
+      failed: { cause: "not-found" },
+    });
+  });
+
+  it("still guards a straight double quote inside a held paragraph", () => {
+    const text = 'It says ‘fitness’ and "fabricated words" here.';
+    expectEverySplit(text, FITNESS, { released: "It says ‘fitness’ and ", failed: { cause: "not-found" } });
+  });
+
+  it("still guards a block-quote line inside a held paragraph", () => {
+    const text = "It says ‘fitness’ is it.\n> fabricated line\n\nMore.";
+    expectEverySplit(text, FITNESS, { released: "It says ‘fitness’ is it.\n", failed: { cause: "not-found" } });
+  });
+
+  it("releases the held paragraph at a blank line, and guards what follows it afresh", () => {
+    const guard = createQuoteGuard(FITNESS);
+    expect(guard.push("It says ‘fitness’ is it.")).toEqual({ ok: true, text: "It says " });
+    expect(guard.push("\r\n\r\nNext ")).toEqual({ ok: true, text: "‘fitness’ is it.\r\n\r\nNext " });
+    expect(guard.push("‘made up’ words")).toEqual({ ok: true, text: "" });
+    expect(guard.end()).toEqual({ ok: false, cause: "not-found", text: "" });
+    const text = "It says ‘fitness’ is it.\n \n> fabricated";
+    expectEverySplit(text, FITNESS, { released: "It says ‘fitness’ is it.\n \n", failed: { cause: "not-found" } });
+  });
+
+  it("never holds a ’ that has no ‘ before it in the paragraph", () => {
+    const guard = createQuoteGuard([]);
+    expect(guard.push("The authors’ claim, what’s more, ends’")).toEqual({
+      ok: true,
+      text: "The authors’ claim, what’s more, ends’",
+    });
+  });
+
+  it("refuses a ‘ with no candidate close as unclosed", () => {
+    expectEverySplit("It says ‘fitness and what’s more", FITNESS, {
+      released: "It says ",
+      failed: { cause: "unclosed" },
+    });
+  });
+
+  it(`refuses a paragraph held past ${PARAGRAPH_HOLD_CAP} characters as unclosed, without waiting for the end`, () => {
+    const guard = createQuoteGuard(["the dogs"]);
+    expect(guard.push("‘the dogs’ ")).toEqual({ ok: true, text: "" });
+    expect(guard.push("x".repeat(PARAGRAPH_HOLD_CAP - "‘the dogs’ ".length))).toEqual({ ok: true, text: "" });
+    expect(guard.push("x")).toEqual({ ok: false, cause: "unclosed", text: "" });
   });
 });
