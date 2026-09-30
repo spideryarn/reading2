@@ -849,20 +849,19 @@ function parseJson(raw: string): { questions?: unknown } {
 export const ANSWER_TOKENS = 14_000;
 
 /**
- * **Room to think, above the shared default** — 64k rather than
- * `THINKING_HEADROOM`'s 40k, since `quiz/5`.
+ * **The whole allowance: the answer plus the shared thinking room**, exported
+ * so tests/jobs-lease-budget.test.ts can hold it inside one job claim.
  *
- * The path prompt asks the model to decide the piece's takeaways before it
- * writes a question and then to plan a route to them, and that is planning a
- * long paper can spend heavily on: measured 2026-09-30, *A landscape of
- * consciousness* used 48,896 output tokens, thinking included, against the old
- * 54k ceiling, in 7.5 minutes. Running out is not a degraded answer but a
- * `truncationFailure` that throws away the paid batch, so the room sits well
- * clear. It costs nothing unless it is used. `labels` and the referee claims
- * run set their own room the same way.
+ * It was 14k + 64k for an hour on 2026-09-30, after a long paper (*A landscape
+ * of consciousness*) spent 48,896 of 54k — the path prompt plans before it
+ * writes. GPT Sol's D1 showed the extra was unusable: a call that fills 78k
+ * streams for about 1,027 s and the job claim ends at 740 s, so the job would
+ * be killed and the paid call lost anyway. At 54k the ceiling is ~711 s and
+ * fits. **The honest limit is time, not tokens**: a paper that needs more
+ * thinking than this needs a smaller job, not a bigger number here.
  * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md.
  */
-export const THINKING_ROOM = 64_000;
+export const QUIZ_MAX_TOKENS = budgetFor("quiz", ANSWER_TOKENS);
 
 export async function generateQuiz(opts: {
   /**
@@ -905,7 +904,7 @@ export async function generateQuiz(opts: {
   const evidence = blocks.filter(isBodyEvidence);
   const words = articleWordCounts(blocks).body;
   const started = Date.now();
-  const maxTokens = budgetFor("quiz", ANSWER_TOKENS, THINKING_ROOM);
+  const maxTokens = QUIZ_MAX_TOKENS;
 
   let message: Anthropic.Message;
   try {

@@ -250,8 +250,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const { loadArticle } = await import("../src/store/index.js");
-  const { generateQuiz, PROMPT_VERSION, ANSWER_TOKENS, THINKING_ROOM } = await import("../src/quiz.js");
-  const { budgetFor } = await import("../src/token-budget.js");
+  const { generateQuiz, PROMPT_VERSION, QUIZ_MAX_TOKENS } = await import("../src/quiz.js");
   const sourceSha256 = createHash("sha256")
     .update(fs.readFileSync(path.join(import.meta.dirname, "..", "src", "quiz.ts")))
     .digest("hex");
@@ -272,7 +271,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         dropped: { ...run.dropped },
         outputTokens: run.outputTokens,
         elapsedMs: run.elapsedMs,
-        maxTokens: budgetFor("quiz", ANSWER_TOKENS, THINKING_ROOM),
+        maxTokens: QUIZ_MAX_TOKENS,
         questions: run.quiz.questions.map((q) => {
           const extra = q as unknown as { band?: string; value?: number };
           return {

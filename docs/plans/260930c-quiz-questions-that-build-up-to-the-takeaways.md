@@ -1,7 +1,8 @@
 # Quiz questions that build up to the takeaways
 
-**Status: building.** Plan reviewed twice by GPT Sol: round 1 "do not build" (seven P1s), round 2
-"build with the listed fixes" (two P1s, both adopted — § Review log). Written 2026-09-30 in `worktree-quiz-build-up`, from
+**Status: built; landing.** Plan reviewed twice by GPT Sol (round 1 "do not build", round 2 "build
+with the listed fixes"), code reviewed twice (round 2 "do not ship" on a token budget that outlived the
+job claim — fixed, § What the measurements said), browser-checked on the box. Written 2026-09-30 in `worktree-quiz-build-up`, from
 [SPIDERYARN-READING2-5W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5W) (report
 `spya-jc2ub9`, an admin suggestion from Greg's own account, provenance checked by
 `scripts/feedback-reporter.ts`, exit 0).
@@ -251,9 +252,15 @@ setting they were not given.
 **The budget did not hold, and that was the most useful thing `after-3` found.** *A landscape of
 consciousness* spent **48,896 output tokens, thinking included, against a 54k ceiling**, over 7.5
 minutes; the other articles stayed under 16k. The path prompt plans before it writes, and a long
-paper plans at length. A truncation throws the paid batch away, so the quiz now has its own thinking
-room, `THINKING_ROOM` = 64k (ceiling 78k), as `labels` and the referee claims run do. Watch the
-pipeline's `outputTokens` for quiz jobs on long papers.
+paper plans at length. The first response was to give the quiz 64k of thinking room (ceiling 78k).
+**Sol's round-2 code review (D1, P1) showed that was unusable**: a call that fills 78k streams for
+about 1,027 s, and a job claim ends at 740 s, so the job would be killed and the paid call lost
+anyway. So the ceiling stays at 54k (~711 s, which fits), exported as `QUIZ_MAX_TOKENS`, and
+`STEP_BUDGET_MS.quiz` — how much claim time must be left before the step may start — goes from
+150 s to **600 s** (the 452 s worst, rounded up; twice the worst no longer fits in a claim). A test in
+`tests/jobs-lease-budget.test.ts` binds both to the claim, red first. **The residual risk is named:** a
+paper that needs more planning than 54k tokens fails with a truncation, and the fix for that is a
+smaller job, not a bigger number. Watch the pipeline's `outputTokens` for quiz jobs on long papers.
 
 ## Stages
 

@@ -684,8 +684,18 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      Rounded to twice the worst and then some, for `timeline`'s reason: twelve
      samples on ONE article (data/noema-mythology-of-conscious-ai, 4,000 words)
      is one article, the answer budget here is 10,000 tokens, and the cost of
-     being under is a mid-step kill rather than a slow step. */
-  quiz: 150_000,
+     being under is a mid-step kill rather than a slow step.
+
+     **Re-measured for `quiz/5`, 2026-09-30**, which plans a path before it
+     writes: 51–134 s over fifteen runs on five articles, and **452 s** on *A
+     landscape of consciousness*, a long paper
+     (evals/results/quiz-build-up/, `elapsedMs`). Twice the worst no longer
+     fits in a claim, so this is the worst rounded up to 600 s: a step started
+     with less than that left is handed back and started fresh on the next
+     claim, which is cheap, rather than killed half way through a paid call.
+     tests/jobs-lease-budget.test.ts holds the floor and the ceiling.
+     docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md. */
+  quiz: 600_000,
   /* **MEASURED 2026-09-16**, two stage-1 runs over two unlike articles: 29–35s,
      one Messages call each over the body at `high` effort. 150s is more than
      four times the slower run because two articles are evidence, not a runtime
