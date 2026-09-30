@@ -27,6 +27,7 @@ const {
   CitationsPanel,
   INFLUENCE_NOTE,
   citingWordsOf,
+  quotedCitingWords,
   byLineOf,
   shortAuthors,
   canPrioritise,
@@ -670,6 +671,13 @@ describe("the by-line", () => {
     await draw(owner({ citations: artefact([listed]) }));
     const by = row(listed.id).querySelector(".cite-by");
     expect(by?.querySelector(".sr-only")?.textContent).toContain("Porter, Vollrath, Shao");
+  });
+});
+
+describe("quotedCitingWords", () => {
+  it("quotes the words once, even when they are a quoted title already", () => {
+    expect(quotedCitingWords("TV episodes [8]")).toBe("“TV episodes [8]”");
+    expect(quotedCitingWords("“Scaling Hypothesis Revisited”")).toBe("“Scaling Hypothesis Revisited”");
   });
 });
 

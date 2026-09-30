@@ -187,6 +187,16 @@ export function byLineOf(work: Pick<ShownWork, "authors" | "year">): string {
 export const CITE_ENTRY_NOTE =
   "The entry in the article's own reference list, copied from the article. We have not looked the work up.";
 
+/**
+ * The citing words in quotation marks — unless they already are in them, as a
+ * cited title often is (`“Scaling Hypothesis Revisited”`), which would come out
+ * doubled. Found in the browser check (plan 260930i).
+ */
+export function quotedCitingWords(quote: string): string {
+  const words = citingWordsOf(quote);
+  return /^…?["“‘']/.test(words) && /["”’']$/.test(words) ? words : `“${words}”`;
+}
+
 export function priorityOf(work: ShownWork): number | undefined {
   if (work.relevance === undefined || work.influence === undefined) return undefined;
   return (2 * work.relevance + work.influence) / 3;
@@ -893,7 +903,7 @@ function WorkRow({
               preview={false}
               className="cite-at"
             >
-              “{citingWordsOf(cited.quote)}”
+              {quotedCitingWords(cited.quote)}
             </BlockRef>
           )}
         </span>
