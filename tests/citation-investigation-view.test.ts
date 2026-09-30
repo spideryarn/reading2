@@ -37,7 +37,7 @@ describe("investigationProvenance", () => {
         `${MIDDLE} ` +
         "The AI was asked to base what it says about the work on those extracts, and used this article to relate them. " +
         "It was instructed not to quote them. " +
-        "One result (arxiv.org) was matched to the work by the first check.",
+        "One result (arxiv.org) is the page an earlier quick check matched to the work.",
     );
   });
 
@@ -88,7 +88,7 @@ describe("investigationProvenance", () => {
         `${MIDDLE} ` +
         "The AI was asked to base what it says about the work on that extract, and used this article to relate it. " +
         "It was instructed not to quote it. " +
-        "One result (doi.org) was matched to the work by the first check.",
+        "One result (doi.org) is the page an earlier quick check matched to the work.",
     );
   });
 
@@ -112,7 +112,7 @@ describe("investigationProvenance", () => {
     "a %s lookup whose page this search did not yield as an extract: says only what the evidence proves",
     (state) => {
       expect(investigationProvenance(UNMATCHED, { state, host: "arxiv.org" })).toBe(
-        `${STEM}The first check matched a page on arxiv.org; this search did not return an extract from it.`,
+        `${STEM}An earlier quick check matched a page on arxiv.org; this search did not return an extract from it.`,
       );
     },
   );
@@ -137,7 +137,7 @@ describe("investigationProvenance", () => {
   it("a page read here wins over the lookup's own host", () => {
     expect(
       investigationProvenance({ ...UNMATCHED, matchedHost: "doi.org" }, { state: "assessed", host: "arxiv.org" }),
-    ).toBe(`${STEM}One result (doi.org) was matched to the work by the first check.`);
+    ).toBe(`${STEM}One result (doi.org) is the page an earlier quick check matched to the work.`);
   });
 
   it("names no host that is not a web address, and drops the brackets when none is left", () => {

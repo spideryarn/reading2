@@ -101,9 +101,9 @@ export function investigationProvenance(
   const firstCheckHost = lookup?.state === "assessed" || lookup?.state === "unreadable" ? lookup.host : null;
   const identity =
     inv.matchedHost !== null
-      ? `One result (${inv.matchedHost}) was matched to the work by the first check.`
+      ? `One result (${inv.matchedHost}) is the page an earlier quick check matched to the work.`
       : firstCheckHost !== null
-        ? `The first check matched a page on ${firstCheckHost}; this search did not return an extract from it.`
+        ? `An earlier quick check matched a page on ${firstCheckHost}; this search did not return an extract from it.`
         : "We could not confirm that any result is this work itself.";
   return [
     returned,

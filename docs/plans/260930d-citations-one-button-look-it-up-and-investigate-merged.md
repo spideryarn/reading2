@@ -140,3 +140,9 @@ A *Just find it* link (above). Reading the paper itself stays 5G's proposed stag
   against it — deleting it would also take a correct link off an unlinked row. The delete, and the
   store method it added, are removed; the test now pins the older match being kept and credited
   (red first). Gates after: typecheck 0; 20 files, 779 tests (Postgres included); build 0.
+- **C-2's overrule, checked by Opus** (the rule for an overruled P1): *stands*, with one copy fix.
+  Keeping the earlier code-identified find is right — `matchedPageOf` still credits it only while
+  its hashes are current, and it is what the model was actually given. But inside one press a
+  reader can watch the quick check find nothing and then read "matched … by the first check". The
+  provenance now says **"an earlier quick check"**, true whether the match came from this press or
+  a previous one.

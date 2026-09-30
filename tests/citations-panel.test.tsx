@@ -1177,7 +1177,7 @@ describe("Investigate", () => {
     const prov = r.querySelector(".cite-inv-prov")?.textContent ?? "";
     expect(prov).toBe(investigationProvenance(INVESTIGATION, ASSESSED));
     expect(prov).toMatch(
-      /The first check matched a page on arxiv\.org; this search did not return an extract from it\.$/,
+      /An earlier quick check matched a page on arxiv\.org; this search did not return an extract from it\.$/,
     );
     expect(prov).not.toMatch(/could not confirm/);
     /* The lookup's own reading is still drawn once, by the row. */
