@@ -1,3 +1,7 @@
+---
+reports: spya-q4mud4
+ending: shipped
+---
 # Quotes: the prompt asks for lines that say different things
 
 **[SPIDERYARN-READING2-2X](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2X)** · reported

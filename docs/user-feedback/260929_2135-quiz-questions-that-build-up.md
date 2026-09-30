@@ -1,3 +1,7 @@
+---
+reports: spya-jc2ub9
+ending: shipped
+---
 # Quiz questions that build up to the takeaways
 
 **[SPIDERYARN-READING2-5W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5W)** · report

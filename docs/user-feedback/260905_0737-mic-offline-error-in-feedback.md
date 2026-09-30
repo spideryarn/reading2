@@ -1,3 +1,7 @@
+---
+reports: spya-a4rfbk
+ending: shipped
+---
 # `[mic-offline]` in the Feedback dialog
 
 **[SPIDERYARN-READING2-1K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1K)** · reported

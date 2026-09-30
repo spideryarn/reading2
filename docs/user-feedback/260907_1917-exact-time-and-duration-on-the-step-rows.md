@@ -1,3 +1,7 @@
+---
+reports: spya-fjajs7
+ending: shipped
+---
 # The exact instant, and how long each step took
 
 **[SPIDERYARN-READING2-2K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2K)** · reported

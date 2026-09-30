@@ -1,3 +1,7 @@
+---
+reports: spya-bpvrwn
+ending: shipped
+---
 # Hierarchy should default to Spine, L1 and L2
 
 **[SPIDERYARN-READING2-Z](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-Z)** · reported

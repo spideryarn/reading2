@@ -29,6 +29,8 @@ import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
+import type { ReadSoFar } from "../read-filter.js";
+import { countsTowardReadingTime } from "../../block-policy.js";
 import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
@@ -1265,6 +1267,27 @@ export function Reader({
   );
 
   /**
+   * **What the reader has read, for the quiz** —
+   * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md. The owner's
+   * reading-time levels, whether they can be believed yet, and the body's words
+   * to measure a share in. Undefined when reading time is off, which the quiz
+   * must not mistake for "read nothing".
+   */
+  const bodyWords = useMemo(
+    () => new Map(article.blocks.filter(countsTowardReadingTime).map((b) => [b.id, b.words] as const)),
+    [article.blocks],
+  );
+  const readingLevels = owner?.readingTime.levels;
+  const readingStatus = owner?.readingTime.status ?? "off";
+  const readSoFar = useMemo<ReadSoFar | undefined>(
+    () =>
+      readingLevels && readingStatus !== "off"
+        ? { levels: readingLevels, status: readingStatus, bodyWords }
+        : undefined,
+    [readingLevels, readingStatus, bodyWords],
+  );
+
+  /**
    * **Each block's position in the article** — Debate's *by claim* order puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
@@ -1683,7 +1706,13 @@ export function Reader({
          half — see `RememberBand`. */
       case "remember":
         return owner ? (
-          <RememberBand slug={slug} blocks={blockText} onJump={bandJump} onMode={setMode} />
+          <RememberBand
+            slug={slug}
+            blocks={blockText}
+            readSoFar={readSoFar}
+            onJump={bandJump}
+            onMode={setMode}
+          />
         ) : null;
       case "glossary":
         /* `glossaryRead ?` rather than `owner ?`, and it is the same test: the

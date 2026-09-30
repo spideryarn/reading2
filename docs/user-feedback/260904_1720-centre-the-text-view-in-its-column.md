@@ -1,3 +1,7 @@
+---
+reports: spya-zfcp5x
+ending: shipped
+---
 # Always centre the Text view within its column
 
 **[SPIDERYARN-READING2-18](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-18)** · reported

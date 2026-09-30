@@ -1,3 +1,7 @@
+---
+reports: spya-gnq9fb
+ending: shipped
+---
 # The send button has no icon, and should be the prominent control in its row
 
 [SPIDERYARN-READING2-3E](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3E) (2026-09-12

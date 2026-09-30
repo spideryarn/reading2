@@ -110,7 +110,7 @@
  * in `ENTRIES`.
  *
  * **A selector that matched nothing is absent, not zero.** Zero and absent are
- * the same fact here — nothing was removed — and an object of four zeroes on
+ * the same fact here — nothing was removed — and an object of five zeroes on
  * every page in the library would make the one page where something *was*
  * removed harder to see, not easier.
  */
@@ -166,7 +166,7 @@ interface Entry {
 }
 
 /**
- * The whole class, and there are four of them.
+ * The whole class, and there are five of them.
  *
  * Each is a selector a platform writes onto chrome it generated, plus the
  * narrowing the corpus and the adversary showed was needed. Growing this list is
@@ -230,6 +230,27 @@ const ENTRIES: readonly Entry[] = [
    * limit rather than a proof.
    */
   { selector: "ul.reflinks", also: isBareLinkList },
+  /**
+   * Springer Nature's *Full size image* button — the link to a figure's own
+   * page that Nature, Scientific Reports, Scientific Data and the rest of the
+   * `c-article` family put under every picture. Eight in the Nature
+   * Neuroscience article of SPIDERYARN-READING2-6A, cut down to two in
+   * tests/fixtures/figure-wrappers/springer-nature.html.
+   *
+   * **This one costs the reader the picture, not just a stray line.** It sits
+   * in the same `div.c-article-section__figure-item` as the `<picture>`, a
+   * picture has no text, so the item's text is the button's alone: link density
+   * 1, weight 25 from `article` in its class, and Readability deletes the item
+   * on *"High weight and mostly links"* — picture and all. Every figure on the
+   * page, 8 of 8. Removing the button is the whole fix: the item then has no
+   * link text to be judged by, and all eight come back. The reading view has
+   * its own ⤢. docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
+   *
+   * `isFigureButton` is the narrowing: inside a figure that holds a picture,
+   * outside its caption, and one link carrying Nature's own `view figure`
+   * action marker with nothing else in the element.
+   */
+  { selector: "div.c-article-section__figure-link", also: isFigureButton },
 ];
 
 /**
@@ -339,6 +360,43 @@ function isBareLinkList(el: Element): boolean {
     );
   });
   return everyItemIsOneBareLink && isControlStripBesideContent(el);
+}
+
+/**
+ * **A button beside a figure's picture, and nothing else.**
+ *
+ * - **Inside a `<figure>` that holds a picture, and not in its caption** — a
+ *   control beside content, the phrase this module's licence turns on. A
+ *   caption is the author's, whatever its class.
+ * - **No picture of its own.** The icon inside Nature's link is an `<svg>`, so
+ *   an `<svg>` inside a link is allowed and any other media is not.
+ * - **Nature calls the one link `view figure`.** The class says where the
+ *   element sits; `data-track-action` says what the platform generated it to
+ *   do. Without that second half, an author's wholly linked credit such as
+ *   `<a>Photo: A. Smith</a>` is indistinguishable from a button and is deleted.
+ * - **Every word and SVG belongs to that one link.** It reads structure and the
+ *   platform's action marker, never the visible words.
+ */
+function isFigureButton(el: Element): boolean {
+  if (el.closest("figcaption") !== null) return false;
+  const figure = el.closest("figure");
+  if (figure === null || figure.querySelector("img, picture, video") === null) return false;
+  if (el.querySelector("img, picture, video, audio, iframe, canvas, object, embed") !== null) return false;
+  const links = Array.from(el.querySelectorAll("a[href]"));
+  const control = links[0];
+  if (links.length !== 1 || control?.getAttribute("data-track-action") !== "view figure") return false;
+  for (const child of Array.from(el.querySelectorAll("*"))) {
+    if (child !== control && !control.contains(child)) return false;
+  }
+  for (const svg of Array.from(el.querySelectorAll("svg"))) {
+    if (svg.closest("a") !== control) return false;
+  }
+  const walker = el.ownerDocument.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if ((node.textContent ?? "").trim() === "") continue;
+    if (node.parentElement?.closest("a") !== control) return false;
+  }
+  return true;
 }
 
 /**

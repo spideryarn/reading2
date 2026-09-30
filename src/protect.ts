@@ -3,11 +3,13 @@
  * content, in Readability's own vocabulary.**
  *
  * It is the mirror image of src/furniture.ts. That module deletes what the
- * publisher labelled as chrome; this one deletes nothing, moves nothing and
- * rewrites no text. It adds **class tokens**, and Readability reads the class
- * attribute in order to answer exactly the question we are answering.
+ * publisher labelled as chrome; this one deletes nothing and rewrites no text.
+ * Rules A and B add **class tokens**, and Readability reads the class attribute
+ * in order to answer exactly the question we are answering. **Rule C moves**:
+ * it unwraps a `<div>`, putting its children where it was, because no token can
+ * do its job (§ *Rule C*, below).
  *
- * ## What it is for, and it is two losses rather than one class of loss
+ * ## What rules A and B are for, and it is two losses rather than one class of loss
  *
  * Both were diagnosed by a spike before anything was designed, and the
  * diagnosis is in
@@ -191,6 +193,53 @@
  * else on the page. Another publisher's correction notice gets added when
  * somebody has a fixture for its actual topology, positive and adversarial.
  *
+ * ## Rule C — a figure deleted with its wrapper, because a picture has no text
+ *
+ * SPIDERYARN-READING2-6A, and the first rule here found on production rather
+ * than in the corpus. A Substack post lost nine of its twenty-three figures:
+ * each sits in `div.captioned-image-container`, and where the caption carries a
+ * link — *"Source: https://…"* — the container's text is the caption alone,
+ * since the picture has none, and its link density runs 0.20 to 0.70 at weight
+ * 0. `_cleanConditionally` deletes it on *"Low weight and a little linky"*, and
+ * the picture goes with it. The six linked captions whose links are too short to
+ * cross 0.2 survive, and so do all the unlinked ones.
+ *
+ * **No token can do this.** Rule B's token takes a wrapper to weight 25, where
+ * the bar is 0.5 — and two of the nine are over it. So rule C takes the wrapper
+ * away instead: before Readability, a `div` between a figure and its picture, or
+ * one wrapped round the figure alone, is unwrapped — **only if Readability's own
+ * two link rules would delete it**, asked by `readabilityWouldTakeItForItsLinks`
+ * with Readability's weight and link-density arithmetic copied, its regexes
+ * pinned, and the nearby exits mirrored: negative weight, list-dominated divs,
+ * allowed videos and div-to-p conversion. The density is measured after the
+ * same hidden and unlikely descendants Readability removes. `figure` is not a
+ * tag `_cleanConditionally` walks, so once no such `div` is left, those two
+ * rules have nothing to take.
+ *
+ * **The mirror is of Readability's first, weight-on pass.** If an extraction is
+ * shorter than 500 characters, Readability retries and eventually switches
+ * `FLAG_WEIGHT_CLASSES` off. A positive wrapper between 0.2 and 0.5 is safe on
+ * the first pass and linky on that retry. Rule C cannot know before parsing
+ * whether the retry will happen; treating every such wrapper as at risk would
+ * move wrappers on ordinary pages where it does not. The stage-1 code review
+ * records the reproduced 536-character case and leaves that widening decision.
+ *
+ * **That is the whole guarantee.** Candidate selection is another way to lose a
+ * figure — one outside the article Readability picks is never appended — and
+ * rule C does not touch it (GPT Sol, plan review).
+ *
+ * **It is under the fallback like A and B, and it needs to be.** GPT Sol built
+ * the page: four sibling `<article>` sections of the author's prose and a
+ * figure whose long linked caption sits inside its picture's `div`. Unwrapped,
+ * the figure wins candidate selection and all four sections go;
+ * `proseRetention` sees four runs missing and the control ships. That page is in
+ * tests/extract-figure-wrappers.test.ts.
+ *
+ * Springer Nature's figures were the other half of the same report and are
+ * **not** this rule's: the wrapper there died of the *Full size image* button
+ * beside the picture, a control the publisher labels, so it is an entry in
+ * src/furniture.ts. docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
+ *
  * ## What this is not, and what it does not fix
  *
  * **It is not a trick played on the library.** Adding a class token that says
@@ -271,6 +320,17 @@ export const RULES = {
    * It never appears beside `correctionNotice`.
    */
   correctionNoticeRolledBack: "an-amendment-correction-rolled-back",
+  /**
+   * Rule C — a figure with a wrapper Readability's link rules would have
+   * deleted, picture and all. Counted per figure, not per `div` unwrapped.
+   * **A wrapper, not necessarily a picture saved**: a figure outside the article
+   * Readability selects is dropped either way, which is what the one corpus
+   * fixture this fires on (Quanta's lead video) shows, byte-identical in both
+   * arms. See § *Rule C* above.
+   */
+  figureWrapper: "a-figure-its-wrapper-would-take",
+  /** Rule C, unwrapped and then taken back — the same arrangement as A and B. */
+  figureWrapperRolledBack: "a-figure-its-wrapper-would-take-rolled-back",
 } as const;
 
 /**
@@ -289,6 +349,7 @@ const WITHDRAWALS: ReadonlyArray<{
 }> = [
   { stamped: RULES.headerNamedTable, withdrawn: RULES.headerNamedTableRolledBack, switchOff: "withoutHeaderNamedTables" },
   { stamped: RULES.correctionNotice, withdrawn: RULES.correctionNoticeRolledBack, switchOff: "withoutCorrectionNotices" },
+  { stamped: RULES.figureWrapper, withdrawn: RULES.figureWrapperRolledBack, switchOff: "withoutFigureWrappers" },
 ];
 
 /**
@@ -348,6 +409,8 @@ export interface ProtectOptions {
   readonly withoutHeaderNamedTables?: boolean;
   /** Skip rule B entirely — the same, for the correction notice. */
   readonly withoutCorrectionNotices?: boolean;
+  /** Skip rule C entirely — the same, for a figure's wrappers. */
+  readonly withoutFigureWrappers?: boolean;
 }
 
 /**
@@ -390,6 +453,20 @@ export const OK_MAYBE_ITS_A_CANDIDATE = /and|article|body|column|content|main|sh
  * was always trying to say.
  */
 export const UNLIKELY_EXCEPT_HEADER = new RegExp(UNLIKELY_CANDIDATES.source.replace("|header|", "|"), "i");
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.positive` — rule C's weight. Pinned like the two above. */
+export const POSITIVE = /article|body|content|entry|hentry|h-entry|main|page|pagination|post|text|blog|story/i;
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.negative` — rule C's weight. Pinned like the two above. */
+export const NEGATIVE =
+  /-ad-|hidden|^hid$| hid$| hid |^hid |banner|combx|comment|com-|contact|footer|gdpr|masthead|media|meta|outbrain|promo|related|scroll|share|shoutbox|sidebar|skyscraper|sponsor|shopping|tags|widget/i;
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.hashUrl` — a fragment link counts 0.3 of its length. */
+export const HASH_URL = /^#.+/;
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.videos` — these embeds make conditional cleaning return early. */
+export const VIDEOS =
+  /\/\/(www\.)?((dailymotion|youtube|youtube-nocookie|player\.vimeo|v\.qq)\.com|(archive|upload\.wikimedia)\.org|player\.twitch\.tv)/i;
 
 /**
  * **The seam that lets a test run the pipeline with this pass switched off**,
@@ -449,10 +526,13 @@ export function protectionIsDisabled(): boolean {
  * which could in principle be nudged by a class appearing on a container.
  * Running last is the version of that with no argument required.
  *
- * Two rules, applied independently, and **no element can qualify for both**:
- * rule A selects `<table>` and rule B selects `<div>`. The header of this file
- * used to say an element might carry both tokens; it cannot, and GPT Sol
- * checked it rather than took it (2026-09-08).
+ * Three rules, applied independently, and **no element can carry both
+ * tokens**: rule A selects `<table>` and rule B selects `<div>`. The header of
+ * this file used to say an element might carry both; it cannot, and GPT Sol
+ * checked it rather than took it (2026-09-08). Rule C runs last and stamps
+ * nothing; it could unwrap a `div` rule B stamped only if that notice held a
+ * figure's picture, and B's 25 points count in its gate, as they would in
+ * Readability's.
  */
 export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {}): KeptStructure {
   if (protectionDisabled) return {};
@@ -516,7 +596,240 @@ export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {
   }
   if (stamped.size > 0) kept[RULES.correctionNotice] = stamped.size;
 
+  const figures = opts.withoutFigureWrappers === true ? 0 : unwrapFigureWrappers(doc);
+  if (figures > 0) kept[RULES.figureWrapper] = figures;
+
   return kept;
+}
+
+/**
+ * **Rule C**: unwrap every `div` Readability's link rules would delete a
+ * figure's picture with, and say how many figures had one. A `<div>` here,
+ * never a `<figure>`: `figure` is not one of the tags `_cleanConditionally`
+ * walks, so the figure itself is never at risk — only a `div` between it and
+ * its picture, or one wrapped round it alone.
+ */
+function unwrapFigureWrappers(doc: Document): number {
+  let figures = 0;
+  for (const figure of Array.from(doc.querySelectorAll("figure"))) {
+    if (figure.querySelector(FIGURE_PICTURE) === null) continue;
+    const inside = unwrapInside(figure);
+    const around = unwrapAround(figure);
+    if (inside || around) figures += 1;
+  }
+  return figures;
+}
+
+/**
+ * Inside: every `div` that holds the picture. The order does not matter:
+ * unwrapping one changes no other `div`'s text, links or class, so each is
+ * judged on exactly what Readability would have judged it on.
+ */
+function unwrapInside(figure: Element): boolean {
+  let unwrapped = false;
+  for (const div of Array.from(figure.querySelectorAll("div"))) {
+    if (div.querySelector(FIGURE_PICTURE) === null) continue;
+    if (!readabilityWouldTakeItForItsLinks(div)) continue;
+    unwrap(div);
+    unwrapped = true;
+  }
+  return unwrapped;
+}
+
+/**
+ * Around: a `div` that wraps nothing but this figure, walking up while that
+ * holds. **Each is judged on its own** — GPT Sol, plan review: an outer wrapper
+ * inherits the figure's link text whether or not it was at risk, so the walk
+ * passes over a safe one rather than unwrapping it.
+ */
+function unwrapAround(figure: Element): boolean {
+  let unwrapped = false;
+  let node: Element = figure;
+  for (let parent = node.parentElement; parent?.tagName === "DIV"; parent = node.parentElement) {
+    if (parent.children.length !== 1 || hasOwnText(parent)) break;
+    if (readabilityWouldTakeItForItsLinks(parent)) {
+      /* The figure's new parent is the next one up; `node` stays where it is. */
+      unwrap(parent);
+      unwrapped = true;
+    } else {
+      node = parent;
+    }
+  }
+  return unwrapped;
+}
+
+/**
+ * **A picture, as rule C means it** — what a reader would miss. An `<svg>` is
+ * left out: in the pages measured it is an icon inside a link, and counting it
+ * would put every figure with a download button in scope.
+ */
+const FIGURE_PICTURE = "img, picture, video";
+
+/**
+ * **Would `_cleanConditionally` delete this `div` on one of its two link rules?**
+ * Readability 0.6.0, Readability.js around line 2580, and nothing else of it:
+ *
+ * - it looks only if the text has **fewer than ten commas**;
+ * - *"Low weight and a little linky"*: class weight under 25 and link density
+ *   over 0.2;
+ * - *"High weight and mostly links"*: weight 25 or more and density over 0.5.
+ *
+ * Asked **before** Readability runs, so `readabilityDomForLinkGate` first takes
+ * out the scripts, styles and hidden descendants Readability removes before it
+ * measures text and links. The other early exits that bear on the two link rules
+ * are mirrored too: a negative weight is already a different deletion, a
+ * list-dominated low-weight div is exempt, an allowed video returns early, and
+ * div Readability turns into a paragraph is never conditionally cleaned as a
+ * div, and the unconditional cleaners ahead of divs no longer contribute text.
+ * The fallback still decides whether the changed page ships; this mirror decides
+ * whether `kept` may honestly say the wrapper crossed a link rule.
+ *
+ * Readability's `linkDensityModifier` is 0 here because `readingArm` passes no
+ * options. Class weight is the first pass's, for the retry limit in Rule C's
+ * header. Other checks are not this rule's and do not qualify a wrapper.
+ */
+export function readabilityWouldTakeItForItsLinks(div: Element): boolean {
+  const staysADiv = readabilityKeepsThisAsADiv(div);
+  const judged = readabilityDomForLinkGate(div);
+  if (judged === null || !staysADiv) return false;
+  readabilityCleanBeforeDivs(judged);
+  if (hasAllowedVideo(judged)) return false;
+  if (readabilityInnerText(judged).split(",").length - 1 >= 10) return false;
+  const weight = readabilityClassWeight(judged);
+  /* `_cleanConditionally` returns on negative weight before it asks either link
+     question. Calling that a link-rule deletion made `kept` false. */
+  if (weight < 0) return false;
+  const density = readabilityLinkDensity(judged);
+  return (!readabilityTreatsAsList(judged) && weight < 25 && density > 0.2) || (weight >= 25 && density > 0.5);
+}
+
+/**
+ * Readability's node-preparation removals that can change comma count or link
+ * density: scripts and styles, then invisible and unlikely descendants. Work on
+ * a clone; the protection pass itself must move only wrappers it accepts.
+ */
+function readabilityDomForLinkGate(div: Element): Element | null {
+  if (readabilityNodePrepRemoves(div)) return null;
+  const clone = div.cloneNode(true) as Element;
+  for (const removed of Array.from(clone.querySelectorAll("script, noscript, style"))) removed.remove();
+  for (const candidate of Array.from(clone.querySelectorAll("*"))) {
+    if (readabilityNodePrepRemoves(candidate)) candidate.remove();
+  }
+  return clone;
+}
+
+/** Readability 0.6.0 `_isProbablyVisible`; `aria-hidden` has normally been removed by `prepareDocument`. */
+function readabilityProbablyVisible(el: Element): boolean {
+  const style = (el as Element & { readonly style?: CSSStyleDeclaration }).style;
+  return (
+    (style === undefined || (style.display !== "none" && style.visibility !== "hidden")) &&
+    !el.hasAttribute("hidden") &&
+    (!el.hasAttribute("aria-hidden") || el.getAttribute("aria-hidden") !== "true" || el.classList.contains("fallback-image"))
+  );
+}
+
+/** The node-preparation removals that happen before divs are scored or cleaned. */
+function readabilityNodePrepRemoves(el: Element): boolean {
+  if (!readabilityProbablyVisible(el)) return true;
+  if (el.getAttribute("aria-modal") === "true" && el.getAttribute("role") === "dialog") return true;
+  const match = `${el.getAttribute("class") ?? ""} ${el.id}`;
+  if (
+    UNLIKELY_CANDIDATES.test(match) &&
+    !OK_MAYBE_ITS_A_CANDIDATE.test(match) &&
+    !hasNearbyAncestor(el, "TABLE") &&
+    !hasNearbyAncestor(el, "CODE") &&
+    el.tagName !== "BODY" &&
+    el.tagName !== "A"
+  ) {
+    return true;
+  }
+  return ["menu", "menubar", "complementary", "navigation", "alert", "alertdialog", "dialog"].includes(
+    el.getAttribute("role") ?? "",
+  );
+}
+
+/** Readability's default ancestor window checks four parents (its default maxDepth is three). */
+function hasNearbyAncestor(el: Element, tagName: string): boolean {
+  let node = el.parentElement;
+  for (let level = 1; node !== null && level <= 4; level += 1) {
+    if (node.tagName === tagName) return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
+/** A source `div` with none of these descendants becomes a `p` before conditional div cleaning. */
+function readabilityKeepsThisAsADiv(div: Element): boolean {
+  return div.querySelector("blockquote, dl, div, img, ol, p, pre, table, ul") !== null;
+}
+
+/** The `isList` calculation immediately above Readability's link rules. */
+function readabilityTreatsAsList(el: Element): boolean {
+  const total = readabilityInnerText(el).length;
+  let list = 0;
+  for (const node of Array.from(el.querySelectorAll("ul, ol"))) list += readabilityInnerText(node).length;
+  return list / total > 0.9;
+}
+
+/** An allowed video makes `_cleanConditionally` return `false` before any link rule. */
+function hasAllowedVideo(el: Element): boolean {
+  return Array.from(el.querySelectorAll("object, embed, iframe")).some(videoIsAllowed);
+}
+
+function videoIsAllowed(embed: Element): boolean {
+  for (const attr of Array.from(embed.attributes)) if (VIDEOS.test(attr.value)) return true;
+  return embed.tagName === "OBJECT" && VIDEOS.test(embed.innerHTML);
+}
+
+/** Unconditional cleaners in `_prepArticle` that run before conditional div cleaning. */
+function readabilityCleanBeforeDivs(el: Element): void {
+  for (const tag of ["object", "embed"]) {
+    for (const candidate of Array.from(el.querySelectorAll(tag))) if (!videoIsAllowed(candidate)) candidate.remove();
+  }
+  for (const removed of Array.from(el.querySelectorAll("footer, link, aside"))) removed.remove();
+  for (const candidate of Array.from(el.querySelectorAll("iframe"))) if (!videoIsAllowed(candidate)) candidate.remove();
+  for (const removed of Array.from(el.querySelectorAll("input, textarea, select, button"))) removed.remove();
+  for (const heading of Array.from(el.querySelectorAll("h1, h2"))) {
+    if (readabilityClassWeight(heading) < 0) heading.remove();
+  }
+}
+
+/** Readability's `_getInnerText`: trimmed, runs of whitespace collapsed to one space. */
+function readabilityInnerText(el: Element): string {
+  return (el.textContent ?? "").trim().replace(/\s{2,}/g, " ");
+}
+
+/** Readability's `_getClassWeight`, with `FLAG_WEIGHT_CLASSES` on — as it is on the first pass. */
+function readabilityClassWeight(el: Element): number {
+  let weight = 0;
+  for (const s of [el.getAttribute("class") ?? "", el.id]) {
+    if (s === "") continue;
+    if (NEGATIVE.test(s)) weight -= 25;
+    if (POSITIVE.test(s)) weight += 25;
+  }
+  return weight;
+}
+
+/** Readability's `_getLinkDensity`: link text over all text, a fragment link at 0.3. */
+function readabilityLinkDensity(el: Element): number {
+  const total = readabilityInnerText(el).length;
+  if (total === 0) return 0;
+  let links = 0;
+  for (const a of Array.from(el.getElementsByTagName("a"))) {
+    const href = a.getAttribute("href");
+    links += readabilityInnerText(a).length * (href !== null && HASH_URL.test(href) ? 0.3 : 1);
+  }
+  return links / total;
+}
+
+/** Any text of its own, directly under it — which a wrapper round a figure does not have. */
+function hasOwnText(el: Element): boolean {
+  return Array.from(el.childNodes).some((n) => n.nodeType === n.TEXT_NODE && (n.textContent ?? "").trim() !== "");
+}
+
+/** Put an element's children where it was. Moves; deletes nothing and rewrites no text. */
+function unwrap(el: Element): void {
+  el.replaceWith(...Array.from(el.childNodes));
 }
 
 /**

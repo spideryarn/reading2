@@ -167,10 +167,13 @@ export interface UseJobs {
   reset(slug: string, regenerate: boolean): Promise<ResetResponse | null>;
   cancel(id: string): Promise<void>;
   /**
-   * `POST /api/jobs/:id/retry`. **Answers with the replacement job** — a retry
-   * is a new job with a new id (`retryJob` in src/jobs.ts), so a page watching
-   * one id must follow it or it watches the failed one for ever (plan 260930e,
-   * Sol's F3). Null on failure, with the sentence in `lastFailure()`.
+   * `POST /api/jobs/:id/retry`. **Answers with the replacement job** — the
+   * route answers with it — or null on failure, with the server's sentence in
+   * `lastFailure()`. Two callers need it: `useStepJob` holds a *Starting…* over
+   * the gap until the new job is polled, without which the old failure's Retry
+   * stays pressable; and the add page follows it, because a retry is a new job
+   * with a new id (`retryJob` in src/jobs.ts) and a page watching one id would
+   * otherwise watch the failed one for ever (plan 260930e, Sol's F3).
    */
   retry(id: string): Promise<Job | null>;
   forget(id: string): Promise<void>;

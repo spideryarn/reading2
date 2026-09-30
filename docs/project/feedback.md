@@ -168,7 +168,30 @@ newest first — the date, problem or suggestion, and what they wrote — read b
 which is owner-scoped in the store like every other read and sends **four fields a report and
 nothing else**: not the email, the address, the diagnostics or the screenshot (`EarlierFeedback` in
 [`src/types.ts`](../../src/types.ts) says why). Fifty at most, and the list says so when there were
-more. **What came of each report is not shown** — the plan's § Deferred says what that would take.
+more.
+
+### Shipped or not, since 2026-09-30
+
+> It would be nice if we could provide a way to filter to things that have or have not been achieved
+> and deployed.
+>
+> — Greg, 2026-09-30 (SPIDERYARN-READING2-63)
+
+Each report now carries a fifth field, **`shipped`**, shown as a word in its meta line, and the tab
+filters **All · Shipped · Not shipped** — on the server (`?show=shipped|unshipped`), so the fifty
+are the newest *matching* ones, not a filter over the newest fifty.
+
+**Nothing marks it; it is derived from the notes.** A note in `docs/user-feedback/` may start with a
+header naming its report row id and its ending (`reports: spya-…` / `ending: shipped`);
+[`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts) compiles the headers into
+`src/feedback-endings.generated.ts`, which the server imports. So on production a report reads as
+shipped **only once the commit carrying its note has been deployed** — that is the "deployed" half,
+for free — and nobody writes to the production database. A report with no note, or a note with no
+header, reads as not shipped: the label is never claimed without a note saying so. What this cannot
+say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped*. The header format,
+split reports (`parts:`), the accepted limits, and why this beat a status column are in
+[260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
+`tests/feedback-endings.test.ts` goes red when a header does not parse or the committed map is stale.
 
 **The Write panel is hidden, not unmounted, and hiding is not switching off.** Its microphone, the
 paste and drop handlers on the whole `<dialog>`, and the form's submit all still reach a draft the
@@ -355,6 +378,7 @@ which *is* the verified account id.
 | the dialog's host, the three shapes of trigger, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
+| whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |

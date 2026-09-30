@@ -1,3 +1,7 @@
+---
+reports: spya-srek7a
+ending: shipped
+---
 # The Feedback thank-you is a toast
 
 SPIDERYARN-READING2-58 (`spya-srek7a`), from Greg (admin), filed from the Feedback dialog. The time

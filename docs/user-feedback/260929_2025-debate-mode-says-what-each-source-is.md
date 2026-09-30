@@ -1,3 +1,7 @@
+---
+reports: spya-w7t24d
+ending: shipped
+---
 # Debate mode says what each source is, and the list has orders
 
 SPIDERYARN-READING2-5P (`spya-w7t24d`), from Greg (admin), filed on

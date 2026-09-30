@@ -45,14 +45,13 @@
  * this file writes. docs/project/logging.md.
  */
 
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type {
-  EarlierFeedbackPage,
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
   FeedbackKind,
@@ -60,7 +59,9 @@ import type {
 import {
   FEEDBACK_WINDOW_MS,
   feedbackHourlyCap,
+  type FeedbackIdFilter,
   type FeedbackReport,
+  type MyFeedbackPage,
   type FeedbackStore,
   type FeedbackSubmission,
   type NewFeedback,
@@ -68,6 +69,21 @@ import {
 import { guardDbStore } from "./db-errors.js";
 
 const logger = log("store");
+
+/**
+ * The Earlier tab's id filter, as a predicate `and`-ed **beside** the owner
+ * one. The ids go as one bound `text[]` — each element quoted in the array
+ * literal, so nothing in an id can split it — rather than drizzle's
+ * `inArray`, which expands to one parameter per id and has its own answer for
+ * an empty list. Empty is meant: `in` nothing is no rows, `out` nothing is all
+ * of them. docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
+ */
+function idFilter(filter: FeedbackIdFilter | undefined): SQL | undefined {
+  if (!filter) return undefined;
+  const literal = `{${filter.ids.map((id) => `"${id.replace(/["\\]/g, "\\$&")}"`).join(",")}}`;
+  const member = sql`${feedbackTable.id} = any(${literal}::text[])`;
+  return filter.keep === "in" ? member : sql`not (${member})`;
+}
 
 /**
  * The first half of the advisory lock's two-integer key — a namespace, so this
@@ -329,7 +345,7 @@ const rawPgFeedbackStore: FeedbackStore = {
     return row ? toReport(row) : null;
   },
 
-  async listMine(limit: number): Promise<EarlierFeedbackPage> {
+  async listMine(limit: number, filter?: FeedbackIdFilter): Promise<MyFeedbackPage> {
     /* **Four columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
        what is never selected cannot be handed on by a later spread. One row past
        the limit is how `more` is known without a second, counting query; the
@@ -344,7 +360,7 @@ const rawPgFeedbackStore: FeedbackStore = {
         body: feedbackTable.body,
       })
       .from(feedbackTable)
-      .where(eq(feedbackTable.ownerId, currentOwnerId()))
+      .where(and(eq(feedbackTable.ownerId, currentOwnerId()), idFilter(filter)))
       .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
       .limit(limit + 1);
     return {

@@ -1,3 +1,7 @@
+---
+reports: spya-wsz0q4
+ending: shipped
+---
 # An uploaded paper gets a guessed link back to the web, with a question mark
 
 SPIDERYARN-READING2-5H (report `spya-wsz0q4`), from Greg (admin). The time in the file name is

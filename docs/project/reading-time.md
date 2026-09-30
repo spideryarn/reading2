@@ -49,6 +49,13 @@ and the drawing.
   fill, the hairlines and the search marks. [`Spine.tsx`](../../src/web/Spine.tsx),
   `tests/spine-reading.test.ts`.
 
+## Who else reads it
+
+- **The quiz**, since 2026-09-30: *Only what I've read* narrows it to questions whose passages are at
+  level 3 or more, and says what share of the body's words is. The hook's `status` exists for it —
+  `off`, `loading`, `loaded`, `failed` — because an empty level map means "read nothing" only once
+  the opening read has answered. [quiz.md § Only what you have read](quiz.md#only-what-you-have-read).
+
 ## Not built
 
 The plan's § Deferred has the list and why each waits: a "furthest I read" button, weighting towards

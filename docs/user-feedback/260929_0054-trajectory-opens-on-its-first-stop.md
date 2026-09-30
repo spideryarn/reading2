@@ -1,3 +1,7 @@
+---
+reports: spya-jjsta2
+ending: shipped
+---
 # Opening Trajectory should take you to its first stop
 
 [SPIDERYARN-READING2-4K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4K) (2026-09-29

@@ -1,3 +1,7 @@
+---
+reports: spya-kzdmhb
+ending: shipped
+---
 # The live conversation kept hanging, on a phone, outdoors with headphones
 
 [SPIDERYARN-READING2-42](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-42) (2026-09-12

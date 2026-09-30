@@ -17,8 +17,8 @@
  *
  * That file is past three and a half thousand lines and its body is at the edge
  * of a complexity budget (see `SharingSection` there). This is a whole control
- * with its own hook; `Metadata` draws the section heading and the experimental
- * gate, and hands this the slug, the metadata it already read, and `refresh`.
+ * with its own hook; `Metadata` draws the row's chip and name and the
+ * experimental gate, and hands this the slug, the metadata it already read, and `refresh`.
  *
  * ## Why the job comes through `useJobs`, not a fetch here
  *
@@ -31,6 +31,7 @@
  */
 import { RotateCcw } from "lucide-react";
 import {
+  type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
@@ -80,7 +81,7 @@ function extraName(step: StepName): string {
   return isExtra(step) ? RESET_EXTRA_NAME[step] : step;
 }
 
-/** Extras with no row in Metadata's existing *Generate it again* section. */
+/** Extras with no row of their own in Metadata's *Re-run AI processing* section. */
 const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
 const RESET_ONLY_PROGRESS = extraSteps().filter((step) => !METADATA_RERUN_STEP_SET.has(step));
 const RESET_ONLY_PROGRESS_SET = new Set<StepName>(RESET_ONLY_PROGRESS);
@@ -440,20 +441,36 @@ function ResetOnlyRegeneration({
 }
 
 /**
- * The card: what it does, the checkbox, the button — and, after one press, the
- * confirm that says what is kept, what is lost, and what it costs.
+ * The row: its name and button, what it does, the checkbox — and, after one
+ * press, the confirm that says what is kept, what is lost, and what it costs.
+ * The first row of *Re-run AI processing*'s card since 2026-09-30, above the
+ * modes, rather than a subheading and a card of its own (Greg,
+ * SPIDERYARN-READING2-65: *"amalgamate the "Start the whole article again" into
+ * the run-it-again section above, e.g. as a button at the top"*).
  *
- * **Two clicks, inline, no `window.confirm`** — the pattern `RerunRow` in
- * Metadata.tsx uses and argues for, and the panel is `AccessSharing`'s confirm,
- * because this one has three things to say and not one sentence. A Retry after a
- * failure resets again, so it asks too, as `RerunRow`'s does.
+ * **Two clicks, inline, no `window.confirm`** — and the only control in that
+ * section that still asks. The mode rows lost their confirm the same day
+ * (Greg, SPIDERYARN-READING2-64, `RerunRow` in Metadata.tsx), because all it
+ * guarded there was one of our model calls. This one guards the reader's own
+ * things: it removes every generated extra and can move comments to *no longer
+ * in this version*, and the panel says so before it happens. The panel is
+ * `AccessSharing`'s confirm, because it has three things to say and not one
+ * sentence. A Retry after a failure resets again, so it asks too.
+ *
+ * docs/plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md
  */
 export function ResetArticle({
   slug,
   provenance,
   onFinished,
+  lead,
 }: {
   slug: string;
+  /**
+   * What the heading line starts with — the chip and the name, drawn by
+   * Metadata.tsx so this row and the mode rows under it share one `Chip`.
+   */
+  lead: ReactNode;
   /** Null until the metadata request lands; the extras are read off its stages. */
   provenance: ArticleMetadata | null;
   /** `refresh`, never `reload` — see `RerunSection` in Metadata.tsx. */
@@ -503,9 +520,35 @@ export function ResetArticle({
 
   const failedAsking = failed?.retry ? { ...failed, retry: () => setPending("retry") } : failed;
 
+  /* The run button, or nothing while the confirm stands in its place. At the
+     right-hand end of the heading line, where every mode row below keeps its
+     own. */
+  const control = asking ? null : (
+    <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
+      <JobProgress
+        job={job}
+        starting={starting}
+        failed={failedAsking}
+        stalled={stalled}
+        /* Opens the confirm rather than starting anything. */
+        onRun={async () => setPending("run")}
+        onCancel={cancel}
+        label="Start again"
+        step="extract"
+        icon={<RotateCcw size={13} />}
+        about="this article"
+        runningLabel="Reading the article again"
+      />
+    </div>
+  );
+
   return (
     <div data-reset className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
-      <p className="tw:m-0 tw:text-muted-foreground">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
+        {lead}
+        {control}
+      </div>
+      <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
         Reads our stored copy of this article again with today's pipeline, as if you had just added
         it, and removes the generated extras listed below.
       </p>
@@ -541,24 +584,7 @@ export function ResetArticle({
           }}
           onCancel={() => setPending(null)}
         />
-      ) : (
-        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-          <JobProgress
-            job={job}
-            starting={starting}
-            failed={failedAsking}
-            stalled={stalled}
-            /* Opens the confirm rather than starting anything. */
-            onRun={async () => setPending("run")}
-            onCancel={cancel}
-            label="Start again"
-            step="extract"
-            icon={<RotateCcw size={13} />}
-            about="this article"
-            runningLabel="Reading the article again"
-          />
-        </div>
-      )}
+      ) : null}
 
       {job !== null && regenerating.length > 0 ? (
         <p role="status" className="tw:m-0 tw:text-xs tw:text-ink-faint">

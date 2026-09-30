@@ -1,3 +1,7 @@
+---
+reports: spya-k7x6vz
+ending: shipped
+---
 # A brain icon for Remember mode
 
 **[SPIDERYARN-READING2-25](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-25)** · reported

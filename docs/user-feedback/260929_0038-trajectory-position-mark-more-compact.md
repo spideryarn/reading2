@@ -1,3 +1,7 @@
+---
+reports: spya-qx08ep
+ending: shipped
+---
 # Trajectory's "where in the article" mark took too much width
 
 [SPIDERYARN-READING2-4D](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4D) (2026-09-29

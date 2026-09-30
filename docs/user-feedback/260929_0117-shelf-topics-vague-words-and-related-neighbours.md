@@ -1,3 +1,7 @@
+---
+reports: spya-g3wzc5
+ending: shipped
+---
 # Shelf topics: vague words, and two related topics side by side
 
 [SPIDERYARN-READING2-4T](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4T) (2026-09-29

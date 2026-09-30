@@ -779,21 +779,46 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
    * checks that cannot fail. So the control here is a second real extraction
    * with the pass disabled, and the comparison is of bytes.
    */
-  it("stamps exactly three fixtures and leaves the other thirty-two alone", async () => {
+  it("stamps exactly four fixtures and leaves the other thirty-one alone", async () => {
     const corpus = await CORPUS;
     expect(corpus.size).toBe(35);
     const stamped = [...corpus].filter(([, r]) => r.kind === "extracted" && Object.keys(r.on.kept).length > 0);
-    expect(stamped.map(([n]) => n).sort()).toEqual(["ar5iv-attention", "plos-biology", "wiki-gdp-table"]);
+    expect(stamped.map(([n]) => n).sort()).toEqual([
+      "ar5iv-attention",
+      "plos-biology",
+      "quanta-year-physics",
+      "wiki-gdp-table",
+    ]);
     /**
      * **The plan says five, and five is wrong.** It reasons *"30 zero-stamp
      * fixtures, because five fixtures are stamped, not four"*; the measurement
-     * is three stamped, two refused and thirty compared. The 30 is right and
-     * its arithmetic is not.
+     * was three stamped, two refused and thirty compared. The 30 was right and
+     * its arithmetic was not. Rule C added Quanta (below), so it is now four
+     * stamped and twenty-nine compared.
      */
-    expect(stamped).toHaveLength(3);
+    expect(stamped).toHaveLength(4);
   });
 
-  it("is byte-identical on all thirty zero-stamp fixtures that extract at all", async () => {
+  /**
+   * **Rule C fires on Quanta and changes nothing the reader gets**, and this
+   * pins that rather than leaving it out. The lead figure is an embedded video
+   * whose player carries YouTube's consent notice — a *"privacy policy."* link —
+   * so its wrappers really are ones Readability's link rules would take. But
+   * that figure sits outside the article Readability selects, so it is never in
+   * the output either way: candidate selection, the limit rule C's header names
+   * (GPT Sol, plan review). `kept` counts a wrapper that would have been taken,
+   * and here that is all it is.
+   */
+  it("fires rule C on Quanta and leaves its output byte-identical", async () => {
+    const row = (await CORPUS).get("quanta-year-physics");
+    expect(row?.kind).toBe("extracted");
+    const r = row as Extract<Row, { kind: "extracted" }>;
+    expect(r.on.kept).toEqual({ [RULES.figureWrapper]: 1 });
+    expect(r.on.bytes).toBe(r.off.bytes);
+    expect(r.on.digest).toBe(r.off.digest);
+  });
+
+  it("is byte-identical on all twenty-nine zero-stamp fixtures that extract at all", async () => {
     const corpus = await CORPUS;
     const compared: string[] = [];
     const differed: string[] = [];
@@ -807,7 +832,7 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
       expect(row.off.kept, name).toEqual({});
     }
     expect(differed).toEqual([]);
-    expect(compared).toHaveLength(30);
+    expect(compared).toHaveLength(29);
   });
 
   it("refuses the two bot walls with the typed refusal, in both arms", async () => {

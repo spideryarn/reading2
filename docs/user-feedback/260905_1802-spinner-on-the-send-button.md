@@ -1,3 +1,7 @@
+---
+reports: spya-vgwt4z
+ending: declined
+---
 # A spinner on the feedback Send button
 
 **[SPIDERYARN-READING2-23](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-23)** · reported

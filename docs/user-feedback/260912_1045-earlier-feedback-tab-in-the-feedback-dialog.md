@@ -1,3 +1,7 @@
+---
+reports: spya-gxzbuj
+ending: shipped
+---
 # A tab in the Feedback dialog listing what you have sent before
 
 [SPIDERYARN-READING2-3R](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3R) (2026-09-12

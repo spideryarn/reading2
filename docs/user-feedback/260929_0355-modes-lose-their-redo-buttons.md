@@ -1,3 +1,7 @@
+---
+reports: spya-utrvyj
+ending: shipped
+---
 # The modes lose their redo buttons
 
 SPIDERYARN-READING2-53, from Greg (admin), in production, build `43f99ecb`, 2026-09-29 01:50:32Z.

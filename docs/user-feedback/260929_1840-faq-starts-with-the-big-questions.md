@@ -1,3 +1,7 @@
+---
+reports: spya-yyf38a
+ending: shipped
+---
 # The FAQ starts with the big questions, under a threshold
 
 SPIDERYARN-READING2-5D (`spya-yyf38a`), from Greg (admin), filed on

@@ -64,7 +64,7 @@ const FRONT: PdfRecord[] = [
  * A reader that returns `FRONT` for page 1 and the page's own text-layer lines
  * for every other page — honest enough to score, fixed enough to assert on.
  */
-function stubReader(pages: { page: number; text: string }[]): PdfReader {
+function stubReader(pages: { page: number; text: string }[], front: PdfRecord[] = FRONT): PdfReader {
   return {
     id: "test/frontmatter",
     async read(_pdf, instruction) {
@@ -79,7 +79,7 @@ function stubReader(pages: { page: number; text: string }[]): PdfReader {
       const records: PdfRecord[] = [];
       for (const page of wanted) {
         if (page === 1) {
-          records.push(...FRONT);
+          records.push(...front);
           continue;
         }
         const text = pages.find((p) => p.page === page)?.text ?? "";
@@ -101,7 +101,7 @@ const frontMatterSaying = (answer: FrontMatterAnswer, onAsk?: () => void): Front
   },
 });
 
-async function run(frontMatter: FrontMatterReader | null, authors: AuthorsReader | null = null) {
+async function run(frontMatter: FrontMatterReader | null, authors: AuthorsReader | null = null, front = FRONT) {
   const bytes = new Uint8Array(await readFile(EASY));
   const pass = await pass0(bytes);
   return runPdfExtract({
@@ -111,7 +111,7 @@ async function run(frontMatter: FrontMatterReader | null, authors: AuthorsReader
     url: "https://example.test/paper.pdf",
     checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
     slug: "paper",
-    reader: stubReader(pass.pages),
+    reader: stubReader(pass.pages, front),
   });
 }
 
@@ -138,6 +138,28 @@ describe("the front-matter pass inside the stage", () => {
     expect(result.meta.byline).toBe("Robert Lawrence Kuhn");
     expect(result.meta.authors).toEqual([{ name: "Robert Lawrence Kuhn", affiliations: [] }]);
     expect(result.frontMatterUsage).toEqual({ input: 2, output: 3 });
+  });
+
+  it("keeps the verified names for the byline when only an affiliation failed, and stores no list", async () => {
+    /* Webb et al. on production: three names verified, one affiliation did
+       not, and the byline fell back to the record with its markers. The byline
+       record here carries a marker, so a byline built from the record and one
+       built from the names cannot be mistaken for each other. 260930e § Stage 2. */
+    const marked = FRONT.map((r) => (r.text === "Robert Lawrence Kuhn" ? { ...r, text: "Robert Lawrence Kuhn1,*" } : r));
+    const result = await run(
+      frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }),
+      {
+        id: "test/authors",
+        usage: () => ({ input: 2, output: 3 }),
+        async ask() {
+          return [{ name: "Robert Lawrence Kuhn", affiliations: ["Closer To Truth, Los Angeles"] }];
+        },
+      },
+      marked,
+    );
+    expect(result.meta.byline).toBe("Robert Lawrence Kuhn");
+    expect(result.meta.authors).toBeUndefined();
+    expect(result.notes.some((n) => n.startsWith("Kept the names without their affiliations"))).toBe(true);
   });
 
   it("leaves the title to the ladder when the pass names none", async () => {

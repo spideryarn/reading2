@@ -1,3 +1,7 @@
+---
+reports: spya-hbbrfp
+ending: shipped
+---
 # Every footer links to the publicly readable shelf
 
 **SPIDERYARN-READING2-3V** · suggestion · from Greg (an admin, so trusted input) · standing on

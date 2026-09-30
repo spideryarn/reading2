@@ -1,3 +1,7 @@
+---
+reports: spya-j5bsp7
+ending: shipped
+---
 # A search box in the glossary, to look a term up
 
 **[SPIDERYARN-READING2-Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-Y)** · reported

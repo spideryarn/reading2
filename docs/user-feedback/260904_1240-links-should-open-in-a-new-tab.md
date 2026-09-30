@@ -1,3 +1,7 @@
+---
+reports: spya-uzggbn
+ending: shipped
+---
 # Links on iPad should preview, then open in a new tab
 
 **[SPIDERYARN-READING2-10](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-10)** · reported
