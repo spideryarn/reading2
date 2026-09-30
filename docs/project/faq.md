@@ -38,13 +38,14 @@ Since `faq/4`:
 - **The prompt asks for up to three broad pressure questions** on the central claim — an objection,
   dependency or tension that remains once the claim is understood, still answered in the piece's
   own passages. *"Why should we believe the main claim?"* and its kin stay banned as summaries.
-- **Every question carries `difficulty` and `centrality`**, 0–1, the Glossary's two scores under
-  its names, validated by the same code ([`src/score-fields.ts`](../../src/score-fields.ts)).
-  Difficulty here is how much of the piece, and how much technical detail, a reader needs before
-  the question makes sense.
+- **The prompt asks every question for `difficulty` and `centrality`**, 0–1, the Glossary's two
+  scores under its names, validated by the same code
+  ([`src/score-fields.ts`](../../src/score-fields.ts)). A missing or rejected score stays absent,
+  rather than costing the question. Difficulty here is how much of the piece, and how much
+  technical detail, a reader needs before the question makes sense.
 - **The default order is *prioritised*:** questions under a bar on
   **`centrality × (1 − difficulty)`** are hidden, and the rest are shown highest first, reading order
-  breaking ties. *Reading order* is one tap away. The two raw scores are drawn on each row; the
+  breaking ties. *Reading order* is one tap away. The available raw scores are drawn on each row; the
   compound never is. The bar starts at `0.20` and is the reader's to move (`?faqby=`, `?faqbar=` —
   [url-state.md](url-state.md)).
 - **Each score is also an order of its own**, since 2026-09-30 — *most central* and *hardest*,

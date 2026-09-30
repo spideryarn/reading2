@@ -459,8 +459,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          product call. This is the half a press would not tell somebody who
          expects an FAQ to have answers under it.
        - "the broadest, most central first; reading order is one tap away":
-         since `faq/4` every question carries the model's `difficulty` and
-         `centrality` (src/types.ts), and the default order is
+         since `faq/4` the model is asked for `difficulty` and `centrality` on
+         every question (src/types.ts), and the default order is
          `orderQuestions` in src/web/faq-order.ts — highest
          `centrality × (1 − difficulty)` first, under a threshold. The stored
          order is still reading order (`inReadingOrder`, src/faq.ts), which

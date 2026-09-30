@@ -103,6 +103,21 @@ single-score orders; the Glossary does neither.
     `mode-catalog.ts` and `faq.css` updated; the catalog's `how` line names the new orders.
   - It agreed on *hardest* over *easiest*.
 - [x] Built, tests and typecheck green
-- [ ] Code reviewed by GPT Sol
-- [ ] Browser check
-- [ ] Docs and notes, pushed to dev
+- [x] **Code reviewed by GPT Sol** (`gpt-5.6-sol`, high, `workspace-write`; exit 0, answer file
+  fresh). No functional defects. Three P3s, all stale wording, which it fixed and I read: the
+  "two orders" comment in `faq-order.ts`; docs that promised every question carries both scores,
+  where a partly scored question is a supported state; and comments in `public-types.ts`,
+  `glossary.css` and `tests/every-mode-draws-its-surface.test.tsx` that still put the promise in
+  the foot or treated `.gloss-sort-trail` as the Glossary's alone. Gates re-run after: typecheck
+  green, seven suites (197 tests) green.
+- [x] **Browser check** (a Sonnet subagent, Playwright, its own dev server from this worktree, a
+  local `faq/4` article with eight questions). Every item passed. The (i) is at the row's end, and
+  a click opens and closes the card, which stays fully on screen at 1300px and 390px. Each of the
+  four orders sorts, the slider shows only under *prioritised*, each row draws a single bar under
+  *most central* and *hardest*, and `?faqby=` updates. No new console entries.
+  One cosmetic point was left as it is: at 390px the four buttons fill the line and the (i) wraps
+  alone, right-aligned, onto a second one. That is the Glossary's trailing slot doing what it does
+  when its row is full. Nothing overlaps and nothing scrolls sideways.
+  Shots: [desktop, card open](260930d-shots/desktop-card-open.png) ·
+  [phone](260930d-shots/phone.png).
+- [x] Docs and notes, pushed to dev

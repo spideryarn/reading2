@@ -51,7 +51,7 @@ import {
 } from "./threshold.js";
 
 /**
- * The two orders — `?faqby=` in the URL. **The type lives here and the runtime
+ * The four orders — `?faqby=` in the URL. **The type lives here and the runtime
  * list, `FAQ_ORDERS`, in params.ts**, which checks the two agree both ways.
  *
  * Split like that for two reasons that pull in opposite directions. params.ts
@@ -127,7 +127,7 @@ export function availableOrders(questions: readonly Scored[]): FaqOrder[] {
   return questions.length < 2 || out.length < 2 ? [] : out;
 }
 
-/** The order actually in force: one with nothing to do — no scores, or nothing to gate — falls back to reading order. */
+/** The order actually in force: one unavailable for this list falls back to reading order. */
 export function effectiveOrder(questions: readonly Scored[], order: FaqOrder): FaqOrder {
   return availableOrders(questions).includes(order) ? order : "document";
 }
@@ -198,7 +198,7 @@ export function faqNote(hidden: number, total: number): string {
 }
 
 /**
- * The two raw scores for `ScoreBars` — drawn, never printed, and never the
+ * The available raw scores for `ScoreBars` — drawn, never printed, and never the
  * compound (ScoreBars.tsx § What it does NOT do). The labels say what each
  * measures *for a question*, which is not what the Glossary's say for a term.
  *

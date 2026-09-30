@@ -33,8 +33,8 @@
  *
  * ## A prioritised order and a bar, since `faq/4`
  *
- * Every question carries the model's `difficulty` and `centrality`, and the
- * default order is *prioritised*: what survives the bar on
+ * The model is asked for `difficulty` and `centrality` on every question, and
+ * the default order is *prioritised*: what survives the bar on
  * `centrality × (1 − difficulty)`, the most central and approachable first —
  * Greg's *"start with a few that are a little bit more high level"*
  * (SPIDERYARN-READING2-5D). *Reading order* is one tap away, and since
@@ -127,7 +127,7 @@ export type FaqAccess =
 
 interface Props {
   access: FaqAccess;
-  /** `?faqby=`. `prioritised` is the default, and falls back when the list has no scores to gate. */
+  /** `?faqby=`. `prioritised` is the default; an unavailable order falls back to reading order. */
   order: FaqOrder;
   onOrder(order: FaqOrder): void;
   /** `?faqbar=`, or null for "nobody has touched it" — which is `FAQ_BAR_DEFAULT`. */
