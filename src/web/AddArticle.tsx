@@ -507,10 +507,17 @@ export function JobCard({
   job,
   queue,
   onHide,
+  onRetried,
 }: {
   job: Job;
   queue: UseJobs;
   onHide: () => void;
+  /**
+   * Told the replacement job when Retry made one. The add page watches one job
+   * by id, and a retry is a new id; the shelf's list shows every job and needs
+   * no telling. Plan 260930e, Sol's F3.
+   */
+  onRetried?: (replacement: Job) => void;
 }) {
   const busy = job.status === "queued" || job.status === "running";
   /**
@@ -564,8 +571,9 @@ export function JobCard({
   const [refusal, setRefusal] = useState<string | null>(null);
   const retry = async () => {
     setRefusal(null);
-    await queue.retry(job.id);
+    const replacement = await queue.retry(job.id);
     setRefusal(queue.lastFailure());
+    if (replacement) onRetried?.(replacement);
   };
 
   return (

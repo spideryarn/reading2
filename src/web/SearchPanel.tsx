@@ -151,6 +151,8 @@ export type SearchAccess =
       loadError: string | null;
       /** A transport failure on a write. Model failures live on the run that failed. */
       error: string | null;
+      /** Requests this tab started and still has in flight, by run id. */
+      running: ReadonlySet<string>;
       onAsk(criterion: string): void;
       onRetry(id: string): void;
       /**
@@ -282,6 +284,16 @@ export function SearchPanel({
      already done by the time you have finished the keystroke. */
   const searching = runs.some((r) => active.includes(r.id) && r.status === "pending");
 
+  /* Questions this tab still has out, ticked or not, as `ask` sends them —
+     trimmed. A persisted `pending` is not enough: after the opening GET it may
+     be another process's work or an orphan, and this tab receives no event
+     when either finishes. SearchMode owns the in-flight ids it started. */
+  const running = new Set(
+    runs
+      .filter((r) => r.status === "pending" && own?.running.has(r.id))
+      .map((r) => r.criterion.trim()),
+  );
+
   return (
     <ModeSurface label="Search this article" feature="srch">
       {/* **No head slot, and therefore no title row**, for the reason
@@ -307,6 +319,7 @@ export function SearchPanel({
           draft={draft}
           onDraft={setDraft}
           busy={matcher === "meaning" && searching}
+          running={running}
           loaded={loaded}
           onAsk={own.onAsk}
         />
@@ -330,6 +343,7 @@ export function SearchPanel({
           loaded={loaded}
           loadFailed={loadFailed}
           active={active}
+          running={running}
           slots={slots}
           onToggle={onToggle}
           onSolo={onSolo}
@@ -431,7 +445,10 @@ const Box = forwardRef<
     /** The meaning-mode draft, owned by `SearchPanel` — see the note there. */
     draft: string;
     onDraft(next: string): void;
+    /** The spinner: a ticked search is still out. It no longer holds Find. */
     busy: boolean;
+    /** Criteria still being searched for, trimmed — the one question Find refuses to ask again. */
+    running: ReadonlySet<string>;
     /**
      * **Has the saved list come back — answered, failed or given up on?** Find
      * waits for it: `SearchApi.loaded` says why. Typing does not.
@@ -439,7 +456,7 @@ const Box = forwardRef<
     loaded: boolean;
     onAsk(criterion: string): void;
   }
->(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, loaded, onAsk }, ref) {
+>(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk }, ref) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
      the focus-on-mount below and for `switchTo`. `useImperativeHandle` would
      hand back a narrowed object; there is nothing to narrow, so the ref is
@@ -460,7 +477,10 @@ const Box = forwardRef<
 
   const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;
-  const ready = matcher === "meaning" && loaded && draft.trim().length > 0 && !busy;
+  /* Not `!busy` any more: several searches may run at once, and only an exact
+     repeat of one still running is refused — see `running` in SearchPanel. */
+  const repeat = running.has(draft.trim());
+  const ready = matcher === "meaning" && loaded && draft.trim().length > 0 && !repeat;
 
   /**
    * Change matcher, taking whatever is in the box along with it.
@@ -601,9 +621,11 @@ const Box = forwardRef<
               if (ready) onAsk(draft);
             }}
             title={
-              loaded
-                ? "Find the passages that match — one model call"
-                : "Waiting for your saved searches to load"
+              !loaded
+                ? "Waiting for your saved searches to load"
+                : repeat
+                  ? "Already searching for this — change the words to ask something else"
+                  : "Find the passages that match — one model call"
             }
           >
             find
@@ -690,12 +712,18 @@ function SavedLoading() {
   );
 }
 
+function retryTitle(run: SearchRun, alreadyRunning: boolean): string {
+  if (alreadyRunning) return "Already searching for this question";
+  return run.error ?? "This search failed. Try it again.";
+}
+
 function Saved({
   access,
   runs,
   loaded,
   loadFailed,
   active,
+  running,
   slots,
   onToggle,
   onSolo,
@@ -708,6 +736,8 @@ function Saved({
   loaded: boolean;
   loadFailed: boolean;
   active: string[];
+  /** Criteria this tab is already searching for, trimmed. */
+  running: ReadonlySet<string>;
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
   onSolo(id: string): void;
@@ -790,6 +820,7 @@ function Saved({
         {sorted.map((run) => {
           const checked = active.includes(run.id);
           const slot = slots.get(run.id);
+          const retryAlreadyRunning = running.has(run.criterion.trim());
           return (
             <li
               key={run.id}
@@ -898,7 +929,8 @@ function Saved({
                   <button
                     type="button"
                     className="srch-icon"
-                    title={run.error ?? "This search failed. Try it again."}
+                    disabled={retryAlreadyRunning}
+                    title={retryTitle(run, retryAlreadyRunning)}
                     onClick={() => own.onRetry(run.id)}
                   >
                     <AlertTriangle size={13} />

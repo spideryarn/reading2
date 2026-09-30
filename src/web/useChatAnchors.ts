@@ -42,6 +42,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ChatAnchor, ThreadSummary } from "../types.js";
+import type { AskedQuestion } from "./comment-nav.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
 export interface ChatAnchorsApi {
@@ -116,6 +117,45 @@ export function countByBlock(summaries: ThreadSummary[]): Map<string, number> {
     counts.set(s.anchor.blockId, (counts.get(s.anchor.blockId) ?? 0) + 1);
   }
   return counts;
+}
+
+/**
+ * **The questions the reader asked about a passage**, for the Comments drawer.
+ *
+ * Every *chat* with an anchor: the gutter's "?" (whole block) and *Chat about
+ * this* on a selection. Both are a question about somewhere in the article, and
+ * a whole-block one draws no mark in the prose, so without this a reader who
+ * forgot which paragraph they pressed had nowhere to find it again — Greg,
+ * SPIDERYARN-READING2-6W. An unanchored chat is about the whole piece, has
+ * nowhere to jump to, and stays in Chat mode only.
+ *
+ * **`kind === "chat"` by a positive test**, for the reason `overlay` in
+ * Reader.tsx gives: opening a row sets `?thread=`, and only a chat may be opened
+ * by the floating dialog.
+ *
+ * **Minus the chats a comment already points at** (`Comment.threadId`): *Also
+ * ask the AI* on a comment makes an anchored chat, and the drawer already lists
+ * that comment, so without this one question would be two rows. GPT Sol's plan
+ * review, finding 3.
+ */
+export function askedQuestions(
+  summaries: ThreadSummary[],
+  comments: readonly { threadId?: string | undefined }[],
+): AskedQuestion[] {
+  const linked = new Set(comments.flatMap((c) => (c.threadId ? [c.threadId] : [])));
+  const out: AskedQuestion[] = [];
+  for (const s of summaries) {
+    if (s.kind !== "chat" || !s.anchor || linked.has(s.id)) continue;
+    out.push({
+      id: s.id,
+      blockId: s.anchor.blockId,
+      quote: "quote" in s.anchor ? s.anchor.quote : undefined,
+      start: "quote" in s.anchor ? s.anchor.start : undefined,
+      createdAt: s.createdAt,
+      lastLine: s.lastLine,
+    });
+  }
+  return out;
 }
 
 /**
@@ -255,6 +295,11 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     droppedInFlight.current = new Set();
     setSummaries([]);
     setLoaded(false);
+    /* The last article's failure is not this one's. It was harmless while only
+       the hook's own callers read `error`; the Comments drawer says it aloud
+       now (plan 260930f), so a stale one would claim this article's questions
+       failed to load. GPT Sol's plan review, finding 4. */
+    setError(null);
     apiFetch(`/api/chat/${encodeURIComponent(slug)}?summary=1`)
       .then((r) => readJson<{ threads?: ThreadSummary[]; error?: string }>(r))
       .then((body) => {

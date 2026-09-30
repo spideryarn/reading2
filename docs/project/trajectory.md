@@ -236,6 +236,19 @@ quotes both whole):
   it too; **the spine does not yet**, because its hover cards need a shorter, node-based version
   first (the plan's *Deferred*).
 
+**The route says what it was planned for** — Greg, 2026-09-30, SPIDERYARN-READING2-60
+([plan 260930e](../plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md),
+which quotes it whole): *"people want to come with an intent … maybe there's a single extra
+trajectory that's added that's specific to their reading intent if they provided one."* The route
+was already shaped by the article's purpose; now the owner can see which one. Over a ready route,
+one quiet line: *Reading for: …*, the whole sentence in a tooltip, and **Edit** into Metadata. With
+no purpose, a small box, *What do you want from this piece?*, and **Plan the route for this**, which
+saves the purpose and only then re-plans the route (unforced — the stamp's profile hash is what
+re-plans it). **Not in the empty state**: the automatic run plans one there, and a second request
+with a different profile would not de-duplicate. Nothing for a visitor, nothing while the purpose
+cannot be read, and no second ask under the stale or profile-changed banner.
+[`TrajectoryPurpose.tsx`](../../src/web/TrajectoryPurpose.tsx).
+
 ### What we tried for v2
 
 Three static mockups, on real data from the entropy paper
