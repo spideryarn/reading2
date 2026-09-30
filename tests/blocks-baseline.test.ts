@@ -606,6 +606,7 @@ describe("the step", () => {
   const stage3 = async (store: MemoryArtifactStore) =>
     await STEPS.blocks.run(
       {
+        power: "standard",
         slug: "a",
         report: () => {},
         signal: new AbortController().signal,

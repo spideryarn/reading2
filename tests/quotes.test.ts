@@ -304,6 +304,7 @@ describe("place", () => {
     const built = buildQuotes(
       { quotes: [{ text: FIRST, importance: 0.8 }] },
       {
+        power: "standard",
         slug: "a-slug",
         blocks: BLOCKS,
         sourceHash: "deadbeefdeadbeef",
@@ -457,7 +458,7 @@ describe("buildQuotes", () => {
 
   it("stamps the artefact and stores document order", () => {
     const dropped = drops();
-    const built = buildQuotes({ quotes: [{ text: THIRD }, { text: FIRST }] }, { ...opts, dropped });
+    const built = buildQuotes({ quotes: [{ text: THIRD }, { text: FIRST }] }, { power: "standard", ...opts, dropped });
     expect(built.version).toBe(PROMPT_VERSION);
     expect(built.generator).toBe(CAPABLE_MODEL);
     expect(built.profileHash).toBeNull();
@@ -468,7 +469,7 @@ describe("buildQuotes", () => {
     const dropped = drops();
     const built = buildQuotes(
       { quotes: [{ text: FIRST }, { text: "Words this piece has never contained at all." }] },
-      { ...opts, dropped },
+      { power: "standard", ...opts, dropped },
     );
     expect(built.discarded.unfound).toBe(1);
   });
@@ -476,6 +477,7 @@ describe("buildQuotes", () => {
   it("throws rather than write an empty list", () => {
     expect(() =>
       buildQuotes({ quotes: [{ text: "Nothing in this article says this, at all." }] }, {
+        power: "standard",
         ...opts,
         dropped: drops(),
       }),
@@ -484,9 +486,10 @@ describe("buildQuotes", () => {
 
   it("inherits an id for the same words, so ?quote= survives a rewrite", () => {
     const dropped = drops();
-    const first = buildQuotes({ quotes: [{ text: FIRST }] }, { ...opts, dropped });
+    const first = buildQuotes({ quotes: [{ text: FIRST }] }, { power: "standard", ...opts, dropped });
     const id = first.quotes[0]?.id;
     const again = buildQuotes({ quotes: [{ text: FIRST }] }, {
+      power: "standard",
       ...opts,
       dropped: drops(),
       inherit: idsByText(first),
@@ -518,6 +521,7 @@ describe("buildQuotes", () => {
       elapsedMs: 1,
     };
     const built = buildQuotes({ quotes: [{ text: FIRST }, { text: fullWidth }] }, {
+      power: "standard",
       ...opts,
       blocks: article,
       dropped: drops(),
@@ -545,6 +549,7 @@ describe("buildQuotes", () => {
       elapsedMs: 1,
     };
     const built = buildQuotes({ quotes: [{ text: FIRST }] }, {
+      power: "standard",
       ...opts,
       blocks: article,
       dropped: drops(),

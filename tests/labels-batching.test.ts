@@ -1128,7 +1128,7 @@ describe("batchFingerprint", () => {
     /* Not vacuous: an empty plan would pass every assertion in the loop. */
     expect(batches.length).toBeGreaterThan(0);
     for (const batch of batches) {
-      expect(batchFingerprint(batch, blocks, outline)).toMatch(/^[a-z0-9][a-z0-9_-]{0,127}$/);
+      expect(batchFingerprint(batch, blocks, outline, "standard")).toMatch(/^[a-z0-9][a-z0-9_-]{0,127}$/);
     }
   });
 
@@ -1136,8 +1136,19 @@ describe("batchFingerprint", () => {
     const { tree, blocks } = fixture(6, 7);
     const outline = renderOutline(tree);
     const [batch] = planBatches(tree, blocks);
-    expect(batchFingerprint(batch!, blocks, outline)).toBe(
-      batchFingerprint(batch!, blocks, outline),
+    expect(batchFingerprint(batch!, blocks, outline, "standard")).toBe(
+      batchFingerprint(batch!, blocks, outline, "standard"),
+    );
+  });
+
+  it("changes with the model's power — an Opus run must not reuse a Sonnet batch", () => {
+    /* A checkpoint is a paid-for answer reused, so unlike a freshness stamp it
+       keys on the exact model: plan 260930f decision 7. */
+    const { tree, blocks } = fixture(6, 7);
+    const outline = renderOutline(tree);
+    const batch = planBatches(tree, blocks)[0]!;
+    expect(batchFingerprint(batch, blocks, outline, "high")).not.toBe(
+      batchFingerprint(batch, blocks, outline, "standard"),
     );
   });
 
@@ -1147,7 +1158,7 @@ describe("batchFingerprint", () => {
     // label written to tell a paragraph apart from one set of neighbours is not
     // a label for a different set.
     const { tree, blocks } = fixture(6, 7);
-    const before = batchFingerprint(planBatches(tree, blocks)[0]!, blocks, renderOutline(tree));
+    const before = batchFingerprint(planBatches(tree, blocks)[0]!, blocks, renderOutline(tree), "standard");
 
     const moved: Tree = {
       ...tree,
@@ -1158,7 +1169,7 @@ describe("batchFingerprint", () => {
         ]),
       ),
     };
-    const after = batchFingerprint(planBatches(moved, blocks)[0]!, blocks, renderOutline(moved));
+    const after = batchFingerprint(planBatches(moved, blocks)[0]!, blocks, renderOutline(moved), "standard");
     expect(after).not.toBe(before);
   });
 
@@ -1166,7 +1177,7 @@ describe("batchFingerprint", () => {
     const { tree, blocks } = fixture(6, 7);
     const first = planBatches(tree, blocks)[0]!;
     const outline = renderOutline(tree);
-    const before = batchFingerprint(first, blocks, outline);
+    const before = batchFingerprint(first, blocks, outline, "standard");
 
     const restated: Tree = {
       ...tree,
@@ -1177,7 +1188,7 @@ describe("batchFingerprint", () => {
         ]),
       ),
     };
-    const after = batchFingerprint(planBatches(restated, blocks)[0]!, blocks, renderOutline(restated));
+    const after = batchFingerprint(planBatches(restated, blocks)[0]!, blocks, renderOutline(restated), "standard");
     expect(after).not.toBe(before);
   });
 
@@ -1208,17 +1219,17 @@ describe("batchFingerprint", () => {
     expect(after.setStarts).not.toEqual(before.setStarts);
 
     // And the fingerprint sees it anyway.
-    expect(batchFingerprint(after, blocks, renderOutline(moved))).not.toBe(
-      batchFingerprint(before, blocks, renderOutline(tree)),
+    expect(batchFingerprint(after, blocks, renderOutline(moved), "standard")).not.toBe(
+      batchFingerprint(before, blocks, renderOutline(tree), "standard"),
     );
   });
 
   it("changes when a paragraph's text changes", () => {
     const { tree, blocks } = fixture(6, 7);
     const outline = renderOutline(tree);
-    const before = batchFingerprint(planBatches(tree, blocks)[0]!, blocks, outline);
+    const before = batchFingerprint(planBatches(tree, blocks)[0]!, blocks, outline, "standard");
     const edited = blocks.map((b, i) => (i === 2 ? { ...b, text: "Rewritten entirely." } : b));
-    const after = batchFingerprint(planBatches(tree, edited)[0]!, edited, outline);
+    const after = batchFingerprint(planBatches(tree, edited)[0]!, edited, outline, "standard");
     expect(after).not.toBe(before);
   });
 
@@ -1230,7 +1241,7 @@ describe("batchFingerprint", () => {
     const outline = renderOutline(tree);
     const batches = planBatches(tree, same, { max: 7 });
     expect(batches.length).toBeGreaterThan(1);
-    const prints = batches.map((b) => batchFingerprint(b, same, outline));
+    const prints = batches.map((b) => batchFingerprint(b, same, outline, "standard"));
     expect(new Set(prints).size).toBe(prints.length);
   });
 });
@@ -1319,7 +1330,7 @@ describe("generateLabels, resuming", () => {
     const outline = renderOutline(tree);
     const batches = planBatches(tree, blocks);
     for (const batch of batches) {
-      const fingerprint = batchFingerprint(batch, blocks, outline);
+      const fingerprint = batchFingerprint(batch, blocks, outline, "standard");
       await store.write("test", "hierarchy-labels", fingerprint, {
         fingerprint,
         labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
@@ -1396,7 +1407,7 @@ describe("generateLabels, resuming", () => {
       const { tree, blocks } = fixture(6, 7);
       const batches = await checkpointFor(store, tree, blocks);
 
-      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
+      const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store });
 
       expect(run.resumed).toBe(batches.length);
       expect(run.batches).toBe(batches.length);
@@ -1416,7 +1427,7 @@ describe("generateLabels, resuming", () => {
     await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
       await checkpointFor(store, tree, blocks);
-      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
+      const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store });
 
       expect(run.file.sourceHash).toBe(hashBlocks(blocks));
       expect(run.file.structureVersion).toBe(tree.version);
@@ -1447,14 +1458,14 @@ describe("generateLabels, resuming", () => {
     const moved = withMovedBoundary(tree, blocks);
 
     await noAuth(async () => {
-        await expect(generateLabels({ tree: moved, blocks, slug: "test", checkpoints: store })).rejects.toThrow(
+        await expect(generateLabels({ power: "standard", tree: moved, blocks, slug: "test", checkpoints: store })).rejects.toThrow(
           /\[ai-not-set-up\]/,
         );
     });
 
     // And the control: unmoved, the same checkpoint resumes everything.
     await noAuth(async () => {
-        const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
+        const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store });
         expect(run.resumed).toBe(run.batches);
     });
   });
@@ -1511,7 +1522,7 @@ describe("generateLabels, resuming", () => {
       const before = store.entries.size;
       expect(before).toBe(batches.length);
 
-      const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
+      const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store });
       expect(run.resumed).toBe(batches.length);
       /* Still every one of them, and not one written back either: a pure resume
          buys nothing, so it records nothing. */
@@ -1532,7 +1543,7 @@ describe("generateLabels, resuming", () => {
          catches that and replaces it with NOT_CONFIGURED first. */
       await checkpointFor(store, tree, blocks);
       await expect(
-        generateLabels({ tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
+        generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() }),
       ).rejects.toThrow(/\[ai-not-set-up\]/);
     });
   });
@@ -1554,7 +1565,7 @@ describe("generateLabels, resuming", () => {
         },
       };
       await expect(
-        generateLabels({ tree, blocks, slug: "test", checkpoints: angry }),
+        generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: angry }),
       ).rejects.toThrow(/\[ai-not-set-up\]/);
     });
   });
@@ -1566,7 +1577,7 @@ describe("generateLabels, resuming", () => {
         // `estimatedCacheable` rather than the flag being asked to carry it.
         const { tree, blocks } = fixture(6, 7);
         await checkpointFor(store, tree, blocks);
-        const run = await generateLabels({ tree, blocks, slug: "test", checkpoints: store });
+        const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store });
         expect(run.estimatedCacheable).toBe(false);
         expect(run.calls).toBe(0);
         expect(run.cacheReadTokens).toBe(0);

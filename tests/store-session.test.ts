@@ -227,6 +227,7 @@ function sessionFor(unconverted?: ReadonlySet<StepName>): StoreSession {
 beforeEach(() => {
   held = memoryArtefacts();
   ctx = {
+    power: "standard",
     slug: SLUG,
     report: () => undefined,
     signal: new AbortController().signal,

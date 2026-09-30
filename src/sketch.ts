@@ -38,7 +38,7 @@ import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
@@ -501,6 +501,8 @@ export async function generateSketch(opts: {
   profile?: string | null;
   /** Overrides SYSTEM, for the prompt harness only. Never set in the app. */
   systemOverride?: string;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<SketchRun> {
   const { blocks, tree } = opts.article;
   const realMeta: Meta | null = opts.article.meta;
@@ -551,7 +553,7 @@ export async function generateSketch(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, profile }) }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -593,7 +595,7 @@ export async function generateSketch(opts: {
      order IS document order (docs/project/block-ids.md). */
   const blockOrder = blocks.map((b) => b.id);
   const { sketch, report } = readSketch(parseJson(raw), { blockOrder });
-  sketch.generator = CAPABLE_MODEL;
+  sketch.generator = generatorFor(opts.power);
   /* **The article's own slug, not `tree.slug`.** They are usually the same and
      on `data/constitution` they are not: that tree says `"slug": "blocks"`,
      left over from whatever it was called when stage 4 ran. Copying it forward
@@ -651,7 +653,7 @@ export async function generateSketch(opts: {
     raw,
     report,
     score,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

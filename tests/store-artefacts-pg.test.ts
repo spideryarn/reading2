@@ -208,6 +208,7 @@ describe("what a step counts as done", () => {
   it("is not done when the store holds nothing", async () => {
     const artefacts = memoryArtefacts();
     const ctx: StepContext = {
+      power: "standard",
       slug: "nothing-here",
       report: () => {},
       signal: new AbortController().signal,

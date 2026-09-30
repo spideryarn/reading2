@@ -364,6 +364,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/feedback/w1/w2"],
   },
+  /* High-powered AI's switch, plan 260930f — in the admin namespace for its gate. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/article\\/([\\w.%-]+)\\/high-power$", flags: "" },
+    methods: ["PUT"],
+    witnesses: ["/api/admin/article/w1/high-power"],
+  },
   {
     match: {
       kind: "regex",
@@ -816,8 +822,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 76;
-const EXPECTED_GUARD_COUNT = 93;
+const EXPECTED_MATCHER_COUNT = 77;
+const EXPECTED_GUARD_COUNT = 94;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1929,6 +1935,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/users",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
+        // High-powered AI's switch, 260930f — added between the two feedback reads
+        "PUT regex /^\\/api\\/admin\\/article\\/([\\w.%-]+)\\/high-power$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         "GET literal /api/library",
         "GET literal /api/library/search",

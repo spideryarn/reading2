@@ -74,7 +74,7 @@ import {
 import type { BuildReport, ModelNode } from "./hierarchy.js";
 import { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 import type { MessagesBody } from "./messages-stream.js";
-import { type Effort, modelFor } from "./models.js";
+import { type Effort, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
 import { budgetFor, THINKING_HEADROOM } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
@@ -1256,6 +1256,8 @@ export function recordCandidate(opts: {
   retries?: number;
   fanOut?: number | null;
   index?: BlockIndex;
+  /** The power the wave ran at, so the record names the model that was asked. */
+  power: ModelPower;
 }): CandidateRecord {
   const { node, blocks, recipe } = opts;
   const index = opts.index ?? indexBlocks(blocks);
@@ -1283,7 +1285,7 @@ export function recordCandidate(opts: {
     authoredHeadings: bodyHeadingsIn(node, blocks, index),
     retries: opts.retries ?? 0,
     fanOut: opts.fanOut ?? null,
-    model: modelFor("hierarchy"),
+    model: modelFor("hierarchy", opts.power),
     effort: EXPAND_EFFORT,
     promptVersion: EXPANSION_PROMPT_STAMP,
   };

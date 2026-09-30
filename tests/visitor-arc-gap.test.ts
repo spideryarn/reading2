@@ -92,7 +92,7 @@ describe("what a visitor gets, and does not", () => {
     const geometry = buildGeometry(tree, blocks);
 
     const parts = partsOf(tree);
-    const real = buildArc(parts.map((_, i) => `Sentence ${i + 1}.`), tree, "example", "hash");
+    const real = buildArc(parts.map((_, i) => `Sentence ${i + 1}.`), tree, "example", "hash", "standard");
     expect(buildArcColumn(geometry, real)).not.toBeNull();
 
     // The visitor's case on an article with no arc.json.

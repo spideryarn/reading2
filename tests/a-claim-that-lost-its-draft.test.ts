@@ -313,6 +313,7 @@ describe("a claim whose draft is taken away mid-step", () => {
        published article — which is what the reader's `ideas` job was. */
     const ingest = await queueJob(slug, INGEST);
     const ingested = await advance(ingest.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: { ...STEPS, ...steps } as never,
     });
@@ -331,6 +332,7 @@ describe("a claim whose draft is taken away mid-step", () => {
     let pointerWas: string | null = null;
     const startedAt = Date.now();
     const advanced = await advance(job.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,
@@ -417,6 +419,7 @@ describe("a claim whose draft is taken away mid-step", () => {
        The job queued behind this one runs now instead of waiting out a lease it
        had nothing to do with. */
     const next = await advance(behind.id, {
+      power: async () => "standard",
       session: claimSession,
       steps: {
         ...STEPS,
@@ -457,7 +460,7 @@ describe("a claim whose draft is taken away mid-step", () => {
     const { steps, blocks } = articleSteps(slug, "ptv");
 
     const ingest = await queueJob(slug, INGEST);
-    expect((await advance(ingest.id, { session: claimSession, steps: { ...STEPS, ...steps } as never }))?.job.status).toBe("done");
+    expect((await advance(ingest.id, { power: async () => "standard", session: claimSession, steps: { ...STEPS, ...steps } as never }))?.job.status).toBe("done");
     const afterIngest = await currentRevisionOf(slug);
     expect(afterIngest).not.toBeNull();
 
@@ -475,6 +478,7 @@ describe("a claim whose draft is taken away mid-step", () => {
     const quotesJob = await queueJob(slug, ["quotes"]);
     expect(
       (await advance(quotesJob.id, {
+        power: async () => "standard",
         session: claimSession,
         steps: { ...STEPS, quotes: returningStep("quotes", { quotes }) } as never,
       }))?.job.status,
@@ -498,6 +502,7 @@ describe("a claim whose draft is taken away mid-step", () => {
     const timelineJob = await queueJob(slug, ["timeline"]);
     expect(
       (await advance(timelineJob.id, {
+        power: async () => "standard",
         session: claimSession,
         steps: { ...STEPS, timeline: returningStep("timeline", { timeline }) } as never,
       }))?.job.status,

@@ -38,7 +38,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -473,6 +473,8 @@ export function buildThread(
     shown: readonly Pick<Block, "id">[];
     /** Filled in with what was taken out, for the caller to log. */
     dropped?: PostBlocksDropped;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
   },
 ): TweetThread {
   const order = new Map(opts.shown.map((b, i) => [b.id, i] as const));
@@ -493,7 +495,7 @@ export function buildThread(
   });
   return {
     version: PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent: absent means "written before this existed" and
@@ -579,7 +581,8 @@ export async function generateTweets(opts: {
    * pulled out. Resolved by whoever queued the job, not read here — src/jobs.ts.
    */
   profile?: string | null;
-
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<TweetsRun> {
   /* `meta` is `null` when the article has no metadata, and that is a state
      rather than a failure: the thread loses the author's name, which the prompt
@@ -656,7 +659,7 @@ export async function generateTweets(opts: {
         { type: "text" as const, text: SYSTEM },
       ],
       messages: [{ role: "user", content: renderPrompt({ meta: realMeta, tree, posts, profile }) }],
-    }, { ...(opts.signal ? { signal: opts.signal } : {}) });
+    }, { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
       const report = opts.onProgress;
@@ -711,6 +714,7 @@ export async function generateTweets(opts: {
     elapsedMs: Date.now() - started,
     shown: evidence,
     dropped,
+    power: opts.power,
   });
 
   return {

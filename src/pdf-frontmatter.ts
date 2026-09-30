@@ -57,7 +57,6 @@
  */
 import { createHash } from "node:crypto";
 import { openRouterJson } from "./ai-call.js";
-import { modelFor } from "./models.js";
 import type { PdfRecord, RecordType } from "./pdf.js";
 import { RENDERED } from "./pdf.js";
 
@@ -402,7 +401,9 @@ export interface FrontMatterReader {
 const MAX_TOKENS = 2_000;
 
 export function openRouterFrontMatterReader(
-  model: string = modelFor("pdf-frontmatter"),
+  /* Required: the article's power picks it (plan 260930f), and a default here
+     would let the pipeline forget to ask. */
+  model: string,
 ): FrontMatterReader {
   /* Counted per reader rather than per call, because a caller wants "what did
      this article's front matter cost" and a retry is two calls. */

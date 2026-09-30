@@ -290,7 +290,7 @@ async function draw(opts: Options): Promise<void> {
        them back, it does not write them a second time. */
     const { result: r, report } = await collectSpend(
       () =>
-        generateIllustrated({
+        generateIllustrated({ power: "standard",
           article,
           sketch,
           ...(systemOverride ? { systemOverride } : {}),

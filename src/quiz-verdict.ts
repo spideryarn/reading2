@@ -155,7 +155,8 @@ export async function classifyVerdict(
     const call = await openRouterJson(
       "quiz-verdict",
       {
-        model: modelFor("quiz-verdict"),
+        /* Quick tier: High-powered AI does not move it (plan 260930f decision 2). */
+        model: modelFor("quiz-verdict", "standard"),
         max_tokens: VERDICT_MAX_TOKENS,
         messages: [
           { role: "system", content: VERDICT_SYSTEM },

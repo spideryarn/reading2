@@ -25,6 +25,7 @@ import type { Article, TweetThread } from "../src/types.js";
 /** @param url omitted entirely when null — an article fetched from a file has no URL at all. */
 function article(url: string | null = "https://paulgraham.com/writes.html"): Article {
   return {
+    highPowerSince: null,
     meta: {
       slug: "writes",
       title: "Writes and Write-Nots",

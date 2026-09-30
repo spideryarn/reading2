@@ -55,7 +55,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, type Effort } from "./models.js";
+import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { isBody } from "./block-policy.js";
@@ -719,6 +719,8 @@ export function buildTrajectory(
     /** The usable quotes — the ones the model was offered. */
     quotes: readonly Quote[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     profileHash: string | null;
     elapsedMs: number;
     dropped: TrajectoryDrops;
@@ -758,7 +760,7 @@ export function buildTrajectory(
   }
   return {
     version: PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     /* The store's spellings (`sourceHash`, `version`, `generator`,
        `profileHash`), which `stampOf` reads — src/store/artifacts.ts. */
@@ -1035,6 +1037,8 @@ export async function generateTrajectory(opts: {
   profile: string | null;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<TrajectoryRun> {
   const { input } = opts;
   const sourceHash = trajectoryInputHash(input);
@@ -1061,7 +1065,7 @@ export async function generateTrajectory(opts: {
           },
         ],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -1109,6 +1113,7 @@ export async function generateTrajectory(opts: {
      left for `buildTrajectory` to refuse. */
   if (Array.isArray(parsed.stops)) parsed.stops = fromLabels(parsed.stops, input.offered);
   const trajectory = buildTrajectory(parsed, {
+    power: opts.power,
     slug: opts.slug,
     quotes: input.offered,
     sourceHash,
@@ -1121,7 +1126,7 @@ export async function generateTrajectory(opts: {
     trajectory,
     offered: count,
     dropped,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     maxTokens,

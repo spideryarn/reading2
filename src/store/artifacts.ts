@@ -59,6 +59,7 @@ import type {
   TweetThread,
 } from "../types.js";
 import { isDebateDocument } from "../types.js";
+import { sameGenerator } from "../models.js";
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
 import type { Assets } from "../assets.js";
@@ -977,6 +978,12 @@ export function stampOf(artefact: unknown): StepStamp {
  * the answer "yes, current" would then mean "nobody checked anything". The
  * safe way to be wrong here is not-current: the cost is one model call, where
  * the other way round is a stale artefact served for ever.
+ *
+ * **`model` compares by generation, not by string** (`sameGenerator`): an
+ * artefact Opus wrote on a high-powered article is current against a Sonnet
+ * expectation and the other way round, so flipping the switch in either
+ * direction re-runs nothing (plan 260930f decision 6). Any other model still
+ * differs.
  */
 export function sameStamp(recorded: StepStamp | null, expected: StepStamp): boolean {
   if (!recorded) return false;
@@ -984,7 +991,13 @@ export function sameStamp(recorded: StepStamp | null, expected: StepStamp): bool
     (k) => expected[k] !== undefined,
   );
   if (keys.length === 0) return false;
-  return keys.every((k) => recorded[k] === expected[k]);
+  return keys.every((k) => {
+    if (k === "model") {
+      const [r, e] = [recorded.model, expected.model];
+      return typeof r === "string" && typeof e === "string" && sameGenerator(r, e);
+    }
+    return recorded[k] === expected[k];
+  });
 }
 
 /**

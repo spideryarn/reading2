@@ -67,7 +67,7 @@
 import type { Block, Meta, SearchHit } from "./types.js";
 import { loadEnvLocal } from "./env.js";
 import { findQuote } from "./quote-match.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
   type StreamEnd,
@@ -100,7 +100,7 @@ import {
  * `SPIDERYARN_SEARCH_MODEL` if that is set — see `resolveModel` there for why
  * the override is read in that file rather than here.
  */
-export const defaultModel = (): string => modelFor("search");
+export const defaultModel = (power: ModelPower): string => modelFor("search", power);
 
 /**
  * How long to wait before giving up.
@@ -197,6 +197,12 @@ export interface SearchRequest {
   blocks: Block[];
   /** What the reader typed. */
   criterion: string;
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -541,7 +547,8 @@ export async function* findPassagesStream({
   meta,
   blocks,
   criterion,
-  model = defaultModel(),
+  power,
+  model = defaultModel(power),
   signal,
   timeoutMs = SEARCH_TIMEOUT_MS,
   stallMs = SEARCH_STALL_MS,
@@ -565,7 +572,7 @@ export async function* findPassagesStream({
      the breakpoint is accepted and does nothing — zeros in both usage fields,
      which is indistinguishable from a cache that has broken. Saying it out loud
      here is what makes the difference visible. */
-  const tooShortToCache = underCacheFloor(cachedText(messages));
+  const tooShortToCache = underCacheFloor(cachedText(messages), model);
 
   const deadline = AbortSignal.timeout(timeoutMs);
   /* A separate clock from the deadline, restartable on every chunk — see

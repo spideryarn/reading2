@@ -89,7 +89,7 @@ beforeEach(() => {
 describe("generateQuotes, on a first pass", () => {
   it("asks for lines that do not repeat the same point", async () => {
     answer = JSON.stringify({ quotes: [{ text: FIRST }] });
-    await generateQuotes({ article: ARTICLE, previous: null });
+    await generateQuotes({ power: "standard", article: ARTICLE, previous: null });
     expect(sent[0]).toContain("Each quote should say something the others do not.");
     expect(sent[0]).toContain("keep the best statement of it");
   });
@@ -98,7 +98,7 @@ describe("generateQuotes, on a first pass", () => {
 describe("generateQuotes, on a Find more", () => {
   it("appends to an unmoved list and keeps its id", async () => {
     answer = JSON.stringify({ quotes: [{ text: SECOND }] });
-    const run = await generateQuotes({ article: ARTICLE, previous: previous() });
+    const run = await generateQuotes({ power: "standard", article: ARTICLE, previous: previous() });
     expect(run.quotes.quotes.map((q) => q.id)[0]).toBe("spya-keep01");
     expect(run.quotes.quotes).toHaveLength(2);
     expect(sent[0]).toContain("ALREADY ON THE LIST");
@@ -106,7 +106,7 @@ describe("generateQuotes, on a Find more", () => {
 
   it("reports this pass's drops for the log, and the whole list's on the artefact", async () => {
     answer = JSON.stringify({ quotes: [{ text: SECOND }, { text: "Words this piece has never contained anywhere." }] });
-    const run = await generateQuotes({ article: ARTICLE, previous: previous() });
+    const run = await generateQuotes({ power: "standard", article: ARTICLE, previous: previous() });
     expect(run.dropped.unfound).toBe(1);
     expect(run.quotes.discarded.unfound).toBe(6);
   });
@@ -126,6 +126,7 @@ describe("generateQuotes, on a Find more", () => {
     answer = JSON.stringify({ quotes: [{ text: THIRD }] });
 
     const run = await generateQuotes({
+      power: "standard",
       article,
       previous: previous({
         sourceHash,
@@ -146,6 +147,7 @@ describe("generateQuotes, on a stale list", () => {
   it("replaces it with FRESH ids even when it is also outdated, and even for the same words", async () => {
     answer = JSON.stringify({ quotes: [{ text: FIRST }] });
     const run = await generateQuotes({
+      power: "standard",
       article: ARTICLE,
       previous: previous({ sourceHash: "an-older-article", version: "quotes/3" }),
     });
@@ -163,7 +165,7 @@ describe("generateQuotes, on an outdated list (same article, older prompt)", () 
      again in exactly the same words keeps the reader's `?quote=` link. */
   it("replaces it rather than appending, and is stamped with the current prompt", async () => {
     answer = JSON.stringify({ quotes: [{ text: SECOND }] });
-    const run = await generateQuotes({ article: ARTICLE, previous: previous({ version: "quotes/3" }) });
+    const run = await generateQuotes({ power: "standard", article: ARTICLE, previous: previous({ version: "quotes/3" }) });
     expect(run.quotes.quotes.map((q) => q.text)).toEqual([SECOND]);
     expect(run.quotes.version).toBe(PROMPT_VERSION);
     expect(run.quotes.passes).toBe(1);
@@ -173,7 +175,7 @@ describe("generateQuotes, on an outdated list (same article, older prompt)", () 
 
   it("keeps the id of a quote chosen again in exactly its words, and mints the rest", async () => {
     answer = JSON.stringify({ quotes: [{ text: FIRST }, { text: SECOND }] });
-    const run = await generateQuotes({ article: ARTICLE, previous: previous({ version: "quotes/3" }) });
+    const run = await generateQuotes({ power: "standard", article: ARTICLE, previous: previous({ version: "quotes/3" }) });
     const ids = run.quotes.quotes.map((q) => q.id);
     expect(ids[0]).toBe("spya-keep01");
     expect(ids[1]).not.toBe("spya-keep01");
@@ -185,7 +187,7 @@ describe("generateQuotes, on an outdated list (same article, older prompt)", () 
     const article = { ...ARTICLE, blocks };
     const sourceHash = inputFingerprint(blocks, TREE, null);
     answer = JSON.stringify({ quotes: [{ text: longer }] });
-    const run = await generateQuotes({ article, previous: previous({ version: "quotes/3", sourceHash }) });
+    const run = await generateQuotes({ power: "standard", article, previous: previous({ version: "quotes/3", sourceHash }) });
     expect(run.quotes.quotes).toHaveLength(1);
     expect(run.quotes.quotes[0]?.id).not.toBe("spya-keep01");
   });
@@ -197,12 +199,12 @@ describe("generateQuotes, near the ceiling", () => {
 
   it("asks for no more than the room left", async () => {
     answer = '{"quotes": []}';
-    await generateQuotes({ article: ARTICLE, previous: previous({ quotes: full(MAX_QUOTES_TOTAL - 3) }) });
+    await generateQuotes({ power: "standard", article: ARTICLE, previous: previous({ quotes: full(MAX_QUOTES_TOTAL - 3) }) });
     expect(sent[0]).toContain("up to 3 MORE");
   });
 
   it("makes no call at all when there is no room, and says it found nothing", async () => {
-    const run = await generateQuotes({ article: ARTICLE, previous: previous({ quotes: full(MAX_QUOTES_TOTAL) }) });
+    const run = await generateQuotes({ power: "standard", article: ARTICLE, previous: previous({ quotes: full(MAX_QUOTES_TOTAL) }) });
     expect(sent).toHaveLength(0);
     expect(run.quotes.quotes).toHaveLength(MAX_QUOTES_TOTAL);
     expect(run.quotes.lastAdded).toBe(0);

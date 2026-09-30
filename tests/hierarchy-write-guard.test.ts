@@ -201,7 +201,7 @@ let structureHash!: typeof import("../src/source-hash.js")["structureHash"];
 
 async function run(): Promise<{ threw: Error | null; run?: HierarchyRun }> {
   try {
-    const result = await generateHierarchy({ blocks, slug: "toc-write-guard", checkpoints: nullCheckpointStore() });
+    const result = await generateHierarchy({ power: "standard", blocks, slug: "toc-write-guard", checkpoints: nullCheckpointStore() });
     return { threw: null, run: result };
   } catch (err) {
     return { threw: err as Error };

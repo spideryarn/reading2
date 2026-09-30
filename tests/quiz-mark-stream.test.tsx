@@ -324,6 +324,7 @@ const MARK = {
   referenceAnswer: "It claims a thing. Then it argues for it.",
   evidence: [],
   answer: "I think it claims a thing.",
+  power: "standard" as const,
 };
 
 /** One OpenRouter frame — `data: {…}`, which is not the shape `sse` writes. */

@@ -73,6 +73,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 async function chat() {
   for await (const _ of converse({
+    power: "standard",
     meta,
     blocks,
     history: [],
@@ -85,7 +86,7 @@ async function chat() {
 }
 
 async function explained() {
-  for await (const _ of explainStream({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" })) {
+  for await (const _ of explainStream({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" })) {
     // drain
   }
 }

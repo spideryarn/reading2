@@ -89,6 +89,7 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
    something the next file to import embeddings might. `import type` is erased,
    so it creates no edge at all. */
 import type { AiJob, Wire } from "./models.js";
+import { isHighPowerModel } from "./high-power-model.js";
 import {
   type StreamChunk,
   readerAborted,
@@ -905,6 +906,24 @@ export function effortOf(job: ChatJob): ReasoningEffort | null {
 }
 
 /**
+ * **The effort that goes on the wire for this job and this model** — the row's,
+ * except that a `providerDefault` row sent to the high-power model gets `high`.
+ *
+ * Opus 5.5's default effort is `medium` where Sonnet 5's is `high`, so leaving
+ * the default in place would make High-powered AI think *less* on every
+ * provider-default job — explain, chat, search, debate, citations, quiz marking —
+ * which is the opposite of the switch's promise. `high` is Sonnet's own
+ * default, so no ceiling sized against Sonnet is asked for more than it was.
+ * Keyed on the model sent, because the reason is that model's default. Plan
+ * 260930f decision 1, Sol F2.
+ */
+function wireEffort(job: ChatJob, model: unknown): ReasoningEffort | null {
+  const row = CHAT_REASONING[job];
+  if ("effort" in row) return row.effort;
+  return typeof model === "string" && isHighPowerModel(model) ? "high" : null;
+}
+
+/**
  * Which path a job posts to.
  *
  * **The `undefined` check is not defensive noise.** `ChatJob` excludes the eight
@@ -1315,14 +1334,14 @@ function outgoing(
   body: AiRequestBody,
   streaming: boolean,
 ): string {
-  const thinking = CHAT_REASONING[job];
   /* After the spread, like `provider`: a body built at run time can carry a
      `reasoning` the type never saw, and the table is the decision. A
      `providerDefault` row strips one for the same reason. */
   const { reasoning: _ignored, ...rest } = body as Record<string, unknown>;
+  const effort = wireEffort(job, rest.model);
   return JSON.stringify({
     ...rest,
-    ...("effort" in thinking ? { reasoning: { effort: thinking.effort } } : {}),
+    ...(effort ? { reasoning: { effort } } : {}),
     /* Every chat row has one; the conditional is for `Route.provider`'s `null`,
        which only the image route uses and which never reaches here. */
     ...(routeFor(job).provider ? { provider: routeFor(job).provider } : {}),
@@ -1637,7 +1656,7 @@ function warnIfThinkingAteTheCeiling(
 ): void {
   if (end.finishReason !== "length" || !meter.reasoningTokens) return;
   try {
-    const thinking = CHAT_REASONING[job];
+    const effort = wireEffort(job, body.model);
     log("model").warn(
       {
         job,
@@ -1645,7 +1664,7 @@ function warnIfThinkingAteTheCeiling(
         ceiling: num(body.max_tokens) ?? num(body.max_completion_tokens),
         reasoningTokens: meter.reasoningTokens,
         outputTokens: meter.outputTokens,
-        effort: "effort" in thinking ? thinking.effort : "provider-default",
+        effort: effort ?? "provider-default",
       },
       `${job} stopped at its token ceiling after ${meter.reasoningTokens} tokens of thinking — ` +
         "see CHAT_REASONING in src/ai-call.ts",

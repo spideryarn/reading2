@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const started = Date.now();
   let chars = 0;
   let last = 0;
-  const call = streamMessage("hierarchy", params);
+  const call = streamMessage("hierarchy", params, { power: "standard" });
   call.onText((delta) => {
     chars += delta.length;
     const now = Date.now();

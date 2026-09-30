@@ -128,7 +128,7 @@ const THREE = [
 
 const meta = { title: "A piece", slug: "piece" } as Meta;
 const blocks: Block[] = [];
-const ctx = { slug: "piece", meta, blocks };
+const ctx = { slug: "piece", meta, blocks, power: "standard" as const };
 
 const found = (citations: Citations, over: { stale?: boolean; outdated?: boolean } = {}) => ({
   citations,

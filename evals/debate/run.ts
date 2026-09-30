@@ -200,7 +200,7 @@ async function commandRun(o: Options): Promise<void> {
   const journal = await JournalFile.open(dir);
 
   const article = await loadArticleFor(slug);
-  const model = modelFor("debate");
+  const model = modelFor("debate", "standard");
   console.log(`Article: ${slug} — ${String(article.blocks.length)} blocks`);
   console.log(`Model:   ${model}`);
   console.log(`Journal: ${journal.file}\n`);
@@ -218,7 +218,7 @@ async function commandRun(o: Options): Promise<void> {
   let kept: { direct: number; claims: number } | null = null;
 
   try {
-    const run = await generateDebate({
+    const run = await generateDebate({ power: "standard",
       article,
       journal,
       onProgress: (detail) => {
@@ -382,7 +382,7 @@ async function commandPlan(o: Options): Promise<void> {
   console.log(`  byline           ${article.meta?.byline ?? "(none)"}`);
   console.log(`  url              ${article.meta?.url ?? "(none)"}`);
   console.log(`  inputFingerprint ${inputFingerprint(article.blocks, article.tree, article.meta)}`);
-  console.log(`  model            ${modelFor("debate")}`);
+  console.log(`  model            ${modelFor("debate", "standard")}`);
   console.log(`\n  pass A  system ${String(DIRECT_SYSTEM.length)} chars (${sha256Of(DIRECT_SYSTEM).slice(0, 12)}), user ${String(directUser.length)} chars (${sha256Of(directUser).slice(0, 12)})`);
   console.log(`  pass B  system ${String(claimsSystem.length)} chars (${sha256Of(claimsSystem).slice(0, 12)}), user ${String(CLAIMS_PROMPT.length)} chars (${sha256Of(CLAIMS_PROMPT).slice(0, 12)})`);
 

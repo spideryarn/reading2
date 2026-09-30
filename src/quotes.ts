@@ -85,7 +85,7 @@ import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -1028,6 +1028,8 @@ export function buildQuotes(
      */
     documentBlocks?: readonly Block[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     /** The rendered profile this was written from, or null for none. */
     profile?: string | null;
     elapsedMs: number;
@@ -1119,7 +1121,7 @@ export function buildQuotes(
        whether some or all of them were. GPT Sol on the plan; Fable arbitrated
        the shape, 2026-09-11. `generator` is the model, which has one value. */
     version: opts.existing ? opts.existing.version : PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent. Absent means "written before this existed"; `null`
@@ -1586,6 +1588,8 @@ export async function generateQuotes(opts: {
    * success. A required one cannot be.
    */
   previous: Quotes | null;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<QuotesRun> {
   const { blocks, tree } = opts.article;
   /* **`null` straight through, and no stub.** Unlike `ideas` and `sketch`, this
@@ -1644,6 +1648,7 @@ export async function generateQuotes(opts: {
     const dropped = noneDropped();
     return {
       quotes: buildQuotes({ quotes: [] }, {
+        power: opts.power,
         slug: tree.slug,
         blocks: evidence,
         documentBlocks: blocks,
@@ -1657,7 +1662,7 @@ export async function generateQuotes(opts: {
       words,
       dropped,
       scores: noQuoteScoreDrops(),
-      model: CAPABLE_MODEL,
+      model: generatorFor(opts.power),
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 0,
@@ -1710,7 +1715,7 @@ export async function generateQuotes(opts: {
           },
         ],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -1767,6 +1772,7 @@ export async function generateQuotes(opts: {
      wearing the same verification as every other row. The two lists have to be
      the same list, which is why this reads the one variable. */
   const quotes = buildQuotes(parseJson(raw), {
+    power: opts.power,
     slug: tree.slug,
     blocks: evidence,
     documentBlocks: blocks,
@@ -1785,7 +1791,7 @@ export async function generateQuotes(opts: {
     words,
     dropped,
     scores,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

@@ -260,7 +260,7 @@ describe("the structure call's request", () => {
   it("sends exactly the pinned bytes and settings", async () => {
     captured.length = 0;
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "fixture", checkpoints: nullCheckpointStore() }),
+      generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "fixture", checkpoints: nullCheckpointStore() }),
     ).rejects.toThrow(); // the mocked call fails on purpose, after capture
     expect(captured).toHaveLength(1);
 
@@ -286,7 +286,7 @@ describe("the structure call's request", () => {
   it("structureRequest is the same request - parity by construction, checked anyway", async () => {
     captured.length = 0;
     await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "fixture", checkpoints: nullCheckpointStore() }),
+      generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "fixture", checkpoints: nullCheckpointStore() }),
     ).rejects.toThrow();
     const { body } = captured[0]!;
     const req = structureRequest(BLOCKS);

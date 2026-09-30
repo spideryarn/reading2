@@ -123,7 +123,7 @@ async function generate(arm: string): Promise<void> {
 
   type Req = Parameters<typeof explainStream>[0];
   async function explainOnce(meta: Req["meta"], blocks: Req["blocks"], blockId: string, quote: string) {
-    for await (const e of explainStream({ meta, blocks, blockId, quote })) {
+    for await (const e of explainStream({ power: "standard", meta, blocks, blockId, quote })) {
       if (e.type === "done") return { text: e.answer, searches: e.searches, ending: e.ending as string };
     }
     throw new Error("explainStream ended without a done event");
@@ -146,7 +146,7 @@ async function generate(arm: string): Promise<void> {
           explainOnce(article.meta, article.blocks, blockId, sentence).then((r) => ({ slug, term, kind: "sentence" as const, asked: sentence, ...r })),
           (async () => {
             const question = `What does "${quote}" mean here, and why does it matter to the argument?`;
-            for await (const e of converse({ meta: article.meta, blocks: article.blocks, history: [], question, slug, kind: "chat", useTools: true })) {
+            for await (const e of converse({ power: "standard", meta: article.meta, blocks: article.blocks, history: [], question, slug, kind: "chat", useTools: true })) {
               if (e.type === "done") return { slug, term, kind: "chat" as const, asked: question, text: e.text, searches: e.searches };
             }
             throw new Error("converse ended without a done event");

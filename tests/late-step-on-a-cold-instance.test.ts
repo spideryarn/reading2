@@ -160,6 +160,7 @@ afterAll(async () => {
  */
 function coldContext(): StepContext {
   return {
+    power: "standard",
     slug: SLUG,
     report: () => undefined,
     signal: new AbortController().signal,

@@ -279,6 +279,7 @@ const PROSE_SOURCE_HASH = articleFingerprint(BLOCKS, TREE, META);
  */
 function ctxOf(slug: string = SLUG): StepContext {
   return {
+    power: "standard",
     slug,
     report: () => undefined,
     signal: new AbortController().signal,
@@ -589,7 +590,7 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
      written twice, so this artefact carries the one that means something to a
      reader. */
   store.plant(SLUG, "debate", "debate", {
-    generator: modelFor("debate"),
+    generator: modelFor("debate", "standard"),
     slug: SLUG,
     sourceHash: DEBATE_SOURCE_HASH,
     version: DEBATE_VERSION,

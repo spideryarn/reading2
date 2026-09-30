@@ -117,7 +117,7 @@ describe("what the provider says about how it stopped", () => {
     let sawDone = false;
     let thrown: Error | undefined;
     try {
-      for await (const e of mirrorStream({ blocks: BLOCKS, comments: [COMMENT] })) {
+      for await (const e of mirrorStream({ power: "standard", blocks: BLOCKS, comments: [COMMENT] })) {
         if (e.type === "delta") streamed += e.text;
         else sawDone = true;
       }
@@ -138,7 +138,7 @@ describe("what the provider says about how it stopped", () => {
        pins. Without this, "refuse every truncation" would pass the whole file. */
     fetchMock.mockResolvedValue(endedWith("length"));
     let done: { remarks: readonly unknown[] } | undefined;
-    for await (const e of mirrorStream({ blocks: BLOCKS, comments: [COMMENT] })) {
+    for await (const e of mirrorStream({ power: "standard", blocks: BLOCKS, comments: [COMMENT] })) {
       if (e.type === "done") done = e;
     }
     expect(done?.remarks).toHaveLength(1);

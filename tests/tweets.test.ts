@@ -71,7 +71,7 @@ describe("countChars", () => {
  * written to anywhere.
  */
 describe("buildThread", () => {
-  const opts = { slug: "a-slug", sourceHash: "deadbeefdeadbeef", elapsedMs: 1234, shown: BLOCKS };
+  const opts = { slug: "a-slug", sourceHash: "deadbeefdeadbeef", elapsedMs: 1234, shown: BLOCKS, power: "standard" as const };
 
   it("stores no post number, because the array already has the order", () => {
     // A stored `number` beside the index is a second copy of one fact, and the
@@ -246,6 +246,7 @@ describe("hashBlocks and isStale", () => {
     buildThread(
       { tweets: [{ text: "a", blocks: ["spya-aaaaaa"] }] },
       {
+        power: "standard",
         slug: "s",
         sourceHash: inputFingerprint(BLOCKS, STALE_TREE, STALE_META),
         elapsedMs: 0,
@@ -413,6 +414,7 @@ function threadFor(blocks: Block[], over: Partial<TweetThread>): TweetThread {
   const full = buildThread(
     { tweets: [{ text: "a post", blocks: [blocks[0]!.id] }] },
     {
+      power: "standard",
       slug: SLUG,
       sourceHash: inputFingerprint(blocks, STAMP_TREE, STAMP_META),
       elapsedMs: 0,
@@ -438,6 +440,7 @@ function ctxFor(): StepContext {
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
+    power: "standard",
   };
 }
 

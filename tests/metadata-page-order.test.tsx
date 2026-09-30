@@ -76,6 +76,7 @@ function article(): Article {
     ],
     assets: undefined,
     navLabelStatus: "ready",
+    highPowerSince: null,
     sourceGuess: undefined,
     tree: {
       version: "t",

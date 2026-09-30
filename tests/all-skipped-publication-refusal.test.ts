@@ -449,6 +449,7 @@ async function failThePublication(
 
   let draftId = "";
   const advanced = await advanceWhenSlotFree(jobId, {
+    power: async () => "standard",
     session: async (job, attempt) => {
       const real = await openPgStoreSession({
         slug: job.slug,
@@ -531,6 +532,7 @@ describe("a claim where every step skips and the publication does not happen", (
     let draftId = "";
     let r2 = "";
     const parts: AdvanceParts = {
+      power: async () => "standard",
       /* **The session factory is where the race is staged**, because it is the
          one moment between the draft being minted — `openPgStoreSession` does
          that, and records R1 as its base — and the walk beginning. In production
@@ -621,6 +623,7 @@ describe("a claim where every step skips and the publication does not happen", (
     const jobId = await queueJob(slug, ["arc"]);
 
     const advanced = await advanceWhenSlotFree(jobId, {
+      power: async () => "standard",
       session: async (job, attempt) =>
         await openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
       steps: { ...STEPS, arc: fakeArc() },
@@ -689,6 +692,7 @@ describe("a claim where every step skips and the publication does not happen", (
 
     let draftId = "";
     const advanced = await advanceWhenSlotFree(jobId, {
+      power: async () => "standard",
       session: async (job, attempt) => {
         const real = await openPgStoreSession({
           slug: job.slug,

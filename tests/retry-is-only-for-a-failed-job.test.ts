@@ -393,7 +393,7 @@ function session(job: Job, attempt: string): Promise<StoreSession> {
 
 /** The real session over the fake steps. */
 function partsFor(steps: Partial<Record<StepName, PipelineStep>>): AdvanceParts {
-  return { session, steps: { ...STEPS, ...steps } as AdvanceParts["steps"] };
+  return { session, steps: { ...STEPS, ...steps } as AdvanceParts["steps"], power: async () => "standard" };
 }
 
 /**

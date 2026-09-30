@@ -118,6 +118,7 @@ const ctx = {
   slug: OPEN,
   meta: { title: "The open article", url: "https://example.com/open" } as Meta,
   blocks: [] as Block[],
+  power: "standard" as const,
 };
 
 let open: ScratchArticle | undefined;

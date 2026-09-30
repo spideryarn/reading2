@@ -134,6 +134,8 @@ import {
   ARTICLE_RENDERER,
   type ArticleStage,
   CAPABLE_MODEL,
+  generatorFor,
+  type ModelPower,
   modelFor,
   STAGE_EFFORT,
 } from "./models.js";
@@ -594,6 +596,16 @@ export interface StepContext {
    * Steps that do not read the whole article ignore this.
    */
   cacheArticle: boolean;
+  /**
+   * **Which capable model this step's calls go to** — the article's
+   * High-powered AI setting, read by `runStep` (src/jobs.ts) from the article
+   * row when the step starts. Required, so a step that makes a capable-tier call
+   * has to pass it on and cannot quietly run Sonnet on a high-powered article.
+   *
+   * Per step rather than per job: flipping the switch mid-job moves the
+   * *remaining* steps. Plan 260930f decisions 3–5.
+   */
+  power: ModelPower;
 }
 
 /**
@@ -2129,8 +2141,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
 
       const result = await runPdfExtract({
-        frontMatter: openRouterFrontMatterReader(),
-        authors: openRouterAuthorsReader(),
+        frontMatter: openRouterFrontMatterReader(modelFor("pdf-frontmatter", ctx.power)),
+        authors: openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -2473,6 +2485,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         /* Only the deepening wave reads it, and only to decide whether to start
            another scoped call — see `StepContext.deadlineAt`. With the flag off
            it changes nothing at all. */
@@ -2735,6 +2748,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         checkpoints,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
       });
 
       /* The artefacts, assembled once, with every check below asked of *this*
@@ -2756,7 +2770,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         {
           slug: ctx.slug,
           step: "labels",
-          model: CAPABLE_MODEL,
+          model: generatorFor(ctx.power),
           /* The one thing this stage forgives with no trace in the product: a
              paragraph the model would not label twice running is a leaf with no
              row, which renders as nothing rather than as an error. Logged at
@@ -2994,6 +3008,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       plog.info(
@@ -3055,6 +3070,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const over = run.over > 0 ? `, ${run.over} over ${run.thread.limit}` : "";
@@ -3149,6 +3165,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const total = run.glossary.entries.length;
@@ -3252,6 +3269,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const total = run.quotes.quotes.length;
@@ -3375,6 +3393,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const total = run.ideas.ideas.length;
@@ -3511,6 +3530,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         previous,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const total = run.timeline.events.length;
@@ -3631,6 +3651,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const questions = run.quiz.questions;
@@ -3709,6 +3730,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const questions = run.faq.questions;
@@ -3794,6 +3816,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const s = run.score;
@@ -3975,6 +3998,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
 
@@ -4118,6 +4142,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
       });
       const [gist, more, most] = run.trajectory.visible;
       plog.info(
@@ -4203,7 +4228,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            `SPIDERYARN_DEBATE_MODEL` can override the model — and a stamp that
            named the default while the override wrote the artefact would report
            every run stale. src/models.ts § `resolveModel`. */
-        model: modelFor("debate"),
+        model: modelFor("debate", ctx.power),
       };
     },
     async run(ctx, store) {
@@ -4211,6 +4236,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
       });
       const { direct, claims } = run.debate;
       plog.info(
@@ -4284,6 +4310,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         previous,
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const rows = run.citations.citations;

@@ -119,6 +119,7 @@ import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
 import { pgShelfTermsStore } from "./pg-shelf-terms.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
+import { type HighPowerStore, pgHighPowerStore } from "./pg-high-power.js";
 
 import { postgresBlobStore } from "./blobs.js";
 
@@ -480,6 +481,9 @@ export const adminStore: AdminStore = guarded("admin", pgAdminStore);
  * docs/plans/260827ai-public-read-only-access.md.
  */
 export const visibilityStore: VisibilityStore = guarded("visibility", pgVisibilityStore);
+
+/** High-powered AI's column — plan 260930f, src/store/pg-high-power.ts. */
+export const highPowerStore: HighPowerStore = guarded("high-power", pgHighPowerStore);
 
 /* ------------------------------------------------------------- feedback -- */
 

@@ -417,6 +417,7 @@ describe("buildIdeas", () => {
     sourceHash: "abc.def",
     elapsedMs: 10,
     dropped: fresh(),
+    power: "standard" as const,
   });
 
   it("stamps the version, the model and a null profileHash", () => {
@@ -468,6 +469,7 @@ describe("idsByName and normaliseName", () => {
 
   it("gives a regenerated idea the id the old list used for the same name", () => {
     const built = buildIdeas({ ideas: [raw({ name: "Writing IS thinking" })] }, {
+      power: "standard",
       slug: "test",
       blocks: BLOCKS,
       sourceHash: "abc.def",
@@ -485,6 +487,7 @@ describe("idsByName and normaliseName", () => {
        reader can see, and one that lands on a DIFFERENT idea is a dead end that
        looks like it worked. */
     const built = buildIdeas({ ideas: [raw({ name: "Prose is where thinking is tested" })] }, {
+      power: "standard",
       slug: "test",
       blocks: BLOCKS,
       sourceHash: "abc.def",
@@ -499,6 +502,7 @@ describe("idsByName and normaliseName", () => {
     const built = buildIdeas(
       { ideas: [raw({ name: "Writing is thinking" }), raw({ name: "writing is thinking!" })] },
       {
+        power: "standard",
         slug: "test",
         blocks: BLOCKS,
         sourceHash: "abc.def",
@@ -552,6 +556,7 @@ describe("inputFingerprint and isStale", () => {
 
   it("reports an artefact stale when the tree alone has moved", () => {
     const built = buildIdeas({ ideas: [raw()] }, {
+      power: "standard",
       slug: "test",
       blocks: BLOCKS,
       sourceHash: inputFingerprint(BLOCKS, tree(), META),

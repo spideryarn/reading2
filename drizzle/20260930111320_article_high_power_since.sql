@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."articles" ADD COLUMN IF NOT EXISTS "high_power_since" timestamp with time zone;

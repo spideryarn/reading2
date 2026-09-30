@@ -2622,6 +2622,8 @@ const rawPgArticleReader: ArticleReader = {
       /* Named, for `assets`' reason: required on `Article`, so a projection
          that forgot it is a type error (src/types.ts § `sourceGuess`). */
       sourceGuess,
+      /* Off the `articles` row `currentRevision` already selected — plan 260930f. */
+      highPowerSince: found.article.highPowerSince?.toISOString() ?? null,
     };
   },
 
@@ -3015,7 +3017,9 @@ const rawPgArticleReader: ArticleReader = {
             {
               inputHash: debateFingerprint(blocks, tree, citedFingerprint),
               promptVersion: DEBATE_PROMPT_VERSION,
-              model: modelFor("debate"),
+              /* `standard` whatever the article's power: `sameStamp` compares by
+                 generation, so an Opus debate is current here too (plan 260930f). */
+              model: modelFor("debate", "standard"),
             },
           );
         }
@@ -3171,6 +3175,8 @@ const rawPgArticleReader: ArticleReader = {
       /* Off the same `shelfFrom` as `purpose`, so the two stores answer this
          from the same derivation rather than from two readings of one column. */
       archivedAt: shelfFrom(found.article).archivedAt ?? null,
+      /* Off the same `articles` row — plan 260930f. */
+      highPowerSince: found.article.highPowerSince?.toISOString() ?? null,
 
       /* **Free, and that is why all three are here rather than behind a second
          endpoint.** `currentRevisionQuery` selects `articles` whole — the row
@@ -3635,7 +3641,10 @@ const rawPgArticleReader: ArticleReader = {
        `lookupContext` the call built its prompt from. Before `attachFinds`, so
        the row it sees is the artefact's, not the upgraded one. */
     const text = new Map(blocks.map((b) => [b.id as string, b.text]));
-    const model = modelFor("citations-find");
+    /* `standard` whatever the article's power: the fingerprint hashes the
+       model's generation, so a lookup made at either power attaches (plan
+       260930f, Sol F1). */
+    const model = modelFor("citations-find", "standard");
     const withLookups = attachLookups(citations, finds, (work) =>
       lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
     );
@@ -3672,7 +3681,8 @@ const rawPgArticleReader: ArticleReader = {
         shelfFrom(found.article),
       );
       const articleKey = investigateArticleKey(promptMeta, blocks);
-      const investigateModel = modelFor("citation-investigate");
+      /* `standard` for `model`'s reason above. */
+      const investigateModel = modelFor("citation-investigate", "standard");
       withInvestigations = attachInvestigations(
         withFinds,
         new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),

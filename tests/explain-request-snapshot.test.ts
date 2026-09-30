@@ -75,7 +75,7 @@ function finished(): Response {
 
 /** The request as `openRouterStream` received it, serialised the way `outgoing` will serialise it. */
 async function requestFor(extra: { deep?: boolean; profile?: string }): Promise<string> {
-  await explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", model: MODEL, ...extra });
+  await explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", model: MODEL, ...extra });
   expect(seen.calls).toHaveLength(1);
   return JSON.stringify(seen.calls[0], null, 2);
 }

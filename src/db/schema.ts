@@ -278,6 +278,21 @@ export const articles = spideryarn.table("articles", {
    * card can print without a join.
    */
   publicAt: timestamp("public_at", { withTimezone: true }),
+
+  /**
+   * **High-powered AI: when it was switched on, or null for off** —
+   * docs/plans/260930f-high-powered-ai-per-article.md. While set, and while the
+   * owner is an administrator (`articlePower` in src/models.ts), this article's
+   * capable-tier calls go to Opus instead of Sonnet.
+   *
+   * On `articles` for the reason `visibility` is: it is a property of the work,
+   * not of one extraction, so a re-extraction must not switch it off. Nothing
+   * that clones an article copies it (checked 2026-09-30: the only `insert into
+   * articles` paths are a fresh ingest and the seed scripts, neither of which
+   * carries it). A timestamp rather than a boolean — the house shape for a
+   * switch, and it says *when* for free.
+   */
+  highPowerSince: timestamp("high_power_since", { withTimezone: true }),
 }, (t) => [
   /**
    * Two spellings, and a third is a row every public read silently ignores.

@@ -109,6 +109,8 @@ import {
   STEP_STOPPED,
 } from "./messages.js";
 import type { Job, JobReset, JobStep, JobUpload, StepName } from "./types.js";
+import { articlePower, type ModelPower } from "./models.js";
+import { highPowerStore } from "./store/index.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
    from either module — they are only ever used structurally, inside types.ts,
@@ -972,7 +974,23 @@ async function runStep(
   /* An observer, never a participant — see `AdvanceParts.onStepSpend`, which is
      where the whole argument for its existence lives. `undefined` in production. */
   onStepSpend: AdvanceParts["onStepSpend"],
+  /* `AdvanceParts.power` — which capable model this step's calls go to. */
+  readPower: AdvanceParts["power"],
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
+  /* **The article's power, read once per step, when the step starts** (plan
+     260930f decision 3): flipping High-powered AI mid-job moves the steps
+     still to run, and every call inside this one sees one answer.
+
+     **A read that fails is this step's failure, not a quiet Sonnet.** It is
+     caught here and re-thrown at the top of the `try` below, so it lands in
+     the same recording every other step failure does. Until then `ctx.power`
+     holds `standard` as a placeholder that nothing can spend: the preflight
+     is skipped for a failed read (it would only decide to skip the step),
+     and the `try` throws before `run`. */
+  const powerRead = await readPower(job).then(
+    (power) => ({ ok: true as const, power }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
   /* **A `contextPaths(job.slug)` stood here until 2026-09-05**, filling
      `dir` and `htmlFile` on every step of every job under either store, and
      nothing downstream read either one. Both went with the filesystem store;
@@ -1004,13 +1022,18 @@ async function runStep(
       job.steps.indexOf(step),
     ),
     ...(job.profile !== undefined && { profile: job.profile }),
+    power: powerRead.ok ? powerRead.power : "standard",
   };
 
   /* `session.reads`, not the store directly. The preflight and the run phase
      have to ask the same store, or a step decides whether to skip by looking at
      one place and does its work against another — which under Postgres means
      files on disk answering for rows in a draft. */
-  if (!stillForced(step) && (await stepIsDone(registry[step.name], ctx, session.reads))) {
+  if (
+    powerRead.ok &&
+    !stillForced(step) &&
+    (await stepIsDone(registry[step.name], ctx, session.reads))
+  ) {
     /* **A step this job already ran keeps saying so.** `runJob` never meets
        this case — it visits each step once, at `pending` — but `advanceJob`
        walks the whole list on every call, so without the guard the second
@@ -1047,6 +1070,7 @@ async function runStep(
   let spend: SpendReport = emptySpend();
 
   try {
+    if (!powerRead.ok) throw powerRead.error;
     /* Bracketing the run, not decorating it. A step that dies between two of
        its own writes leaves artefacts that all exist and all parse and
        describe two different generations, and nothing about the files can
@@ -1941,6 +1965,14 @@ export interface AdvanceParts {
    * Raised by GPT Sol reviewing evals/cost/run.ts, 2026-09-02.
    */
   readonly onStepSpend?: (step: StepName, report: SpendReport) => void;
+  /**
+   * **Which capable model a step's calls go to** — read per step by `runStep`
+   * and put on `StepContext.power`. Production reads the article row
+   * (`readStepPower`); a test says what it wants. Required, like `steps`, so
+   * a test harness cannot leave production's database read under fakes that
+   * have no article row. docs/plans/260930f-high-powered-ai-per-article.md.
+   */
+  readonly power: (job: Job) => Promise<ModelPower>;
 }
 
 /** The pipeline's own shape, named so `AdvanceParts` can say it once. */
@@ -2091,7 +2123,33 @@ function sweepLine(swept: readonly ExpirySettlement[]): string {
   return `${parts.join(" and ")} — job(s) whose claimant stopped answering`;
 }
 
-const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS };
+/** Exported so a test can check what it is wired to — tests/high-power-step.test.ts. */
+export const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS, power: readStepPower };
+
+/**
+ * **The article's power for one step** — `articlePower` over the row's
+ * `high_power_since` and the job's owner (plan 260930f decision 4).
+ *
+ * **No row is a failure, never `standard`.** The plan expected a fresh
+ * ingest to have no row yet; it always does by now, because the claim opens
+ * the job's draft and that is where the row is born (`openOrBeginJobDraft` →
+ * `lockOrCreateArticle`, src/store/pg-revisions.ts) — with the column null.
+ * So a missing row at step time is something gone wrong, and quietly
+ * answering Sonnet for it would hide that.
+ *
+ * By `job.ownerId`, not the ambient owner: a job outlives the request that
+ * made it (src/owner.ts § `runAsOwner`).
+ */
+export async function readStepPower(job: Job): Promise<ModelPower> {
+  const row = await highPowerStore.read(job.slug, job.ownerId);
+  if (!row.found) {
+    throw new Error(
+      `No article row for "${job.slug}" when its step started, so there is no High-powered AI ` +
+        "setting to read. The claim opens the draft before any step, and that creates the row.",
+    );
+  }
+  return articlePower(row.highPowerSince, job.ownerId);
+}
 
 /**
  * `advanceJob`, with the session and the step registry named rather than
@@ -2579,6 +2637,7 @@ async function walkClaim(
         parts.steps,
         transitionAfter,
         parts.onStepSpend,
+        parts.power,
       );
 
       if (ran.outcome === "skipped") continue;

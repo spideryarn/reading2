@@ -259,6 +259,7 @@ async function runWave(opts: {
   blocks?: readonly Block[];
 }) {
   return runExpansionWave({
+    power: "standard",
     slug: SLUG,
     checkpoints: opts.checkpoints,
     /* The fakes here answer with a string, because none of these tests is about
@@ -293,6 +294,7 @@ function canonicalFor(
     recipe,
   });
   return canonicalExpansionRequest({
+    power: "standard",
     params: request.params,
     bodyHash: expansionBodyHash(blocks),
     seed,
@@ -315,7 +317,7 @@ describe("the expansion checkpoint's key", () => {
     expect(request.thinking).toEqual({ type: "adaptive" });
     expect(request.max_tokens).toBeGreaterThan(0);
     expect(request.provider).toEqual(MESSAGES_PROVIDER);
-    expect(request.model).toBe(modelFor("hierarchy"));
+    expect(request.model).toBe(modelFor("hierarchy", "standard"));
     /* And the four the plan's table adds, which a whole-document call gets for
        free and a scoped one does not. */
     /* `expansionBodyHash`, not `hashBlocks`: the article's own fingerprint plus
@@ -341,7 +343,7 @@ describe("the expansion checkpoint's key", () => {
       outline: SEED.outline,
       recipe: ONE_PER_CALL,
     });
-    expect(canonicalFor(first).request).toEqual(messagesWireBody("hierarchy", request.params));
+    expect(canonicalFor(first).request).toEqual(messagesWireBody("hierarchy", request.params, "standard"));
   });
 
   it("moves when any field of it moves — enumerated, not listed", () => {

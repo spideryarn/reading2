@@ -79,7 +79,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         const out = path.join(OUT, arm, `${slug}.json`);
         if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
         const article = await loadArticle(slug);
-        const { result: run } = await collectSpend(() => faqModule.generateFaq({ article: { ...article, slug } }), {
+        const { result: run } = await collectSpend(() => faqModule.generateFaq({ power: "standard", article: { ...article, slug } }), {
           attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
           sink: (row) => costStore.record(row),
         });

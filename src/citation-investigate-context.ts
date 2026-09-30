@@ -22,6 +22,7 @@
  */
 import { createHash } from "node:crypto";
 
+import { generationKey } from "./models.js";
 import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } from "./types.js";
 
 /**
@@ -132,6 +133,8 @@ export function investigateArticleKey(
 /**
  * **The fingerprint** — the model asked for, not the one that answered, since
  * only the configured model is known at read time (as `lookupContextHash`).
+ * And its generation rather than its id, for `lookupContextHash`'s reason: a
+ * toggle of High-powered AI must not detach the answer (plan 260930f, Sol F1).
  */
 export function investigateContextHash(
   context: InvestigateContext,
@@ -142,7 +145,7 @@ export function investigateContextHash(
 ): string {
   return hash16([
     CITATION_INVESTIGATE_VERSION,
-    model,
+    generationKey(model),
     articleKey,
     context.title,
     context.authors,

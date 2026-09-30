@@ -135,6 +135,7 @@ describe("the other places an article's URL becomes a link", () => {
 /** The same allowlist on the masthead's own anchor, which had the same hole. */
 describe("the article title as a link", () => {
   const article = (m: Meta): Article => ({
+    highPowerSince: null,
     meta: m,
     blocks: [],
     assets: undefined,
