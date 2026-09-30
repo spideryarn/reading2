@@ -26,7 +26,7 @@ import {
   provenanceOf,
   type InvestigateEvent,
 } from "../src/citation-investigate.js";
-import { investigateContext } from "../src/citation-investigate-context.js";
+import { CITATION_INVESTIGATE_VERSION, investigateContext } from "../src/citation-investigate-context.js";
 import type { StreamOutcome } from "../src/ai-call.js";
 import type { StreamRun, StreamRunEvent } from "../src/stream-run.js";
 import type { AllowanceTaken } from "../src/store/contracts.js";
@@ -244,6 +244,34 @@ describe("the request", () => {
     expect(second).toMatch(/only when its title, authors and year match/);
   });
 
+  /* Whether a result is the work is code's claim, drawn under the answer as
+     "We could not confirm that any result is this work itself." A browser check
+     found the model saying "This search turned up the work itself, hosted
+     directly on gwern.net" directly above it (plan 260930a § Review log). So
+     the prompt leaves that claim to code, in both branches, and has results
+     named by site. */
+  it("tells the model not to say whether any result is the work, and to name results by site", () => {
+    const context = investigateContext(work(), (id) => BLOCKS.find((b) => b.id === id)?.text);
+    for (const matched of [
+      null,
+      { url: "https://arxiv.org/abs/2001.08361", title: "Scaling Laws", quotes: [] },
+    ]) {
+      const request = investigateRequest({ meta: ARTICLE.meta, blocks: BLOCKS, context, profile: null, matched, model: "m" });
+      const messages = request.messages as { role: string; content: unknown }[];
+      const system = messages[0]?.content as string;
+      expect(system).toMatch(/Never say whether you found the work itself/);
+      expect(system).toMatch(/the reader is told that separately/);
+      expect(system).toMatch(/by its site/);
+      expect(system, "the old instruction to describe a result as this work").not.toMatch(/describe a result as this work/i);
+      expect(system, "the old instruction to say the work itself was not found").not.toMatch(/work itself was not found/);
+      const second = (messages[1]?.content as { text: string }[])[1]?.text ?? "";
+      expect(second, "the second part invites the claim again").not.toMatch(/Describe a result as this work/);
+    }
+    expect(CITATION_INVESTIGATE_VERSION, "the prompt changed, so stored answers must detach").toBe(
+      "citation-investigate/2",
+    );
+  });
+
   it("puts Look it up's matched page and its verified quotes in, when there is one", async () => {
     const h = harness({
       deltas: ["Does it back the claim?\nIt does."],
@@ -315,7 +343,7 @@ describe("what is kept", () => {
       searches: 1,
       searchesFrom: "server_tool_use_details",
       at: "2026-09-30T12:00:00.000Z",
-      promptVersion: "citation-investigate/1",
+      promptVersion: "citation-investigate/2",
     });
     expect(h.finished).toEqual(["lease-1"]);
   });

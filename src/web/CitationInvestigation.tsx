@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CitationInvestigation } from "../types.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { useTapReveal } from "./useTapReveal.js";
 
 /* ------------------------------------------------------------- the copy -- */
 
@@ -218,11 +219,16 @@ export function InvestigateButton({
   onInvestigate(id: string): void;
 }) {
   const label = again ? "Investigate again" : "Investigate";
+  /* A finger's first tap opens the card, its second presses — a press costs
+     money, and the card is what says so (useTapReveal.ts). */
+  const reveal = useTapReveal(!busy);
   return (
     <Tooltip
       placement="bottom"
       keepSide
       className="tip-soon"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
       content={
         <ControlTip
           head={label}
@@ -232,6 +238,7 @@ export function InvestigateButton({
              part is the prompt's *For you*, only with a profile. */
           what="Searches the web for this work and writes a short reading of how it bears on this article — and on you, if you have written a profile or why you're reading this one."
           how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it does not fetch the page itself, and is told not to quote the extracts. The answer is kept on this row; a new one replaces it only if it finishes."
+          tap={reveal.tap}
         />
       }
     >
@@ -239,7 +246,10 @@ export function InvestigateButton({
         type="button"
         className="gloss-btn cite-investigate"
         aria-disabled={busy}
-        onClick={() => {
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (!reveal.commit(e)) return;
           if (busy) return;
           onInvestigate(id);
         }}

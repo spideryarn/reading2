@@ -1050,3 +1050,71 @@ describe("Investigate", () => {
     expect(r.querySelector(".cite-inv-source-title")?.textContent).toContain("<b>Source title</b>");
   });
 });
+
+/* ------------------------------------------------------- a finger's press --
+   Both of a row's paid buttons carry a card saying what a press costs, and on
+   a touch screen the tap that opened the card was also the tap that spent the
+   money (plan 260930a § Review log, Browser check). Reveal, then commit: a
+   finger's first tap opens the card and says "Tap again to do it.", the second
+   presses; a mouse presses at once. docs/project/touch.md.
+
+   The pointer is read off the press's `pointerdown`, never off the click: on
+   iOS 18.2 and later a finger's click says `mouse` (WebKit bug 282988), so the
+   iPad case below sends exactly that. jsdom has no PointerEvent, so these are
+   MouseEvents carrying `pointerType`, as tests/spine-hover.test.tsx sends. */
+
+function fire(el: Element, type: string, pointerType: string) {
+  const ev = new MouseEvent(type, { bubbles: true, cancelable: true, detail: 1 });
+  Object.defineProperty(ev, "pointerType", { value: pointerType });
+  Object.defineProperty(ev, "pointerId", { value: 1 });
+  el.dispatchEvent(ev);
+}
+
+/** One press: down, up, click. `click` is what the click itself reports. */
+async function press(el: Element, down: "touch" | "mouse", click: string = down) {
+  await act(async () => {
+    fire(el, "pointerdown", down);
+    fire(el, "pointerup", down);
+    fire(el, "click", click);
+  });
+}
+
+const TAP_AGAIN = "Tap again to do it.";
+const tapHint = () => document.querySelector('[role="tooltip"] .tip-soon-tap')?.textContent ?? null;
+
+describe("a finger's first press on a paid button reveals its card; the second presses", () => {
+  const buttons = [
+    ["Investigate", "investigate", investigateButton],
+    ["Look it up", "find", findButton],
+  ] as const;
+
+  for (const [name, hook, button] of buttons) {
+    it(`${name}: the first tap opens the card and spends nothing, the second presses`, async () => {
+      const pressed: string[] = [];
+      await draw(owner({ citations: artefact([CENTRAL]), [hook]: async (id: string) => void pressed.push(id) }));
+      await press(button(CENTRAL.id), "touch");
+      expect(pressed, "one tap spent the money").toEqual([]);
+      expect(tapHint()).toBe(TAP_AGAIN);
+      await press(button(CENTRAL.id), "touch");
+      expect(pressed).toEqual([CENTRAL.id]);
+    });
+
+    it(`${name}: an iPad's tap, whose click says mouse, still only reveals`, async () => {
+      const pressed: string[] = [];
+      await draw(owner({ citations: artefact([CENTRAL]), [hook]: async (id: string) => void pressed.push(id) }));
+      await press(button(CENTRAL.id), "touch", "mouse");
+      expect(pressed, "the click's pointerType decided it, not the press's").toEqual([]);
+      expect(tapHint()).toBe(TAP_AGAIN);
+      await press(button(CENTRAL.id), "touch", "mouse");
+      expect(pressed).toEqual([CENTRAL.id]);
+    });
+
+    it(`${name}: a mouse click presses at once and says nothing about tapping`, async () => {
+      const pressed: string[] = [];
+      await draw(owner({ citations: artefact([CENTRAL]), [hook]: async (id: string) => void pressed.push(id) }));
+      await press(button(CENTRAL.id), "mouse");
+      expect(pressed).toEqual([CENTRAL.id]);
+      expect(tapHint()).toBeNull();
+    });
+  }
+});

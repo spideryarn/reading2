@@ -58,6 +58,7 @@ import {
   type ThresholdResult,
 } from "./threshold.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { useTapReveal } from "./useTapReveal.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -744,6 +745,10 @@ function WorkRow({
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
   /* A row already looked up offers the same press again, and says so. */
   const lookLabel = work.lookup === undefined ? "Look it up" : "Look it up again";
+  /* *Look it up* is paid, and its card is what says so: a finger's first tap
+     opens the card, its second presses (useTapReveal.ts). Called here, not
+     inside the `find !== null` branch, because a hook cannot be conditional. */
+  const lookReveal = useTapReveal(finding === null);
 
   return (
     <li
@@ -802,6 +807,8 @@ function WorkRow({
             placement="bottom"
             keepSide
             className="tip-soon"
+            open={lookReveal.open}
+            onOpenChange={lookReveal.onOpenChange}
             content={
               <ControlTip
                 head={lookLabel}
@@ -833,6 +840,7 @@ function WorkRow({
                      patch (useCitations.ts § applyFound) does the same. */
                 what="Searches the web for this work. If a result clearly matches it, the AI reads that result's search extract — usually its abstract, not the full work — against what the article uses it for, and shows a passage only where code found those exact words in the extract."
                 how="It costs money: a paid web provider, and a few seconds. On a row with only a Scholar search, the matching result also becomes its link; a link the article gave never changes. A press that finds no match stores nothing, and pressing again just spends again."
+                tap={lookReveal.tap}
               />
             }
           >
@@ -854,7 +862,10 @@ function WorkRow({
               type="button"
               className="gloss-btn cite-find"
               aria-disabled={finding !== null}
-              onClick={() => {
+              onPointerDown={lookReveal.onPointerDown}
+              onPointerCancel={lookReveal.onPointerCancel}
+              onClick={(e) => {
+                if (!lookReveal.commit(e)) return;
                 if (finding !== null) return;
                 void find.onFind(work.id);
               }}

@@ -173,13 +173,19 @@ have them. Use the article's own link to aim the search when one is given. One
 or two searches is usually enough; do not keep searching once you have found
 pages about the work.
 
-WHICH RESULT IS THE WORK
+WHICH RESULTS TO DRAW ON
 
-When the details below name a result that was matched to this work, treat that
-page as the work. Otherwise, describe a result as this work only when its
-title, authors and year match those given; if none does, say plainly that the
-work itself was not found, and describe only what the results that mention it
-say about it.
+When the details below name a result that an earlier check, Look it up, matched
+to this work, draw on that page as being about the work; you may say that page
+was matched by Look it up. Otherwise, draw on a result as being about this work
+only when its title, authors and year match those given, and for results that
+only mention it, say what they say about it.
+
+Never say whether you found the work itself, and never say that any result is
+the work, is the paper, or hosts it: the reader is told that separately. Refer
+to each result by its site and what it is: a page on gwern.net, the abstract
+on arxiv.org, a summary on nature.com. Give a result's own title only without
+quotation marks, unless it is exactly the work's title.
 
 WHAT TO WRITE
 
@@ -259,7 +265,7 @@ export function investigatePart(
   lines.push("");
   if (matched) {
     lines.push(
-      "An earlier check matched one search result to this work:",
+      "An earlier check, Look it up, matched one search result to this work:",
       `URL: ${matched.url}`,
       ...(matched.title ? [`Its title: ${matched.title}`] : []),
     );
@@ -269,7 +275,7 @@ export function investigatePart(
     }
   } else {
     lines.push(
-      "No search result has been confirmed to be this work. Describe a result as this work only when its title, authors and year match those given above.",
+      "No search result has been matched to this work. Draw on a result as being about this work only when its title, authors and year match those given above, and do not say whether any result is the work itself.",
     );
   }
   lines.push("", `What the article uses it for: ${context.why}`, "", "Where the article cites it:");
