@@ -421,3 +421,46 @@ describe("the expected tail, which is also the idempotency", () => {
     expect(out.status).toBe(409);
   });
 });
+
+/**
+ * **The kind a spoken exchange creates.** SPIDERYARN-READING2-70: Remember
+ * opens straight into an empty conversation that exists only in the tab, so
+ * pressing Live there makes the first spoken exchange the write that creates
+ * it — and it used to create a chat, which Remember then hid.
+ * docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md
+ */
+describe("the kind of conversation it creates", () => {
+  it("creates a Remember conversation when the tab began one, on disk", async () => {
+    const out = await post("spya-vaaaca", exchange({ kind: "remember" }));
+    expect(out.status).toBe(200);
+    expect(threadOf(out).kind).toBe("remember");
+    const stored = (await threads()).find((t) => t.id === threadOf(out).id);
+    expect(stored?.kind).toBe("remember");
+    /* And the spoken rows carry no stance, as spoken turns never have. */
+    expect(stored?.messages[1]?.stance).toBeUndefined();
+  });
+
+  it("still creates a chat when no kind is named", async () => {
+    expect(threadOf(await post("spya-vaaacb", exchange())).kind).toBe("chat");
+  });
+
+  it("refuses a kind a live session cannot have, and a word that is not a kind", async () => {
+    for (const kind of ["candidates", "review", 7]) {
+      const out = await post("spya-vaaacc", exchange({ kind }));
+      expect(out.status, String(kind)).toBe(400);
+    }
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("refuses to turn an existing conversation into the other kind", async () => {
+    const first = threadOf(await post("spya-vaaacd", exchange({ kind: "remember" })));
+    const out = await post(
+      "spya-vaaacd",
+      exchange({ kind: "chat", expectedTailId: first.messages.at(-1)?.id }),
+    );
+    expect(out.status).toBe(409);
+    const stored = (await threads()).find((t) => t.id === first.id);
+    expect(stored?.kind).toBe("remember");
+    expect(stored?.messages).toHaveLength(2);
+  });
+});

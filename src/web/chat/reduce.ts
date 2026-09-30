@@ -439,6 +439,13 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
  * first one's stored answer, which does not exist until the first has landed.
  */
 function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcome {
+  /* The conversation's own kind, from `base` — not the mode's, which differs
+     whenever the reader has opened a thread of the other kind. A conversation
+     Remember began is in `base` from `thread.begun`, before anything is stored,
+     and this is what lets the first spoken exchange create it as Remember
+     rather than as a chat. A candidates thread has no Live control; if one ever
+     got here, sending nothing keeps the server's default rather than a 400. */
+  const kind = state.base.find((t) => t.id === op.threadId)?.kind;
   return {
     state: register<SpokenOperation>(state, op, () => false),
     commands: [
@@ -458,6 +465,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
         ...(op.reply.passages ? { passages: op.reply.passages } : {}),
         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
         ...(op.reply.interrupted ? { interrupted: true } : {}),
+        ...(kind === "chat" || kind === "remember" ? { kind } : {}),
       },
     ],
   };

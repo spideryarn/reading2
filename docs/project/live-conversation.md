@@ -52,6 +52,14 @@ that this control was not built was stale: `94ddccd42` deliberately labelled it 
 and `028676677` preserved it through the Review-to-Remember rename. New list-level spoken
 conversations start in Chat.
 
+**A live conversation started in Remember's empty conversation is stored as Remember.** Remember
+opens straight into a conversation that exists only in the tab, so pressing Live there makes the
+first spoken exchange the write that creates it. The spoken append names the kind the tab has for
+it (`SpokenTurn.kind` in [`src/chat.ts`](../../src/chat.ts)), used only when creating the thread.
+Until 2026-09-30 it always created a Chat, and Remember's arrival rule then hid it behind a fresh
+empty conversation — SPIDERYARN-READING2-70,
+[260930d](../plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md).
+
 ## Where the pieces are
 
 | | |
