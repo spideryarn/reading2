@@ -3826,6 +3826,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
+        power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
       const paragraphs = run.simpleSummary.paragraphs;

@@ -124,7 +124,7 @@ async function run(arm: string, slugs: string[]): Promise<void> {
           /* `onDone`, not the returned report: it fires on a failed run too, so a
              run that fails validation is still priced. */
           const { result } = await collectSpend(
-            () => simple.generateSimpleSummary({ article: { ...article, slug }, pitch }),
+            () => simple.generateSimpleSummary({ article: { ...article, slug }, pitch, power: "standard" }),
             {
               attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
               sink: (row) => costStore.record(row),

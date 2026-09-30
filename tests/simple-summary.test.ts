@@ -91,7 +91,7 @@ const para = (text: string, ...ids: string[]) => ({ text, ids });
 function build(paragraphs: unknown, dropped = emptyDropped()) {
   return buildSimpleSummary(
     { paragraphs },
-    { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped },
+    { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped, power: "standard" },
   );
 }
 
@@ -116,10 +116,10 @@ describe("buildSimpleSummary", () => {
 
   it("fails on an answer with no paragraphs array", () => {
     expect(() =>
-      buildSimpleSummary({ summary: "x" }, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped() }),
+      buildSimpleSummary({ summary: "x" }, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" }),
     ).toThrow(/no `paragraphs` array/);
     expect(() =>
-      buildSimpleSummary(null, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped() }),
+      buildSimpleSummary(null, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" }),
     ).toThrow(/no `paragraphs` array/);
   });
 
@@ -209,26 +209,26 @@ describe("the request", () => {
 
   it("fails on malformed JSON and stores nothing", async () => {
     answer = "{ this is not json";
-    await expect(generateSimpleSummary({ article: article() })).rejects.toThrow();
+    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
   });
 
   it("fails on a refusal", async () => {
     stop = "refusal";
     answer = "";
-    await expect(generateSimpleSummary({ article: article() })).rejects.toThrow();
+    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
   });
 
   it("fails on a max_tokens stop rather than parsing half an answer", async () => {
     stop = "max_tokens";
     answer = JSON.stringify({ paragraphs: [para("About.", INTRO.id), para("Why.", WHY.id)] });
-    await expect(generateSimpleSummary({ article: article() })).rejects.toThrow();
+    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
   });
 
   it("reports what it dropped on the run, and does not store it", async () => {
     answer = JSON.stringify({
       paragraphs: [para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)],
     });
-    const run = await generateSimpleSummary({ article: article() });
+    const run = await generateSimpleSummary({ power: "standard", article: article() });
     expect(run.dropped.unknownIds).toBe(1);
     expect(run.dropped.duplicateIds).toBe(1);
     expect(run.words).toBe(2);
@@ -240,11 +240,11 @@ describe("the request", () => {
     const [first, second] = noMeta.blocks.filter((b) => b.treatment !== "supplement");
     if (!first || !second) throw new Error("fixture needs two body blocks");
     answer = JSON.stringify({ paragraphs: [para("About.", first.id), para("Why.", second.id)] });
-    const run = await generateSimpleSummary({ article: noMeta, cacheArticle: true });
+    const run = await generateSimpleSummary({ power: "standard", article: noMeta, cacheArticle: true });
 
     answer = JSON.stringify({ ideas: [] });
     const { generateIdeas } = await import("../src/ideas.js");
-    await generateIdeas({ article: noMeta, previous: null, cacheArticle: true }).catch(() => undefined);
+    await generateIdeas({ power: "standard", article: noMeta, previous: null, cacheArticle: true }).catch(() => undefined);
 
     const [call, ideasCall] = sent;
     if (!call || !ideasCall) throw new Error("expected both calls");

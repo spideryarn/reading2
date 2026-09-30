@@ -53,7 +53,7 @@ import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { plainWords } from "./plain-words.js";
 import {
@@ -335,6 +335,8 @@ export function buildSimpleSummary(
     slug: string;
     /** The body evidence the request sent — the only ids a paragraph may name. */
     evidence: readonly { id: BlockId }[];
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     sourceHash: string;
     elapsedMs: number;
     dropped: SimpleDropped;
@@ -372,8 +374,8 @@ export function buildSimpleSummary(
   }
   return {
     version: SIMPLE_VERSION,
-    /* `CAPABLE_MODEL`, the name — every staleness check compares against it. */
-    generator: CAPABLE_MODEL,
+    /* The model's name for this power — every staleness check compares against it. */
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     generatedAt: new Date().toISOString(),
@@ -410,6 +412,8 @@ export async function generateSimpleSummary(opts: {
    * carry `SIMPLE_VERSION` wrongly — nothing in the app passes it.
    */
   pitch?: SimplePitch;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<SimpleSummaryRun> {
   const { blocks, tree, meta: realMeta } = opts.article;
 
@@ -446,7 +450,7 @@ export async function generateSimpleSummary(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt() }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -489,6 +493,7 @@ export async function generateSimpleSummary(opts: {
 
   const dropped = emptyDropped();
   const simpleSummary = buildSimpleSummary(parseJsonAnswer<unknown>(raw, "the model's answer"), {
+    power: opts.power,
     slug: opts.article.slug,
     evidence,
     sourceHash,
@@ -502,7 +507,7 @@ export async function generateSimpleSummary(opts: {
     blocks: blocks.length,
     words: simpleSummary.paragraphs.reduce((n, p) => n + wordCount(p.text), 0),
     dropped,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
