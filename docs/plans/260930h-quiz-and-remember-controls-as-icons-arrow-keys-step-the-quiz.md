@@ -127,6 +127,10 @@ rules, the dialog guard, the `IconButton` + `Tooltip` row, and whether each new 
 P3, fixed by it: comments in four files pointed at a section called "← / → in Trajectory and Quiz",
 which the docs never used. Its focused run: 7 files, 118 tests passed; typecheck passed.
 
+**Full suite** at 5fc7dcdf (after merging `origin/dev`): 1246 files passed, 5 failed, and all five
+are a fresh worktree's missing build output — `api-dist/vercel.js` (cold-start-lazy-imports,
+pdf-bundle-trace) and `tools/fleet/web/dist` (the three fleet route tests). None touches this change.
+
 ## Browser check
 
 A Sonnet subagent, Playwright on the box, at 348c8573 plus the working tree, before the review
