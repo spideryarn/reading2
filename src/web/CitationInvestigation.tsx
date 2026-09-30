@@ -231,7 +231,7 @@ export function InvestigateButton({
              (src/citation-investigate.ts never fetches a page), the profile
              part is the prompt's *For you*, only with a profile. */
           what="Searches the web for this work and writes a short reading of how it bears on this article — and on you, if you have written a profile or why you're reading this one."
-          how="It costs money. It reads search engines' extracts of web pages, not the paper itself, and is told not to quote them. The answer is kept on this row; a new one replaces it only if it finishes."
+          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it does not fetch the page itself, and is told not to quote the extracts. The answer is kept on this row; a new one replaces it only if it finishes."
         />
       }
     >

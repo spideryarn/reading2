@@ -901,7 +901,7 @@ describe("Investigate", () => {
     expect(row("spya-v2w3x4").querySelector(".cite-inv")).toBeNull();
   });
 
-  it("its card says what it does, that it costs, that it reads extracts not the paper, and that it is kept", async () => {
+  it("its card says what it does, costs and keeps, and distinguishes extracts from pages it fetched", async () => {
     await draw(owner({ citations: artefact([CENTRAL]) }));
     const card = await cardFor(investigateButton(CENTRAL.id));
     expect(card.head).toBe("Investigate");
@@ -911,9 +911,10 @@ describe("Investigate", () => {
     expect(copy).toMatch(/profile/i);
     expect(card.how).toMatch(/costs money/i);
     expect(card.how).toMatch(/extracts/i);
-    expect(card.how).toMatch(/not the paper itself/i);
+    expect(card.how).toMatch(/may be an abstract or part of a paper/i);
+    expect(card.how).toMatch(/does not fetch the page itself/i);
     expect(card.how).toMatch(/kept on this row/i);
-    expect(copy).not.toMatch(/verif|confirm|model call|reads the paper/i);
+    expect(copy).not.toMatch(/verif|confirm|model call|not the paper|reads the paper/i);
   });
 
   it("streams into the pressed row only, says what the wait is first, and holds every other row", async () => {
@@ -1025,5 +1026,27 @@ describe("Investigate", () => {
     expect(r.querySelector(".cite-inv-offer")).toBeNull();
     /* The lookup's own reading is still drawn once, by the row. */
     expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
+  });
+
+  it("renders answer and source titles as text, and links only to http(s) sources", async () => {
+    const unsafe = {
+      ...INVESTIGATION,
+      answer: "Does it back the claim?\n<img src=x onerror=alert(1)> is model text.",
+      sources: [
+        { url: "javascript:alert(1)", title: "<img src=x onerror=alert(2)>" },
+        { url: "https://safe.example/paper", title: "<b>Source title</b>" },
+      ],
+    };
+    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: unsafe }]) }));
+    const r = row(CENTRAL.id);
+    expect(r.querySelector("img, b")).toBeNull();
+    expect(r.querySelector(".cite-inv-text")?.textContent).toContain("<img src=x onerror=alert(1)>");
+
+    await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
+    const links = [...r.querySelectorAll<HTMLAnchorElement>(".cite-inv-sources a")];
+    expect(links.map((link) => link.href)).toEqual(["https://safe.example/paper"]);
+    expect(links[0]?.getAttribute("target")).toBe("_blank");
+    expect(links[0]?.getAttribute("rel")).toContain("noopener");
+    expect(r.querySelector(".cite-inv-source-title")?.textContent).toContain("<b>Source title</b>");
   });
 });

@@ -40,6 +40,14 @@ function run(deltas: string[], allowed: readonly string[] = [...ARTICLE, TITLE])
   return { released, failed };
 }
 
+/** Every two-way boundary, plus the most fragmented stream the guard can see. */
+function runsAcrossSplits(text: string, allowed: readonly string[] = [...ARTICLE, TITLE]) {
+  return [
+    ...Array.from({ length: text.length + 1 }, (_, split) => run([text.slice(0, split), text.slice(split)], allowed)),
+    run([...text], allowed),
+  ];
+}
+
 describe("the investigate quote guard", () => {
   it("passes plain prose through as it arrives, without holding it", () => {
     const guard = createQuoteGuard(ARTICLE);
@@ -140,6 +148,36 @@ describe("the investigate quote guard", () => {
       released: text,
       failed: null,
     });
+  });
+
+  it("does not mistake ordinary right apostrophes or an s-ending quoted term for a possessive, across chunk splits", () => {
+    const cases = [
+      { text: "The authors’ claim is narrow.", allowed: ARTICLE },
+      { text: "The article uses ‘fitness’ as its term.", allowed: ["The article defines fitness precisely."] },
+      { text: "The article says ‘fitness’ is useful.", allowed: ["The article defines fitness precisely."] },
+      { text: "It calls this ‘fitness’.", allowed: ["The article defines fitness precisely."] },
+    ];
+    for (const { text, allowed } of cases) {
+      for (const [split, result] of runsAcrossSplits(text, allowed).entries()) {
+        expect(result, `${JSON.stringify(text)}, split ${split}`).toEqual({ released: text, failed: null });
+      }
+    }
+  });
+
+  it("does not release an allowed s-ending term when a later close makes it the prefix of a source quote", () => {
+    const text = "It says ‘fitness’ is a fabricated result’ here.";
+    for (const [split, result] of runsAcrossSplits(text, ["The article defines fitness precisely."]).entries()) {
+      expect(result.failed, `split ${split}`).toEqual({ cause: "not-found" });
+      expect(result.released, `split ${split}`).toBe("It says ");
+    }
+  });
+
+  it("keeps later prose apostrophes and a second allowed quoted term separate from an s-ending term", () => {
+    const text = "It says ‘fitness’ is the authors’ term, while ‘loss’ is ours.";
+    const allowed = ["The article defines fitness and loss precisely."];
+    for (const [split, result] of runsAcrossSplits(text, allowed).entries()) {
+      expect(result, `split ${split}`).toEqual({ released: text, failed: null });
+    }
   });
 
   it("refuses an ambiguous possessive prefix even when no later close arrives", () => {

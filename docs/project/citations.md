@@ -229,6 +229,48 @@ allowance or the store, has a second caller: an uploaded paper's guessed web add
 ([ingest-queue.md § A guessed web address](ingest-queue.md#a-guessed-web-address-looked-for-once)),
 which brings its own job id and allowance and judges the page more strictly than `pageNamesTitle`.
 
+## Investigate: a closer look at one work, on demand
+
+Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), following 5G:
+
+> That would still be ideal, but it's probably too expensive to do for every single paper. Perhaps
+> instead, in a citation-item in Citations mode, provide an "Investigate" button that triggers this
+> deeper dive, i.e. don't do it automatically for every single paper every time we run Citations
+> mode.
+
+Every owner row has **Investigate** beside *Look it up*. One press is one streamed answer, written
+from a few web searches and kept on the row: *does it back the claim*, *how else it bears on this
+article*, and *for you* when the reader has written a profile or *why you're reading this one*.
+Nothing runs for every row. The design, its two plan reviews, the probe and the code reviews are
+[260930a](../plans/260930a-citations-investigate-one-work-on-demand.md); this says what is built.
+
+**It never quotes a source, and code makes sure of that before a word is sent.** Verbatim evidence
+belongs to *Look it up*, the one path whose quotes code has found in an extract. Investigate
+paraphrases and names the host. The server holds back anything in quotation marks (`"`, `“`, `‘`)
+or on a `>` line until code finds it in the article, the work's title or reference, or *Look it up*'s
+verified quotes. Anything else stops the answer, nothing is kept, and the reader's screen is
+cleared ([`investigate-quote-guard.ts`](../../src/investigate-quote-guard.ts)).
+
+**What was read is said by code, from what the search returned**: how many results came back with
+an extract, their hosts, and the longest extract in words. It does not say "we did not read the
+paper": the probe found an extract that was most of a PDF. It says *we did not fetch any page
+ourselves; an extract may be an abstract or part of a paper's text*. It names *Look it up*'s
+match only when that page is among this answer's own results. Otherwise it says *we could not confirm
+that any result is this work itself*, and the prompt forbids describing a look-alike as the work.
+
+**Kept, private, and hidden when out of date.** One row per work in `citation_investigations`,
+replaced by a second press. It is attached to an owner row only while its fingerprint matches.
+The fingerprint covers everything sent: the article, the work's fields and link, `why` and the
+citing passages, the reader's profile, *Look it up*'s match, the prompt version and the model. It
+never reaches a visitor, and it is in all three exports. A failed *Investigate again* leaves the
+earlier answer in place, and the row says so.
+
+**Bounded** by its own allowance bucket, `citation-investigate`: one at a time, 8 an hour and 20 a
+day per reader, and 60 a day across everyone. These numbers come from the probe: $0.12 a press on
+average and $0.15 at worst, budgeted at $0.30 against a $20-a-day ceiling. Exa is pinned, with 8
+results of at most 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)).
+It is the `citation-investigate` job on the gateway.
+
 ## Chat can read it
 
 Chat — typed, a passage question, and Live — can read the stored list through the
@@ -263,7 +305,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor. Each is in one of the two plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself. Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -271,6 +313,7 @@ the cap; real influence from a citation database; searching every unlinked row a
 [`useCitations.ts`](../../src/web/useCitations.ts) (`useCitationsRead` is the half `OwnedReader`
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
+[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Investigate's row) ·
 [`CitationsMode.tsx`](../../src/web/modes/citations/CitationsMode.tsx) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·

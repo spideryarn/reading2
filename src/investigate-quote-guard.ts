@@ -21,7 +21,10 @@
  *   while `‘bigger is better’ here` is an unambiguous close and can keep
  *   streaming. If the `s’ ` is followed by a word, it remains inside the span;
  *   if the stream ends first, the safe answer is to stop rather than release
- *   an unchecked continuation.
+ *   an unchecked continuation. The narrow grammatical exceptions are forms
+ *   of *be* and `as`: `‘fitness’ is …` and `‘fitness’ as …` cannot be plural
+ *   possessives. Those stay held to the end (or another `’`) before the quoted
+ *   term is released, so a later close still makes the whole span get checked.
  * - Any line whose first non-blank character is `>`, to the end of the line.
  * - Leading blanks on a line, until the first other character says whether the
  *   line is a block quote.
@@ -80,6 +83,8 @@ const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 const WHITESPACE = /\s/u;
 const S_END = /[sS]/u;
 const TRAILING_PUNCTUATION = /[\s,.;:!?]+$/u;
+/** Words that cannot be the noun governed by a plural possessive. */
+const CLOSE_FOLLOWERS = ["as", "is", "are", "was", "were"] as const;
 
 /**
  * @param allowed the texts a quotation may come from — the article's blocks,
@@ -101,6 +106,8 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
   let pendingClose = false;
   /** Exclusive offsets of the still-plausible `’` closes in `held`. */
   let curlyCloses: number[] = [];
+  /** An s-ending close followed by an unambiguous prose word. */
+  let proseClose: number | null = null;
   let failed: Extract<GuardStep, { ok: false }> | null = null;
 
   function found(words: string): boolean {
@@ -117,7 +124,19 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
     mode = "text";
     pendingClose = false;
     curlyCloses = [];
+    proseClose = null;
     return out;
+  }
+
+  /** Classify the word after an ambiguous `s’ ` without depending on chunks. */
+  function closeFollower(suffix: string): "prefix" | "complete" | "no" {
+    const match = /^\s*([\p{L}\p{N}]*)(.*)$/us.exec(suffix);
+    if (!match) return "no";
+    const word = (match[1] ?? "").toLowerCase();
+    const after = match[2] ?? "";
+    if (word === "") return "prefix";
+    if (after === "") return CLOSE_FOLLOWERS.some((candidate) => candidate.startsWith(word)) ? "prefix" : "no";
+    return CLOSE_FOLLOWERS.includes(word as (typeof CLOSE_FOLLOWERS)[number]) ? "complete" : "no";
   }
 
   /**
@@ -135,11 +154,12 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
     /* A word after a possible close is the irreducibly ambiguous case:
        `‘allowed words’ then` and `‘allowed words’ continuation’` have the same
        prefix. Releasing the first interpretation can leak the second. */
-    if (LETTER_OR_DIGIT.test(suffix) || suffix.includes("‘")) return fail("unclosed");
+    if ((LETTER_OR_DIGIT.test(suffix) && proseClose !== close) || suffix.includes("‘")) return fail("unclosed");
     held = "";
     mode = "text";
     pendingClose = false;
     curlyCloses = [];
+    proseClose = null;
     const rest = push(suffix + extra);
     return rest.ok
       ? { ok: true, text: span + rest.text }
@@ -210,14 +230,39 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
         if (close === undefined) return fail("unclosed", out);
         const suffix = held.slice(close);
         const before = held[close - 2] ?? "";
-        if (
-          LETTER_OR_DIGIT.test(c) &&
-          (suffix === "" || (S_END.test(before) && suffix.trim() === ""))
-        ) {
+        if (proseClose === close) {
+          /* Do not release yet: a later close would make this an inner
+             apostrophe, so the longer span must be checked as a whole. */
+          if (c === "‘") {
+            /* An explicit new opener settles the grammatical close. Replay
+               the held prose so its apostrophes are parsed in text mode, then
+               let this opener start its own guarded span. */
+            const resolved = settleCurlyAndReplay(c);
+            if (!resolved.ok) return { ...resolved, text: out + resolved.text };
+            out += resolved.text;
+            continue;
+          }
+          held += c;
+          if (c === "’") {
+            curlyCloses.push(held.length);
+          }
+          if (held.length - 1 > cap) return fail("unclosed", out);
+          continue;
+        }
+        if (S_END.test(before) && suffix !== "") {
+          const follower = closeFollower(suffix + c);
+          if (follower !== "no") {
+            held += c;
+            if (follower === "complete") proseClose = close;
+            if (held.length - 1 > cap) return fail("unclosed", out);
+            continue;
+          }
+        }
+        if (LETTER_OR_DIGIT.test(c) && (suffix === "" || (S_END.test(before) && suffix.trim() === ""))) {
           /* A contraction (`what’s`) or a spaced plural possessive (`dogs’
              owners`). This candidate is definitely not the close. */
           curlyCloses.pop();
-          pendingClose = false;
+          pendingClose = proseClose !== null && curlyCloses.includes(proseClose);
         } else if (WHITESPACE.test(c) && S_END.test(before)) {
           /* `laws’ ` could close a quote or begin a plural possessive. Hold the
              blanks too, until the next non-blank character decides it. */
@@ -274,6 +319,14 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
         return line === null ? fail("not-found") : { ok: true, text: line };
       }
       case "curly-single": {
+        const close = curlyCloses.at(-1);
+        if (
+          close !== undefined &&
+          S_END.test(held[close - 2] ?? "") &&
+          CLOSE_FOLLOWERS.includes(held.slice(close).trim().toLowerCase() as (typeof CLOSE_FOLLOWERS)[number])
+        ) {
+          proseClose = close;
+        }
         const resolved = settleCurlyAndReplay("");
         if (!resolved.ok) return resolved;
         const tail = end();

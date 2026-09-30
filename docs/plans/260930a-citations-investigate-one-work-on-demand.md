@@ -258,3 +258,16 @@ day** ($18); **per reader 20 a day, 8 an hour, one at a time**.
   straight inch mark stopping an answer, a failed profile read over-invalidating. Gates re-run by me
   after its fixes: typecheck 0, 96 unit, 127 Postgres. **C-1's fix is the reviewer's own code and is
   checked narrowly in the stage-2 review.**
+- **Code review, stage 2** —
+  [260930a-citations-investigate-code-review-2-sol.md](260930a-citations-investigate-code-review-2-sol.md),
+  *approve with the fixes made*: D-1 (C-1's fix refused legitimate prose such as `‘fitness’ is`;
+  refixed without reopening the leak, tested at every split), D-2 (the tip said "not the paper
+  itself"; now says an extract may be an abstract or part of a paper). Gates after: typecheck 0,
+  114 unit. **D-1 is the guard's third version and the reviewer's own; checked narrowly below.**
+- **Browser check** (Sonnet, Playwright, 390px and desktop; shots in `260930a-shots/`): streams
+  progressively (first text ~6 s, whole ~13 s), kept across reload, visitor sees nothing, no quote
+  marks in the answer. Two defects found and fixed after: **the AI said "This search turned up the
+  work itself" above code's "We could not confirm that any result is this work itself"** — the
+  prompt now leaves that claim to code; and **one tap on a phone both opened the tip and started the
+  paid call** — the same was true of *Look it up*; both now reveal on the first tap and act on the
+  second, the shelf's rule (touch.md). The check spent two presses (~$0.24).

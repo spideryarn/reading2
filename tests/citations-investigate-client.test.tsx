@@ -73,6 +73,7 @@ let signal: AbortSignal | null = null;
 let reply: "stream" | { status: number; error: string } = "stream";
 let push: ((event: string, data: unknown) => void) | null = null;
 let end: (() => void) | null = null;
+let breakStream: ((error: Error) => void) | null = null;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -89,6 +90,7 @@ vi.mock("../src/web/lib/api.js", () => ({
         start(controller) {
           push = (event, data) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
           end = () => controller.close();
+          breakStream = (error) => controller.error(error);
         },
       });
       return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
@@ -143,6 +145,7 @@ beforeEach(() => {
   reply = "stream";
   push = null;
   end = null;
+  breakStream = null;
   hook = null;
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -263,6 +266,28 @@ describe("investigate", () => {
     expect(hook?.investigateFailed?.message).toBeTruthy();
     expect(hook?.investigateFailed?.previousAt).toBeNull();
     expect(row()?.investigation).toBeUndefined();
+  });
+
+  it("a transport error after words arrived removes the whole draft and re-reads", async () => {
+    await open();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    await act(async () => push?.("delta", { text: "A cut-off answer" }));
+    await flush();
+    expect(hook?.investigateDraft?.text).toBe("A cut-off answer");
+
+    const before = gets;
+    await act(async () => breakStream?.(new TypeError("connection lost")));
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(hook?.investigateDraft).toBeNull();
+    expect(hook?.investigateFailed?.message).toBeTruthy();
+    expect(gets).toBe(before + 1);
   });
 
   it("a refusal before the stream opens says its sentence and re-reads nothing", async () => {
