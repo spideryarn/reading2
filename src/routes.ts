@@ -9,7 +9,7 @@
  *
  *   GET    /api/library         every article on the shelf, for the homepage
  *                                `?archived=1` for the other half
- *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
+ *   GET    /api/library/search   `?q=…&limit=…&archived=1` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
  *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
@@ -40,7 +40,8 @@
  *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
- *   POST   /api/citations/:slug/:id/investigate   look into one cited work on the web, and keep the answer → SSE
+ *   POST   /api/citations/:slug/:id/investigate   look one cited work up, then look into it on the web, and keep both → SSE
+ *   POST   /api/citations/:slug/:id/find   the lookup alone; no button calls it since plan 260930d, kept one deploy for open tabs
  *   POST   /api/source-guess/:slug   an upload looks for its own page on the web, once → SourceGuess
  *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
  *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
@@ -1920,10 +1921,13 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  * `POST /api/citations/:slug/:id/investigate`, SSE out. Citations'
  * *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
- * `streamTermLookup`'s shape exactly: the 404 and the allowance's 429/503 are
- * decided by `investigateCitation` before a header is written, then any number
- * of `delta` and exactly one `done` (`{ investigation }`, **written only after
- * it is stored**) or `error` (`{ error }`). Every delta has already passed the
+ * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
+ * by `investigateCitation` before a header is written. Then, since plan
+ * 260930d, `stage` (`{ stage: "finding" }`) and one `lookup` (the stored
+ * *Look it up* answer, `/find`'s body) when the press looks the work up first,
+ * and `stage` (`{ stage: "reading" }`); then any number of `delta` and exactly
+ * one `done` (`{ investigation }`, **written only after it is stored**) or
+ * `error` (`{ error }`). Every delta has already passed the
  * quote guard (src/investigate-quote-guard.ts); a stop is an `error` carrying
  * the guard's sentence, and the client replaces the whole streamed answer
  * with it.
@@ -1934,23 +1938,51 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  */
 async function streamCitationInvestigation(slug: string, entryId: string, res: ServerResponse): Promise<void> {
   const profile = await resolveProfile(slug);
-  const { stream } = await investigateCitation(slug, entryId, profile);
+  const { stream, release } = await investigateCitation(slug, entryId, profile);
 
-  const { frame } = sse(res);
+  let frame: ReturnType<typeof sse>["frame"] | null = null;
   try {
+    const connection = sse(res);
+    frame = connection.frame;
+    /* The reader can leave during the owner/profile reads above. Admission was
+       already taken so 429/503 could stay an ordinary JSON response; do not
+       start either paid call for a socket that will never iterate the stream. */
+    if (!connection.alive()) return;
     for await (const event of stream()) {
-      if (event.type === "delta") {
-        frame("delta", { text: event.text });
-        continue;
+      switch (event.type) {
+        case "stage":
+          frame("stage", { stage: event.stage });
+          break;
+        case "lookup":
+          /* The body `POST …/find` answers, unchanged — the client applies it
+             exactly as it applied that route's answer. */
+          frame("lookup", event.response);
+          break;
+        case "delta":
+          frame("delta", { text: event.text });
+          break;
+        case "done": {
+          const done: InvestigateCitationDone = { investigation: event.investigation };
+          frame("done", done);
+          break;
+        }
+        default: {
+          const never: never = event;
+          throw new Error(`unhandled investigate event: ${JSON.stringify(never)}`);
+        }
       }
-      const done: InvestigateCitationDone = { investigation: event.investigation };
-      frame("done", done);
     }
   } catch (err) {
     captureFailure(err, { route: "citation-investigate", slug });
-    frame("error", { error: sayToReader(err, { route: "citation-investigate", slug }) });
+    frame?.("error", { error: sayToReader(err, { route: "citation-investigate", slug }) });
   } finally {
-    res.end();
+    /* Usually the generator has already released it. This is the path for a
+       client gone before iteration, and is idempotent on every other path. */
+    try {
+      await release();
+    } finally {
+      res.end();
+    }
   }
 }
 
@@ -4731,7 +4763,9 @@ function slugPart(m: RegExpExecArray, group: number): string {
 const MAX_LIBRARY_HITS = 30;
 
 /**
- * `GET /api/library/search?q=…&limit=…` — every article at once.
+ * `GET /api/library/search?q=…&limit=…&archived=1` — every article at once,
+ * and the archived ones too with `archived=1` (the shelf's Include archived
+ * chip; plan 260930d).
  *
  * The query is read from the URL rather than a body because this is a read, and
  * a read that cannot be linked to or retried is a read that has given something
@@ -4754,11 +4788,17 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
      every comparison you would write instead. */
   const limit = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 1), MAX_LIBRARY_HITS) : MAX_LIBRARY_HITS;
 
-  const { hits, capped } = await librarySearch.searchLibrary(query, limit);
+  /* `=== "1"`, the same reading as the shelf's own `?archived=1` below. */
+  const archived = params.get("archived") === "1";
+
+  const { hits, capped } = await librarySearch.searchLibrary(query, limit, { includeArchived: archived });
   return {
     // Echoed so a client can drop a response that arrived after it moved on.
-    // Debounced typing produces out-of-order responses as a matter of course.
+    // Debounced typing produces out-of-order responses as a matter of course —
+    // and so does pressing the chip, which changes the question without
+    // changing the words.
     query,
+    archived,
     hits,
     articles: new Set(hits.map((h) => h.slug)).size,
     capped,

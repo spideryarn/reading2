@@ -1897,6 +1897,19 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /**
+   * Whether the pipeline can safely reuse the stored source document. A
+   * rebuild with no web address leaves `fetch` unforced, so this is exactly
+   * that step's skip condition on the current published revision: a
+   * `raw_source_kind` and a completed `fetch` run must both be present. Either
+   * missing means the job would attempt stage 1 and fail for want of an address
+   * (feedback 6B,
+   * docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
+   *
+   * Required so a cached row written before this fact existed is rejected,
+   * rather than silently treated as safe (`src/web/lib/cached-shelf.ts`).
+   */
+  sourceReusable: boolean;
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 
@@ -2062,12 +2075,20 @@ export interface LibraryHit {
    */
   text: string;
   rank: number;
+  /**
+   * The article is archived. Only ever true when the search was asked to
+   * include the archive (`?archived=1`, the shelf's Include archived chip), and
+   * the client marks such a passage the way it marks the card.
+   */
+  archived: boolean;
 }
 
 /** What GET /api/library/search returns. */
 export interface LibrarySearchResponse {
   /** Echoed back, so a late response can be dropped by a client that has moved on. */
   query: string;
+  /** Echoed too: whether archived articles were searched (`?archived=1`). */
+  archived: boolean;
   hits: LibraryHit[];
   /** How many articles those hits are spread across — the line above the list. */
   articles: number;
@@ -3868,15 +3889,28 @@ export interface CitationInvestigation {
 }
 
 /**
- * `POST /api/citations/:slug/:id/investigate` — SSE. Any number of `delta`
+ * `POST /api/citations/:slug/:id/investigate` — SSE. Since plan 260930d,
+ * first `stage` (`{ stage: "finding" }`) and one `lookup` (a
+ * `FindCitationResponse`, **already stored**) when the press looks the work up,
+ * then `stage` (`{ stage: "reading" }`); then any number of `delta`
  * (`{ text }`), then exactly one of `done` (this, **written only after the
  * investigation is stored**) or `error` (`{ error }`, the reader-facing
- * sentence). On `error` nothing new was kept: a previous investigation, if
- * any, is still the stored one.
+ * sentence). On `error` no new investigation was kept — but a `lookup` that
+ * arrived before it was, and its new match can detach the previous
+ * investigation (its fingerprint covers the match).
  */
 export interface InvestigateCitationDone {
   investigation: CitationInvestigation;
 }
+
+/**
+ * Which step of the one *Investigate* press is running (plan 260930d): `finding`
+ * — the lookup that looks for the work's own page, only when the row has no
+ * current `assessed` one — then `reading`, the streamed answer. Sent as a
+ * `stage` frame (`{ stage }`); a `lookup` frame between them carries the
+ * lookup's answer, the same `FindCitationResponse` `POST …/find` answers.
+ */
+export type InvestigateStage = "finding" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {

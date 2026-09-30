@@ -28,6 +28,7 @@ const hit = (text: string, over: Partial<LibraryHit> = {}): LibraryHit => ({
   blockId: "spya-k3m9qt",
   text,
   rank: 1,
+  archived: false,
   ...over,
 });
 

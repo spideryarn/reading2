@@ -736,7 +736,7 @@ export interface LibrarySearch {
   /**
    * @param query what the reader typed, raw. Each adapter parses it its own way.
    * @param limit the most hits to return. The caller says whether the answer was cut.
-   * @param opts see `LibrarySearchOptions`. Absent means the whole library.
+   * @param opts see `LibrarySearchOptions`. Absent means all active articles.
    */
   searchLibrary(
     query: string,
@@ -857,6 +857,15 @@ export interface LibrarySearchOptions {
    * simply excludes nothing.
    */
   readonly excludeSlug?: string;
+  /**
+   * Search archived articles too. Off by default, and chat's `search_library`
+   * never sets it: archived articles are out of the index unless the reader has
+   * asked for them — the shelf's **Include archived** chip
+   * (docs/project/library.md; plan 260930d, SPIDERYARN-READING2-72). Each hit
+   * says which it is (`LibraryHit.archived`), so a passage from an archived
+   * article can be marked as one rather than opening a ghost.
+   */
+  readonly includeArchived?: boolean;
 }
 
 /* ------------------------------------------------- the reader's own state -- */

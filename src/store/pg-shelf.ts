@@ -593,6 +593,7 @@ const rawPgLibrarySearch: LibrarySearch = {
         blockId: revisionBlocks.blockId,
         text: revisionBlocks.text,
         rank,
+        archived: sql<boolean>`${articles.archivedAt} is not null`,
       })
       .from(revisionBlocks)
       .innerJoin(articleRevisions, eq(articleRevisions.id, revisionBlocks.revisionId))
@@ -612,9 +613,12 @@ const rawPgLibrarySearch: LibrarySearch = {
              so without it a model answering your question could quote a
              stranger's article back at you. src/store/pg.ts § `ownedSlug`. */
           ownedByReader(),
-          // Archived articles are out of the index, not filtered from the
-          // results: a hit that opens an article you deleted reads as a ghost.
-          isNull(articles.archivedAt),
+          /* Archived articles are out of the index, not filtered from the
+             results — unless the reader asked for them with the shelf's
+             Include archived chip, and then each hit says it is archived so
+             the client can mark it (plan 260930d). A hit that opens an
+             article you archived, unmarked, reads as a ghost. */
+          ...(opts.includeArchived ? [] : [isNull(articles.archivedAt)]),
           /* In the WHERE clause, so it happens before `limit` below. Chat's
              `search_library` asks for this to leave out the article the reader
              already has open, and removing it from the returned rows instead
@@ -652,6 +656,7 @@ const rawPgLibrarySearch: LibrarySearch = {
       blockId: row.blockId,
       text: row.text,
       rank: Number(row.rank),
+      archived: row.archived,
     }));
 
     log("store").debug({ hits: hits.length, capped }, "library search");

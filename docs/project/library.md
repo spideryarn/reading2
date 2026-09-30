@@ -165,7 +165,15 @@ do to an article was open it. Then Greg asked for the verbs:
 Five buttons, revealed on hover and on focus: **Edit title**, **Re-fetch and rebuild**, **Open the
 original**, **Copy link**, **Archive**. Re-run is not new machinery — it is
 `POST /api/jobs { slug, force: ["fetch"] }`, the route the add box already uses; without the `force`
-the queue skips every step whose artefact is on disk, which is every step.
+the queue skips every step whose artefact is on disk, which is every step. Where there is no web
+address to fetch it is **Rebuild** instead — the same job with `force: ["extract"]`, so `fetch`
+skips over the copy we already hold and everything after it runs again (the job
+[`enqueueReset`](../../src/jobs.ts) queues, without the reset plan):
+
+> It *could* rebuild them though, and so I feel like that button should still be active - it should
+> just skip the refetching (and perhaps indicate that in the tooltip).
+>
+> — Greg, 2026-09-30 ([260930d](../plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md))
 
 The plan, the decisions and what was deliberately left out are in
 [260826k-library-shelf-actions-and-search.md](../plans/260826k-library-shelf-actions-and-search.md).
@@ -189,7 +197,7 @@ places that reveal before they act.
 
 ### When a button cannot do its job
 
-Two of the five need a source URL, and until 2026-09-05 they were simply **not drawn** without one —
+Two of the five used to need a source URL, and until 2026-09-05 they were simply **not drawn** without one —
 each absence a real fix (a re-fetch with nothing to fetch, an anchor pointed at a `javascript:` URL),
 each made by deleting the control. The cost only shows across cards:
 
@@ -200,17 +208,23 @@ each made by deleting the control. The cost only shows across cards:
 > — Greg, 2026-09-05
 
 So all five are always drawn, and the precondition decides whether the button *works* rather than
-whether it exists. The card and the accessible name both say **which** absence it is: no address
-recorded at all, versus an address we will not follow. The card never says *why* there is no address
-— "you uploaded this" is a claim assembled from a gap in our own files, and a revision can be
-published with no `requested_url` and no `final_url`, which is the same refusal
+whether it exists. Since 2026-09-30 the re-fetch without an address becomes a rebuild from the
+stored copy (above), and says so — one card for both absences, since they do the same thing. It is
+unavailable only when the pipeline has **no reusable stored copy**
+(`LibraryEntry.sourceReusable === false`): `stepIsDone(fetch)` needs both a raw-source reference and
+a completed `fetch` run on the current published revision, and a new draft carries both. Without
+either, `fetch` runs for want of its complete artefact and fails. **Open the original**'s card and
+accessible name say **which** absence it is: no address recorded at all, versus an address we will
+not follow. No card says *why* there is no address — "you uploaded this" is a claim assembled from
+a gap in our own files, and a revision can be published with no `requested_url` and no `final_url`,
+which is the same refusal
 [`Metadata.tsx`](../../src/web/Metadata.tsx) § `uploaded` makes.
 
 **One test decides both buttons, not two.** Re-fetch was gated on "has a URL" and the link on "has a
 *web* URL", on the reasoning that a non-web address is still an address — but it is not an address
 stage 1 will follow ([`src/fetch.ts`](../../src/fetch.ts) refuses anything but http(s)), so a
 `javascript:` article got a live button over a job that always failed at its first step. GPT Sol,
-2026-09-05.
+2026-09-05. The same test now decides whether the button forces `fetch` or `extract`.
 
 **`aria-disabled`, never the `disabled` attribute**, and that is the whole feature rather than a
 detail: a natively disabled button is out of the tab order and suppresses activation, and engines
@@ -257,7 +271,7 @@ and every check anybody ran with a mouse would look fine.
 So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
 case nothing. `GET /api/library?archived=1` is the other half of the shelf.
 
-The **Archived** chip beside Unread is the other way back, and it is not optional decoration:
+The **Include archived** chip beside Unread (it read just *Archived* until 2026-09-30, below) is the other way back, and it is not optional decoration:
 without it Archive is permanent from the interface the moment the nine-second Undo strip goes, which
 would make "nothing is destroyed" true of the database and false of the product. It is off by
 default and does not fetch until turned on (`?archived=1`, a direct link included).
@@ -281,11 +295,25 @@ The chip is drawn **whenever the shelf has answered**, even over an empty active
 without the sort chips — because a reader whose every article is archived must still be able to
 reach them (GPT Sol R2); the empty-shelf message comes from the combined list.
 
+**The chip reaches both halves of the search box**, and until 2026-09-30 it reached one. The cards
+were searched across the archive; the passages (`GET /api/library/search`) never were. Greg had
+archived an article by accident, with no byline or site name on its card, and searched for its
+author to put it back: *"I couldn't find a way to find that Wolfram bigger brains article with the
+search box when it was archived, and it felt like a bug"* (SPIDERYARN-READING2-72, plan
+[260930d](../plans/260930d-shelf-search-finds-archived-articles-and-the-archived-chip-says-include.md)).
+Now the hook sends `&archived=1` with the chip, the response echoes it so an answer for the other
+chip state is dropped, and a passage from an archived article wears the same **Archived** mark as the
+card. With the chip off, a passage search that finds nothing says that archived articles were not
+searched. The chip's words changed at the same time, from **Archived** to **Include archived**:
+beside Unread, which narrows, a bare *Archived* read as "only archived" — *"I couldn't tell if that
+button meant, when clicked, include both active and archived, or only include archived."*
+
 **An archived article is still readable by direct link.** Only the shelf filters. That is a decision
 rather than an oversight — the shelf is a shelf, not an access control list, and a link that stops
 working is a worse surprise than a card that is out of sight. The library *search* is the exception:
-an archived article is out of the index entirely, because a hit that opens an article you archived
-reads as a ghost.
+an archived article is out of the index unless the reader turns on Include archived, because an
+unmarked hit that opens an article you archived reads as a ghost. Chat's `search_library` never
+turns it on.
 
 **And archiving takes it out of the public listing too**, which is the one place the shelf rule bends.
 [`publicLibraryQuery`](../../src/store/public-library.ts) asks for `visibility = 'public'`, a

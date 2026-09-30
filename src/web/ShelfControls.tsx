@@ -70,18 +70,23 @@ export function ShelfControls({
 }) {
   /* Every accessible name here **begins with the visible text** — see the
      Unread chip below for why. */
+  /* **"Include archived", not "Archived"** (plan 260930d). Beside Unread,
+     which *narrows* to one kind, a pill reading just "Archived" read as "only
+     archived" — Greg, 2026-09-30 (SPIDERYARN-READING2-72): *"I couldn't tell
+     if that button meant, when clicked, include both active and archived, or
+     only include archived."* It adds; the words say so. */
   const archivedChip = (
     <Chip
       pressed={archived}
       describe={
         archived
-          ? "Archived — showing archived articles on the shelf too, each marked. Activate to hide them."
-          : "Archived — show archived articles on the shelf too, sorted and filtered with the rest"
+          ? "Include archived — archived articles are listed and searched too, each marked Archived. Activate to hide them."
+          : "Include archived — list and search archived articles too, each marked Archived"
       }
       onClick={() => onArchived(!archived)}
     >
       <Archive size={12} />
-      Archived
+      Include archived
     </Chip>
   );
 

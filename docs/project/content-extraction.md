@@ -208,6 +208,15 @@ The differences that matter to a reader:
 - **A continuation joins only on the same source page or the immediately following one.** The join
   cursor advances after every joined record, so legitimate three-page continuations work without
   allowing backwards or cross-gap joins.
+- **A paragraph cut by a figure, or by a footer at a page turn, is joined back.** Since 2026-09-30
+  a `continues` record may reach past figures, tables and page furniture (`publisher`, `footnote`)
+  to the paragraph it continues — furniture only at a page turn, never past the next page, never
+  past a line the front-matter pass set aside, and only where the earlier half visibly stops
+  mid-sentence. On production that was ~70 paragraphs the model had marked `continues` and the
+  reader still got in halves. A continued caption is joined inside its `<figcaption>`, and its
+  figure's ref is minted from the whole caption. `continuationTargets` in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) is the one rule `renderHtml` and `mendSeamHyphens`
+  share — [260930e](../plans/260930e-pdf-transcription-glitches.md).
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
@@ -619,7 +628,10 @@ institutions the source declares for them — the `citation_author_institution` 
 with the footnote markers cut away by rule (the `Smith1` fix). A PDF's names and affiliations are the page's
 own characters, found where the model pointed, never the model's text
 ([`src/pdf-authors.ts`](../../src/pdf-authors.ts)). Stored only when it accounts for the whole
-byline, and then the byline is derived from it, so the two never disagree. The masthead and the
+byline, and then the byline is derived from it, so the two never disagree. For a PDF whose names
+all verify but an affiliation does not, since 2026-09-30 the byline is those names and no list is
+stored — until then the byline fell back to the record with its markers
+([260930e](../plans/260930e-pdf-transcription-glitches.md) § Stage 2). The masthead and the
 Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page with no declared list
 keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
 [../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).

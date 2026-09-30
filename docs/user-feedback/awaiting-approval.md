@@ -12,6 +12,7 @@ proposed, and a link to the plan doc. When Greg answers, the work either happens
 in this directory records which, and the line comes off.
 
 - 2026-09-29 · SPIDERYARN-READING2-5J · Readers paying with their ChatGPT plan, at a quarter of the price. It needs OpenAI to admit us, and the plan says it is 6–9 weeks and genuinely complicated. Greg's decisions: whether to apply to OpenAI, and whether to run the ~$10–20 eval of GPT-6.1 Sol first · [260929g](../plans/260929g-bring-your-own-ai-subscription.md)
+- 2026-09-30 · SPIDERYARN-READING2-61 · **Shipped; only the privacy wording waits.** The quiz now reads the stored reading-time totals too, and the /privacy bullet names only the outline and margin as their purpose — one clause to add, and published wording is yours · [260930e § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md)
 
 ## Attempted abuse, not yet seen by Greg
 
@@ -43,7 +44,8 @@ cost. **One of them was written as a deploy blocker and the deploy went out anyw
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
 
-- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. Two calls left open: (1) offer *Investigate* only once *Look it up* has identified the work, so code rather than the model decides which search result is the paper (an extra paid press each time); (2) 5G's proposed stage, reading the paper itself. Both are set out in the plan · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named)
+- 2026-09-30 · SPIDERYARN-READING2-69 (shipped) · PDF transcription glitches. Three calls left open: (1) a PDF's footnotes are transcribed but never shown — show them at the end, unlinked (cheap), or with linked markers (a prompt change every re-import pays for); (2) whether to re-render the PDF articles already on the shelf so they get the paragraph joins (free where chunks are still checkpointed; rewrites real readers' articles); (3) the author check can still drop an author printed after the last name the model gave, which is tied to stacked NeurIPS-style bylines · [260930e](../plans/260930e-pdf-transcription-glitches.md#deferred-and-named)
+- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. One call still open: 5G's proposed stage, reading the paper itself · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named). *Its other call — have code identify the work before the reading — was answered by Greg's own report 75 the same day: one button that runs the quick check first ([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)). The assumption taken there — losing the separate 3¢ press, and with it 20-an-hour lookups — is in that plan's § The one product call, with its one-line fallback.*
 
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data

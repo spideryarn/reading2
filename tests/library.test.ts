@@ -59,6 +59,7 @@ describe("describeArticle", () => {
     scalars: deriveLibraryScalars({ blocks, tree }),
     comments: 0,
     addedAt: "2026-08-25T00:00:00.000Z",
+    sourceReusable: true,
   };
 
   /** The same tree with one rung of the blurb's fallback removed. */

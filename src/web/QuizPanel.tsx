@@ -30,6 +30,25 @@
  * file owns the two facts it needs, the verdicts and how the reader arrived.
  * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md § The walk.
  *
+ * ## Only what you have read
+ *
+ * > if there's a tick box that defaults to only show me questions for stuff
+ * > I've read, and then it would only show quiz questions for the stuff that
+ * > the user has read.
+ * >
+ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-61)
+ *
+ * With reading time on, a tick-box, on by default, narrows the walk to the
+ * questions whose evidence passages the reader has read (src/web/read-filter.ts
+ * says what "read" means). **The path is not rebuilt**: `at` stays an index into
+ * the artefact's array, and the filter only changes which indices can be landed
+ * on. A Next that skips an unread step is not an arrival from the step before,
+ * so the premise is shown — it is the bridge over the step skipped. And the
+ * panel never draws a question it has not committed to: while the one at `at`
+ * is filtered out, nothing interactive is drawn, and an effect moves through
+ * `move`, which takes the draft and the mark with it. GPT Sol's findings on
+ * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md.
+ *
  * ## "Show a reference answer", and the word that is not "the"
  *
  * The button says *a* reference answer, and that is the whole design of it.
@@ -61,11 +80,12 @@
  * old request, which is otherwise still holding `useQuiz`'s single live slot
  * and leaves the new batch's Answer button enabled and inert.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
 import type { BlockId, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
 import { showPremise } from "./quiz-ladder.js";
+import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
 import type { RememberView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
@@ -159,9 +179,17 @@ export function QuizPanel({
   owner,
   subMode,
   blocks,
+  readSoFar,
   onJump,
 }: {
   owner: UseQuiz;
+  /**
+   * The reader's reading so far — src/web/read-filter.ts. **Absent means
+   * reading time is off**, and then there is no tick-box and every question is
+   * walked, exactly as before: an empty level map would otherwise read as
+   * "read nothing" and hide the whole quiz.
+   */
+  readSoFar?: ReadSoFar | undefined;
   /** The Recall | Quiz control, built by `RememberBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
@@ -228,6 +256,29 @@ export function QuizPanel({
   const [listing, setListing] = useState(false);
   /** Per question, and reset by `move` — see the comment on the button. */
   const [showAnswer, setShowAnswer] = useState(false);
+  /** "Only what I've read" — on by default, per visit. Greg's words. */
+  const [onlyRead, setOnlyRead] = useState(true);
+
+  /**
+   * **Which steps of the path the reader may land on.** Every one, unless the
+   * tick-box is on *and* the levels can be believed (`loaded`). While they are
+   * `loading` the walk waits rather than guessing; if they `failed` it is the
+   * whole path, and a line says so — an empty map from a failed read is not
+   * "read nothing" (GPT Sol's finding 1).
+   */
+  const filtering = readSoFar !== undefined && onlyRead;
+  const waitingForReading = filtering && readSoFar.status === "loading";
+  const filterActive = filtering && readSoFar.status === "loaded";
+  const readLevels = readSoFar?.levels;
+  const included = useMemo(
+    () => questions.map((q) => !filterActive || !readLevels || questionIsRead(q, readLevels, blocks)),
+    [questions, filterActive, readLevels, blocks],
+  );
+  const includedAt = useMemo(
+    () => included.flatMap((yes, i) => (yes ? [i] : [])),
+    [included],
+  );
+  const hiddenCount = questions.length - includedAt.length;
 
   const box = useRef<HTMLTextAreaElement | null>(null);
 
@@ -260,7 +311,51 @@ export function QuizPanel({
     setShowAnswer(false);
   }, [quiz?.batchId]);
 
-  const question: QuizQuestion | undefined = questions[at];
+  /**
+   * **Off a filtered-out step, through `move`.** When the question at `at` is
+   * not one the reader may land on — the opening step before anything is read,
+   * the tick-box turned on, the switch turned off and on again — go to the
+   * first included step at or after it, else the last one before it. With none
+   * at all, drop the draft and the mark, since the empty state has no box to
+   * hold them.
+   *
+   * **After the batch reset, and reading from 0 on a new batch.** Both effects
+   * run in the same commit, and the later `setAt` is the one that lands; the
+   * reset's `setAt(0)` has not reached `at` yet, so on a new batch this starts
+   * from the front itself rather than from the old batch's index.
+   */
+  const filterBatch = useRef(quiz?.batchId);
+  /* A replacement batch reaches render before either reset effect reaches the
+     state it owns. Do not paint the new batch at the old batch's index in that
+     gap: even when that index happens to be included, its question would sit
+     over the old batch's draft and mark until the passive effects run. The
+     reset below always schedules a render (`setVerdicts(new Map())`), and the
+     filter effect commits the new batch to this ref before that render. */
+  const changingBatch = filterBatch.current !== quiz?.batchId;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `move` is recreated every render and reads nothing this list does not already cover
+  useEffect(() => {
+    const from = filterBatch.current === quiz?.batchId ? at : 0;
+    filterBatch.current = quiz?.batchId;
+    if (!filterActive || included[from] !== false) return;
+    const target = includedAt.find((i) => i >= from) ?? lastBefore(includedAt, from);
+    if (target !== undefined) {
+      move(target, false);
+      return;
+    }
+    if (owner.attempt || typed !== "") {
+      owner.clearAttempt();
+      setTyped("");
+      setShowAnswer(false);
+    }
+  }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId]);
+
+  /** Undefined while the step at `at` is filtered out — see the effect above. */
+  const question: QuizQuestion | undefined =
+    changingBatch || waitingForReading || included[at] === false ? undefined : questions[at];
+  /* The reader's place, counted among the steps they may land on. */
+  const position = includedAt.indexOf(at) + 1;
+  const nextAt = includedAt.find((i) => i > at);
+  const previousAt = lastBefore(includedAt, at);
 
   /**
    * **Dictation, in the box the reader is most likely to talk into.**
@@ -446,11 +541,14 @@ export function QuizPanel({
    * it always did.
    */
   const stillMarking = mine?.status === "marking";
-  const canGoNext = !stillMarking && at < questions.length - 1;
+  const canGoNext = !stillMarking && nextAt !== undefined;
 
+  /* **Arrived by Next only if nothing was skipped.** A Next over an unread
+     step did not come from the step before, whose answer the premise restates,
+     so the premise is shown. */
   const goNext = () => {
-    if (!canGoNext) return;
-    move(at + 1, true);
+    if (!canGoNext || nextAt === undefined) return;
+    move(nextAt, nextAt === at + 1);
   };
 
   /**
@@ -562,6 +660,27 @@ export function QuizPanel({
             </p>
           )}
 
+          {readSoFar && questions.length > 0 && (
+            <OnlyRead
+              on={onlyRead}
+              onChange={setOnlyRead}
+              readSoFar={readSoFar}
+            />
+          )}
+
+          {waitingForReading && questions.length > 0 && (
+            <p className="gloss-quiet">Looking for what you have read…</p>
+          )}
+
+          {filterActive && questions.length > 0 && includedAt.length === 0 && (
+            <div className="gloss-empty">
+              <p>None of these questions is about a passage you have read yet.</p>
+              <p className="gloss-hint">
+                Read on, or untick <em>Only what I’ve read</em> to see all {questions.length}.
+              </p>
+            </div>
+          )}
+
           {question && (
             /* One group for the whole band, so moving along a row of citations
                shows each card immediately instead of waiting out the open delay
@@ -569,7 +688,7 @@ export function QuizPanel({
             <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
               <div className="quiz-one">
                 <p className="gloss-count">
-                  Question {at + 1} of {questions.length}
+                  Question {position} of {includedAt.length}
                   {/* Dropped while the box holds something that has not been
                       marked, because this line sits directly above that box and
                       reads as a claim about what is in it. The tick in the list
@@ -680,7 +799,11 @@ export function QuizPanel({
                       order there is, and a history stack would be a second
                       one. Not an arrival by Next, so the step shows its
                       premise. */}
-                  <button type="button" disabled={at === 0} onClick={() => move(at - 1, false)}>
+                  <button
+                    type="button"
+                    disabled={previousAt === undefined}
+                    onClick={() => previousAt !== undefined && move(previousAt, false)}
+                  >
                     Previous
                   </button>
                   <button type="button" disabled={!canGoNext} onClick={goNext}>
@@ -692,17 +815,26 @@ export function QuizPanel({
                     aria-expanded={listing}
                     onClick={() => setListing((v) => !v)}
                   >
-                    {listing ? "Hide the list" : `Show all ${questions.length}`}
+                    {listing ? "Hide the list" : `Show all ${includedAt.length}`}
                   </button>
                 </div>
 
                 {listing && (
-                  <QuestionList
-                    questions={questions}
-                    currentId={question.id}
-                    answered={answered}
-                    onPick={pick}
-                  />
+                  <>
+                    <QuestionList
+                      questions={questions.filter((_, i) => included[i])}
+                      currentId={question.id}
+                      answered={answered}
+                      onPick={pick}
+                    />
+                    {hiddenCount > 0 && (
+                      <p className="gloss-hint">
+                        {hiddenCount === 1
+                          ? "One more is about a passage you have not read yet."
+                          : `${hiddenCount} more are about passages you have not read yet.`}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </TooltipGroup>
@@ -710,6 +842,38 @@ export function QuizPanel({
         </>
       )}
     </ModeSurface>
+  );
+}
+
+/**
+ * **"Only what I've read", and how much that is.**
+ *
+ * The figure is the share of the body's words in passages read — the same
+ * rule as the tick-box — so the two cannot disagree. Said only once the levels
+ * can be believed: while loading it says nothing, and after a failed read it
+ * says the filter is off rather than claiming a share of zero.
+ */
+function OnlyRead({
+  on,
+  onChange,
+  readSoFar,
+}: {
+  on: boolean;
+  onChange(next: boolean): void;
+  readSoFar: ReadSoFar;
+}) {
+  const share = readSoFar.status === "loaded" ? shareRead(readSoFar.levels, readSoFar.bodyWords) : null;
+  return (
+    <div className="quiz-only-read">
+      <label>
+        <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> Only what
+        I’ve read
+      </label>
+      {share !== null && <span className="gloss-hint">{readShareLabel(share)} of the piece read so far</span>}
+      {readSoFar.status === "failed" && on && (
+        <span className="gloss-hint">couldn’t load what you have read, so this is every question</span>
+      )}
+    </div>
   );
 }
 

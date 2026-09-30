@@ -149,7 +149,11 @@ describe("the revision column policy", () => {
    */
   it("gives the source reference to the one read that serves it, and no other", () => {
     expect(POLICY.rawSourceSha256).toEqual({ rawSource: "value" });
-    expect(POLICY.rawSourceKind).toEqual({ rawSource: "value" });
+    /* **Plus the shelf, by presence only** (2026-09-30, feedback 6B): a boolean
+       evaluated in Postgres, so the reference itself still reaches one read.
+       The shelf's rebuild needs to know whether there is a stored copy, and
+       nothing more. docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md. */
+    expect(POLICY.rawSourceKind).toEqual({ rawSource: "value", library: "presence" });
     expect(policyGrants("rawSource")).toEqual(
       ["id", "rawFilename", "rawSourceKind", "rawSourceSha256"].sort(),
     );
@@ -443,6 +447,14 @@ describe("the shelf's own query", () => {
    */
   const shelfSql = (archived: boolean): string =>
     listArticlesQuery(new QueryBuilder() as never, { archived }).toSQL().sql;
+
+  it("matches fetch's skip condition, not merely the source reference", () => {
+    const sql = shelfSql(false);
+    expect(sql).toContain('"raw_source_kind" is not null');
+    expect(sql).toMatch(
+      /exists \(\s*select 1 from "spideryarn"\."revision_step_runs"[\s\S]*"step_name" = 'fetch'[\s\S]*"status" = 'done'/,
+    );
+  });
 
   it("looks at the four artefact columns and reads none of them", () => {
     const sql = shelfSql(false);
