@@ -63,6 +63,14 @@ describe("appending into an empty thread", () => {
     expect(thread.title).toBe("New chat");
   });
 
+  it("keeps Remember's placeholder when its first spoken transcription failed", () => {
+    /* Empty reader speech is valid when transcription failed. The companion's
+       answer still saves the exchange, so this placeholder can persist in the
+       shared list and must describe the kind the thread was created as. */
+    const { thread } = withSpokenTurn([], spoken({ question: "", kind: "remember" }), AT);
+    expect(thread.title).toBe("Remembering");
+  });
+
   it("is a chat thread when the caller names no kind", () => {
     expect(withSpokenTurn([], spoken(), AT).thread.kind).toBe("chat");
   });

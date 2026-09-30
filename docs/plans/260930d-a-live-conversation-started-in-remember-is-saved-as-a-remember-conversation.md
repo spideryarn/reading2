@@ -116,6 +116,13 @@ test above was added and watched red. It confirmed the renamed-id path is sound:
 replaces the tab's entry before the live hook adopts the new id. (2, P2) "Nothing was lost" was
 stronger than the evidence — reworded above.
 
+GPT Sol on the code, 2026-09-30: **ship after its fix.** One P2, fixed by it with a test: a Remember
+thread whose first spoken transcription failed kept the title "New chat" for good; it now keeps
+"Remembering", the placeholder the tab already shows. It traced the paths the kind feeds — the next
+typed turn, retry and edit, the stance seed, the `/live` ticket, the dialog, the renamed-id path —
+and found them right. A kind contradiction on the spoken path takes the tail conflict's repair, words
+kept. Gates re-run outside its sandbox: 68 files, 1,020 tests; typecheck 0.
+
 ## Docs
 
 live-conversation.md § The controls (the Remember paragraph) and remember-mode.md get one sentence

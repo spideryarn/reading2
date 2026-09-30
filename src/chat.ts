@@ -481,7 +481,11 @@ export function withSpokenTurn(
     /* Same rule as `withTurn`: the client's id is honoured only if it is one of
        ours and free, so a duplicate cannot append to a stranger's thread. */
     id: isSpideryarnId(threadId) && !ids.has(threadId) ? threadId : mintUniqueId(ids),
-    title: "New chat",
+    /* Usually replaced by the first transcription below. An empty reader
+       transcription is valid, though, so this can become the lasting title and
+       must describe the kind the exchange is creating. Mirrors the local-only
+       placeholders in src/web/useChat.ts. */
+    title: kind === "remember" ? "Remembering" : "New chat",
     createdAt: at,
     updatedAt: at,
     /* The kind the tab began it as — Remember, when Live was pressed in the
