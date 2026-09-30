@@ -280,14 +280,15 @@ change.
 
 **Nothing to add, if the mode spends through a pipeline step or an article route** —
 [cost-tracking.md](cost-tracking.md) is the three rules that make that true. A step's spend is
-attributed to the article by `runStep`, and its step name becomes its own line in the **What it
-cost** section of the metadata page (administrator only) and in `npm run cost`.
+attributed to the article by `runStep`, and its `(step, job)` pair becomes its own line in the
+**What it cost** section of the metadata page (administrator only); `npm run cost` counts the same
+calls by job and category.
 
 Two things to check:
 
-- **A new route with the slug in its path answers `article: "first-capture"`** in the route table;
+- **A new route answers `article` in the route table** — `"first-capture"` when the slug is capture 1;
   the compiler makes you answer, but it cannot make you answer right. A slug that arrives in the
-  query or the body is wrapped by hand with `withSpendAttribution`.
+  query or the body is `"handler"`, and wrapped by hand with `withSpendAttribution`.
 - **A new `AiJob` gets a row in `JOB_DISPOSITION`** ([`src/cost-categories.ts`](../../src/cost-categories.ts)),
   or its spend is shown in the `unknown` category. The compiler asks for this one too.
 

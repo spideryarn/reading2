@@ -1161,7 +1161,39 @@ const ADMITTED: Readonly<Record<string, string>> = {
     "seam import. It opens no ledger, by decision and with a reason on the declaration.",
 };
 
+/**
+ * **Evals that go through the seams and open their own eval-scoped ledger.**
+ *
+ * Neither a stage CLI (they are `scope_kind = 'eval'`, not `cli`, so
+ * `withLedger("cli", main)` would file their spend as the product's) nor a
+ * declaration (`src/spend-declarations.ts` registers *holes* — a bypass, or a
+ * seam call with no collector — and these have neither). Added 2026-09-30 for
+ * `npm run test:paid`, docs/plans/260930f-article-cost-on-the-metadata-page.md.
+ *
+ * Each is checked, not trusted: its source must open `collectSpend` with
+ * `scopeKind: "eval"` and write through `costStore.record`, which is what makes
+ * the rows reach the ledger and be counted as non-product.
+ */
+const LEDGERED_EVALS: Readonly<Record<string, string>> = {
+  "evals/cost/ledger-check.ts":
+    "npm run test:paid — three tiny real calls, one per wire, read back through the ledger " +
+    "and the metadata page's article query. docs/project/cost-tracking.md.",
+};
+
 describe("the listed stage CLIs open the ledger", () => {
+  it("has every ledgered eval really open an eval-scoped collector that writes rows", () => {
+    for (const file of Object.keys(LEDGERED_EVALS)) {
+      const source = read(file);
+      expect(source, `${file} opens no collectSpend`).toMatch(/\bcollectSpend\(/);
+      expect(source, `${file} does not attribute to the eval scope`).toMatch(
+        /scopeKind:\s*"eval"/,
+      );
+      expect(source, `${file} does not write rows through costStore.record`).toMatch(
+        /sink:\s*costStore\.record/,
+      );
+    }
+  });
+
   it('wraps every listed stage CLI entrypoint in withLedger("cli", main)', () => {
     const offenders = Object.keys(PAID_CLIS)
       .map((file) => ledgerOffence(file, read(file)))
@@ -1183,7 +1215,8 @@ describe("the listed stage CLIs open the ledger", () => {
        what ADMITTED above is for. */
     const seamEntries = entryModules().filter((f) => importsSeam(read(f)));
     const unaccounted = seamEntries.filter(
-      (f) => !(f in PAID_CLIS) && !DECLARATIONS.some((d) => d.file === f),
+      (f) =>
+        !(f in PAID_CLIS) && !(f in LEDGERED_EVALS) && !DECLARATIONS.some((d) => d.file === f),
     );
     expect(
       unaccounted,

@@ -69,7 +69,7 @@ async function dispatch(
     },
   };
   const context = {
-    user: { id: "00000000-0000-4000-8000-00000000ab01" },
+    user: { id: "00000000-0000-4000-8000-00000068ab01" },
     request: {
       req: { method: "GET" } as IncomingMessage,
       res: {} as ServerResponse,
@@ -79,7 +79,7 @@ async function dispatch(
     },
   } as unknown as Context;
   const { result } = await collectSpend(() => dispatchAuthRoute([route] as unknown as Rows, context), {
-    attribution: { scopeKind: "request", ownerId: "00000000-0000-4000-8000-00000000ab01" },
+    attribution: { scopeKind: "request", ownerId: "00000000-0000-4000-8000-00000068ab01" },
     sink: async (r) => {
       rows.push(r);
     },

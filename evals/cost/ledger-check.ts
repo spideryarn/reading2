@@ -40,7 +40,8 @@
  * (`productSpendByOwner`). Ledger rows are never deleted, and these are no
  * exception — they are the record of what the check spent.
  *
- * Needs `OPENROUTER_API_KEY` and a database with the eval owner seeded
+ * Needs the OpenRouter key in `.env.local` (the gateway refuses without it)
+ * and a database with the eval owner seeded
  * (`npm run db:seed` or `npx tsx scripts/seed-accounts.ts`).
  */
 
@@ -68,10 +69,6 @@ function dollars(nanos: number): string {
 
 async function main(): Promise<number> {
   loadEnvLocal();
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.error("OPENROUTER_API_KEY is not set — this check spends real money and needs the key.");
-    return 2;
-  }
   console.log(`Ledger: ${costStore.describe()}`);
 
   /* **Before spending anything**: the rows are owned by the eval account, and

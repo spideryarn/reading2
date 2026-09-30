@@ -219,6 +219,35 @@ migration (`1790762920540`) that is not on dev yet, and `db:migrate` refuses to 
 Not mine to delete. The private-Postgres test lane builds its own database from the journal, so the
 suite applies this migration regardless.
 
+## The code review
+
+GPT Sol reviewed the built code with write access
+([review](260930f-article-cost-on-the-metadata-page-code-review-sol.md); the codex wrapper
+overwrote its answer file with a two-line summary, so the findings were recovered from the run's
+activity log — exit 0, verdict *DO NOT SHIP until finding 4*). Four findings:
+
+1. **P2, fixed by Sol** — with no ledger lines the section returned early and dropped the coverage
+   notes, so a silent live conversation disappeared; and *"— at least"* came after the figure it
+   qualified. Now the empty state keeps the notes, and the total reads *At least $…*.
+2. **P3, fixed by Sol** — three boundaries had no test that could fail: the Metadata page's
+   admin-only mount (now a source contract), link-summary's hand wrap (the existing real-stream
+   harness now captures a ledger row, so the § *What changed* gap above is closed), and
+   `silentLiveSessionsForArticle` (Postgres fixtures for silent, reported and unconnected sessions —
+   Sol could not reach Docker; they pass here).
+3. **P3, fixed by Sol** — the `belongsTo` comment claimed to recover a pre-creation call its own
+   predicate excludes.
+4. **P2, fixed by me** — `cost-tracking.md` and the new-mode section overclaimed (every call writes
+   a row; the page says "by how much" it is short; only pattern rows and two values; a mode gets a
+   line in `npm run cost`). Sol held it for Greg under edit-important-docs.md, but both are text this
+   change wrote and neither is AGENTS.md, an entry point or `docs/reusable/`, so the rule does not
+   apply; its proposed wording was taken.
+
+The full suite then found three reds of mine that no scoped run had: fixture uuids shared with
+other files (renumbered), the paid check naming `OPENROUTER_API_KEY` itself (removed — the gateway
+refuses without it), and the new `test:paid` entry unaccounted for in `tests/paid-cli-ledger.test.ts`
+— it is neither a stage CLI nor a declared hole, so that test gained `LEDGERED_EVALS`, which checks
+the file really opens an eval-scoped collector writing to `costStore`.
+
 ## Log
 
 - 2026-09-30 — plan written; Sol plan review, BUILD WITH CHANGES; all six findings taken.

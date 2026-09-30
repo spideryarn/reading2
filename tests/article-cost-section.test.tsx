@@ -9,6 +9,8 @@
  * than **saying when the total is a floor**: a figure with unpriced calls behind
  * it must not look like the whole truth.
  */
+import { readFileSync } from "node:fs";
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 /* `apiFetch` reaches for IndexedDB; see tests/admin-page.test.tsx. */
@@ -136,7 +138,9 @@ describe("the article cost section", () => {
       silentLiveSessions: 1,
     } satisfies ArticleCost);
     await mount();
-    expect(host.textContent).toContain("at least");
+    expect(host.querySelector("[data-testid=article-cost-total]")?.textContent).toContain(
+      "At least $0.0100",
+    );
     expect(host.textContent).toContain("2 calls reported no cost");
     expect(host.textContent).toContain("1 live conversation connected and never reported usage");
     expect(host.querySelector("tbody td:last-child")?.textContent).toBe("$0.0100+");
@@ -146,6 +150,14 @@ describe("the article cost section", () => {
     answer(200, { slug: "a", lines: [], silentLiveSessions: null } satisfies ArticleCost);
     await mount();
     expect(host.textContent).toContain("No model calls are recorded against this article.");
+    expect(host.textContent).toContain("Only what was recorded and tied to this article");
+  });
+
+  it("does not hide a silent live conversation when there are no ledger rows", async () => {
+    answer(200, { slug: "a", lines: [], silentLiveSessions: 1 } satisfies ArticleCost);
+    await mount();
+    expect(host.textContent).toContain("No model calls are recorded against this article.");
+    expect(host.textContent).toContain("1 live conversation connected and never reported usage");
   });
 
   it("shows a refusal as an error rather than as a zero", async () => {
@@ -163,5 +175,18 @@ describe("lineName", () => {
     expect(lineName(line({}))).toBe("hierarchy");
     expect(lineName(line({ job: "referee_claims", stepName: null }))).toBe("referee claims");
     expect(lineName(line({ job: "labels" }))).toBe("hierarchy · labels");
+  });
+});
+
+describe("where the section is mounted", () => {
+  it("draws the section only behind the client-side admin courtesy check", () => {
+    /* The server gate is the protection and has its route test. This source
+       contract holds the separate UI promise: a non-admin never sees an empty
+       or refused What-it-cost section. Mounting all of Metadata here would
+       replace this one assertion with every fetch and store on that page. */
+    const source = readFileSync("src/web/Metadata.tsx", "utf8");
+    expect(source).toMatch(
+      /\{isAdmin\(user\?\.id\) && \(\s*<Section label="What it cost">\s*<ArticleCostBody slug=\{slug\} \/>/,
+    );
   });
 });

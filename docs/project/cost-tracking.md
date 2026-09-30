@@ -12,8 +12,10 @@ one — **how a new piece of AI work gets its cost tracked, and where the figure
 
 ## The short version: you should not have to do anything
 
-Every paid call writes one row to `spideryarn.ai_calls`, priced when the provider said what it cost
-and counted as *unpriced* when it did not. A new feature gets that for nothing **if it keeps to
+Every gateway call made inside a collector writes one row to `spideryarn.ai_calls`, priced when the
+provider said what it cost and counted as *unpriced* when it did not. (A call outside every
+collector, or whose row fails to write, leaves only a process counter —
+[below](#the-articles-figure-and-what-it-cant-see).) A new feature gets that for nothing **if it keeps to
 three rules**, and each rule has something that enforces it:
 
 1. **Call a model through the gateway**, never with your own client or `fetch`: `streamMessage`
@@ -57,13 +59,14 @@ says why) returns the article's rows grouped by scope, job and step, each with t
 [`src/cost-categories.ts`](../../src/cost-categories.ts) gives it — the same words `npm run cost`
 uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
 
-- **It is keyed on the article's id**, with one fallback: a row written without an id (the lookup
-  failed, or the call came before the article row existed) is matched on the owner's slug, but only
-  if it happened after this article was created. A slug is unique only among *current* articles,
-  and without that bound a new article that reused a deleted one's slug would inherit its bill.
+- **It is keyed on the article's id**, with one fallback: a row written without an id because the
+  lookup failed while this article existed is matched on the owner's slug, but only if it happened
+  after this article was created. A call made *before* the article row existed is deliberately left
+  out: it cannot be told apart from a deleted predecessor that had the same slug, and a slug is
+  unique only among *current* articles.
   `belongsTo` in [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts).
-- **It is a floor, and the page says by how much.** Calls that reported no cost are counted and not
-  priced, and live conversations that connected and never posted usage are counted separately.
+- **It is a floor, and the page names the gaps it can observe** — not their size, which is unknown.
+  Calls that reported no cost are counted and not priced, and live conversations that connected and never posted usage are counted separately.
   Calls that failed or were stopped are included — they usually still cost — and counted too.
 - **A call that wrote no row is invisible to it**: a failed ledger write, or a call made outside
   every collector. Those exist only as process counters (`unscopedCalls()`, the collector's
@@ -77,10 +80,19 @@ uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
 
 ## The route table says where the article is
 
-Every pattern route in `AUTH_ROUTES` ([`src/routes.ts`](../../src/routes.ts)) carries an `article`
-field: `"first-capture"` if the first capture group is the article's slug, `"none"` otherwise.
-`dispatchAuthRoute` reads it and wraps the handler in `withSpendAttribution`, so any model call the
-route makes — now or after somebody adds one next month — lands on the article's figure.
+Every row of `AUTH_ROUTES` ([`src/routes.ts`](../../src/routes.ts)), exact and pattern alike,
+carries an `article` field:
+
+- `"first-capture"` (pattern rows only) — capture 1 is the article's slug. `dispatchAuthRoute`
+  wraps the handler in `withSpendAttribution`, so any model call the route makes — now, or after
+  somebody adds one next month — lands on the article's figure. This is the only value the
+  dispatcher acts on.
+- `"handler"` — the slug arrives some other way (a query parameter, the body) and the handler wraps
+  its own call. Link summaries and dictation.
+- `"none"` — no article in the path, or the route never calls a model.
+
+`tests/authenticated-api-route-contract.test.ts` refuses a row with no `article`, a value that is
+not a literal, and `"first-capture"` on an exact row, which has no capture.
 
 It is required rather than optional on purpose. An optional field is the "remember to" rule again,
 which is what missed link previews and dictation. It is lenient at run time: a capture that is not a

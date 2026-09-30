@@ -47,6 +47,10 @@ const UNTIL = "2031-04-01T00:00:00.000Z";
 const RUN = "00000000-0000-4000-8000-00000000d901";
 const ALICE = "00000000-0000-4000-8000-00000000ad01";
 const BOB = "00000000-0000-4000-8000-00000000ad02";
+const SILENT_SESSION = "00000000-0000-4000-8000-00000000d911";
+const REPORTED_SESSION = "00000000-0000-4000-8000-00000000d912";
+const UNCONNECTED_SESSION = "00000000-0000-4000-8000-00000000d913";
+const ARTICLE_SESSION_IDS = [SILENT_SESSION, REPORTED_SESSION, UNCONNECTED_SESSION];
 
 function row(id: string, over: Partial<AiCallRow>): AiCallRow {
   return {
@@ -291,13 +295,14 @@ await pgReady({
 describe("the per-owner spend aggregate", () => {
   afterAll(async () => {
     const { getDb, closeDb } = await import("../src/db/client.js");
-    const { aiCalls } = await import("../src/db/schema.js");
-    const { eq } = await import("drizzle-orm");
+    const { aiCalls, realtimeSessions } = await import("../src/db/schema.js");
+    const { inArray } = await import("drizzle-orm");
     /* The ledger rows only. The two seeded accounts stay: `ai_calls.owner_id`
        is `ON DELETE RESTRICT` on purpose so that billing history survives a
        customer deletion, and a suite that fought that would be fighting the
        thing the column is for. */
-    await getDb().delete(aiCalls).where(eq(aiCalls.runId, RUN));
+    await getDb().delete(aiCalls).where(inArray(aiCalls.runId, [RUN, REPORTED_SESSION]));
+    await getDb().delete(realtimeSessions).where(inArray(realtimeSessions.id, ARTICLE_SESSION_IDS));
     await removeBareArticles([ARTICLE], ALICE as OwnerId);
     await closeDb();
   });
@@ -414,10 +419,77 @@ describe("the per-owner spend aggregate", () => {
     expect(
       await spendForArticle({
         ...article,
-        id: "00000000-0000-4000-8000-0000000000ff",
+        id: "00000000-0000-4000-8000-00000068a0ff",
         slug: "spend-fixture-article-never",
       }),
     ).toEqual([]);
+  });
+
+  it("counts only connected live sessions on the article that left no usage row", async () => {
+    const article = await theArticle();
+    const { getDb } = await import("../src/db/client.js");
+    const { realtimeSessions } = await import("../src/db/schema.js");
+    const { acceptRealtimeUsage } = await import("../src/live.js");
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { silentLiveSessionsForArticle } = await import(
+      "../src/store/ai-calls-spend-pg.js"
+    );
+    const issuedAt = "2031-06-05T10:00:00.000Z";
+    const connectedAt = "2031-06-05T10:00:01.000Z";
+    const acceptsUntil = "2031-06-06T10:00:00.000Z";
+    const session = (id: string, connected: string | null) => ({
+      id,
+      ownerId: ALICE,
+      articleId: article.id,
+      articleSlug: ARTICLE,
+      threadId: null,
+      model: "gpt-realtime-2.1",
+      transcriptionModel: "gpt-live-transcribe",
+      issuedAt: new Date(issuedAt),
+      acceptsUntil: new Date(acceptsUntil),
+      connectedAt: connected ? new Date(connected) : null,
+      closedAt: null,
+      closeReason: null,
+    });
+    await getDb()
+      .insert(realtimeSessions)
+      .values([
+        session(SILENT_SESSION, connectedAt),
+        session(REPORTED_SESSION, connectedAt),
+        session(UNCONNECTED_SESSION, null),
+      ])
+      .onConflictDoNothing();
+
+    /* One connected session really did report. Build its row through the same
+       trust-boundary function as the route, so the fixture obeys every
+       realtime CHECK rather than hand-copying that evolving shape. */
+    await pgCostStore.record(
+      acceptRealtimeUsage({
+        session: {
+          id: REPORTED_SESSION,
+          ownerId: ALICE,
+          articleSlug: ARTICLE,
+          threadId: null,
+          model: "gpt-realtime-2.1",
+          transcriptionModel: "gpt-live-transcribe",
+          issuedAt,
+          acceptsUntil,
+          connectedAt,
+          closedAt: null,
+          closeReason: null,
+        },
+        usage: {
+          kind: "transcription",
+          providerEventId: "transcription-for-article-cost-test",
+          startedAt: null,
+          finishedAt: "2031-06-05T10:00:02.000Z",
+          audioSeconds: 1,
+        },
+        receivedAt: new Date("2031-06-05T10:00:03.000Z"),
+      }),
+    );
+
+    expect(await silentLiveSessionsForArticle(article)).toBe(1);
   });
 
   it("agrees with totalRows() about what the same rows cost", async () => {

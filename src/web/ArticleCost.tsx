@@ -13,10 +13,10 @@
  *
  * A total with nothing beside it reads as the whole truth. This one is a floor:
  * calls that reported no cost are counted and not priced, live conversations
- * whose tab died before posting are absent, and calls a route never attributed
- * to the article are invisible to the query. Each of those is said in words when
- * it applies, which is the same move the coverage header of `npm run cost` makes
- * (docs/reusable/silent-success.md).
+ * that connected but never reported usage are counted separately, and calls a
+ * route never attributed to the article are invisible to the query. Each of
+ * those is said in words when it applies, which is the same move the coverage
+ * header of `npm run cost` makes (docs/reusable/silent-success.md).
  */
 
 import { useEffect, useState } from "react";
@@ -89,52 +89,52 @@ function CostTable({ cost }: { cost: ArticleCost }) {
      plan review P2; docs/project/ai-gateway.md § What it cost. */
   const credits = lines.reduce((n, l) => n + l.creditsNanos, 0);
 
-  if (lines.length === 0) {
-    return (
-      <p className="tw:m-0 tw:text-sm tw:text-ink-faint">
-        No model calls are recorded against this article.
-      </p>
-    );
-  }
-
   return (
     <div className={`${CARD} tw:p-4 tw:text-sm`}>
-      <p className="tw:m-0 tw:mb-3" data-testid="article-cost-total">
-        <span className="tw:text-lg tw:font-semibold tw:tabular-nums">
-          {formatSpendNanos(total)}
-        </span>{" "}
-        <span className="tw:text-ink-faint">
-          over {calls} {calls === 1 ? "call" : "calls"}
-          {unpriced > 0 ? " — at least" : ""}
-        </span>
-      </p>
+      {lines.length === 0 ? (
+        <p className="tw:m-0 tw:text-ink-faint">
+          No model calls are recorded against this article.
+        </p>
+      ) : (
+        <>
+          <p className="tw:m-0 tw:mb-3" data-testid="article-cost-total">
+            <span className="tw:text-lg tw:font-semibold tw:tabular-nums">
+              {unpriced > 0 ? "At least " : ""}
+              {formatSpendNanos(total)}
+            </span>{" "}
+            <span className="tw:text-ink-faint">
+              over {calls} {calls === 1 ? "call" : "calls"}
+            </span>
+          </p>
 
-      <table className="tw:w-full tw:border-collapse tw:text-left">
-        <thead>
-          <tr className="tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
-            <th className="tw:py-1 tw:pr-3 tw:font-normal">Work</th>
-            <th className="tw:py-1 tw:pr-3 tw:font-normal">Kind</th>
-            <th className="tw:py-1 tw:pr-3 tw:text-right tw:font-normal">Calls</th>
-            <th className="tw:py-1 tw:text-right tw:font-normal">Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => (
-            <tr
-              key={`${line.scopeKind}/${line.job}/${line.stepName ?? ""}`}
-              className="tw:border-t tw:border-border"
-            >
-              <td className="tw:py-1 tw:pr-3">{lineName(line)}</td>
-              <td className="tw:py-1 tw:pr-3 tw:text-ink-faint">{line.category}</td>
-              <td className="tw:py-1 tw:pr-3 tw:text-right tw:tabular-nums">{line.calls}</td>
-              <td className="tw:py-1 tw:text-right tw:tabular-nums">
-                {formatSpendNanos(articleCostLineNanos(line))}
-                {line.unpricedCalls > 0 ? "+" : ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          <table className="tw:w-full tw:border-collapse tw:text-left">
+            <thead>
+              <tr className="tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+                <th className="tw:py-1 tw:pr-3 tw:font-normal">Work</th>
+                <th className="tw:py-1 tw:pr-3 tw:font-normal">Kind</th>
+                <th className="tw:py-1 tw:pr-3 tw:text-right tw:font-normal">Calls</th>
+                <th className="tw:py-1 tw:text-right tw:font-normal">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line) => (
+                <tr
+                  key={`${line.scopeKind}/${line.job}/${line.stepName ?? ""}`}
+                  className="tw:border-t tw:border-border"
+                >
+                  <td className="tw:py-1 tw:pr-3">{lineName(line)}</td>
+                  <td className="tw:py-1 tw:pr-3 tw:text-ink-faint">{line.category}</td>
+                  <td className="tw:py-1 tw:pr-3 tw:text-right tw:tabular-nums">{line.calls}</td>
+                  <td className="tw:py-1 tw:text-right tw:tabular-nums">
+                    {formatSpendNanos(articleCostLineNanos(line))}
+                    {line.unpricedCalls > 0 ? "+" : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
 
       <ul className="tw:m-0 tw:mt-3 tw:list-none tw:p-0 tw:text-xs tw:text-ink-faint tw:space-y-1">
         {unpriced > 0 && (

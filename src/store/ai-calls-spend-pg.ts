@@ -506,10 +506,11 @@ export interface ArticleIdentity {
  * deleted article's slug can be minted again, and the schema anticipates
  * renaming. `article_id` is `on delete set null` and is filled at write time
  * only when the spender owns the article (`articleIdFor` in ai-calls-pg.ts), so
- * a row can still lack one — a lookup that failed, or a call made before the
- * article row existed. Those are matched on `(owner_id, article_slug)` and
- * bounded below by the article's creation, so a previous article under the
- * same slug cannot leak in. GPT Sol, plan review of
+ * a row can still lack one when that lookup failed. Those are matched on
+ * `(owner_id, article_slug)` and bounded below by the article's creation, so a
+ * previous article under the same slug cannot leak in. A call genuinely made
+ * before the current article existed is deliberately excluded: it cannot be
+ * distinguished safely from that predecessor. GPT Sol, plan review of
  * docs/plans/260930f-article-cost-on-the-metadata-page.md, P1.
  *
  * The owner-scoped lookup that produced `article` is what keeps this to the

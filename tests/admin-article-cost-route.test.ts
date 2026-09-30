@@ -33,7 +33,7 @@ vi.mock("../src/store/pg.js", async () => {
     ownedArticleIdentity: async (slug: string) => {
       seen.calls.push(`ownedArticleIdentity(${slug})`);
       if (!seen.owned) throw actual.notFound(slug);
-      return { id: "00000000-0000-4000-8000-0000000000a1", createdAt: new Date("2026-09-01") };
+      return { id: "00000000-0000-4000-8000-00000068a001", createdAt: new Date("2026-09-01") };
     },
   };
 });
@@ -154,7 +154,7 @@ describe("an article's cost, for the administrator", () => {
     /* Keyed on the article the lookup found, and on the administrator as its
        owner — src/store/ai-calls-spend-pg.ts § `belongsTo`. */
     expect(seen.calls).toContain(
-      `spendForArticle(00000000-0000-4000-8000-0000000000a1, ${SLUG}, ${TEST_SUB})`,
+      `spendForArticle(00000000-0000-4000-8000-00000068a001, ${SLUG}, ${TEST_SUB})`,
     );
     const cost = JSON.parse(sent.body) as ArticleCost;
     expect(cost.slug).toBe(SLUG);
