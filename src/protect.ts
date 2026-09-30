@@ -3,11 +3,13 @@
  * content, in Readability's own vocabulary.**
  *
  * It is the mirror image of src/furniture.ts. That module deletes what the
- * publisher labelled as chrome; this one deletes nothing, moves nothing and
- * rewrites no text. It adds **class tokens**, and Readability reads the class
- * attribute in order to answer exactly the question we are answering.
+ * publisher labelled as chrome; this one deletes nothing and rewrites no text.
+ * Rules A and B add **class tokens**, and Readability reads the class attribute
+ * in order to answer exactly the question we are answering. **Rule C moves**:
+ * it unwraps a `<div>`, putting its children where it was, because no token can
+ * do its job (§ *Rule C*, below).
  *
- * ## What it is for, and it is two losses rather than one class of loss
+ * ## What rules A and B are for, and it is two losses rather than one class of loss
  *
  * Both were diagnosed by a spike before anything was designed, and the
  * diagnosis is in
@@ -191,6 +193,42 @@
  * else on the page. Another publisher's correction notice gets added when
  * somebody has a fixture for its actual topology, positive and adversarial.
  *
+ * ## Rule C — a figure deleted with its wrapper, because a picture has no text
+ *
+ * SPIDERYARN-READING2-6A, and the first rule here found on production rather
+ * than in the corpus. A Substack post lost nine of its twenty-three figures:
+ * each sits in `div.captioned-image-container`, and where the caption carries a
+ * link — *"Source: https://…"* — the container's text is the caption alone,
+ * since the picture has none, and its link density runs 0.20 to 0.70 at weight
+ * 0. `_cleanConditionally` deletes it on *"Low weight and a little linky"*, and
+ * the picture goes with it. The six linked captions whose links are too short to
+ * cross 0.2 survive, and so do all the unlinked ones.
+ *
+ * **No token can do this.** Rule B's token takes a wrapper to weight 25, where
+ * the bar is 0.5 — and two of the nine are over it. So rule C takes the wrapper
+ * away instead: before Readability, a `div` between a figure and its picture, or
+ * one wrapped round the figure alone, is unwrapped — **only if Readability's own
+ * two link rules would delete it**, asked by `readabilityWouldTakeItForItsLinks`
+ * with Readability's weight and link-density arithmetic copied and its regexes
+ * pinned. `figure` is not a tag `_cleanConditionally` walks, so once no such
+ * `div` is left, those two rules have nothing to take.
+ *
+ * **That is the whole guarantee.** Candidate selection is another way to lose a
+ * figure — one outside the article Readability picks is never appended — and
+ * rule C does not touch it (GPT Sol, plan review).
+ *
+ * **It is under the fallback like A and B, and it needs to be.** GPT Sol built
+ * the page: four sibling `<article>` sections of the author's prose and a
+ * figure whose long linked caption sits inside its picture's `div`. Unwrapped,
+ * the figure wins candidate selection and all four sections go;
+ * `proseRetention` sees four runs missing and the control ships. That page is in
+ * tests/extract-figure-wrappers.test.ts.
+ *
+ * Springer Nature's figures were the other half of the same report and are
+ * **not** this rule's: the wrapper there died of the *Full size image* button
+ * beside the picture, a control the publisher labels, so it is an entry in
+ * src/furniture.ts. docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
+ *
  * ## What this is not, and what it does not fix
  *
  * **It is not a trick played on the library.** Adding a class token that says
@@ -271,6 +309,17 @@ export const RULES = {
    * It never appears beside `correctionNotice`.
    */
   correctionNoticeRolledBack: "an-amendment-correction-rolled-back",
+  /**
+   * Rule C — a figure with a wrapper Readability's link rules would have
+   * deleted, picture and all. Counted per figure, not per `div` unwrapped.
+   * **A wrapper, not necessarily a picture saved**: a figure outside the article
+   * Readability selects is dropped either way, which is what the one corpus
+   * fixture this fires on (Quanta's lead video) shows, byte-identical in both
+   * arms. See § *Rule C* above.
+   */
+  figureWrapper: "a-figure-its-wrapper-would-take",
+  /** Rule C, unwrapped and then taken back — the same arrangement as A and B. */
+  figureWrapperRolledBack: "a-figure-its-wrapper-would-take-rolled-back",
 } as const;
 
 /**
@@ -289,6 +338,7 @@ const WITHDRAWALS: ReadonlyArray<{
 }> = [
   { stamped: RULES.headerNamedTable, withdrawn: RULES.headerNamedTableRolledBack, switchOff: "withoutHeaderNamedTables" },
   { stamped: RULES.correctionNotice, withdrawn: RULES.correctionNoticeRolledBack, switchOff: "withoutCorrectionNotices" },
+  { stamped: RULES.figureWrapper, withdrawn: RULES.figureWrapperRolledBack, switchOff: "withoutFigureWrappers" },
 ];
 
 /**
@@ -348,6 +398,8 @@ export interface ProtectOptions {
   readonly withoutHeaderNamedTables?: boolean;
   /** Skip rule B entirely — the same, for the correction notice. */
   readonly withoutCorrectionNotices?: boolean;
+  /** Skip rule C entirely — the same, for a figure's wrappers. */
+  readonly withoutFigureWrappers?: boolean;
 }
 
 /**
@@ -390,6 +442,16 @@ export const OK_MAYBE_ITS_A_CANDIDATE = /and|article|body|column|content|main|sh
  * was always trying to say.
  */
 export const UNLIKELY_EXCEPT_HEADER = new RegExp(UNLIKELY_CANDIDATES.source.replace("|header|", "|"), "i");
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.positive` — rule C's weight. Pinned like the two above. */
+export const POSITIVE = /article|body|content|entry|hentry|h-entry|main|page|pagination|post|text|blog|story/i;
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.negative` — rule C's weight. Pinned like the two above. */
+export const NEGATIVE =
+  /-ad-|hidden|^hid$| hid$| hid |^hid |banner|combx|comment|com-|contact|footer|gdpr|masthead|media|meta|outbrain|promo|related|scroll|share|shoutbox|sidebar|skyscraper|sponsor|shopping|tags|widget/i;
+
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.hashUrl` — a fragment link counts 0.3 of its length. */
+export const HASH_URL = /^#.+/;
 
 /**
  * **The seam that lets a test run the pipeline with this pass switched off**,
@@ -449,10 +511,13 @@ export function protectionIsDisabled(): boolean {
  * which could in principle be nudged by a class appearing on a container.
  * Running last is the version of that with no argument required.
  *
- * Two rules, applied independently, and **no element can qualify for both**:
- * rule A selects `<table>` and rule B selects `<div>`. The header of this file
- * used to say an element might carry both tokens; it cannot, and GPT Sol
- * checked it rather than took it (2026-09-08).
+ * Three rules, applied independently, and **no element can carry both
+ * tokens**: rule A selects `<table>` and rule B selects `<div>`. The header of
+ * this file used to say an element might carry both; it cannot, and GPT Sol
+ * checked it rather than took it (2026-09-08). Rule C runs last and stamps
+ * nothing; it could unwrap a `div` rule B stamped only if that notice held a
+ * figure's picture, and B's 25 points count in its gate, as they would in
+ * Readability's.
  */
 export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {}): KeptStructure {
   if (protectionDisabled) return {};
@@ -516,7 +581,139 @@ export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {
   }
   if (stamped.size > 0) kept[RULES.correctionNotice] = stamped.size;
 
+  const figures = opts.withoutFigureWrappers === true ? 0 : unwrapFigureWrappers(doc);
+  if (figures > 0) kept[RULES.figureWrapper] = figures;
+
   return kept;
+}
+
+/**
+ * **Rule C**: unwrap every `div` Readability's link rules would delete a
+ * figure's picture with, and say how many figures had one. A `<div>` here,
+ * never a `<figure>`: `figure` is not one of the tags `_cleanConditionally`
+ * walks, so the figure itself is never at risk — only a `div` between it and
+ * its picture, or one wrapped round it alone.
+ */
+function unwrapFigureWrappers(doc: Document): number {
+  let figures = 0;
+  for (const figure of Array.from(doc.querySelectorAll("figure"))) {
+    if (figure.querySelector(FIGURE_PICTURE) === null) continue;
+    const inside = unwrapInside(figure);
+    const around = unwrapAround(figure);
+    if (inside || around) figures += 1;
+  }
+  return figures;
+}
+
+/**
+ * Inside: every `div` that holds the picture. The order does not matter:
+ * unwrapping one changes no other `div`'s text, links or class, so each is
+ * judged on exactly what Readability would have judged it on.
+ */
+function unwrapInside(figure: Element): boolean {
+  let unwrapped = false;
+  for (const div of Array.from(figure.querySelectorAll("div"))) {
+    if (div.querySelector(FIGURE_PICTURE) === null) continue;
+    if (!readabilityWouldTakeItForItsLinks(div)) continue;
+    unwrap(div);
+    unwrapped = true;
+  }
+  return unwrapped;
+}
+
+/**
+ * Around: a `div` that wraps nothing but this figure, walking up while that
+ * holds. **Each is judged on its own** — GPT Sol, plan review: an outer wrapper
+ * inherits the figure's link text whether or not it was at risk, so the walk
+ * passes over a safe one rather than unwrapping it.
+ */
+function unwrapAround(figure: Element): boolean {
+  let unwrapped = false;
+  let node: Element = figure;
+  for (let parent = node.parentElement; parent?.tagName === "DIV"; parent = node.parentElement) {
+    if (parent.children.length !== 1 || hasOwnText(parent)) break;
+    if (readabilityWouldTakeItForItsLinks(parent)) {
+      /* The figure's new parent is the next one up; `node` stays where it is. */
+      unwrap(parent);
+      unwrapped = true;
+    } else {
+      node = parent;
+    }
+  }
+  return unwrapped;
+}
+
+/**
+ * **A picture, as rule C means it** — what a reader would miss. An `<svg>` is
+ * left out: in the pages measured it is an icon inside a link, and counting it
+ * would put every figure with a download button in scope.
+ */
+const FIGURE_PICTURE = "img, picture, video";
+
+/**
+ * **Would `_cleanConditionally` delete this `div` on one of its two link rules?**
+ * Readability 0.6.0, Readability.js around line 2580, and nothing else of it:
+ *
+ * - it looks only if the text has **fewer than ten commas**;
+ * - *"Low weight and a little linky"*: class weight under 25 and link density
+ *   over 0.2;
+ * - *"High weight and mostly links"*: weight 25 or more and density over 0.5.
+ *
+ * Asked **before** Readability runs, of a document it has not yet cleaned, so it
+ * is an estimate of the later question rather than the question itself — close
+ * because the text and the links are the same, and made safe by the fallback,
+ * which is what decides whether the page ships with rule C. The point of asking
+ * at all is `kept`: a figure is counted only where Readability's own rule would
+ * have taken it, the standard rule A holds itself to. GPT Sol, plan review.
+ *
+ * Readability's `linkDensityModifier` is 0 here because `readingArm` passes no
+ * options, and its other checks — a negative class weight on its own, too many
+ * `<li>`s or inputs, embeds — are not this rule's: none was measured taking a
+ * figure.
+ */
+export function readabilityWouldTakeItForItsLinks(div: Element): boolean {
+  if (readabilityInnerText(div).split(",").length - 1 >= 10) return false;
+  const weight = readabilityClassWeight(div);
+  const density = readabilityLinkDensity(div);
+  return (weight < 25 && density > 0.2) || (weight >= 25 && density > 0.5);
+}
+
+/** Readability's `_getInnerText`: trimmed, runs of whitespace collapsed to one space. */
+function readabilityInnerText(el: Element): string {
+  return (el.textContent ?? "").trim().replace(/\s{2,}/g, " ");
+}
+
+/** Readability's `_getClassWeight`, with `FLAG_WEIGHT_CLASSES` on — as it is on the first pass. */
+function readabilityClassWeight(el: Element): number {
+  let weight = 0;
+  for (const s of [el.getAttribute("class") ?? "", el.id]) {
+    if (s === "") continue;
+    if (NEGATIVE.test(s)) weight -= 25;
+    if (POSITIVE.test(s)) weight += 25;
+  }
+  return weight;
+}
+
+/** Readability's `_getLinkDensity`: link text over all text, a fragment link at 0.3. */
+function readabilityLinkDensity(el: Element): number {
+  const total = readabilityInnerText(el).length;
+  if (total === 0) return 0;
+  let links = 0;
+  for (const a of Array.from(el.getElementsByTagName("a"))) {
+    const href = a.getAttribute("href");
+    links += readabilityInnerText(a).length * (href !== null && HASH_URL.test(href) ? 0.3 : 1);
+  }
+  return links / total;
+}
+
+/** Any text of its own, directly under it — which a wrapper round a figure does not have. */
+function hasOwnText(el: Element): boolean {
+  return Array.from(el.childNodes).some((n) => n.nodeType === n.TEXT_NODE && (n.textContent ?? "").trim() !== "");
+}
+
+/** Put an element's children where it was. Moves; deletes nothing and rewrites no text. */
+function unwrap(el: Element): void {
+  el.replaceWith(...Array.from(el.childNodes));
 }
 
 /**
