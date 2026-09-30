@@ -1094,6 +1094,9 @@ describe("the artefacts a shared link carries", () => {
           contextHash: "invhashsentinel0",
           promptVersion: "citation-investigate/1",
         },
+        /* The work's reference entry (plan 260930i) — owner-only until the
+           public DTO names it, which is Greg's call on a defence. */
+        entry: "entry sentinel from the reference list",
         /* Attached only by the owner's GET route. A non-vacuous sentinel for
            the public DTO's field-by-field omission (plan 260930b). */
         inSpideryarn: {
@@ -1714,6 +1717,18 @@ describe("the artefacts a shared link carries", () => {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+  });
+
+  /**
+   * **Nor a work's reference entry** (plan 260930i, GPT Sol's plan review F9).
+   * It is the article's own text, but for a PDF it is text the public page does
+   * not show, and widening the projection is a change to a defence
+   * (docs/project/security-map.md), left for Greg.
+   */
+  it("carries no cited work's reference entry, anywhere", () => {
+    const json = JSON.stringify(built);
+    expect(json).not.toContain("entry sentinel from the reference list");
+    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("entry");
   });
 
   /** Nor the owner's read-time link to another article (plan 260930b). */

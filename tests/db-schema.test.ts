@@ -590,7 +590,7 @@ describe("the schema keeps the promises the plan makes", () => {
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
-                            'shelf_topic_scores_owner_fk')
+                            'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -623,6 +623,10 @@ describe("the schema keeps the promises the plan makes", () => {
            the link panel and was not added here then, which is exactly the
            omission this test exists to catch. */
         "rate_limit_events_owner_fk",
+        /* drizzle/20260930144303, CASCADE: a note that the server has seen
+           this account, worth nothing once the account is gone — and a RESTRICT
+           would stop an account being deleted at all. */
+        "reader_arrivals_owner_fk",
         "reader_profiles_owner_fk",
         /* drizzle/20260902150952. The parent of every realtime `ai_calls` row —
            and the reason RESTRICT here is doubly load-bearing: `ai_calls`

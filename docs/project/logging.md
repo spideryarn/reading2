@@ -161,7 +161,7 @@ its assertions. `LOG_LEVEL` overrides all of it, which is how you debug a failin
 
 ## What gets logged, and where
 
-Seven components, as a closed TypeScript union rather than free-form strings — a typo in a component
+Eight components, as a closed TypeScript union rather than free-form strings — a typo in a component
 name is invisible, because the line is still written and just never matches the filter built around
 the name you meant.
 
@@ -173,6 +173,7 @@ the name you meant.
 | `store` | [`src/store/pg.ts`](../../src/store/pg.ts) and the rest of `src/store/`; [`src/comments.ts`](../../src/comments.ts) and its siblings only for their surviving fixture readers | store-level failures — historically chiefly the fixture fallback, below, which no longer exists now the store is Postgres-only |
 | `auth` | [`src/auth.ts`](../../src/auth.ts) | **only ever our side failing.** A refused token is not logged here — that is an ordinary 401 and the `http` line already says so. Nothing in this component may carry a token, a `sub` or an email address |
 | `health` | [`src/vercel-health.ts`](../../src/vercel-health.ts) | the two errors `GET /api/health` catches — the store check and the schema check. The endpoint is public, so the caller gets the driver's message truncated to 200 characters and the whole of it comes here. Trimming the response is only safe while the untrimmed copy is somewhere |
+| `email` | [`src/email.ts`](../../src/email.ts) | mail the server sends itself — sent (with Resend's id), skipped outside production, or failed. A label naming the kind of mail, never the recipient or the body. See [email.md](email.md) |
 | `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts), [`src/search.ts`](../../src/search.ts) | the model calls with a reader waiting on them — explaining a selection, chat, and semantic search |
 
 ### The one that answers an open question

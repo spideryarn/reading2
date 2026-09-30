@@ -42,6 +42,8 @@ export interface Section {
   blockId: BlockId;
   nodeId: NodeId;
   title: string;
+  /** The article's apparatus rather than its argument. Absent or false means body. */
+  supplement?: boolean;
 }
 
 /**
@@ -86,6 +88,7 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
       blockId: block.id,
       nodeId: item.node.id,
       title: item.node.title,
+      supplement: item.supplement,
     });
   }
   return sections;
