@@ -1267,6 +1267,17 @@ describe("one owner's article, asked for by another", { timeout: 20_000 }, () =>
     expect(hits.hits.map((h) => h.slug)).not.toContain(SLUG);
   });
 
+  /* The shelf's Include archived chip widens the search's WHERE (plan
+     260930d); the owner clause must survive the widening. */
+  it("is not in their library search with the archive included either", async () => {
+    const { pgLibrarySearch } = await import("../src/store/pg-shelf.js");
+    const hits = await runInRequest(async () => {
+      setRequestOwner(OUTSIDER);
+      return pgLibrarySearch.searchLibrary(RARE, 10, { includeArchived: true });
+    });
+    expect(hits.hits.map((h) => h.slug)).not.toContain(SLUG);
+  });
+
   /**
    * **The reader's own PDF, which the first version of this work walked past.**
    *

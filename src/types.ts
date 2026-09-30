@@ -2062,12 +2062,20 @@ export interface LibraryHit {
    */
   text: string;
   rank: number;
+  /**
+   * The article is archived. Only ever true when the search was asked to
+   * include the archive (`?archived=1`, the shelf's Include archived chip), and
+   * the client marks such a passage the way it marks the card.
+   */
+  archived: boolean;
 }
 
 /** What GET /api/library/search returns. */
 export interface LibrarySearchResponse {
   /** Echoed back, so a late response can be dropped by a client that has moved on. */
   query: string;
+  /** Echoed too: whether archived articles were searched (`?archived=1`). */
+  archived: boolean;
   hits: LibraryHit[];
   /** How many articles those hits are spread across — the line above the list. */
   articles: number;

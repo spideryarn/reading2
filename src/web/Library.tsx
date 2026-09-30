@@ -80,7 +80,7 @@ import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
-import { ShelfCard } from "./ShelfEntry.js";
+import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -369,7 +369,7 @@ export function Library({
   const queue = useJobs("watches-queue", reload);
 
   // Matcher two: the passages inside the articles, from the server.
-  const passages = useLibrarySearch(query);
+  const passages = useLibrarySearch(query, archivedOn);
 
   const searching = query.trim().length > 0;
   /* Every count is over the one list: `total` is what is in scope, `showing`
@@ -385,12 +385,15 @@ export function Library({
      passages are the answer to the search, so narrowing them by the search
      twice would be wrong. `null` when the chip is off, which is "do not narrow"
      rather than "narrow to nothing". */
+  /* Over `scope`, not the active shelf alone: with Include archived on, an
+     archived article nobody has opened is as unread as any other, and its
+     passages must not vanish when the cards keep it (plan 260930d). */
   const unread = useMemo(
     () =>
-      show === "unread" && articles
-        ? new Set(articles.filter((a) => a.opens === 0).map((a) => a.slug))
+      show === "unread" && scope
+        ? new Set(scope.filter((a) => a.opens === 0).map((a) => a.slug))
         : null,
-    [articles, show],
+    [scope, show],
   );
 
   /* Whichever column is sorted first decides what a card says about itself. */
@@ -777,7 +780,7 @@ export function Library({
           very article — two answers to one question, on one screen. The hidden
           ones are counted rather than silently dropped, because "it is in
           something you have already read" is the useful half of that answer. */}
-      {searching && <Passages state={passages} query={query} only={unread} />}
+      {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
 
       {/* **No "Show archived" here any more** (plan 260929a): it was a
           disclosure at the foot of the shelf, with its own second list, and
@@ -1013,9 +1016,12 @@ function Passages({
   state,
   query,
   only,
+  archived,
 }: {
   state: ReturnType<typeof useLibrarySearch>;
   query: string;
+  /** The Include archived chip — what the search was asked, and what "nothing" means. */
+  archived: boolean;
   /**
    * The slugs the Unread chip is letting through, or `null` for "everything".
    *
@@ -1045,11 +1051,16 @@ function Passages({
      the previous query's passages sit on screen while the next request runs,
      marked and linked with the NEW query — passages that do not contain what
      the reader typed, presented as though they do. */
-  if (state.resultsQuery !== query.trim()) return null;
+  if (state.resultsQuery !== query.trim() || state.resultsArchived !== archived) return null;
   if (state.hits.length === 0) {
     return (
       <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
         Nothing in the text of any article matches “{query.trim()}”.
+        {/* Said once, here, at the end of the search's two answers. Greg
+            searched for an article he had just archived, found nothing, and
+            could not tell whether that was the archive or the search
+            (SPIDERYARN-READING2-72). */}
+        {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
       </p>
     );
   }
@@ -1105,6 +1116,12 @@ function Passages({
   );
 }
 
+/**
+ * What the passages say when they found nothing and the archive was not asked.
+ * The chip's visible words, so the reader can see which one it means.
+ */
+const NOT_SEARCHING_ARCHIVE = "Archived articles aren't searched — turn on Include archived to search them too.";
+
 /** How much of the paragraph to show. Wide enough to judge, short enough to skim. */
 const SNIPPET_CHARS = 200;
 
@@ -1121,7 +1138,12 @@ function Passage({ hit, query }: { hit: LibraryHit; query: string }) {
       href={href}
       className="tw:block tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-4 tw:py-3 tw:no-underline tw:hover:border-highlight/60"
     >
-      <span className="tw:block tw:text-xs tw:text-muted-foreground">{hit.title}</span>
+      <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground">
+        {hit.title}
+        {/* Only ever set with Include archived on. Marked as the card is, so a
+            passage that opens an article you archived is not a ghost. */}
+        {hit.archived && <ArchivedMark />}
+      </span>
       <span className="tw:mt-1 tw:block tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
         {marked(hit.text, query)}
       </span>

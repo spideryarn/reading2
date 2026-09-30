@@ -54,6 +54,8 @@ let archiveFails: boolean;
 let activeGate: Promise<void> | null;
 /** Make a later active-list refresh fail. */
 let activeFails: boolean;
+/** Hold the active-only passage search back, for the stale-response race. */
+let searchGate: Promise<void> | null;
 /** The stale-while-revalidate first paint, when a test needs one. */
 let cached: LibraryEntry[] | null;
 
@@ -102,8 +104,21 @@ vi.mock("../src/web/lib/api.js", () => ({
       }
       return json({ entry: next });
     }
-    // The passage search, which nothing here asks about.
-    return json({ query: "", hits: [], articles: 0, capped: false });
+    if (url.startsWith("/api/library/search?")) {
+      /* The passage search. One archived article, Delta, has a passage
+         matching "zibble" — found only when the chip asks for the archive,
+         the way the server answers (plan 260930d). */
+      const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+      const query = params.get("q") ?? "";
+      const withArchive = params.get("archived") === "1";
+      if (!withArchive && searchGate) await searchGate;
+      const hits =
+        withArchive && query === "zibble"
+          ? [{ slug: "delta", title: "Delta", blockId: "spya-k3m9qt", text: "a zibble in Delta", rank: 1, archived: true }]
+          : [];
+      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false });
+    }
+    return json({ error: "unmocked" }, 404);
   },
   fetchOk: async () => new Response(null, { status: 200 }),
   readJson: async (r: Response) => {
@@ -158,6 +173,7 @@ beforeEach(() => {
   activeGate = null;
   activeFails = false;
   cached = null;
+  searchGate = null;
   /* Titles that interleave, so "sorted with everything else" is visible:
      by title, A (active) B (archived) C (active) D (archived). */
   active = [entry("alpha", "Alpha"), entry("charlie", "Charlie")];
@@ -199,7 +215,7 @@ const params = () => new URLSearchParams(location.search);
 /** The Archived chip in the controls row — its name begins with its visible text. */
 function archivedChip(): HTMLButtonElement | undefined {
   return [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find((b) =>
-    (b.getAttribute("aria-label") ?? "").startsWith("Archived"),
+    (b.getAttribute("aria-label") ?? "").startsWith("Include archived"),
   );
 }
 
@@ -227,7 +243,7 @@ describe("the Archived chip", () => {
     const chip = archivedChip();
     expect(chip, "an Archived chip in the controls").toBeTruthy();
     expect(chip?.getAttribute("aria-pressed")).toBe("false");
-    expect(chip?.textContent).toContain("Archived");
+    expect(chip?.textContent?.trim()).toBe("Include archived");
     const unread = [...host.querySelectorAll("button[aria-pressed]")].find((b) =>
       (b.getAttribute("aria-label") ?? "").startsWith("Unread"),
     );
@@ -492,5 +508,56 @@ describe("the Archived chip", () => {
     await waitFor(() => !host.textContent?.includes("Loading archived…"), "the archive");
     expect(cards()).toEqual([{ title: "Delta", archived: true }]);
     expect(host.textContent).toMatch(/1 of 4 articles \(0 active \+ 1 archived\)/);
+  });
+
+  /* SPIDERYARN-READING2-72, plan 260930d: an archived article whose card
+     words do not contain the query could be found by neither half of the
+     search box — the passage search never asked for the archive. */
+  it("searches the archived articles' text too when on, and marks the passage", async () => {
+    await show("/?archived=1&q=zibble");
+    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
+    await waitFor(() => !!passage(), "the archived passage");
+    expect(asked).toContain("GET /api/library/search?q=zibble&archived=1");
+    expect(passage()?.querySelector("[data-archived-mark]"), "marked Archived").toBeTruthy();
+  });
+
+  it("says the archive was not searched when off and nothing matched", async () => {
+    await show("/?q=zibble");
+    const line = () => [...host.querySelectorAll("p")].find((p) => p.textContent?.startsWith("Nothing in the text"));
+    await waitFor(() => !!line(), "the nothing-found line");
+    expect(asked).toContain("GET /api/library/search?q=zibble");
+    expect(line()?.textContent).toContain("turn on Include archived");
+  });
+
+  it("asks again when the chip is pressed with the words unchanged", async () => {
+    await show("/?q=zibble");
+    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
+    await waitFor(() => asked.includes("GET /api/library/search?q=zibble"), "the first search");
+    expect(passage()).toBeUndefined();
+    const chip = archivedChip();
+    if (!chip) throw new Error("no chip");
+    click(chip);
+    await waitFor(() => !!passage(), "the archived passage after pressing the chip");
+  });
+
+  it("drops a late active-only answer that lands after the chip was pressed", async () => {
+    /* The words are the same both times, so the echoed query alone cannot
+       tell the two answers apart; the echoed `archived` does (Sol, plan
+       review). The abort would normally stop the first request, and this
+       mock ignores aborts — which is exactly the response that escapes one. */
+    let release!: () => void;
+    searchGate = new Promise((r) => {
+      release = r;
+    });
+    await show("/?q=zibble");
+    await waitFor(() => asked.includes("GET /api/library/search?q=zibble"), "the first, held search");
+    const chip = archivedChip();
+    if (!chip) throw new Error("no chip");
+    click(chip);
+    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
+    await waitFor(() => !!passage(), "the archived passage");
+    release();
+    await settle(150);
+    expect(passage(), "the late empty answer did not repaint the list").toBeTruthy();
   });
 });

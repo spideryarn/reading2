@@ -49,6 +49,8 @@ export interface LibrarySearchState {
    * though they do. Caught by a cross-family review, 2026-08-26.
    */
   resultsQuery: string;
+  /** Whether `hits` included the archive — the other half of the question, checked the same way. */
+  resultsArchived: boolean;
   /** How many articles those hits are spread across. */
   articles: number;
   capped: boolean;
@@ -62,6 +64,7 @@ export interface LibrarySearchState {
 const IDLE: LibrarySearchState = {
   hits: [],
   resultsQuery: "",
+  resultsArchived: false,
   articles: 0,
   capped: false,
   searching: false,
@@ -69,10 +72,16 @@ const IDLE: LibrarySearchState = {
   asked: false,
 };
 
-export function useLibrarySearch(query: string): LibrarySearchState {
+/**
+ * @param includeArchived the shelf's Include archived chip: search the archived
+ *   articles' text too (plan 260930d). Part of the question, so pressing the
+ *   chip asks again, and a response for the other chip state is dropped like a
+ *   response for other words.
+ */
+export function useLibrarySearch(query: string, includeArchived: boolean): LibrarySearchState {
   const [state, setState] = useState<LibrarySearchState>(IDLE);
-  const current = useRef(query);
-  current.current = query;
+  const current = useRef({ query, includeArchived });
+  current.current = { query, includeArchived };
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -97,14 +106,17 @@ export function useLibrarySearch(query: string): LibrarySearchState {
          different halves: abort stops the browser holding six connections open
          while somebody types, and the echo check is what stops a response that
          escaped the abort from repainting the list. Either alone leaves a gap. */
-      apiFetch(`/api/library/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
+      const archived = includeArchived ? "&archived=1" : "";
+      apiFetch(`/api/library/search?q=${encodeURIComponent(trimmed)}${archived}`, { signal: controller.signal })
         .then((r) => readJson<LibrarySearchResponse>(r))
         .then((body) => {
           // The answer to a question nobody is asking any more.
-          if (body.query !== current.current.trim()) return;
+          if (body.query !== current.current.query.trim()) return;
+          if (body.archived !== current.current.includeArchived) return;
           setState({
             hits: body.hits,
             resultsQuery: body.query,
+            resultsArchived: body.archived,
             articles: body.articles,
             capped: body.capped,
             searching: false,
@@ -123,7 +135,7 @@ export function useLibrarySearch(query: string): LibrarySearchState {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, includeArchived]);
 
   return state;
 }

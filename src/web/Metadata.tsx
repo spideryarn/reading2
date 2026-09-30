@@ -2618,15 +2618,15 @@ function ArchiveArticle({
       <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
         {archived ? (
           <>
-            It is off the library and out of library search. It is not erased, and this offer does
-            not expire.
+            It is off the library and out of library search unless you turn on Include archived
+            there. It is not erased, and this offer does not expire.
           </>
         ) : (
           <>
             It comes off the library and out of library search. Nothing is erased — the article, its
             block ids and every question you have asked about it stay exactly where they are, this
             page and the reading view keep working, and Put back is here and under{" "}
-            <em className="tw:not-italic tw:text-foreground">Show archived</em> on the{" "}
+            <em className="tw:not-italic tw:text-foreground">Include archived</em> on the{" "}
             <Link href={LIBRARY_HREF} className="tw:text-highlight">
               library
             </Link>

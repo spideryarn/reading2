@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "29 September 2026";
+const LAST_UPDATED = "30 September 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -528,7 +528,8 @@ export function PrivacyPage() {
         <p>
           The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
           article off the shelf and out of your library search, and you can bring it back at any
-          time under “Show archived”. Nothing is destroyed, and your notes on it are still there.
+          time: turn on “Include archived” beside the search box, and archived articles are listed
+          and searched too. Nothing is destroyed, and your notes on it are still there.
         </p>
         <p>
           If you want an article actually gone,{" "}

@@ -9,7 +9,7 @@
  *
  *   GET    /api/library         every article on the shelf, for the homepage
  *                                `?archived=1` for the other half
- *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
+ *   GET    /api/library/search   `?q=…&limit=…&archived=1` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
  *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
@@ -4717,7 +4717,9 @@ function slugPart(m: RegExpExecArray, group: number): string {
 const MAX_LIBRARY_HITS = 30;
 
 /**
- * `GET /api/library/search?q=…&limit=…` — every article at once.
+ * `GET /api/library/search?q=…&limit=…&archived=1` — every article at once,
+ * and the archived ones too with `archived=1` (the shelf's Include archived
+ * chip; plan 260930d).
  *
  * The query is read from the URL rather than a body because this is a read, and
  * a read that cannot be linked to or retried is a read that has given something
@@ -4740,11 +4742,17 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
      every comparison you would write instead. */
   const limit = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 1), MAX_LIBRARY_HITS) : MAX_LIBRARY_HITS;
 
-  const { hits, capped } = await librarySearch.searchLibrary(query, limit);
+  /* `=== "1"`, the same reading as the shelf's own `?archived=1` below. */
+  const archived = params.get("archived") === "1";
+
+  const { hits, capped } = await librarySearch.searchLibrary(query, limit, { includeArchived: archived });
   return {
     // Echoed so a client can drop a response that arrived after it moved on.
-    // Debounced typing produces out-of-order responses as a matter of course.
+    // Debounced typing produces out-of-order responses as a matter of course —
+    // and so does pressing the chip, which changes the question without
+    // changing the words.
     query,
+    archived,
     hits,
     articles: new Set(hits.map((h) => h.slug)).size,
     capped,
