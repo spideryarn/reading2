@@ -145,7 +145,9 @@ readers never are.
   are the reference: [260825g](../plans/260825g-tweet-thread-page.md) (why it exists, and what it
   refuses to look like) and
   [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) (the mode, the
-  wide band, the links).
+  wide band, the links) and
+  [260930h](../plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md) (the band as a
+  share of the room, and icon-only copy buttons).
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.

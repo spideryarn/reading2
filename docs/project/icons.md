@@ -223,7 +223,8 @@ Going forwards, then:
   from the bar (`MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx)), so the button looks like where
   it goes: Trajectory's stop card opens Glossary with `BookA`, Ideas with `Lightbulb` and FAQ with
   `BadgeQuestionMark` (`OpenIn` in [`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx)).
-- **Every icon has a tooltip.** No bare icon, anywhere.
+- **Every icon has a tooltip.** No bare icon, anywhere. If the control has a keyboard shortcut, the
+  tooltip names it — [tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
 - **Not for content.** A link whose words *are* the thing — an idea's name, an event's label, a
   section title — stays words. The rule is about labels like *In the glossary ›*, not about text
   that happens to be clickable.

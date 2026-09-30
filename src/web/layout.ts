@@ -227,7 +227,8 @@ export const MODE_IDEAL = 400; // 25rem
 export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading as prose
 
 /**
- * **The widest a `"wide"` band goes: a prose column's measure.** Tweets' posts
+ * **The widest a `"wide"` band goes: a prose column's measure** — a ceiling
+ * since 2026-09-30, reached from about 1307px at a 16px root (`WIDE_SHARE`). Tweets' posts
  * are set in the prose face, so the width at which prose reads well is the width
  * at which they do. Greg, 2026-09-29: *"It could be quite a wide left-hand
  * column if that will help to make it be readable."*
@@ -246,10 +247,30 @@ export function wideIdeal(rootFontPx: number): number {
 }
 
 /**
+ * **The wide band's share of the room beside the rail**, since 2026-09-30.
+ *
+ * It had taken whatever the prose left — `avail − PROSE_MIN` — and on an iPad
+ * that swung from floor to ceiling: 288px in portrait (834 wide), where the
+ * prose was defending 544, and 544 in landscape (1194), where band and prose
+ * came out nearly equal. Greg, 2026-09-30 (SPIDERYARN-READING2-6G): *"The tweet
+ * thread column perhaps could be slightly wider when I'm looking at it on my
+ * iPad in portrait mode, and slightly narrower when I'm looking at it on my
+ * iPad in landscape mode."* A share is one number for the relationship he was
+ * reacting to: 345 and 496 on those two, and 544 still from about 1307 up.
+ *
+ * So in Tweets the prose gives up its `PROSE_MIN` defence (477 in portrait):
+ * the thread is what is being read there and the prose is where its links
+ * land. It never goes below `MODE_PROSE_FLOOR`, and the band never below the
+ * standard one. docs/plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md.
+ */
+export const WIDE_SHARE = 0.42;
+
+/**
  * **Which band a mode gets.** Every mode's band is `MODE_MIN`–`MODE_IDEAL` wide,
  * except Structure's while its two columns are on screen — see
- * `structureColumnsBand` — and a `"wide"` one, which grows to `wideIdeal`
- * instead, by the same rule: only into room the prose was not defending.
+ * `structureColumnsBand` — and a `"wide"` one, which takes `WIDE_SHARE` of the
+ * room up to `wideIdeal`, and so is the one band that takes room the prose was
+ * defending.
  */
 export type BandShape = "standard" | "structure" | "wide";
 
@@ -493,9 +514,10 @@ export function fitView({
  *    and covers the article instead. **The page never overflows and never
  *    scrolls sideways**; it said it did until 2026-09-06, and that was already
  *    only reachable in the branch the cover check had made unreachable.
- *  - **Structure's columns are the one band that can be wider**, and only once
- *    they fit beside `PROSE_MIN` — `bandWidth` below, and
- *    `structureColumnsBand` above it.
+ *  - **Two bands can be wider.** Structure's columns, only once they fit
+ *    beside `PROSE_MIN` — `structureColumnsBand` — and Tweets' wide band,
+ *    which takes a share of the room and lets the prose down towards
+ *    `MODE_PROSE_FLOOR` to do it (`WIDE_SHARE`). Both in `bandWidth` below.
  *  - **The prose is always on.** There is no longer any view that hides it
  *    (`?text=0` went with the Hierarchy mode on 2026-09-29).
  */
@@ -597,15 +619,17 @@ function fitMode(
   }
 
   /* **Two different prose numbers, and the difference is the whole negotiation.**
-     The band's share is computed against `PROSE_MIN` — the width the prose is
-     *defended* at — so while the window can afford it the band shrinks and the
-     reading column keeps its 544. The column's own width then falls back to
-     `MODE_PROSE_FLOOR`, which only binds once the band has already bottomed out at
-     `MODE_MIN`: between 688 and 832 of `avail` the band sits at 288 and the
-     prose grows 400 → 544, and at 832 the two agree and the arithmetic is
-     identical to what it was when there was one constant. Below 688 the branch
-     above has already taken the covering path, so `proseW` is never less than
-     `MODE_PROSE_FLOOR` and the sum is never more than `avail`. */
+     A standard band (and Structure until its columns fit) is computed against
+     `PROSE_MIN` — the width the prose is *defended* at — so while the window can
+     afford it the band shrinks and the reading column keeps its 544. A wide
+     band is the deliberate exception: `bandWidth` lets its share take the prose
+     down towards `MODE_PROSE_FLOOR`. The column's own width falls back to that
+     floor in either case. For a standard band it only binds once the band has
+     already bottomed out at `MODE_MIN`: between 688 and 832 of `avail` the band
+     sits at 288 and the prose grows 400 → 544, and at 832 the two agree and the
+     arithmetic is identical to what it was when there was one constant. Below
+     688 the branch above has already taken the covering path, so `proseW` is
+     never less than `MODE_PROSE_FLOOR` and the sum is never more than `avail`. */
   const modeW = bandWidth(avail, bandShape, rootFontPx);
   const proseW = Math.max(MODE_PROSE_FLOOR, avail - modeW);
   return {
@@ -631,17 +655,23 @@ function fitMode(
  * the one column fine as it is (260928a § Assumptions 1).
  *
  * The prose keeps `PROSE_MIN` at the switch: the columns take only room the
- * reading column was not defending.
+ * reading column was not defending. The wide band is the exception, by
+ * design: see `WIDE_SHARE`.
  */
 function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): number {
   if (bandShape === "structure") {
     const { min, ideal } = structureColumnsBand(rootFontPx);
     if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
   }
+  const standard = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
-     Structure's two columns. */
+     Structure's two columns. A share of the room (`WIDE_SHARE`), never
+     narrower than the standard band, never wider than its root-relative cap
+     or than leaves the prose its floor. The last bound is what keeps
+     `fitMode` from overflowing at the crossover: 0.42 × 688 is 289. */
   if (bandShape === "wide") {
-    return clamp(avail - PROSE_MIN, MODE_MIN, Math.max(MODE_IDEAL, wideIdeal(rootFontPx)));
+    const cap = Math.min(Math.max(MODE_IDEAL, wideIdeal(rootFontPx)), avail - MODE_PROSE_FLOOR);
+    return clamp(Math.round(avail * WIDE_SHARE), standard, cap);
   }
-  return clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
+  return standard;
 }
