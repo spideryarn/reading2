@@ -325,6 +325,13 @@ export function QuizPanel({
    * from the front itself rather than from the old batch's index.
    */
   const filterBatch = useRef(quiz?.batchId);
+  /* A replacement batch reaches render before either reset effect reaches the
+     state it owns. Do not paint the new batch at the old batch's index in that
+     gap: even when that index happens to be included, its question would sit
+     over the old batch's draft and mark until the passive effects run. The
+     reset below always schedules a render (`setVerdicts(new Map())`), and the
+     filter effect commits the new batch to this ref before that render. */
+  const changingBatch = filterBatch.current !== quiz?.batchId;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `move` is recreated every render and reads nothing this list does not already cover
   useEffect(() => {
     const from = filterBatch.current === quiz?.batchId ? at : 0;
@@ -344,7 +351,7 @@ export function QuizPanel({
 
   /** Undefined while the step at `at` is filtered out — see the effect above. */
   const question: QuizQuestion | undefined =
-    waitingForReading || included[at] === false ? undefined : questions[at];
+    changingBatch || waitingForReading || included[at] === false ? undefined : questions[at];
   /* The reader's place, counted among the steps they may land on. */
   const position = includedAt.indexOf(at) + 1;
   const nextAt = includedAt.find((i) => i > at);
@@ -862,9 +869,9 @@ function OnlyRead({
         <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> Only what
         I’ve read
       </label>
-      {share !== null && <span className="gloss-hint"> · {readShareLabel(share)} of the piece read so far</span>}
+      {share !== null && <span className="gloss-hint">{readShareLabel(share)} of the piece read so far</span>}
       {readSoFar.status === "failed" && on && (
-        <span className="gloss-hint"> · couldn’t load what you have read, so this is every question</span>
+        <span className="gloss-hint">couldn’t load what you have read, so this is every question</span>
       )}
     </div>
   );

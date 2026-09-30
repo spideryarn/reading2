@@ -4,7 +4,14 @@
  */
 import { describe, expect, it } from "vitest";
 import type { QuizQuestion } from "../src/types.js";
-import { isRead, questionIsRead, READ_ENOUGH, shareRead } from "../src/web/read-filter.js";
+import {
+  isRead,
+  lastBefore,
+  questionIsRead,
+  READ_ENOUGH,
+  readShareLabel,
+  shareRead,
+} from "../src/web/read-filter.js";
 import type { ReadLevel } from "../src/web/reading-time.js";
 
 const q = (...ids: string[]): QuizQuestion => ({
@@ -81,5 +88,25 @@ describe("shareRead", () => {
 
   it("ignores levels for blocks the piece does not have", () => {
     expect(shareRead(levels([["spya-other1", 4]]), new Map([["spya-aaaaaa", 100]]))).toBe(0);
+  });
+});
+
+describe("readShareLabel", () => {
+  it("names the endpoints and does not round a non-endpoint onto one", () => {
+    expect(readShareLabel(0)).toBe("none");
+    expect(readShareLabel(0.004)).toBe("under 1%");
+    expect(readShareLabel(0.396)).toBe("about 40%");
+    expect(readShareLabel(0.996)).toBe("over 99%");
+    expect(readShareLabel(1)).toBe("all");
+  });
+});
+
+describe("lastBefore", () => {
+  it("returns the last lower index, never the current one", () => {
+    expect(lastBefore([], 3)).toBeUndefined();
+    expect(lastBefore([1, 3, 5], 1)).toBeUndefined();
+    expect(lastBefore([1, 3, 5], 3)).toBe(1);
+    expect(lastBefore([1, 3, 5], 4)).toBe(3);
+    expect(lastBefore([1, 3, 5], 9)).toBe(5);
   });
 });

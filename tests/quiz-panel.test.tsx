@@ -30,7 +30,7 @@
  * Each has a positive control beside it, because a test that has never been
  * able to fail is not evidence — docs/reusable/silent-success.md.
  */
-import { act, createElement } from "react";
+import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
@@ -1070,5 +1070,52 @@ describe("only what you have read, across a new batch", () => {
     expect(host.querySelector(".quiz-question")?.textContent).toBe("Question number 3?");
     paintB(B);
     expect(host.querySelector(".quiz-question")?.textContent).toBe("New question 2?");
+  });
+
+  it("does not paint the replacement batch at the old batch's index before its reset effect", () => {
+    const commits: Array<string | null> = [];
+    const A = batch([question(1), question(2), question(3)], "spya-batch1");
+    const B = batch(
+      [1, 2, 3].map((n) => question(n, { question: `New question ${n}?` })),
+      "spya-batch2",
+    );
+
+    function CommitProbe() {
+      /* Layout effects see the committed DOM before QuizPanel's passive reset
+         effects. A final-DOM assertion cannot catch the one paint in which a
+         new question can otherwise sit over the preceding batch's draft. */
+      useLayoutEffect(() => {
+        commits.push(host.querySelector(".quiz-question")?.textContent ?? null);
+      });
+      return null;
+    }
+
+    const paintWithProbe = (quiz: Quiz) =>
+      act(() => {
+        root.render(
+          createElement(
+            "div",
+            null,
+            createElement(QuizPanel, {
+              owner: owner({ quiz }),
+              blocks: BLOCKS,
+              onJump: () => {},
+            }),
+            createElement(CommitProbe),
+          ),
+        );
+      });
+
+    paintWithProbe(A);
+    press("Next");
+    press("Next");
+    type("an answer to the old third question");
+    commits.length = 0;
+
+    paintWithProbe(B);
+
+    expect(commits[0], "the first replacement commit exposed the old index").toBeNull();
+    expect(host.querySelector(".quiz-question")?.textContent).toBe("New question 1?");
+    expect(host.querySelector("textarea")?.value).toBe("");
   });
 });

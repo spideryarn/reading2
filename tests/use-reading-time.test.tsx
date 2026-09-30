@@ -7,7 +7,7 @@
  * Rows are real `tbody tr[data-block]` elements with `getBoundingClientRect`
  * stubbed, so the hook's own selector, binary search and sharing are what run.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,6 +25,8 @@ let releasePost: (() => void) | null = null;
 let gets = 0;
 /** When set, the opening GET rejects. */
 let failGet = false;
+/** A server refusal reaches `readJson`, which rejects it even when its body is JSON. */
+let getStatus = 200;
 let postCommitsToServer = false;
 
 vi.mock("../src/web/lib/api.js", () => ({
@@ -55,9 +57,12 @@ vi.mock("../src/web/lib/api.js", () => ({
         releaseGet = resolve;
       });
     }
-    return new Response(JSON.stringify({ seconds: serverSeconds }), { status: 200 });
+    return new Response(JSON.stringify({ seconds: serverSeconds }), { status: getStatus });
   },
-  readJson: async (r: Response) => r.json(),
+  readJson: async (r: Response) => {
+    if (!r.ok) throw new Error(`Request failed (${r.status})`);
+    return r.json();
+  },
   leavingFetch: (_url: string, init: RequestInit) => {
     posts.push({ via: "leavingFetch", ...JSON.parse(String(init.body)) });
   },
@@ -91,14 +96,26 @@ function mountRows(boxes: [string, number, number][]) {
   document.body.append(table);
 }
 
-function Harness({ words, enabled }: { words: Map<string, number>; enabled: boolean }) {
-  latest = useReadingTime("my-article", words, enabled);
+function Harness({
+  words,
+  enabled,
+  slug = "my-article",
+}: {
+  words: Map<string, number>;
+  enabled: boolean;
+  slug?: string;
+}) {
+  latest = useReadingTime(slug, words, enabled);
   return null;
 }
 
-async function render(enabled = true, words = new Map([[A, 230], [B, 230], [C, 230]])) {
+async function render(
+  enabled = true,
+  words = new Map([[A, 230], [B, 230], [C, 230]]),
+  slug = "my-article",
+) {
   await act(async () => {
-    root.render(createElement(Harness, { words, enabled }));
+    root.render(createElement(Harness, { words, enabled, slug }));
   });
   /* Let the opening GET land. */
   await act(async () => {
@@ -130,6 +147,7 @@ beforeEach(() => {
   releasePost = null;
   gets = 0;
   failGet = false;
+  getStatus = 200;
   postCommitsToServer = false;
   visibility = "visible";
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
@@ -351,6 +369,13 @@ describe("useReadingTime's status — whether an empty map means read nothing", 
     expect(latest.status).toBe("failed");
   });
 
+  it("says failed when the opening GET answers with a non-OK response", async () => {
+    mountRows([[A, 0, 800]]);
+    getStatus = 503;
+    await render();
+    expect(latest.status).toBe("failed");
+  });
+
   it("is off when switched off, and loading again when switched back on", async () => {
     mountRows([[A, 0, 800]]);
     await render();
@@ -361,5 +386,38 @@ describe("useReadingTime's status — whether an empty map means read nothing", 
     await render(true);
     /* A new run: the old run's "loaded" must not carry over into it. */
     expect(latest.status).toBe("loading");
+  });
+
+  it("is loading synchronously for a different article, not loaded from the preceding slug", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    expect(latest.status).toBe("loaded");
+
+    holdGet = true;
+    await render(true, new Map([[A, 230]]), "another-article");
+    expect(latest.status).toBe("loading");
+  });
+
+  it("makes one opening GET and settles under StrictMode's effect replay", async () => {
+    mountRows([[A, 0, 800]]);
+    holdGet = true;
+    await act(async () => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(Harness, { words: new Map([[A, 230]]), enabled: true }),
+        ),
+      );
+    });
+    expect(gets).toBe(1);
+    expect(latest.status).toBe("loading");
+
+    await act(async () => {
+      releaseGet?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest.status).toBe("loaded");
   });
 });

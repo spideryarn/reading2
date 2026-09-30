@@ -1,6 +1,6 @@
 # Quiz asks only about what you have read, and says how much that is
 
-**Status:** planned · 2026-09-30 · from [SPIDERYARN-READING2-61](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-61),
+**Status:** shipped to `dev` · 2026-09-30 · from [SPIDERYARN-READING2-61](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-61),
 an admin report (Greg's own account, checked with `scripts/feedback-reporter.ts`). The note is
 [260930_0037](../user-feedback/260930_0037-quiz-asks-only-about-what-you-have-read.md).
 
@@ -133,7 +133,11 @@ per-block totals `/privacy` already describes (§ Reading time). No change to pu
 ## Reviews
 
 - Plan: GPT Sol, read-only — [six findings, all taken](260930e-quiz-only-asks-about-what-you-have-read-review-sol.md)
-- Code: GPT Sol — (pending)
+- Code: GPT Sol — [one P1 and missing coverage, both fixed by the reviewer](260930e-quiz-only-asks-about-what-you-have-read-code-review-sol.md): a replacement batch could paint for one render at the old batch's index over the old draft (now a synchronous `changingBatch` guard, with a test that goes red without it); tests added for `readShareLabel`, `lastBefore`, a non-OK GET, a slug change and StrictMode.
+
+## Browser check
+
+A Sonnet subagent on its own dev server, commit `96d54a22`, `fowler-phrenology` (12 questions, no model call): the row renders ticked with "about 3% of the piece read so far" and the empty state; unticking shows all 12; about 100 seconds reading question 1's passage moved the figure to 6% and the walk to "Question 1 of 1"; with Experimental off there is no row and all 12 show. **One bug, fixed:** at 390px the figure ran off the band's right edge, clipped. The row is now a wrapping flex row and the figure wraps whole onto its own line; re-checked at 390 and 1280.
 
 ## Changes from GPT Sol's plan review
 
