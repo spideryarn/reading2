@@ -48,9 +48,11 @@ import { STARTING } from "../src/job-state.js";
  * must honour.
  */
 let readOnly = false;
+/** The microphone recording — only the ← / → rule reads it. */
+let armed = false;
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
-    dictation: { supported: true, armed: false, transcribing: readOnly },
+    dictation: { supported: true, armed, transcribing: readOnly },
     readOnly,
     toggle: () => {},
   }),
@@ -152,23 +154,45 @@ let host: HTMLDivElement;
 let root: Root;
 const jumped: BlockId[] = [];
 
+/** The ← / → handler the panel last registered — see "← and → step the path". */
+let arrowKeys: ((dir: -1 | 1) => boolean) | null = null;
+
 function paint(o: UseQuiz) {
   act(() => {
     root.render(
       createElement(QuizPanel, {
         owner: o,
         blocks: BLOCKS,
+        onArrowKeys: (h: ((dir: -1 | 1) => boolean) | null) => {
+          arrowKeys = h;
+        },
         onJump: (id: BlockId) => jumped.push(id),
       }),
     );
   });
 }
 
-/** Every button whose visible text is exactly `label`. */
+/**
+ * Every button whose name is exactly `label` — its `aria-label` when it has one
+ * (the step row is icons since SPIDERYARN-READING2-71), otherwise its visible
+ * text.
+ */
 function buttons(label: string): HTMLButtonElement[] {
   return [...host.querySelectorAll("button")].filter(
-    (b) => (b.textContent ?? "").trim() === label,
+    (b) => (b.getAttribute("aria-label") ?? (b.textContent ?? "").trim()) === label,
   ) as HTMLButtonElement[];
+}
+
+/**
+ * Refused the way the step row refuses: `IconButton`'s `aria-disabled`, and
+ * **never** the native attribute, which would take the button out of the tab
+ * order and stop its tooltip opening (IconButton.tsx § `disabled`). A natively
+ * disabled one throws rather than counting as either answer. GPT Sol's plan
+ * review, finding 3.
+ */
+function off(b: HTMLButtonElement | undefined): boolean | undefined {
+  if (b?.disabled) throw new Error(`"${b.getAttribute("aria-label")}" is natively disabled`);
+  return b && b.getAttribute("aria-disabled") === "true";
 }
 
 function press(label: string) {
@@ -194,9 +218,11 @@ function type(text: string) {
 
 beforeEach(() => {
   readOnly = false;
+  armed = false;
   cleared.length = 0;
   marked.length = 0;
   jumped.length = 0;
+  arrowKeys = null;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -225,7 +251,7 @@ describe("the reference answer is behind a door that shuts again", () => {
     paint(owner());
     press("Show a reference answer");
     expect(host.textContent).toContain("The reference answer to 1.");
-    press("Next");
+    press("Next question");
     expect(host.textContent).toContain("Question number 2?");
     expect(host.textContent).not.toContain("The reference answer to 2.");
   });
@@ -255,14 +281,14 @@ describe("the list is the artefact's order and nothing else", () => {
 
   it("draws the rows in the order it was given, however wrong that order looks", () => {
     paint(owner({ quiz: batch(scrambled) }));
-    press("Show all 3");
+    press("Show all 3 questions");
     const rows = [...host.querySelectorAll(".quiz-list-q")].map((n) => n.textContent);
     expect(rows).toEqual(["Question number 3?", "Question number 1?", "Question number 2?"]);
   });
 
   it("opens the question that was picked, and shuts the list", () => {
     paint(owner({ quiz: batch(scrambled) }));
-    press("Show all 3");
+    press("Show all 3 questions");
     const [, second] = [...host.querySelectorAll(".quiz-list-row")] as HTMLButtonElement[];
     act(() => {
       second?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -279,7 +305,7 @@ describe("the list is the artefact's order and nothing else", () => {
        batch, so the reset effect has already fired once by now. What this test
        is about is the move. */
     const before = cleared.length;
-    press("Next");
+    press("Next question");
     expect(cleared).toHaveLength(before + 1);
     expect(host.querySelector("textarea")?.value).toBe("");
   });
@@ -462,7 +488,7 @@ describe("a mark stays bound to the answer it was computed from", () => {
 
   it("does not carry the attempt into a batch that replaced it", () => {
     paint(owner({ quiz: batch([question(1), question(2)]) }));
-    press("Next");
+    press("Next question");
     expect(host.textContent).toContain("Question 2 of 2");
     const before = cleared.length;
 
@@ -604,7 +630,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("goes to the next question in the array whatever the verdict", () => {
     for (const verdict of ["right", "wrong", undefined] as const) {
       paint(owner({ quiz: PATH, attempt: judged(first.id, verdict) }));
-      press("Next");
+      press("Next question");
       expect(stem(), `after ${verdict ?? "no"} verdict`).toBe("Question number 2?");
       expect(host.textContent).toContain("Question 2 of 3");
       remount();
@@ -613,7 +639,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
 
   it("asks the next step on its own after a right answer", () => {
     paint(owner({ quiz: PATH, attempt: judged(first.id, "right") }));
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBeNull();
     /* Hiding the premise is not hiding the step. */
     expect(stem()).toBe("Question number 2?");
@@ -621,7 +647,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
 
   it("hands the reader the thread after a wrong answer, above the question and apart from it", () => {
     paint(owner({ quiz: PATH, attempt: judged(first.id, "wrong") }));
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
     const premise = host.querySelector(".quiz-premise");
     const q = host.querySelector(".quiz-question");
@@ -631,11 +657,11 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
 
   it("hands it over too when nothing was judged — a skip, or a classifier that failed", () => {
     paint(owner({ quiz: PATH, attempt: judged(first.id, undefined) }));
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
     remount();
     paint(owner({ quiz: PATH }));
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
   });
 
@@ -645,7 +671,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
     const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
     paint(o);
     paint({ ...o, attempt: null });
-    press("Next");
+    press("Next question");
     expect(stem()).toBe("Question number 2?");
     expect(premiseShown()).toBeNull();
   });
@@ -653,12 +679,12 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("follows the latest verdict on the step before", () => {
     const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
     paint(o);
-    press("Next");
+    press("Next question");
     paint({ ...o, attempt: null });
-    press("Previous");
+    press("Previous question");
     /* Answered again, and wrong this time. */
     paint({ ...o, attempt: judged(first.id, "wrong") });
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
   });
 
@@ -667,35 +693,35 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
        carry step 1's thread to step 2 — they came from the other side. */
     const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
     paint(o);
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBeNull();
     paint({ ...o, attempt: judged(second.id, "right") });
-    press("Next");
-    press("Previous");
+    press("Next question");
+    press("Previous question");
     expect(stem()).toBe("Question number 2?");
     expect(premiseShown()).toBe(P2);
   });
 
   it("walks back one step at a time, and counts the position on the path", () => {
     paint(owner({ quiz: PATH }));
-    press("Next");
-    press("Next");
+    press("Next question");
+    press("Next question");
     expect(host.textContent).toContain("Question 3 of 3");
-    expect(buttons("Next")[0]?.disabled, "Next was live on the last step").toBe(true);
-    press("Previous");
+    expect(off(buttons("Next question")[0]), "Next was live on the last step").toBe(true);
+    press("Previous question");
     expect(stem()).toBe("Question number 2?");
     expect(host.textContent).toContain("Question 2 of 3");
-    press("Previous");
-    expect(buttons("Previous")[0]?.disabled).toBe(true);
+    press("Previous question");
+    expect(off(buttons("Previous question")[0])).toBe(true);
   });
 
   it("jumps to a question picked from the list, and walks on from there", () => {
     paint(owner({ quiz: PATH }));
-    press("Show all 3");
+    press("Show all 3 questions");
     pickRow(2);
     expect(host.textContent).toContain("Question 3 of 3");
     expect(host.querySelectorAll(".quiz-list-row")).toHaveLength(0);
-    press("Previous");
+    press("Previous question");
     expect(stem()).toBe("Question number 2?");
   });
 
@@ -708,11 +734,11 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("shows the premise on a step picked from the list, even when the step before was right", () => {
     const o = owner({ quiz: PATH });
     paint(o);
-    press("Next");
+    press("Next question");
     paint({ ...o, attempt: judged(second.id, "right") });
-    press("Previous");
+    press("Previous question");
     paint({ ...o, attempt: null });
-    press("Show all 3");
+    press("Show all 3 questions");
     pickRow(2);
     expect(stem()).toBe("Question number 3?");
     expect(premiseShown()).toBe(P3);
@@ -728,7 +754,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("always shows the premise when the batch had a question dropped mid-path", () => {
     const gapped: Quiz = { ...PATH, dropped: { ...PATH.dropped, gaps: 1 } };
     paint(owner({ quiz: gapped, attempt: judged(first.id, "right") }));
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
   });
 
@@ -741,9 +767,9 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
    */
   it("lists question stems only, never premises", () => {
     paint(owner({ quiz: PATH }));
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
-    press("Show all 3");
+    press("Show all 3 questions");
     const list = host.querySelector(".quiz-list")?.textContent ?? "";
     expect(list).toContain("Question number 2?");
     expect(list).toContain("Question number 3?");
@@ -758,7 +784,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
        it once; the index walk keeps the guard. */
     paint(owner({ quiz: PATH }));
     cleared.length = 0;
-    press("Show all 3");
+    press("Show all 3 questions");
     pickRow(0);
     expect(cleared, "the attempt was cleared by picking the current row").toEqual([]);
     expect(stem()).toBe("Question number 1?");
@@ -768,20 +794,20 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("forgets every verdict when the batch is replaced", () => {
     const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
     paint(o);
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBeNull();
     /* The same questions under a new `batchId` — the case where a verdict map
        that outlived its batch would still find ids to match. */
     paint({ ...o, quiz: { ...PATH, batchId: "spya-batch2" }, attempt: null });
     expect(host.textContent).toContain("Question 1 of 3");
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
   });
 
   it("does not put the old verdict back while clearing a replacement batch", () => {
     const old = owner({ quiz: PATH, attempt: judged(first.id, "right") });
     paint(old);
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBeNull();
 
     /* The replacement deliberately reuses ids, and the old completed attempt
@@ -795,7 +821,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
       attempt: judged(first.id, "right"),
     });
     expect(host.textContent).toContain("Question 1 of 3");
-    press("Next");
+    press("Next question");
     expect(premiseShown()).toBe(P2);
   });
 
@@ -808,8 +834,8 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("never says a word about difficulty, however the reader is doing", () => {
     for (const verdict of ["right", "wrong", undefined] as const) {
       paint(owner({ quiz: PATH, attempt: judged(first.id, verdict) }));
-      press("Next");
-      press("Show all 3");
+      press("Next question");
+      press("Show all 3 questions");
       const shown = (host.textContent ?? "").toLowerCase();
       for (const leak of ["easy", "medium", "hard", "harder", "easier", "difficulty", "level"]) {
         expect(
@@ -842,29 +868,29 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
 
     it("will not move on before the verdict has landed", () => {
       paint(owner({ quiz: PATH, attempt: marking(first.id) }));
-      const [next] = buttons("Next");
-      expect(next?.disabled, "Next was live while the verdict was still in flight").toBe(true);
+      const [next] = buttons("Next question");
+      expect(off(next), "Next was live while the verdict was still in flight").toBe(true);
     });
 
     it("leaves Previous and the list live, so a reader can still walk away", () => {
       const o = owner({ quiz: PATH });
       paint(o);
-      press("Next");
+      press("Next question");
       paint({ ...o, attempt: marking(second.id) });
-      const [prev] = buttons("Previous");
-      expect(prev?.disabled, "a reader waiting on a mark was trapped").toBe(false);
-      expect(buttons("Show all 3").length).toBe(1);
+      const [prev] = buttons("Previous question");
+      expect(off(prev), "a reader waiting on a mark was trapped").toBe(false);
+      expect(buttons("Show all 3 questions").length).toBe(1);
     });
 
     it("moves again once the mark is done, and the verdict decides the premise", () => {
       const o = owner({ quiz: PATH });
       paint(o);
-      press("Next");
+      press("Next question");
       paint({ ...o, attempt: marking(second.id) });
-      expect(buttons("Next")[0]?.disabled).toBe(true);
+      expect(off(buttons("Next question")[0])).toBe(true);
       paint({ ...o, attempt: judged(second.id, "right") });
-      expect(buttons("Next")[0]?.disabled).toBe(false);
-      press("Next");
+      expect(off(buttons("Next question")[0])).toBe(false);
+      press("Next question");
       expect(stem()).toBe(third.question);
       expect(premiseShown()).toBeNull();
     });
@@ -983,28 +1009,28 @@ describe("only what you have read", () => {
     const some = read([KNOWN, THIRD]);
     paintRead(o, some);
     tick();
-    press("Next");
+    press("Next question");
     expect(stem()).toBe(second.question);
     paintRead({ ...o, attempt: judged(second.id, "right") }, some);
     tick();
     expect(stem()).toBe(third.question);
-    press("Previous");
+    press("Previous question");
     expect(stem()).toBe(first.question);
-    press("Next");
+    press("Next question");
     expect(stem()).toBe(third.question);
     expect(premiseShown(), "a Next over a skipped step counted as arriving from it").toBe(P3);
   });
 
   it("hides the premise after a right answer when Next skipped nothing — the control", () => {
     paintRead(owner({ quiz: PATH, attempt: judged(first.id, "right") }), read([KNOWN, OTHER]));
-    press("Next");
+    press("Next question");
     expect(stem()).toBe(second.question);
     expect(premiseShown()).toBeNull();
   });
 
   it("lists only the questions read, and says how many more there are", () => {
     paintRead(owner({ quiz: PATH }), read([KNOWN]));
-    press("Show all 1");
+    press("Show all 1 question");
     const rows = [...host.querySelectorAll(".quiz-list-row")].map((r) => r.textContent ?? "");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toContain(first.question);
@@ -1029,7 +1055,7 @@ describe("only what you have read", () => {
     tick();
     /* Unticked: the whole path again, from where the reader was. */
     expect(stem()).toBe(second.question);
-    press("Previous");
+    press("Previous question");
     expect(stem()).toBe(first.question);
     type("a draft about the first");
     const clears = cleared.length;
@@ -1065,8 +1091,8 @@ describe("only what you have read, across a new batch", () => {
         );
       });
     paintB(A);
-    press("Next");
-    press("Next");
+    press("Next question");
+    press("Next question");
     expect(host.querySelector(".quiz-question")?.textContent).toBe("Question number 3?");
     paintB(B);
     expect(host.querySelector(".quiz-question")?.textContent).toBe("New question 2?");
@@ -1107,8 +1133,8 @@ describe("only what you have read, across a new batch", () => {
       });
 
     paintWithProbe(A);
-    press("Next");
-    press("Next");
+    press("Next question");
+    press("Next question");
     type("an answer to the old third question");
     commits.length = 0;
 
@@ -1117,5 +1143,114 @@ describe("only what you have read, across a new batch", () => {
     expect(commits[0], "the first replacement commit exposed the old index").toBeNull();
     expect(host.querySelector(".quiz-question")?.textContent).toBe("New question 1?");
     expect(host.querySelector("textarea")?.value).toBe("");
+  });
+});
+
+/**
+ * **← and → step the path** — SPIDERYARN-READING2-71; keyboard.md § ← / → in
+ * Trajectory and Quiz. The panel hands `Reader` one handler, which `useArrowNav`
+ * calls after its own guards (no modifier, not typing, no drawer). What is
+ * tested here is the half only the panel knows: that the handler is the
+ * buttons' own rule, that it answers `false` when it took nothing — so the key
+ * goes back to the browser — and that a stray press cannot throw away an
+ * answer that has not been marked.
+ */
+describe("← and → step the path", () => {
+  const PATH = batch([question(1), question(2), question(3)]);
+  const [first] = PATH.questions as [QuizQuestion];
+  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const key = (dir: -1 | 1): boolean | undefined => {
+    let took: boolean | undefined;
+    act(() => {
+      took = arrowKeys?.(dir);
+    });
+    return took;
+  };
+
+  it("registers a handler while a question is showing, and takes it back on unmount", () => {
+    paint(owner({ quiz: PATH }));
+    expect(arrowKeys).not.toBeNull();
+    act(() => root.unmount());
+    expect(arrowKeys, "the handler outlived the panel").toBeNull();
+    root = createRoot(host);
+  });
+
+  it("→ is Next and ← is Previous, and neither wraps", () => {
+    paint(owner({ quiz: PATH }));
+    expect(key(-1), "← on the first question took the key").toBe(false);
+    expect(stem()).toBe("Question number 1?");
+    expect(key(1)).toBe(true);
+    expect(stem()).toBe("Question number 2?");
+    expect(key(1)).toBe(true);
+    expect(stem()).toBe("Question number 3?");
+    expect(key(1), "→ on the last question took the key").toBe(false);
+    expect(stem()).toBe("Question number 3?");
+    expect(key(-1)).toBe(true);
+    expect(stem()).toBe("Question number 2?");
+  });
+
+  it("→ waits for a mark still arriving, as Next does", () => {
+    paint(
+      owner({
+        quiz: PATH,
+        attempt: { questionId: first.id, answer: "mine", status: "marking", reply: "So far", error: null },
+      }),
+    );
+    /* The box is left empty, so this is `canGoNext` refusing and not the
+       unmarked-draft rule below. */
+    expect(key(1)).toBe(false);
+    expect(stem()).toBe("Question number 1?");
+  });
+
+  it("will not throw away an answer that has not been marked", () => {
+    paint(owner({ quiz: PATH }));
+    type("half an answer");
+    expect(key(1), "a stray → discarded a draft").toBe(false);
+    expect(stem()).toBe("Question number 1?");
+    expect(host.querySelector("textarea")?.value).toBe("half an answer");
+    // Positive control: the same key moves once the box is empty again.
+    type("");
+    expect(key(1)).toBe(true);
+    expect(stem()).toBe("Question number 2?");
+  });
+
+  /* The box is empty in both, so the draft rule above cannot be what refuses. */
+  it("will not move while the microphone is recording", () => {
+    armed = true;
+    paint(owner({ quiz: PATH }));
+    expect(key(1), "a stray → moved while the reader was talking").toBe(false);
+    expect(stem()).toBe("Question number 1?");
+    armed = false;
+    paint(owner({ quiz: PATH }));
+    expect(key(1), "the control: the same press moves once it stops").toBe(true);
+  });
+
+  it("will not move while a transcript is on its way", () => {
+    readOnly = true;
+    paint(owner({ quiz: PATH }));
+    expect(key(1), "the transcript would land under the next question").toBe(false);
+    expect(stem()).toBe("Question number 1?");
+  });
+
+  it("an unavailable step button is still focusable and does nothing when pressed", () => {
+    paint(owner({ quiz: PATH }));
+    const [prev] = buttons("Previous question");
+    expect(off(prev)).toBe(true);
+    const before = cleared.length;
+    press("Previous question");
+    expect(stem()).toBe("Question number 1?");
+    expect(cleared.length, "a refused press still ran move()").toBe(before);
+  });
+
+  it("moves on once the answer has been marked", () => {
+    const o = owner({ quiz: PATH });
+    paint(o);
+    type("mine");
+    paint({
+      ...o,
+      attempt: { questionId: first.id, answer: "mine", status: "done", reply: "Good.", error: null },
+    });
+    expect(key(1)).toBe(true);
+    expect(stem()).toBe("Question number 2?");
   });
 });

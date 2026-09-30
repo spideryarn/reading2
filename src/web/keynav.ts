@@ -477,6 +477,13 @@ export function useArrowNav(
       // ← / → belong to a mode that claims them, and otherwise to the browser.
       // See `horizontal` above.
       if (across !== 0) {
+        /* **Not from inside a dialog.** A comment's dialog focuses its Close
+           button and has ‹ › of its own, and a key pressed there is not a
+           request to step the band behind it. Scoped to where the key was
+           pressed rather than to "a dialog is open": the comment dialog is
+           modeless, and a reader who clicks back into the page means the page.
+           GPT Sol's review of plan 260930h, finding 1. */
+        if ((e.target as Element | null)?.closest?.('dialog, [role="dialog"]')) return;
         const mine = sideways.current;
         if (mine?.(across)) e.preventDefault();
         return;

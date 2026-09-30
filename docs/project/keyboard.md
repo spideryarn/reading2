@@ -2,7 +2,7 @@
 
 > **Status, 2026-09-29.** The stride belonged to the gist columns of Hierarchy mode, which was removed
 > that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Trajectory stops
-> (further down), and are the browser's everywhere else.** ↑ / ↓ still take the step in
+> and, since 2026-09-30, Quiz's questions (both further down), and are the browser's everywhere else.** ↑ / ↓ still take the step in
 > the article. Everything here about columns, the pointer's level, the aim and the `L1 / L2` buttons is
 > history.
 
@@ -200,6 +200,35 @@ same and says *Back to stop 1* there. A step replaces
 reason. `tests/keynav-horizontal.test.ts` pins both halves — the handler takes the key, and without
 one the stride still moves. The plan is
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md) § Keys (Sol F5).
+
+## ← / → in Quiz
+
+> And maybe add keyboard shortcuts, left and right, to move through the quiz questions.
+>
+> — Greg, 2026-09-30, SPIDERYARN-READING2-71
+
+**While Remember's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
+same seam as Trajectory's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
+`null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Remember — so
+it runs after every guard above, and Recall, or any other mode, leaves ← / → with the browser.
+
+The handler is the buttons' own rule, so the keys can do no more than the buttons: no wrap at
+either end, and → waits while a mark is still arriving, as Next does. **It adds two rules the buttons
+do not have. A key will not throw away words in the answer box that have not been marked** — a
+draft, a failed mark, or an edit made after the mark — **nor move while the microphone is recording
+or its transcript is on its way**, box empty or not, since the transcript would land under the next
+question. The box already keeps its own key presses
+(`stopPropagation`), so this is the reader who typed, clicked somewhere else on the page, and
+pressed →; a click on a labelled button is a deliberate act and still moves. In each refused case
+the handler answers "took nothing", so the key goes back to the browser.
+
+**Neither Trajectory nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
+`[role="dialog"]`, found from the key's own target. A comment's dialog focuses its Close button and
+has ‹ › of its own, so without this a press there stepped the band behind it. Scoped to the target
+rather than to "a dialog is open", because the comment dialog is modeless and a reader who clicks
+back into the page means the page (`tests/keynav-horizontal.test.ts`).
+`tests/quiz-panel.test.tsx` § "← and → step the path" pins all of it. The plan is
+[260930h](../plans/260930h-quiz-and-remember-controls-as-icons-arrow-keys-step-the-quiz.md).
 
 ## The aim is visible before you press anything
 

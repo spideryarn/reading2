@@ -139,6 +139,26 @@ describe("with a horizontal handler (Trajectory)", () => {
     expect(asked).toEqual([]);
   });
 
+  /* A comment's dialog focuses its Close button and has ‹ › of its own; an
+     arrow pressed there must not step the band behind it. GPT Sol's review of
+     plan 260930h, finding 1. Both shapes the app uses: a hand-rolled
+     `role="dialog"` and a native `<dialog>`. */
+  it("does not step the band from inside a dialog", () => {
+    for (const tag of ["aside", "dialog"] as const) {
+      const dialog = document.createElement(tag);
+      if (tag === "aside") dialog.setAttribute("role", "dialog");
+      const button = document.createElement("button");
+      dialog.append(button);
+      document.body.append(dialog);
+      const e = press("ArrowRight", {}, button);
+      expect(e.defaultPrevented).toBe(false);
+      dialog.remove();
+    }
+    expect(asked, "a key pressed in a dialog reached the band").toEqual([]);
+    press("ArrowRight");
+    expect(asked, "the control: the same key outside a dialog").toEqual([1]);
+  });
+
   it("leaves ↑ and ↓ to the article", () => {
     press("ArrowDown");
     expect(asked).toEqual([]);
