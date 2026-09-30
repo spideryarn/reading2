@@ -75,7 +75,7 @@ import {
   sortDirParam,
 } from "./params.js";
 import { isArchived, narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
-import { ShelfTerms } from "./ShelfTerms.js";
+import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
 import { useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
@@ -659,7 +659,9 @@ export function Library({
 
       {/* Between the controls and the count, so the count is visibly the
           result of everything above it. Only once there is a shelf and an
-          answer: a failed request draws nothing (useShelfTerms.ts). */}
+          answer: a failed request draws nothing (useShelfTerms.ts), and
+          while one is out a spinner holds the row's place. */}
+      {total > 0 && !terms.data && terms.loading && <ShelfTermsLoading articleCount={total} />}
       {total > 0 && terms.data && (
         <ShelfTerms
           data={terms.data}

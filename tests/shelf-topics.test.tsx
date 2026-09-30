@@ -174,6 +174,7 @@ enableHistorySync();
 
 const { Library } = await import("../src/web/Library.js");
 const { REFRESHING_RETRIES, REFRESHING_RETRY_MS, shelfKeyOf } = await import("../src/web/useShelfTerms.js");
+const { COLLAPSED_CHIPS, MIN_WORKS } = await import("../src/web/ShelfTerms.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -254,6 +255,15 @@ function archivedChip(): HTMLButtonElement {
   );
   if (!found) throw new Error("no Archived chip");
   return found;
+}
+/** The placeholder row drawn while the topics are being asked for. */
+function topicsLoading(): HTMLElement | null {
+  return host.querySelector<HTMLElement>('[role="status"][aria-label="Loading topics"]');
+}
+function reservedControl(status: HTMLElement | null, label: string): HTMLElement | undefined {
+  return [...(status?.querySelectorAll<HTMLElement>("span") ?? [])].find((el) =>
+    el.textContent?.trim().startsWith(label),
+  );
 }
 function countLine(): string | null {
   const p = [...host.querySelectorAll("p")].find((el) => /\bof \d+ articles?\b/.test(el.textContent ?? ""));
@@ -497,6 +507,57 @@ describe("the Topics row", () => {
     await show("/?topics=memory");
     expect(chips()).toHaveLength(0);
     expect(cards()).toHaveLength(4);
+    // A failure is not a wait: no spinner that spins for ever.
+    expect(topicsLoading()).toBeNull();
+  });
+
+  it("shows a spinner in the row's place while the topics load, and the pills once they land (report a4xsg3)", async () => {
+    let release: (body: LibraryTermsResponse) => void = () => {};
+    answer = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    await show("/");
+    const status = topicsLoading();
+    expect(status).not.toBeNull();
+    expect(status?.querySelector(".cmt-spinner")).not.toBeNull();
+    // Words beside the spinner, never a bare one (icons.md § The loading spinner).
+    expect(status?.textContent).toContain("Loading topics…");
+    expect(chips()).toHaveLength(0);
+
+    // Four articles: too few for topics, so one line and no outline pills.
+    expect(status?.querySelectorAll("[data-ghost-pill]")).toHaveLength(0);
+
+    await act(async () => release(ACTIVE_TERMS));
+    await settle();
+    expect(topicsLoading()).toBeNull();
+    expect(chips()).toHaveLength(3);
+  });
+
+  it("holds the collapsed row's shape in outlines when enough article rows make topics possible", async () => {
+    activeArticles = Array.from({ length: MIN_WORKS }, (_, i) => ({ ...ACTIVE[i % ACTIVE.length]!, slug: `many-${i}` }));
+    answer = () => new Promise(() => {});
+    await show("/");
+    const status = topicsLoading();
+    const ghosts = status?.querySelectorAll("[data-ghost-pill]") ?? [];
+    // The spinner and its words take the first pill's place.
+    expect(ghosts).toHaveLength(COLLAPSED_CHIPS - 1);
+    for (const g of ghosts) expect(g.getAttribute("aria-hidden")).toBe("true");
+    // Eight article rows can produce at most eight topics, so the real
+    // collapsed row cannot have its conditional "All N topics" control.
+    expect(reservedControl(status, "All")).toBeUndefined();
+    expect(reservedControl(status, "More detail")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("reserves the conditional All-topics control only when more than twelve topics are possible", async () => {
+    activeArticles = Array.from({ length: COLLAPSED_CHIPS + 1 }, (_, i) => ({
+      ...ACTIVE[i % ACTIVE.length]!,
+      slug: `many-${i}`,
+    }));
+    answer = () => new Promise(() => {});
+    await show("/");
+    const all = reservedControl(topicsLoading(), "All");
+    expect(all?.getAttribute("aria-hidden")).toBe("true");
   });
 });
 
@@ -517,6 +578,7 @@ describe("the archive in scope", () => {
 
     expect(asked).toContain("/api/library/terms?archived=1");
     expect(chips()).toHaveLength(0);
+    expect(topicsLoading()).not.toBeNull();
     expect(cards()).toHaveLength(4);
     expect(archivedRows()).toHaveLength(2);
 

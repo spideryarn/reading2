@@ -53,6 +53,14 @@ export interface ShelfTermsState {
    * key missing from it is gone for good.
    */
   settled: boolean;
+  /**
+   * A question is out and nothing — neither a body nor a failure — has come
+   * back for it. The Topics row draws a spinner in its place while this is
+   * true (report a4xsg3). A failure is an answer, so it never spins for ever;
+   * and a `null` shelfKey is no question at all (the archive's own wait says
+   * "Loading archived…" in its own line, Sol on plan 260930j).
+   */
+  loading: boolean;
 }
 
 /**
@@ -160,11 +168,12 @@ export function useShelfTerms({
       shelfKey !== null &&
       answer?.archived === archived &&
       answer.shelfKey === shelfKey
-        ? answer.data
+        ? answer
         : null;
     return {
-      data: current,
-      settled: !!current && current.pending === 0,
+      data: current?.data ?? null,
+      settled: !!current?.data && current.data.pending === 0,
+      loading: shelfKey !== null && current === null,
     };
   }, [answer, archived, shelfKey]);
 }

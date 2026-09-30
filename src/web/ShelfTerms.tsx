@@ -29,7 +29,7 @@
  * and a click goes back up as a key. docs/project/shelf-terms.md.
  */
 import { useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, LoaderCircle } from "lucide-react";
 import { useQueryState } from "nuqs";
 import type { LibraryTermsResponse } from "../types.js";
 import { libraryTopicsViewParam } from "./params.js";
@@ -43,10 +43,81 @@ import { TooltipGroup } from "./Tooltip.js";
 export const COLLAPSED_CHIPS = 12;
 
 /** Below this many distinct works the server chooses no topics at all. */
-const MIN_WORKS = 8;
+export const MIN_WORKS = 8;
 
 const QUIET_BUTTON =
   "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground";
+const TERMS_ROW = "tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2";
+
+/**
+ * Widths for the placeholder's outline pills, in rem: a spread like a real
+ * row's (≈50–130px, mean ≈100px, measured on a 21-article shelf), so the
+ * outlines wrap where the pills will. One fewer than COLLAPSED_CHIPS, because
+ * the spinner and its words take the first pill's place.
+ */
+const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6, 8, 4, 6.5, 7, 5.5, 6];
+
+/**
+ * **The row's place, held while the topics are asked for** (Greg's report
+ * a4xsg3, 2026-09-30: *"let's show some kind of loading spinner in their place
+ * while they're loading"*): the same label, the app's one spinner with its
+ * words, and — when the article count makes topics possible — the collapsed
+ * row's shape in faint outlines, wrapping with the real row's flex classes,
+ * then its always-present detail control and, when possible, its conditional
+ * All-topics control, drawn invisibly at their real width. So the cards below
+ * land near where they will stay at any width (GPT Sol, plan 260930j: a
+ * remembered pixel height was the alternative, and goes stale with the shelf,
+ * the window and the zoom).
+ *
+ * Before the answer, article rows are only an upper bound on distinct works:
+ * exact copies are one work on the server, but their `textHash` is not in the
+ * library response. So `articleCount` decides only what the shelf *might*
+ * draw. Fewer than MIN_WORKS rows is certainly one line; more rows may still
+ * collapse after the answer if they are copies or no useful topics survive.
+ */
+export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
+  const mightHaveTopics = articleCount >= MIN_WORKS;
+  /* The chooser returns at most one topic per distinct work. More than twelve
+     article rows is therefore necessary — though not sufficient — for the
+     real row's conditional "All N topics" button. */
+  const mightHaveAllTopics = articleCount > COLLAPSED_CHIPS;
+  return (
+    <div
+      role="status"
+      aria-label="Loading topics"
+      className={`tw:mb-3 tw:min-h-7 ${TERMS_ROW}`}
+    >
+      <span className="tw:text-xs tw:font-medium tw:text-muted-foreground">Topics</span>
+      <span className="tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:px-1 tw:text-xs tw:text-muted-foreground">
+        <LoaderCircle className="cmt-spinner" size={13} />
+        Loading topics…
+      </span>
+      {mightHaveTopics && (
+        <>
+          {GHOST_PILL_REM.map((rem, i) => (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list that never reorders
+              key={i}
+              aria-hidden="true"
+              data-ghost-pill
+              className="tw:inline-block tw:h-7 tw:rounded-full tw:border tw:border-border tw:opacity-50"
+              style={{ width: `${rem}rem` }}
+            />
+          ))}
+          {mightHaveAllTopics && (
+            <span aria-hidden="true" className={`${QUIET_BUTTON} tw:invisible`}>
+              All 20 topics
+              <ChevronRight size={12} />
+            </span>
+          )}
+          <span aria-hidden="true" className={`${QUIET_BUTTON} tw:invisible`}>
+            More detail
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function ShelfTerms({
   data,
@@ -94,7 +165,7 @@ export function ShelfTerms({
     const tooFew = pending === 0 && scope.works < MIN_WORKS;
     if (!reading && !tooFew) return null;
     return (
-      <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2">
+      <div className="tw:mb-3 tw:flex tw:min-h-7 tw:flex-wrap tw:items-center tw:gap-x-2">
         <span className="tw:text-xs tw:font-medium tw:text-muted-foreground">Topics</span>
         {reading || (
           <span className="tw:text-xs tw:text-muted-foreground">
@@ -136,7 +207,7 @@ export function ShelfTerms({
      button mounted across the switch and focus stays on it. */
   return (
     <div className="tw:mb-3">
-      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2">
+      <div className={TERMS_ROW}>
         <span className="tw:text-xs tw:font-medium tw:text-muted-foreground">Topics</span>
         {!detail && (
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>

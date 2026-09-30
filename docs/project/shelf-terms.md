@@ -43,6 +43,14 @@ The route fills missing candidates **within a time budget** and answers `pending
 still unread; the client shows what it has, says *"Reading N more articles…"*, and asks again. The
 server always reads at least one article per request, so the loop cannot spin.
 
+**Before the first answer**, the row's place holds the spinner and *"Loading topics…"*. When the
+number of article rows makes topics possible, it also holds the collapsed row's approximate shape
+in faint outline pills, wrapping like the real row, so the cards usually land near where they will
+stay. Exact copies count as one work only on the server, and the real labels and number of topics
+are not known yet, so this reserve can still be taller or shorter (Greg's report a4xsg3, 2026-09-30;
+plan [260930j](../plans/260930j-shelf-topics-loading-spinner.md)). A failed request is an answer, and
+draws nothing rather than spinning for ever.
+
 ## The model's judgement
 
 > I'm still not that happy with the suggestions that are being generated. They're just not that
