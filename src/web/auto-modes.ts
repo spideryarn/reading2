@@ -138,9 +138,24 @@ export function autoModeRequests(): StepName[][] {
  */
 export async function queueAutoModes(run: UseJobs["run"], slug: string): Promise<void> {
   const post = (steps: StepName[]) => run({ slug, steps }).catch(() => null);
+  const { together, after } = autoModePosts();
+  await Promise.all(together.map(post));
+  for (const steps of after) await post(steps);
+}
+
+/**
+ * **The order `queueAutoModes` posts in**: the jobs that read nothing, fired
+ * together, then the rest one after another. Not `autoModeRequests()`'s order
+ * since `crossrefs` joined (260930f): it sorts last in `STEP_ORDER` but reads
+ * nothing, so it goes out before Trajectory. Exported so the tests that pin
+ * what the add page posts read this answer rather than a copy of it.
+ */
+export function autoModePosts(): { together: StepName[][]; after: StepName[][] } {
   const requests = autoModeRequests();
-  await Promise.all(requests.filter((steps) => steps.length === 1).map(post));
-  for (const steps of requests.filter((steps) => steps.length > 1)) await post(steps);
+  return {
+    together: requests.filter((steps) => steps.length === 1),
+    after: requests.filter((steps) => steps.length > 1),
+  };
 }
 
 const AUTO_MODES_KEY = "spideryarn.add.generate-main-modes";
