@@ -1,10 +1,14 @@
+---
+reports: spya-qdgnks
+ending: shipped
+---
 # Quiz's controls as icons, and ← / → to move through the questions
 
 [SPIDERYARN-READING2-71](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-71), a suggestion
 from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from Remember → Quiz on
 `pmc13013618-spya-uekgh6`. The time in the file name is when this session picked the report up. It
-had no Sentry access and the report text came in the brief. **No `reports:` header**, because the
-feedback row id was not in the brief. The next sweep adds it.
+had no Sentry access and the report text came in the brief. The
+header above was added by the feedback sweep on 2026-09-30, from the issue's `report_id` tag.
 
 > Make minimal UI tweaks to the quiz mode and maybe remember mode as well. For example, let's use
 > icons instead of text labels, you know, perhaps with tooltips. And maybe add keyboard shortcuts,

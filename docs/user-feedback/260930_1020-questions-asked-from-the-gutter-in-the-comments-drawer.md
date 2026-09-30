@@ -1,11 +1,14 @@
+---
+reports: spya-q59jex
+ending: shipped
+---
 # A question asked from the gutter is in the Comments drawer
 
 [SPIDERYARN-READING2-6W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6W), a suggestion
 from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from Trajectory mode on
 `pmc13013618-spya-uekgh6` with the Comments drawer open. The time in the file name is when this
-session picked the report up. It had no Sentry access and the report text came in the brief. **No
-`reports:` header**, because the feedback row id was not in the brief and this session could not
-read it. The next sweep adds the header, as it did for five notes on 2026-09-30.
+session picked the report up. It had no Sentry access and the report text came in the brief. The
+header above was added by the feedback sweep on 2026-09-30, from the issue's `report_id` tag.
 
 > I just asked a question, but with clicking the sort of question mark icon in the vertical gutter
 > next to a block, and I got a good answer, and that was great. And then I clicked the X in the top

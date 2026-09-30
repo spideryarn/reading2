@@ -1,10 +1,14 @@
+---
+reports: spya-muymup
+ending: shipped
+---
 # Auth emails in Spideryarn's voice
 
 [SPIDERYARN-READING2-6S](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6S), a suggestion
 from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from Trajectory on
 `pmc13013618-spya-uekgh6`. The time in the file name is when this session picked the report up. It
-had no Sentry access and the report text came in the brief. **No `reports:` header**, because the
-feedback row id was not in the brief. The next sweep adds it.
+had no Sentry access and the report text came in the brief. The
+header above was added by the feedback sweep on 2026-09-30, from the issue's `report_id` tag.
 
 > The auth emails still use Supabase's default wording. "Reset your password" and the sign-up
 > confirmation are unbranded boilerplate. Rewrite them in Spideryarn's voice and using Spideryarn's

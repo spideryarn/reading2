@@ -1,11 +1,15 @@
+---
+reports: spya-f65rcm, spya-s3spgj
+ending: shipped
+---
 # Trajectory: the (i) on the controls row, and ‹ › name their keys
 
 [SPIDERYARN-READING2-73](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-73) and
 [SPIDERYARN-READING2-74](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-74), two
 suggestions from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), both sent from
 Trajectory on `bf03197835-spya-qfwsw2`. One batched note for both. The time in the file name is when
-this session picked them up; it had no Sentry access, and the report text came in the brief. **No
-`reports:` header**, because the feedback row ids were not in the brief. The next sweep adds them.
+this session picked them up; it had no Sentry access, and the report text came in the brief. The
+header above was added by the feedback sweep on 2026-09-30, from the issues' `report_id` tags.
 
 > Can we save vertical screen real estate by moving the (i) icon that's at the top of the Trajectory
 > mode onto the same row as the other UI widgets like previous and next and gist and more
