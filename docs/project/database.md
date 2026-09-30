@@ -547,9 +547,20 @@ that misdirects you.
 |---|---|---|
 | direct — `db.<ref>.supabase.co:5432` | local admin work | **IPv6-only** unless the paid IPv4 add-on is on. Works from Greg's laptop; will not resolve from Vercel |
 | session pooler | **migrations** | IPv4, and a real session — which DDL and the migrator's bookkeeping both need |
-| transaction pooler — port 6543 | **the running app** | one connection per transaction. `LISTEN/NOTIFY`, session advisory locks and `SET` outside a transaction all silently stop working here |
+| transaction pooler — port 6543 | **the running app** | one connection per transaction. `LISTEN/NOTIFY` and session advisory locks silently stop working here, and a `SET` outside a transaction **leaks to the next client** — see below |
 
 The username differs too: pooler connections are `postgres.<project-ref>`, not plain `postgres`.
+
+**Never `SET` anything on the transaction pooler — least of all `default_transaction_read_only`.**
+`.env.prod`'s `DATABASE_URL` is port 6543, and Supavisor does not reset a backend when it hands it
+back, so a plain `SET` outlives your `psql` and applies to whoever gets that backend next — which,
+at our traffic, is every production request. On 2026-09-30 an agent reading feedback ran
+`psql "$DB" -c "set default_transaction_read_only=on" -c "select …"` as a safety habit, and every
+write in production failed with SQLSTATE `25006` (`PreventCommandIfReadOnly`), shown to readers as
+`[db-busy]`, until the backend was `RESET`. To read safely, use `begin read only; …; commit;` (the
+setting dies with the transaction), or the session pooler on port 5432. To tell whether a backend is
+poisoned: `select current_setting('default_transaction_read_only')` via 6543 says `on` while the
+same query via 5432 says `off`; `reset default_transaction_read_only` via 6543 clears it.
 
 **SSL is enforced**, so a plain connection is refused — and `pg` does not use SSL by default, so the
 refusal arrives looking like a credentials error. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)
