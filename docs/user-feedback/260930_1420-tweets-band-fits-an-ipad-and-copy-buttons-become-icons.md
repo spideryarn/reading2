@@ -1,3 +1,7 @@
+---
+reports: spya-tmn904, spya-tdzq5b
+ending: shipped
+---
 # Tweets: a band that suits an iPad both ways up, and copy buttons that are icons
 
 [SPIDERYARN-READING2-6G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6G) and

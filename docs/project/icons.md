@@ -231,9 +231,8 @@ Going forwards, then:
 - **"Where we can."** A control whose meaning no icon carries, or that a first-time reader must
   understand before pressing (*Plan the route*), keeps its words.
 
-This is a note, not yet a line in [design-css-overview.md](design-css-overview.md), which is a rule
-doc and changes only with Greg's approval of the wording
-([edit-important-docs.md](../reusable/edit-important-docs.md)).
+[design-css-overview.md](design-css-overview.md) carries it as a one-line pointer, approved by Greg
+on 2026-09-29 (`1a44cb57`).
 
 ## Where they're used
 

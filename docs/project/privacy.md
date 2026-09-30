@@ -407,9 +407,20 @@ It goes with the article (a cascade through `block_identities`), and is in both 
 
 **Since 2026-09-30 the quiz reads it too** — [quiz.md § Only what you have read](quiz.md#only-what-you-have-read)
 — in the browser, to choose which questions to show and to say how much of the piece is read. Nothing
-new is stored or sent. The page's bullet still gives only the outline-and-margin purpose; a wording
-that adds the quiz is proposed to Greg in
-[260930e § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).
+new is stored or sent. So on 2026-10-01 the bullet stopped naming its uses: it now says *"Some of
+Spideryarn's features use it — to show you where you have been, for example"*, and `LAST_UPDATED`
+moved.
+
+> Perhaps just remove some of the low-level detail, because the user doesn't really care *exactly
+> which modes* use it - so just say that some modes might?
+>
+> — Greg, 2026-10-01
+
+**A new owner-only feature that uses the totals only in memory needs no change here**, whether that
+happens in the browser or on our server. Reconsider the bullet before storing anything new from the
+totals, showing them or a conclusion drawn from them to a shared link's reader, or sending either
+outside Spideryarn — to a model, for example. The plan is
+[261001a](../plans/261001a-privacy-reading-time-wording.md).
 
 ## Shelf topics
 
