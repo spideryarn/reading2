@@ -272,8 +272,10 @@
    centred 65ch box inside a wider cell whenever a band is open (prose.css §
    `.prose`), so a line drawn against the cell hung 36px left of the text, under
    the gutter's icons — the 260930i browser check. The same `max-width` and
-   `margin-inline: auto`, and the reading face and size so that `ch` means the
-   same width here as there; the button sets its own smaller type in `rem`. */
+   `margin-inline: auto`, and the reading face, size **and weight** so that `ch`
+   means the same width here as there — Geist is variable and its weight axis
+   moves the zero's advance, which was the last 2.8px at 1280 (gutter.css says
+   the same of the gutter). The button sets its own type, weight included. */
 td.text .quiz-in-prose {
   display: flex;
   flex-direction: column;
@@ -282,6 +284,7 @@ td.text .quiz-in-prose {
   margin: 0.35rem auto 0.1rem;
   font-family: var(--font-reading);
   font-size: var(--reading-size);
+  font-weight: var(--reading-weight);
   user-select: none;
 }
 td.text .quiz-in-prose-q {
@@ -296,6 +299,7 @@ td.text .quiz-in-prose-q {
   font-family: var(--font-ui);
   font-size: 0.8rem;
   font-style: italic;
+  font-weight: 400;
   line-height: 1.4;
   color: var(--ink-faint);
   text-align: left;

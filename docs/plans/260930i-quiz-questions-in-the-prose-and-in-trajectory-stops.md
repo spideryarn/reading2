@@ -1,6 +1,6 @@
 # Quiz questions in the prose, and so in Trajectory's stops
 
-**Status:** built, in review · 2026-09-30 · from [SPIDERYARN-READING2-6V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6V),
+**Status:** shipped to `dev` · 2026-09-30 · from [SPIDERYARN-READING2-6V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6V),
 an admin report (Greg's own account, checked with `scripts/feedback-reporter.ts`, exit 0).
 
 ## What Greg asked for
@@ -143,8 +143,23 @@ pressing lines, copy-select). Two defects, both fixed before review:
 - **A second press while Quiz was open pushed an identical entry**, so one Back did nothing. It now
   sets only the arrival when Quiz is already open. The test went red first.
 
+A re-check after the fix left 2.8px at 1280 — the zero's advance on Geist's weight axis, the same
+slippage gutter.css documents — so the line also takes `--reading-weight`; after that every line
+matched its `.prose` to 0px, left and right, in Plain, Trajectory and Glossary at 1280 and at 390
+([Plain](260930i-check-after-plain-1280.png), [Trajectory](260930i-check-after-trajectory-1280.png)).
+
 Otherwise: 12 lines on a 41-paragraph essay, not a wall; clear of **Next stop ›** by 8px at both
 widths; `user-select: none` holds; one Back after a press restores the old view.
+
+### The code review and the gates
+
+[GPT Sol's code review](260930i-quiz-questions-in-the-prose-code-review-sol.md): approve, with two
+fixes it made — an arrival for the unread opening question lost to the read filter's move in the
+same commit, and a native `title` on the line. One full suite after merging `dev`: 7 files red, all
+explained. Five needed a build (`npm run build`, `build:fleet`; green after). Two were this change:
+the request-trace test now records the one new `GET /api/quiz/` per owned article view, and
+`last-view.test.ts`'s scanner misread a one-line `useQueryStates({ … })` (now written one key per
+line, as everywhere else).
 
 ### Passed over
 

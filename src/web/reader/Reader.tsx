@@ -661,7 +661,11 @@ export function Reader({
      the reader a Back that does nothing (the 260930i browser check). Read
      through a ref so that `openQuizAt` keeps its identity — it is in
      `quizAfter`'s memo, and a new one would re-render `TableView`. */
-  const [quizNav, setQuizNav] = useQueryStates({ mode: modeParam, remember: rememberParam, thread: threadParam });
+  const [quizNav, setQuizNav] = useQueryStates({
+    mode: modeParam,
+    remember: rememberParam,
+    thread: threadParam,
+  });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
   useEffect(() => {
