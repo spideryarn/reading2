@@ -4,10 +4,13 @@
  *     npx tsx scripts/supabase-auth-config.ts show
  *     npx tsx scripts/supabase-auth-config.ts apply [--dry-run]
  *     npx tsx scripts/supabase-auth-config.ts smtp [--dry-run]
+ *     npx tsx scripts/supabase-auth-config.ts templates [--dry-run]
  *
  * `apply` writes the Google sign-in settings; `smtp` writes the outgoing-mail
- * settings (Resend, since 2026-09-29 — docs/project/email.md). They are
- * separate commands so that fixing one never re-sends the other's secret.
+ * settings (Resend, since 2026-09-29 — docs/project/email.md); `templates`
+ * writes the subject and HTML of the two auth emails the app sends, read from
+ * supabase/config.toml and supabase/templates/ (since 2026-09-30). They are
+ * separate commands so that fixing one never re-sends another's secret.
  *
  * Written on 2026-08-27, when "Continue with Google" on www.spideryarn.com
  * returned `{"msg":"Unsupported provider: provider is not enabled"}` — the
@@ -78,6 +81,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { parse as parseToml } from "smol-toml";
 
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
@@ -156,7 +161,69 @@ const WATCHED = [
   "smtp_admin_email",
   "smtp_sender_name",
   "rate_limit_email_sent",
+  "mailer_subjects_confirmation",
+  "mailer_templates_confirmation_content",
+  "mailer_subjects_recovery",
+  "mailer_templates_recovery_content",
 ] as const;
+
+/**
+ * The auth emails with our own words, as GoTrue names them. Only the two the
+ * app actually sends: a sign-up confirmation and a password reset. Adding one
+ * is a line here, a section in supabase/config.toml and a file in
+ * supabase/templates/. docs/plans/260930h-auth-emails-in-spideryarn-s-voice.md.
+ */
+export const EMAIL_TEMPLATES = ["confirmation", "recovery"] as const;
+
+/**
+ * The fields `templates` writes, built from supabase/config.toml.
+ *
+ * **config.toml is the one home for the subject lines**, and the local stack
+ * reads the same sections, so what production sends and what the local mail
+ * catcher shows cannot drift apart. `content_path` there is relative to the
+ * repo root (the Supabase CLI's convention), so it is resolved against `root`.
+ *
+ * Refuses a missing section, subject or file, a path other than
+ * `supabase/templates/<name>.html`, or a template without exactly one link to
+ * `{{ .ConfirmationURL }}`, rather than sending it: a PATCH of `""` would
+ * quietly put Supabase's default back, and a swapped path would send the wrong
+ * email under the right subject.
+ */
+export function templatesBody(
+  configToml: string,
+  root: string,
+  read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+): Record<string, string> {
+  const config = parseToml(configToml) as {
+    auth?: { email?: { template?: Record<string, { subject?: unknown; content_path?: unknown }> } };
+  };
+  const sections = config.auth?.email?.template ?? {};
+  const body: Record<string, string> = {};
+  for (const name of EMAIL_TEMPLATES) {
+    const section = sections[name];
+    const subject = section?.subject;
+    const contentPath = section?.content_path;
+    if (typeof subject !== "string" || subject.trim() === "") {
+      throw new Error(`supabase/config.toml has no subject for [auth.email.template.${name}].`);
+    }
+    if (typeof contentPath !== "string" || contentPath === "") {
+      throw new Error(`supabase/config.toml has no content_path for [auth.email.template.${name}].`);
+    }
+    const expected = `supabase/templates/${name}.html`;
+    if (path.relative(root, path.resolve(root, contentPath)) !== expected) {
+      throw new Error(`[auth.email.template.${name}] content_path must be ${expected}, not ${contentPath}.`);
+    }
+    const html = read(path.resolve(root, contentPath));
+    /* The link itself, not the variable anywhere: a comment that mentions it
+       would pass a plain `includes` with the button deleted. */
+    if (html.split('href="{{ .ConfirmationURL }}"').length !== 2) {
+      throw new Error(`${contentPath} needs exactly one href="{{ .ConfirmationURL }}", its button.`);
+    }
+    body[`mailer_subjects_${name}`] = subject;
+    body[`mailer_templates_${name}_content`] = html;
+  }
+  return body;
+}
 
 /**
  * Outgoing auth mail — confirmations, password resets, magic links — through
@@ -276,6 +343,9 @@ function display(key: string, value: unknown): string {
     const id = String(value);
     return `${id.slice(0, 12)}… (${id.length} chars)`;
   }
+  if (key.startsWith("mailer_templates_")) {
+    return `<${String(value).length} chars of HTML>`;
+  }
   if (key === "uri_allow_list") {
     const entries = String(value).split(",").filter(Boolean);
     return entries.length === 0 ? "<empty>" : `\n      ${entries.join("\n      ")}`;
@@ -324,11 +394,19 @@ function smtpBody(): Record<string, unknown> {
   return { ...SMTP, smtp_pass: key };
 }
 
+function fileTemplatesBody(): Record<string, string> {
+  try {
+    return templatesBody(readFileSync(path.join(ROOT, "supabase", "config.toml"), "utf8"), ROOT);
+  } catch (error) {
+    die(error instanceof Error ? error.message : String(error));
+  }
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2];
   const dryRun = process.argv.includes("--dry-run");
-  if (command !== "show" && command !== "apply" && command !== "smtp") {
-    die("Usage: npx tsx scripts/supabase-auth-config.ts <show|apply|smtp> [--dry-run]");
+  if (command !== "show" && command !== "apply" && command !== "smtp" && command !== "templates") {
+    die("Usage: npx tsx scripts/supabase-auth-config.ts <show|apply|smtp|templates> [--dry-run]");
   }
 
   const token = process.env.SUPABASE_ACCESS_TOKEN;
@@ -355,7 +433,12 @@ async function main(): Promise<void> {
 
   if (command === "show") return;
 
-  const body = command === "smtp" ? smtpBody() : googleBody();
+  const body =
+    command === "smtp"
+      ? smtpBody()
+      : command === "templates"
+        ? fileTemplatesBody()
+        : googleBody();
 
   console.log("\nwriting:");
   for (const [key, value] of Object.entries(body)) {
@@ -432,7 +515,10 @@ async function main(): Promise<void> {
   console.log(
     command === "smtp"
       ? "Now send a real one: request a password reset, and look for it in Resend's Emails log."
-      : "Now: ./scripts/check-remote-auth.sh   (google must flip to ON)",
+      : command === "templates"
+        ? "Now send a real one: sign up with a fresh address on www.spideryarn.com, and check the\n" +
+          "subject and the button in the inbox (and Resend's Emails log)."
+        : "Now: ./scripts/check-remote-auth.sh   (google must flip to ON)",
   );
 }
 

@@ -408,6 +408,19 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Spideryarn's own words for the two auth emails the app sends. This file is the one home for
+# their subject lines: `npx tsx scripts/supabase-auth-config.ts templates` reads these two
+# sections and writes the same subject and HTML to the hosted project. docs/project/email.md.
+# Locally they load when the stack next starts; with `enable_confirmations = false` above, only
+# the recovery one is ever sent here.
+[auth.email.template.confirmation]
+subject = "Confirm your email for Spideryarn"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Your Spideryarn sign-in link"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
