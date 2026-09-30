@@ -4477,6 +4477,54 @@ export interface SimpleParagraph {
   ids: BlockId[];
 }
 
+/** The stored Simple contract, shared by generation and every read boundary. */
+export const SIMPLE_MIN_PARAGRAPHS = 2;
+export const SIMPLE_MAX_PARAGRAPHS = 4;
+export const SIMPLE_MAX_IDS = 3;
+export const SIMPLE_MAX_WORDS = 320;
+
+/**
+ * Is this a usable stored paragraph list?
+ *
+ * The generator performs the evidence-dependent check that every id belongs
+ * to the exact body it sent. This is the part a reader can check without the
+ * article: the same quantity, text, id and word limits the generator enforces.
+ */
+export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
+  if (
+    !Array.isArray(value) ||
+    value.length < SIMPLE_MIN_PARAGRAPHS ||
+    value.length > SIMPLE_MAX_PARAGRAPHS
+  ) {
+    return false;
+  }
+
+  let words = 0;
+  for (const valueParagraph of value) {
+    if (
+      typeof valueParagraph !== "object" ||
+      valueParagraph === null ||
+      Array.isArray(valueParagraph)
+    ) {
+      return false;
+    }
+    const paragraph = valueParagraph as { text?: unknown; ids?: unknown };
+    if (typeof paragraph.text !== "string" || paragraph.text.trim() === "") return false;
+    words += paragraph.text.trim().split(/\s+/).length;
+
+    if (
+      !Array.isArray(paragraph.ids) ||
+      paragraph.ids.length < 1 ||
+      paragraph.ids.length > SIMPLE_MAX_IDS ||
+      paragraph.ids.some((id) => typeof id !== "string" || id.trim() === "") ||
+      new Set(paragraph.ids).size !== paragraph.ids.length
+    ) {
+      return false;
+    }
+  }
+  return words <= SIMPLE_MAX_WORDS;
+}
+
 /** The artefact. The `simple_summary` column on `article_revisions`. */
 export interface SimpleSummary {
   version: string;

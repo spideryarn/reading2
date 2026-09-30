@@ -12,9 +12,10 @@ import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
-import { SHAPE } from "../src/store/artifacts.js";
+import { SHAPE, whyUnusable } from "../src/store/artifacts.js";
 import type { Block, BlockId } from "../src/types.js";
 import {
+  ANSWER_TOKENS,
   MAX_WORDS,
   SIMPLE_SYSTEM,
   SIMPLE_VERSION,
@@ -24,20 +25,24 @@ import {
   inputFingerprint,
   simpleSystem,
 } from "../src/simple-summary.js";
-import { STAGE_EFFORT } from "../src/models.js";
+import { HIGH_POWER_MODEL, STAGE_EFFORT } from "../src/models.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
 let answer = "";
 let stop: string = "end_turn";
-const sent: { task: string; body: unknown }[] = [];
+const sent: { task: string; body: unknown; options: unknown }[] = [];
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
-    streamMessage: (task: string, body: unknown) => {
-      sent.push({ task, body: JSON.parse(JSON.stringify(body)) });
+    streamMessage: (task: string, body: unknown, options: unknown) => {
+      sent.push({
+        task,
+        body: JSON.parse(JSON.stringify(body)),
+        options: JSON.parse(JSON.stringify(options)),
+      });
       const message = {
         id: "msg_stub",
         type: "message",
@@ -151,14 +156,17 @@ describe("buildSimpleSummary", () => {
     expect(dropped.unknownIds).toBe(3);
   });
 
-  it("dedupes ids, caps them at three, and counts both", () => {
+  it("dedupes ids before capping them at three, and counts both", () => {
     const dropped = emptyDropped();
     const out = build(
-      [para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id), para("Two.", WHY.id)],
+      [
+        para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id, METHOD.id),
+        para("Two.", WHY.id),
+      ],
       dropped,
     );
     expect(out.paragraphs[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
-    expect(dropped.duplicateIds).toBe(1);
+    expect(dropped.duplicateIds).toBe(2);
     expect(dropped.overCap).toBe(1);
   });
 
@@ -194,6 +202,29 @@ describe("buildSimpleSummary", () => {
     );
     expect(() => build([])).toThrow(/Only 0 of the model's 0/);
   });
+
+  it("refuses an invalid paragraph count again at the store boundary", () => {
+    const one = [para("Only one.", INTRO.id)];
+    const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) =>
+      para(`Paragraph ${i}.`, b.id),
+    );
+    expect(whyUnusable("simple", { paragraphs: [] })).toBe('no usable "paragraphs"');
+    expect(whyUnusable("simple", { paragraphs: one })).toBe('no usable "paragraphs"');
+    expect(whyUnusable("simple", { paragraphs: five })).toBe('no usable "paragraphs"');
+    expect(whyUnusable("simple", { paragraphs: [one[0], para("Two.", WHY.id)] })).toBeNull();
+  });
+
+  it("refuses malformed stored paragraphs and the same word ceiling", () => {
+    const overWords = Array.from({ length: MAX_WORDS }, () => "word").join(" ");
+    for (const paragraphs of [
+      [para("", INTRO.id), para("Two.", WHY.id)],
+      [para("One.", INTRO.id, INTRO.id), para("Two.", WHY.id)],
+      [para("One.", INTRO.id, WHY.id, RESULT.id, METHOD.id), para("Two.", WHY.id)],
+      [para(overWords, INTRO.id), para("One more.", WHY.id)],
+    ]) {
+      expect(whyUnusable("simple", { paragraphs })).toBe('no usable "paragraphs"');
+    }
+  });
 });
 
 /* ------------------------------------------------------------ the request -- */
@@ -209,6 +240,11 @@ describe("the request", () => {
 
   it("fails on malformed JSON and stores nothing", async () => {
     answer = "{ this is not json";
+    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
+  });
+
+  it("fails on an empty successful answer", async () => {
+    answer = "";
     await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
   });
 
@@ -249,12 +285,31 @@ describe("the request", () => {
     const [call, ideasCall] = sent;
     if (!call || !ideasCall) throw new Error("expected both calls");
     expect(call.task).toBe("simple");
-    const body = call.body as { system: unknown[]; output_config: { effort: string } };
+    const body = call.body as {
+      max_tokens: number;
+      system: unknown[];
+      output_config: { effort: string };
+    };
     expect(body.system[0]).toEqual((ideasCall.body as { system: unknown[] }).system[0]);
     expect(body.system[1]).toEqual({ type: "text", text: SIMPLE_SYSTEM });
     expect(body.output_config.effort).toBe("high");
+    expect(body.max_tokens).toBe(run.maxTokens);
+    expect(body.max_tokens).toBeGreaterThanOrEqual(ANSWER_TOKENS);
     expect(STAGE_EFFORT.simple).toBe("high");
     expect(run.simpleSummary.sourceHash).toBe(inputFingerprint(noMeta.blocks, noMeta.tree, null));
+  });
+
+  it("sends high power to the gateway and stamps the model that wrote the artefact", async () => {
+    answer = JSON.stringify({
+      paragraphs: [para("About.", INTRO.id), para("Why.", WHY.id)],
+    });
+    const run = await generateSimpleSummary({ power: "high", article: article() });
+    const [call] = sent;
+    if (!call) throw new Error("expected one call");
+
+    expect(call.options).toMatchObject({ power: "high" });
+    expect(run.model).toBe(HIGH_POWER_MODEL);
+    expect(run.simpleSummary.generator).toBe(HIGH_POWER_MODEL);
   });
 
   it("does not go stale when only a supplement block, which the request omits, changes", () => {

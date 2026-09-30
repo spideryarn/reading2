@@ -60,7 +60,7 @@ import type {
   Tree,
   TweetThread,
 } from "../types.js";
-import { isDebateDocument } from "../types.js";
+import { isDebateDocument, isSimpleParagraphs } from "../types.js";
 import { sameGenerator } from "../models.js";
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
@@ -418,9 +418,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
   crossrefs: { field: "links", ok: isArray },
-  /* A `paragraphs` array. `buildSimpleSummary` throws on fewer than two, so an
-     empty one never reaches here from the step. */
-  simple: { field: "paragraphs", ok: isArray },
+  /* Two to four usable paragraphs. `buildSimpleSummary` enforces this on the
+     model's answer; this second check is the store boundary, so a direct or
+     malformed JSONB value cannot make the step report done with an empty band. */
+  simple: { field: "paragraphs", ok: isSimpleParagraphs },
 };
 
 /**

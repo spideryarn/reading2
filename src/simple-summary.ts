@@ -62,7 +62,17 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import type { BlockId, Meta, SimpleParagraph, SimpleSummary, Tree } from "./types.js";
+import {
+  SIMPLE_MAX_IDS,
+  SIMPLE_MAX_PARAGRAPHS,
+  SIMPLE_MAX_WORDS,
+  SIMPLE_MIN_PARAGRAPHS,
+  type BlockId,
+  type Meta,
+  type SimpleParagraph,
+  type SimpleSummary,
+  type Tree,
+} from "./types.js";
 
 export type { SimpleParagraph, SimpleSummary } from "./types.js";
 
@@ -74,20 +84,20 @@ export type { SimpleParagraph, SimpleSummary } from "./types.js";
 export const SIMPLE_VERSION = "simple/1";
 
 /** More is a failure, not a cut. */
-export const MAX_PARAGRAPHS = 4;
+export const MAX_PARAGRAPHS = SIMPLE_MAX_PARAGRAPHS;
 
 /** Fewer surviving validation is a failure: nothing is stored. */
-export const MIN_PARAGRAPHS = 2;
+export const MIN_PARAGRAPHS = SIMPLE_MIN_PARAGRAPHS;
 
 /** Passages per paragraph. Extra ids are dropped and counted. */
-export const MAX_IDS = 3;
+export const MAX_IDS = SIMPLE_MAX_IDS;
 
 /**
  * The hard ceiling on the whole text, in words. The prompt asks for well
  * under 250; this leaves room for a model that runs a little long, and refuses
  * one that has written a digest rather than an orientation.
  */
-export const MAX_WORDS = 320;
+export const MAX_WORDS = SIMPLE_MAX_WORDS;
 
 /**
  * The answer budget in tokens: at most four paragraphs of ~320 words in all
@@ -274,16 +284,17 @@ export function wordCount(text: string): number {
 /** One paragraph's ids: known body evidence, first occurrence, at most `MAX_IDS`. */
 function keptIds(raw: unknown, evidenceIds: ReadonlySet<string>, dropped: SimpleDropped): BlockId[] {
   const ids: BlockId[] = [];
+  const seen = new Set<string>();
   for (const id of Array.isArray(raw) ? raw : []) {
     const s = typeof id === "string" ? id.trim() : "";
     if (!evidenceIds.has(s)) {
       dropped.unknownIds++;
-    } else if (ids.includes(s as BlockId)) {
+    } else if (seen.has(s)) {
       dropped.duplicateIds++;
-    } else if (ids.length >= MAX_IDS) {
-      dropped.overCap++;
     } else {
-      ids.push(s as BlockId);
+      seen.add(s);
+      if (ids.length >= MAX_IDS) dropped.overCap++;
+      else ids.push(s as BlockId);
     }
   }
   return ids;

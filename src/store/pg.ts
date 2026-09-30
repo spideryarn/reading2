@@ -190,6 +190,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
+import { isSimpleParagraphs } from "../types.js";
 import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
@@ -3685,7 +3686,7 @@ const rawPgArticleReader: ArticleReader = {
     const found = await currentRevision(slug, "simpleSummary");
     if (!found) throw notFound(slug);
     const simpleSummary = found.revision.simpleSummary as SimpleSummary | null;
-    if (!simpleSummary || !Array.isArray(simpleSummary.paragraphs)) {
+    if (!simpleSummary || !isSimpleParagraphs(simpleSummary.paragraphs)) {
       throw Object.assign(
         new Error(
           `No plain-words summary for "${slug}" yet. Write one with ` +

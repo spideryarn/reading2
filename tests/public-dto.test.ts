@@ -1672,6 +1672,15 @@ describe("the artefacts a shared link carries", () => {
     }
   });
 
+  it("does not publish a stored Simple artefact outside its 2–4 paragraph contract", () => {
+    const invalid = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      simpleSummary: { ...SIMPLE, paragraphs: [] },
+    });
+    expect("simpleSummary" in invalid).toBe(false);
+  });
+
   /**
    * **Each cited work minus `key` and `found`, and every address re-judged.**
    * Exact nested keys against a list with every field set, so a spread of the

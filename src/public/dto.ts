@@ -89,7 +89,7 @@ import type {
   Tweet,
   TweetThread,
 } from "../types.js";
-import { anchorFields, identifiesOf, readStoredLean } from "../types.js";
+import { anchorFields, identifiesOf, isSimpleParagraphs, readStoredLean } from "../types.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -1033,7 +1033,7 @@ export function publicArticle(row: {
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
     ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
     ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
-    ...(row.simpleSummary !== null
+    ...(row.simpleSummary !== null && isSimpleParagraphs(row.simpleSummary.paragraphs)
       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
       : {}),
     ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),

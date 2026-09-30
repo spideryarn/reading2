@@ -153,11 +153,11 @@ describe("the public revision read", () => {
   });
 
   /**
-   * **The four artefacts slice 1b carries, in the same statement.**
+   * **The generated artefacts the public reader carries, in the same statement.**
    *
    * The point of Greg's "no new endpoints" decision is that they ride on the
    * row the article read already fetches — so what has to be true is not that
-   * four columns are selected somewhere, but that they are selected **by this
+   * their columns are selected somewhere, but that they are selected **by this
    * query**, which is the one carrying `where visibility = 'public'`. A second
    * read that fetched them without the predicate would serve a private
    * article's glossary at a public URL, and every DTO test would stay green
@@ -166,7 +166,18 @@ describe("the public revision read", () => {
    * the same `articleQuery` object the predicate case above reads.
    */
   it("asks for the artefacts on the row it already filtered", () => {
-    for (const column of ["glossary", "ideas", "quotes", "tweets", "timeline", "trajectory", "faq", "citations", "debate"]) {
+    for (const column of [
+      "glossary",
+      "ideas",
+      "quotes",
+      "tweets",
+      "timeline",
+      "trajectory",
+      "faq",
+      "citations",
+      "debate",
+      "simple_summary",
+    ]) {
       expect(article, column).toContain(`"${column}"`);
     }
     /* **And the image manifest, on this same statement.** It is the half of
