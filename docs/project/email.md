@@ -53,7 +53,8 @@ templates were written on 2026-09-30 and not applied by the session that wrote t
 is a production write:
 [260930h](../plans/260930h-auth-emails-in-spideryarn-s-voice.md) has the steps.
 
-Three rules the HTML keeps, and `tests/auth-email-templates.test.ts` pins the first two:
+Three rules the HTML keeps; the production writer refuses the first two when they are broken, and
+`tests/auth-email-templates.test.ts` pins them:
 
 - **The button's link is `{{ .ConfirmationURL }}`, verbatim, and nothing else.** GoTrue builds it,
   so the redirect allow-list still decides where a one-time code may be sent.
@@ -66,11 +67,13 @@ Supabase's, because the app sends none of them.
 
 **A password reset cannot complete in the app yet.** There is no "Forgot password?" link and no
 set-a-new-password screen. A reset sent from the dashboard lands as an implicit-flow link that our
-PKCE client refuses. The plan above has the measurement and the deferred build.
+PKCE client refuses. That is why the recovery email says only "Continue to Spideryarn", rather than
+promising a reset or a completed login. The plan above has the measurement and the deferred build.
 
 ## See also
 
 - [auth.md](auth.md): what the confirmation email is for, and the sign-in flow around it
 - [website-text.md § The contact address](website-text.md#the-contact-address): why the sender is
   `hello@`
-- [`scripts/supabase-auth-config.ts`](../../scripts/supabase-auth-config.ts): the `smtp` command
+- [`scripts/supabase-auth-config.ts`](../../scripts/supabase-auth-config.ts): the `smtp` and
+  `templates` commands

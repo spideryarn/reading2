@@ -29,22 +29,28 @@ describe.each(EMAIL_TEMPLATES)("the %s email", (name) => {
      that decision into this HTML. */
   it("has one button, and it carries Supabase's own link unaltered", () => {
     const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs.filter((h) => h !== "mailto:hello@spideryarn.com")).toEqual([
+    expect(hrefs).toEqual([
       "{{ .ConfirmationURL }}",
+      "mailto:hello@spideryarn.com",
     ]);
   });
 
   it("uses no other template value", () => {
     const actions = [...html.matchAll(/\{\{[^}]*\}\}/g)].map((m) => m[0]);
-    expect(new Set(actions)).toEqual(new Set(["{{ .ConfirmationURL }}"]));
-    /* An unbalanced brace is a Go template parse error, and GoTrue then sends
-       its own default. */
-    expect(html.split("{{").length).toBe(html.split("}}").length);
+    expect(actions).toEqual(["{{ .ConfirmationURL }}"]);
+    /* Anything left over is an incomplete Go-template action. GoTrue would
+       silently fall back to its default template. */
+    expect(html.replace("{{ .ConfirmationURL }}", "")).not.toMatch(/\{\{|\}\}/);
   });
 
   it("is ours, not Supabase's boilerplate", () => {
     expect(html).toContain("Spideryarn");
     expect(html).not.toMatch(/Confirm your signup|Follow this link/i);
+    if (name === "recovery") {
+      /* Dashboard-sent recovery links are implicit-flow links, which this
+         app's PKCE client refuses. The email must not promise they sign in. */
+      expect(html).not.toMatch(/sign(?:-| )?in link|signs you in|sign me in/i);
+    }
   });
 });
 
@@ -58,7 +64,10 @@ describe("templatesBody", () => {
       "mailer_templates_recovery_content",
     ]);
     expect(body.mailer_subjects_confirmation).toBe("Confirm your email for Spideryarn");
-    expect(body.mailer_subjects_recovery).toBe("Your Spideryarn sign-in link");
+    expect(body.mailer_subjects_recovery).toBe("Continue to Spideryarn");
+    expect(body.mailer_templates_confirmation_content).toBe(
+      readFileSync(path.join(ROOT, "supabase", "templates", "confirmation.html"), "utf8"),
+    );
     expect(body.mailer_templates_recovery_content).toBe(
       readFileSync(path.join(ROOT, "supabase", "templates", "recovery.html"), "utf8"),
     );
@@ -68,15 +77,50 @@ describe("templatesBody", () => {
      so each gap must stop the command rather than send "". */
   it("refuses a missing section, subject or file, and a template with no link", () => {
     const without = (needle: string) => CONFIG.replace(needle, "");
-    expect(() => templatesBody(without("[auth.email.template.recovery]"), ROOT)).toThrow();
+    const recoverySection = `[auth.email.template.recovery]
+subject = "Continue to Spideryarn"
+content_path = "./supabase/templates/recovery.html"
+`;
+    expect(() => templatesBody(without(recoverySection), ROOT)).toThrow(
+      /no subject for \[auth\.email\.template\.recovery\]/,
+    );
     expect(() =>
-      templatesBody(without('subject = "Your Spideryarn sign-in link"'), ROOT),
+      templatesBody(without('subject = "Continue to Spideryarn"'), ROOT),
     ).toThrow(/no subject for \[auth\.email\.template\.recovery\]/);
     /* Not merely the variable somewhere in the file: a comment mentioning it
        would satisfy that with the button deleted. GPT Sol, plan review. */
     expect(() =>
       templatesBody(CONFIG, ROOT, () => "<!-- {{ .ConfirmationURL }} --><p>no button</p>"),
     ).toThrow(/exactly one href="\{\{ \.ConfirmationURL \}\}"/);
+  });
+
+  it("refuses another link or another Go-template action", () => {
+    const confirmation = readFileSync(
+      path.join(ROOT, "supabase", "templates", "confirmation.html"),
+      "utf8",
+    );
+    expect(() =>
+      templatesBody(CONFIG, ROOT, () =>
+        confirmation.replace("</body>", '<a href="https://example.com">elsewhere</a></body>'),
+      ),
+    ).toThrow(/one action link and one hello@ mailto link/);
+    expect(() =>
+      templatesBody(CONFIG, ROOT, () => confirmation.replace("</body>", "{{ .Email }}</body>")),
+    ).toThrow(/only Go-template action/);
+  });
+
+  it("does not mistake a commented-out action link for a working one", () => {
+    const confirmation = readFileSync(
+      path.join(ROOT, "supabase", "templates", "confirmation.html"),
+      "utf8",
+    );
+    const withoutWorkingButton = confirmation.replace(
+      /<a href="\{\{ \.ConfirmationURL \}\}"[^>]*>.*?<\/a>/,
+      '<!-- <a href="{{ .ConfirmationURL }}">not rendered</a> -->',
+    );
+    expect(() => templatesBody(CONFIG, ROOT, () => withoutWorkingButton)).toThrow(
+      /exactly one href="\{\{ \.ConfirmationURL \}\}"/,
+    );
   });
 
   /* A swapped or stray path would upload the wrong email under the right

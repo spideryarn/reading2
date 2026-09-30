@@ -21,22 +21,25 @@ smtp`), so the sender was ours and the words were not.
 
 1. **Two HTML files, one per email Greg named**: `supabase/templates/confirmation.html` (sign-up)
    and `supabase/templates/recovery.html` (password reset). The subjects are "Confirm your email for
-   Spideryarn" and "Your Spideryarn sign-in link". The second is not "Reset your password", because
-   the app cannot reset one yet (§ The finding, below).
+   Spideryarn" and "Continue to Spideryarn". The second promises neither a reset nor a completed
+   login, because which flow its link uses depends on how the email was requested (§ The finding,
+   below).
 2. **`supabase/config.toml` points the local stack at them**: `[auth.email.template.confirmation]`
    and `[auth.email.template.recovery]`, each a `subject` and a `content_path`. **That file is the
    one home for the subject lines.** The production script reads them from there.
 3. **`scripts/supabase-auth-config.ts templates`**, a fourth command beside `show`, `apply` and
    `smtp`. It reads the two sections out of `config.toml` with `smol-toml`, which is already a
    dependency, then reads the HTML files they name. It refuses a path other than
-   `supabase/templates/<name>.html`, and a file without exactly one `href="{{ .ConfirmationURL }}"`. It PATCHes `mailer_subjects_{confirmation,recovery}` and
+   `supabase/templates/<name>.html`, a file with any Go-template action other than the one
+   `href="{{ .ConfirmationURL }}"`, or any link beyond that action and the `hello@` mailto link. It PATCHes `mailer_subjects_{confirmation,recovery}` and
    `mailer_templates_{confirmation,recovery}_content`, and reads them back. The field names come
    from the live OpenAPI schema `UpdateAuthConfigBody` (read 2026-09-30), not from memory: that API
    ignores keys it does not know, so a misspelled one would return 200 and change nothing. `--dry-run` works as for
    the others.
 4. **A test**, `tests/auth-email-templates.test.ts`, which checks what we can check without a
    server:
-   - each template has exactly one link, and its target is exactly `{{ .ConfirmationURL }}`;
+   - each template has exactly one action link, whose target is `{{ .ConfirmationURL }}`, and the
+     one `hello@` mailto link;
    - no other Go-template variable appears;
    - the subjects and paths the script would send are the ones in `config.toml`.
 
@@ -101,6 +104,11 @@ dashboard-style recovery link: 303 -> http://127.0.0.1:5999#access_token=<…>&�
 PASS
 ```
 
+That is the literal output from the second run. Code review then found that "sign-in link" still
+promised too much for a dashboard-requested recovery, and changed the subject to "Continue to
+Spideryarn" and the button to "Continue". **A third run, with that final copy, printed the same lines
+with `recovery subject: Continue to Spideryarn`, and PASS.**
+
 The script is kept beside this plan as [`260930h-spike-e2e.mjs`](260930h-spike-e2e.mjs). Its import is
 an absolute path into this worktree, so re-running it means editing that line. It was run twice: first
 with absolute `content_path`s, then with the repo's relative `./supabase/templates/…`, symlinked into
@@ -109,6 +117,7 @@ the spike project, which shows the CLI resolves them from the project root.
 Screenshots, from the mail catcher at desktop and phone width:
 [confirmation](260930h-shot-confirmation-desktop.png) ([phone](260930h-shot-confirmation-phone.png)),
 [recovery](260930h-shot-recovery-desktop.png) ([phone](260930h-shot-recovery-phone.png)).
+All four were taken again after each wording change, so they show the final copy.
 
 In words: the email arrives with our subject and our body. The link in our button goes back to the
 callback with a PKCE code, and that code signs you in. After a reset, `updateUser` sets a new password: the old one is refused and the new
@@ -132,13 +141,13 @@ This is a finding, and not something the templates cause:
 - **Even signed in, there is nowhere to choose a new password.** Nothing in `src/web/` calls
   `updateUser`.
 
-**So the recovery email says what its link does, and no more**: "Your sign-in link", a button that
-says "Sign me in", and no promise of a new password. That is true of a reset the app requests
-(the PKCE spike above signs you in). A dashboard-sent reset still lands signed out, whatever the words
-say. The first draft said "signs you in so you can choose a new one", and GPT Sol's plan review
-caught that as a promise the app cannot keep. **When the set-a-new-password step is built, the
-recovery words change with it**, and the template's header comment says so. Building that step is
-the deferred rest (below). It is a feature with its own auth surface, not a rewording.
+**So the recovery email promises only that its button continues the recovery attempt**: "Continue to
+Spideryarn", a button that says "Continue", and no claim that it resets the password or completes a
+login. An app-requested recovery uses PKCE and signs in; a dashboard-requested one still lands signed
+out. The first draft promised a new password, and the plan-review revision still called it a sign-in
+link. Code review caught the remaining false promise. **When the set-a-new-password step is built,
+the recovery words change with it**, and the template's header comment says so. Building that step
+is the deferred rest (below). It is a feature with its own auth surface, not a rewording.
 
 ## Security
 
@@ -157,7 +166,7 @@ This is a write to the hosted project's configuration, so this session did not d
 project ref. From a checkout of `dev` that contains this commit:
 
 ```
-npx tsx scripts/supabase-auth-config.ts templates --dry-run   # prints the two subjects and byte counts
+npx tsx scripts/supabase-auth-config.ts templates --dry-run   # prints the two subjects and HTML character counts
 npx tsx scripts/supabase-auth-config.ts templates             # writes, then reads back all four fields
 ```
 
@@ -167,7 +176,7 @@ Then the real check, as for `smtp`:
    Spideryarn with the subject "Confirm your email for Spideryarn", and its button should confirm the
    account.
 2. **Recovery:** from the dashboard, *Authentication → Users → … → Send password recovery* to the
-   same address. It should arrive as "Your Spideryarn sign-in link", in our layout. **Its button will
+   same address. It should arrive as "Continue to Spideryarn", in our layout. **Its button will
    not sign you in**. That is the pre-existing gap above, not the template.
 3. **Resend click tracking must be off** (Resend → Domains → spideryarn.com → Configuration). It is
    off by default. If it were on, Resend would rewrite every link, including the one-time one. This
@@ -199,16 +208,21 @@ or PATCH the four fields back to empty strings.
 
 - **Plan: GPT Sol, read-only, 2026-09-30:**
   [260930h-auth-emails-review-plan-sol.md](260930h-auth-emails-review-plan-sol.md). Verdict *build
-  with changes*: seven findings, all taken.
-  1. The recovery copy promised a new password (reworded, above).
+  with changes*: seven findings, all ultimately taken; code review tightened 1, 3 and 6 after finding
+  their first implementations incomplete.
+  1. The recovery copy promised an outcome the app could not provide (now neutral, above).
   2. Scanners and Resend click tracking (deferred, and a production-check step).
-  3. The guard was satisfied by a comment (it now counts `href`s, and the comment no longer holds the
-     variable).
+  3. The guard was satisfied by a comment (it now requires exactly the action and mailto links, and
+     rejects any other Go-template action).
   4. Classic Outlook (a `<td bgcolor>` button and `width="480"`).
   5. The dashboard-reset claim was not in the spike (step 3 added, and the inference marked).
-  6. `content_path` was too permissive (pinned to `supabase/templates/<name>.html`, tested both ways).
+  6. `content_path` was too permissive (pinned to `supabase/templates/<name>.html`, with both file
+     bodies asserted in the test).
   7. Footer contrast (`#737373` to `#a3a3a3`).
 
   It confirmed that `{{ .ConfirmationURL }}` is right for both emails under PKCE, and that the four
   field names are right.
-- Code: GPT Sol — below once it has run.
+- **Code: GPT Sol, 2026-09-30:** found the incomplete recovery promise and production-template
+  guard above, strengthened the tests, and corrected the dry-run description from bytes to
+  characters. Its answer: [260930h-auth-emails-review-code-sol.md](260930h-auth-emails-review-code-sol.md).
+  Its diff was read, then the focused tests (29 passed), the typecheck and the spike were re-run on it.

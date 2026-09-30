@@ -418,7 +418,7 @@ subject = "Confirm your email for Spideryarn"
 content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.recovery]
-subject = "Your Spideryarn sign-in link"
+subject = "Continue to Spideryarn"
 content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize email template
