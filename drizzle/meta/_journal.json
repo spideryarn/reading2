@@ -705,8 +705,15 @@
     {
       "idx": 100,
       "version": "7",
-      "when": 1790766800103,
-      "tag": "20260930111320_article_high_power_since",
+      "when": 1790763831944,
+      "tag": "20260930102351_ai_calls_article_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1790773314405,
+      "tag": "20260930130154_article_high_power_since",
       "breakpoints": true
     }
   ]

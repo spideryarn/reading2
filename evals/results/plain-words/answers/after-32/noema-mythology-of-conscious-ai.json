@@ -1,0 +1,64 @@
+{
+  "arm": "after-32",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceSha256": {
+    "explain.ts": "cd5f9c050ab73f7684aee08f43abf2f1f555bc328bdc1d3a6a237bf5d6d27ce9",
+    "converse.ts": "2b7329e05e4ecdee9c048ca96858e228e86a26ac1e1bf249e34dcc224f35a4e5"
+  },
+  "blocksSha256": "350eaeb20348e322b9e7b99c2057a367301483d8cc9abd8f00ac9e48795f183d",
+  "at": "2026-09-30T11:50:40.843Z",
+  "answers": [
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "term": "computational functionalism",
+      "kind": "term",
+      "asked": "computational functionalism",
+      "text": "Computational functionalism is the name philosophers give to a specific assumption the whole essay is built to test: \"that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise.\" In other words, on this view, what a system is made of doesn't matter — only what it does, computationally. If you run the right program, on the right kind of information-processing structure, consciousness follows, whether that program runs on neurons, silicon, or in principle anything else capable of the same computation. Later in the piece Seth restates it even more sharply as \"the claim that (algorithmic) computation is sufficient for consciousness.\"\n\nThe reason the term matters here is that Seth treats it as the hidden load-bearing wall under most talk of conscious AI: \"The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.\" He notes that \"This assumption... is so deeply ingrained that it can be difficult to recognize it as an assumption at all. But that is what it is,\" and the rest of the section is his attempt to argue that it's false — that brains aren't Turing-style computers in the relevant sense, that other non-computational dynamics may matter, that biological life itself may be necessary, and that simulating a process isn't the same as instantiating it. As background beyond the article: computational functionalism is a real position in philosophy of mind with roots in the work of Hilary Putnam and others in the mid-20th century, who argued mental states are defined by their functional/causal role rather than their physical substrate — the idea Seth is here narrowing specifically to computation in the Turing-machine sense, so he can attack that narrower version directly.",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "term": "computational functionalism",
+      "kind": "sentence",
+      "asked": "This assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all.",
+      "text": "This is naming the assumption the whole essay is built around attacking: the idea, as the surrounding text puts it, \"that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise.\" The philosophical label for this position is computational functionalism — the view that consciousness is a matter of running the right program, regardless of what physical material does the running.\n\nThe point of calling it \"deeply ingrained\" is that this isn't usually argued for; it's the silent premise underneath most talk of AI consciousness. If a chatbot processes information in a sufficiently brain-like way, people assume it must be having experiences — without ever pausing to check whether \"processes information the right way\" is actually enough for something to feel like anything from the inside. The essay is flagging this now because everything that follows (the four arguments about brains not being computers, life mattering, simulation versus instantiation, and so on) is aimed at showing that this assumption, quietly taken for granted, doesn't hold up once you examine it directly — and that \"if it's wrong, as I think it may be, then real artificial consciousness is fully off the table, at least for the kinds of AI we're familiar with.\"",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "term": "computational functionalism",
+      "kind": "chat",
+      "asked": "What does \"computational functionalism\" mean here, and why does it matter to the argument?",
+      "text": "Computational functionalism, in Seth's usage, is the assumption that implementing the right kind of computation, or information processing, is sufficient for consciousness to arise, regardless of what physical material carries it out [spya-wepmnr]. He treats this as the hidden load-bearing premise of the whole \"conscious AI\" debate: the very idea of conscious AI rests on that assumption, and it is so deeply ingrained that it can be difficult to recognize it as an assumption at all [spya-wepmnr].\n\nWhy it matters structurally: Seth says that if this assumption is wrong, real artificial consciousness is fully off the table, at least for the kinds of AI we're familiar with [spya-wepmnr]. His four arguments — that brains are not computers, that there are other, non-Turing forms of computation and dynamics, that life itself may matter, and that simulation is not instantiation — are all really different ways of attacking this one premise [spya-cv97j7 spya-ymbpwn]. He makes the dependency explicit at the end: a computational simulation of the brain, however detailed, will only give rise to consciousness if consciousness is a matter of computation, so projects like whole-brain emulation or mind-uploading already assume computational functionalism is true rather than proving it [spya-pbcr03 spya-mtzbbg]. He even points out that Bostrom's simulation-hypothesis argument quietly smuggles in the same unexamined assumption — that a computer running a suitable program would be conscious — treating it as given rather than defending it [spya-xdy4fe].\n\nSo the term names the fork in the road: accept computational functionalism, and conscious AI is a live, perhaps inevitable, prospect; reject it — as Seth leans toward doing, while conceding it remains a minority view [spya-qu7j89] — and the entire mythology of imminent machine consciousness loses its foundation.",
+      "searches": 0
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "term": "autopoiesis",
+      "kind": "term",
+      "asked": "autopoiesis",
+      "text": "Autopoiesis is a term from biology and systems theory, coined in the early 1970s by the Chilean biologists Humberto Maturana and Francisco Varela. It describes what makes something a living system in the first place: not just that it moves or reproduces, but that it continuously builds and repairs itself using its own internal processes, regenerating the very components and boundaries that keep it existing as a distinct entity. A cell is the paradigm case — its metabolism is constantly producing the molecules and membranes that constitute the cell itself, so that the process and the thing it produces are one and the same.\n\nIn the passage, Seth uses this concept to make a specific point against treating brains as computers: even a single neuron is \"busy maintaining its own integrity and regenerating the conditions and material basis for its own continued existence,\" a process he calls autopoiesis, which he says \"is arguably a defining and distinctive characteristic of living systems.\" The point is that this self-producing activity isn't incidental to what a neuron does — it's bound up with what a neuron is, in a way that has no equivalent in a silicon chip, which just sits there being acted on rather than continuously remaking itself. This sets up the essay's later argument, in the section on why \"life matters,\" that this same self-sustaining, self-regenerating character of living matter may be inseparable from the very processes that give rise to conscious experience.",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "term": "autopoiesis",
+      "kind": "sentence",
+      "asked": "(This process is called autopoiesis, from the Greek for “self-production.” Autopoiesis is arguably a defining and distinctive characteristic of living systems.)",
+      "text": "Autopoiesis is a concept from biology and systems theory, most closely associated with the Chilean biologists Humberto Maturana and Francisco Varela, who coined the term in the 1970s to describe how living systems continuously produce and maintain themselves. Here Seth uses it to describe something he's just pointed to in the neuron: that even a single neuron is a spectacularly complicated biological machine, busy maintaining its own integrity and regenerating the conditions and material basis for its own continued existence. The Greek roots are \"auto\" (self) and \"poiesis\" (making) — so a self-making system, one that spends its own activity constantly rebuilding the very structure that does the activity, rather than just running on fixed hardware the way a computer does.\n\nThis is doing real work in the essay's larger argument, not just supplying a fun etymology. Seth is building toward the claim that brains can't be cleanly split into \"software\" and \"hardware\" the way computers can, because a living neuron isn't just executing a program on stable material — it's continually remaking that material as part of what it does. A few sentences later he calls this \"a defining and distinctive characteristic of living systems,\" setting up his later argument (in the section on \"biological naturalism\") that this self-sustaining, life-specific process might be part of what consciousness actually depends on — something silicon, which doesn't need to continuously regenerate itself to keep functioning, simply doesn't do.",
+      "searches": 0,
+      "ending": "finished"
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "term": "autopoiesis",
+      "kind": "chat",
+      "asked": "What does \"autopoiesis\" mean here, and why does it matter to the argument?",
+      "text": "In this piece, autopoiesis names the self-producing activity of a living cell or organism: it is constantly rebuilding the very material conditions that keep it existing, rather than just running a fixed process on inert hardware. The article defines it directly: even a single neuron is \"a spectacularly complicated biological machine, busy maintaining its own integrity and regenerating the conditions and material basis for its own continued existence,\" and it names this \"autopoiesis, from the Greek for 'self-production.'\" The piece adds that \"autopoiesis is arguably a defining and distinctive characteristic of living systems\" [spya-cf8rt8].\n\nWhy it matters to the argument: it is the biological fact that underwrites Seth's case that brains cannot be cleanly split into \"mindware\" running on \"wetware\" the way software runs on hardware. He states this contrast directly — brains, unlike computers, are things where \"it is difficult, and likely impossible, to separate what they do from what they are\" [spya-zw2m7u]. Autopoiesis is the concrete mechanism behind that claim: a self-maintaining system's identity is inseparable from its ongoing material activity, so you cannot lift out \"the computation it's doing\" as something substrate-independent. That in turn feeds his broader argument against computational functionalism — the assumption that the right computation is enough for consciousness — since evidence that the materiality of the brain matters for its function is evidence against the idea that digital computation is all that counts, which is evidence against computational functionalism [spya-p4vmm0].\n\nAutopoiesis resurfaces later as the biological root of his positive proposal (biological naturalism): he traces a line from the ubiquitous process of prediction error minimization becoming inseparable from the materiality of life itself, drawn directly from the self-producing, autopoietic nature of biological material all the way to the Bayesian best-guessing that underpins perceptual experience [spya-vys3vj]. So the term does double duty: it is his evidence that brains resist the software/hardware split computers rely on, and it is the biological glue connecting his account of life to his account of why experience feels the way it does.",
+      "searches": 0
+    }
+  ]
+}

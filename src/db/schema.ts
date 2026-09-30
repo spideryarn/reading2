@@ -3039,6 +3039,12 @@ export const aiCalls = spideryarn.table(
     /** "What did this ingest cost", asked once per job at the end of it. */
     index("ai_calls_job").on(t.jobId),
     /**
+     * "What has this article cost, over its whole life" — the metadata page's
+     * administrator section (src/store/ai-calls-spend-pg.ts § `belongsTo`).
+     * The slug fallback in the same predicate rides `ai_calls_owner_started`.
+     */
+    index("ai_calls_article").on(t.articleId),
+    /**
      * "What did the product cost, as opposed to the measuring of it" — the
      * split `npm run cost` leads with, because a bake-off's forty PDF pages
      * landing in the number Greg sets a price against is how a price gets set

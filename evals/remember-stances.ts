@@ -266,7 +266,7 @@ async function main(): Promise<void> {
   say(`Article: \`${dir}\` (${blocks.length} blocks)`);
   say();
   say(
-    "Seven readers × four stances. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of `evals/remember-stances.ts`.",
+    "Eight readers × four stances. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of `evals/remember-stances.ts`.",
   );
   say();
 

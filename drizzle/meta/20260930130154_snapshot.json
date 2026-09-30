@@ -1,6 +1,6 @@
 {
-  "id": "e233aaac-d778-47e6-8ccb-f17fe387b322",
-  "prevId": "bc488b16-b05c-43a6-9ef8-095e99b05f58",
+  "id": "a685fc0d-49f7-4dfe-8406-70081dcd1add",
+  "prevId": "70020ec2-5963-414c-8a43-483d527f7a67",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -331,6 +331,21 @@
           "columns": [
             {
               "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_calls_article": {
+          "name": "ai_calls_article",
+          "columns": [
+            {
+              "expression": "article_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

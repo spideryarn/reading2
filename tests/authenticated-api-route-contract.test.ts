@@ -379,6 +379,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/feedback/w1/w2/screenshot"],
   },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/articles/w1/cost"],
+  },
   // -------------------------------------------------------- library / shelf
   {
     match: { kind: "literal", path: "/api/library" },
@@ -1267,8 +1272,19 @@ interface ParsedTableEntry {
 }
 
 const ENTRY_KEYS: Record<"exact" | "pattern", string[]> = {
-  exact: ["kind", "method", "path", "handler"],
-  pattern: ["kind", "method", "pattern", "handler"],
+  exact: ["kind", "method", "path", "article", "handler"],
+  pattern: ["kind", "method", "pattern", "article", "handler"],
+};
+
+/**
+ * **Where a row's spend is attributed** (src/routes.ts § `ArticleAttribution`,
+ * docs/project/cost-tracking.md): a literal, one of these, and never
+ * `"first-capture"` on an exact row, which has no capture. The type says the
+ * same; this says it about the literal the table actually holds.
+ */
+const ARTICLE_VALUES: Record<"exact" | "pattern", string[]> = {
+  exact: ["handler", "none"],
+  pattern: ["first-capture", "handler", "none"],
 };
 
 /**
@@ -1383,6 +1399,14 @@ function readTableEntry(element: unknown, constants: Map<string, AstNode>): Pars
   const expected = ENTRY_KEYS[kind];
   if (sorted([...byKey.keys()]).join(",") !== sorted(expected).join(",")) {
     refuse(element, `an ${ROUTE_TABLE} \`${kind}\` entry whose keys are not ${expected.join(", ")}`);
+  }
+
+  const article = stringValue(byKey.get("article"));
+  if (article === undefined || !ARTICLE_VALUES[kind].includes(article)) {
+    refuse(
+      element,
+      `an ${ROUTE_TABLE} \`${kind}\` entry whose \`article\` is not one of ${ARTICLE_VALUES[kind].join(", ")}`,
+    );
   }
 
   const handler = byKey.get("handler");
@@ -1938,6 +1962,8 @@ describe("the authenticated API's route contract", () => {
         // High-powered AI's switch, 260930f — added between the two feedback reads
         "PUT regex /^\\/api\\/admin\\/article\\/([\\w.%-]+)\\/high-power$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
+        // one article's cost, for the metadata page, 260930f
+        "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
         "GET literal /api/library",
         "GET literal /api/library/search",
         "GET literal /api/library/terms",
@@ -2161,7 +2187,10 @@ describe("the authenticated API's route contract", () => {
         ROUTE_TABLE,
       );
 
-    const HANDLER = "handler: async () => {}";
+    /* Every row answers `article` (src/routes.ts § `ArticleAttribution`), so a
+       fixture row that did not would be refused for its keys and a refusal
+       below would pass for the wrong reason. */
+    const HANDLER = 'article: "none", handler: async () => {}';
 
     it("reads a row that is only literals", () => {
       /* The positive half: without it every refusal below is equally consistent
@@ -2212,7 +2241,12 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       ["a call builds the path", `{ kind: "exact", method: "GET", path: apiPath("x"), ${HANDLER} }`],
       ["a call builds the row", `buildRoute("/api/x")`],
       ["the row is spread in", `...MORE_ROUTES`],
-      ["the handler is named elsewhere", `{ kind: "exact", method: "GET", path: "/api/x", handler: billingUsageHandler }`],
+      ["the handler is named elsewhere", `{ kind: "exact", method: "GET", path: "/api/x", article: "none", handler: billingUsageHandler }`],
+      /* Where the spend goes is answered on every row, as a literal, and an
+         exact path has no capture to take a slug from. */
+      ["a row says nothing about its article", `{ kind: "exact", method: "GET", path: "/api/x", handler: async () => {} }`],
+      ["an exact row claims a capture it cannot have", `{ kind: "exact", method: "GET", path: "/api/x", article: "first-capture", handler: async () => {} }`],
+      ["the article is not a literal", `{ kind: "pattern", method: "GET", pattern: /^\\/api\\/x$/, article: WHERE, handler: async () => {} }`],
       /* An identifier is resolved only against a module-scope `const` holding a
          string or regex literal, so one this file does not declare — or one
          holding anything a call could have built — is still a refusal. */

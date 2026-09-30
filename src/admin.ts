@@ -419,3 +419,59 @@ export function formatSpendNanos(nanos: number): string {
   if (nanos !== 0 && Math.abs(dollars) < 0.0001) return `$${dollars.toFixed(8)}`;
   return `$${dollars.toFixed(4)}`;
 }
+
+/* ---------------------------------------------------------- article cost -- */
+
+/**
+ * **What one article has cost in model calls, as the administrator sees it on
+ * the metadata page.** `GET /api/admin/articles/:slug/cost`;
+ * docs/project/cost-tracking.md.
+ *
+ * Here rather than in the store because the browser reads it and this module
+ * imports nothing — the same reason `AdminUser` is here.
+ *
+ * Money is **nano-dollars in three pockets**, never one pre-added figure, for
+ * the reason `totalRows()` gives in src/store/ai-calls.ts: `credits` is what
+ * OpenRouter settled, `byok` was billed to somebody else's key, `computed` is
+ * our own arithmetic over a price table. A caller adds them on purpose.
+ */
+export interface ArticleCostLine {
+  /** `ai_calls.scope_kind` — `job_step`, `request`, `eval`, `cli`. */
+  scopeKind: string;
+  /** `ai_calls.purpose` — the `AiJob`: `hierarchy`, `labels`, `chat`, … */
+  job: string;
+  /** The pipeline step, for step-scoped work; `null` for a request. */
+  stepName: string | null;
+  /** src/cost-categories.ts § `costCategoryOf`, computed on the server. */
+  category: string;
+  calls: number;
+  creditsNanos: number;
+  byokNanos: number;
+  computedNanos: number;
+  /** Priced by our own arithmetic rather than settled by the provider. */
+  computedCalls: number;
+  /** Happened and reported no money — the total is short by these. */
+  unpricedCalls: number;
+  /** Errored or aborted — a retry pays again, so these are worth seeing. */
+  nonOkCalls: number;
+  /** ISO, earliest and latest `started_at` in the group. */
+  firstAt: string;
+  lastAt: string;
+}
+
+export interface ArticleCost {
+  slug: string;
+  lines: ArticleCostLine[];
+  /**
+   * Live conversations on this article whose channel opened and which never
+   * reported a single turn — the voice equivalent of an unpriced call, and a
+   * row nobody can see from `lines` because it never became one. `null` when
+   * this database has no `realtime_sessions` table to ask.
+   */
+  silentLiveSessions: number | null;
+}
+
+/** A line's money, the three pockets added — the one place the page adds them. */
+export function articleCostLineNanos(line: ArticleCostLine): number {
+  return line.creditsNanos + line.byokNanos + line.computedNanos;
+}

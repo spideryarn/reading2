@@ -1,0 +1,22 @@
+## Findings
+
+1. **FIXED — Asked-row focus was lost when `ChatDialog` closed.** The dialog already focuses its close button on open, but the drawer row is unmounted, leaving no valid return target. It now falls back to Comments after the existing gutter fallback. Regression test was observed failing before the fix. [ChatDialog.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/ChatDialog.tsx:402), [ChatDialog.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/ChatDialog.tsx:486), [focus test](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/tests/chat-dialog-gives-focus-back.test.tsx:203). These two files were outside the original change but required for the focus fix.
+
+2. **FIXED — Partial loading was asymmetric.** Comments already loaded/questions pending showed a loader, but questions already loaded/comments pending silently looked complete. The drawer now uses the combined loading state in both directions. The new mirror test failed before the fix. [Dock.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/Dock.tsx:3615), [Dock.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/Dock.tsx:3686), [test](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/tests/asked-questions-in-the-comments-drawer.test.tsx:186).
+
+3. **FIXED — The history documentation missed Remember’s deliberate push.** `mode` is current because it is a callback dependency. In Remember, `setMode("chat")` and the thread/jump setters run synchronously and batch into one entry; Chat then reads the shared `?thread=`. An away passage scrolls underneath the covering band, preserving the correct article position for when the band leaves. For here/orphan rows, Remember still pushes once so Back returns to Remember; other modes do not. The plan and code comments now state that exception accurately. [Reader.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/reader/Reader.tsx:1394), [Reader.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/reader/Reader.tsx:1419), [plan](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/docs/plans/260930f-gutter-questions-listed-in-the-comments-drawer.md:148).
+
+4. **FIXED — Fit and ownership needed direct, non-vacuous proof.** Added a 9→10 fit-signature assertion and a hostile visitor-prop test. The runtime gate derives asked rows and `onOpenAsked` only from the owner arm, so visitors receive neither even if an invalid caller injects `asked`. [Dock.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/Dock.tsx:1494), [Dock.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/Dock.tsx:1596), [tests](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/tests/asked-questions-in-the-comments-drawer.test.tsx:209).
+
+5. **FIXED — The remaining plan-review findings are correctly implemented.** Asked rows render no `lastLine`; linked `threadId`s are excluded; errors appear over partial lists and are cleared when a new slug fetch begins. [Dock.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/Dock.tsx:3648), [useChatAnchors.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/useChatAnchors.ts:141), [useChatAnchors.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb6w-gutter-question-findable/src/web/useChatAnchors.ts:293).
+
+Validation:
+
+- Required Vitest command: 59/59 passed.
+- Focus regression suite: 11/11 passed.
+- Typecheck: all 2,414 files passed via `node --import tsx scripts/typecheck.ts`. The literal npm wrapper was attempted but its `tsx` CLI IPC socket was denied by the sandbox.
+- Scoped Biome check: no errors; existing complexity/style advisories remain.
+- Full `npm test` could not start because the sandbox cannot reach the local Postgres/Docker service.
+- No commit made; the pre-existing untracked review-prompt file was untouched.
+
+Verdict: **Ship with the fixes above; no remaining functional blocker found.**

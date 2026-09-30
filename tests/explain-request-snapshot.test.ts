@@ -93,13 +93,13 @@ describe("the explain request does not move", () => {
   it("ordinary", async () => {
     const serialised = await requestFor({});
     expect(serialised).toMatchSnapshot();
-    expect(sha(serialised)).toMatchInlineSnapshot(`"582dd39acb6878fed1c3de8849cfb06506ef0d1074d6ba41ab3db14633d0420d"`);
+    expect(sha(serialised)).toMatchInlineSnapshot(`"97b63dca9cc861389b010f56647b8503bdeadfe77cbc69ed9107c3560428d88a"`);
   });
 
   it("deep", async () => {
     const serialised = await requestFor({ deep: true });
     expect(serialised).toMatchSnapshot();
-    expect(sha(serialised)).toMatchInlineSnapshot(`"b922da46c90958c2ce9e230e0f0e8979e2e1877dd42fd49d7a5628b0a13fc505"`);
+    expect(sha(serialised)).toMatchInlineSnapshot(`"4bcee3c6b9c68c1e963cee3d011e2702b4423a2d9e88cf5366579efb8258ca49"`);
   });
 
   it("with a profile", async () => {
@@ -107,6 +107,6 @@ describe("the explain request does not move", () => {
       profile: "A statistician who reads economics for work, and knows little biology.",
     });
     expect(serialised).toMatchSnapshot();
-    expect(sha(serialised)).toMatchInlineSnapshot(`"57f519bd564e17158105ba362d5517ce9f0c2c4b8a142e7695b28222eb682269"`);
+    expect(sha(serialised)).toMatchInlineSnapshot(`"68d30370c87fddbb7405715697ceb9b3a1889dc327bb2ef2069898e26812a883"`);
   });
 });

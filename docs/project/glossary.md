@@ -1255,7 +1255,7 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   the absence of a "checked" block. That is the cost of making the web reader-initiated, and it is
   the right cost, but it is a cost.
 - **A checked answer is written for a dialog, not for an 18rem column.** Reusing `explain` means
-  reusing its length rule — *"two or three short paragraphs is usually right"* — which was tuned for
+  reusing its length rule — *"one or two short paragraphs is usually right"* — which was tuned for
   [`CommentDialog`](comments.md). Measured in a browser at 1,158 characters against a `background` of
   265: it does not overflow and it is not cramped, but the checked part becomes the bulk of the entry
   and the entry becomes a footnote to it. The fix is a `SYSTEM` of its own, which means lifting the

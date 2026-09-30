@@ -323,15 +323,18 @@ export function ChatDialog({
    * button with it. `isConnected` is therefore not defensive tidiness here, it
    * is the ordinary path, and the fallback is what actually runs.
    *
-   * **The fallback is the passage's own "…", not a dock button.** There is no
-   * Chat button in the dock to fall back to — checked, the dock's labels are
-   * Commands, Comments, Metadata, Tweets and Spideryarn, and Chat is a *mode* in
-   * the radiogroup rather than a panel. Falling back to a mode switch would put
-   * the reader somewhere they never were. The row's `.blk-more` is where they
-   * actually were, it is always rendered rather than only while the disclosure
-   * is open, and it is where `BlockGutter` itself restores focus on Escape. The
-   * row is remembered at mount, because by cleanup the button that names it has
-   * gone.
+   * **The ordinary fallback is the passage's own "…", not a mode button.** There
+   * is no Chat button in the dock to fall back to — Chat is a mode in the
+   * radiogroup — and choosing one would put the reader somewhere they never
+   * were. The row's `.blk-more` is where a gutter opener came from, it is always
+   * rendered rather than only while the disclosure is open, and it is where
+   * `BlockGutter` itself restores focus on Escape. The row is remembered at
+   * mount, because by cleanup the button that names it has gone.
+   *
+   * A question reopened from the Comments drawer has no article row: closing
+   * the drawer removes that opener in the same commit that mounts this dialog.
+   * In that one path the Comments button is the stable place the reader came
+   * through, matching `CommentDialog`'s drawer lifecycle.
    *
    * **No trap and no `aria-modal`**, unchanged — the prose behind stays live,
    * which is the whole point of a modeless dialog and is argued at length in
@@ -486,7 +489,14 @@ export function ChatDialog({
           back.focus();
           return;
         }
-        if (row?.isConnected) row.querySelector<HTMLButtonElement>(".blk-more")?.focus();
+        const gutter = row?.isConnected
+          ? row.querySelector<HTMLButtonElement>(".blk-more")
+          : null;
+        if (gutter) {
+          gutter.focus();
+          return;
+        }
+        document.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]')?.focus();
       });
     };
   }, [opened]);

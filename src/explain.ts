@@ -221,8 +221,8 @@ WHAT IT MUST NOT DO
 
 - Do not summarise the article. The reader is reading it.
 - Do not praise or grade the writing.
-- Do not pad. Two or three short paragraphs is usually right; one is often
-  better. Never more than four.
+- Do not pad. One or two short paragraphs is usually right, and one is often
+  enough. Never more than three.
 - Do not invent. But "the article does not say" is not an answer on its own —
   it is the point at which you go and find out. Say it only when you have looked
   and the thing is genuinely not establishable.

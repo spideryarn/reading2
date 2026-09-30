@@ -772,6 +772,37 @@ holds all of it; the reproduction is in
 Escape's capture-phase handler in `Dock` is untouched by any of this, and must stay that way — it is
 what stops one press closing `CommentDialog` underneath the dim.
 
+### The questions you asked are in it too <a id="asked-questions"></a>
+
+Greg, 2026-09-30
+([SPIDERYARN-READING2-6W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6W)):
+
+> I think if I ask a question, I expect that to show up in the comments so that I can find it again
+> or find the answer again. Perhaps somehow flagged as a question rather than a comment, but still
+> there.
+
+The gutter's "?" and *Chat about this* make a **chat**, not a comment
+([260904b § no new `ThreadKind`](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md#no-new-kind)),
+and a chat about the whole block draws no mark in the prose. So a reader who closed the answer and
+forgot which paragraph they had pressed had nowhere to find it. Nothing was lost: the thread is
+stored, and it is in Chat mode's list under the same title as every other "?", *Help me understand.*
+
+Since then the drawer lists **every chat with an anchor** beside the comments, in the one reading
+order (`orderDrawer` in [`comment-nav.ts`](../../src/web/comment-nav.ts)), each labelled
+*Question*, with the paragraph's opening or the quote. There is **no answer preview**: the
+summaries' `lastLine` is not kept live, so a question asked this visit would say *thinking…* under
+the answer the reader had just read. Nor the title, which is *Help me understand.* on every "?".
+Pressing one goes through the same jump a comment row uses (`jumpToComment`, with `openChatThread`
+as the opener): the floating chat dialog, or the band in Chat mode, and from Remember it switches to
+Chat. They are still chats, in `chat_threads`; the drawer only shows them. Left out: an unanchored
+chat (it is about the whole piece, and stays in Chat mode), and a chat a comment already points at
+through `threadId` (*Also ask the AI*), whose comment row covers it. The count on the Comments
+button counts both, and the drawer does not say *"Nothing marked yet"* until both lists have
+loaded.
+
+The comment dialog's arrows still walk comments only.
+[260930f](../plans/260930f-gutter-questions-listed-in-the-comments-drawer.md) has what was deferred.
+
 ## Where the code is
 
 | File | What it does |

@@ -87,6 +87,7 @@ async function mountPanel({
         loaded: true,
         loadError: null,
         error: null,
+        running: new Set(),
         onAsk: () => {},
         onRetry: () => {},
         onRecolour: () => {},

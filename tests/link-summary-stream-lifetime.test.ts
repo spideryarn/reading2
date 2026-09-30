@@ -58,6 +58,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AiCallRow, SpendRecord } from "../src/ai-spend.js";
 import { getDb } from "../src/db/client.js";
 import { linkSummaries } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -94,6 +95,7 @@ const stub = vi.hoisted(() => {
   let taken = 0;
   return {
     calls: 0,
+    rows: [] as AiCallRow[],
     /** Outcomes returned by the real Postgres claim, observed without replacing it. */
     claimKinds: [] as Array<"hit" | "claimed" | "pending">,
     /** The target the stubbed preview answers for, set once the fixture is read. */
@@ -121,6 +123,22 @@ const stub = vi.hoisted(() => {
   };
 });
 
+/* `handleApi`'s real collector, with only its sink captured. The model stub
+   below records one ordinary call, so the row says whether the exact route's
+   hand-written `withSpendAttribution` really remained around the whole stream. */
+vi.mock("../src/store/ai-calls.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/store/ai-calls.js")>();
+  return {
+    ...actual,
+    costStore: {
+      ...actual.costStore,
+      record: async (row: AiCallRow) => {
+        stub.rows.push(row);
+      },
+    },
+  };
+});
+
 /* Only the stream is replaced. It yields a first sentence, signals, holds, and
    then finishes the way a complete response does — `[DONE]` seen and a `stop`
    reason, both of which `classifyEnd` requires before a summary may be stored. */
@@ -139,6 +157,33 @@ vi.mock("../src/ai-call.js", async (importOriginal) => ({
     yield { choices: [{ delta: { content: "of the claim." }, finish_reason: "stop" }] };
     options.end.terminated = true;
     options.end.finishReason = "stop";
+    const { providerCost, recordSpend } = await import("../src/ai-spend.js");
+    const record: SpendRecord = {
+      job: "link-summary",
+      answeredBy: "openai/test",
+      upstreamCostNanos: null,
+      model: "openai/test",
+      cost: providerCost(1_000),
+      generationId: null,
+      upstream: "OpenAI",
+      isByok: false,
+      providerAccount: "openrouter",
+      credentialFingerprint: "abcdef012345",
+      wire: "chat",
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite5mTokens: null,
+      cacheWrite1hTokens: null,
+      reasoningTokens: 0,
+      webSearches: null,
+      serviceTier: null,
+      inferenceGeo: null,
+      ms: 10,
+      outcome: "ok",
+    };
+    recordSpend(record);
   },
 }));
 
@@ -277,6 +322,7 @@ describe("a link summary outlives nothing it should", { timeout: 60_000 }, () =>
 
   /* Each case starts cold: no stored summary and no claim for this article. */
   beforeEach(async () => {
+    stub.rows.length = 0;
     await getDb().delete(linkSummaries).where(eq(linkSummaries.articleId, article.articleId));
   });
 
@@ -300,6 +346,7 @@ describe("a link summary outlives nothing it should", { timeout: 60_000 }, () =>
 
     expect(call.ended()).toBe(true);
     expect(terminals(call.written()), call.written()).toEqual(["ready"]);
+    expect(stub.rows.map((r) => [r.job, r.articleSlug])).toEqual([["link-summary", SLUG]]);
   });
 
   it("a second hover while the first is streaming is told pending by the claim, and buys nothing", async () => {

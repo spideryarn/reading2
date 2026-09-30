@@ -113,7 +113,13 @@ import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { flushPendingFlash, resetFlash } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
-import { anchored, countByBlock, helpThreadFor, threadFor } from "../useChatAnchors.js";
+import {
+  anchored,
+  askedQuestions,
+  countByBlock,
+  helpThreadFor,
+  threadFor,
+} from "../useChatAnchors.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
 import {
   NO_SEARCHES,
@@ -1379,6 +1385,43 @@ export function Reader({
       void setThread(id);
     },
     [setNote, setThread],
+  );
+
+  /**
+   * **The questions the reader asked from a passage**, for the Comments drawer —
+   * docs/plans/260930f-gutter-questions-listed-in-the-comments-drawer.md.
+   *
+   * Opening one is the drawer's jump, the same function a comment row goes
+   * through (comment-jump.ts): it is generic over `{ id, blockId }` and takes
+   * the opener as a parameter, so the *here / away / nowhere* check is the
+   * comment row's exactly. `openChatThread` writes `?thread=` and clears
+   * `?note=` in the same tick, so they land with any jump on at most one entry,
+   * and exactly one when the passage was away. Remember is
+   * the deliberate extra case: even for a passage already here (or gone), its
+   * switch into Chat is itself one pushed entry, so Back can return to Remember.
+   * The thread, panel close and any jump are still batched into that one entry.
+   *
+   * **Where it opens depends on the mode**, because `overlay` above is
+   * suppressed in two of them: in Chat mode the band shows `?thread=` already,
+   * and in Remember it would be a chat inside the Remember band (or wiped by
+   * Quiz's cleanup), so the press follows it into Chat mode — the rule the
+   * band's own `onThread` keeps (ConversationModes.tsx). Every other mode gets
+   * the floating dialog. GPT Sol's plan review, finding 1.
+   *
+   * **Minus the chats a comment already points at.** *Also ask the AI* on a
+   * comment makes an anchored chat and records it as the comment's `threadId`,
+   * so without this the drawer would list that one question twice. Finding 3.
+   */
+  const askedList = useMemo(
+    () => askedQuestions(chatSummaries, comments),
+    [chatSummaries, comments],
+  );
+  const openAskedFromDrawer = useCallback(
+    (id: string) => {
+      if (mode === "remember") void setMode("chat");
+      jumpToComment(askedList, id, openChatThread, jumpTo);
+    },
+    [askedList, openChatThread, jumpTo, mode, setMode],
   );
 
   /* **A *new* conversation anchored to the whole block** — the other half of
@@ -2729,6 +2772,18 @@ export function Reader({
                   // like nothing happening.
                   void setPanel(null);
                   openCommentFromDrawer(id);
+                },
+                asked: {
+                  questions: askedList,
+                  loaded: owner.chatAnchors.loaded,
+                  error: owner.chatAnchors.error,
+                  blocks: article.blocks,
+                  onOpen: (id) => {
+                    // Closed first, as a comment row does — the dialog would
+                    // otherwise open underneath the dim.
+                    void setPanel(null);
+                    openAskedFromDrawer(id);
+                  },
                 },
               }
             : /* **The same drawer, with the owner's comments in it**, since

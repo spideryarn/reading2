@@ -556,6 +556,19 @@ The wider version of the same numbers — by category, with a median/p95/max spr
 account — is `npm run cost -- --owners`:
 [ai-gateway.md § The pricing report](ai-gateway.md#the-pricing-report-per-owner-by-category-with-the-spread).
 
+## One article's cost, and only your own
+
+Since 2026-09-30 the metadata page has a **What it cost** section, drawn for the administrator
+only: `GET /api/admin/articles/:slug/cost`, behind the same namespace gate, grouped by step and job
+([cost-tracking.md](cost-tracking.md)).
+
+**It answers only for an article the administrator owns.** The route asks `ownedArticleIdentity`
+before it reads any spend, so another account's slug is the ordinary 404. Everything else on these
+pages is a fact about an *account*; a per-mode breakdown of somebody else's article is a fact about
+what they did with it, which is the line § *What it deliberately does not show* draws. Widening it
+to other people's articles is a decision for Greg
+([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+
 ## The plan and ingest columns
 
 Added 2026-09-03 beside spend, because "who is paying" and "who is expensive" are two halves of one

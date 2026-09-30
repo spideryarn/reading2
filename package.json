@@ -46,6 +46,7 @@
     "eval:deepen": "tsx evals/deepen/run.ts",
     "eval:debate": "tsx evals/debate/run.ts",
     "eval:cost:interactions": "tsx evals/cost/interactions.ts",
+    "test:paid": "tsx evals/cost/ledger-check.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "tsx scripts/db-generate.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
