@@ -76,7 +76,7 @@
  * here — these statements bind two timestamps.
  */
 
-import { and, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { aiCalls } from "../db/schema.js";
@@ -466,4 +466,131 @@ export async function accountsInWindow(
     .where(window(since, until))
     .groupBy(aiCalls.providerAccount);
   return [...rows].sort((a, b) => b.calls - a.calls);
+}
+
+/**
+ * One `(scope, job, step)` bucket of **one article's** spend — `SpendGroup`
+ * without the owner, plus when the bucket's calls happened and how many of
+ * them did not finish cleanly.
+ */
+export interface ArticleSpendGroup {
+  scopeKind: string;
+  job: string;
+  stepName: string | null;
+  calls: number;
+  creditsNanos: number;
+  byokNanos: number;
+  computedNanos: number;
+  computedCalls: number;
+  unpricedCalls: number;
+  /** `outcome <> 'ok'` — errored or aborted calls, which usually still cost. */
+  nonOkCalls: number;
+  firstAt: Date;
+  lastAt: Date;
+}
+
+/** Which article, established by an owner-scoped lookup before this is asked. */
+export interface ArticleIdentity {
+  id: string;
+  slug: string;
+  ownerId: string;
+  createdAt: Date;
+}
+
+/**
+ * The rows that belong to one article: **its id**, or — for a row whose id
+ * could not be resolved when it was written — **its owner's slug, since it was
+ * created**.
+ *
+ * The id is the key because a slug is only unique among *current* articles: a
+ * deleted article's slug can be minted again, and the schema anticipates
+ * renaming. `article_id` is `on delete set null` and is filled at write time
+ * only when the spender owns the article (`articleIdFor` in ai-calls-pg.ts), so
+ * a row can still lack one — a lookup that failed, or a call made before the
+ * article row existed. Those are matched on `(owner_id, article_slug)` and
+ * bounded below by the article's creation, so a previous article under the
+ * same slug cannot leak in. GPT Sol, plan review of
+ * docs/plans/260930f-article-cost-on-the-metadata-page.md, P1.
+ *
+ * The owner-scoped lookup that produced `article` is what keeps this to the
+ * administrator's own articles; this predicate does not check ownership itself.
+ */
+function belongsTo(article: ArticleIdentity) {
+  return or(
+    eq(aiCalls.articleId, article.id),
+    and(
+      isNull(aiCalls.articleId),
+      eq(aiCalls.ownerId, article.ownerId),
+      eq(aiCalls.articleSlug, article.slug),
+      gte(aiCalls.startedAt, article.createdAt),
+    ),
+  );
+}
+
+/**
+ * **Everything the ledger says one article has cost**, grouped by scope, job
+ * and step — the metadata page's administrator section.
+ * docs/project/cost-tracking.md.
+ *
+ * No time window: an article's cost is its whole life. And no scope filter —
+ * the caller categorises every group (src/cost-categories.ts, which this file
+ * may not import: it reaches src/pipeline.ts, which reaches back into the
+ * stores), so eval and CLI spend is shown as what it is rather than dropped.
+ *
+ * **What it cannot see** is any call that wrote no row (a failed ledger write,
+ * a call outside every collector) and any call no route attributed to the
+ * article — before 2026-09-30, link previews and dictation. The page says so.
+ */
+export async function spendForArticle(article: ArticleIdentity): Promise<ArticleSpendGroup[]> {
+  const rows = await getDb()
+    .select({
+      scopeKind: aiCalls.scopeKind,
+      job: aiCalls.purpose,
+      stepName: aiCalls.stepName,
+      calls: CALLS,
+      creditsNanos: CREDITS,
+      byokNanos: BYOK,
+      computedNanos: COMPUTED,
+      computedCalls: COMPUTED_CALLS,
+      unpricedCalls: UNPRICED_CALLS,
+      nonOkCalls: sql<number>`count(*) filter (where ${aiCalls.outcome} <> 'ok')`.mapWith(Number),
+      firstAt: sql<Date>`min(${aiCalls.startedAt})`.mapWith(aiCalls.startedAt),
+      lastAt: sql<Date>`max(${aiCalls.startedAt})`.mapWith(aiCalls.startedAt),
+    })
+    .from(aiCalls)
+    .where(belongsTo(article))
+    .groupBy(aiCalls.scopeKind, aiCalls.purpose, aiCalls.stepName);
+  return [...rows];
+}
+
+/**
+ * Live conversations on one article that **connected and reported nothing** —
+ * `realtimeSessionCoverage`'s `silent`, narrowed to the article by the same
+ * rule as `belongsTo`. `null` when the table is not in this database, for the
+ * reason that function gives.
+ */
+export async function silentLiveSessionsForArticle(
+  article: ArticleIdentity,
+): Promise<number | null> {
+  const db = getDb();
+  const probe = await db.execute<{ ready: boolean }>(
+    sql`select to_regclass('spideryarn.realtime_sessions') is not null as ready`,
+  );
+  const ready = (probe as unknown as { rows?: { ready: boolean }[] }).rows ?? [];
+  if (ready[0]?.ready !== true) return null;
+  const result = await db.execute<{ silent: string }>(
+    sql`select count(*) as silent
+          from spideryarn.realtime_sessions s
+         where (s.article_id = ${article.id}
+                or (s.article_id is null
+                    and s.owner_id = ${article.ownerId}
+                    and s.article_slug = ${article.slug}
+                    and s.issued_at >= ${article.createdAt}))
+           and s.connected_at is not null
+           and not exists (
+             select 1 from spideryarn.ai_calls c where c.realtime_session_id = s.id
+           )`,
+  );
+  const rows = (result as unknown as { rows?: Record<string, string>[] }).rows ?? [];
+  return Number(rows[0]?.silent ?? 0);
 }

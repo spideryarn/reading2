@@ -26,6 +26,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { totalRows } from "../src/store/ai-calls.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
+import { bareArticles, removeBareArticles } from "./helpers/bare-article.js";
+import type { OwnerId } from "../src/owner.js";
 
 loadEnvLocal();
 
@@ -176,6 +178,103 @@ const FIXTURES: AiCallRow[] = [
   }),
 ];
 
+/**
+ * **One article's rows, as the metadata page's admin section reads them** —
+ * `spendForArticle`. In 2031 (and one in 2020), outside every window the
+ * per-owner tests above ask about, so they change none of those counts.
+ *
+ * Alice owns a real article row with this slug, created when the suite runs.
+ * The rows are written in two batches, and the order is the test:
+ *
+ * - `BEFORE_ARTICLE` is recorded **before the article row exists**, so
+ *   `articleIdFor` resolves nothing and each row has the slug and no id. One is
+ *   dated 2031 (after the article's creation — the fallback must include it);
+ *   one is dated 2020 (a previous article under the same slug — the fallback
+ *   must not).
+ * - `AFTER_ARTICLE` is recorded once it exists, so Alice's rows carry its id.
+ *   Bob's rows on the same slug do not (he does not own it) and must not count:
+ *   the query is the owner's article, not every row that names the slug.
+ */
+const ARTICLE = "spend-fixture-article-a1";
+const BEFORE_ARTICLE: AiCallRow[] = [
+  /* Fell back to the slug, after the article was born: counted. */
+  row("00000000-0000-4000-8000-00000000e106", {
+    articleSlug: ARTICLE,
+    job: "labels",
+    startedAt: "2031-06-01T10:00:00.000Z",
+    finishedAt: "2031-06-01T10:00:01.000Z",
+    creditsUsedNanos: 3_000_000,
+    outcome: "error",
+  }),
+  /* A previous article that had this slug and was deleted: not counted. */
+  row("00000000-0000-4000-8000-00000000e107", {
+    articleSlug: ARTICLE,
+    startedAt: "2020-01-01T10:00:00.000Z",
+    finishedAt: "2020-01-01T10:00:01.000Z",
+    creditsUsedNanos: 800_000_000,
+  }),
+];
+const AFTER_ARTICLE: AiCallRow[] = [
+  row("00000000-0000-4000-8000-00000000e101", {
+    articleSlug: ARTICLE,
+    startedAt: "2031-06-02T10:00:00.000Z",
+    finishedAt: "2031-06-02T10:00:01.000Z",
+    creditsUsedNanos: 40_000_000,
+  }),
+  row("00000000-0000-4000-8000-00000000e102", {
+    articleSlug: ARTICLE,
+    job: "labels",
+    startedAt: "2031-06-02T10:01:00.000Z",
+    finishedAt: "2031-06-02T10:01:01.000Z",
+    creditsUsedNanos: 7_000_000,
+  }),
+  row("00000000-0000-4000-8000-00000000e108", {
+    articleSlug: ARTICLE,
+    scopeKind: "request",
+    job: "chat",
+    stepName: null,
+    wire: "chat",
+    startedAt: "2031-06-03T09:00:00.000Z",
+    finishedAt: "2031-06-03T09:00:02.000Z",
+    creditsUsedNanos: 2_000_000,
+  }),
+  row("00000000-0000-4000-8000-00000000e109", {
+    articleSlug: ARTICLE,
+    scopeKind: "request",
+    job: "chat",
+    stepName: null,
+    wire: "chat",
+    costSource: "none",
+    creditsUsedNanos: null,
+    startedAt: "2031-06-04T09:00:00.000Z",
+    finishedAt: "2031-06-04T09:00:02.000Z",
+  }),
+  /* Another account naming the same slug: not Alice's article, not counted. */
+  row("00000000-0000-4000-8000-00000000e103", {
+    ownerId: BOB,
+    articleSlug: ARTICLE,
+    scopeKind: "request",
+    job: "chat",
+    stepName: null,
+    wire: "chat",
+    startedAt: "2031-06-03T09:00:00.000Z",
+    finishedAt: "2031-06-03T09:00:02.000Z",
+    creditsUsedNanos: 90_000_000,
+  }),
+  /* A different article. */
+  row("00000000-0000-4000-8000-00000000e105", {
+    articleSlug: "spend-fixture-article-b2",
+    startedAt: "2031-06-02T11:00:00.000Z",
+    finishedAt: "2031-06-02T11:00:01.000Z",
+    creditsUsedNanos: 500_000_000,
+  }),
+];
+/** The rows the article's figure must be made of, and nothing else. */
+const ARTICLE_ROWS = [
+  ...BEFORE_ARTICLE.filter((r) => r.startedAt > "2031"),
+  ...AFTER_ARTICLE.filter((r) => r.articleSlug === ARTICLE && r.ownerId === ALICE),
+];
+
 /** Everything the window should see — the last fixture is outside it. */
 const IN_WINDOW = FIXTURES.filter((r) => r.startedAt < UNTIL);
 
@@ -199,17 +298,21 @@ describe("the per-owner spend aggregate", () => {
        customer deletion, and a suite that fought that would be fighting the
        thing the column is for. */
     await getDb().delete(aiCalls).where(eq(aiCalls.runId, RUN));
+    await removeBareArticles([ARTICLE], ALICE as OwnerId);
     await closeDb();
   });
 
-  /* Written once, because every test below reads the same six rows and
-     re-inserting them per test would be six round trips for nothing.
+  /* Written once, because every test below reads the same rows and
+     re-inserting them per test would be round trips for nothing.
      `onConflictDoNothing` on the id makes a re-run harmless.
 
      **The two accounts have to exist first.** `ai_calls.owner_id` carries a
      foreign key into `auth.users`, which is the schema saying a bill belongs to
      somebody — so a fixture owner id invented here is rejected rather than
-     silently orphaned. */
+     silently orphaned.
+
+     **And the article rows go in on either side of the article's birth** —
+     see `BEFORE_ARTICLE`. */
   const written = (async () => {
     const { getDb } = await import("../src/db/client.js");
     const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
@@ -223,8 +326,99 @@ describe("the per-owner spend aggregate", () => {
       email: "spend-bob@spideryarn.local",
       onConflictDoNothing: true,
     });
-    for (const fixture of FIXTURES) await pgCostStore.record(fixture);
+    /* A previous run's article would give the "before" rows an id. */
+    await removeBareArticles([ARTICLE], ALICE as OwnerId);
+    for (const fixture of [...FIXTURES, ...BEFORE_ARTICLE]) await pgCostStore.record(fixture);
+    await bareArticles([ARTICLE], ALICE as OwnerId);
+    for (const fixture of AFTER_ARTICLE) await pgCostStore.record(fixture);
   })();
+
+  /** Alice's article as the route establishes it — id and birth from the row. */
+  async function theArticle() {
+    await written;
+    const { getDb } = await import("../src/db/client.js");
+    const { articles } = await import("../src/db/schema.js");
+    const { and, eq } = await import("drizzle-orm");
+    const [found] = await getDb()
+      .select({ id: articles.id, createdAt: articles.createdAt })
+      .from(articles)
+      .where(and(eq(articles.slug, ARTICLE), eq(articles.ownerId, ALICE)));
+    if (!found) throw new Error("the fixture article was not created");
+    return { ...found, slug: ARTICLE, ownerId: ALICE };
+  }
+
+  it("totals the owner's article, and not another account's rows under its slug", async () => {
+    const { spendForArticle } = await import("../src/store/ai-calls-spend-pg.js");
+    const groups = await spendForArticle(await theArticle());
+    const js = totalRows(ARTICLE_ROWS);
+    const sql = groups.reduce(
+      (acc, g) => ({
+        credits: acc.credits + g.creditsNanos,
+        byok: acc.byok + g.byokNanos,
+        computed: acc.computed + g.computedNanos,
+        calls: acc.calls + g.calls,
+        unpriced: acc.unpriced + g.unpricedCalls,
+        nonOk: acc.nonOk + g.nonOkCalls,
+      }),
+      { credits: 0, byok: 0, computed: 0, calls: 0, unpriced: 0, nonOk: 0 },
+    );
+    /* Held against `totalRows()` over the rows that should count, as the
+       per-owner test above is — and against a hand figure too, because Bob's
+       $0.09, the old article's $0.80 or the other slug's $0.50 leaking in would
+       move both. */
+    expect(sql.credits).toBe(js.credits);
+    expect(sql.byok).toBe(js.upstream);
+    expect(sql.computed).toBe(js.computed);
+    expect(sql.unpriced).toBe(js.unpriced);
+    expect(sql.calls).toBe(5);
+    expect(sql.credits).toBe(3_000_000 + 40_000_000 + 7_000_000 + 2_000_000);
+    expect(sql.unpriced).toBe(1);
+    expect(sql.nonOk).toBe(1);
+  });
+
+  it("does not inherit a deleted article's rows through a reused slug", async () => {
+    const { spendForArticle } = await import("../src/store/ai-calls-spend-pg.js");
+    const groups = await spendForArticle(await theArticle());
+    /* The 2020 row has the slug, Alice as owner and no id — everything but a
+       date after this article's birth. */
+    expect(groups.every((g) => g.firstAt.getUTCFullYear() === 2031)).toBe(true);
+  });
+
+  it("splits one article by step and job, so a mode is a line of its own", async () => {
+    const { spendForArticle } = await import("../src/store/ai-calls-spend-pg.js");
+    const groups = await spendForArticle(await theArticle());
+    const key = (g: { scopeKind: string; job: string; stepName: string | null }) =>
+      `${g.scopeKind}/${g.job}/${g.stepName ?? "-"}`;
+    expect(groups.map(key).sort()).toEqual([
+      "job_step/hierarchy/hierarchy",
+      "job_step/labels/hierarchy",
+      "request/chat/-",
+    ]);
+    const chat = groups.find((g) => g.job === "chat");
+    /* Two chat turns are one line, one of them unpriced. */
+    expect(chat).toMatchObject({ calls: 2, creditsNanos: 2_000_000, unpricedCalls: 1 });
+    expect(chat?.firstAt.toISOString()).toBe("2031-06-03T09:00:00.000Z");
+    expect(chat?.lastAt.toISOString()).toBe("2031-06-04T09:00:00.000Z");
+    /* The labels line joins the id-keyed row and the slug-fallback one. */
+    expect(groups.find((g) => g.job === "labels")).toMatchObject({
+      calls: 2,
+      creditsNanos: 10_000_000,
+      nonOkCalls: 1,
+    });
+    for (const g of groups) expect(typeof g.creditsNanos).toBe("number");
+  });
+
+  it("answers an article nobody has spent on with no lines, not an error", async () => {
+    const { spendForArticle } = await import("../src/store/ai-calls-spend-pg.js");
+    const article = await theArticle();
+    expect(
+      await spendForArticle({
+        ...article,
+        id: "00000000-0000-4000-8000-0000000000ff",
+        slug: "spend-fixture-article-never",
+      }),
+    ).toEqual([]);
+  });
 
   it("agrees with totalRows() about what the same rows cost", async () => {
     await written;

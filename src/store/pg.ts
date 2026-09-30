@@ -320,6 +320,30 @@ export async function articleIdForOwned(
 }
 
 /**
+ * **The id and the birth of an article the ambient owner holds** — or the same
+ * owner-filtered not-found `articleIdForOwned` throws.
+ *
+ * For the article cost query (src/store/ai-calls-spend-pg.ts §
+ * `spendForArticle`), which needs the creation time as well as the id: a
+ * ledger row with no `article_id` is matched by the owner's slug only if it
+ * happened after *this* article was created, so a deleted article's rows cannot
+ * be inherited by a new one that reused its slug.
+ */
+export async function ownedArticleIdentity(
+  slug: string,
+): Promise<{ id: string; createdAt: Date }> {
+  requireSlug(slug);
+  const rows = await getDb()
+    .select({ id: articles.id, createdAt: articles.createdAt })
+    .from(articles)
+    .where(ownedSlug(slug))
+    .limit(1);
+  const found = rows[0];
+  if (!found) throw notFound(slug);
+  return found;
+}
+
+/**
  * **Take the article row, so nothing else in this article writes until we commit.**
  *
  * A serialising lock on a row that is already known to exist, held by four
