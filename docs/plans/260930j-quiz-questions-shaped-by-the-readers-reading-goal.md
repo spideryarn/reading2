@@ -1,6 +1,6 @@
 # Quiz questions shaped by the reader's reading goal
 
-Status: planned 2026-09-30. Sentry SPIDERYARN-READING2-6Q, from Greg (admin, verified by account id).
+Status: shipped on `dev` 2026-09-30, not deployed. Sentry SPIDERYARN-READING2-6Q, from Greg (admin, verified by account id).
 Note: [260930_2200](../user-feedback/260930_2200-quiz-shaped-by-your-reading-goal.md).
 
 > If the reader has told us why they're reading this article (the "Why are you reading this?" prompt
@@ -222,3 +222,7 @@ nothing addresses the reader or says a goal was given.
   it read all 38 goal questions, found the blind labels reasonable and conservative, and put the
   claim at its right size: *most questions are about the goal for these two paths, on one article —
   not yet a general result.* That is the claim this plan makes.
+- 2026-09-30: merged `origin/dev` (one conflict in quiz.md with 6R's *Where to look again*: both
+  sections kept, dev's verdict-map wording kept with this plan's profile clause). Full suite on the
+  merge: 27,223 passed; 5 files red, all missing build output in a fresh worktree (`api-dist/`,
+  `tools/fleet/web/dist`) — none touches this change. Pushed to `dev`.
