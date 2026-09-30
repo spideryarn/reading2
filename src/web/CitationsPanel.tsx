@@ -38,6 +38,7 @@ import {
   MAX_CITATIONS,
   type BlockId,
   type CitationLookup,
+  type CitationPlace,
   type CitationSupport,
   type CitedInSpideryarn,
   type CitedMatchedBy,
@@ -50,6 +51,8 @@ import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
 import { BlockRef } from "./BlockRef.js";
+import { Tooltip } from "./Tooltip.js";
+import { citePassageKey } from "./rows.js";
 import {
   InvestigateButton,
   type InvestigateFailureHere,
@@ -87,6 +90,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
   investigation?: CitedWork["investigation"];
   /** Already an article here, the reader's or a public one (plan 260930b). A public row cannot carry one. */
   inSpideryarn?: CitedWork["inSpideryarn"];
+  /** The work's entry as the article gives it (plan 260930i). Not in the public projection. */
+  entry?: CitedWork["entry"];
 };
 
 /* ------------------------------------------------------------- the scores -- */
@@ -114,6 +119,74 @@ export const CITATION_BAR_DEFAULT = 0.25;
  * the list should keep. Weighted to relevance so a famous but passing reference
  * does not ride its fame over the bar.
  */
+/**
+ * **The verified place a row's *first cited* names** — a mention in the
+ * `firstCited` block, else the reference when that is where it points (a
+ * bibliography-only work). `null` when neither is: a work reached through a
+ * footnote's marker, whose paragraph holds a number and no quote of ours. Its
+ * `quote` is the article's own characters (src/citations.ts § `verifyPlace`),
+ * and `citeMarks` re-finds it at render time — nothing here reads `start`.
+ */
+export function citingPlaceOf(
+  work: Pick<ShownWork, "firstCited" | "mentions" | "reference">,
+): CitationPlace | null {
+  const mention = work.mentions.find((m) => m.blockId === work.firstCited);
+  if (mention) return mention;
+  return work.reference?.blockId === work.firstCited ? work.reference : null;
+}
+
+/** How long a row lets the citing words run before it shortens them. */
+export const CITING_WORDS_MAX = 60;
+
+/**
+ * **The citing words, short enough for a row.** A quote is up to 120
+ * characters; the marker is what matters, so a quote ending in one — `…TV
+ * episodes [8]`, `…as argued (Tulving 1983)` — keeps its end, and any other
+ * keeps its start. Cut at a word boundary where there is one.
+ */
+export function citingWordsOf(quote: string): string {
+  const q = quote.replace(/\s+/g, " ").trim();
+  if (q.length <= CITING_WORDS_MAX) return q;
+  if (/[\])]$/.test(q)) {
+    const tail = q.slice(q.length - CITING_WORDS_MAX);
+    const space = tail.indexOf(" ");
+    return `…${space > 0 && space < CITING_WORDS_MAX / 2 ? tail.slice(space + 1) : tail}`;
+  }
+  const head = q.slice(0, CITING_WORDS_MAX);
+  const space = head.lastIndexOf(" ");
+  return `${space > CITING_WORDS_MAX / 2 ? head.slice(0, space) : head}…`;
+}
+
+/** More names than this, and a row shows the first and *et al.* */
+export const AUTHORS_SHOWN = 2;
+
+/**
+ * **Authors short enough for a row** (SPIDERYARN-READING2-6K: *"even if in
+ * somewhat truncated form"*): two names or fewer as the article gives them,
+ * more as *First et al.* — and a list that already ends *et al.* keeps only its
+ * first name. The whole list is in the by-line's tooltip.
+ */
+export function shortAuthors(authors: string): string {
+  const etAl = /\bet al\.?\s*$/i.test(authors);
+  const names = authors
+    .replace(/\bet al\.?\s*$/i, "")
+    .split(/\s*(?:;|,|\s&\s|\band\b)\s*/)
+    .map((n) => n.trim())
+    .filter(Boolean);
+  if (names.length === 0) return authors;
+  if (etAl || names.length > AUTHORS_SHOWN) return `${names[0]} et al.`;
+  return authors;
+}
+
+/** `Chen et al. · 2017`, or empty when the article gives neither. */
+export function byLineOf(work: Pick<ShownWork, "authors" | "year">): string {
+  return [work.authors ? shortAuthors(work.authors) : undefined, work.year].filter(Boolean).join(" · ");
+}
+
+/** Said under an entry wherever it is shown — a row's tooltip and the prose card. */
+export const CITE_ENTRY_NOTE =
+  "The entry in the article's own reference list, copied from the article. We have not looked the work up.";
+
 export function priorityOf(work: ShownWork): number | undefined {
   if (work.relevance === undefined || work.influence === undefined) return undefined;
   return (2 * work.relevance + work.influence) / 3;
@@ -432,7 +505,8 @@ interface Props {
   /** `?citebar=`, or null for "nobody has touched it" — `CITATION_BAR_DEFAULT`. */
   bar: number | null;
   onBar(bar: number | null): void;
-  onJump(id: BlockId): void;
+  /** `passage` is `citePassageKey(work.id)` when the row names the citing words (rows.ts). */
+  onJump(id: BlockId, passage?: string): void;
 }
 
 export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, onBar, onJump }: Props) {
@@ -732,9 +806,10 @@ function WorkRow({
   unscored: boolean;
   /** Owner-only even if malformed visitor JSON carries the optional field. */
   showInSpideryarn: boolean;
-  onJump(id: BlockId): void;
+  onJump(id: BlockId, passage?: string): void;
   investigate: RowInvestigate | null;
 }) {
+  const cited = citingPlaceOf(work);
   /* **No source at all when the public boundary refused the address** — a
      visitor's row whose link carried a credential or a private host. The row
      stays, drawn as a citation with no link, and says nothing about why: the
@@ -742,7 +817,7 @@ function WorkRow({
   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
   const note = investigate?.note ?? null;
   const scores = scoresOf(work);
-  const by = [work.authors, work.year].filter(Boolean).join(" · ");
+  const by = byLineOf(work);
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
@@ -771,7 +846,7 @@ function WorkRow({
         )}
       </p>
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
-      {by && <p className="cite-by">{by}</p>}
+      {by && <ByLine work={work} by={by} />}
       <p className="cite-why">
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
       </p>
@@ -805,7 +880,22 @@ function WorkRow({
         )}
         <span className="cite-first">
           {work.citedInBody ? "first cited" : "only in the references"}{" "}
-          <BlockRef id={work.firstCited} onJump={onJump} />
+          {cited === null ? (
+            <BlockRef id={work.firstCited} onJump={onJump} />
+          ) : (
+            /* The words the article cites it with, not the block id: one
+               paragraph can cite three works, and only the words say which
+               (SPIDERYARN-READING2-6J). The jump lands on — and flashes — those
+               words' mark; with none drawn it falls back to the paragraph. */
+            <BlockRef
+              id={work.firstCited}
+              onJump={(id) => onJump(id, citePassageKey(work.id))}
+              preview={false}
+              className="cite-at"
+            >
+              “{citingWordsOf(cited.quote)}”
+            </BlockRef>
+          )}
         </span>
       </p>
       {/* The press's first step found no page: said quietly, and the
@@ -846,6 +936,39 @@ function WorkRow({
  * Debate's rule down the left (debate.css § `.dbt-quote`): a slice of a
  * stranger's page, which may never become markup.
  */
+/**
+ * **The row's by-line, and on hover the authors as given and where they came from**
+ * — the authors unshortened and the work's entry in the article's reference list,
+ * which is where the journal or conference, volume and pages are
+ * (SPIDERYARN-READING2-6K). No card when there is nothing more to say. Not a
+ * tab stop — eighty rows would be eighty — so the entry is also `sr-only`,
+ * Masthead.tsx's idiom for a tooltip on a line of text.
+ */
+function ByLine({ work, by }: { work: ShownWork; by: string }) {
+  const entry = work.entry;
+  const shortened = work.authors !== undefined && shortAuthors(work.authors) !== work.authors;
+  if (!entry && !shortened) return <p className="cite-by">{by}</p>;
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      className="tip-soon"
+      content={
+        <>
+          <div className="tip-soon-head">{[work.authors, work.year].filter(Boolean).join(" · ")}</div>
+          {entry && <p className="cite-entry">{entry}</p>}
+          {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
+        </>
+      }
+    >
+      <p className="cite-by cite-by-more">
+        {by}
+        {entry && <span className="sr-only"> — {entry}</span>}
+      </p>
+    </Tooltip>
+  );
+}
+
 /** How a work was matched to an article here, in the tooltip's words. */
 export const CITE_HERE_HOW: Record<CitedMatchedBy, string> = {
   doi: "the same DOI",

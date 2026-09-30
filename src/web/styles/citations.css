@@ -46,6 +46,33 @@
   color: var(--ink-soft);
   font-size: 0.83rem;
 }
+/* A by-line with more behind it — the full authors, the reference entry
+   (CitationsPanel.tsx § `ByLine`). `help`, as `mark.cite` is: the card is the
+   affordance and a click does nothing. */
+.cite-by-more {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in oklab, var(--ink-soft) 50%, transparent);
+  text-underline-offset: 2px;
+  width: fit-content;
+}
+/* The entry in the tooltip, and in the prose card: the article's own words. */
+.cite-entry {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+/* The citing words that name *first cited* (plan 260930i) — quoted prose, so
+   none of `.block-ref`'s id-chip type (prose.css): the words are the point,
+   and they have to be readable to say which of a paragraph's three cites this is. */
+.cite-first .cite-at {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: normal;
+  line-height: inherit;
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.cite-first .cite-at:hover { color: var(--highlight-ink); }
 
 .cite-why {
   margin: 0.2rem 0 0;

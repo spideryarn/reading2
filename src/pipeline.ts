@@ -137,7 +137,8 @@ import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { MAX_PAGES } from "./uploads.js";
-import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
+import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
+import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import {
@@ -1733,6 +1734,51 @@ const ILLUSTRATE_REFUSAL: Record<IllustrateRefusal, ReaderFacingFailure> = {
  */
 function refuseToIllustrate(reason: IllustrateRefusal): never {
   throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
+
+/**
+ * **A PDF article's reference list, for the Citations stage** — plan 260930i
+ * (SPIDERYARN-READING2-6K). Stage 2 does not render a PDF's bibliography, so
+ * without this the stage sees `[8]` and nothing to say what it is.
+ *
+ * Read from the stored document's text layer (`pass0`, pdf.js, no model),
+ * through `readRawBytes` as `recoverPdfFigures` reads it, so it is the same
+ * bytes the article was made from. **Never fails the step**: a list is an
+ * improvement to the answer, not a precondition for one, so every road that
+ * finds none says which in `state` — the step's log line carries it — and the
+ * stage runs as it did before.
+ */
+async function pdfReferenceList(
+  ctx: StepContext,
+  store: ArtifactReads,
+): Promise<{
+  list: NumberedReferenceList | null;
+  state: "not-pdf" | "scan" | "no-list" | "found" | "unreadable";
+  ms: number;
+}> {
+  const started = Date.now();
+  const manifest = await store.read(ctx.slug, "fetch", "raw");
+  if (manifest?.kind !== "pdf") return { list: null, state: "not-pdf", ms: 0 };
+  try {
+    const bytes = await readRawBytes(manifest, { slug: ctx.slug });
+    ctx.signal?.throwIfAborted();
+    const pass = await pass0(bytes, { maxPages: MAX_PAGES });
+    /* A scan has no text layer to read a list from (Sol F7). */
+    if (pass.isScan) return { list: null, state: "scan", ms: Date.now() - started };
+    /* Running headers and footers out first (`pageLines`), so a journal's
+       header on every bibliography page is neither inside an entry nor, when
+       it says "References", taken for the list's heading (Sol F1). */
+    const lines = pass.pages.flatMap((p) => pageLines(pass, p.page));
+    const list = referenceListFrom(lines);
+    return { list, state: list === null ? "no-list" : "found", ms: Date.now() - started };
+  } catch (err) {
+    ctx.signal?.throwIfAborted();
+    plog.warn(
+      { slug: ctx.slug, step: "citations", err: err instanceof Error ? err.message : String(err) },
+      `citations ${ctx.slug}: could not read the PDF's reference list; going on without it`,
+    );
+    return { list: null, state: "unreadable", ms: Date.now() - started };
+  }
 }
 
 /**
@@ -4376,9 +4422,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          keyed on, so a read that quietly answered `null` would orphan every
          one of them. `previousCitationsFrom` refuses an unreadable baseline. */
       const previous = await previousCitationsFrom(store, ctx.slug);
+      const referenceList = await pdfReferenceList(ctx, store);
       const run = await generateCitations({
         article: await readArticle(ctx.slug, store),
         previous,
+        referenceList: referenceList.list,
         onProgress: ctx.report,
         signal: ctx.signal,
         power: ctx.power,
@@ -4416,6 +4464,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           notesReached: run.coverage.notesReached,
           references: run.coverage.references,
           referencesReached: run.coverage.referencesReached,
+          /* **The reference-list witness** (plan 260930i): a PDF whose list
+             was not found (`referenceList: "no-list"`) or whose entries
+             were found and none kept (`entries: 0` over a long list) is the
+             6K complaint coming back, and nothing on screen would say which. */
+          referenceList: referenceList.state,
+          referenceListEntries: referenceList.list?.entries.size ?? 0,
+          referenceListMs: referenceList.ms,
+          entries: rows.filter((c) => c.entry !== undefined).length,
           ...run.drops,
           ...run.scores,
         },

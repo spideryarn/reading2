@@ -14,12 +14,15 @@ import { describe, expect, it, vi } from "vitest";
 
 let answer = "";
 let stop: "end_turn" | "max_tokens" = "end_turn";
+/** What the last call sent — the reference list test reads its system blocks. */
+let sent: { system?: { text: string }[] } | null = null;
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
-    streamMessage: () => {
+    streamMessage: (_job: string, params: { system?: { text: string }[] }) => {
+      sent = params;
       const message = {
         id: "msg_stub",
         type: "message",
@@ -43,6 +46,7 @@ import {
   buildCitations,
   type Draft,
   emptyDrops,
+  markerNumbers,
   generateCitations,
   idsByKey,
   linkFor,
@@ -54,6 +58,7 @@ import {
   systemPrompt,
 } from "../src/citations.js";
 import { plainWords } from "../src/plain-words.js";
+import type { NumberedReferenceList } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
@@ -612,7 +617,7 @@ describe("generateCitations", () => {
       capped: false,
       works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
     });
-    const run = await generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null });
+    const run = await generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
     expect(run.citations.version).toBe(PROMPT_VERSION);
     expect(run.citations.citations).toHaveLength(1);
     expect(run.coverage).toEqual({ notes: 1, notesReached: 1, references: 1, referencesReached: 0, works: 1 });
@@ -622,7 +627,7 @@ describe("generateCitations", () => {
     stop = "max_tokens";
     answer = '{"works": [{"title": "Si';
     await expect(
-      generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null }),
+      generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null }),
     ).rejects.toThrow(/ran past its/);
     stop = "end_turn";
   });
@@ -634,5 +639,155 @@ describe("the prompt", () => {
     expect(systemPrompt()).toMatch(/Never write a URL, a DOI/);
     /* The ellipsis is how five of twelve places failed on scaling-hypothesis. */
     expect(systemPrompt().replace(/\s+/g, " ")).toMatch(/never join two pieces with "\.\.\."/i);
+  });
+});
+
+/* ----------------------------------------------- a PDF's reference list --
+   Plan 260930i (SPIDERYARN-READING2-6K), as GPT Sol's plan review reshaped it.
+   A PDF article's bibliography is not a block, so code splits the list read
+   from the PDF's text layer at its own numbers, the model names an entry by
+   number, and code keeps it only if the work's verified mentions cite that
+   number; then title, authors and year are located in the entry. */
+describe("an entry in a PDF's reference list", () => {
+  const ENTRY_7 = "7. Lee, H. et al. (2020) What can narratives tell us about the neural bases of human memory? Curr. Opin. Behav. Sci. 32, 111–119";
+  const ENTRY_8 =
+    "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals. Nat. Neurosci. 20, 115–125";
+  const ENTRY_9 =
+    "9. Baldassano, C. and Chen, J. (2017a) Discovering event structure in continuous narrative perception and memory. Neuron 95, 709–721";
+  const LIST: NumberedReferenceList = { entries: new Map([[7, ENTRY_7], [8, ENTRY_8], [9, ENTRY_9]]) };
+  const BODY = [block("spya-b00001", "People recall TV episodes [8] and narratives [7,9] in detail.")];
+
+  function withList(works: unknown[]) {
+    const drops = emptyDrops();
+    const citations = buildCitations(
+      { capped: false, works },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: BODY,
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit: null,
+        drops,
+        scores: noScoreDrops(),
+        referenceList: LIST,
+      },
+    );
+    return { rows: citations.citations, drops };
+  }
+  const chen = (over: Record<string, unknown> = {}) => ({
+    title: "Shared memories reveal shared structure in neural activity across individuals",
+    authors: "Chen et al.",
+    year: "2017",
+    why: "Evidence that recall of a TV episode is shared across people.",
+    ...scored,
+    mentions: [{ block: "spya-b00001", quote: "TV episodes [8]" }],
+    entry: 8,
+    ...over,
+  });
+
+  it("attaches the list's entry when its number is the one the text cites", () => {
+    const { rows, drops } = withList([chen()]);
+    expect(rows[0]?.entry).toBe(ENTRY_8);
+    expect(rows[0]?.authors).toBe("Chen et al.");
+    expect(rows[0]?.year).toBe("2017");
+    expect(drops.entryUnfound + drops.entryMismatch + drops.entryDisagrees).toBe(0);
+  });
+
+  it("refuses an entry number the text does not cite — the neighbour's line", () => {
+    const { rows, drops } = withList([chen({ entry: 9 })]);
+    expect(rows[0]?.entry).toBeUndefined();
+    expect(drops.entryMismatch).toBe(1);
+  });
+
+  it("refuses a number the list does not have, and keeps the row", () => {
+    const { rows, drops } = withList([chen({ entry: 88 })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entry).toBeUndefined();
+    expect(drops.entryUnfound).toBe(1);
+  });
+
+  it("accepts a number inside a cited list, and keeps the entry's own year token", () => {
+    const { rows } = withList([
+      {
+        title: "Discovering event structure in continuous narrative perception and memory",
+        authors: "Baldassano, Chen",
+        year: "2017",
+        why: "Event structure in narrative memory.",
+        ...scored,
+        mentions: [{ block: "spya-b00001", quote: "narratives [7,9]" }],
+        entry: "9",
+      },
+    ]);
+    expect(rows[0]?.entry).toBe(ENTRY_9);
+    expect(rows[0]?.year).toBe("2017a");
+    expect(rows[0]?.authors).toBe("Baldassano, Chen");
+  });
+
+  it("drops the entry when the title is not in it, and authors or a year it does not carry", () => {
+    const wrongTitle = withList([chen({ title: "Study on recall of TV episodes" })]);
+    expect(wrongTitle.rows[0]?.entry).toBeUndefined();
+    expect(wrongTitle.rows[0]?.title).toBe("Study on recall of TV episodes");
+    expect(wrongTitle.drops.entryDisagrees).toBe(1);
+
+    const invented = withList([chen({ authors: "Chen, Smith", year: "2019" })]);
+    expect(invented.rows[0]?.entry).toBe(ENTRY_8);
+    expect(invented.rows[0]?.authors).toBeUndefined();
+    expect(invented.rows[0]?.year).toBeUndefined();
+    expect(invented.drops.authorsUnfound).toBe(1);
+    expect(invented.drops.yearUnfound).toBe(1);
+  });
+
+  it("ignores an entry when there is no list", () => {
+    const { rows } = build([chen()], BODY);
+    expect(rows[0]?.entry).toBeUndefined();
+  });
+
+  it("uses a bibliography block's text as the entry only when one work claims it", () => {
+    const ref = block("spya-r00001", "Tulving, E. (1983) Elements of Episodic Memory. Oxford University Press.", {
+      role: "reference",
+    });
+    const tulving = {
+      title: "Elements of Episodic Memory",
+      authors: "Tulving",
+      year: "1983",
+      why: "The distinction it builds on.",
+      ...scored,
+      reference: { block: "spya-r00001", quote: "Tulving, E. (1983)" },
+    };
+    const one = build([tulving], [...BODY, ref]);
+    expect(one.rows[0]?.entry).toBe("Tulving, E. (1983) Elements of Episodic Memory. Oxford University Press.");
+    const shared = build(
+      [tulving, { ...tulving, title: "Oxford University Press", authors: "Oxford", reference: { block: "spya-r00001", quote: "Oxford University Press" } }],
+      [...BODY, ref],
+    );
+    expect(shared.rows.every((r) => r.entry === undefined)).toBe(true);
+  });
+});
+
+describe("numbered cites", () => {
+  it("reads the numbers a bracketed cite names", () => {
+    expect([...markerNumbers(["TV episodes [8]"])]).toEqual([8]);
+    expect([...markerNumbers(["(e.g., [16,17])", "[3–5]", "[20-21]"])].sort((a, b) => a - b)).toEqual([
+      3, 4, 5, 16, 17, 20, 21,
+    ]);
+    expect([...markerNumbers(["Tulving (1983)"])]).toEqual([]);
+  });
+});
+
+describe("generateCitations with a reference list", () => {
+  it("sends the list after the article, and not when there is none", async () => {
+    answer = JSON.stringify({ capped: false, works: [] });
+    const blocks = [block("spya-b00001", "Nothing cited here at all.")];
+    const article = { blocks, tree: tree(), meta: null } as never;
+    const list: NumberedReferenceList = {
+      entries: new Map([[1, "1. Chen, J. et al. (2017) Shared memories."]]),
+    };
+    await generateCitations({ power: "standard", article, previous: null, referenceList: list });
+    const texts = (sent?.system ?? []).map((b) => b.text);
+    expect(texts).toHaveLength(3);
+    expect(texts[1]).toContain("<reference-list>\n[1] Chen, J. et al. (2017) Shared memories.\n</reference-list>");
+    await generateCitations({ power: "standard", article, previous: null, referenceList: null });
+    expect((sent?.system ?? []).map((b) => b.text).some((t) => t.includes("<reference-list>"))).toBe(false);
   });
 });

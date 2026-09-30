@@ -333,3 +333,31 @@ describe("flashBlock with a passage", () => {
     style.remove();
   });
 });
+
+/**
+ * **A cited work's words** — Citations' *first cited* jump (SPIDERYARN-READING2-6J,
+ * plan 260930i). The marks carry `data-cite`, not `data-hit`, and one phrase
+ * can cite two works; `citePassageKey` is the one spelling `passageMarks` reads.
+ */
+describe("flashBlock with a cited work", () => {
+  it("washes that work's marks only, and not the paragraph", async () => {
+    const { citePassageKey } = await import("../src/web/rows.js");
+    layOut();
+    const td = prose("spya-aaaaaa");
+    if (td)
+      td.innerHTML = `<div class="prose"><p>Lab tasks <mark class="cite" data-cite="spya-waaaaa">[1,2]</mark>, eye movements <mark class="cite" data-cite="spya-wbbbbb spya-waaaaa">[3–5]</mark> and <mark class="cite" data-cite="spya-wccccc">[6]</mark>.</p></div>`;
+    flashBlock("spya-aaaaaa", { passage: citePassageKey("spya-wccccc") });
+    const washed = () => [...document.querySelectorAll(".passage-flash")].map((m) => m.textContent);
+    expect(washed()).toEqual(["[6]"]);
+    expect(prose("spya-aaaaaa")?.classList.contains("block-flash")).toBe(false);
+    vi.advanceTimersByTime(FLASH_MS);
+    flashBlock("spya-aaaaaa", { passage: citePassageKey("spya-waaaaa") });
+    expect(washed()).toEqual(["[1,2]", "[3–5]"]);
+  });
+
+  it("has a wash for a cite mark in the stylesheet", () => {
+    const css = readFileSync("src/web/styles/prose.css", "utf8");
+    expect(css).toMatch(/td\.text mark\.cite\.passage-flash\s*\{\s*animation:\s*passage-flash 1\.2s/);
+    expect(css).toMatch(/td\.text mark\.cite\.passage-flash-still\s*\{\s*background-color:/);
+  });
+});

@@ -94,9 +94,30 @@ export function rowsForBlockIds(blockIds: readonly string[]): (HTMLElement | nul
  * `data-hit` is a space-separated list, because one generated `<mark>` can
  * carry several hits, and a key is `quote:block:n` — so split and compare
  * rather than build a `~=` selector that would need escaping.
+ *
+ * **A cited work is the second key shape** (plan 260930i, SPIDERYARN-READING2-6J):
+ * `citePassageKey(id)` finds the `mark.cite` fragments whose `data-cite` list
+ * names that work, so Citations' *first cited* jump centres on and flashes the
+ * words that cite it rather than the paragraph. Here, not at each caller, so
+ * the scroll and the flash still find a passage by one rule.
  */
 export function passageMarks(cell: ParentNode, key: string): HTMLElement[] {
+  if (key.startsWith(CITE_KEY)) {
+    const id = key.slice(CITE_KEY.length);
+    return [...cell.querySelectorAll<HTMLElement>("mark[data-cite]")].filter((m) =>
+      (m.dataset.cite ?? "").split(" ").includes(id),
+    );
+  }
   return [...cell.querySelectorAll<HTMLElement>("mark.hit[data-hit]")].filter((m) =>
     (m.dataset.hit ?? "").split(" ").includes(key),
   );
+}
+
+/* No `Found.key` starts with it: those begin with a block, quote, idea or run id
+   (search-hits.ts), and none of those is spelt `cite:`. */
+const CITE_KEY = "cite:";
+
+/** The passage key for a cited work's marks — `passageMarks` above. */
+export function citePassageKey(workId: string): string {
+  return `${CITE_KEY}${workId}`;
 }
