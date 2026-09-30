@@ -1,3 +1,7 @@
+---
+reports: spya-a0ep9m
+ending: shipped
+---
 # A long dictation is no longer cut off at two and a half minutes
 
 SPIDERYARN-READING2-5B (`spya-a0ep9m`), from Greg (admin), filed from the Feedback dialog. The time

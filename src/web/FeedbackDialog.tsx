@@ -116,7 +116,7 @@ import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 /** The stamp the release and the source maps went up under, if this is a build. */
 import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
-import { EarlierList, useEarlierFeedback } from "./FeedbackEarlier.js";
+import { EarlierFilter, EarlierList, useEarlierFeedback } from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
@@ -672,7 +672,7 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, retry } = useEarlierFeedback(open, view === "earlier");
+  const { earlier, show, setShow, retry } = useEarlierFeedback(open, view === "earlier");
   const ids = useId();
   const tabId = (which: View) => `${ids}-tab-${which}`;
   const panelId = (which: View) => `${ids}-panel-${which}`;
@@ -1222,7 +1222,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierList earlier={earlier} retry={retry} />
+          <EarlierFilter show={show} onShow={setShow} />
+          <EarlierList earlier={earlier} show={show} retry={retry} />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

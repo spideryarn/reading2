@@ -1,3 +1,7 @@
+---
+reports: spya-cjjvp4
+ending: shipped
+---
 # Equations render as raw LaTeX
 
 **Sentry:** SPIDERYARN-READING2-30 · first seen 2026-09-12 08:04Z · kind `suggestion` · from Greg

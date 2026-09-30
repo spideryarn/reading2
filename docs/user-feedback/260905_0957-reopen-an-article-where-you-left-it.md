@@ -1,3 +1,7 @@
+---
+reports: spya-n2hzwm
+ending: shipped
+---
 # Reopen an article where you left it
 
 **[SPIDERYARN-READING2-1W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1W)** · reported

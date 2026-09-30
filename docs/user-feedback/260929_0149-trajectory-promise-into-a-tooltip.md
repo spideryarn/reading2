@@ -1,3 +1,7 @@
+---
+reports: spya-sgfxuv
+ending: shipped
+---
 # The route's small print moves into a tooltip
 
 [SPIDERYARN-READING2-52](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-52) (2026-09-29

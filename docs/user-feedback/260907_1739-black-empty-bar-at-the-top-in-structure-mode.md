@@ -1,3 +1,7 @@
+---
+reports: spya-jj939h
+ending: shipped
+---
 # A black empty bar at the top, in Structure mode
 
 **[SPIDERYARN-READING2-2E](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2E)** · reported

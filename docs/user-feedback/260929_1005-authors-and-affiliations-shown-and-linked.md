@@ -1,3 +1,7 @@
+---
+reports: spya-ewtasn
+ending: shipped
+---
 # Authors and affiliations: extracted at import, cleaned, shown and linked
 
 SPIDERYARN-READING2-4J, from Greg (admin), in production, build `cba650a3`, on

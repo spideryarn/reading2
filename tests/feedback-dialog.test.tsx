@@ -1244,11 +1244,132 @@ describe("the Earlier tab", () => {
         createdAt: "2026-09-12T10:45:00.000Z",
         kind: "suggestion",
         body: "A tab of what I sent before.\nJust a list.",
+        shipped: true,
       },
-      { id: "spya-a1b2c3", createdAt: "2026-09-09T08:00:00.000Z", kind: null, body: "The shelf is slow." },
+      {
+        id: "spya-a1b2c3",
+        createdAt: "2026-09-09T08:00:00.000Z",
+        kind: null,
+        body: "The shelf is slow.",
+        shipped: false,
+      },
     ],
     more: false,
   };
+
+  function showButton(name: "All" | "Shipped" | "Not shipped"): HTMLButtonElement {
+    const found = [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].find(
+      (b) => (b.textContent ?? "").trim() === name,
+    );
+    if (!found) throw new Error(`no ${name} filter`);
+    return found;
+  }
+
+  it("marks a shipped report, and only that one", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    const items = [...panelOf("Earlier").querySelectorAll("li")];
+    expect(items[0]?.querySelector(".fb-earlier-shipped")?.textContent).toBe("Shipped");
+    expect(items[0]?.querySelector(".fb-earlier-shipped")?.getAttribute("title")).toContain(
+      "in the version of Spideryarn you're using",
+    );
+    expect(items[1]?.querySelector(".fb-earlier-shipped")).toBeNull();
+  });
+
+  it("refuses a report without a shipped flag as the wrong shape", async () => {
+    const { shipped: _dropped, ...withoutFlag } = REPORTS.reports[0] ?? { shipped: true };
+    listAnswer = page({ reports: [withoutFlag], more: false });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  it("filters on the server, one read per filter per opening, and starts on All", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(showButton("All").getAttribute("aria-pressed")).toBe("true");
+    for (const b of panelOf("Earlier").querySelectorAll(".fb-show-button")) {
+      expect(b.getAttribute("type")).toBe("button");
+    }
+
+    listAnswer = page({ reports: [], more: false });
+    click(showButton("Shipped"));
+    await act(async () => {});
+    expect(lists).toEqual(["/api/feedback", "/api/feedback?show=shipped"]);
+    expect(showButton("Shipped").getAttribute("aria-pressed")).toBe("true");
+    expect(panelOf("Earlier").textContent).toContain("None of your reports has a shipped change yet.");
+
+    click(showButton("Not shipped"));
+    await act(async () => {});
+    expect(lists.at(-1)).toBe("/api/feedback?show=unshipped");
+    expect(panelOf("Earlier").textContent).toContain("Every report you've sent has a shipped change.");
+
+    /* Back to All: the answer already held, not a fourth read. */
+    click(showButton("All"));
+    await act(async () => {});
+    expect(lists).toHaveLength(3);
+    expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(2);
+
+    reopen();
+    listAnswer = page(REPORTS);
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(showButton("All").getAttribute("aria-pressed"), "a new opening is back on All").toBe("true");
+    expect(lists.at(-1)).toBe("/api/feedback");
+  });
+
+  it("files a late answer under the filter that asked, never over the one showing", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    let settleShipped: ((res: Response) => void) | null = null;
+    listAnswer = () => new Promise<Response>((resolve) => (settleShipped = resolve));
+    click(showButton("Shipped"));
+    await act(async () => {});
+
+    listAnswer = page({ reports: [], more: false });
+    click(showButton("Not shipped"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("Every report you've sent has a shipped change.");
+
+    const onlyShipped = { reports: [REPORTS.reports[0]], more: false };
+    await act(async () => {
+      settleShipped?.(new Response(JSON.stringify(onlyShipped), { status: 200 }));
+    });
+    expect(panelOf("Earlier").textContent, "Not shipped is still what shows").toContain(
+      "Every report you've sent has a shipped change.",
+    );
+    expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+
+    click(showButton("Shipped"));
+    await act(async () => {});
+    expect(lists, "Shipped's late answer was kept, so no second read").toHaveLength(3);
+    expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(1);
+  });
+
+  it("drops an answer that lands after the dialog shut", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    listAnswer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    reopen();
+    await act(async () => {
+      settle?.(new Response(JSON.stringify(REPORTS), { status: 200 }));
+    });
+    listAnswer = page({ reports: [], more: false });
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(lists, "the new opening read afresh").toHaveLength(2);
+    expect(panelOf("Earlier").textContent).toContain("You haven't sent us any feedback yet.");
+  });
 
   it("starts on Write, and lists the reader's own reports when Earlier is chosen", async () => {
     listAnswer = page(REPORTS);

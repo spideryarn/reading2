@@ -1,3 +1,7 @@
+---
+reports: spya-sfj0e9
+ending: shipped
+---
 # A button in Quotes mode to find more
 
 **[SPIDERYARN-READING2-27](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-27)** · reported

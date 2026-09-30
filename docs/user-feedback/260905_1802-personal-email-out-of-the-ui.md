@@ -1,3 +1,7 @@
+---
+reports: spya-ws4765
+ending: shipped
+---
 # The personal address comes out of the UI
 
 **[SPIDERYARN-READING2-22](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-22)** · reported

@@ -1,3 +1,7 @@
+---
+reports: spya-buj2gb
+ending: shipped
+---
 # Trajectory: ideas and FAQ open in place, like the glossary
 
 SPIDERYARN-READING2-59 (`spya-buj2gb`), 2026-09-29, a suggestion from an admin (Greg), in

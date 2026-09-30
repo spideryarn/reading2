@@ -1,3 +1,7 @@
+---
+reports: spya-batuwx
+ending: shipped
+---
 # The spider beside "Spideryarn Reading", and Beta on the right
 
 SPIDERYARN-READING2-4X, from Greg (admin), in production, build `cba650a3`, on the signed-out

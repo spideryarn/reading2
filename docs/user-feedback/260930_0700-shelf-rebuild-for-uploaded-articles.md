@@ -1,3 +1,7 @@
+---
+reports: spya-tedd58
+ending: shipped
+---
 # The shelf's Re-fetch and rebuild should still rebuild an uploaded article
 
 SPIDERYARN-READING2-6B, from Greg (admin; `feedback-reporter.ts` exits 0 for the issue's user). The

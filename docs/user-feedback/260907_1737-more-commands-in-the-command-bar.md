@@ -1,3 +1,7 @@
+---
+reports: spya-gud39s
+ending: shipped
+---
 # More commands in the command bar, and the button beside the logo
 
 **Sentry:** `SPIDERYARN-READING2-2D` · reported 2026-09-07 17:37 UTC, from

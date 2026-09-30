@@ -1,3 +1,7 @@
+---
+reports: spya-d896sz
+ending: shipped
+---
 # Trajectory: icons for navigation, the question first, a route sparkline, "where am I"
 
 SPIDERYARN-READING2-5C (`spya-d896sz`), 2026-09-29, a suggestion from an admin (Greg), in

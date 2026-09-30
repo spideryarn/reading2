@@ -1,3 +1,7 @@
+---
+reports: spya-cyzsy4
+ending: shipped
+---
 # Diagram mode goes behind the Experimental switch
 
 SPIDERYARN-READING2-4R, from Greg (admin), in production, build `cba650a3`, on

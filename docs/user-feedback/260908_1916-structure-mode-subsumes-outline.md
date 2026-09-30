@@ -1,3 +1,7 @@
+---
+reports: spya-ava6u7
+ending: shipped
+---
 # Structure mode subsumes Outline
 
 **[SPIDERYARN-READING2-2S](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2S)** · report

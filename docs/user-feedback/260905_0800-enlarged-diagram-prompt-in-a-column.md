@@ -1,3 +1,7 @@
+---
+reports: spya-ssfnsd
+ending: shipped
+---
 # The enlarged diagram's prompt, in a column beside it
 
 **[SPIDERYARN-READING2-1P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1P)** · reported

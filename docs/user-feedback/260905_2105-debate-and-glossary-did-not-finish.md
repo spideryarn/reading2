@@ -1,3 +1,7 @@
+---
+reports: spya-a689m4, spya-sze5ug
+ending: shipped
+---
 # Debate and glossary "did not finish" — one bug, and it was ours from this morning
 
 **[SPIDERYARN-READING2-28](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-28)** and

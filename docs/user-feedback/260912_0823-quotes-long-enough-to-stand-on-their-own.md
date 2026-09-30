@@ -1,3 +1,7 @@
+---
+reports: spya-g3ztpc
+ending: shipped
+---
 # Quotes: long enough to stand on their own
 
 **[SPIDERYARN-READING2-3C](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3C)** · reported
