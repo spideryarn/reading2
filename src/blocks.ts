@@ -465,8 +465,11 @@ type NoteFields = Pick<Block, "role" | "treatment" | "noteId">;
  * `scrubReserved` takes every copy off before a single one of ours is written,
  * and it runs unconditionally, before the "no candidates" early return. So the
  * rule stage 3 depends on is that **`splitIntoBlocks` is only ever handed HTML
- * that has been through `canonicaliseNotes`** — which today is the whole of
- * `runExtract`, its only production caller. `NOTE_ID_PATTERN` is the belt: a
+ * whose note stamps we wrote** — through `canonicaliseNotes` on the web path
+ * (`runExtract`), or by `renderHtml` in src/pdf-read.ts, which builds a PDF's
+ * HTML itself out of escaped model text and so has nothing arriving that could
+ * carry a stamp (since 2026-09-30, docs/plans/260930k-pdf-footnotes-shown-and-linked.md).
+ * Those two are its only production callers. `NOTE_ID_PATTERN` is the belt: a
  * value that is not the ten hex digits stage 2 mints is not carried, so nothing
  * a page wrote can reach blocks.json, Postgres or the public payload as an id.
  *
