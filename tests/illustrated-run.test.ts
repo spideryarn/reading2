@@ -786,8 +786,10 @@ describe("generateIllustrated with the article's own figures", () => {
     const { draw, calls } = drawer();
     const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw, figures: FIGURES });
 
-    const user = (streamMessage.mock.calls[0]?.[1] as { messages: { content: string }[] }).messages[0]
-      ?.content;
+    const request = streamMessage.mock.calls[0]?.[1] as
+      | { messages: { content: string }[] }
+      | undefined;
+    const user = request?.messages[0]?.content;
     expect(user).toContain("=== THE ARTICLE'S OWN FIGURES ===");
     expect(user).toContain('- FIGURE A [spya-aaaaaa]: "Figure 1. The ladder of nature."');
 
@@ -828,16 +830,40 @@ describe("generateIllustrated with the article's own figures", () => {
     );
   });
 
+  it("faults a figure whose trusted offer no longer matches at attachment time", async () => {
+    answerWith(withFigures({ overview: ["FIGURE A"] }));
+    let reads = 0;
+    const drifting = { ...FIGURES[0]! };
+    Object.defineProperty(drifting, "label", {
+      enumerable: true,
+      get: () => (++reads < 3 ? "FIGURE A" : "FIGURE B"),
+    });
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({
+      article: ARTICLE,
+      sketch: SKETCH,
+      draw,
+      figures: [drifting],
+    });
+    expect(calls[0]?.references).toBeUndefined();
+    expect(run.illustrated.plates[0]?.figures).toBeUndefined();
+    expect(run.report.faults.map((f) => f.what)).toContain(
+      "FIGURE A no longer matches the offered figure — not attached",
+    );
+  });
+
   /**
    * **An article with no figures is today's plate, to the byte** — the brief
    * gets no figure section and every image call the envelope and references it
-   * had before `illustrated/5`.
+   * had before paper figures became an input.
    */
   it("sends exactly what it sent before when there are no figures", async () => {
     const { draw, calls } = drawer();
     await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
-    const user = (streamMessage.mock.calls[0]?.[1] as { messages: { content: string }[] }).messages[0]
-      ?.content;
+    const request = streamMessage.mock.calls[0]?.[1] as
+      | { messages: { content: string }[] }
+      | undefined;
+    const user = request?.messages[0]?.content;
     expect(user).not.toContain("OWN FIGURES");
     expect(calls[0]?.references).toBeUndefined();
     expect(calls[1]?.references).toHaveLength(1);

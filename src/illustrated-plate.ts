@@ -358,6 +358,8 @@ export interface OfferedFigure {
 
 /** `FIGURE A` to `FIGURE Z` — the only shape a stored label may have. */
 const FIGURE_LABEL = /^FIGURE [A-Z]$/;
+/** Also sees casing and plural drift, so a named-but-unattached figure is faulted. */
+const FIGURE_MENTION = /\bFIGURES?\s+[A-Z]\b/gi;
 
 /** Everything about a plate the brief model writes, before anybody draws it. */
 export interface IllustratedPlateBrief {
@@ -1110,10 +1112,23 @@ function figuresNamedIn(
   faults: IllustratedFault[],
   where: string,
 ): PlateFigure[] {
-  const named = [...new Set(prompt.match(/\bFIGURE [A-Z]\b/g) ?? [])];
   const kept: PlateFigure[] = [];
+  const seen = new Set<string>();
   let bytes = 0;
-  for (const label of named) {
+  for (const match of prompt.matchAll(FIGURE_MENTION)) {
+    const label = match[0];
+    if (seen.has(label)) continue;
+    seen.add(label);
+    /* Do not silently turn `figure a` or `FIGURES A` into an offered label.
+       They still name a figure the composition will try to draw, so ignoring
+       them would recreate the named-but-not-handed gap this function closes. */
+    if (!FIGURE_LABEL.test(label)) {
+      faults.push({
+        where,
+        what: `the composition names ${JSON.stringify(label)}, which is not an exact offered label — not attached`,
+      });
+      continue;
+    }
     const offered = opts.figures?.get(label);
     if (offered === undefined) {
       faults.push({ where, what: `the composition names ${label}, which was not offered — not attached` });
@@ -1143,8 +1158,16 @@ function readStoredFigures(raw: unknown, faults: IllustratedFault[], where: stri
     faults.push({ where, what: "figures is not a list — dropped" });
     return [];
   }
+  const looked = raw.slice(0, MAX_PLATE_FIGURES);
+  if (raw.length > looked.length) {
+    faults.push({
+      where,
+      what: `${raw.length - looked.length} figure(s) past the ${MAX_PLATE_FIGURES}-figure cap were not read`,
+    });
+  }
   const kept: PlateFigure[] = [];
-  for (const [k, entry] of raw.entries()) {
+  const labels = new Set<string>();
+  for (const [k, entry] of looked.entries()) {
     const label = isObj(entry) ? str(entry.label) : "";
     const block = isObj(entry) ? str(entry.block) : "";
     const sha256 = isObj(entry) ? str(entry.sha256) : "";
@@ -1160,6 +1183,11 @@ function readStoredFigures(raw: unknown, faults: IllustratedFault[], where: stri
       faults.push({ where: `${where}.figures[${k}]`, what: "not a figure record — dropped" });
       continue;
     }
+    if (labels.has(label)) {
+      faults.push({ where: `${where}.figures[${k}]`, what: "the same figure label again — dropped" });
+      continue;
+    }
+    labels.add(label);
     kept.push({ label, block, sha256, ext });
   }
   return kept;

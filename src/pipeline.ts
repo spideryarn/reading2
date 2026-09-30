@@ -3975,8 +3975,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* **The article's own figures, as ingredients** — Greg, 2026-09-30:
          "make sure we feed in the figures from the paper". A missing manifest
          and a manifest with no stored pictures are both *no figures*, which is
-         the plate this step drew before `illustrated/5`; a figure whose bytes
-         will not load is left out rather than failing the run
+         the plate this step drew before paper figures became an input; a
+         figure whose bytes will not load is left out rather than failing the run
          (src/illustrated-figures.ts). The figures are in the fingerprint,
          through `figuresFingerprint`, so a paper whose figures arrive later
          reads stale.

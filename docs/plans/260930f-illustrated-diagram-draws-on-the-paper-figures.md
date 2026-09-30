@@ -9,7 +9,7 @@ Feedback SPIDERYARN-READING2-5X (report `spya-c7807j`), from Greg (admin), on
 > — Greg, 2026-09-30
 
 Parent docs: [diagram.md § Illustrated](../project/diagram.md#illustrated) and
-[article-images.md](../project/article-images.md). Status: **built, on `dev`** (see § Outcome).
+[article-images.md](../project/article-images.md). Status: **built, on `dev`, not deployed** (see § Outcome).
 
 ## What the image model can take — checked before planning
 
@@ -148,9 +148,34 @@ budget closes the size risk that motivated it.
 
 ## Outcome
 
-*Pending the real run and the code review.*
+Built and on `dev`; not deployed. Two real runs through the queue on the local paper
+`entropy-24-00930-spya-pywwkq` (four stored figures), plus an ordering probe — all in
+[`evals/results/illustrated-figures-260930/`](../../evals/results/illustrated-figures-260930/README.md):
+
+- **Run 1, $0.53: 0 figures handed over.** The brief put "FIGURE A" in the overview's composition
+  and never wrote the separate list; the Venn was drawn from its caption. This is what moved the
+  design to *a plate's figures are the labels its composition names*.
+- **Run 2, $0.51: 6 figures across 3 plates.** The paper's Venn figure is recognisably redrawn as a
+  framed inset, without its lettering; a five-panel results figure became small chart panels in a
+  scene. One leak: two tiny glyph-words ("RC") on a vessel, probably from that figure's axis labels.
+- **Ordering probe, $0.28.** In the overview position the envelope's "Image 1 / Image 2" was
+  honoured. In the zoom position it was not, but confounded — see the next point — so unproven.
+- **Found on the way, not caused by this: zoom plates re-draw much of the overview.** Run 1's zoom
+  plate, with no figures attached, copies the overview's whole lower half and garbles a caption
+  ("BIELOW"). The style reference is being used as a base to edit, not just a hand to match. Worth
+  its own look; not touched here.
+
+Cost per paper is unchanged in shape: a figure is ~1,000 input tokens on the image call, at
+$0.50/M.
 
 ## Reviews
 
 - Plan: GPT Sol, read-only — done, above.
-- Code: GPT Sol — *pending*.
+- Code: GPT Sol, 2026-09-30 —
+  [findings](260930f-illustrated-diagram-draws-on-the-paper-figures-code-review-sol.md), prompt
+  beside it, scoped diff in `260930f-code-review.diff`. No P0. P1: a mis-cased or plural mention
+  (`figure a`, `FIGURES A`) was neither attached nor faulted — now faulted, still never repaired.
+  P2s: the stored plate record could claim a figure a late lookup had dropped (now rewritten from
+  what was actually attached, and faulted); stored figure lists were unbounded and could repeat a
+  label (now capped and deduped); two tests could mask a missing call. All fixed by the reviewer and
+  checked here; the Postgres suite its sandbox could not reach passed here.

@@ -641,7 +641,7 @@ describe("readStoredIllustrated", () => {
 });
 
 /**
- * **A plate's figures** — `illustrated/5`, SPIDERYARN-READING2-5X.
+ * **A plate's figures** — 260930f, SPIDERYARN-READING2-5X.
  * docs/plans/260930f-illustrated-diagram-draws-on-the-paper-figures.md.
  */
 describe("a plate's figures", () => {
@@ -679,11 +679,21 @@ describe("a plate's figures", () => {
       record("FIGURE A", "spya-bbbbbb", "a"),
       record("FIGURE C", "spya-aaaaaa", "c"),
     ]);
-    /* "figure a" in lower case is not a label and is not read as one: this
-       file never repairs. */
     expect(report.faults.map((f) => f.what)).toEqual([
       "the composition names FIGURE Z, which was not offered — not attached",
+      'the composition names "figure a", which is not an exact offered label — not attached',
       `FIGURE D is past the ${MAX_PLATE_FIGURES}-figure cap — not attached`,
+    ]);
+  });
+
+  it("faults a plural shorthand rather than silently drawing figures it did not attach", () => {
+    const { illustrated, report } = readModelBrief(
+      brief([good()], composing("Put FIGURES A AND B beside the conclusion.")),
+      { ...ONE, figures: OFFERED },
+    );
+    expect(illustrated.plates[0]?.figures).toBeUndefined();
+    expect(report.faults.map((f) => f.what)).toEqual([
+      'the composition names "FIGURES A", which is not an exact offered label — not attached',
     ]);
   });
 
@@ -727,6 +737,30 @@ describe("a plate's figures", () => {
     expect(report.faults.map((f) => f.what)).toEqual([
       "not a figure record — dropped",
       "not a figure record — dropped",
+    ]);
+  });
+
+  it("keeps a stored figure record inside the same count and uniqueness bounds as a fresh brief", () => {
+    const { illustrated, report } = readStoredIllustrated(
+      brief([good()], {
+        image: IMAGE,
+        figures: [
+          record("FIGURE A", "spya-zzzzzz", "a"),
+          record("FIGURE A", "spya-zzzzzz", "a"),
+          record("FIGURE B", "spya-zzzzzz", "b"),
+          record("FIGURE C", "spya-zzzzzz", "c"),
+          record("FIGURE D", "spya-zzzzzz", "d"),
+        ],
+      }),
+      ONE,
+    );
+    expect(illustrated.plates[0]?.figures?.map((f) => f.label)).toEqual([
+      "FIGURE A",
+      "FIGURE B",
+    ]);
+    expect(report.faults.map((f) => f.what)).toEqual([
+      `2 figure(s) past the ${MAX_PLATE_FIGURES}-figure cap were not read`,
+      "the same figure label again — dropped",
     ]);
   });
 

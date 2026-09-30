@@ -1126,7 +1126,7 @@ export async function generateIllustrated(opts: {
      tell the two apart. Plan § Profile, and who may see it. */
   illustrated.profileHash = profile ? hashProfile(profile) : null;
 
-  const { draws, cancelled } = await drawPlates(illustrated, draw, { ...opts, figures });
+  const { draws, cancelled } = await drawPlates(illustrated, report, draw, { ...opts, figures });
 
   return {
     illustrated,
@@ -1182,6 +1182,7 @@ function wasAborted(err: unknown, signal?: AbortSignal): boolean {
  */
 async function drawPlates(
   illustrated: Illustrated,
+  report: IllustratedReport,
   draw: DrawPlate,
   opts: {
     onProgress?: (detail: string) => void;
@@ -1205,8 +1206,39 @@ async function drawPlates(
        would be a figure record from somewhere else, and it is not sent. */
     const attached = (plate.figures ?? []).flatMap((f) => {
       const figure = figureByLabel.get(f.label);
-      return figure ? [figure] : [];
+      if (
+        !figure ||
+        figure.block !== f.block ||
+        figure.sha256 !== f.sha256 ||
+        figure.ext !== f.ext
+      ) {
+        /* A plate record and the bytes must never part company. This should be
+           unreachable for `loadArticleFigures`' immutable local result, but a
+           caller may hold and mutate an injected list while the brief streams.
+           Dropping silently would leave the artefact claiming an object the
+           illustrator never saw. */
+        report.faults.push({
+          where: `plate[${i}]`,
+          what: `${f.label} no longer matches the offered figure — not attached`,
+        });
+        return [];
+      }
+      return [figure];
     });
+    if (attached.length !== (plate.figures?.length ?? 0)) {
+      /* `figures` is the record of what was actually sent, not what survived
+         the earlier read. Keep it on the same side of this final lookup as the
+         references and their numbered envelope. */
+      if (attached.length === 0) delete plate.figures;
+      else {
+        plate.figures = attached.map(({ label, block, sha256, ext }) => ({
+          label,
+          block,
+          sha256,
+          ext: ext === "png" ? "png" : "jpeg",
+        }));
+      }
+    }
     const refs = [
       ...(reference ? [reference] : []),
       ...attached.map((f) => ({ dataUrl: f.dataUrl })),
