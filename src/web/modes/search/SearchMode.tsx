@@ -113,7 +113,8 @@ export function SearchBand({
              And it switches itself on, which is the one exception to
              default-false: a search the reader just paid for and cannot see is
              not a result. */
-          setActive([...panel.active, ask(criterion)]);
+          const id = ask(criterion);
+          setActive((ids) => [...ids, id]);
           onOpenHit(null);
         },
         onRetry: retry,
@@ -123,7 +124,7 @@ export function SearchBand({
         onRecolour: recolour,
         onDelete: (id) => {
           remove(id);
-          setActive(panel.active.filter((x) => x !== id));
+          setActive((ids) => ids.filter((x) => x !== id));
           onOpenHit(null);
         },
       }}
@@ -189,6 +190,17 @@ export function VisitorSearchBand({
  * itself on, and a deleted one switches itself off. `setActive` is that write,
  * handed back so those two verbs can stay on the arm they belong to instead of
  * being passed *in* here as optionals.
+ *
+ * **It takes an updater, not a list**, since several searches can be started
+ * at once (docs/plans/260930f-parallel-searches.md): a write built from
+ * `panel.active` appends to whatever that render saw. The updater gets nuqs's
+ * latest value instead. **It does not make two asks in one React batch safe** —
+ * nuqs refreshes that value inside a state updater, which a batch defers, so the
+ * second call still sees the old list (tried in a test, 2026-09-30). What makes
+ * that case unreachable is that every ask comes from a click or a keypress,
+ * and React renders after each discrete event before the next arrives. The
+ * duplicate-question refusal in `Box` leans on the same fact. GPT Sol raised
+ * it reviewing the plan.
  */
 function useSearchMode({
   runs,
@@ -401,6 +413,7 @@ function useSearchMode({
       },
     },
     /* `?runs=`, for the owner's two verbs that write it. See the docblock. */
-    setActive: (ids: string[]) => void setRunIds(ids),
+    setActive: (next: (ids: string[]) => string[]) =>
+      void setRunIds((old) => next(resolveRuns(old, run1))),
   };
 }
