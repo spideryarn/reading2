@@ -247,7 +247,8 @@ const ENTRIES: readonly Entry[] = [
    * its own ⤢. docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
    *
    * `isFigureButton` is the narrowing: inside a figure that holds a picture,
-   * outside its caption, and nothing in it but a link.
+   * outside its caption, and one link carrying Nature's own `view figure`
+   * action marker with nothing else in the element.
    */
   { selector: "div.c-article-section__figure-link", also: isFigureButton },
 ];
@@ -369,24 +370,31 @@ function isBareLinkList(el: Element): boolean {
  *   caption is the author's, whatever its class.
  * - **No picture of its own.** The icon inside Nature's link is an `<svg>`, so
  *   an `<svg>` inside a link is allowed and any other media is not.
- * - **Every word inside a link.** It reads *whether* a text node sits under an
- *   `<a>`, never what it says — a credit line like *"Photo: A. Smith"* with a
- *   linked name has words outside the link and is declined.
+ * - **Nature calls the one link `view figure`.** The class says where the
+ *   element sits; `data-track-action` says what the platform generated it to
+ *   do. Without that second half, an author's wholly linked credit such as
+ *   `<a>Photo: A. Smith</a>` is indistinguishable from a button and is deleted.
+ * - **Every word and SVG belongs to that one link.** It reads structure and the
+ *   platform's action marker, never the visible words.
  */
 function isFigureButton(el: Element): boolean {
   if (el.closest("figcaption") !== null) return false;
   const figure = el.closest("figure");
   if (figure === null || figure.querySelector("img, picture, video") === null) return false;
   if (el.querySelector("img, picture, video, audio, iframe, canvas, object, embed") !== null) return false;
-  for (const svg of Array.from(el.querySelectorAll("svg"))) {
-    if (svg.closest("a") === null || !el.contains(svg.closest("a"))) return false;
+  const links = Array.from(el.querySelectorAll("a[href]"));
+  const control = links[0];
+  if (links.length !== 1 || control?.getAttribute("data-track-action") !== "view figure") return false;
+  for (const child of Array.from(el.querySelectorAll("*"))) {
+    if (child !== control && !control.contains(child)) return false;
   }
-  if (el.querySelector("a[href]") === null) return false;
+  for (const svg of Array.from(el.querySelectorAll("svg"))) {
+    if (svg.closest("a") !== control) return false;
+  }
   const walker = el.ownerDocument.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if ((node.textContent ?? "").trim() === "") continue;
-    const link = node.parentElement?.closest("a") ?? null;
-    if (link === null || !el.contains(link)) return false;
+    if (node.parentElement?.closest("a") !== control) return false;
   }
   return true;
 }

@@ -209,9 +209,20 @@
  * away instead: before Readability, a `div` between a figure and its picture, or
  * one wrapped round the figure alone, is unwrapped — **only if Readability's own
  * two link rules would delete it**, asked by `readabilityWouldTakeItForItsLinks`
- * with Readability's weight and link-density arithmetic copied and its regexes
- * pinned. `figure` is not a tag `_cleanConditionally` walks, so once no such
- * `div` is left, those two rules have nothing to take.
+ * with Readability's weight and link-density arithmetic copied, its regexes
+ * pinned, and the nearby exits mirrored: negative weight, list-dominated divs,
+ * allowed videos and div-to-p conversion. The density is measured after the
+ * same hidden and unlikely descendants Readability removes. `figure` is not a
+ * tag `_cleanConditionally` walks, so once no such `div` is left, those two
+ * rules have nothing to take.
+ *
+ * **The mirror is of Readability's first, weight-on pass.** If an extraction is
+ * shorter than 500 characters, Readability retries and eventually switches
+ * `FLAG_WEIGHT_CLASSES` off. A positive wrapper between 0.2 and 0.5 is safe on
+ * the first pass and linky on that retry. Rule C cannot know before parsing
+ * whether the retry will happen; treating every such wrapper as at risk would
+ * move wrappers on ordinary pages where it does not. The stage-1 code review
+ * records the reproduced 536-character case and leaves that widening decision.
  *
  * **That is the whole guarantee.** Candidate selection is another way to lose a
  * figure — one outside the article Readability picks is never appended — and
@@ -453,6 +464,10 @@ export const NEGATIVE =
 /** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.hashUrl` — a fragment link counts 0.3 of its length. */
 export const HASH_URL = /^#.+/;
 
+/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.videos` — these embeds make conditional cleaning return early. */
+export const VIDEOS =
+  /\/\/(www\.)?((dailymotion|youtube|youtube-nocookie|player\.vimeo|v\.qq)\.com|(archive|upload\.wikimedia)\.org|player\.twitch\.tv)/i;
+
 /**
  * **The seam that lets a test run the pipeline with this pass switched off**,
  * and nothing else uses it.
@@ -659,23 +674,124 @@ const FIGURE_PICTURE = "img, picture, video";
  *   over 0.2;
  * - *"High weight and mostly links"*: weight 25 or more and density over 0.5.
  *
- * Asked **before** Readability runs, of a document it has not yet cleaned, so it
- * is an estimate of the later question rather than the question itself — close
- * because the text and the links are the same, and made safe by the fallback,
- * which is what decides whether the page ships with rule C. The point of asking
- * at all is `kept`: a figure is counted only where Readability's own rule would
- * have taken it, the standard rule A holds itself to. GPT Sol, plan review.
+ * Asked **before** Readability runs, so `readabilityDomForLinkGate` first takes
+ * out the scripts, styles and hidden descendants Readability removes before it
+ * measures text and links. The other early exits that bear on the two link rules
+ * are mirrored too: a negative weight is already a different deletion, a
+ * list-dominated low-weight div is exempt, an allowed video returns early, and
+ * div Readability turns into a paragraph is never conditionally cleaned as a
+ * div, and the unconditional cleaners ahead of divs no longer contribute text.
+ * The fallback still decides whether the changed page ships; this mirror decides
+ * whether `kept` may honestly say the wrapper crossed a link rule.
  *
  * Readability's `linkDensityModifier` is 0 here because `readingArm` passes no
- * options, and its other checks — a negative class weight on its own, too many
- * `<li>`s or inputs, embeds — are not this rule's: none was measured taking a
- * figure.
+ * options. Class weight is the first pass's, for the retry limit in Rule C's
+ * header. Other checks are not this rule's and do not qualify a wrapper.
  */
 export function readabilityWouldTakeItForItsLinks(div: Element): boolean {
-  if (readabilityInnerText(div).split(",").length - 1 >= 10) return false;
-  const weight = readabilityClassWeight(div);
-  const density = readabilityLinkDensity(div);
-  return (weight < 25 && density > 0.2) || (weight >= 25 && density > 0.5);
+  const staysADiv = readabilityKeepsThisAsADiv(div);
+  const judged = readabilityDomForLinkGate(div);
+  if (judged === null || !staysADiv) return false;
+  readabilityCleanBeforeDivs(judged);
+  if (hasAllowedVideo(judged)) return false;
+  if (readabilityInnerText(judged).split(",").length - 1 >= 10) return false;
+  const weight = readabilityClassWeight(judged);
+  /* `_cleanConditionally` returns on negative weight before it asks either link
+     question. Calling that a link-rule deletion made `kept` false. */
+  if (weight < 0) return false;
+  const density = readabilityLinkDensity(judged);
+  return (!readabilityTreatsAsList(judged) && weight < 25 && density > 0.2) || (weight >= 25 && density > 0.5);
+}
+
+/**
+ * Readability's node-preparation removals that can change comma count or link
+ * density: scripts and styles, then invisible and unlikely descendants. Work on
+ * a clone; the protection pass itself must move only wrappers it accepts.
+ */
+function readabilityDomForLinkGate(div: Element): Element | null {
+  if (readabilityNodePrepRemoves(div)) return null;
+  const clone = div.cloneNode(true) as Element;
+  for (const removed of Array.from(clone.querySelectorAll("script, noscript, style"))) removed.remove();
+  for (const candidate of Array.from(clone.querySelectorAll("*"))) {
+    if (readabilityNodePrepRemoves(candidate)) candidate.remove();
+  }
+  return clone;
+}
+
+/** Readability 0.6.0 `_isProbablyVisible`; `aria-hidden` has normally been removed by `prepareDocument`. */
+function readabilityProbablyVisible(el: Element): boolean {
+  const style = (el as Element & { readonly style?: CSSStyleDeclaration }).style;
+  return (
+    (style === undefined || (style.display !== "none" && style.visibility !== "hidden")) &&
+    !el.hasAttribute("hidden") &&
+    (!el.hasAttribute("aria-hidden") || el.getAttribute("aria-hidden") !== "true" || el.classList.contains("fallback-image"))
+  );
+}
+
+/** The node-preparation removals that happen before divs are scored or cleaned. */
+function readabilityNodePrepRemoves(el: Element): boolean {
+  if (!readabilityProbablyVisible(el)) return true;
+  if (el.getAttribute("aria-modal") === "true" && el.getAttribute("role") === "dialog") return true;
+  const match = `${el.getAttribute("class") ?? ""} ${el.id}`;
+  if (
+    UNLIKELY_CANDIDATES.test(match) &&
+    !OK_MAYBE_ITS_A_CANDIDATE.test(match) &&
+    !hasNearbyAncestor(el, "TABLE") &&
+    !hasNearbyAncestor(el, "CODE") &&
+    el.tagName !== "BODY" &&
+    el.tagName !== "A"
+  ) {
+    return true;
+  }
+  return ["menu", "menubar", "complementary", "navigation", "alert", "alertdialog", "dialog"].includes(
+    el.getAttribute("role") ?? "",
+  );
+}
+
+/** Readability's default ancestor window checks four parents (its default maxDepth is three). */
+function hasNearbyAncestor(el: Element, tagName: string): boolean {
+  let node = el.parentElement;
+  for (let level = 1; node !== null && level <= 4; level += 1) {
+    if (node.tagName === tagName) return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
+/** A source `div` with none of these descendants becomes a `p` before conditional div cleaning. */
+function readabilityKeepsThisAsADiv(div: Element): boolean {
+  return div.querySelector("blockquote, dl, div, img, ol, p, pre, table, ul") !== null;
+}
+
+/** The `isList` calculation immediately above Readability's link rules. */
+function readabilityTreatsAsList(el: Element): boolean {
+  const total = readabilityInnerText(el).length;
+  let list = 0;
+  for (const node of Array.from(el.querySelectorAll("ul, ol"))) list += readabilityInnerText(node).length;
+  return list / total > 0.9;
+}
+
+/** An allowed video makes `_cleanConditionally` return `false` before any link rule. */
+function hasAllowedVideo(el: Element): boolean {
+  return Array.from(el.querySelectorAll("object, embed, iframe")).some(videoIsAllowed);
+}
+
+function videoIsAllowed(embed: Element): boolean {
+  for (const attr of Array.from(embed.attributes)) if (VIDEOS.test(attr.value)) return true;
+  return embed.tagName === "OBJECT" && VIDEOS.test(embed.innerHTML);
+}
+
+/** Unconditional cleaners in `_prepArticle` that run before conditional div cleaning. */
+function readabilityCleanBeforeDivs(el: Element): void {
+  for (const tag of ["object", "embed"]) {
+    for (const candidate of Array.from(el.querySelectorAll(tag))) if (!videoIsAllowed(candidate)) candidate.remove();
+  }
+  for (const removed of Array.from(el.querySelectorAll("footer, link, aside"))) removed.remove();
+  for (const candidate of Array.from(el.querySelectorAll("iframe"))) if (!videoIsAllowed(candidate)) candidate.remove();
+  for (const removed of Array.from(el.querySelectorAll("input, textarea, select, button"))) removed.remove();
+  for (const heading of Array.from(el.querySelectorAll("h1, h2"))) {
+    if (readabilityClassWeight(heading) < 0) heading.remove();
+  }
 }
 
 /** Readability's `_getInnerText`: trimmed, runs of whitespace collapsed to one space. */

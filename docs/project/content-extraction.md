@@ -346,7 +346,9 @@ MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, 
 `ul.reflinks`, and Springer Nature's *Full size image* button, `div.c-article-section__figure-link`.
 That last one is the entry that costs a reader something when it stays: it shares a wrapper with the
 figure's picture, a picture has no text, and Readability deletes the wrapper for being all link —
-every figure on a Nature page, until 2026-09-30
+every figure on a Nature page, until 2026-09-30. The selector alone is not proof: the narrowing also
+requires the one link's publisher-written `data-track-action="view figure"`, or the same class around
+a wholly linked author credit would delete the credit
 ([260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md)). `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
 about the piece, and a reader may want them.
 
@@ -401,10 +403,22 @@ holding a figure's picture is judged by whatever text is left in it — on Subst
 all: nine of twenty-three figures on one post. No token can help (the high-weight bar is 0.5, and two
 of the nine were over it), so rule C unwraps such a `div` before Readability sees it, **only where
 Readability's own two link rules would delete it**, asked with Readability's arithmetic copied and
-pinned. It is under the same fallback as the tokens, and it guarantees nothing about a figure outside
-the article Readability selects. The reasoning, GPT Sol's page that needs the fallback, and the
-production numbers are in
+pinned. The gate also mirrors the branches around that arithmetic: hidden and unlikely descendants
+are gone before density is measured, a negative weight is already a different deletion, a
+list-dominated low-weight `div` is exempt, an allowed video returns early, and a `div` converted to
+`p` is never in the conditional `div` pass. Text in elements cleaned before divs, such as a
+`footer`, is gone before density is measured too. It is under the same fallback as the tokens, and it
+guarantees nothing about a figure outside the article Readability selects. The reasoning, GPT Sol's
+page that needs the fallback, and the production numbers are in
 [260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md).
+
+The gate mirrors Readability's first pass, when class weighting is on. A parse shorter than 500
+characters is retried with successively weaker flags, including one with class weighting off; on
+that retry a positive wrapper between 0.2 and 0.5 density can be deleted even though rule C left it
+alone. The 2026-09-30 code review reproduced that as an accepted 536-character article. Fixing it
+means either moving every such wrapper on ordinary pages that never retry, or adding a second-pass
+decision around a private Readability state, so it remains a named limit rather than hidden inside
+the first-pass claim.
 
 **Two tokens, one job each, and that is a P0 rather than a style.** `spya-keep-column` is in
 `okMaybeItsACandidate` and deliberately in neither `positive` nor `negative`, so it defeats a

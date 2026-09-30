@@ -24,12 +24,14 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { readArticle } from "../src/extract.js";
+import { removePlatformFurniture } from "../src/furniture.js";
 import { loadMathsRenderer } from "../src/maths-server.js";
 import {
   HASH_URL,
   NEGATIVE,
   POSITIVE,
   RULES,
+  VIDEOS,
   controlOptionsFor,
   keptWithdrawn,
   readabilityWouldTakeItForItsLinks,
@@ -82,6 +84,25 @@ describe("furniture — Springer Nature's figures, deleted for their Full size i
   it("declines a credit line whose words are not all inside its link", () => {
     const { removed } = extracted(withLinkDiv(`Photo: <a href="https://example.org/p">A. Smith</a>`), "https://example.org/x");
     expect(removed["div.c-article-section__figure-link"]).toBeUndefined();
+  });
+
+  it("declines an author's wholly linked credit without Nature's control marker", () => {
+    const doc = dom(withLinkDiv(`<a href="https://example.org/photographers/a-smith">Photo: A. Smith</a>`));
+    const removed = removePlatformFurniture(doc);
+    expect(removed["div.c-article-section__figure-link"]).toBeUndefined();
+    expect(doc.body.textContent).toContain("Photo: A. Smith");
+  });
+
+  it("declines content beside the marked control even when it has no text node", () => {
+    const doc = dom(
+      withLinkDiv(
+        `<a href="https://example.org/p" data-track-action="view figure">Full size image</a>` +
+          `<span aria-label="Photo: A. Smith"></span>`,
+      ),
+    );
+    const removed = removePlatformFurniture(doc);
+    expect(removed["div.c-article-section__figure-link"]).toBeUndefined();
+    expect(doc.querySelector('[aria-label="Photo: A. Smith"]')).not.toBeNull();
   });
 
   it("declines one that holds a picture of its own", () => {
@@ -158,6 +179,7 @@ describe("rule C — the gate is Readability's own two link rules", () => {
     expect(POSITIVE.source).toBe(LIVE.positive?.source);
     expect(NEGATIVE.source).toBe(LIVE.negative?.source);
     expect(HASH_URL.source).toBe(LIVE.hashUrl?.source);
+    expect(VIDEOS.source).toBe(LIVE.videos?.source);
   });
 
   const div = (html: string) => dom(`<body>${html}</body>`).body.firstElementChild as Element;
@@ -174,6 +196,11 @@ describe("rule C — the gate is Readability's own two link rules", () => {
     expect(readabilityWouldTakeItForItsLinks(div(`<div class="content">${figure(LINKY)}</div>`))).toBe(false);
   });
 
+  it("adds class and id weight independently", () => {
+    expect(readabilityWouldTakeItForItsLinks(div(`<div id="content">${figure(LINKY)}</div>`))).toBe(false);
+    expect(readabilityWouldTakeItForItsLinks(div(`<div class="media" id="content">${figure(LINKY)}</div>`))).toBe(true);
+  });
+
   it("counts a fragment link at 0.3 of its length", () => {
     const fragment = `<a href="#ref-1">a source link that is fairly long</a>`;
     expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(fragment)}</div>`))).toBe(false);
@@ -182,6 +209,70 @@ describe("rule C — the gate is Readability's own two link rules", () => {
   it("does not look at a wrapper with ten commas, as Readability does not", () => {
     const commas = `<a href="https://example.org/x">a, b, c, d, e, f, g, h, i, j, k</a>`;
     expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(commas)}</div>`))).toBe(false);
+  });
+
+  it("does not call a negative-weight deletion a link-rule deletion", () => {
+    expect(readabilityWouldTakeItForItsLinks(div(`<div class="media">${figure(LINKY)}</div>`))).toBe(false);
+  });
+
+  it("honours the low-weight link-rule exemption for list-dominated divs", () => {
+    const list = `<ul><li>${LINKY}</li></ul>`;
+    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c"><figure><img src="a.png">${list}</figure></div>`))).toBe(false);
+  });
+
+  it("honours the allowed-video exemption that returns before the link rules", () => {
+    const video = `<iframe src="https://www.youtube.com/embed/abc"></iframe>`;
+    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(`${video}${LINKY}`)}</div>`))).toBe(false);
+  });
+
+  it("declines a video-only div that Readability converts to a paragraph before cleaning divs", () => {
+    const videoFigure = `<figure><video src="movie.mp4"></video><figcaption>${LINKY}</figcaption></figure>`;
+    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${videoFigure}</div>`))).toBe(false);
+  });
+});
+
+describe("rule C — the DOM Readability actually judges", () => {
+  const prose =
+    `<p>` +
+    "Author prose remains here for candidate selection and makes this article comfortably long enough. ".repeat(12) +
+    `</p>`;
+
+  it("ignores hidden unlinked text that Readability removes before measuring density", () => {
+    const hidden =
+      "This hidden explanation is deliberately long and unlinked, so counting it would put the source below the line. ".repeat(4);
+    const html =
+      `<html><body><article>${prose}<div class="wrap"><figure><img src="https://example.org/a.png">` +
+      `<figcaption><span hidden>${hidden}</span><a href="https://example.org/source">` +
+      `A visible linked source description long enough not to hit the short-content check</a></figcaption>` +
+      `</figure></div></article></body></html>`;
+    const { doc, kept } = extracted(html, "https://example.org/x");
+    expect(doc.querySelector('img[src="https://example.org/a.png"]')).not.toBeNull();
+    expect(kept[RULES.figureWrapper]).toBe(1);
+  });
+
+  it("ignores a footer that Readability cleans before conditional divs", () => {
+    const footer =
+      "This footer is deliberately long and unlinked, so counting it would put the source below the line. ".repeat(4);
+    const html =
+      `<html><body><article>${prose}<div class="wrap"><figure><img src="https://example.org/a.png">` +
+      `<figcaption><footer>${footer}<iframe src="https://www.youtube.com/embed/inside-removed-footer"></iframe></footer>` +
+      `<a href="https://example.org/source">` +
+      `A visible linked source description long enough not to hit the short-content check</a></figcaption>` +
+      `</figure></div></article></body></html>`;
+    const { doc, kept } = extracted(html, "https://example.org/x");
+    expect(doc.querySelector('img[src="https://example.org/a.png"]')).not.toBeNull();
+    expect(kept[RULES.figureWrapper]).toBe(1);
+  });
+
+  it("walks past a safe inner wrapper and unwraps the risky outer one", () => {
+    const linked = `<a href="https://example.org/source">a linked source whose length puts density between the two thresholds</a>`;
+    const html =
+      `<html><body><article>${prose}<div class="outer"><div class="content"><figure>` +
+      `<img src="https://example.org/a.png"><figcaption>A short caption followed by ${linked}</figcaption>` +
+      `</figure></div></div></article></body></html>`;
+    const { doc, kept } = extracted(html, "https://example.org/x");
+    expect(doc.querySelector('img[src="https://example.org/a.png"]')).not.toBeNull();
+    expect(kept[RULES.figureWrapper]).toBe(1);
   });
 });
 
@@ -196,8 +287,8 @@ describe("rule C — under the same fallback as rules A and B", () => {
    * **GPT Sol's page**, found in the plan review and rebuilt against the built
    * gate on 2026-09-30 (the first version had 141 commas, which the gate
    * declines): four sibling `<article>` sections of the author's prose, and a
-   * figure whose four-paragraph caption, half of it linked, sits inside its
-   * picture's `div`. Unwrapped, the figure wins candidate selection and all four
+   * figure whose two linked caption paragraphs sit inside its picture's neutral
+   * `div`. Unwrapped, the figure wins candidate selection and all four
    * sections go — so the control has to ship, and does, and the picture is the
    * price.
    */
@@ -209,12 +300,13 @@ describe("rule C — under the same fallback as rules A and B", () => {
     const html =
       `<html><head><title>T</title></head><body>` +
       [0, 1, 2, 3].map((n) => `<article><p>AUTHOR-${n} ${sentence}</p></article>`).join("") +
-      `<figure><div class="media"><img src="x.png"><p>${caption}</p><p>${caption}</p>` +
+      `<figure><div class="figure-box"><img src="x.png">` +
       `<p><a href="/source">${caption}</a></p><p><a href="/source">${caption}source material</a></p></div></figure>` +
       `</body></html>`;
     const r = readArticle(html, "https://example.org/x");
     const text = dom(r.article?.content ?? "").body.textContent ?? "";
     for (const n of [0, 1, 2, 3]) expect(text, `section ${n}`).toContain(`AUTHOR-${n}`);
+    expect(dom(r.article?.content ?? "").querySelector("img")).toBeNull();
     expect(r.kept).toEqual({ [RULES.figureWrapperRolledBack]: 1 });
   });
 });

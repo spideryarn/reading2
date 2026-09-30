@@ -68,19 +68,30 @@ enlarge button:
 - **Nature's button is furniture.** `div.c-article-section__figure-link` is Springer Nature's own
   label on a control it generates, which is the whole licence of
   [`src/furniture.ts`](../../src/furniture.ts). A fifth entry, narrowed to what the corpus shows:
-  inside a `<figure>`, no picture, and every word inside a link. Removing that one element alone
-  brings back all eight Nature pictures, because the item around the picture then has no link text
-  to be judged by.
+  inside a `<figure>`, no picture, and exactly one link bearing Nature's own
+  `data-track-action="view figure"`, with every word and element inside it. Removing that one element
+  alone brings back all eight Nature pictures, because the item around the picture then has no link
+  text to be judged by.
 - **Rule C in [`src/protect.ts`](../../src/protect.ts), for a wrapper that dies of its caption.**
   Before Readability, for each `<figure>` holding an `img`, `picture` or `video`, look at every `div`
   between the figure and its picture and every `div` that wraps nothing but the figure (walking up
   while that holds, each judged on its own), and **unwrap one only if Readability's own
-  link-density rules would delete it**: fewer than ten commas, and link density over 0.2 at class
-  weight under 25, or over 0.5 at 25 and above. The weight and density are Readability 0.6.0's
-  `_getClassWeight` and `_getLinkDensity` — fragment links count 0.3 — copied, with the regexes
-  pinned against the live prototype the way rules A and B pin theirs. So `kept` counts a figure only
-  where Readability would really have taken it: the nine Substack figures whose captions cross the
-  line, not the six whose links are too short to matter.
+  link-density rules would delete it**: fewer than ten commas, and link density over 0.2 at
+  non-negative class weight under 25, or over 0.5 at 25 and above. The weight and density are
+  Readability 0.6.0's `_getClassWeight` and `_getLinkDensity` — fragment links count 0.3 — copied,
+  with the regexes pinned against the live prototype the way rules A and B pin theirs. The gate also
+  mirrors the nearby exits and the DOM Readability judges: negative weight is a different deletion,
+  list-dominated low-weight divs and allowed videos are exempt, divs converted to paragraphs are
+  never conditionally cleaned as divs, and text Readability removes as hidden, unlikely or in an
+  element cleaned before divs does not dilute the density. So `kept` counts a figure only where Readability's link rule would really have
+  taken its wrapper: the nine Substack figures whose captions cross the line, not the six whose links
+  are too short to matter.
+- **The gate is the first, weight-on pass.** Readability can retry a sub-500-character extraction
+  with `FLAG_WEIGHT_CLASSES` off, making a positive wrapper at density 0.2–0.5 newly linky. Code
+  review reproduced an accepted 536-character result that loses its image that way. Pre-empting it
+  means unwrapping every such wrapper on pages that never retry, or adding a second-pass decision
+  around Readability's private retry state; that width is left for Greg rather than smuggled into
+  this stage.
 - `figure` is not among the tags `_cleanConditionally` walks (`form`, `fieldset`, `table`, `ul`,
   `div`), so once the at-risk `div` is gone, those two rules have nothing to remove. **That is the
   whole guarantee.** Candidate selection is a separate way to lose a figure — one outside the
@@ -187,18 +198,20 @@ Deferred, named: cause 4 (to Greg as a question), the lead image, WebP/AVIF host
 ## Stage 1, as built
 
 - **The furniture entry**: `div.c-article-section__figure-link`, narrowed by `isFigureButton`
-  (inside a figure that holds a picture, not in its caption, no picture of its own, every word inside
-  a link) — [`src/furniture.ts`](../../src/furniture.ts).
+  (inside a figure that holds a picture, not in its caption, no picture of its own, and one link with
+  Nature's own `data-track-action="view figure"`) — [`src/furniture.ts`](../../src/furniture.ts).
 - **Rule C**: `unwrapFigureWrappers` and its gate `readabilityWouldTakeItForItsLinks`, with
-  `POSITIVE`, `NEGATIVE` and `HASH_URL` copied and pinned — [`src/protect.ts`](../../src/protect.ts).
+  `POSITIVE`, `NEGATIVE`, `HASH_URL` and `VIDEOS` copied and pinned — [`src/protect.ts`](../../src/protect.ts).
 - **Tests**: [`tests/extract-figure-wrappers.test.ts`](../../tests/extract-figure-wrappers.test.ts),
   red before the change (three of seven at first; the rest were counterfactuals and negatives), with
   fixtures cut verbatim from the two live pages in `tests/fixtures/figure-wrappers/`. GPT Sol's
   rollback page could not be rebuilt from its description, so a second, narrow Sol run supplied it
   against the built gate
   ([question](260930e-figures-readability-deletes-with-their-wrapper-p1-4-question-prompt.md),
-  [answer](260930e-figures-readability-deletes-with-their-wrapper-p1-4-question-sol.md)); taking
-  rule C's row out of `WITHDRAWALS` turns that test and the bookkeeping test red.
+  [answer](260930e-figures-readability-deletes-with-their-wrapper-p1-4-question-sol.md)). Code review
+  found that reconstruction's `class="media"` made it negative-weight and therefore tested a
+  different deletion; the neutral replacement still needs the fallback. Taking rule C's row out of
+  `WITHDRAWALS` turns that test and the bookkeeping test red.
 - **The corpus**: rule C fires on one of the 35 fixtures, `quanta_year_physics`, and its output is
   **byte-identical** in both arms. The lead figure is a video player whose YouTube consent notice
   carries a *"privacy policy."* link, so the wrapper really is at risk — but the figure sits outside
@@ -211,3 +224,42 @@ Deferred, named: cause 4 (to Greg as a question), the lead image, WebP/AVIF host
   | Nature `s41593` | 0 → **8** of 8 | furniture ×8 |
   | Substack (Raschka) | 14 → **23** of 23 | rule C, `kept` = 9 — exactly the nine that were lost |
   | Wolfram, Asterisk, Noema | unchanged | nothing |
+
+## Code review, stage 1
+
+GPT Sol, 2026-09-30, `--sandbox workspace-write`, fixing inside the stage
+([prompt](260930e-figures-readability-deletes-with-their-wrapper-code-review-prompt.md),
+[answer](260930e-figures-readability-deletes-with-their-wrapper-code-review-sol.md), scoped
+[diff](260930e-figures-readability-deletes-with-their-wrapper-code-review.diff)). Exit 0 and a new
+answer file — **but the answer file holds only Sol's closing summary** (four P1s fixed, one P2 left,
+106 tests passing). The numbered findings it was asked to write there were overwritten by the
+wrapper's final message and are nowhere else. So the review was judged from its diff and its tests,
+each of which is a constructed case:
+
+- **`isFigureButton` could delete an author's credit** written wholly as a link in that class. It now
+  also requires Nature's own `data-track-action="view figure"` on the single link, with every word
+  and element inside that link.
+- **The gate called some deletions link-rule deletions that were not.** A negative class weight is
+  Readability's earlier, separate deletion. My rollback test used `class="media"`, which is
+  negative-weight, so it was testing that deletion and not rule C. It now uses a neutral class and
+  still needs the fallback.
+- **The gate measured a DOM Readability never sees.** It now drops what Readability removes before
+  it measures: hidden and unlikely descendants, scripts and styles, the elements cleaned before
+  divs. It also honours the exits around the link rules: list-dominated divs, allowed videos, and a
+  `div` Readability turns into a `p`.
+- **Left for Greg (P2):** the gate mirrors Readability's first pass. A page under 500 characters is
+  retried with class weighting off, and there a positive wrapper at density 0.2–0.5 can still lose
+  its picture. Sol reproduced a 536-character case.
+
+Checked here after the review: the three suites, 106 passing; `npm run typecheck`, exit 0; lint
+clean; and the fallback mutation re-run on the new rollback test (red without rule C's
+`WITHDRAWALS` row, green with it).
+
+**The one complexity cost, named for Greg.** The fixes make the gate about 130 lines of mirrored
+Readability internals, where the plan had three. What it buys is a `kept` that matches Readability's
+first pass on every case anyone has constructed, rather than one that is roughly right, and fewer
+wrappers moved that would have survived anyway. It is still a mirror run before Readability, so the
+retry above is a known gap. The simpler alternative is to go back to the three-line estimate and
+let the prose fallback carry safety alone. Then `kept` becomes an estimate and says so, and a few
+more wrappers get moved for nothing. Either is defensible. The fuller mirror shipped because this file's
+audit line has always been held to what really happened.
