@@ -19,6 +19,18 @@ then what would decide between them. A bare list of labels is not a question yet
 *"Often I get asked a question and I don't understand what the question is asking, or the options,
 or how to choose between them."*)
 
+**Order the work by ease and value**, unless told otherwise: the most value for the least effort
+first, and the costly, low-value item last or not at all.
+
+**Push back on a product suggestion you think is wrong** — a bad idea, one that would bring a lot of
+complexity or problems, or one where you see a better way. Say so, with the reason and the
+alternative, rather than building it as asked. That is a question for the user under the rule above,
+and a good one; they would rather hear it before the work than find it after.
+
+(Greg, 2026-10-01: *"agents should a) broadly prioritise by a combination of ease and value (unless
+otherwise instructed); and b) push back on product suggestions that you think are a bad idea or will
+create a lot of complexity/problems or where you think there's a better way."*)
+
 Running low on context is not a reason to stop. The plan doc is the memory: update it and keep going.
 
 ## The plan doc
