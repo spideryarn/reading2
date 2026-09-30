@@ -14,7 +14,7 @@ import {
   fitView,
   MODE_IDEAL,
   MODE_MIN,
-  PROSE_MIN,
+  MODE_PROSE_FLOOR,
   proseAloneMaxPx,
   SPINE_W,
   wideIdeal,
@@ -132,37 +132,49 @@ describe("the article on its own stops at the measure", () => {
  * >
  * > — Greg, 2026-09-29 (SPIDERYARN-READING2-5A)
  *
- * The posts are set in the prose face, so the band grows to a prose column's
- * measure, `wideIdeal` = 34rem — and by the same rule as every other band, only
- * into room the prose was not defending (`PROSE_MIN`). The numbers are written
- * out by hand rather than computed from the constants, because a test that
- * derived its expectation from `wideIdeal` would pass whatever `wideIdeal` said.
- * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ * > The tweet thread column perhaps could be slightly wider when I'm looking at
+ * > it on my iPad in portrait mode, and slightly narrower when I'm looking at it
+ * > on my iPad in landscape mode.
+ * >
+ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-6G)
+ *
+ * Since 2026-09-30 it takes a share of the room (`WIDE_SHARE`, 0.42) rather than
+ * whatever the prose leaves, between the standard band and `wideIdeal`. The
+ * numbers are written out by hand rather than computed from the constants,
+ * because a test that derived its expectation from `wideIdeal` would pass
+ * whatever `wideIdeal` said.
+ * docs/plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md.
  */
 describe("a wide band", () => {
-  const wide = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX) =>
-    fitView({ windowWidth, modeBand: true, bandShape: "wide", rootFontPx });
+  const wide = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX, showSpine: boolean | null = null) =>
+    fitView({ windowWidth, modeBand: true, bandShape: "wide", rootFontPx, showSpine });
+  const standard = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX, showSpine: boolean | null = null) =>
+    fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx, showSpine });
+
+  it("is wider on an iPad in portrait and narrower in landscape than it was", () => {
+    // 834 − 12 = 822; 0.42 × 822 = 345. It was 288, the band's floor.
+    expect(wide(834).modeW).toBe(345);
+    expect(wide(834).widths).toEqual([477]);
+    // 1194 − 12 = 1182; 0.42 × 1182 = 496. It was 544, the cap.
+    expect(wide(1194).modeW).toBe(496);
+    expect(wide(1194).widths).toEqual([686]);
+  });
 
   it("is a prose column's measure at a desktop window and a 16px root", () => {
     expect(wideIdeal(16)).toBe(544);
     expect(wide(1440).modeW).toBe(544);
     // And the prose beside it keeps the rest of the window.
     expect(wide(1440).widths).toEqual([1440 - SPINE_W - 544]);
+    // Below the cap it is the share: 0.42 × 1268 = 533.
+    expect(wide(1280).modeW).toBe(533);
   });
 
-  it("scales with the root, because the posts are rem-sized type", () => {
+  it("caps with the root, because the posts are rem-sized type", () => {
     expect(wide(1440, 12).modeW).toBe(408);
-    expect(wide(1440, 20).modeW).toBe(680);
-  });
-
-  it("takes only room the prose was not defending", () => {
-    /* At a 20px root the ideal is 680, but a 1100px window leaves 1088 - 544 =
-       544 beside a defended reading column, and that is all it gets. */
-    expect(wide(1100, 20).modeW).toBe(544);
-    expect(wide(1100, 20).widths).toEqual([PROSE_MIN]);
-    /* Squeezed below the ordinary band's floor, it stops at `MODE_MIN` like
-       any other, and the prose gives up the rest down to its own floor. */
-    expect(wide(800).modeW).toBe(MODE_MIN);
+    /* At a 20px root the cap is 680, but at 1440 the share is 0.42 × 1428 =
+       600 — the cap is a ceiling now, not a target, and it arrives nearer 1630. */
+    expect(wide(1440, 20).modeW).toBe(600);
+    expect(wide(1700, 20).modeW).toBe(680);
   });
 
   it("never comes out narrower than an ordinary band at a small root", () => {
@@ -170,10 +182,31 @@ describe("a wide band", () => {
     expect(wide(1440, 9).modeW).toBe(MODE_IDEAL);
   });
 
+  it("holds its invariants at every width, root and rail", () => {
+    for (const root of [9, 12, 16, 20]) {
+      for (const spine of [null, false] as const) {
+        for (let w = 320; w <= 2400; w++) {
+          const f = wide(w, root, spine);
+          const s = standard(w, root, spine);
+          expect(f.overflowing).toBe(false);
+          if (f.modeW === 0) continue; // covering, like any band
+          expect(f.widths[0]).toBeGreaterThanOrEqual(MODE_PROSE_FLOOR);
+          expect(f.modeW).toBeGreaterThanOrEqual(s.modeW);
+          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, wideIdeal(root)));
+          expect(f.modeW + (f.widths[0] ?? 0)).toBe(w - (spine === false ? 0 : SPINE_W));
+        }
+      }
+    }
+  });
+
   it("covers the article below the crossover, like any other band", () => {
+    expect(wide(699).modeW).toBe(0);
+    expect(wide(700).modeW).toBe(MODE_MIN);
+    expect(wide(700).widths).toEqual([MODE_PROSE_FLOOR]);
+    expect(wide(687, DEFAULT_ROOT_PX, false).modeW).toBe(0);
+    expect(wide(688, DEFAULT_ROOT_PX, false).modeW).toBe(MODE_MIN);
     const at = 690;
     expect(bandCoversProse(at)).toBe(true);
-    expect(wide(at).modeW).toBe(0);
     expect(wide(at).widths).toEqual([at - SPINE_W]);
   });
 
