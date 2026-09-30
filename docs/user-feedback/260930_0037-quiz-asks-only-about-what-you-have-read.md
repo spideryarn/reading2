@@ -60,13 +60,13 @@ Nothing here builds a second tracker.
 ([six changes, all taken](../plans/260930e-quiz-only-asks-about-what-you-have-read-review-sol.md)) and
 the code.
 
-## For you to decide
+## The privacy wording
 
-- **One clause on /privacy.** Nothing new is stored, but the page says the reading totals are there
-  "so that the article's outline and margin can show you where you have been". The quiz now uses
-  them too. The wording is proposed in
-  [the plan § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md)
-  and listed in [awaiting-approval.md](awaiting-approval.md).
+The /privacy bullet about reading time named the outline and margin as the only use, and the quiz now
+used the totals too. Your answer (2026-10-01) was not to list which features use them, so the bullet
+now reads *"Some of Spideryarn's features use it — to show you where you have been, for example"*,
+and the page's date moved to 1 October. Nothing about what is kept changed. Shipped on `dev` in
+`7a7785c6` — [261001a](../plans/261001a-privacy-reading-time-wording.md).
 
 ## What we did not build
 

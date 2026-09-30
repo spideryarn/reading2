@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "30 September 2026";
+const LAST_UPDATED = "1 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -212,10 +212,10 @@ export function PrivacyPage() {
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
             articles</strong> — with experimental features on, a running total of the seconds each
-            passage has been on your screen, so that the article’s outline and margin can show you
-            where you have been. We keep the totals, not a history of your reading (our ordinary
-            server logs do show when an update arrived). It is not shown to anybody reading an
-            article you have shared, and it goes when the article does.
+            passage has been on your screen. Some of Spideryarn’s features use it — to show you
+            where you have been, for example. We keep the totals, not a history of your reading (our
+            ordinary server logs do show when an update arrived). It is not shown to anybody reading
+            an article you have shared, and it goes when the article does.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> — we keep

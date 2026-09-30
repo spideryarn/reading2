@@ -76,7 +76,9 @@ up: a dense but central question falls below an easy peripheral one.
 old prompt. Neither let summary questions back in.
 
 **A list from before `faq/4`** has no scores, so it offers no order and no bar and is drawn in
-reading order exactly as it was. The rule and its arithmetic are
+reading order exactly as it was. **Those stay as they are**: the new order is for new articles, and
+an owner who wants it re-runs the FAQ from the Metadata page. Greg, 2026-10-01, asked whether to
+rebuild existing FAQs across production: *"new articles only"*. The rule and its arithmetic are
 [`src/web/faq-order.ts`](../../src/web/faq-order.ts), on the threshold machinery the Glossary and
 Citations share ([`src/web/threshold.ts`](../../src/web/threshold.ts)).
 
