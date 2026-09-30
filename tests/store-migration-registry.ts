@@ -704,9 +704,16 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the whole of its filesystem contact. Arrived 2026-09-05 with the parameter, which replaced " +
       "three callers setting `VERCEL=1` to make one `if` go the other way.",
   },
+  /**
+   * **`evidence: "static-only"`, because this file arrived after the stored
+   * witness ran.** Its route call, article update, job-row read and cleanup are
+   * visible in the import graph and the file itself; a later witness run can
+   * replace this static judgement with dynamic evidence.
+   */
   "tests/quiz-job-carries-the-reading-goal.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
+    evidence: "static-only",
     reason:
       "`POST /api/jobs` for a quiz freezes this article's `purpose` onto the job row " +
       "(SPIDERYARN-READING2-6Q). The purpose and the job both live only in Postgres; the " +

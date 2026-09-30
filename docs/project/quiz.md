@@ -337,7 +337,8 @@ asked on the add page and in Trajectory. The quiz job already carried it — `PO
 the rendered profile onto every job — and the stage now hands it to the prompt. With a reason, the
 path heads for the takeaways that matter for it and spends most of its steps on the parts that bear
 on it; it is still a path, still anchored, and never says a reason was given. With none, the prompt
-is byte-for-byte what it was (`tests/profile-prompts.test.ts`). The plan and its measurement are
+has the same user message byte-for-byte (`tests/profile-prompts.test.ts`); the constant system
+instructions now include the conditional goal rules on every call. The plan and its measurement are
 [260930j](../plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md).
 
 - **Not the shared profile machinery.** `profileSection` promises the profile changes *"nothing

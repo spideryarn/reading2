@@ -652,6 +652,27 @@ describe("the generation prompt", () => {
     expect(QUIZ_SYSTEM).toContain("KEEP TO WHAT MATTERS");
   });
 
+  it("lets a reading reason move most of the path towards its takeaways", () => {
+    /* SPIDERYARN-READING2-6Q. Merely carrying the profile to the request is not
+       the feature: without these rules the model has no instruction to change
+       the proportions, and every plumbing test still passes. */
+    expect(QUIZ_SYSTEM).toContain("IT DECIDES WHERE THE PATH GOES");
+    expect(QUIZ_SYSTEM).toMatch(/Choose the takeaways that matter for that\s+reason/);
+    expect(QUIZ_SYSTEM).toMatch(/spend most of the questions on the parts of the piece that bear on\s+it/);
+  });
+
+  it("does not let About alone move the path", () => {
+    expect(QUIZ_SYSTEM).toContain("ONLY THE REASON FOR READING MOVES THE PATH");
+    expect(QUIZ_SYSTEM).toMatch(/line about who they are and no reason for reading, set the ordinary path/);
+  });
+
+  it("keeps the reading reason out of questions, premises and answers", () => {
+    expect(QUIZ_SYSTEM).toMatch(
+      /never say or hint that a reason was given — in\s+a question, a premise or a reference answer/i,
+    );
+    expect(QUIZ_SYSTEM).toContain("Nothing is asked \"because\" of it");
+  });
+
   it("asks for no band, no spread and no value any more", () => {
     /* The three fields the path replaced. A prompt that still asked for them
        would spend the model's attention on a judgement nothing reads, and the

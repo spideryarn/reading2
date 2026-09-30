@@ -1,0 +1,682 @@
+diff --git a/evals/quiz-reading-goal.ts b/evals/quiz-reading-goal.ts
+new file mode 100644
+index 00000000..88c8361b
+--- /dev/null
++++ b/evals/quiz-reading-goal.ts
+@@ -0,0 +1,151 @@
++/**
++ * **Does a reason for reading move the quiz towards it?**
++ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md § How we will know.
++ *
++ * ```
++ * npx tsx evals/quiz-reading-goal.ts parts <slug>                                   # free: the parts, numbered
++ * npx tsx evals/quiz-reading-goal.ts generate --arm none-1 <slug>                   # paid
++ * npx tsx evals/quiz-reading-goal.ts generate --arm goal-1 --purpose "…" <slug>     # paid
++ * npx tsx evals/quiz-reading-goal.ts generate --arm about-1 --about "…" <slug>       # paid: the control
++ * npx tsx evals/quiz-reading-goal.ts report --parts 2,3 <slug>                      # free
++ * ```
++ *
++ * `generate` calls production's own `generateQuiz`, with the purpose rendered
++ * exactly as `resolveProfile` would render it for a reader with no *About you*
++ * box. `report` counts, per arm, the questions whose evidence sits **mostly**
++ * in the named parts (by block position, matched by the part's range), and
++ * prints each question beside the part it draws on — read those, the count is
++ * a prompt to look, not a verdict. Two runs per arm, because one run of an
++ * identical quiz prompt wobbles (docs/project/quiz.md § The rule is counted).
++ *
++ * Reads the article from the local database, read-only. Writes JSON under
++ * `evals/results/quiz-reading-goal/<arm>/`.
++ */
++
++import fs from "node:fs";
++import path from "node:path";
++import { loadEnvLocal } from "../src/env.js";
++
++const OUT = path.join(import.meta.dirname, "results", "quiz-reading-goal");
++
++interface ArmFile {
++  arm: string;
++  slug: string;
++  purpose: string | null;
++  /** The *About you* box, for the control arm that has one and no purpose. */
++  about?: string | null;
++  at: string;
++  /** Block ids in document order, so `report` needs no database. */
++  order: string[];
++  /** Each part's title and first/last block id. */
++  parts: { title: string; range: [string, string] }[];
++  dropped: Record<string, number>;
++  questions: { premise?: string; question: string; evidence: string[] }[];
++}
++
++async function withArticle<T>(slug: string, fn: (a: import("../src/article-input.js").Article) => Promise<T>) {
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
++  const { loadArticle } = await import("../src/store/index.js");
++  return runAsOwner(environmentOwnerId(), async () => fn({ ...(await loadArticle(slug)), slug }));
++}
++
++async function partsOfArticle(article: import("../src/article-input.js").Article) {
++  const { partsOf } = await import("../src/arc.js");
++  return partsOf(article.tree).map((p) => ({ title: p.title, range: p.range as [string, string] }));
++}
++
++async function generate(arm: string, purpose: string | null, about: string | null, slug: string): Promise<void> {
++  const out = path.join(OUT, arm, `${slug}.json`);
++  if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
++  const { generateQuiz } = await import("../src/quiz.js");
++  const { renderProfile } = await import("../src/profile.js");
++  await withArticle(slug, async (article) => {
++    const profile = renderProfile({ profile: about, purpose });
++    console.log(`${arm}: ${slug} — ${profile ?? "no profile"}`);
++    const run = await generateQuiz({ power: "standard", article, profile });
++    const file: ArmFile = {
++      arm,
++      slug,
++      purpose,
++      about,
++      at: new Date().toISOString(),
++      order: article.blocks.map((b) => b.id),
++      parts: await partsOfArticle(article),
++      dropped: { ...run.dropped },
++      questions: run.quiz.questions.map((q) => ({
++        ...(q.premise ? { premise: q.premise } : {}),
++        question: q.question,
++        evidence: q.evidence.map((e) => e.blockId),
++      })),
++    };
++    fs.mkdirSync(path.dirname(out), { recursive: true });
++    fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
++    console.log(`  wrote ${path.relative(process.cwd(), out)}: ${file.questions.length} questions`);
++  });
++}
++
++/** Which part a block is in, by position — `-1` for one outside every part. */
++function partOf(file: ArmFile, blockId: string): number {
++  const at = file.order.indexOf(blockId);
++  return file.parts.findIndex((p) => {
++    const lo = file.order.indexOf(p.range[0]);
++    const hi = file.order.indexOf(p.range[1]);
++    return at >= lo && at <= hi;
++  });
++}
++
++function report(slug: string, target: number[]): void {
++  if (!fs.existsSync(OUT)) throw new Error("nothing generated yet");
++  for (const arm of fs.readdirSync(OUT).sort()) {
++    const f = path.join(OUT, arm, `${slug}.json`);
++    if (!fs.existsSync(f)) continue;
++    const file = JSON.parse(fs.readFileSync(f, "utf8")) as ArmFile;
++    let hits = 0;
++    const lines: string[] = [];
++    for (const [i, q] of file.questions.entries()) {
++      const parts = q.evidence.map((id) => partOf(file, id) + 1);
++      const inTarget = parts.filter((p) => target.includes(p)).length;
++      const hit = inTarget * 2 > parts.length;
++      if (hit) hits++;
++      lines.push(`  ${hit ? "●" : "○"} ${String(i + 1).padStart(2)}. [part ${parts.join(",")}] ${q.question}`);
++    }
++    const n = file.questions.length;
++    console.log(
++      `\n${arm} — ${file.purpose ?? "(no purpose)"}${file.about ? ` / about: ${file.about}` : ""}\n` +
++        `  ${hits} of ${n} questions (${n ? Math.round((100 * hits) / n) : 0}%) draw mostly on part ${target.join(",")}`,
++    );
++    for (const l of lines) console.log(l);
++  }
++}
++
++if (import.meta.url === `file://${process.argv[1]}`) {
++  const [cmd, ...rest] = process.argv.slice(2);
++  const flag = (name: string) => {
++    const at = rest.indexOf(name);
++    return at >= 0 ? rest[at + 1] : undefined;
++  };
++  const named = new Set(["--arm", "--purpose", "--about", "--parts"].flatMap((n) => {
++    const at = rest.indexOf(n);
++    return at >= 0 ? [at, at + 1] : [];
++  }));
++  const slug = rest.find((_, i) => !named.has(i));
++  if (!slug) throw new Error("name a slug");
++  if (cmd === "parts") {
++    await withArticle(slug, async (article) => {
++      for (const [i, p] of (await partsOfArticle(article)).entries()) console.log(`${i + 1}. ${p.title}`);
++    });
++    process.exit(0);
++  } else if (cmd === "generate") {
++    const arm = flag("--arm");
++    if (!arm) throw new Error("generate needs --arm <name>");
++    await generate(arm, flag("--purpose") ?? null, flag("--about") ?? null, slug);
++    process.exit(0);
++  } else if (cmd === "report") {
++    const parts = (flag("--parts") ?? "").split(",").map(Number).filter((n) => n > 0);
++    if (parts.length === 0) throw new Error("report needs --parts 1,2");
++    report(slug, parts);
++  } else {
++    throw new Error("usage: quiz-reading-goal.ts parts|generate|report …");
++  }
++}
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 205b7124..e406349a 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -3641,12 +3641,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+      * skeleton before the article, so re-cutting the sections changes the
+      * question being asked while every block stays byte-identical.
+      *
+-     * **And no `profileHash`**, like `timeline` and unlike `ideas` and
+-     * `sketch`. There is a real argument for one — how hard a question is
+-     * depends on who is reading — and it was deferred rather than overlooked,
+-     * with the six touchpoints it would cost written down in the plan. Adding
+-     * it later needs no migration, because `profileHash` is a field on the JSON
+-     * artefact. docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
++     * **And no `profileHash`**, unlike `ideas` and `sketch`, although since
++     * 2026-09-30 the prompt reads the profile: a reader's goal shapes the path,
++     * and changing the goal must not rewrite the quiz behind them — *Write them
++     * again* is how a new goal is picked up (Greg, SPIDERYARN-READING2-6Q).
++     * src/quiz.ts § The profile.
+      */
+     stamp: async (ctx, store) => {
+       /* `tryReadArticle`, where `run` below takes `readArticle` — the same
+@@ -3676,6 +3675,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+         signal: ctx.signal,
+         power: ctx.power,
+         cacheArticle: ctx.cacheArticle,
++        profile: ctx.profile ?? null,
+       });
+       const questions = run.quiz.questions;
+       plog.info(
+@@ -3689,6 +3689,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+           cacheWriteTokens: run.cacheWriteTokens,
+           ms: run.elapsedMs,
+           questions: questions.length,
++          /* The profile's LENGTH, never the profile — it is the reader's own
++             words. docs/project/logging.md. */
++          profileChars: ctx.profile?.length ?? 0,
+           /* **How much of the path leans on what came before, and where it
+              broke.** `premised` counts the steps carrying a premise — a
+              path with none is a list again, which is the failure the premise
+diff --git a/src/quiz.ts b/src/quiz.ts
+index f4e2a8e4..cfc86dc9 100644
+--- a/src/quiz.ts
++++ b/src/quiz.ts
+@@ -85,14 +85,33 @@
+  * attempts. **Nothing may call `readBaseline` for this kind**, because there is
+  * no `BASELINE` row for it and that function throws for a kind with none.
+  *
+- * ## No profile in v1
++ * ## The profile: read, but not stamped or recorded
+  *
+- * Stated rather than defaulted into. There is a real argument for one — how
+- * hard a question is depends on who is reading, which is the argument `ideas`
+- * accepted — and it is deferred because it costs six more touchpoints and makes
+- * every quiz stale the moment somebody edits their profile. Adding it later
+- * needs no migration, since `profileHash` is a field on a JSON artefact. Write
+- * the path for a well-read non-specialist first.
++ * Until 2026-09-30 the quiz ignored the profile. Greg, SPIDERYARN-READING2-6Q:
++ * *"if I've said I want to understand their methods, most of the questions
++ * should be about the methods, not an even spread across the paper."* So the
++ * rendered profile the job already carries is handed to the prompt, in its own
++ * section (`readerSection`) rather than the shared `profileSection`, because
++ * the shared one promises the profile changes nothing about the article's
++ * proportions and here the proportions are the point.
++ *
++ * Three things it deliberately does not do, each Greg's or forced:
++ *
++ * - **Not in the stamp.** Changing your goal does not make a quiz stale or
++ *   rewrite one; *Write them again* is a forced run and resolves the profile at
++ *   the press. Greg: *"no automatic regeneration needed for v1."*
++ * - **No `profileHash` on the artefact.** `ProfileCarrying` in src/store/pg.ts
++ *   is derived from every artefact type with one, so the field would put the
++ *   quiz in the owner's *make public* dialog as personalised — about a mode a
++ *   visitor never sees. It arrives with the label that would read it.
++ * - **The whole profile, not the purpose alone.** `Job.profile` is one rendered
++ *   string; carrying the purpose separately is the six touchpoints this
++ *   header used to warn about. The prompt confines the *About the reader* line
++ *   to assumed vocabulary, never which parts it asks about. And not
++ *   `PROFILE_RULES` either: they let the profile govern "which things you spend
++ *   words on", which is exactly what the About line must not do here.
++ *
++ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
+  */
+ 
+ import type Anthropic from "@anthropic-ai/sdk";
+@@ -776,7 +795,41 @@ gets a short path, and that is a correct answer. Do not pad: a padded question
+ is a question about nothing, which is worse than one fewer step.
+ 
+ Cover the piece. The takeaways usually draw on all of it, so the path should
+-too; do not spend half the steps on its first third.
++too; do not spend half the steps on its first third. (Unless the reader has
++said why they are reading — below.)
++
++IF THE READER HAS SAID WHY THEY ARE READING
++
++Some requests end with a note about the reader: perhaps a line about who they
++are, perhaps a line saying why they are reading this piece. Most carry neither,
++and then none of this applies. When there is a reason for reading:
++
++- IT DECIDES WHERE THE PATH GOES. Choose the takeaways that matter for that
++  reason, and spend most of the questions on the parts of the piece that bear on
++  it. A reader who came for the methods gets a path mostly about the methods,
++  not an even spread across the piece.
++- IT IS STILL A PATH. Start with what the piece plainly says and lean each step
++  on the one before. A few early steps may set up what the later ones need —
++  what was studied, what the author is arguing against — so that the steps
++  about the reason have something to lean on.
++- IT NEVER CHANGES WHAT THE ARTICLE SAYS. Every question is about the subject,
++  answered by the article, anchored in its words. The reason changes which parts
++  you ask about, never what the piece says about them.
++- If the piece has little on the reason, set the path you would have set
++  anyway, and never say so.
++- ONLY THE REASON FOR READING MOVES THE PATH. A line about who they are may
++  change the vocabulary you assume and the least context a question needs to
++  say what it is asking about — never which parts of the piece you ask about,
++  which takeaways you head for, and never enough to answer the question. With a
++  line about who they are and no reason for reading, set the ordinary path.
++- Never address the reader, and never say or hint that a reason was given — in
++  a question, a premise or a reference answer. Nothing is asked "because" of it.
++  The subjects the reason names are ordinary words: use them wherever the
++  article does.
++
++    BAD   QUESTION  Since you came for the methods: how did the authors
++                    measure synergy?
++    GOOD  QUESTION  How did the authors measure synergy?
+ 
+ ${plainWords("ask", "explain")}
+ 
+@@ -811,12 +864,16 @@ line break inside a string either.`;
+  * exactly the judgement the takeaways at the end of the path depend on.
+  * It is also why this stage's freshness hash covers the tree.
+  *
+- * **Nothing about the reader goes in here**, and nothing about the call: the
+- * article part above carries the cache breakpoint, and this stage shares that
+- * prefix with `ideas`, `sketch` and `timeline` (`ARTICLE_RENDERER` in
+- * src/models.ts).
++ * **The reader goes here and nowhere earlier.** The article part above carries
++ * the cache breakpoint, and this stage shares that prefix with `ideas`,
++ * `sketch` and `timeline` (`ARTICLE_RENDERER` in src/models.ts), so the one
++ * thing that varies per reader is in this, the last part.
++ *
++ * With no profile the output is byte-for-byte what it was before the reader
++ * arrived — Greg's *"the same as today when there isn't"*, which
++ * tests/profile-prompts.test.ts asks of the bytes.
+  */
+-export function renderPrompt(opts: { tree: Tree }): string {
++export function renderPrompt(opts: { tree: Tree; profile: string | null }): string {
+   const skeleton = partsOf(opts.tree)
+     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
+     .join("\n\n");
+@@ -825,7 +882,29 @@ export function renderPrompt(opts: { tree: Tree }): string {
+ 
+ === ITS SHAPE ===
+ 
+-${skeleton}`;
++${skeleton}${readerSection(opts.profile)}`;
++}
++
++/**
++ * The profile, for this stage — **not `profileSection`**, whose reminder says
++ * the profile changes nothing about the article's proportions. Here a reason
++ * for reading is meant to change exactly that; the binding rules are in
++ * `QUIZ_SYSTEM` § IF THE READER HAS SAID WHY THEY ARE READING, where the
++ * profile cannot reach them. Empty — not a heading over nothing — when there is
++ * no profile, for the reason `renderProfile` gives.
++ */
++function readerSection(profile: string | null): string {
++  if (!profile) return "";
++  return `
++
++=== WHY THIS READER IS HERE ===
++
++${profile}
++
++If a reason for reading is given above, aim the path at the takeaways that
++matter for it, and spend most of the questions on the parts of the piece that
++bear on it; if not, set the ordinary path. Everything is still about what the
++article says. Do not address the reader and do not mention this.`;
+ }
+ 
+ /**
+@@ -883,6 +962,11 @@ export async function generateQuiz(opts: {
+   cacheArticle?: boolean;
+   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+   power: ModelPower;
++  /**
++   * Who is reading, already rendered — `renderProfile` in src/profile.ts — or
++   * `null`. Frozen on the job when it was posted; see the header.
++   */
++  profile?: string | null;
+ }): Promise<QuizRun> {
+   const { blocks, tree, meta: articleMeta } = opts.article;
+ 
+@@ -935,7 +1019,7 @@ export async function generateQuiz(opts: {
+           },
+           { type: "text" as const, text: QUIZ_SYSTEM },
+         ],
+-        messages: [{ role: "user", content: renderPrompt({ tree }) }],
++        messages: [{ role: "user", content: renderPrompt({ tree, profile: opts.profile ?? null }) }],
+       },
+       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
+     );
+diff --git a/tests/profile-prompts.test.ts b/tests/profile-prompts.test.ts
+index 593866fc..7afe781f 100644
+--- a/tests/profile-prompts.test.ts
++++ b/tests/profile-prompts.test.ts
+@@ -23,6 +23,7 @@ import { renderProfile } from "../src/profile.js";
+ import { renderPrompt as glossaryPrompt } from "../src/glossary.js";
+ import { renderPrompt as tweetsPrompt } from "../src/tweets.js";
+ import { renderPrompt as quotesPrompt } from "../src/quotes.js";
++import { renderPrompt as quizPrompt } from "../src/quiz.js";
+ 
+ const id = (i: number) => `spya-aaaaa${i}`;
+ 
+@@ -119,3 +120,40 @@ describe("quotes' prompt", () => {
+     expect(render(null)).not.toMatch(/\n{3,}/);
+   });
+ });
++
++/**
++ * The quiz joined on 2026-09-30 (SPIDERYARN-READING2-6Q): a reader who has said
++ * why they are reading gets a path that heads for that. It has **its own
++ * section** rather than `profileSection`, because the shared reminder says the
++ * profile changes nothing about the article's proportions and here the
++ * proportions are the point — so the first marker is the quiz's own heading.
++ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
++ */
++describe("quiz's prompt", () => {
++  const QUIZ_MARKERS = ["WHY THIS READER IS HERE", "neuroethologist", "I want the evidence"];
++  const render = (profile: string | null) => quizPrompt({ tree: TREE, profile });
++
++  it("carries the profile when there is one", () => {
++    const out = render(PROFILE);
++    for (const marker of QUIZ_MARKERS) expect(out).toContain(marker);
++  });
++
++  it("says nothing about a reader when there is none", () => {
++    const out = render(null);
++    for (const marker of [...QUIZ_MARKERS, "WHO IS READING"]) expect(out).not.toContain(marker);
++  });
++
++  it("is byte-for-byte today's prompt when there is none", () => {
++    /* "The same as today when there isn't" — Greg's words, asked of the bytes.
++       The literal is the prompt as it stood before the profile arrived. */
++    expect(render(null)).toBe(`Set the quiz for this article — up to 20 questions.
++
++=== ITS SHAPE ===
++
++PART 1: part-a
++  the gist of part-a
++
++PART 2: part-b
++  the gist of part-b`);
++  });
++});
+diff --git a/tests/quiz-job-carries-the-reading-goal.test.ts b/tests/quiz-job-carries-the-reading-goal.test.ts
+new file mode 100644
+index 00000000..8473fa51
+--- /dev/null
++++ b/tests/quiz-job-carries-the-reading-goal.test.ts
+@@ -0,0 +1,125 @@
++/**
++ * **A quiz job posted by the reading view carries this article's reading goal.**
++ *
++ * SPIDERYARN-READING2-6Q: the quiz is written with the owner's reason for
++ * reading when there is one. The stage reads it off the job
++ * (tests/quiz-step-registration.test.ts § the reader's reason), and this asks
++ * the other half — that `POST /api/jobs {slug, steps: ["quiz"]}`, which is what
++ * both `ensure` and *Write them again* send, resolves `articles.purpose` and
++ * freezes it on the job row. Nothing asked that of any step before: the route
++ * code is step-agnostic, and a regression in it would leave every profiled mode
++ * quietly unprofiled. GPT Sol's plan review, finding 1.
++ *
++ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
++ */
++import type { IncomingMessage, ServerResponse } from "node:http";
++
++import { eq } from "drizzle-orm";
++import { afterAll, beforeAll, describe, expect, it } from "vitest";
++
++import { getDb } from "../src/db/client.js";
++import { articles, jobs as jobsTable } from "../src/db/schema.js";
++import { loadEnvLocal } from "../src/env.js";
++import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
++import { pgReady } from "./helpers/pg-ready.js";
++import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
++
++loadEnvLocal();
++
++await pgReady({
++  suite: "tests/quiz-job-carries-the-reading-goal.test.ts",
++  tables: ["spideryarn.articles", "spideryarn.jobs"],
++});
++
++const { handleApi } = await import("../src/routes.js");
++
++const SLUG = "test-quiz-job-carries-the-reading-goal";
++/** A word that could not reach the job from anywhere but this article's purpose. */
++const PURPOSE = "I want to understand their ornithopter methods.";
++
++async function post(url: string, body: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
++  const req = Object.assign(
++    (async function* () {
++      yield Buffer.from(JSON.stringify(body));
++    })(),
++    { method: "POST", url, headers: AUTHED_HEADERS },
++  ) as unknown as IncomingMessage;
++  let status = 0;
++  let text = "";
++  const res = {
++    set statusCode(v: number) {
++      status = v;
++    },
++    get statusCode() {
++      return status;
++    },
++    writableEnded: false,
++    destroyed: false,
++    setHeader() {},
++    writeHead(code: number) {
++      status = code;
++    },
++    flushHeaders() {},
++    on() {},
++    once() {},
++    removeListener() {},
++    write(chunk: unknown) {
++      text += String(chunk);
++      return true;
++    },
++    end(chunk?: unknown) {
++      if (chunk !== undefined) text += String(chunk);
++      (this as { writableEnded: boolean }).writableEnded = true;
++    },
++  } as unknown as ServerResponse;
++  await handleApi(req, res, acceptAny);
++  return { status, body: text ? (JSON.parse(text) as Record<string, unknown>) : {} };
++}
++
++async function profileOfJob(id: string): Promise<string | null> {
++  const [row] = await getDb().select({ profile: jobsTable.profile }).from(jobsTable).where(eq(jobsTable.id, id));
++  if (!row) throw new Error(`no job row ${id}`);
++  return row.profile;
++}
++
++let scratch: ScratchArticle | undefined;
++let vercel: string | undefined;
++
++beforeAll(async () => {
++  /* `VERCEL`, so `enqueue` does not start driving the quiz it queues — which
++     would be a real model call. tests/enqueue-owns-the-article.test.ts. */
++  vercel = process.env.VERCEL;
++  process.env.VERCEL = "1";
++  scratch = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
++  await getDb().update(articles).set({ purpose: PURPOSE }).where(eq(articles.slug, SLUG));
++}, 120_000);
++
++afterAll(async () => {
++  if (vercel === undefined) delete process.env.VERCEL;
++  else process.env.VERCEL = vercel;
++  await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
++  await scratch?.remove();
++});
++
++describe("POST /api/jobs for a quiz", () => {
++  it("freezes this article's reason for reading onto the job", async () => {
++    const reply = await post("/api/jobs", { slug: SLUG, steps: ["quiz"] });
++    expect(reply.status).toBe(202);
++    const profile = await profileOfJob(String(reply.body.id));
++    expect(profile).toContain(`Why they are reading this piece: ${PURPOSE}`);
++  });
++
++  it("does too for Write them again, which is forced", async () => {
++    const reply = await post("/api/jobs", { slug: SLUG, steps: ["quiz"], force: ["quiz"] });
++    expect(reply.status).toBe(202);
++    expect(await profileOfJob(String(reply.body.id))).toContain(PURPOSE);
++  });
++
++  it("carries none when the client declines it — the control", async () => {
++    /* Without this the cases above would pass on a route that wrote the
++       purpose onto every job whatever it was asked. */
++    const reply = await post("/api/jobs", { slug: SLUG, steps: ["quiz"], force: ["quiz"], useProfile: false });
++    expect(reply.status).toBe(202);
++    expect(await profileOfJob(String(reply.body.id))).toBeNull();
++  });
++});
+diff --git a/tests/quiz-step-registration.test.ts b/tests/quiz-step-registration.test.ts
+index c10bb0a6..e85f7b94 100644
+--- a/tests/quiz-step-registration.test.ts
++++ b/tests/quiz-step-registration.test.ts
+@@ -84,6 +84,7 @@ import { BASELINE, STAMP_SOURCE } from "../src/store/artifacts.js";
+ import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
+ import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
+ import type { Quiz } from "../src/types.js";
++import { renderProfile } from "../src/profile.js";
+ 
+ /* ------------------------------------------------------- the stubbed model -- */
+ 
+@@ -100,13 +101,16 @@ import type { Quiz } from "../src/types.js";
+  */
+ const answers: string[] = [];
+ let calls = 0;
++/** What each call was sent, whole — so a case can ask what reached the model. */
++const sent: string[] = [];
+ 
+ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
+   return {
+     ...real,
+-    streamMessage: () => {
++    streamMessage: (_label: string, params: unknown) => {
+       calls++;
++      sent.push(JSON.stringify(params));
+       const text = answers.shift();
+       if (text === undefined) throw new Error("the stub ran out of scripted answers");
+       const message = {
+@@ -136,8 +140,9 @@ const SLUG = "noema-mythology-of-conscious-ai";
+ let root = "";
+ let store: MemoryArtifactStore;
+ 
+-function ctxFor(): StepContext {
++function ctxFor(profile?: string): StepContext {
+   return {
++    ...(profile !== undefined ? { profile } : {}),
+     power: "standard",
+     slug: SLUG,
+     report: () => undefined,
+@@ -173,9 +178,9 @@ async function script(): Promise<void> {
+ }
+ 
+ /** Run the stage for real and write what it produced, exactly as `jobs.ts` does. */
+-async function runAndWrite(): Promise<Quiz> {
++async function runAndWrite(profile?: string): Promise<Quiz> {
+   await script();
+-  const ctx = ctxFor();
++  const ctx = ctxFor(profile);
+   const result = await STEPS.quiz.run(ctx, store, nullCheckpointStore());
+   /* The stub ran short if anything is left — a silent way for the stage to have
+      taken a path this file did not intend. */
+@@ -200,6 +205,7 @@ afterAll(async () => {
+ 
+ beforeEach(async () => {
+   calls = 0;
++  sent.length = 0;
+   /* **A fresh store per case, read off the untouched copy of `example/`.** It
+      replaces three lines of cleanup — delete `quiz.json`, delete the `steps/`
+      markers, put `blocks.json` back — which existed only because the store and
+@@ -317,3 +323,50 @@ describe("what the quiz step deliberately does not register", () => {
+     expect(BASELINE.quiz).toBeUndefined();
+   });
+ });
++
++/**
++ * **The reader's reason for reading reaches the model** — SPIDERYARN-READING2-6Q,
++ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md. The
++ * job already carries the rendered profile (`POST /api/jobs` resolves it); until
++ * 2026-09-30 this step dropped it on the floor, and nothing would have said so.
++ */
++describe("the reader's reason for reading", () => {
++  const PROFILE = renderProfile({ purpose: "I want to understand their zymurgical methods." })!;
++
++  it("is in what the model is sent when the job carries one", async () => {
++    await runAndWrite(PROFILE);
++    expect(sent).toHaveLength(1);
++    expect(sent[0]).toContain("zymurgical methods");
++  });
++
++  it("goes after the article, in the user message, and nowhere in the system part", async () => {
++    /* The article is the first system block and carries the cache breakpoint,
++       shared with ideas, sketch and timeline; a reader's words anywhere in the
++       system part would split that entry per reader. GPT Sol's plan review, 4. */
++    await runAndWrite(PROFILE);
++    const params = JSON.parse(sent[0] ?? "{}") as {
++      system: { text: string }[];
++      messages: { role: string; content: string }[];
++    };
++    for (const part of params.system) expect(part.text).not.toContain("zymurgical");
++    expect(params.messages).toHaveLength(1);
++    expect(params.messages[0]?.content).toContain("zymurgical");
++  });
++
++  it("leaves no trace when the job carries none", async () => {
++    await runAndWrite();
++    expect(sent).toHaveLength(1);
++    expect(sent[0]).not.toContain("WHY THIS READER IS HERE");
++    expect(sent[0]).not.toContain("Why they are reading this piece");
++  });
++
++  it("does not make the quiz stale when it changes — no automatic rewrite", async () => {
++    /* Greg: "no automatic regeneration needed for v1" — *Write them again*
++       picks up a new goal. So the profile is not in the stamp. */
++    await runAndWrite(PROFILE);
++    calls = 0;
++    const other = renderProfile({ purpose: "Only the discussion, please." })!;
++    expect(await stepIsDone(STEPS.quiz, ctxFor(other), store)).toBe(true);
++    expect(calls).toBe(0);
++  });
++});
+diff --git a/tests/store-migration-registry.ts b/tests/store-migration-registry.ts
+index aad15751..1f8c366d 100644
+--- a/tests/store-migration-registry.ts
++++ b/tests/store-migration-registry.ts
+@@ -704,6 +704,14 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
+       "the whole of its filesystem contact. Arrived 2026-09-05 with the parameter, which replaced " +
+       "three callers setting `VERCEL=1` to make one `if` go the other way.",
+   },
++  "tests/quiz-job-carries-the-reading-goal.test.ts": {
++    category: "shared-mechanism-collateral",
++    mechanisms: ["fixture-loader"],
++    reason:
++      "`POST /api/jobs` for a quiz freezes this article's `purpose` onto the job row " +
++      "(SPIDERYARN-READING2-6Q). The purpose and the job both live only in Postgres; the " +
++      "seeder is the whole of its filesystem contact.",
++  },
+   "tests/enqueue-owns-the-article.test.ts": {
+     category: "shared-mechanism-collateral",
+     mechanisms: ["fixture-loader"],
+@@ -2629,6 +2637,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
+   "tests/draft-sweep-on-step-start.test.ts": "private-postgres",
+   "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
+   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
++  "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
+   "tests/export-route.test.ts": "private-postgres",
+   "tests/feedback-store.test.ts": "private-postgres",
+   /* The first inbound rate limiter, and the lane follows from what it

@@ -869,9 +869,11 @@ line break inside a string either.`;
  * `sketch` and `timeline` (`ARTICLE_RENDERER` in src/models.ts), so the one
  * thing that varies per reader is in this, the last part.
  *
- * With no profile the output is byte-for-byte what it was before the reader
- * arrived — Greg's *"the same as today when there isn't"*, which
- * tests/profile-prompts.test.ts asks of the bytes.
+ * With no profile this varying user message is byte-for-byte what it was before
+ * the reader arrived — Greg's *"the same as today when there isn't"*, which
+ * tests/profile-prompts.test.ts asks of these bytes. The complete request is not
+ * byte-identical: `QUIZ_SYSTEM` now carries the conditional rules above for
+ * every call, so it stays constant across readers.
  */
 export function renderPrompt(opts: { tree: Tree; profile: string | null }): string {
   const skeleton = partsOf(opts.tree)

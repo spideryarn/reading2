@@ -329,6 +329,15 @@ describe("what the quiz step deliberately does not register", () => {
  * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md. The
  * job already carries the rendered profile (`POST /api/jobs` resolves it); until
  * 2026-09-30 this step dropped it on the floor, and nothing would have said so.
+ *
+ * **Mutation.** Stop passing `ctx.profile` to `generateQuiz`: the two arrival
+ * cases fail. Put the reader's words in a system block as well as the user
+ * message: the placement case fails. Add the profile to the stamp: the
+ * no-automatic-rewrite case fails.
+ *
+ * **Blind to.** These cases prove the request's plumbing and shape, not that a
+ * model obeys the instructions or that the route resolved today's article
+ * purpose; the paid evaluation and the route-to-job test ask those separately.
  */
 describe("the reader's reason for reading", () => {
   const PROFILE = renderProfile({ purpose: "I want to understand their zymurgical methods." })!;

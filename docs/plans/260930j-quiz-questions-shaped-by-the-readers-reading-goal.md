@@ -212,3 +212,13 @@ nothing addresses the reader or says a goal was given.
   says a goal was given (scanned, all six arms). `about-2` dropped 7 questions for quotes that
   could not be found — a drop rate the baseline has shown before (quiz.md), not a profile effect
   as far as one run can say.
+- 2026-09-30: GPT Sol code review, write-capable ([prompt](260930j-quiz-reading-goal-code-review-prompt.md),
+  [answer](260930j-quiz-reading-goal-code-review-sol.md), [diff it read](260930j-quiz-reading-goal-code-review.diff);
+  exit 0, file fresh). **Ship.** It fixed three things in place: the new Postgres test's registry
+  entry failed `tests/store-migration-registry.test.ts` (needed `evidence: "static-only"`); the
+  prompt's goal rules were unguarded (tests added to `tests/quiz.test.ts`); and "byte-for-byte" was
+  true of the user message, not the whole request (comment, test and quiz.md corrected). On the
+  measurement it recomputed both columns exactly and agreed the predeclared bar **genuinely failed**;
+  it read all 38 goal questions, found the blind labels reasonable and conservative, and put the
+  claim at its right size: *most questions are about the goal for these two paths, on one article —
+  not yet a general result.* That is the claim this plan makes.

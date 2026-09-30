@@ -143,9 +143,10 @@ describe("quiz's prompt", () => {
     for (const marker of [...QUIZ_MARKERS, "WHO IS READING"]) expect(out).not.toContain(marker);
   });
 
-  it("is byte-for-byte today's prompt when there is none", () => {
+  it("is byte-for-byte today's user prompt when there is none", () => {
     /* "The same as today when there isn't" — Greg's words, asked of the bytes.
-       The literal is the prompt as it stood before the profile arrived. */
+       The literal is the varying user message as it stood before the profile
+       arrived. `QUIZ_SYSTEM` gained conditional rules and is not byte-equal. */
     expect(render(null)).toBe(`Set the quiz for this article — up to 20 questions.
 
 === ITS SHAPE ===
