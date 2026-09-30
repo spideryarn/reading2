@@ -45,7 +45,7 @@ export function ShelfTermsDetail({
 }: {
   /** The topics to draw, in the order to draw them. */
   terms: readonly ShelfTerm[];
-  /** Each topic's palette slot — the same one its pill's dot wears. */
+  /** Each topic's hue-ring stop — the same one its pill's dot wears. */
   slotOf: (key: string) => number;
   /** The live count, from the one formula in shelf-narrow.ts. */
   count: (key: string) => number;

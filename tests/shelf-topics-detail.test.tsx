@@ -12,7 +12,8 @@
  *    top three articles as links to `/read/<slug>`;
  *  - the chip in a row is the pill: it toggles the same key, with the same
  *    `aria-pressed`;
- *  - a topic's pill dot and its row swatch are the same palette slot;
+ *  - a topic's pill dot and its row swatch are the same hue-ring stop, the
+ *    one its shared articles give it (topic-colour.ts);
  *  - the view round-trips through the URL, and focus stays on the toggle.
  */
 import { act, createElement, useState } from "react";
@@ -22,7 +23,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { LibraryTermsResponse } from "../src/types.js";
 import { ShelfTerms } from "../src/web/ShelfTerms.js";
 import { topArticles } from "../src/web/ShelfTermChip.js";
-import { topicSlot } from "../src/web/topic-colour.js";
+import { topicHueStops } from "../src/web/topic-colour.js";
 
 class NoResizeObserver {
   observe(): void {}
@@ -162,11 +163,13 @@ describe("More detail", () => {
     expect(bars[7]).toBe(String(Math.round((7 / 14) * 100)));
     expect(rows.every((r) => r.querySelector("[data-count-bar]")?.getAttribute("aria-hidden") === "true")).toBe(true);
 
-    // A swatch per row, decorative, in the topic's palette slot.
+    // A swatch per row, decorative, at the topic's stop on the hue ring —
+    // computed over every topic, so the same stop the pure function gives.
+    const stops = topicHueStops(DATA.terms);
     for (const [i, r] of rows.entries()) {
       const swatch = r.querySelector("[data-topic-slot]");
       expect(swatch?.getAttribute("aria-hidden")).toBe("true");
-      expect(swatch?.getAttribute("data-topic-slot")).toBe(String(topicSlot(i)));
+      expect(swatch?.getAttribute("data-topic-slot")).toBe(String(stops.get(KEYS[i]!)));
     }
   });
 
@@ -223,11 +226,13 @@ describe("More detail", () => {
       expect(swatch?.getAttribute("data-topic-slot"), key).toBe(dot?.getAttribute("data-topic-slot"));
       // The colour itself is the same palette reference on both.
       expect(swatch?.style.getPropertyValue("--topic"), key).toBe(dot?.style.getPropertyValue("--topic"));
-      expect(swatch?.style.getPropertyValue("--topic")).toMatch(/^var\(--cat-\d+\)$/);
+      expect(swatch?.style.getPropertyValue("--topic")).toMatch(/^var\(--hue-\d+\)$/);
     }
-    // Distinct neighbours: the first seven are seven different slots.
-    const firstSeven = rows.slice(0, 7).map((r) => r.querySelector("[data-topic-slot]")?.getAttribute("data-topic-slot"));
-    expect(new Set(firstSeven).size).toBe(7);
+    // The fixture's topics overlap in a chain (topic i shares articles with
+    // i±1, i±2), so the hues follow it along the arc, end to end.
+    const stops = rows.map((r) => Number(r.querySelector("[data-topic-slot]")?.getAttribute("data-topic-slot")));
+    for (let i = 1; i < stops.length; i++) expect(stops[i]).toBeGreaterThan(stops[i - 1]!);
+    expect([stops[0], stops[stops.length - 1]]).toEqual([0, 31]);
   });
 });
 

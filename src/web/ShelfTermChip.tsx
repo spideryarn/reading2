@@ -85,7 +85,7 @@ export function TermChip({
   /** `|visible ∩ its articles|` — shelf-narrow.ts § topicCounts. */
   count: number;
   on: boolean;
-  /** The palette slot for its dot (topic-colour.ts), or `null` for none. */
+  /** The hue-ring stop for its dot (topic-colour.ts), or `null` for none. */
   slot: number | null;
   onToggle: (key: string) => void;
   scope: TermTipScope;

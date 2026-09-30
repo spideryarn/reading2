@@ -274,7 +274,7 @@ const SWATCHES: { group: string; names: string[] }[] = [
 ];
 
 /**
- * The three colour scales — docs/project/colour-scales.md.
+ * The colour scales — docs/project/colour-scales.md.
  *
  * On this page rather than only in a stylesheet because **a colour scale cannot
  * be reviewed one value at a time.** What is wrong with a ramp is always a
@@ -333,6 +333,18 @@ const SCALES: { name: string; tokens: string[]; note: string }[] = [
       "overwhelmingly is, so to a deuteranope this is a scale that gets darker in the middle and " +
       "says nothing about which side you are on. Only use it where something other than the hue " +
       "already tells the reader which end is which.",
+  },
+  {
+    name: "Hue ring — the shelf's topics, near means related",
+    /* 32 is HUE_STOPS in topic-colour.ts, not imported: that module is on the
+       reader's eager graph, and this page is lazy (tests/eager-client-graph.test.ts).
+       tests/colour-scales.test.ts holds the stylesheet to HUE_STOPS. */
+    tokens: Array.from({ length: 32 }, (_, i) => `--hue-${i}`),
+    note:
+      "One lightness, hue climbing from red to violet and stopping short of red again. Neighbouring " +
+      "stops should read as related shades and the two ends as clearly different. Not " +
+      "colour-blind safe: at one lightness a dichromat loses most of it, which is acceptable only " +
+      "because the topic's label always carries what the colour decorates.",
   },
 ];
 
@@ -615,7 +627,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
       <section>
         <h2>Colour scales</h2>
         <p className="design-note">
-          The three palettes that are not the brand — see{" "}
+          The palettes that are not the brand — see{" "}
           <code className="design-token">docs/project/colour-scales.md</code>. No contrast ratios
           here, deliberately: none of these is ever text, and a ratio against{" "}
           <code className="design-token">--page</code> would be a number that looks like a verdict

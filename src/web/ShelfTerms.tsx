@@ -16,8 +16,9 @@
  * COLLAPSED_CHIPS in rank order plus any chosen further down, and "All N
  * topics" expands the same row to every pill in place. Detail
  * (`?topicsView=detail`): every topic, in rank order, one row each —
- * ShelfTermsDetail.tsx. Each topic wears the colour of its rank
- * (topic-colour.ts), as a dot on its pill and a swatch on its row.
+ * ShelfTermsDetail.tsx. Each topic wears a hue chosen by which articles it
+ * shares with the others, so related topics look alike (topic-colour.ts,
+ * report 5N), as a dot on its pill and a swatch on its row.
  *
  * **Both views draw only the topics worth offering** — a topic with nothing
  * left to show is not drawn unless it is chosen (`availableTopics`, plan
@@ -35,7 +36,7 @@ import { libraryTopicsViewParam } from "./params.js";
 import { availableTopics } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
 import { ShelfTermsDetail } from "./ShelfTermsDetail.js";
-import { topicSlot } from "./topic-colour.js";
+import { topicHueStops } from "./topic-colour.js";
 import { TooltipGroup } from "./Tooltip.js";
 
 /** How many chips the collapsed row draws, besides any chosen ones. */
@@ -102,9 +103,12 @@ export function ShelfTerms({
   const detail = view === "detail";
   const count = (key: string) => counts.get(key) ?? 0;
   const chosen = new Set(selected);
-  /* A topic's colour is its rank's: its index in the server's order. */
-  const rank = new Map(terms.map((t, i) => [t.key, i]));
-  const slotOf = (key: string) => topicSlot(rank.get(key) ?? 0);
+  /* A topic's colour comes from which articles it shares with the other
+     topics, over every topic the server chose (not only those drawn), so it
+     does not move as the view narrows. Not memoised: ~30 topics is well under
+     a millisecond, and a hook here would sit after the early return above. */
+  const hues = topicHueStops(terms);
+  const slotOf = (key: string) => hues.get(key) ?? 0;
   /* **The server's rank order**, never re-sorted (plan 260928d): the chooser
      ranks for coverage, so the first few chips are the few that reach most of
      the shelf. **Zeros go first, then the first twelve** (plan 260929a, Sol
@@ -112,8 +116,8 @@ export function ShelfTerms({
      then does the row take the first COLLAPSED_CHIPS, plus any chosen topic
      further down, in its place — or, with "All N topics", every one. Taking
      twelve and then dropping zeros would leave the row short with pills
-     waiting beyond it. The colour stays the rank's, above, so a chip keeps its
-     dot when its neighbours come and go. */
+     waiting beyond it. The colour is computed over every topic, above, so a chip
+     keeps its dot when its neighbours come and go. */
   const available = availableTopics(terms, count, chosen);
   const shown = all
     ? available
