@@ -14,16 +14,15 @@
  * reader's rendered profile, the prompt version and the model. Anything else
  * reads *Investigate* again, and one press regenerates.
  *
- * **The article enters as its blocks — ids and text — not as the rendered
- * prompt part.** The prompt part is `articleWithIds(meta, blocks)`, whose head
- * carries the title as the reading view shows it (a reader's rename included,
- * via `titleFor`) and the byline; the read seam that attaches has the blocks in
- * hand and not that meta. A renamed article keeps its investigation; a changed
- * paragraph does not. Written down as a deviation from the plan's wording.
+ * **The article enters as the exact fields `articleWithIds` renders**: title,
+ * byline, site, URL, then block ids and text. The current matched *Look it up*
+ * page enters as the exact URL, title and verified passages the second part
+ * renders. Both used to be omitted, which let an answer survive after its
+ * prompt had changed.
  */
 import { createHash } from "node:crypto";
 
-import type { Citations, CitationInvestigation, CitedWork } from "./types.js";
+import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } from "./types.js";
 
 /**
  * **Bump when the prompt (`INVESTIGATE_SYSTEM`, src/citation-investigate.ts),
@@ -52,6 +51,34 @@ export interface InvestigateContext {
   why: string;
   /** The citing passages, in order, each capped. */
   passages: string[];
+}
+
+/** The current *Look it up* page and the fields Investigate sends from it. */
+export interface MatchedPage {
+  url: string;
+  title: string | null;
+  quotes: string[];
+}
+
+/**
+ * The matched page, or `null`: the attached lookup must be current, must have
+ * identified a page, and must be the lookup stored on this find.
+ */
+export function matchedPageOf(work: CitedWork, find: CitationFind | null): MatchedPage | null {
+  const lookup = work.lookup;
+  if (!lookup || !find?.lookup) return null;
+  if (lookup.state !== "assessed" && lookup.state !== "unreadable") return null;
+  if (find.lookup.contextHash !== lookup.contextHash || find.lookup.evidenceHash !== lookup.evidenceHash) {
+    return null;
+  }
+  const quotes =
+    lookup.state === "assessed"
+      ? [
+          ...(lookup.verdict.support !== "not-in-extract" ? [lookup.verdict.quote] : []),
+          ...(lookup.paperDoes ? [lookup.paperDoes.quote] : []),
+        ]
+      : [];
+  return { url: find.url, title: find.title ?? null, quotes };
 }
 
 type WorkFields = Pick<
@@ -91,9 +118,15 @@ function hash16(parts: readonly unknown[]): string {
   return createHash("sha256").update(JSON.stringify(parts), "utf8").digest("hex").slice(0, 16);
 }
 
-/** The article, as its blocks' ids and text in order — see the header for why not the rendered part. */
-export function investigateArticleKey(blocks: readonly { id: string; text: string }[]): string {
-  return hash16(blocks.map((b) => [b.id, b.text]));
+/** The fields `articleWithIds` renders, in its order, without duplicating its prose labels. */
+export function investigateArticleKey(
+  meta: Pick<Meta, "title" | "byline" | "siteName" | "url">,
+  blocks: readonly { id: string; text: string }[],
+): string {
+  return hash16([
+    [meta.title, meta.byline ?? null, meta.siteName ?? null, meta.url ?? null],
+    blocks.map((b) => [b.id, b.text]),
+  ]);
 }
 
 /**
@@ -104,6 +137,7 @@ export function investigateContextHash(
   context: InvestigateContext,
   articleKey: string,
   profile: string | null,
+  matched: MatchedPage | null,
   model: string,
 ): string {
   return hash16([
@@ -119,6 +153,7 @@ export function investigateContextHash(
     context.why,
     context.passages,
     profile,
+    matched ? [matched.url, matched.title, matched.quotes] : null,
   ]);
 }
 

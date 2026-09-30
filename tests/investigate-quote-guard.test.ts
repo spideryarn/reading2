@@ -114,10 +114,45 @@ describe("the investigate quote guard", () => {
     expect(leak.released).toBe("It says ");
   });
 
-  it("waits for the next delta when a single-quoted span's ’ is the last character", () => {
+  it("does not release an allowed prefix before a plural-possessive apostrophe", () => {
+    /* The first `’` belongs to "dogs’ owners"; it is not the closing mark.
+       Finding the shorter "the dogs" in the article must not release that
+       prefix and let the unchecked rest of the source quotation through. */
+    const text = "It says ‘the dogs’ owners fabricated every result’ here.";
+    const allowed = ["The article discusses the dogs, but makes no such claim."];
+    for (let split = 0; split <= text.length; split += 1) {
+      const leak = run([text.slice(0, split), text.slice(split)], allowed);
+      expect(leak.failed, `split at ${split}`).toEqual({ cause: "not-found" });
+      expect(leak.released, `split at ${split}`).toBe("It says ");
+    }
+  });
+
+  it("releases an unambiguous curly close followed by prose", () => {
     const guard = createQuoteGuard(ARTICLE);
     expect(guard.push("So ‘bigger is better’")).toEqual({ ok: true, text: "So " });
     expect(guard.push(" it says.")).toEqual({ ok: true, text: "‘bigger is better’ it says." });
+    expect(guard.end()).toEqual({ ok: true, text: "" });
+  });
+
+  it("releases a verified curly-single quote containing a plural possessive", () => {
+    const text = "It says ‘the dogs’ owners objected’";
+    expect(run([text], ["The article says the dogs’ owners objected to the change."])).toEqual({
+      released: text,
+      failed: null,
+    });
+  });
+
+  it("refuses an ambiguous possessive prefix even when no later close arrives", () => {
+    const leak = run(["It says ‘the dogs’", " owners fabricated every result"], [
+      "The article discusses the dogs, but makes no such claim.",
+    ]);
+    expect(leak).toEqual({ released: "It says ", failed: { cause: "unclosed" } });
+  });
+
+  it("applies the cap while a possessive/close ambiguity remains held", () => {
+    const guard = createQuoteGuard(["the dogs"]);
+    expect(guard.push("‘the dogs’ ")).toEqual({ ok: true, text: "" });
+    expect(guard.push("x".repeat(QUOTE_SPAN_CAP))).toEqual({ ok: false, cause: "unclosed", text: "" });
   });
 
   it("leaves apostrophes and straight single quotes alone", () => {
@@ -128,6 +163,13 @@ describe("the investigate quote guard", () => {
   it("toggles on the straight double quote", () => {
     const text = 'First "bigger is better" then "small & shallow" and done.';
     expect(run([text])).toEqual({ released: text, failed: null });
+  });
+
+  it("does not let mismatched straight and curly marks close a held span", () => {
+    const curly = run(['It says “bigger is better"', ' and fabricated” now.']);
+    expect(curly).toEqual({ released: "It says ", failed: { cause: "not-found" } });
+    const straight = run(['It says "bigger is better”', ' and fabricated" now.']);
+    expect(straight).toEqual({ released: "It says ", failed: { cause: "not-found" } });
   });
 
   it("stops a block-quote line whose words are not allowed, and releases none of it", () => {

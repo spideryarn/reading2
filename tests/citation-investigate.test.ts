@@ -279,6 +279,18 @@ describe("provenanceOf", () => {
   it("credits Look it up's page only when its URL, normalised, is among the extracts", () => {
     expect(provenanceOf(EVIDENCE, "https://ARXIV.org/abs/2001.08361/#top").matchedHost).toBe("arxiv.org");
     expect(provenanceOf(EVIDENCE, "https://arxiv.org/abs/9999.00001").matchedHost).toBeNull();
+    expect(
+      provenanceOf(
+        [{ url: "https://example.org/paper", excerpt: "an extract" }],
+        "https://example.org:8443/paper",
+      ).matchedHost,
+    ).toBeNull();
+    expect(
+      provenanceOf(
+        [{ url: "http://example.org/paper", excerpt: "an extract" }],
+        "https://example.org/paper",
+      ).matchedHost,
+    ).toBeNull();
     /* A page that came back without an extract was not read. */
     expect(provenanceOf(EVIDENCE, "https://empty.example/page").matchedHost).toBeNull();
   });

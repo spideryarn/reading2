@@ -90,6 +90,7 @@ import {
   investigateArticleKey,
   investigateContext,
   investigateContextHash,
+  matchedPageOf,
 } from "../citation-investigate-context.js";
 import { investigationFromRow } from "./citation-investigation-row.js";
 import { renderProfile } from "../profile.js";
@@ -1451,6 +1452,23 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
  */
 async function blockHashInputs(revisionId: string): Promise<BlockFingerprint[]> {
   return blockHashQuery(getDb(), revisionId);
+}
+
+/** The title fallback `loadArticle` would put in `articleWithIds`'s head. */
+async function firstHeadingTitle(revisionId: string): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ text: revisionBlocks.text })
+    .from(revisionBlocks)
+    .where(
+      and(
+        eq(revisionBlocks.revisionId, revisionId),
+        eq(revisionBlocks.kind, "heading"),
+        eq(revisionBlocks.level, 1),
+      ),
+    )
+    .orderBy(asc(revisionBlocks.ordinal))
+    .limit(1);
+  return row?.text ?? null;
 }
 
 /**
@@ -3607,7 +3625,26 @@ const rawPgArticleReader: ArticleReader = {
         profile: await pgReaderStore.readProfile(),
         purpose: shelfFrom(found.article).purpose ?? null,
       });
-      const articleKey = investigateArticleKey(blocks);
+      /* Rebuild exactly the four head fields `loadArticle` handed the call.
+         The h1 query runs only for the old/no-metadata case and only when an
+         investigation exists to attach. A reader rename wins, as it does in
+         `loadArticle`; omitting it here kept a profiled answer visible under a
+         different TITLE than the model saw. */
+      const headingTitle =
+        found.revision.title === null && found.article.titleOverride === null
+          ? await firstHeadingTitle(found.revision.id)
+          : null;
+      const promptMeta = titleFor(
+        {
+          slug,
+          title: found.revision.title ?? headingTitle ?? slug,
+          ...(found.revision.byline === null ? {} : { byline: found.revision.byline }),
+          ...(found.revision.siteName === null ? {} : { siteName: found.revision.siteName }),
+          ...(found.revision.finalUrl === null ? {} : { url: found.revision.finalUrl }),
+        },
+        shelfFrom(found.article),
+      );
+      const articleKey = investigateArticleKey(promptMeta, blocks);
       const investigateModel = modelFor("citation-investigate");
       withInvestigations = attachInvestigations(
         withFinds,
@@ -3617,6 +3654,7 @@ const rawPgArticleReader: ArticleReader = {
             investigateContext(work, (id) => text.get(id)),
             articleKey,
             profile,
+            matchedPageOf(work, finds.get(work.id) ?? null),
             investigateModel,
           ),
       );

@@ -16,9 +16,12 @@
  *
  * - From an opening `"`, `“` or `‘` (U+2018) to its close — `"` toggles, `“`
  *   closes on `”`, `‘` on `’`. **A `’` followed by a letter or digit is an
- *   apostrophe, not a close** (*what’s*), so it cannot end a span early and let
- *   the unchecked rest of it out; that needs one character of lookahead, so a
- *   `’` at the very end of a delta waits for the next one.
+ *   apostrophe, not a close** (*what’s*). A mark after an `s` and before a
+ *   blank is also held: `‘the dogs’ owners objected’` is a plural possessive,
+ *   while `‘bigger is better’ here` is an unambiguous close and can keep
+ *   streaming. If the `s’ ` is followed by a word, it remains inside the span;
+ *   if the stream ends first, the safe answer is to stop rather than release
+ *   an unchecked continuation.
  * - Any line whose first non-blank character is `>`, to the end of the line.
  * - Leading blanks on a line, until the first other character says whether the
  *   line is a block quote.
@@ -74,6 +77,8 @@ type Mode =
   | "blockquote";
 
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const WHITESPACE = /\s/u;
+const S_END = /[sS]/u;
 const TRAILING_PUNCTUATION = /[\s,.;:!?]+$/u;
 
 /**
@@ -94,6 +99,8 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
   let atLineStart = true;
   /** In `curly-single`: the last held character is a `’` that may be the close. */
   let pendingClose = false;
+  /** Exclusive offsets of the still-plausible `’` closes in `held`. */
+  let curlyCloses: number[] = [];
   let failed: Extract<GuardStep, { ok: false }> | null = null;
 
   function found(words: string): boolean {
@@ -109,7 +116,34 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
     held = "";
     mode = "text";
     pendingClose = false;
+    curlyCloses = [];
     return out;
+  }
+
+  /**
+   * Settle a curly-single span at its last plausible close, then feed the
+   * characters after that close back through the guard. The replay matters:
+   * the suffix may contain another opening mark or a block quote and therefore
+   * cannot be released as an unchecked lump.
+   */
+  function settleCurlyAndReplay(extra: string): GuardStep {
+    const close = curlyCloses.at(-1);
+    if (close === undefined) return fail("unclosed");
+    if (!found(held.slice(1, close - 1))) return fail("not-found");
+    const span = held.slice(0, close);
+    const suffix = held.slice(close);
+    /* A word after a possible close is the irreducibly ambiguous case:
+       `‘allowed words’ then` and `‘allowed words’ continuation’` have the same
+       prefix. Releasing the first interpretation can leak the second. */
+    if (LETTER_OR_DIGIT.test(suffix) || suffix.includes("‘")) return fail("unclosed");
+    held = "";
+    mode = "text";
+    pendingClose = false;
+    curlyCloses = [];
+    const rest = push(suffix + extra);
+    return rest.ok
+      ? { ok: true, text: span + rest.text }
+      : { ok: false, cause: rest.cause, text: span + rest.text };
   }
 
   /**
@@ -172,20 +206,43 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
       }
 
       if (mode === "curly-single" && pendingClose) {
-        pendingClose = false;
-        if (!LETTER_OR_DIGIT.test(c)) {
-          /* The `’` held last was the close. Check the span, then this
-             character is ordinary prose again. */
-          const span = settle(held.slice(1, -1));
-          if (span === null) return fail("not-found", out);
-          out += span + prose(c);
+        const close = curlyCloses.at(-1);
+        if (close === undefined) return fail("unclosed", out);
+        const suffix = held.slice(close);
+        const before = held[close - 2] ?? "";
+        if (
+          LETTER_OR_DIGIT.test(c) &&
+          (suffix === "" || (S_END.test(before) && suffix.trim() === ""))
+        ) {
+          /* A contraction (`what’s`) or a spaced plural possessive (`dogs’
+             owners`). This candidate is definitely not the close. */
+          curlyCloses.pop();
+          pendingClose = false;
+        } else if (WHITESPACE.test(c) && S_END.test(before)) {
+          /* `laws’ ` could close a quote or begin a plural possessive. Hold the
+             blanks too, until the next non-blank character decides it. */
+          held += c;
+          if (held.length - 1 > cap) return fail("unclosed", out);
+          continue;
+        } else {
+          /* An ordinary close. Replay anything after it (including this
+             character) so a newline followed by `>` cannot bypass the
+             block-quote guard. */
+          const resolved = settleCurlyAndReplay(c);
+          if (!resolved.ok) return { ...resolved, text: out + resolved.text };
+          out += resolved.text;
           continue;
         }
-        /* An apostrophe inside the span: carry on holding. */
       }
 
       held += c;
-      if (held.length - 1 > cap) return fail("unclosed", out);
+      if (mode === "curly-single" && c === "’") {
+        curlyCloses.push(held.length);
+        pendingClose = true;
+      }
+      if (held.length - 1 > cap) {
+        return fail("unclosed", out);
+      }
 
       const closes =
         (mode === "straight" && c === '"') ||
@@ -197,7 +254,6 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
         atLineStart = false;
         continue;
       }
-      if (mode === "curly-single" && c === "’") pendingClose = true;
     }
     return { ok: true, text: out };
   }
@@ -218,9 +274,12 @@ export function createQuoteGuard(allowed: readonly string[], cap: number = QUOTE
         return line === null ? fail("not-found") : { ok: true, text: line };
       }
       case "curly-single": {
-        if (!pendingClose) return fail("unclosed");
-        const span = settle(held.slice(1, -1));
-        return span === null ? fail("not-found") : { ok: true, text: span };
+        const resolved = settleCurlyAndReplay("");
+        if (!resolved.ok) return resolved;
+        const tail = end();
+        return tail.ok
+          ? { ok: true, text: resolved.text + tail.text }
+          : { ok: false, cause: tail.cause, text: resolved.text + tail.text };
       }
       case "straight":
       case "curly-double":

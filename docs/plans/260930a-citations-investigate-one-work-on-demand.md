@@ -246,3 +246,15 @@ day** ($18); **per reader 20 a day, 8 an hour, one at a time**.
   answer's own extracts, and pass its verified quotes in. Q-1: moved the guard into the stream, which
   closes the P0 (nothing quote-shaped is sent before it is checked). Q-2 and Q-4 adopted. **Q-3
   partly overruled** — § Which result is the work.
+- **Code review, stage 1** —
+  [260930a-citations-investigate-code-review-sol.md](260930a-citations-investigate-code-review-sol.md),
+  *approve with the fixes made*. Sol fixed, red-first, C-1 (P0: a plural possessive `dogs’ owners`
+  inside a `‘…’` span let an unchecked continuation stream out; the guard now holds `s’ ` until the
+  next character decides, replays what follows a close, and fails the irreducibly ambiguous case),
+  C-2 (the fingerprint now covers the rendered article head: title, byline, site, URL), C-3 (Look it
+  up's match — URL, title, verified quotes — is in the fingerprint), C-4 (the match compares scheme
+  and port too). It accepted every declared deviation: the stop message's retry tail, "a current
+  Look it up that identified a page" = assessed or unreadable with quotes only from assessed, a
+  straight inch mark stopping an answer, a failed profile read over-invalidating. Gates re-run by me
+  after its fixes: typecheck 0, 96 unit, 127 Postgres. **C-1's fix is the reviewer's own code and is
+  checked narrowly in the stage-2 review.**

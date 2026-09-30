@@ -54,7 +54,9 @@ import {
   investigateArticleKey,
   investigateContext,
   investigateContextHash,
+  matchedPageOf,
   type InvestigateContext,
+  type MatchedPage,
 } from "./citation-investigate-context.js";
 import { wordCount } from "./citation-lookup.js";
 import { safeUrl } from "./glossary.js";
@@ -86,7 +88,6 @@ import type {
   CitationFind,
   CitationInvestigation,
   CitationsFound,
-  CitedWork,
   Meta,
   SearchEvidence,
 } from "./types.js";
@@ -237,40 +238,6 @@ ${plainWords("explain")}
 ${PROFILE_RULES}`;
 
 /**
- * **The page *Look it up* matched to this work**, when the row has a current
- * lookup that identified one: its URL and title from the stored find, and the
- * extract's own verified quotes (`assessed` only — an `unreadable` reading
- * identified the page but kept no quote).
- */
-export interface MatchedPage {
-  url: string;
-  title: string | null;
-  quotes: string[];
-}
-
-/**
- * **The matched page, or `null`** — only when the lookup attached to the row
- * (which `loadCitations` attaches only while its fingerprint matches) passed
- * 5G's identity rule, and the stored find is the one that lookup came from.
- */
-export function matchedPageOf(work: CitedWork, find: CitationFind | null): MatchedPage | null {
-  const lookup = work.lookup;
-  if (!lookup || !find?.lookup) return null;
-  if (lookup.state !== "assessed" && lookup.state !== "unreadable") return null;
-  if (find.lookup.contextHash !== lookup.contextHash || find.lookup.evidenceHash !== lookup.evidenceHash) {
-    return null;
-  }
-  const quotes =
-    lookup.state === "assessed"
-      ? [
-          ...(lookup.verdict.support !== "not-in-extract" ? [lookup.verdict.quote] : []),
-          ...(lookup.paperDoes ? [lookup.paperDoes.quote] : []),
-        ]
-      : [];
-  return { url: find.url, title: find.title ?? null, quotes };
-}
-
-/**
  * The second user part: the work, the match (or the rule when there is none),
  * what the article uses it for, the citing passages, then the profile, then
  * the instruction — the job last, as explain orders it.
@@ -399,9 +366,14 @@ export interface Provenance {
 export function normalisedUrl(url: string): string | null {
   try {
     const u = new URL(url);
-    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    const hostname = u.hostname.toLowerCase().replace(/^www\./, "");
+    /* `hostname` silently drops a non-default port. That made two different
+       origins count as the same page and could credit Look it up's match to an
+       extract from another service on the host. URL normalises default ports
+       to empty for us. */
+    const host = `${hostname}${u.port ? `:${u.port}` : ""}`;
     const path = u.pathname.replace(/\/+$/, "");
-    return `${host}${path}${u.search}`;
+    return `${u.protocol.toLowerCase()}//${host}${path}${u.search}`;
   } catch {
     return null;
   }
@@ -490,7 +462,13 @@ export function makeInvestigateCitation(
     const matched = matchedPageOf(work, work.lookup ? await deps.finds.load(slug, entryId) : null);
 
     const model = modelFor("citation-investigate");
-    const contextHash = investigateContextHash(context, investigateArticleKey(article.blocks), profile, model);
+    const contextHash = investigateContextHash(
+      context,
+      investigateArticleKey(article.meta, article.blocks),
+      profile,
+      matched,
+      model,
+    );
     const request = investigateRequest({ meta: article.meta, blocks: article.blocks, context, profile, matched, model });
     const allowed = allowedQuoteTexts(article.blocks, context, matched);
     const line = log("model").child({ slug, entryId });

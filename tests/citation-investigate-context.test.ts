@@ -4,8 +4,8 @@
  * P-4, one hash over everything).
  *
  * Each case changes one input the hash is meant to cover and checks the stored
- * answer stops attaching; and the one input it is written not to cover (the
- * article's head, via a rename) is pinned too, so that choice is visible.
+ * answer stops attaching. That includes the article head and the current
+ * Look-it-up match: both alter the request even when the article's blocks do not.
  */
 import { describe, expect, it } from "vitest";
 
@@ -16,8 +16,9 @@ import {
   investigateArticleKey,
   investigateContext,
   investigateContextHash,
+  type MatchedPage,
 } from "../src/citation-investigate-context.js";
-import type { BlockId, CitationInvestigation, Citations, CitedWork } from "../src/types.js";
+import type { BlockId, CitationInvestigation, Citations, CitedWork, Meta } from "../src/types.js";
 
 const A = "spya-aaaaaa" as BlockId;
 const B = "spya-bbbbbb" as BlockId;
@@ -30,6 +31,20 @@ const BLOCKS = [
   { id: C, text: "Third." },
   { id: D, text: "A fourth citing paragraph, past the cap of three." },
 ];
+
+const META: Meta = {
+  slug: "s",
+  title: "The article title",
+  byline: "A. Writer",
+  siteName: "Example Review",
+  url: "https://example.com/article",
+};
+
+const MATCHED: MatchedPage = {
+  url: "https://arxiv.org/abs/2001.08361",
+  title: "Scaling Laws",
+  quotes: ["We study scaling laws."],
+};
 
 function work(over: Partial<CitedWork> = {}): CitedWork {
   return {
@@ -52,8 +67,21 @@ function work(over: Partial<CitedWork> = {}): CitedWork {
 
 const textOf = (blocks: typeof BLOCKS) => (id: string) => blocks.find((b) => b.id === id)?.text;
 
-function hashFor(w: CitedWork, blocks = BLOCKS, profile: string | null = null, model = "m"): string {
-  return investigateContextHash(investigateContext(w, textOf(blocks)), investigateArticleKey(blocks), profile, model);
+function hashFor(
+  w: CitedWork,
+  blocks = BLOCKS,
+  profile: string | null = null,
+  model = "m",
+  meta: Meta = META,
+  matched: MatchedPage | null = MATCHED,
+): string {
+  return investigateContextHash(
+    investigateContext(w, textOf(blocks)),
+    investigateArticleKey(meta, blocks),
+    profile,
+    matched,
+    model,
+  );
 }
 
 const STORED = (contextHash: string): CitationInvestigation => ({
@@ -97,9 +125,16 @@ describe("the investigate context", () => {
 describe("attaching a stored investigation", () => {
   const base = work();
   const stored = new Map([[base.id, STORED(hashFor(base))]]);
-  const attach = (w: CitedWork, blocks = BLOCKS, profile: string | null = null, model = "m") =>
-    attachInvestigations(list(w), stored, (row) => hashFor(row, blocks, profile, model)).citations[0]
-      ?.investigation;
+  const attach = (
+    w: CitedWork,
+    blocks = BLOCKS,
+    profile: string | null = null,
+    model = "m",
+    meta: Meta = META,
+    matched: MatchedPage | null = MATCHED,
+  ) =>
+    attachInvestigations(list(w), stored, (row) => hashFor(row, blocks, profile, model, meta, matched))
+      .citations[0]?.investigation;
 
   it("attaches while nothing it was made from has changed", () => {
     expect(attach(base)?.answer).toBe("An answer.");
@@ -134,6 +169,21 @@ describe("attaching a stored investigation", () => {
 
   it("hides it when the configured model changed", () => {
     expect(attach(base, BLOCKS, null, "another-model")).toBeUndefined();
+  });
+
+  it.each<[string, Meta]>([
+    ["title", { ...META, title: "A reader rename" }],
+    ["byline", { ...META, byline: "Another Writer" }],
+    ["site", { ...META, siteName: "Another Review" }],
+    ["article URL", { ...META, url: "https://example.com/moved" }],
+  ])("hides it when the article head's %s changed", (_what, changed) => {
+    expect(attach(base, BLOCKS, null, "m", changed)).toBeUndefined();
+  });
+
+  it("hides it when a Look-it-up match appears or its sent fields change", () => {
+    expect(attach(base, BLOCKS, null, "m", META, null)).toBeUndefined();
+    expect(attach(base, BLOCKS, null, "m", META, { ...MATCHED, title: "A revised title" })).toBeUndefined();
+    expect(attach(base, BLOCKS, null, "m", META, { ...MATCHED, quotes: ["A different verified quote."] })).toBeUndefined();
   });
 
   it("leaves every row without a stored answer untouched", () => {
