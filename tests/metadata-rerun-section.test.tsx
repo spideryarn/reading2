@@ -24,8 +24,9 @@
  *    thing between a double click and two paid runs.
  *  - **The Sketch and Debate rows say their price before the press**, which
  *    the confirm used to be the only place to say.
- *  - **The glossary says *Find more terms***, because forcing that step
- *    *appends* (src/glossary.ts § `generateGlossary`).
+ *  - **The glossary's note says it may add or rewrite**, because which one a
+ *    forced run does is `existingFor`'s decision (src/glossary.ts), not the
+ *    page's to predict.
  *  - **The completion read trails an outstanding GET rather than joining it.**
  *    The last test drives the interleaving `useOrderedRead` exists for, through
  *    the page, so it is about the callback the rows were really handed.
@@ -140,11 +141,6 @@ const ARTICLE: Article = {
 
 /** Which steps the metadata endpoint currently says have run. */
 let ran: Set<StepName>;
-/**
- * Steps that ran once but are no longer current: `done` false, `ranAt` set —
- * what `articleMetadata` in src/store/pg.ts reports for a stale artefact.
- */
-let stale: Set<StepName>;
 /** Every `POST /api/jobs` body, in order. */
 let posts: unknown[];
 /**
@@ -161,6 +157,8 @@ let holdPost = false;
 /** Resolves a held `POST /api/jobs/:id/retry`; set only while `holdRetry` is true. */
 let releaseRetry: (() => void) | undefined;
 let holdRetry = false;
+/** The retry route's next answer, varied by refusal tests. */
+let retryAnswer: () => Response;
 /**
  * Held `GET /api/metadata/:slug` answers, oldest first — each already carrying
  * the stages as they stood **when it was asked for**, which is what makes the
@@ -187,7 +185,7 @@ function stages(): StageState[] {
     step,
     label: `Doing ${step}`,
     outputs: [`data/${SLUG}/${step}.json`],
-    done: ran.has(step) && !stale.has(step),
+    done: ran.has(step),
     ranAt: ran.has(step) ? "2026-09-01T00:00:00.000Z" : null,
     startedAt: ran.has(step) ? "2026-08-31T23:59:52.000Z" : null,
     bytes: null,
@@ -220,7 +218,6 @@ function madeJob(id: string, step: StepName, status: Job["status"] = "queued"): 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   ran = new Set<StepName>(METADATA_RERUN_STEPS);
-  stale = new Set<StepName>();
   experimentalOn = false;
   posts = [];
   retries = [];
@@ -228,6 +225,7 @@ beforeEach(() => {
   holdPost = false;
   releaseRetry = undefined;
   holdRetry = false;
+  retryAnswer = () => json(madeJob("job-retried", "quotes"));
   heldMetadata = [];
   holdMetadata = false;
   metadataReads = 0;
@@ -247,7 +245,7 @@ beforeEach(() => {
     const retried = /^\/api\/jobs\/([^/]+)\/retry$/.exec(url);
     if (retried && method === "POST") {
       retries.push(retried[1] ?? "");
-      const answer = json(madeJob("job-retried", "quotes"));
+      const answer = retryAnswer();
       if (!holdRetry) return Promise.resolve(answer);
       return new Promise<Response>((go) => {
         releaseRetry = () => go(answer);
@@ -402,8 +400,13 @@ describe("the Re-run AI processing section", () => {
     holdPost = true;
     await open();
     const run = button("timeline", "Run it again");
-    await act(async () => run?.click());
-    await act(async () => run?.click());
+    /* Both events before React can commit the first one's state, as the Retry
+       test below does: two separate `act` calls would click a detached button
+       the second time and pass without any latch. */
+    await act(async () => {
+      run?.click();
+      run?.click();
+    });
 
     expect(row("timeline")?.textContent).toContain("Starting");
     expect(button("timeline", "Run it again"), "the button stayed up mid-flight").toBeUndefined();
@@ -418,32 +421,25 @@ describe("the Re-run AI processing section", () => {
   });
 
   /**
-   * Forcing the glossary **appends** a batch of terms, so its button says so —
-   * the only place that is said now the confirm has gone.
+   * **The glossary gets the plain label, and a note that says both outcomes.**
+   * Forcing it appends when `existingFor` (src/glossary.ts) accepts the old
+   * list — same source, prompt version and reader profile — and rewrites it
+   * otherwise. *Find more terms* promised the append every time, and keying
+   * the label on `done` guessed wrong both ways, because `done` tracks the
+   * model and not the profile (GPT Sol, both reviews, 2026-09-30).
    */
-  it("says Find more terms on the glossary, and runs it on one press", async () => {
-    await open();
-    expect(button("glossary", "Run it again")).toBeUndefined();
-    await press(button("glossary", "Find more terms"));
-    expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
-  });
-
-  /**
-   * **A stale glossary is rewritten, not appended to** (`existingFor`,
-   * src/glossary.ts), so *Find more terms* over it would promise what the press
-   * does not do. Found by GPT Sol's plan review, 2026-09-30.
-   */
-  it("says Run it again, not Find more terms, over a stale glossary", async () => {
-    stale = new Set<StepName>(["glossary"]);
+  it("labels the glossary like any mode and says it may add or rewrite", async () => {
     await open();
     expect(button("glossary", "Find more terms")).toBeUndefined();
-    expect(button("glossary", "Run it again")).toBeTruthy();
+    expect(row("glossary")?.textContent).toContain("Adds more terms to the list");
+    expect(row("glossary")?.textContent).toContain("writes a new one");
+    await press(button("glossary", "Run it again"));
+    expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
   });
 
   it("says Run it over a glossary that has never run", async () => {
     ran = new Set<StepName>(["arc"]);
     await open();
-    expect(button("glossary", "Find more terms")).toBeUndefined();
     expect(button("glossary", "Run it again")).toBeUndefined();
     expect(button("glossary", "Run it")).toBeTruthy();
   });
@@ -488,9 +484,9 @@ describe("the Re-run AI processing section", () => {
     );
   });
 
-  it("puts a note on the sketch, debate and trajectory rows and on no other", async () => {
+  it("puts a note on the glossary, sketch, debate and trajectory rows and on no other", async () => {
     await open();
-    const noted = new Set(["sketch", "debate", "trajectory"]);
+    const noted = new Set(["glossary", "sketch", "debate", "trajectory"]);
     for (const step of METADATA_RERUN_STEPS) {
       expect(
         host.querySelector(`#rerun-note-${step}`) !== null,
@@ -510,7 +506,7 @@ describe("the Re-run AI processing section", () => {
    * the confirm gone this is the only place the price is said. ⟨Sol, plan
    * review F4, 2026-09-30.⟩
    */
-  it("describes the Run button with the note, so a screen reader hears the price", async () => {
+  it("describes the Run and Retry buttons with the note, so a screen reader hears the price", async () => {
     await open();
     const run = button("debate", "Run it again");
     const ids = (run?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
@@ -518,6 +514,21 @@ describe("the Re-run AI processing section", () => {
     const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
     expect(described).toContain("$0.20–0.40");
     expect(button("quotes", "Run it again")?.hasAttribute("aria-describedby")).toBe(false);
+
+    await press(run);
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "debate", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+    const retry = button("debate", "Retry");
+    const retryIds = (retry?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    const retryDescription = retryIds
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ");
+    expect(retryDescription).toContain("$0.20–0.40");
   });
 
   /**
@@ -635,8 +646,13 @@ describe("the Re-run AI processing section", () => {
 
     holdRetry = true;
     const retry = button("quotes", "Retry");
-    await act(async () => retry?.click());
-    await act(async () => retry?.click());
+    /* Both events before React can commit the first one's state update. Two
+       separate `act` calls only click a detached old button the second time and
+       stay green without a synchronous request latch. */
+    await act(async () => {
+      retry?.click();
+      retry?.click();
+    });
     expect(button("quotes", "Retry"), "Retry stayed up mid-flight").toBeUndefined();
     expect(row("quotes")?.textContent).toContain("Starting");
     for (const b of [...(row("quotes")?.querySelectorAll("button") ?? [])]) {
@@ -648,6 +664,25 @@ describe("the Re-run AI processing section", () => {
     await settle();
     expect(retries).toEqual(["job-1"]);
     expect(posts).toHaveLength(1);
+  });
+
+  it("restores Retry instead of leaving Starting stuck when the retry is refused", async () => {
+    retryAnswer = () => json({ error: "That job cannot be tried again." }, 409);
+    await open();
+    await press(button("quotes", "Run it again"));
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+
+    await press(button("quotes", "Retry"));
+
+    expect(retries).toEqual(["job-1"]);
+    expect(row("quotes")?.textContent).not.toContain("Starting");
+    expect(button("quotes", "Retry"), "the refused action left no way to try again").toBeTruthy();
   });
 
   /**

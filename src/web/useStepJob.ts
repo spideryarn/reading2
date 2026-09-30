@@ -466,6 +466,19 @@ export function useStepJob<S extends StepName>(
    * that question would be a render for nothing.
    */
   const startedId = useRef<string | null>(null);
+  /* State removes the button on the next commit; this ref closes the smaller
+     window before that commit, when two click events can still invoke the same
+     Retry handler — two paid retries, since Metadata's rows stopped asking
+     first on 2026-09-30. It stays held after the POST answers until the
+     returned job is present in the queue, matching `starting` rather than only
+     the request, and a refusal releases it. GPT Sol's code review.
+
+     **Retry only, not `start`.** `start` is called twice on purpose — a mode
+     that starts itself and then a press before the first job is polled
+     (tests/modes-that-start-themselves.test.tsx, tests/step-job-force.test.tsx
+     both went red with it there). Metadata's run button latches in `RerunRow`
+     instead, where one press is the whole of what it means. */
+  const inFlight = useRef(false);
   const [starting, setStarting] = useState(false);
 
   /**
@@ -505,6 +518,7 @@ export function useStepJob<S extends StepName>(
     if (!seen) return;
     /* It exists, so the request is no longer merely in flight. */
     setStarting(false);
+    inFlight.current = false;
     startedId.current = null;
     if (seen.status === "queued" || seen.status === "running") return;
     if (seen.status === "done" && !announced.current.has(id)) onFinished();
@@ -592,6 +606,11 @@ export function useStepJob<S extends StepName>(
    */
   const retry = useCallback(
     async (id: string) => {
+      /* React commits a discrete click promptly in the browser, but the action
+         itself must still be single-flight: two events can reach this closure
+         before that commit removes the button. */
+      if (inFlight.current) return;
+      inFlight.current = true;
       setStarting(true);
       const next = await queue.retry(id);
       if (next) {
@@ -599,6 +618,7 @@ export function useStepJob<S extends StepName>(
         startedId.current = next.id;
         return;
       }
+      inFlight.current = false;
       setStarting(false);
     },
     [queue],

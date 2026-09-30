@@ -79,11 +79,18 @@ reader's, so Greg's request does not reach it.
   - Debate: *Up to two calls: $0.20–0.40 on a short article, more on a long one* (Sol F3 — pass B
     is conditional, and the range is for a short article).
   - Trajectory: *Needs Quotes first; without them it stops before any model call* (Sol F3).
-- **Glossary's label** (Sol F2). Forcing a **current** glossary appends; forcing a **stale** one
-  rewrites it (`existingFor`, src/glossary.ts). So *Find more terms* only over a current one, *Run
-  it again* over a stale one, *Run it* over none. The old confirm made the same wrong promise
-  (*"New terms are added"*) over a stale glossary, so this is a pre-existing gap the removal
-  surfaced, not one it opened.
+- **Glossary** (Sol F2, then its code review). Forcing it appends when `existingFor`
+  (src/glossary.ts) accepts the old list — same source, prompt version and reader profile — and
+  rewrites it otherwise. The first build keyed *Find more terms* on `done`; the code review showed
+  `done` tracks the model and not the profile, so that guessed wrong both ways. Built instead: the
+  glossary gets the plain *Run it* / *Run it again* like every mode, and a note — *Adds more terms
+  to the list; if the article or your reader profile has changed, writes a new one* — that says both
+  outcomes rather than predicting one. The old confirm and label promised the append every time, so
+  this is a pre-existing gap the removal surfaced, not one it opened.
+- **Double press on Run** (code review, by extension of its Retry finding). Two click events can
+  reach the handler before React commits `starting`. A ref latch in `RerunRow` holds for the POST's
+  round trip. Not in `useStepJob.start`: other panels call it twice on purpose, and two suites went
+  red when it was there. Retry's latch is in `useStepJob`, where Sol put it.
 
 ### 2. *Start again* is the section's first row (65)
 
@@ -133,10 +140,21 @@ rerun card, before the first mode row, and still asks before it posts.
   glossary, lost qualifications in two notes, notes not accessible descriptions). All four taken,
   above. Its suggestion to also warn inline that a stale rewrite hides saved look-ups is deferred.
 
+- **Code, GPT Sol** ([260930e-code-review-sol.md](260930e-code-review-sol.md), EXIT=0, with
+  fixes): a synchronous Retry latch in `useStepJob` and its tests (kept); the glossary label still
+  mispredicting (reworked, above); ResetArticle's Retry still fire-and-forget (P3, deferred below).
+  The work after it went back for a second look —
+  [260930e-code-review-2-sol.md](260930e-code-review-2-sol.md).
+
 ## Deferred
 
 - A per-reader limiter on re-runs (ai-gateway.md already has the design, and the files are on the
   security map, so it is Greg's).
 - Undo for an accidental *Find more terms* (the appended terms stay).
-- Saying, on a stale glossary's row, that a rewrite stops saved look-ups showing beside entries
-  whose ids change (they stay stored). The old confirm did not say it either.
+- Saying, on the glossary's row, that a rewrite stops saved look-ups showing beside entries whose
+  ids change (they stay stored). The old confirm did not say it either.
+- Telling the reader in advance whether a glossary run will append or rewrite: needs the server to
+  expose `existingFor`'s verdict through `articleMetadata`.
+- ResetArticle's Retry fires and forgets `queue.retry` (Sol code review P3). It predates this work,
+  sits behind its own confirm, and the server collapses a duplicate reset; giving `useResetJob` the
+  same latch is the fix.

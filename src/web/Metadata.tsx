@@ -1372,7 +1372,6 @@ function RerunSection({
                we cannot make yet. `RerunRow` reads either as *not that we know
                of*, which is what picks *Run it* over *Run it again*. */
             done={provenance?.stages.find((s) => s.step === step)?.done}
-            ran={(provenance?.stages.find((s) => s.step === step)?.ranAt ?? null) !== null}
             onFinished={onFinished}
           />
         ))}
@@ -1404,14 +1403,17 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
 };
 
 /**
- * **The three rows for which "another model call" is not the whole story**,
+ * **The four rows for which "another model call" is not the whole story**,
  * said under the mode's name, before the press, because nothing else on this
  * page says it.
  *
- * Until 2026-09-30 these were three of four sentences in an inline confirm that
- * every press went through; Greg asked for the confirm to go (below, at
- * `RerunRow`). The fourth, Glossary's *appends*, is its button: *Find more
- * terms* over a current glossary, and not over a stale one, which is rewritten.
+ * Until 2026-09-30 these were the four special sentences in an inline confirm
+ * that every press went through; Greg asked for the confirm to go (below, at
+ * `RerunRow`). The glossary's says **both** outcomes: a run appends when
+ * `existingFor` (src/glossary.ts) accepts the old list — same source, prompt
+ * version and reader profile — and rewrites it otherwise, and nothing on this
+ * page knows which in advance (GPT Sol's code review). The old confirm, and the
+ * *Find more terms* label, promised the append every time.
  *
  * The Sketch's figures are `SKETCH_PRICE` and `SKETCH_WAIT` from
  * ./sketch-cost.ts, so this page and the Sketch panel cannot name two different
@@ -1431,25 +1433,12 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * reaches the button by keyboard.
  */
 const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
+  glossary:
+    "Adds more terms to the list; if the article or your reader profile has changed, writes a new one",
   sketch: `${SKETCH_PRICE}, ${SKETCH_WAIT}`,
   debate: "Up to two calls: $0.20–0.40 on a short article, more on a long one",
   trajectory: "Needs Quotes first; without them it stops before any model call",
 };
-
-/**
- * **What the glossary's button says, and it has to say what forcing it does.**
- *
- * A current glossary is appended to, so *Find more terms*. A stale one — ran
- * once, but for a source that has since changed, so `done` is false with a
- * `ranAt` — is **rewritten** from scratch (`existingFor`, src/glossary.ts), and
- * *Find more terms* over it would promise an append that does not happen. That
- * gap was hidden behind a confirm sentence that made the same wrong promise
- * until 2026-09-30, found by GPT Sol's plan review of its removal.
- */
-function glossaryLabel(done: boolean | undefined, ran: boolean): string {
-  if (done) return "Find more terms";
-  return ran ? "Run it again" : "Run it";
-}
 
 /**
  * One row: the mode's name, and a button that runs it.
@@ -1495,15 +1484,12 @@ function RerunRow({
   slug,
   step,
   done,
-  ran,
   onFinished,
 }: {
   slug: string;
   step: MetadataRerunStep;
   /** `StageState.done`, or undefined while the metadata request is out. */
   done: boolean | undefined;
-  /** `StageState.ranAt !== null` — only the glossary's label reads it. */
-  ran: boolean;
   onFinished: () => void;
 }) {
   const { job, failed, stalled, starting, start, cancel } = useStepJob(
@@ -1512,14 +1498,39 @@ function RerunRow({
     onFinished,
     "watches-queue",
   );
+  /* **One press, one run.** `starting` takes the button away on the next
+     commit, but two click events can reach this handler before it — two paid
+     runs, now nothing asks first. Held for the POST's round trip; after that
+     `starting` holds until the job is polled, and the button is long gone.
+     Here and not in `useStepJob.start`, which other panels call twice on
+     purpose — see `inFlight` there. */
+  const pressing = useRef(false);
+  const run = async () => {
+    if (pressing.current) return;
+    pressing.current = true;
+    try {
+      /* Forced, and forced **by name**. The step's own freshness check
+         would otherwise skip an artefact that is, by construction,
+         current — a run that looks like it worked and changed nothing.
+         `useStepJob` turns this into `force: [step]`, never a positional
+         force, so nothing after it in `STEP_ORDER` is swept in. */
+      await start({ force: true });
+    } finally {
+      pressing.current = false;
+    }
+  };
 
   const Icon = STAGE_ICONS[step];
-  /* *Find more terms* for the glossary, in the words its own panel already uses,
-     because forcing that step appends. Otherwise off `done`, so the button and
-     the `ran` / `not run` pill in Technical details cannot contradict each
-     other — and `undefined` reads as "not that we know of". */
-  const label =
-    step === "glossary" ? glossaryLabel(done, ran) : done ? "Run it again" : "Run it";
+  /* Off `done`, so the button and the `ran` / `not run` pill in Technical
+     details cannot contradict each other — and `undefined` reads as "not that
+     we know of". **The glossary too, since 2026-09-30.** It said *Find more
+     terms* whatever its state, and then off `done`, and both were a guess at
+     whether this press appends or rewrites — which `existingFor`
+     (src/glossary.ts) decides from the source, the prompt version and the
+     reader profile, none of which `done` tracks exactly (GPT Sol, both
+     reviews of 260930e). So it gets the plain label, and its note says the
+     two outcomes rather than predicting one. */
+  const label = done ? "Run it again" : "Run it";
   const note = RERUN_COST_NOTE[step];
   /* Keyed on the step: a dozen rows share the page, and a fixed id would
      describe every button with whichever note came first. */
@@ -1561,12 +1572,7 @@ function RerunRow({
           starting={starting}
           failed={failed}
           stalled={stalled}
-          /* Forced, and forced **by name**. The step's own freshness check
-             would otherwise skip an artefact that is, by construction,
-             current — a run that looks like it worked and changed nothing.
-             `useStepJob` turns this into `force: [step]`, never a positional
-             force, so nothing after it in `STEP_ORDER` is swept in. */
-          onRun={() => start({ force: true })}
+          onRun={run}
           onCancel={cancel}
           label={label}
           step={step}
