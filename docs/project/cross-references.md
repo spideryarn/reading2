@@ -1,0 +1,107 @@
+# Cross-references: the article linked to itself
+
+A phrase in the prose that sums up something the piece shows in detail elsewhere is underlined as a
+link. Two examples:
+
+- the abstract's "reduced recall by 38%" links to the results paragraph that reports it;
+- "Figure 4C" links to the figure.
+
+Hovering or focusing the phrase shows the same card every block link has: the target's section and
+the start of its paragraph. Clicking jumps there, which flashes the target and offers the back chip.
+The links are drawn in every mode. Cross-references are not a mode and have no band. Part of
+[reading-view-overview.md](reading-view-overview.md).
+
+> it annotated things by adding, you know, anchor links or whatever to relevant other parts of the
+> article. So, for example, if it describes a result, then it would create an anchor link to the
+> block that actually, you know, the results in detail that underlie that statement or conclusion.
+> So you can always jump around the paper to get to the thing being described. And maybe this would
+> be a preprocessing step that always happens. And you'd have a cool tooltip, a rich tooltip that
+> you could hover over that would preview that linked-to block.
+>
+> — Greg, 2026-09-30
+
+The plan, the reviews and the measured runs are in
+[260930f](../plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md).
+
+## What is stored
+
+The `crossrefs` step ([`src/crossrefs.ts`](../../src/crossrefs.ts)) makes one Sonnet call over the
+article with its [block ids](block-ids.md). The call returns `{ from, phrase, to }` triples. A
+link addresses both ends by id and nothing else. The phrase is a slice of `from`'s own rendered
+text, and the model's own string is not kept.
+
+**Every rule the prompt states is enforced by validation**, and each rule has a `dropped` counter:
+
+- `from` and `to` are known ids;
+- a link is never to the same block or the one next to it;
+- the phrase is 2–12 words;
+- the phrase occurs exactly once in `from`'s rendered text;
+- no two links overlap;
+- there is a cap on the number of links.
+
+"Exactly once in the rendered text" is the rule the whole feature rests on. The client can mark
+only an occurrence it can find unambiguously, in the text the reader actually sees. That means
+after maths has become MathML. So the server checks with the same finder, over the same text,
+before it stores anything.
+
+Freshness is a hash of exactly the request's article and skeleton. **A stale artefact is not
+drawn.** A link can outlive an edit with both ids and its phrase intact and still no longer be
+true, and the prose has nowhere to say "out of date".
+
+## When it runs
+
+- **After an import**, when the add page's *generate the main modes* box is ticked
+  ([260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md)). It is added to that
+  list by hand, because the list is derived from modes and this is not one. It runs in the first,
+  parallel group.
+- **On demand**, from Metadata's *Re-run AI processing* (`METADATA_RERUN_STEPS`).
+
+Not in the import itself, which stays as fast as it can be. The prose picks the links up as soon as
+the job finishes, with no reload (`useCrossrefs` refreshes on the job's completion).
+
+**Cost, measured**: $0.05–0.17 an article on the local corpus. The plan has the token counts.
+
+## In the prose
+
+`"xref"` is the sixth `MarkKind` in [`annotate.ts`](../../src/web/annotate.ts). Each mark carries
+`data-xref="<nonce>-<i>"`:
+
+- the **nonce** is random per page load and held in memory only
+  ([`xref.ts`](../../src/web/xref.ts));
+- `i` indexes the validated artefact.
+
+Every handler — the click, Enter, the card, and the mouse-up that would otherwise open a comment —
+resolves a mark only through `xrefTarget`. That function checks the nonce and then takes `to` from
+the artefact, **never from the DOM**. So an article's own HTML cannot make a working
+cross-reference: it cannot know the nonce.
+
+- **Precedence**: an xref wins over a glossary term, a citation mark, a comment and a search wash on
+  the same words. The one exception is an author's own `<a>`: an xref crossing one is dropped,
+  and the author's link keeps its card and its click.
+- **Keyboard**: one Tab stop per link, on the first piece of a phrase that marking split. Enter
+  jumps.
+- **Modified clicks**: nothing special. There is no `href`, so ⌘-click is not "open in a new tab"
+  here.
+- **Touch**: a tap goes straight there.
+
+## Who sees it
+
+**Only the article's owner, in v1.** The route is `GET /api/crossrefs/:slug`, owner-authenticated,
+and a visitor's view makes no request for it. Two things wait on Greg, because each is an edit to a
+[listed defence](security-map.md#where-the-defences-physically-live), and an unattended run does
+not make those:
+
+1. **Reserving the mark at ingress** — `data-xref` in `FORBID_ATTR`, the `xref` class reserved, and
+   `SANITIZER_VERSION` bumped. This is the sanitiser's own rule for a new `MarkKind`. The nonce
+   already stops a forged mark from working; the reservation would stop one from even *looking*
+   like a link. The same edit should forbid `data-block-link`, `data-block-preview` and
+   `data-block-missing`, which an article can forge today regardless of this feature.
+2. **Visitors** — a `crossrefs` key through `PUBLIC_PROJECTIONS` and the public DTO, omitted when
+   stale.
+
+## Deferred
+
+- Several targets per link.
+- A reader switch to hide the underlines.
+- Back-references on the target.
+- Generating automatically for older articles on open.

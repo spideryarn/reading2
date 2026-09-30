@@ -171,6 +171,9 @@ That is every band mode; `plain` is the only one that opens no band.
 
 - **[links.md](links.md)** — hover one of the article's own hyperlinks and a card says where it
   goes; also the measurement showing Readability-in-the-browser is a wall, not a decision.
+- **[cross-references.md](cross-references.md)** — the article linked to itself: a phrase that
+  sums up what another passage shows in detail, underlined, previewed on hover, a jump on click.
+  Open it for why a forged mark cannot work, and the two defence edits still waiting on Greg.
 - **[tooltips.md](tooltips.md)** — the library choice, and why there are two implementations: the
   glossary card's triggers are injected HTML with no React element to wrap.
 - **[keyboard.md](keyboard.md)** — ↑ / ↓ take the step; ← / → step Trajectory stops.

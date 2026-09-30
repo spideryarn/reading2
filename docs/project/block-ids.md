@@ -493,6 +493,10 @@ the native `title` the others had. A link whose panel already shows the passage 
 `preview={false}` and its card says only where it is
 ([260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)).
 
+**The prose's own cross-references use the same card** — a phrase in one block linked to the block
+that shows it in detail, both ends by id, the target taken from the stored artefact and never from
+the DOM ([cross-references.md](cross-references.md)).
+
 **An id the article does not have is not a link**, because a dead chip is worse than visible noise:
 pressing it does nothing and nothing distinguishes that from a bug in the scrolling. In model prose
 `Cited` draws it as plain text. Anywhere else in the reading view `BlockRef` draws it as a dimmed

@@ -72,6 +72,10 @@ export const RESET_ROLE = {
   illustrated: "extra",
   debate: "extra",
   citations: "extra",
+  /* Made after import by the add page's box or a press on Metadata, off
+     DEFAULT_INGEST_STEPS, a whole column: exactly the modes' shape, though it
+     is not a mode. */
+  crossrefs: "extra",
 } as const satisfies Record<StepName, ResetRole>;
 
 /** The steps a reset drops — a type, so a map over them is exhaustive. */

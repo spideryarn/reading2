@@ -92,6 +92,11 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "./faq.js";
 import {
+  generateCrossrefs,
+  inputFingerprint as crossrefsFingerprint,
+  PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
+} from "./crossrefs.js";
+import {
   generateDebate,
   inputFingerprint as debateFingerprint,
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
@@ -527,6 +532,13 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      positional cascade would buy it for nothing; and it replaces rather than
      appends. docs/plans/260911g-citations-mode.md. */
   "citations",
+  /* The same two reasons as `faq`: it reads the blocks, the tree and the
+     metadata, nothing else in the pipeline reads what it writes, so the
+     positional cascade would buy a model call for nothing. Its `stamp` compares
+     a stored `sourceHash`, so a moved article re-runs without being forced. And
+     it replaces rather than appends.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  "crossrefs",
 ]);
 
 export interface StepContext {
@@ -4385,6 +4397,65 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: { citations: run.citations },
         detail: `${rows.length} ${rows.length === 1 ? "work" : "works"}, ${linked} linked`,
+      };
+    },
+  },
+  /* Stage 5q — cross-references: a phrase in one block linked to the block that
+     shows it in detail. Off DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED;
+     queued after import by the add page's box, or by a press on Metadata.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+
+     **No baseline read**, like `faq`: nothing addresses a link, so a re-run
+     replaces the list. */
+  crossrefs: {
+    name: "crossrefs",
+    label: "Linking the article to itself",
+    produces: ["crossrefs"],
+    /**
+     * The exact body-only article rendering and top-level skeleton the request
+     * sends, with the **real, nullable** metadata, which is what
+     * `generateCrossrefs` hashes too. No `profileHash`.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: crossrefsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: CROSSREFS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateCrossrefs({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const links = run.crossrefs.links;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "crossrefs",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          blocks: run.blocks,
+          links: links.length,
+          /* Counts only — never a phrase. `unquoted` and `ambiguous` are the
+             ones to watch: the model paraphrasing, or picking words the prose
+             could not place. */
+          ...run.dropped,
+        },
+        `crossrefs ${ctx.slug}: ${links.length} links`,
+      );
+      return {
+        parts: { crossrefs: run.crossrefs },
+        detail: `${links.length} ${links.length === 1 ? "link" : "links"}`,
       };
     },
   },

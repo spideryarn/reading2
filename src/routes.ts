@@ -37,6 +37,7 @@
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
+ *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
  *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
@@ -149,6 +150,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadCrossrefs,
   loadTrajectory,
   loadDebate,
   loadCitations,
@@ -7995,6 +7997,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
          written for a profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
+    },
+  },
+
+  /* Cross-references —
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+     GET only, and no DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["crossrefs"] }. This route never spends.
+     **Owner-authenticated like every artefact route here, with no anonymous
+     twin** (Sol F1): a visitor's read goes through the public DTO, and adding
+     it there is a defence edit left for Greg (the plan's § Left for Greg). */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/crossrefs\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      /* No `withProfileChanged`: not written for a profile. */
+      send(res, 200, await loadCrossrefs(slugPart(captures, 1)));
     },
   },
 

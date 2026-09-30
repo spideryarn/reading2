@@ -4,11 +4,12 @@
  * horizontal handler (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Keys, Sol F5).
  *
- * While Trajectory is the mode, ← / → step its stops; everywhere else they are
- * the browser's (they moved the stride across Hierarchy's gist columns until
- * 2026-09-29). The existing guards hold for
- * both: no modifiers, not while typing, not when a widget nearer the keypress
- * has already handled it, and no auto-repeat. ↑ / ↓ are untouched either way.
+ * While Trajectory is the mode, ← / → step its stops; while Remember's Quiz
+ * half is showing, they step its questions; everywhere else they are the
+ * browser's (they moved the stride across Hierarchy's gist columns until
+ * 2026-09-29). The existing guards hold for both: no modifiers, not while
+ * typing, not when a widget nearer the keypress has already handled it, and no
+ * auto-repeat. ↑ / ↓ are untouched either way.
  *
  * A DOM test for keynav-handled.test.ts's reason: the listener is on `window`,
  * so what decides is a real event travelling up a real DOM.
@@ -103,7 +104,7 @@ function press(
   return event;
 }
 
-describe("with a horizontal handler (Trajectory)", () => {
+describe("with a horizontal handler (Trajectory or Quiz)", () => {
   beforeEach(async () => {
     await mount(true);
   });
@@ -137,6 +138,26 @@ describe("with a horizontal handler (Trajectory)", () => {
     });
     input.remove();
     expect(asked).toEqual([]);
+  });
+
+  /* A comment's dialog focuses its Close button and has ‹ › of its own; an
+     arrow pressed there must not step the band behind it. GPT Sol's review of
+     plan 260930h, finding 1. Both shapes the app uses: a hand-rolled
+     `role="dialog"` and a native `<dialog>`. */
+  it("does not step the band from inside a dialog", () => {
+    for (const tag of ["aside", "dialog"] as const) {
+      const dialog = document.createElement(tag);
+      if (tag === "aside") dialog.setAttribute("role", "dialog");
+      const button = document.createElement("button");
+      dialog.append(button);
+      document.body.append(dialog);
+      const e = press("ArrowRight", {}, button);
+      expect(e.defaultPrevented).toBe(false);
+      dialog.remove();
+    }
+    expect(asked, "a key pressed in a dialog reached the band").toEqual([]);
+    press("ArrowRight");
+    expect(asked, "the control: the same key outside a dialog").toEqual([1]);
   });
 
   it("leaves ↑ and ↓ to the article", () => {

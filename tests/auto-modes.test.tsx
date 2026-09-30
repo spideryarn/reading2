@@ -75,14 +75,26 @@ const { STEP_READS, autoModeRequests, autoModeSteps, autoModesDetail, queueAutoM
   "../src/web/auto-modes.js"
 );
 const { modeStep } = await import("../src/web/activation.js");
+
+/**
+ * The order `queueAutoModes` posts in: the jobs that read nothing first, then
+ * the rest. It was also `autoModeRequests()`'s own order until `crossrefs`
+ * (plan 260930f) joined — last in `STEP_ORDER`, and reading nothing, so it is
+ * posted before Trajectory though it sorts after it.
+ */
+const postingOrder = (): StepName[][] => {
+  const requests = autoModeRequests();
+  return [...requests.filter((s) => s.length === 1), ...requests.filter((s) => s.length > 1)];
+};
 const { AddPage } = await import("../src/web/AddPage.js");
 
 describe("which steps the box queues", () => {
-  it("is the five main modes that make something, in STEP_ORDER", () => {
+  it("is the five main modes that make something, and the cross-references, in STEP_ORDER", () => {
     /* If this changes, a mode moved in or out of the experimental switch, or
        started or stopped making something. That may be right — then change
-       this line, and the price in the plan. */
-    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "trajectory"]);
+       this line, and the price in the plan. `crossrefs` is no mode: it is
+       added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3. */
+    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "trajectory", "crossrefs"]);
   });
 
   it("puts Trajectory after Quotes and Ideas, which it reads", () => {
@@ -100,6 +112,7 @@ describe("which steps the box queues", () => {
 
   it("names them to the reader", () => {
     expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas and Trajectory");
+    expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });
 
@@ -121,6 +134,7 @@ describe("queueAutoModes", () => {
       ["quotes"],
       ["ideas"],
       ["quotes", "ideas", "trajectory"],
+      ["crossrefs"],
     ]);
   });
 
@@ -142,8 +156,9 @@ describe("queueAutoModes", () => {
       return null;
     };
     await queueAutoModes(run, "an-article");
-    expect(answered).toHaveLength(5);
-    expect(trajectoryPostedAfter, "Trajectory was posted before the other four had answered").toBe(4);
+    expect(answered).toHaveLength(6);
+    /* The four modes that read nothing, and `crossrefs`, which reads nothing either. */
+    expect(trajectoryPostedAfter, "Trajectory was posted before the other five had answered").toBe(5);
   });
 
   it("carries on past one that throws", async () => {
@@ -153,7 +168,7 @@ describe("queueAutoModes", () => {
       if (request.steps[0] === "glossary") throw new Error("network");
       return null;
     }, "an-article");
-    expect(started).toHaveLength(5);
+    expect(started).toHaveLength(6);
   });
 });
 
@@ -239,7 +254,7 @@ describe("the add page", () => {
     render("done");
     await settle();
     expect(navigations).toHaveLength(1);
-    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
     expect(runs.every((r) => r.slug === "a-paper")).toBe(true);
   });
 
@@ -249,7 +264,7 @@ describe("the add page", () => {
     addResult = finished;
     renderSource({ kind: "url", url: "https://example.com/a-paper" });
     await settle();
-    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
     expect(navigations).toEqual(["/read/a-paper"]);
   });
 
@@ -272,7 +287,7 @@ describe("the add page", () => {
       );
     });
     await settle();
-    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
   });
 
   it("queues the modes when an engine-owned upload resolves to an existing article", async () => {
@@ -284,7 +299,7 @@ describe("the add page", () => {
     };
     renderSource({ kind: "upload", uploadId: UPLOAD_ID });
     await settle();
-    expect(runs.map((r) => r.steps)).toEqual(autoModeRequests());
+    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
     expect(navigations).toEqual(["/read/a-paper"]);
   });
 

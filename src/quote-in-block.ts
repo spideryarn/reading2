@@ -120,7 +120,7 @@ const SKIP_MATHS_IN = new Set<string>(MATHS_SKIP_TAGS);
  * that mixed form and was both accepting unseen symbols and refusing real
  * selections across the two formulae.
  */
-function renderedBlockMathsText(html: string, render: RenderTex): string {
+export function renderedBlockMathsText(html: string, render: RenderTex): string {
   const root = jsdom().JSDOM.fragment(html);
   const texts: Text[] = [];
   const visit = (node: Node, skipped: boolean): void => {

@@ -26,7 +26,9 @@ import type {
   Block,
   BlockId,
   Comment,
+  Crossref,
 } from "../types.js";
+import { XREF_NONCE, xrefTarget } from "./xref.js";
 import { useRenderCount } from "./perf.js";
 import type { Geometry } from "./tree.js";
 import type { Fit } from "./layout.js";
@@ -37,6 +39,7 @@ import {
   resolveMark,
   termMarks,
   citeMarks,
+  xrefMarks,
   type CiteSelection,
   type Mark,
   type TermSelection,
@@ -113,6 +116,13 @@ interface ProseEntry {
   /** `citeMarksByBlock`'s array for this block — every cited work placed here. */
   cites: readonly Mark[];
   /**
+   * `xrefMarksByBlock`'s array for this block — the cross-references starting
+   * here. In the key for the reason `cites` is: the links are a separate GET
+   * that lands after the blocks, and a memo that ignored them drew them only
+   * when something else happened to move (see the `proseHtml` dependencies).
+   */
+  xrefs: readonly Mark[];
+  /**
    * `openTerm`, but **only when this block carries that term** — otherwise
    * null.
    *
@@ -175,6 +185,7 @@ function sameInputs(
   terms: readonly Mark[],
   hits: readonly Mark[],
   cites: readonly Mark[],
+  xrefs: readonly Mark[],
   openTerm: string | null,
 ): boolean {
   return (
@@ -183,6 +194,7 @@ function sameInputs(
     had.terms === terms &&
     had.hits === hits &&
     had.cites === cites &&
+    had.xrefs === xrefs &&
     had.openTerm === openTerm
   );
 }
@@ -403,6 +415,10 @@ const NOT_A_BLOCK_SELECTION = [
      deferred: without it, this line would take the tap away and give nothing
      back. ProseHoverCard.tsx § tapSelector. */
   "mark.hit.cite",
+  /* **A cross-reference inside a quoted sentence**, for the citation's reason
+     one line up: a bare `mark.xref` is caught by `mark:not(.hit)`, and a tap
+     on one already means something — it jumps (the `<tbody>` click below). */
+  "mark.hit.xref",
   "mark.hit[data-wash]",
   "mark.hit:not([data-quote])",
   /* The ⤢ on a figure, and every control in the gutter. The gutter's own
@@ -557,6 +573,16 @@ interface Props {
    */
   cites?: readonly CiteSelection[] | undefined;
   /**
+   * **The cross-references to draw** — the owner's validated links, or null for
+   * a visitor, a stale artefact, or none generated (useCrossrefs.ts decides).
+   * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+   *
+   * The same array is what a click resolves against: `xrefTarget` reads `to`
+   * from here by the index the mark names, never from the DOM. Optional, for
+   * `cites`' reason.
+   */
+  xrefs?: readonly Crossref[] | null | undefined;
+  /**
    * The term the reader has pressed in the glossary band, of the many drawn.
    *
    * **Its own prop rather than an `open` flag inside `terms`**, so that pressing
@@ -688,6 +714,7 @@ function TableViewInner({
   onBookmark,
   terms,
   cites,
+  xrefs,
   openTerm,
   hitMarks,
   hitStrength,
@@ -880,6 +907,16 @@ function TableViewInner({
   const citeMarksByBlock = useMemo(() => citeMarks(blocks, cites ?? []), [blocks, cites]);
 
   /**
+   * The cross-references, placed. Its own memo for `citeMarksByBlock`'s reason:
+   * it changes only when the links are replaced. `XREF_NONCE` is this page
+   * load's, and the same one `xrefTarget` checks — xref.ts.
+   */
+  const xrefMarksByBlock = useMemo(
+    () => xrefMarks(blocks, xrefs ?? [], XREF_NONCE),
+    [blocks, xrefs],
+  );
+
+  /**
    * Last render's `{ __html }` objects **and what each was built from**, so an
    * unchanged block can be handed back the one React has already seen without
    * being computed again — see `proseHtml` below for why each half matters.
@@ -995,9 +1032,10 @@ function TableViewInner({
       const cmts = marksByBlock.get(block.id) ?? NO_MARKS;
       const hits = hitMarks?.get(block.id) ?? NO_MARKS;
       const cited = citeMarksByBlock.get(block.id) ?? NO_MARKS;
+      const linked = xrefMarksByBlock.get(block.id) ?? NO_MARKS;
       const pressed = pressedIn(found, openTerm);
       const had = was.get(block.id);
-      if (had && sameInputs(had, block, cmts, found, hits, cited, pressed)) {
+      if (had && sameInputs(had, block, cmts, found, hits, cited, linked, pressed)) {
         /* Nothing this block is drawn from has changed, so neither has its
            html. The entry — and with it the `{ __html }` object React compares
            — is passed through untouched. */
@@ -1013,6 +1051,7 @@ function TableViewInner({
         ...(pressed ? found.map((m) => (m.id === pressed ? { ...m, open: true } : m)) : found),
         ...hits,
         ...cited,
+        ...linked,
       ];
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
@@ -1040,6 +1079,7 @@ function TableViewInner({
         terms: found,
         hits,
         cites: cited,
+        xrefs: linked,
         openTerm: pressed,
         out: had && had.out.__html === withHandles ? had.out : { __html: withHandles },
       });
@@ -1054,8 +1094,11 @@ function TableViewInner({
        blocks are in the payload) changed nothing on screen. Any *other*
        dependency moving afterwards recomputed it and the marks appeared, so one
        article had them and the next did not.
-       tests/prose-not-rebuilt.test.tsx has the reproduction. */
-  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, citeMarksByBlock, openTerm]);
+       tests/prose-not-rebuilt.test.tsx has the reproduction.
+
+       `xrefMarksByBlock` is here for the same reason from the start: the
+       cross-references are a separate GET too. tests/xref-prose.test.tsx. */
+  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, citeMarksByBlock, xrefMarksByBlock, openTerm]);
 
   /**
    * **Apparatus, dressed as apparatus** — which block starts a note, what the
@@ -1153,10 +1196,13 @@ function TableViewInner({
           </th>
         </tr>
       </thead>
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the click being handled
-          is always on a real <a> inside the prose, and pressing Enter on a
-          focused link fires a click that bubbles to exactly this handler. A
-          keydown listener here would run the jump twice. */}
+      {/* The click being handled is on a real <a> inside the prose, or on a
+          cross-reference mark. Enter on a focused link fires a click that
+          bubbles to exactly this handler, so the keydown handler below must
+          never act on a link — it would run the jump twice. It acts only on a
+          cross-reference, which is not a native link and gets no such click.
+          (This was a biome-ignore for useKeyWithClickEvents until the keydown
+          handler existed, 2026-09-30.) */}
       <tbody
         ref={bodyRef}
         /* On a pointer only — see `canHover` above. A finger's selection is set
@@ -1164,6 +1210,21 @@ function TableViewInner({
            that no reader produced. */
         onMouseLeave={() => {
           if (canHover()) setHoveredRow(null);
+        }}
+        /* **Enter on a focused cross-reference jumps** (Sol F6). A `<mark>`
+           with `role="link"` is not a link: the browser sends no click for
+           Enter on it, so without this the one Tab stop `annotateHtml` gives a
+           phrase would be a stop that goes nowhere. The same nonce-checked
+           resolution as the click, and nothing else here listens for keys —
+           Enter on a real `<a>` fires a click, which is why the comment above
+           says a keydown handler would jump twice for those. */
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || e.defaultPrevented) return;
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          const xrefTo = xrefTarget(e.target, xrefs);
+          if (!xrefTo) return;
+          e.preventDefault();
+          onJump(xrefTo);
         }}
         /* Both handlers below are delegated, not per-block: the prose is
            injected HTML, so its <mark> and <a> elements are not React's and
@@ -1180,7 +1241,33 @@ function TableViewInner({
           // arriving `#spya-…` into `?at=` before React mounts. Taking it over
           // would break the one case where the browser's own answer is right.
           if (e.defaultPrevented || e.button !== 0) return;
+          /* **A cross-reference is not a link, and a modified click on one does
+             nothing** — this line returns for it as for everything else. There
+             is no `href` behind the mark, so ⌘-click cannot mean "in a new tab"
+             here, and turning it into an in-place jump would answer a question
+             the reader did not ask. Stated rather than hidden: Sol F6 on
+             docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          /* **A cross-reference jumps** — resolved through the nonce, with `to`
+             read from the artefact by index and never from the DOM, so a
+             `class="xref"` the article wrote itself is an underline that does
+             nothing (xref.ts). First, because it wins the words it is on: a
+             term, a citation, a comment or a search's wash under it has
+             already stood aside (`onMouseUp` below, ProseHoverCard's
+             selectors). An author's link never contains one — `xrefMarks`
+             drops those — so the link logic below is not being pre-empted.
+
+             **Unless the click ends a selection**: the drag was the reader
+             choosing words, and `onMouseUp` has already turned it into a
+             question. */
+          const xrefTo = xrefTarget(e.target, xrefs);
+          if (xrefTo) {
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed) return;
+            e.preventDefault();
+            onJump(xrefTo);
+            return;
+          }
           /* Enlarge, before anything else looks at this press.
              Ahead of the link test on purpose: a picture inside a link gets
              both a button and a link, and pressing the *button* has to mean the
@@ -1285,6 +1372,13 @@ function TableViewInner({
              one click, in that order. Following the link is the one the reader
              asked for. */
           if ((e.target as Element).closest?.("a[href]")) return;
+          /* **A cross-reference wins the words it is on** (Sol F5), for the
+             link's reason just above: a comment or a chat under it would open
+             here on mouseup and the click would then jump — two answers to one
+             press. After the selection test on purpose: a drag across a
+             cross-reference is still a question. Only a nonce-valid mark:
+             a forged `class="xref"` leaves the comment its click. */
+          if (xrefTarget(e.target, xrefs)) return;
           /* **One `<mark>` can carry both classes, and which one wins a click
              changed on 2026-08-28.**
 
