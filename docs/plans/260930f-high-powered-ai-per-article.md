@@ -415,6 +415,32 @@ command run without `--force`: `arc skipped — already done`, no model call. So
 wire, the ledger records the model actually sent, and switching off re-runs nothing. The article was
 left switched off.
 
+## The migration, rebuilt on the merge
+
+Merging `origin/dev` forked the drizzle chain: dev had added `20260930102351_ai_calls_article_index`
+beside this branch's column. This side was unpublished, so it was rebuilt per
+[database.md § Repairing a fork](../project/database.md): dev's journal taken whole, the old
+`.sql` and snapshot deleted, `npm run db:generate` re-run (it produced exactly the one column), the
+`ADD COLUMN IF NOT EXISTS` re-applied, `npm run db:chain` green. It is now
+`20260930130154_article_high_power_since`.
+
+**The shared local database's ledger does not record it.** The column was added there directly during
+Stage 2, because the ledger already held another worktree's unmerged migration and `db:migrate`
+refused; it still refuses (one ledger row belonging to no migration in this journal, not this
+branch's). The `IF NOT EXISTS` is what makes a later ordinary migrate apply cleanly over the column
+that is already there. Production has not been touched and gets it on the next deploy's migrate.
+
+## The full suite, after the merge
+
+One run of `npm test` (via `scripts/tmux-job.ts`) after merging dev: 16 failures, all accounted for.
+Eleven were this branch meeting dev: the new store had to follow dev's store rules (contract in
+`contracts.ts`, `guardDbStore` at the export, listed in `tests/store-guarded.test.ts`), the route
+contract's canary counts moved by one each (dev added a route too), the switch's test borrowed a
+fixture uuid another file owns, and dev put an admin cost section on `/metadata` whose request the
+switch's test did not answer. All fixed and re-run green. The other five (`cold-start-lazy-imports`,
+`pdf-bundle-trace`, three `fleet-*` wiring tests) are a fresh worktree's missing build output: after
+`npm run build && npm run build:fleet` all five pass (112 tests).
+
 ## Review log
 
 - **Plan review, round 1** (GPT Sol, read-only):

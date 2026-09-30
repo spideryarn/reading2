@@ -182,6 +182,10 @@ beforeEach(() => {
       return Promise.resolve(putAnswer(body.on));
     }
     if (url === "/api/jobs") return Promise.resolve(json({ jobs: [] }));
+    /* The admin's cost section on the same page asks for its own figures. */
+    if (url.endsWith("/cost")) {
+      return Promise.resolve(json({ slug: SLUG, lines: [], silentLiveSessions: 0 }));
+    }
     return Promise.resolve(json({}));
   });
 
@@ -239,7 +243,7 @@ async function click(el: HTMLElement | null): Promise<void> {
 
 describe("the High-powered AI switch", () => {
   it("is not drawn for a reader who is not the administrator", async () => {
-    session.user = { id: "11111111-2222-4333-8444-555555555555" };
+    session.user = { id: "5e1d6c0a-7b2f-4e39-9a4d-3c8f2b1e6a70" };
     await open();
     expect(host.querySelector("[data-high-power]")).toBeNull();
     expect(host.textContent).not.toContain("High-powered AI");

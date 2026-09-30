@@ -22,34 +22,17 @@ import { and, isNull, isNotNull } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles } from "../db/schema.js";
-import type { OwnerId } from "../owner.js";
+import type { HighPowerStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { ownedSlug } from "./owned-slug.js";
 import { requireSlug } from "./require-slug.js";
 
-export interface HighPowerStore {
-  /**
-   * Switch it on or off for one of the caller's own articles, and say what it
-   * now is: the ISO moment it was switched on, or `null`. Throws a 404-shaped
-   * error for a slug the caller does not own.
-   */
-  set(slug: string, on: boolean): Promise<{ highPowerSince: string | null }>;
-  /**
-   * The column for `slug` owned by `ownerId`, or `{ found: false }` when there
-   * is no such row — which, for the job runner, is either a fresh ingest (the
-   * row is born by a later step) or something that went wrong, and only the
-   * caller can tell which.
-   */
-  read(
-    slug: string,
-    ownerId: OwnerId,
-  ): Promise<{ found: false } | { found: true; highPowerSince: Date | null }>;
-}
 
 function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
-export const pgHighPowerStore: HighPowerStore = {
+const rawPgHighPowerStore: HighPowerStore = {
   async set(slug, on) {
     requireSlug(slug);
     const db = getDb();
@@ -84,3 +67,5 @@ export const pgHighPowerStore: HighPowerStore = {
     return row ? { found: true, highPowerSince: row.highPowerSince } : { found: false };
   },
 };
+
+export const pgHighPowerStore: HighPowerStore = guardDbStore("high-power", rawPgHighPowerStore);

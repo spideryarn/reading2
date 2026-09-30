@@ -35,6 +35,24 @@ account and could not read Sentry.
 > a doc you've made publicly shared, and it would cost a single doc, because the 0.5 multiplies by
 > the two.
 
-**Ending: in progress** — this line is rewritten when the work lands.
+**Ending: Shipped** — on `dev`, not deployed. Resolve 6C (this session has no Sentry sign-in, so
+the next feedback sweep does the status write). The reader-facing half waits on Greg and has its line
+in [awaiting-approval.md](awaiting-approval.md).
+
+What we did: a **High-powered AI** switch per article, at the top of *Re-run AI processing* on
+`/metadata`, visible to the administrator only. Switched on, that article's capable-tier calls — the
+pipeline modes and chat, explain, search, quiz marking, referee, citations — go to Claude Opus 5.5
+instead of Sonnet 5, at twice the token price. Quick jobs, PDF reading, dictation and images do not
+move. Switching either way re-runs nothing; *Run it again* on a mode is how you redo it with Opus, and
+what Opus wrote stays current after you switch back. Checked end to end on the local stack: the
+ledger records Opus sent and answered, and switched off the same mode skips as already done.
+
+**Not built, and why:** the two-docs charge (one if public), the refusal with one doc left, the
+import-time flag, and the `/pricing` and `/features` lines. That is slot accounting and published
+copy; the plan's § Deferred has the recommendation (a one-time charge of one extra article when first
+switched on, so private totals two and public one) and draft copy.
+
+**For Greg to look at:** one new clause on `/privacy` naming `claude-opus-5-5`, which the privacy
+test requires of every model the app can send.
 
 Plan: [260930f](../plans/260930f-high-powered-ai-per-article.md).

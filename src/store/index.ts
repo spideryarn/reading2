@@ -80,6 +80,7 @@ import type {
   FetchAllowanceStore,
   GlossaryLookupStore,
   GlossaryStore,
+  HighPowerStore,
   LibrarySearch,
   LinkPreviewStore,
   LinkSummaryStore,
@@ -119,7 +120,7 @@ import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
 import { pgShelfTermsStore } from "./pg-shelf-terms.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
-import { type HighPowerStore, pgHighPowerStore } from "./pg-high-power.js";
+import { pgHighPowerStore } from "./pg-high-power.js";
 
 import { postgresBlobStore } from "./blobs.js";
 

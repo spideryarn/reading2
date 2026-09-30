@@ -46,6 +46,7 @@
  */
 
 import { isAdmin, type AdminUser } from "../admin.js";
+import type { OwnerId } from "../owner.js";
 import type { Assets } from "../assets.js";
 import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
@@ -1655,6 +1656,30 @@ import type { Visibility, VisibilityState } from "../types.js";
  * same line.
  */
 export type { VisibilityState } from "../types.js";
+
+/**
+ * **High-powered AI, one article at a time** — `articles.high_power_since`.
+ * Postgres only; src/store/pg-high-power.ts, and
+ * docs/plans/260930f-high-powered-ai-per-article.md.
+ */
+export interface HighPowerStore {
+  /**
+   * Switch it on or off for one of the caller's own articles, and say what it
+   * now is: the ISO moment it was switched on, or `null`. Throws a 404-shaped
+   * error for a slug the caller does not own.
+   */
+  set(slug: string, on: boolean): Promise<{ highPowerSince: string | null }>;
+  /**
+   * The column for `slug` owned by `ownerId`, or `{ found: false }` when there
+   * is no such row — which, for the job runner, is either a fresh ingest (the
+   * row is born by a later step) or something that went wrong, and only the
+   * caller can tell which.
+   */
+  read(
+    slug: string,
+    ownerId: OwnerId,
+  ): Promise<{ found: false } | { found: true; highPowerSince: Date | null }>;
+}
 
 /**
  * May a stranger read this article?
