@@ -65,6 +65,7 @@ import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { PurposeLine } from "./TrajectoryPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -586,6 +587,11 @@ export function TrajectoryPanel({ access, view, away }: Props) {
               {run("Plan it again", true)}
             </div>
           )}
+
+          {/* What the route was planned for, or the question — owner only,
+              and only over a ready route (Sol F6: the empty state's automatic
+              run would race a press). TrajectoryPurpose.tsx. */}
+          {owner && <PurposeLine owner={owner} bannerUp={bannerReason(owner) !== null} />}
 
           {total === 0 && <p className="gloss-quiet">This route has no stops.</p>}
 

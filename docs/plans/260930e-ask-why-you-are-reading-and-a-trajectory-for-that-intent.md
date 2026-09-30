@@ -205,3 +205,13 @@ above the list (and in the empty state):
   they are choosing; the box has `maxLength` 600 rather than a counter that can go over, since an
   over-long draft would only fail after the import; and the Metadata page's local function is now
   `commitPurpose`, to leave the name `savePurpose` to the shared one.
+- 2026-09-30: stage 2 built (uncommitted, for review). `PurposeLine` in
+  `src/web/TrajectoryPurpose.tsx`, mounted by `TrajectoryPanel` over a ready route for the owner
+  only; it reads `usePurpose(owner.slug)` itself, so no new prop crosses `TrajectoryAccess`.
+  Tests: `tests/trajectory-purpose-line.test.tsx`, 12 cases; seven watched red before the
+  component existed, and the five "draws nothing" cases (loading, read failed, `purposeFailed`,
+  empty state, visitor) each checked by mutating its guard out, bar the visitor's, which the type
+  of `owner` enforces. Differs from the plan in two small ways: under the stale or profile-changed
+  banner the *box* is not drawn (the banner already offers *Plan it again*; two asks for one job),
+  though a set purpose's line is; and **Edit** carries the view state (`carriedSearch`), as the
+  dock's and masthead's Metadata links do, so its href has `?mode=trajectory`.

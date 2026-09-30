@@ -231,6 +231,51 @@
    have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */
 .traj-again { padding: 0.1rem 0 0.45rem; }
 
+/* **What the route was planned for** — TrajectoryPurpose.tsx, plan 260930e §
+   Stage 2. One quiet line above the list: small, muted, cut with an ellipsis
+   (the whole sentence is in its tooltip), and never allowed to shrink the
+   scroller under it, so `flex: none`. The ask is the same size, a band 280px
+   wide included. */
+.traj-purpose {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.35rem 0.7rem 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+.traj-purpose-said {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--radius);
+}
+.traj-purpose-said:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.traj-purpose-label { color: var(--ink-soft); font-weight: 500; }
+.traj-purpose-edit { flex: none; color: var(--ink-soft); }
+.traj-purpose-tip p { margin: 0; max-width: 24em; }
+.traj-purpose-ask { flex-direction: column; align-items: stretch; gap: 0.3rem; }
+.traj-purpose-q { color: var(--ink-soft); }
+.traj-purpose-input {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  resize: vertical;
+}
+.traj-purpose-input:focus-visible { outline: none; border-color: var(--highlight); }
+.traj-purpose-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
+.traj-purpose-ask .gloss-error { margin: 0; }
+
 /* ------------------------------------------------------ the door in the prose --
    After the current stop's block, outside `.prose` (TableView.tsx §
    `afterBlock`). Right-aligned, where the eye lands at the end of a paragraph,
