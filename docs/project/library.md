@@ -381,6 +381,14 @@ There is no confirmation dialog there either, and the reason is sharper than on 
 asking you to confirm something that is undone by a button in the same place, for ever, teaches
 people to click through modals.
 
+**And a second button for it, under the title, since 2026-09-30.** Greg: *"a button to archive near
+the top because that's going to be quite a common action … it doesn't need to kick you out of the
+article itself"* (SPIDERYARN-READING2-6Z). It is the same state as the section at the foot, not a
+copy (`useArchive` in [`Metadata.tsx`](../../src/web/Metadata.tsx)), so the two cannot disagree. It
+says *you can carry on reading* and moves nowhere. **Share…** beside it only takes the reader to
+*Access & sharing*, whose confirmation stays the one way to publish —
+[260930h](../plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md).
+
 ### A renamed title is an override, not an edit
 
 Stage 2 rewrites `meta.json` on every run (see [below](#metajson-and-the-articles-identity)). A

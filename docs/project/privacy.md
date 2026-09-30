@@ -467,7 +467,7 @@ these moves:
   a model call"*) is one `tests/public-network-trace.test.tsx` actually enforces.
 
 - a new **subprocessor** arrives, or one goes — the list is Supabase, Vercel, OpenRouter, OpenAI,
-  Google, Sentry, Stripe
+  Google, Sentry, Stripe, Resend
 - the **regions** change, or an article's bytes start living somewhere other than
   Supabase Storage in London ([database.md](database.md))
 - **retention** changes anywhere — Sentry's 30 days, Vercel's ~1 day of request logs
