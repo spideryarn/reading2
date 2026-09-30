@@ -9,9 +9,8 @@
  * docs/plans/261001a-unfakeable-admin-feedback-reports.md.
  */
 
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { pathToFileURL } from "node:url";
+import { describe, expect, it, vi } from "vitest";
 import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD } from "../src/admin.js";
 import {
   BODY_END,
@@ -19,13 +18,13 @@ import {
   CannotTell,
   type Lookup,
   type ReportRow,
+  isMainModule,
   judge,
   normaliseEventId,
+  productionConnection,
+  readReportRows,
   run,
 } from "../scripts/feedback-reporter.js";
-
-const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
-const SCRIPT = fileURLToPath(new URL("../scripts/feedback-reporter.ts", import.meta.url));
 
 /** Any uuid that is neither of Greg's. A reader's, as far as this is concerned. */
 const STRANGER_ID = "9f1c0a3e-4b2d-4c8a-9e77-0d1a2b3c4d5e";
@@ -80,6 +79,7 @@ describe("judge", () => {
     /* The file said production; the row says otherwise, and the row wins. */
     expect(judge([row({ environment: "development" })], EVENT_ID).kind).toBe("unknown");
     expect(judge([row({ environment: "test" })]).kind).toBe("unknown");
+    expect(judge([row({ environment: "a-new-value" })], EVENT_ID).kind).toBe("unknown");
     expect(judge([row({ environment: "preview" })], EVENT_ID).kind).toBe("admin");
   });
 
@@ -143,25 +143,38 @@ describe("run", () => {
   });
 
   it("exits 2 when production cannot be read, whatever the failure", async () => {
-    for (const error of [new CannotTell("no .env.prod"), new Error("ECONNREFUSED"), "a string"]) {
+    for (const error of [new CannotTell("no .env.prod"), new Error("postgres://u:hunter2@db"), "hunter2"]) {
       const { status, out } = await collect(["--report-id", REPORT_ID], async () => {
         throw error;
       });
       expect(status).toBe(2);
       expect(out).toContain("Not trusted");
+      expect(out).not.toContain("hunter2");
     }
   });
 
   it("exits 2 without asking production when the id is missing or malformed", async () => {
-    const never: Lookup = async () => {
+    const never = vi.fn<Lookup>(async () => {
       throw new Error("must not be called");
-    };
+    });
     expect((await collect([], never)).status).toBe(2);
     expect((await collect(["--report-id", "--event-id", EVENT_ID], never)).status).toBe(2);
     expect((await collect(["--report-id", "SPIDERYARN-READING2-5K"], never)).status).toBe(2);
     expect((await collect(["--report-id", REPORT_ID, "--event-id"], never)).status).toBe(2);
     expect((await collect(["--report-id", REPORT_ID, "--event-id="], never)).status).toBe(2);
     expect((await collect(["--report-id", REPORT_ID, "--event-id", "abc"], never)).status).toBe(2);
+    expect((await collect(["--report-id", REPORT_ID, "--event-idd", EVENT_ID], never)).status).toBe(2);
+    expect((await collect(["--report-id", REPORT_ID, "--report-id", REPORT_ID], never)).status).toBe(2);
+    expect(never).not.toHaveBeenCalled();
+  });
+
+  it("does not print ADMIN before an unexpected row-formatting failure", async () => {
+    const { status, out } = await collect(
+      ["--report-id", REPORT_ID],
+      found(row({ createdAt: new Date(Number.NaN) })),
+    );
+    expect(status).toBe(2);
+    expect(out).not.toContain("ADMIN");
   });
 
   it("refuses the old --user-id form, even alongside a report id", async () => {
@@ -179,13 +192,129 @@ describe("run", () => {
   });
 });
 
-describe("the CLI", () => {
-  it("is wired: the old form exits 2 from a shell, without touching a database", () => {
-    const result = spawnSync(TSX, [SCRIPT, "--user-id", ADMIN_USER_ID_PROD], {
-      encoding: "utf8",
-      timeout: 60_000,
+describe("the production connection", () => {
+  const PROD =
+    "postgresql://spideryarn_app.alschkahzfagtppxspfq:hunter2@aws-0-eu-west-2.pooler.supabase.com:6543/postgres";
+
+  it("pins the real project and hands pg the verified CA", () => {
+    const connection = productionConnection(PROD);
+    expect(connection.host).toBe("aws-0-eu-west-2.pooler.supabase.com:6543");
+    expect(connection.config.ssl).toMatchObject({ rejectUnauthorized: true });
+  });
+
+  it.each(["sslmode=no-verify", "ssl=true", "sslnegotiation=direct"])(
+    "refuses a URL-level TLS override (%s)",
+    (option) => {
+      expect(() => productionConnection(`${PROD}?${option}`)).toThrow(/override verified TLS/);
+    },
+  );
+
+  it("uses pg's effective host, and refuses a host override away from production", () => {
+    expect(() => productionConnection(`${PROD}?host=other.example.com`)).toThrow(/hosted Supabase/);
+  });
+
+  it("refuses another hosted Supabase project and a non-Postgres URL", () => {
+    expect(() =>
+      productionConnection(
+        "postgresql://spideryarn_app.someotherproject:p@aws-0-eu-west-2.pooler.supabase.com:6543/postgres",
+      ),
+    ).toThrow(/not Spideryarn's production project/);
+    expect(() => productionConnection("https://alschkahzfagtppxspfq.supabase.co")).toThrow(
+      /not a postgres URL/,
+    );
+  });
+});
+
+describe("the production read transaction", () => {
+  const stored = {
+    owner_id: ADMIN_USER_ID_PROD,
+    body: "Please make the quiz shorter.",
+    kind: "suggestion",
+    url: "https://www.spideryarn.com/read/some-article",
+    slug: "some-article",
+    build_commit: "6d09e3cc",
+    environment: "production",
+    has_screenshot: false,
+    has_diagnostics: false,
+    created_at: new Date("2026-09-30T12:00:00Z"),
+    sentry_event_id: EVENT_ID,
+  };
+
+  const client = (query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[] }>) => {
+    const fake = {
+      connect: vi.fn(async () => {}),
+      query: vi.fn(query),
+      end: vi.fn(async () => {}),
+    };
+    return { fake, value: fake as unknown as Parameters<typeof readReportRows>[0] };
+  };
+
+  it("performs exactly one SELECT inside BEGIN READ ONLY and ROLLBACK", async () => {
+    const { fake, value } = client(async (sql) => ({ rows: /^select /i.test(sql) ? [stored] : [] }));
+    await expect(readReportRows(value, REPORT_ID)).resolves.toMatchObject([
+      { ownerId: ADMIN_USER_ID_PROD, sentryEventId: EVENT_ID },
+    ]);
+    const statements = fake.query.mock.calls.map(([sql]) => sql.trim());
+    expect(statements).toHaveLength(3);
+    expect(statements[0]).toBe("begin read only");
+    expect(statements[1]).toMatch(/^select /i);
+    expect(statements[1]).not.toMatch(/\b(insert|update|delete|set)\b/i);
+    expect(statements[2]).toBe("rollback");
+    expect(fake.query.mock.calls[1]?.[1]).toEqual([REPORT_ID]);
+    expect(fake.end).toHaveBeenCalledOnce();
+  });
+
+  it("ends the client after connect fails", async () => {
+    const { fake, value } = client(async () => ({ rows: [] }));
+    fake.connect.mockRejectedValueOnce(new Error("connect failed"));
+    await expect(readReportRows(value, REPORT_ID)).rejects.toThrow("connect failed");
+    expect(fake.query).not.toHaveBeenCalled();
+    expect(fake.end).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and ends after SELECT fails", async () => {
+    const { fake, value } = client(async (sql) => {
+      if (/^select /i.test(sql)) throw new Error("select failed");
+      return { rows: [] };
     });
-    expect(result.status).toBe(2);
-    expect(result.stdout).toContain("CANNOT TELL");
+    await expect(readReportRows(value, REPORT_ID)).rejects.toThrow("select failed");
+    expect(fake.query.mock.calls.map(([sql]) => sql.trim())).toEqual([
+      "begin read only",
+      expect.stringMatching(/^select /i),
+      "rollback",
+    ]);
+    expect(fake.end).toHaveBeenCalledOnce();
+  });
+
+  it("lets a failed rollback replace a would-be result, and still ends", async () => {
+    const { fake, value } = client(async (sql) => {
+      if (sql === "rollback") throw new Error("rollback failed");
+      return { rows: /^select /i.test(sql) ? [stored] : [] };
+    });
+    await expect(readReportRows(value, REPORT_ID)).rejects.toThrow("rollback failed");
+    expect(fake.end).toHaveBeenCalledOnce();
+  });
+
+  it("does not return a result when closing the connection fails", async () => {
+    const { fake, value } = client(async (sql) => ({ rows: /^select /i.test(sql) ? [stored] : [] }));
+    fake.end.mockRejectedValueOnce(new Error("close failed"));
+    await expect(readReportRows(value, REPORT_ID)).rejects.toThrow("close failed");
+  });
+
+  it("refuses a malformed stored event id while still rolling back", async () => {
+    const { fake, value } = client(async (sql) => ({
+      rows: /^select /i.test(sql) ? [{ ...stored, sentry_event_id: "not-an-event-id" }] : [],
+    }));
+    await expect(readReportRows(value, REPORT_ID)).rejects.toBeInstanceOf(CannotTell);
+    expect(fake.query.mock.calls.at(-1)?.[0]).toBe("rollback");
+    expect(fake.end).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the CLI", () => {
+  it("recognises the worktree-relative path npx tsx supplies", () => {
+    const absolute = pathToFileURL(`${process.cwd()}/scripts/feedback-reporter.ts`).href;
+    expect(isMainModule(absolute, "scripts/feedback-reporter.ts")).toBe(true);
+    expect(isMainModule(absolute, `${process.cwd()}/scripts/feedback-reporter.ts`)).toBe(true);
   });
 });

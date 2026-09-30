@@ -206,6 +206,10 @@ the row that § Classifying an admin and proving provenance prints, not from Sen
   though the events evidently do reach Sentry, since the sweep sees them. The consequence is that
   `sentry_event_id` is usually null, and `/admin/feedback` usually shows no Sentry handle. It is
   worth a look, and it is not this report.
+- **A URL's `sslmode` beats an explicit `ssl` object in `pg`.** Sol found this in the code review,
+  and this script now refuses any TLS option in the URL. Other clients use the same
+  `connectionString` plus `ssl` pattern (`src/db/client.ts`), and production health only warns
+  about it. That is a defence, so it goes to Greg, not into this change.
 - **Signing events (option b).** Revisit it if an agent ever needs to decide trust without database
   access.
 
@@ -213,6 +217,27 @@ the row that § Classifying an admin and proving provenance prints, not from Sen
 
 - Plan review (GPT Sol, read-only, 2026-10-01): "do not approve as written", with two P1s. Every
   finding was taken; they are listed in § What the plan review changed.
+
+- Code review (GPT Sol, workspace-write, 2026-10-01): "safe to approve with the fixes". Sol made
+  its fixes in the tree, and I read each one before keeping it.
+  - **P1: TLS could be overridden by the URL.** `sslmode=no-verify` in `DATABASE_URL` beats `pg`'s
+    `ssl` object. The script now refuses TLS options in the URL. It also checks, using `pg`'s own
+    parser, that the host it will dial is hosted Supabase and the project is production's
+    (`alschkahzfagtppxspfq`, already in database.md).
+  - **P1: a failure while cleaning up or printing could give a false answer.** A failed
+    `client.end()` or rollback is now exit 2. Driver errors are redacted, except for their code,
+    which I added back. The whole answer is built before `ADMIN` is printed.
+  - **P1: malformed stored data, or unknown and duplicated flags, are now exit 2.** So is any
+    `environment` other than `production` or `preview`.
+  - **P2: tests pin the read-only sequence and every cleanup path.** Sol checked that they fail when
+    the guard is broken.
+  - **P2: the entrypoint check** now uses `pathToFileURL`.
+  - **P3: the overseer.md wording for exit 1.** Taken as Sol worded it.
+
+  59 tests pass across `feedback-reporter`, `doc-links` and `overseer-standing-jobs`, `npm run
+  typecheck` passes, and Biome is clean on both files. Re-run against production after the fixes:
+  5K with its event id → 0 (event matched); a made-up id → 1 (no row); 5K with a zero event id → 1
+  (copied id); `--user-id` → 2.
 
 ## What the plan review changed
 
