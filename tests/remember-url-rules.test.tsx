@@ -34,6 +34,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import type { QuizRead } from "../src/web/useQuiz.js";
 import { MODES, modeParam, REMEMBER_VIEWS, rememberParam } from "../src/web/params.js";
 
 /* -------------------------------------------------------------- parsing -- */
@@ -173,6 +174,17 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
+/** `OwnedReader`'s quiz read, posed: nothing written yet. src/web/useQuiz.ts § QuizRead. */
+const QUIZ_READ: QuizRead = {
+  status: "none",
+  quiz: null,
+  stale: false,
+  outdated: false,
+  error: null,
+  reload: async () => {},
+  refresh: async () => {},
+};
+
 async function mount(search: string, band: "remember" | "conversation"): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () => {
@@ -183,6 +195,7 @@ async function mount(search: string, band: "remember" | "conversation"): Promise
         band === "remember"
           ? createElement(RememberBand, {
               slug: "a-piece",
+              quizRead: QUIZ_READ,
               blocks: new Map<string, string>(),
               onJump: () => {},
               onMode: () => {},

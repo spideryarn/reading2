@@ -258,6 +258,15 @@ with a different profile would not de-duplicate. Nothing for a visitor, nothing 
 cannot be read, and no second ask under the stale or profile-changed banner.
 [`TrajectoryPurpose.tsx`](../../src/web/TrajectoryPurpose.tsx).
 
+**Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
+SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are now
+drawn in the prose in every mode ([quiz.md § In the prose](quiz.md)), after their passage, so at a
+stop with one it sits between the passage and **Next stop ›** — the cue asks what to look for before
+you read, the question what you took after. Nothing was added to the card or the route: on the card
+the question repeated the cue, and a question as its own stop would braid a second ordered path into
+the route. Both, and the pass's questions at the end of a pass, are deferred in
+[260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
+
 ### What we tried for v2
 
 Three static mockups, on real data from the entropy paper

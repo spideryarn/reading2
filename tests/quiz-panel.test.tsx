@@ -30,7 +30,7 @@
  * Each has a positive control beside it, because a test that has never been
  * able to fail is not evidence — docs/reusable/silent-success.md.
  */
-import { act, createElement, useLayoutEffect } from "react";
+import { act, createElement, StrictMode, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
@@ -65,6 +65,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
+type QuizArrival = import("../src/web/QuizPanel.js").QuizArrival;
 
 /* **Real ids, and that matters.** `ID_PATTERN` rejects `1`, `i`, `l` and `o`,
    so a plausible-looking fixture id such as `spya-aaa111` is not one of ours and
@@ -1252,5 +1253,110 @@ describe("← and → step the path", () => {
     });
     expect(key(1)).toBe(true);
     expect(stem()).toBe("Question number 2?");
+  });
+});
+
+/**
+ * **A question pressed in the prose lands the band on it** — `QuizArrival`,
+ * SPIDERYARN-READING2-6V; docs/plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md
+ * and GPT Sol's plan review of it (findings 1–3). The arrival names its batch;
+ * it is a jump, so the premise shows; the question already open is not moved
+ * to, because `move` would abort its mark; the tick-box gives way; and the
+ * landing survives StrictMode running the effects twice.
+ */
+describe("an arrival from the prose", () => {
+  const THIRD = "spya-h4r7nx";
+  const THREE = new Map([...BLOCKS, [THIRD, "The third paragraph."]]);
+  const on = (id: string) => [{ blockId: id as BlockId, quote: "x", start: 0 }];
+  const P3 = "The third step's premise.";
+  const PATH = batch([
+    question(1, { evidence: on(KNOWN) }),
+    question(2, { evidence: on(OTHER) }),
+    question(3, { evidence: on(THIRD), premise: P3 }),
+  ]);
+  const [first, second, third] = PATH.questions as [QuizQuestion, QuizQuestion, QuizQuestion];
+  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const premiseShown = () => host.querySelector(".quiz-premise")?.textContent ?? null;
+  const taken: QuizArrival[] = [];
+
+  function paintAt(
+    o: UseQuiz,
+    arrival: QuizArrival | null,
+    opts: { readSoFar?: ReadSoFar; strict?: boolean } = {},
+  ) {
+    const panel = createElement(QuizPanel, {
+      owner: o,
+      blocks: THREE,
+      readSoFar: opts.readSoFar,
+      arrival,
+      onArrivalTaken: (a: QuizArrival) => taken.push(a),
+      onJump: () => {},
+    });
+    act(() => {
+      root.render(opts.strict ? createElement(StrictMode, null, panel) : panel);
+    });
+  }
+
+  beforeEach(() => {
+    taken.length = 0;
+  });
+
+  it("opens on the pressed question, with its premise, and hands the arrival back", () => {
+    const o = owner({ quiz: PATH });
+    paintAt(o, null);
+    expect(stem()).toBe(first.question);
+    const a: QuizArrival = { batchId: PATH.batchId, questionId: third.id };
+    paintAt(o, a);
+    expect(stem()).toBe(third.question);
+    expect(premiseShown(), "a jump shows the premise").toBe(P3);
+    expect(taken).toContain(a);
+  });
+
+  it("lands on it when the band mounts with the arrival already there — under StrictMode", () => {
+    const a: QuizArrival = { batchId: PATH.batchId, questionId: second.id };
+    paintAt(owner({ quiz: PATH }), a, { strict: true });
+    /* The batch reset's `setAt(0)` runs twice as well; the landing must win both times. */
+    expect(stem()).toBe(second.question);
+    expect(host.textContent).toContain("Question 2 of 3");
+  });
+
+  it("ignores an arrival from another batch, even when the id is in this one, and still hands it back", () => {
+    const a: QuizArrival = { batchId: "spya-oldbat", questionId: third.id };
+    paintAt(owner({ quiz: PATH }), a);
+    expect(stem()).toBe(first.question);
+    expect(taken).toContain(a);
+  });
+
+  it("does not move to the question already open, so a mark still arriving survives", () => {
+    const marking: Attempt = { questionId: first.id, answer: "half", status: "marking", reply: "So far", error: null };
+    const o = owner({ quiz: PATH, attempt: marking });
+    paintAt(o, null);
+    const before = cleared.length;
+    paintAt(o, { batchId: PATH.batchId, questionId: first.id });
+    expect(cleared.length, "the open question's mark was thrown away").toBe(before);
+    expect(stem()).toBe(first.question);
+    /* The control: another question does move, and takes the mark with it. */
+    paintAt(o, { batchId: PATH.batchId, questionId: second.id });
+    expect(cleared.length).toBeGreaterThan(before);
+    expect(stem()).toBe(second.question);
+  });
+
+  it("turns 'Only what I've read' off when it would hide the pressed question", () => {
+    const readSoFar: ReadSoFar = {
+      levels: new Map([[KNOWN, 4 as const]]),
+      status: "loaded",
+      bodyWords: new Map([
+        [KNOWN, 100],
+        [OTHER, 100],
+        [THIRD, 100],
+      ]),
+    };
+    const o = owner({ quiz: PATH });
+    paintAt(o, null, { readSoFar });
+    const box = () => host.querySelector<HTMLInputElement>(".quiz-only-read input");
+    expect(box()?.checked).toBe(true);
+    paintAt(o, { batchId: PATH.batchId, questionId: third.id }, { readSoFar });
+    expect(stem()).toBe(third.question);
+    expect(box()?.checked, "the tick-box should say it gave way").toBe(false);
   });
 });

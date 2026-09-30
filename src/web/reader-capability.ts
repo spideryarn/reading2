@@ -37,6 +37,7 @@ import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { QuotesRead } from "./useQuotes.js";
 import type { CitationsRead } from "./useCitations.js";
+import type { QuizRead } from "./useQuiz.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
 import type { UseArc } from "./useArc.js";
@@ -78,6 +79,15 @@ export type ReaderCapability =
        * card off a shared link.
        */
       citations: CitationsRead;
+      /**
+       * The opening quiz read, shared with the band. `useQuizRead`.
+       *
+       * Here for the reason `quotes` is: since 2026-09-30 the quiz's questions
+       * are drawn in the prose in **every** mode (SPIDERYARN-READING2-6V).
+       * **No visitor arm**: the public payload carries no quiz and marking is
+       * an owner's POST, so a visitor gets no questions by construction.
+       */
+      quiz: QuizRead;
       /**
        * **The cross-references the prose may draw**, or null — `useCrossrefs`,
        * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.

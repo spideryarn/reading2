@@ -101,6 +101,21 @@ import { type UseDictationField, useDictationField } from "./useDictationField.j
 import { armActivation } from "./activation.js";
 import { useRenderCount } from "./perf.js";
 
+/**
+ * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
+ * (SPIDERYARN-READING2-6V; QuizInProse.tsx). In memory, owned by `Reader` and
+ * cleared once taken, the way chat's `ChatHandoff` is: which question is open
+ * stays out of the URL (docs/project/quiz.md § On screen).
+ *
+ * **It names its batch**, because a replacement batch can reuse a question id
+ * with a new meaning — the reason every mark binds to `batchId`. An arrival from
+ * another batch is taken and ignored. GPT Sol's plan review, 260930i finding 1.
+ */
+export interface QuizArrival {
+  readonly batchId: string;
+  readonly questionId: QuizQuestionId;
+}
+
 /** "3 questions", "1 question". */
 function questionCount(n: number): string {
   return `${n} question${n === 1 ? "" : "s"}`;
@@ -190,6 +205,8 @@ export function RememberSubModeToggle({
 
 export function QuizPanel({
   owner,
+  arrival,
+  onArrivalTaken,
   subMode,
   blocks,
   readSoFar,
@@ -197,6 +214,10 @@ export function QuizPanel({
   onArrowKeys,
 }: {
   owner: UseQuiz;
+  /** A question pressed in the prose, to go to — `QuizArrival`. */
+  arrival?: QuizArrival | null | undefined;
+  /** Tells the owner of `arrival` it has been dealt with, so it can clear it. */
+  onArrivalTaken?: ((taken: QuizArrival) => void) | undefined;
   /**
    * The reader's reading so far — src/web/read-filter.ts. **Absent means
    * reading time is off**, and then there is no tick-box and every question is
@@ -368,6 +389,44 @@ export function QuizPanel({
       setShowAnswer(false);
     }
   }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId]);
+
+  /**
+   * **Land on a question pressed in the prose** — `QuizArrival`.
+   *
+   * **Declared after the batch reset and the filter effect, on purpose**: all
+   * three can run in one commit — the band mounting with an arrival, or a new
+   * batch — and the last `setAt` is the one that lands. It is idempotent, so
+   * StrictMode running it twice lands in the same place; only the hand-back is
+   * repeated, and the owner clears an arrival only if it is still the one it
+   * was handed. GPT Sol's plan review, 260930i finding 2.
+   *
+   * - **Another batch's arrival is taken and ignored** — finding 1.
+   * - **The question already open is not moved to**, `pick`'s rule: `move`
+   *   aborts a mark in flight and drops the draft (finding 3). On a batch that
+   *   has only just arrived, `at` is still the old batch's index, so that
+   *   comparison is not trusted there.
+   * - **The tick-box gives way.** The reader asked for this question by name, so
+   *   if *Only what I've read* would hide it — or the reading levels are still
+   *   loading, while the walk waits — it is turned off, visibly, rather than
+   *   the walk landing somewhere else.
+   * - A jump is not an arrival by Next, so the step shows its premise.
+   */
+  const arrivalBatch = useRef(quiz?.batchId);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs for a new arrival or a new batch; `move` is recreated every render and the rest is read as it stands
+  useEffect(() => {
+    const sameBatch = arrivalBatch.current === quiz?.batchId;
+    arrivalBatch.current = quiz?.batchId;
+    if (!arrival || !quiz) return;
+    if (arrival.batchId === quiz.batchId) {
+      const to = questions.findIndex((q) => q.id === arrival.questionId);
+      if (to >= 0) {
+        if (filtering && (waitingForReading || included[to] === false)) setOnlyRead(false);
+        if (!(sameBatch && to === at)) move(to, false);
+        setListing(false);
+      }
+    }
+    onArrivalTaken?.(arrival);
+  }, [arrival, quiz?.batchId]);
 
   /** Undefined while the step at `at` is filtered out — see the effect above. */
   const question: QuizQuestion | undefined =

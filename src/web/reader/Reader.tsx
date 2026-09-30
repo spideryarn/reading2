@@ -15,6 +15,7 @@
 
 import {
   type CSSProperties,
+  type ReactElement,
   type ReactNode,
   useCallback,
   useEffect,
@@ -23,7 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useQueryState } from "nuqs";
+import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
@@ -63,6 +64,9 @@ import {
   RememberBand,
 } from "../modes/conversation/ConversationModes.js";
 import { askAboutTerm } from "../chat-handoff.js";
+import type { QuizArrival } from "../QuizPanel.js";
+import { QuizInProse } from "../QuizInProse.js";
+import { questionsByAnchor } from "../quiz-anchors.js";
 import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
 import { type HeraldPress, ModeHerald } from "../ModeHerald.js";
 import { TableView } from "../TableView.js";
@@ -98,6 +102,7 @@ import {
   eventParam,
   spineParam,
   threadParam,
+  rememberParam,
   type Mode,
 } from "../params.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
@@ -628,6 +633,51 @@ export function Reader({
   useEffect(() => {
     if (mode !== "chat") setChatHandoff(null);
   }, [mode]);
+  /**
+   * **A quiz question pressed in the prose**, for Quiz to open at — `QuizArrival`
+   * in QuizPanel.tsx, and SPIDERYARN-READING2-6V. The chat handoff's shape: set
+   * in the same event as the navigation, taken by the band, cleared here — and
+   * cleared if the reader leaves Remember before the band took it, so it cannot
+   * wait for a later visit.
+   */
+  const [quizArrival, setQuizArrival] = useState<QuizArrival | null>(null);
+  const quizArrivalTaken = useCallback(
+    /* Only if it is still the one handed over: StrictMode hands it back twice,
+       and a second press may have replaced it in between. */
+    (taken: QuizArrival) => setQuizArrival((was) => (was === taken ? null : was)),
+    [],
+  );
+  useEffect(() => {
+    if (mode !== "remember") setQuizArrival(null);
+  }, [mode]);
+  /* **Mode, sub-mode and thread in one pushed entry** — Remember's rule 1
+     (ConversationModes.tsx § RememberBand): `thread` cleared on the way to Quiz,
+     so there is no frame in which the URL says both, and one Back undoes the
+     whole trip. Not a press of the Quiz chip, so it arms nothing and can buy
+     nothing: a line in the prose exists only because a quiz already does.
+
+     **And no entry at all when Quiz is already open**: which question is open
+     is not in the URL, so a second entry would hold the same address and cost
+     the reader a Back that does nothing (the 260930i browser check). Read
+     through a ref so that `openQuizAt` keeps its identity — it is in
+     `quizAfter`'s memo, and a new one would re-render `TableView`. */
+  const [quizNav, setQuizNav] = useQueryStates({ mode: modeParam, remember: rememberParam, thread: threadParam });
+  const inQuiz = useRef(false);
+  const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
+  useEffect(() => {
+    inQuiz.current = nowInQuiz;
+  }, [nowInQuiz]);
+  const openQuizAt = useCallback(
+    (batchId: string, questionId: BlockId) => {
+      setQuizArrival({ batchId, questionId });
+      if (!inQuiz.current)
+        void setQuizNav({ mode: "remember", remember: "quiz", thread: null }, { history: "push" });
+      /* A band that had stepped aside on a narrow window comes back: the reader
+         has asked to answer. */
+      setBandAway(false);
+    },
+    [setQuizNav],
+  );
   /**
    * The passage the reader has just selected, before they have saved anything.
    *
@@ -1172,6 +1222,38 @@ export function Reader({
       ),
     };
   }, [mode, trajectoryControl, bandBack]);
+
+  /**
+   * **The quiz's questions, in the prose, in every mode** — Greg, 2026-09-30
+   * (SPIDERYARN-READING2-6V): *"if you've generated quiz questions, it should
+   * always show them in situ in the text, whether you're in quiz mode or not."*
+   * Each after the block holding its last evidence passage (quiz-anchors.ts);
+   * in Trajectory that puts it just above the door, which is the whole of the
+   * Trajectory half. docs/plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md.
+   *
+   * **Memoised on the quiz, its staleness, the blocks and a stable handler, and
+   * nothing that moves while you scroll** — `memo(TableView)` holds only while
+   * every prop keeps its identity. Owner-only by construction: a visitor's
+   * payload carries no quiz, and marking is an owner's POST. A stale quiz is
+   * not drawn: its passages may no longer be the prose. An outdated one is.
+   */
+  const quizRead = owner?.quiz ?? null;
+  const drawnQuiz = quizRead?.status === "ready" && !quizRead.stale ? quizRead.quiz : null;
+  const quizAfter = useMemo(() => {
+    if (!drawnQuiz || drawnQuiz.questions.length === 0) return null;
+    const byBlock = questionsByAnchor(
+      drawnQuiz.questions,
+      article.blocks.map((b) => b.id),
+    );
+    const out = new Map<BlockId, ReactElement>();
+    for (const [blockId, questions] of byBlock) {
+      out.set(
+        blockId,
+        <QuizInProse batchId={drawnQuiz.batchId} questions={questions} onOpen={openQuizAt} />,
+      );
+    }
+    return out;
+  }, [drawnQuiz, article.blocks, openQuizAt]);
 
   /**
    * Reading order, not ask order — the panel's arrows walk you *down the
@@ -1781,6 +1863,9 @@ export function Reader({
         return owner ? (
           <RememberBand
             slug={slug}
+            quizRead={owner.quiz}
+            quizArrival={quizArrival}
+            onQuizArrivalTaken={quizArrivalTaken}
             blocks={blockText}
             readSoFar={readSoFar}
             onJump={bandJump}
@@ -2392,6 +2477,7 @@ export function Reader({
            capability. */
         onHelp={owner ? helpAboutBlock : undefined}
         afterBlock={afterBlock}
+        quizAfter={quizAfter}
         /* The owner's, and only once the opening read has landed without error
            — `bookmarkBlock` says why. */
         onBookmark={

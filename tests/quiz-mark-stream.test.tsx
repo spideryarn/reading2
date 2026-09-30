@@ -68,7 +68,7 @@ const HOISTED = vi.hoisted(() => {
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useQuiz, type UseQuiz } from "../src/web/useQuiz.js";
+import { useQuiz, useQuizRead, type UseQuiz } from "../src/web/useQuiz.js";
 import { markAnswerStream, type QuizMarkEvent } from "../src/quiz-mark.js";
 import type { Block, Meta, Quiz } from "../src/types.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -85,7 +85,8 @@ let root: Root;
 let latest: UseQuiz | undefined;
 
 function Harness() {
-  latest = useQuiz(SLUG);
+  const read = useQuizRead(SLUG);
+  latest = useQuiz(SLUG, read);
   return null;
 }
 

@@ -288,6 +288,39 @@ carries on its own (GPT Sol's plan review; Greg's *"maybe remember mode as well"
   `useQuiz`'s one live request, and without the clear the new batch's Answer button is enabled and
   does nothing.
 
+## In the prose, in every mode
+
+Greg, 2026-09-30 (SPIDERYARN-READING2-6V):
+
+> Actually, let's just go one step further and say if you've generated quiz questions, it should
+> always show them in situ in the text, whether you're in quiz mode or not.
+
+So once an owner has questions, each one is also a muted line in the prose, after the block holding
+its **last** evidence passage — only there has the reader met all of what it asks about. Pressing it
+opens Quiz at that question. The design pass (two product-manager agents, screenshots of six
+options), the choice and what was deferred are
+[260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
+
+- **The question's words only, never its premise** — the list's rule, for the list's reason.
+- **Pressing it is a jump**, so the band shows the premise; it goes through
+  `?mode=remember&remember=quiz` with `thread` cleared, one pushed entry, and an in-memory
+  `QuizArrival` that names its batch ([`QuizPanel.tsx`](../../src/web/QuizPanel.tsx)). Pressing the
+  question already open does nothing, since `move` would abort its mark; if *Only what I've read*
+  would hide it, the tick-box turns itself off. It arms nothing and buys nothing — a line exists only
+  because a quiz does.
+- **Not drawn for a stale quiz**, whose passages may no longer be the prose; drawn for an outdated
+  one. Not drawn for a visitor: the public payload has no quiz.
+- **Shown whether or not you have read the passage.** The reading levels move every minute and would
+  re-render the whole article through `memo(TableView)`; a question before its passage is a
+  pre-question, not a giveaway.
+- **Answering stays in the band.** Answering in the prose would put a second copy of the answer box,
+  the mark binding and the premise rule in `TableView`'s path — the plan's *Deferred* says what would
+  change that.
+- The read moved up for it: `useQuizRead` in `OwnedReader`, `useQuiz(slug, read)` in the band — the
+  Quotes split — so *Write them again* moves the lines too.
+  [`quiz-anchors.ts`](../../src/web/quiz-anchors.ts), [`QuizInProse.tsx`](../../src/web/QuizInProse.tsx),
+  `TableView`'s `quizAfter`.
+
 ## Only what you have read
 
 Greg, 2026-09-30 (SPIDERYARN-READING2-61):
@@ -329,7 +362,7 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
 - **No reader profile in the stamp**, so no `profileChanged` on the response. Adding one later needs
   no migration — it would be a field on the JSON.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,
-  above.
+  above. (The lines in the prose are placed by passage, but the band still walks the whole path.)
 - **No spoken quizzing.** Greg asked for it — *"ideally this would work well with Live Dialogue
   mode"* — and then chose to defer it whole rather than half-build it. The reasoning, and the three
   shapes it could take, are in [the plan § Spoken
