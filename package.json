@@ -117,7 +117,7 @@
     "stripe": "22.6.1",
     "tailwind-merge": "^3.6.0",
     "temml": "0.13.5",
-    "undici": "^7.29.0"
+    "undici": "^7.30.0"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.8",
