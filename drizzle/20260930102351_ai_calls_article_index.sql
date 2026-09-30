@@ -1,0 +1,1 @@
+CREATE INDEX "ai_calls_article" ON "spideryarn"."ai_calls" USING btree ("article_id");
