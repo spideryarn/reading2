@@ -1,0 +1,161 @@
+{
+  "arm": "after",
+  "slug": "cargocult-spya-rz663q",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "d5fca6f8a04b7f11ebf96ecf419a5b0782cb897932a473e2c3fd10f6fe9cac79",
+  "at": "2026-09-30T05:12:38.682Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 7354,
+  "elapsedMs": 75493,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "According to Feynman, what method separated workable ideas from the kind of superstition common in the Middle Ages?",
+      "referenceAnswer": "The method of trying an idea out to see if it actually worked, and eliminating it if it did not.",
+      "evidence": [
+        "spya-ddrr9m"
+      ]
+    },
+    {
+      "question": "What happened when Feynman personally tested Uri Geller's claimed ability to bend keys and read minds?",
+      "referenceAnswer": "Nothing happened in either test — the mind reading failed and the key did not bend, even when tried underwater as Geller suggested — so Feynman could not actually investigate the phenomenon.",
+      "evidence": [
+        "spya-mmhbvn"
+      ]
+    },
+    {
+      "premise": "Testing Uri Geller's claims produced no real results.",
+      "question": "Besides psychic claims, what other widely accepted fields does Feynman say fail the basic test of actually working?",
+      "referenceAnswer": "He points to methods of teaching reading and math, since reading scores keep falling or barely rising despite constant efforts to improve methods, and to methods of handling criminals, since crime has not decreased despite years of theory.",
+      "evidence": [
+        "spya-aww976",
+        "spya-aww976"
+      ]
+    },
+    {
+      "premise": "Fields like reading instruction and criminal treatment are treated as scientific yet show no real progress.",
+      "question": "What name does Feynman give to activities that follow all the outward forms of scientific investigation but never actually produce results?",
+      "referenceAnswer": "He calls it Cargo Cult Science, comparing it to South Sea islanders who built fake runways and control towers copying what they saw during the war but never got any planes to land.",
+      "evidence": [
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "premise": "Cargo Cult Science copies the form of science but never gets real results, the way fake runways never bring in planes.",
+      "question": "What single missing ingredient does Feynman say generally explains why Cargo Cult Science fails to work?",
+      "referenceAnswer": "A kind of scientific integrity — an utter honesty, or 'leaning over backwards,' that is missing from the practice even though the outward form of investigation looks right.",
+      "evidence": [
+        "spya-afgs74"
+      ]
+    },
+    {
+      "premise": "Cargo Cult Science lacks a kind of scientific integrity, an honesty that leans over backwards.",
+      "question": "What specifically must a scientist report about their own work, according to Feynman's description of this integrity?",
+      "referenceAnswer": "Everything that might make the results invalid — not just the evidence supporting the conclusion, but other possible explanations, details that could cast doubt on the interpretation, and how any doubts were ruled out.",
+      "evidence": [
+        "spya-rxj5wa"
+      ]
+    },
+    {
+      "premise": "Scientific integrity means disclosing anything that could cast doubt on a result, not just the supporting evidence.",
+      "question": "How does Feynman use the Wesson Oil advertisement to show the difference between being technically truthful and having full scientific integrity?",
+      "referenceAnswer": "The ad's claim that Wesson Oil does not soak through food is technically true, but it implies something false by omission: no oil soaks through at a certain temperature, while at another temperature all oils, including Wesson, will soak through — so the true statement still misleads.",
+      "evidence": [
+        "spya-bpyx8n"
+      ]
+    },
+    {
+      "premise": "Scientific integrity requires disclosing anything that could mislead, even if a statement is technically true.",
+      "question": "What does the history of measurements of the electron's charge after Millikan reveal about how scientists can fool themselves?",
+      "referenceAnswer": "Because Millikan's original value was slightly wrong, later researchers who got results too far above his tended to search harder for errors and discard them, while results closer to his value were accepted more readily, so the correct value emerged only slowly over many small steps rather than all at once.",
+      "evidence": [
+        "spya-s9msxy",
+        "spya-uj9v2h"
+      ]
+    },
+    {
+      "premise": "Researchers unconsciously discarded results that deviated too far from Millikan's original value.",
+      "question": "What does Feynman say is the first principle for avoiding this kind of self-deception in science?",
+      "referenceAnswer": "That you must not fool yourself, since you are the easiest person to fool; only after achieving that is it easy to be honest with other scientists.",
+      "evidence": [
+        "spya-ed9mzv"
+      ]
+    },
+    {
+      "premise": "The first principle is not fooling yourself, which then makes honesty toward other scientists easy.",
+      "question": "What extra obligation does Feynman describe toward laymen, using the example of his friend explaining astronomy research on the radio?",
+      "referenceAnswer": "He says a scientist should honestly tell the public what applications the work does or doesn't have, rather than claiming false practical value just to keep getting funding, and let the public decide whether to support it based on the truth.",
+      "evidence": [
+        "spya-mjty2q"
+      ]
+    },
+    {
+      "premise": "Feynman says scientists should honestly tell the public the truth about their work rather than shade it to keep funding.",
+      "question": "What rule does Feynman give about publishing results, illustrated with the low-nicotine cigarette advertising example?",
+      "referenceAnswer": "Results should always be published regardless of how they come out, since letting the chance of publication depend on whether the answer is favorable, as advertisers do, produces a misleadingly one-sided picture.",
+      "evidence": [
+        "spya-jk7mj4"
+      ]
+    },
+    {
+      "premise": "Results must be published regardless of whether they come out favorably.",
+      "question": "What flaw did Feynman identify in the psychology student's planned experiment on rats, and in her professor's response?",
+      "referenceAnswer": "She planned only to run the new condition without first repeating the original experiment under the original condition, so she would not know whether her chosen variable truly caused any difference; her professor rejected Feynman's suggested fix, saying repeating the earlier experiment would be a waste of time.",
+      "evidence": [
+        "spya-tf8rj2",
+        "spya-v0xcd7"
+      ]
+    },
+    {
+      "premise": "Her professor refused to let her repeat the earlier experiment to confirm the baseline result.",
+      "question": "What compromise of scientific integrity did Feynman describe at the National Accelerator Laboratory's deuterium experiment?",
+      "referenceAnswer": "Rather than rerunning the comparison experiment with light hydrogen on the same apparatus, the researcher used someone else's data from a different apparatus, because pressure for quick new results left too little time and money to do the direct comparison properly.",
+      "evidence": [
+        "spya-m95kqm"
+      ]
+    },
+    {
+      "premise": "Pressure for fast results led one researcher to skip a proper direct comparison.",
+      "question": "What did Young's rat-corridor experiment demonstrate about eliminating hidden cues from an experiment?",
+      "referenceAnswer": "He kept discovering unnoticed cues the rats used to find the food door — appearance, smell, lighting, and finally the sound of the floor — and had to control each one, eventually needing sand on the floor, before the rats were truly forced to learn the intended task.",
+      "evidence": [
+        "spya-rndcqw",
+        "spya-npdc6n"
+      ]
+    },
+    {
+      "premise": "Young painstakingly eliminated every hidden cue the rats used, down to the sound of the floor.",
+      "question": "What happened to Young's experiment in the research that followed it, despite Feynman calling it an 'A-Number-1' piece of science?",
+      "referenceAnswer": "Later researchers running rats through mazes ignored his findings, never adopted his controls such as the sand-covered corridor, and stopped citing his work, which Feynman says is itself a mark of Cargo Cult Science.",
+      "evidence": [
+        "spya-wye8g6"
+      ]
+    },
+    {
+      "premise": "Later researchers ignored Young's carefully controlled experiment.",
+      "question": "What happened to the ESP experiments of Rhine and others as their techniques were improved over time?",
+      "referenceAnswer": "As criticisms led to better controls, the measured effects kept shrinking until they disappeared, and one researcher then argued that requiring the results to be repeatable was an unreasonable demand, which Feynman says is not science.",
+      "evidence": [
+        "spya-rbpppq",
+        "spya-rbpppq"
+      ]
+    },
+    {
+      "premise": "One parapsychology researcher argued that requiring repeatable results was an unreasonable demand.",
+      "question": "What final wish does Feynman leave the graduating students with?",
+      "referenceAnswer": "He wishes them the good luck of finding themselves somewhere free to maintain the kind of scientific integrity he described, without being forced by career pressure or the need for financial support to give it up.",
+      "evidence": [
+        "spya-ndyj3t"
+      ]
+    }
+  ]
+}

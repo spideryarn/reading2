@@ -9,10 +9,10 @@
  *  1. **The reference answer collapses again when the reader moves on.** Left
  *     open it carries over, and the next question arrives with its answer
  *     already under it. Nothing goes red; the reader just stops being quizzed.
- *  2. **The order is the artefact's.** `orderQuestions` sorts the whole batch
- *     once, against bands and values this panel never sees. A sort here would
- *     be a second opinion, and a plausible-looking wrong order is unfalsifiable
- *     by eye.
+ *  2. **The order is the artefact's.** Since `quiz/5` it is the model's path,
+ *     each step leaning on the ones before; a sort here would ask step 6 before
+ *     the step 5 it leans on, and a plausible-looking wrong order is
+ *     unfalsifiable by eye.
  *  3. **A tick means a mark reached `done`.** A reply that is merely non-empty
  *     is a stream that stopped, which looks identical to one that finished.
  *  4. **The Answer button is refused while a transcript is on its way.**
@@ -86,8 +86,6 @@ function question(n: number, over: Partial<QuizQuestion> = {}): QuizQuestion {
     question: `Question number ${n}?`,
     referenceAnswer: `The reference answer to ${n}.`,
     evidence: [{ blockId: KNOWN as BlockId, quote: "The first paragraph", start: 0 }],
-    band: "easy",
-    value: 3,
     ...over,
   };
 }
@@ -250,14 +248,9 @@ describe("the reference answer is behind a door that shuts again", () => {
 });
 
 describe("the list is the artefact's order and nothing else", () => {
-  /* Deliberately not sorted by band, by value, by id or alphabetically, so any
-     sort added here changes the answer. `orderQuestions` in src/quiz.ts has
-     already done this against the whole batch. */
-  const scrambled = [
-    question(3, { band: "hard", value: 5 }),
-    question(1, { band: "easy", value: 1 }),
-    question(2, { band: "medium", value: 4 }),
-  ];
+  /* Deliberately not sorted by id, by text or alphabetically, so any sort
+     added here changes the answer. The order is the path the model set. */
+  const scrambled = [question(3), question(1), question(2)];
 
   it("draws the rows in the order it was given, however wrong that order looks", () => {
     paint(owner({ quiz: batch(scrambled) }));
@@ -546,34 +539,32 @@ describe("the gap between pressing and the job appearing", () => {
   });
 });
 
-/**
- * **The adaptive walk** — right answer, harder next; wrong answer, easier.
- *
- * Greg chose this on 2026-09-06 in place of the difficulty slider he had asked
- * for, and the reason it is the better answer is that it is *not a control*:
- * nothing on screen may say what it is doing. So there are two kinds of case
- * here, and the second is as load-bearing as the first — the ladder moves, and
- * the reader is never told that it did.
- *
- * The rest are the navigation cases a cross-family review pointed out the plan
- * had not actually defined, `A → B → C → Previous → pick D` above all: get that
- * wrong and the panel silently repeats a question or applies one verdict twice,
- * which looks from the outside exactly like a quiz.
- *
- * docs/plans/260907d-make-the-quiz-adaptive.md.
- */
-describe("the quiz gets harder when you are right and easier when you are wrong", () => {
-  /** 2 easy, 2 medium, 2 hard, in the server's order. */
-  const LADDER = batch([
-    { ...question(1), band: "easy" as const, value: 5 },
-    { ...question(2), band: "easy" as const, value: 4 },
-    { ...question(3), band: "medium" as const, value: 5 },
-    { ...question(4), band: "medium" as const, value: 4 },
-    { ...question(5), band: "hard" as const, value: 5 },
-    { ...question(6), band: "hard" as const, value: 4 },
-  ]);
 
-  /** A finished mark for the question on screen, judged as given. */
+/**
+ * **The walk: a path in order, with help that adapts.**
+ *
+ * Since `quiz/5` the questions are a path the model set, each step leaning on
+ * the one before, and the reader walks it front to back — Next is the next
+ * question in the array, whatever happened. What adapts is the premise: shown
+ * above a step unless the reader has just come there with Next from a step
+ * judged right. Greg chose adaptive with no control on 2026-09-06; the band
+ * ladder that kept that promise until 2026-09-30 is gone
+ * (docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md § The walk).
+ *
+ * Two kinds of case, and the second is as load-bearing as the first: the help
+ * adapts, and the reader is never told that anything did. And one the plan
+ * adds: **the list shows stems only**, because a premise is an earlier
+ * question's answer and scanning the list must not answer rows the reader has
+ * not reached (Sol F3).
+ */
+describe("the walk is the path, and the premise is the help that adapts", () => {
+  const P2 = "The piece ties it to cost.";
+  const P3 = "Cost is what the author measures.";
+  /** Three steps: an opening with no premise, then two that lean back. */
+  const PATH = batch([question(1), question(2, { premise: P2 }), question(3, { premise: P3 })]);
+  const [first, second, third] = PATH.questions as [QuizQuestion, QuizQuestion, QuizQuestion];
+
+  /** A finished mark for a question, judged as given. */
   function judged(id: string, verdict: "right" | "wrong" | undefined): Attempt {
     return {
       questionId: id,
@@ -585,60 +576,218 @@ describe("the quiz gets harder when you are right and easier when you are wrong"
     };
   }
 
-  const opening = LADDER.questions[0]!;
+  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const premiseShown = () => host.querySelector(".quiz-premise")?.textContent ?? null;
 
-  it("opens at the front of the server's array", () => {
-    paint(owner({ quiz: LADDER }));
-    expect(host.textContent).toContain("Question number 1?");
-    expect(host.textContent).toContain("Question 1 of 6");
+  /** A fresh panel, for a loop that paints several independent walks. */
+  function remount() {
+    act(() => root.unmount());
+    root = createRoot(host);
+  }
+
+  function pickRow(n: number) {
+    act(() => {
+      const rows = [...host.querySelectorAll(".quiz-list-row")] as HTMLElement[];
+      rows[n]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  it("opens at the front of the path", () => {
+    paint(owner({ quiz: PATH }));
+    expect(stem()).toBe("Question number 1?");
+    expect(host.textContent).toContain("Question 1 of 3");
+    /* The opening step leans on nothing, so there is nothing above it. */
+    expect(premiseShown()).toBeNull();
   });
 
-  it("steps up a band after a right answer", () => {
-    paint(owner({ quiz: LADDER, attempt: judged(opening.id, "right") }));
+  it("goes to the next question in the array whatever the verdict", () => {
+    for (const verdict of ["right", "wrong", undefined] as const) {
+      paint(owner({ quiz: PATH, attempt: judged(first.id, verdict) }));
+      press("Next");
+      expect(stem(), `after ${verdict ?? "no"} verdict`).toBe("Question number 2?");
+      expect(host.textContent).toContain("Question 2 of 3");
+      remount();
+    }
+  });
+
+  it("asks the next step on its own after a right answer", () => {
+    paint(owner({ quiz: PATH, attempt: judged(first.id, "right") }));
     press("Next");
-    /* Question 3 is the highest-value medium — one band up, and the value
-       ordering inside it is the server's. */
-    expect(host.textContent).toContain("Question number 3?");
+    expect(premiseShown()).toBeNull();
+    /* Hiding the premise is not hiding the step. */
+    expect(stem()).toBe("Question number 2?");
   });
 
-  it("stays at the bottom of the ladder after a wrong answer", () => {
-    paint(owner({ quiz: LADDER, attempt: judged(opening.id, "wrong") }));
+  it("hands the reader the thread after a wrong answer, above the question and apart from it", () => {
+    paint(owner({ quiz: PATH, attempt: judged(first.id, "wrong") }));
     press("Next");
-    /* Nothing below easy, so the other easy question — not a medium. */
-    expect(host.textContent).toContain("Question number 2?");
+    expect(premiseShown()).toBe(P2);
+    const premise = host.querySelector(".quiz-premise");
+    const q = host.querySelector(".quiz-question");
+    expect(premise?.compareDocumentPosition(q as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(q?.textContent).not.toContain(P2);
   });
 
-  it("holds the band when the answer was never judged", () => {
-    /* The classifier failed, or the reader skipped. Absence is a designed
-       outcome and must not stall the panel or step it. */
-    paint(owner({ quiz: LADDER, attempt: judged(opening.id, undefined) }));
+  it("hands it over too when nothing was judged — a skip, or a classifier that failed", () => {
+    paint(owner({ quiz: PATH, attempt: judged(first.id, undefined) }));
     press("Next");
-    expect(host.textContent).toContain("Question number 2?");
+    expect(premiseShown()).toBe(P2);
+    remount();
+    paint(owner({ quiz: PATH }));
+    press("Next");
+    expect(premiseShown()).toBe(P2);
   });
 
-  it("comes back down after a wrong answer higher up", () => {
-    const o = owner({ quiz: LADDER, attempt: judged(opening.id, "right") });
+  it("remembers the verdict after the attempt has gone", () => {
+    /* In the app `move` clears the attempt, so by the time step 2 is on screen
+       the only record of step 1's verdict is the panel's own. */
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
+    paint(o);
+    paint({ ...o, attempt: null });
+    press("Next");
+    expect(stem()).toBe("Question number 2?");
+    expect(premiseShown()).toBeNull();
+  });
+
+  it("follows the latest verdict on the step before", () => {
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
     paint(o);
     press("Next");
-    expect(host.textContent).toContain("Question number 3?");
-    /* Now wrong at medium: back to easy, and to the easy one not yet seen. */
-    paint({ ...o, attempt: judged(LADDER.questions[2]!.id, "wrong") });
+    paint({ ...o, attempt: null });
+    press("Previous");
+    /* Answered again, and wrong this time. */
+    paint({ ...o, attempt: judged(first.id, "wrong") });
     press("Next");
-    expect(host.textContent).toContain("Question number 2?");
+    expect(premiseShown()).toBe(P2);
+  });
+
+  it("shows the premise on a step reached by Previous, even after a right answer before it", () => {
+    /* Right on 1, right on 2, on to 3, then back to 2. The reader did not just
+       carry step 1's thread to step 2 — they came from the other side. */
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
+    paint(o);
+    press("Next");
+    expect(premiseShown()).toBeNull();
+    paint({ ...o, attempt: judged(second.id, "right") });
+    press("Next");
+    press("Previous");
+    expect(stem()).toBe("Question number 2?");
+    expect(premiseShown()).toBe(P2);
+  });
+
+  it("walks back one step at a time, and counts the position on the path", () => {
+    paint(owner({ quiz: PATH }));
+    press("Next");
+    press("Next");
+    expect(host.textContent).toContain("Question 3 of 3");
+    expect(buttons("Next")[0]?.disabled, "Next was live on the last step").toBe(true);
+    press("Previous");
+    expect(stem()).toBe("Question number 2?");
+    expect(host.textContent).toContain("Question 2 of 3");
+    press("Previous");
+    expect(buttons("Previous")[0]?.disabled).toBe(true);
+  });
+
+  it("jumps to a question picked from the list, and walks on from there", () => {
+    paint(owner({ quiz: PATH }));
+    press("Show all 3");
+    pickRow(2);
+    expect(host.textContent).toContain("Question 3 of 3");
+    expect(host.querySelectorAll(".quiz-list-row")).toHaveLength(0);
+    press("Previous");
+    expect(stem()).toBe("Question number 2?");
   });
 
   /**
-   * **The rule that makes this a feature rather than a gauge.**
-   *
-   * quiz.md: *"quoting 'hard' at a reader would be handing them a token with
-   * nothing behind it"*. Adaptive must not leak the difficulty either — no
-   * "here's a harder one", no pips, no level. This asserts the absence, which
-   * is the only way an absence gets defended.
+   * **A jump is not an arrival by Next** — GPT Sol's R2-1. Step 2 was judged
+   * right, and then the reader went elsewhere; coming to step 3 from the list,
+   * they have not just carried step 2's thread there, so step 3 keeps its
+   * premise. Keyed on the verdict alone, this would be asked bare.
+   */
+  it("shows the premise on a step picked from the list, even when the step before was right", () => {
+    const o = owner({ quiz: PATH });
+    paint(o);
+    press("Next");
+    paint({ ...o, attempt: judged(second.id, "right") });
+    press("Previous");
+    paint({ ...o, attempt: null });
+    press("Show all 3");
+    pickRow(2);
+    expect(stem()).toBe("Question number 3?");
+    expect(premiseShown()).toBe(P3);
+  });
+
+  /**
+   * **A path with a hole in it shows every premise.** Validation dropped a
+   * step mid-path, so for some step "the one before" on screen is not the one
+   * its premise restates, and a right answer to it is no evidence. The positive
+   * control is the same walk without the gap, above: right on step 1, Next,
+   * no premise.
+   */
+  it("always shows the premise when the batch had a question dropped mid-path", () => {
+    const gapped: Quiz = { ...PATH, dropped: { ...PATH.dropped, gaps: 1 } };
+    paint(owner({ quiz: gapped, attempt: judged(first.id, "right") }));
+    press("Next");
+    expect(premiseShown()).toBe(P2);
+  });
+
+  /**
+   * **The list never shows a premise** — Sol's F3. A premise restates an
+   * earlier step's answer; drawn in the list it would answer rows the reader
+   * has not reached yet. The positive control first: the premise is on
+   * screen, so its absence from the list is not merely its absence from the
+   * page.
+   */
+  it("lists question stems only, never premises", () => {
+    paint(owner({ quiz: PATH }));
+    press("Next");
+    expect(premiseShown()).toBe(P2);
+    press("Show all 3");
+    const list = host.querySelector(".quiz-list")?.textContent ?? "";
+    expect(list).toContain("Question number 2?");
+    expect(list).toContain("Question number 3?");
+    expect(list).not.toContain(P2);
+    expect(list).not.toContain(P3);
+  });
+
+  it("does not disturb the current attempt when its own row is picked", () => {
+    /* `move` aborts a mark in flight and clears the draft, so treating "the
+       current one" as a move lets a reader destroy a half-typed answer by
+       tapping the highlighted row. GPT Sol's code review on the ladder caught
+       it once; the index walk keeps the guard. */
+    paint(owner({ quiz: PATH }));
+    cleared.length = 0;
+    press("Show all 3");
+    pickRow(0);
+    expect(cleared, "the attempt was cleared by picking the current row").toEqual([]);
+    expect(stem()).toBe("Question number 1?");
+    expect(buttons("Hide the list")).toEqual([]);
+  });
+
+  it("forgets every verdict when the batch is replaced", () => {
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
+    paint(o);
+    press("Next");
+    expect(premiseShown()).toBeNull();
+    /* The same questions under a new `batchId` — the case where a verdict map
+       that outlived its batch would still find ids to match. */
+    paint({ ...o, quiz: { ...PATH, batchId: "spya-batch2" }, attempt: null });
+    expect(host.textContent).toContain("Question 1 of 3");
+    press("Next");
+    expect(premiseShown()).toBe(P2);
+  });
+
+  /**
+   * **The rule that makes this adaptive rather than a gauge.** quiz.md: quoting
+   * a difficulty at a reader is handing them a token with nothing behind it.
+   * The premise must not become one either — no "a hint", no level. This
+   * asserts the absence, which is the only way an absence gets defended.
    */
   it("never says a word about difficulty, however the reader is doing", () => {
     for (const verdict of ["right", "wrong", undefined] as const) {
-      paint(owner({ quiz: LADDER, attempt: judged(opening.id, verdict) }));
+      paint(owner({ quiz: PATH, attempt: judged(first.id, verdict) }));
       press("Next");
+      press("Show all 3");
       const shown = (host.textContent ?? "").toLowerCase();
       for (const leak of ["easy", "medium", "hard", "harder", "easier", "difficulty", "level"]) {
         expect(
@@ -646,143 +795,19 @@ describe("the quiz gets harder when you are right and easier when you are wrong"
           `"${leak}" reached the screen after a ${verdict ?? "missing"} verdict`,
         ).not.toContain(leak);
       }
+      remount();
     }
-  });
-
-  it("counts the reader's own path, not the server's array", () => {
-    paint(owner({ quiz: LADDER, attempt: judged(opening.id, "right") }));
-    press("Next");
-    /* The third question in the array, but the second one they have met. */
-    expect(host.textContent).toContain("Question 2 of 6");
-  });
-
-  it("stops offering Next once every question has been seen", () => {
-    const one = batch([{ ...question(1), band: "easy" as const, value: 5 }]);
-    paint(owner({ quiz: one }));
-    const [next] = buttons("Next");
-    expect(next?.disabled).toBe(true);
-  });
-
-  describe("navigating by hand", () => {
-    it("walks back along the path the reader actually took", () => {
-      const o = owner({ quiz: LADDER, attempt: judged(opening.id, "right") });
-      paint(o);
-      press("Next");
-      expect(host.textContent).toContain("Question number 3?");
-      paint({ ...o, attempt: null });
-      press("Previous");
-      expect(host.textContent).toContain("Question number 1?");
-    });
-
-    it("retraces forward through history rather than selecting again", () => {
-      const o = owner({ quiz: LADDER, attempt: judged(opening.id, "right") });
-      paint(o);
-      press("Next");
-      paint({ ...o, attempt: null });
-      press("Previous");
-      press("Next");
-      /* Back to the one they had already been given — not a fresh pick, which
-         would apply the verdict a second time. */
-      expect(host.textContent).toContain("Question number 3?");
-    });
-
-    /**
-     * **Only an answer given at the end of the path moves the ladder**, and
-     * this pins it because the documentation said otherwise until GPT Sol's
-     * second finding. A reader who has gone back and answered something is
-     * retracing; the question after B is C because that is where they were, and
-     * applying B's verdict would mean inserting a new question into the middle
-     * of a path they have already walked.
-     */
-    it("does not re-steer from an answer given back down the path", () => {
-      const o = owner({ quiz: LADDER, attempt: judged(opening.id, "right") });
-      paint(o);
-      press("Next"); // → 3
-      paint({ ...o, attempt: null });
-      press("Previous"); // → 1
-      /* Answer question 1 again, wrongly this time. */
-      paint({ ...o, attempt: judged(opening.id, "wrong") });
-      press("Next");
-      /* Onward through the path already walked, not down a rung to question 2. */
-      expect(host.textContent).toContain("Question number 3?");
-    });
-
-    it("lets the reader reach past the ladder, and learns nothing from the reach", () => {
-      paint(owner({ quiz: LADDER }));
-      press("Show all 6");
-      act(() => {
-        const rows = [...host.querySelectorAll("button")].filter((b) =>
-          (b.textContent ?? "").includes("Question number 5?"),
-        );
-        rows[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-      expect(host.textContent).toContain("Question number 5?");
-      /* Second in their path, though fifth in the array. */
-      expect(host.textContent).toContain("Question 2 of 6");
-    });
-
-    /**
-     * The case the review said `path + cursor` could not express. `seen` is the
-     * encounter order, so Previous from D goes to C rather than to B — chosen
-     * deliberately, because the alternative needs a second stack to serve one
-     * rare gesture, and named here so it is a decision rather than a surprise.
-     */
-    it("handles A, B, C, back to B, then a pick — without repeating anything", () => {
-      const o = owner({ quiz: LADDER, attempt: judged(opening.id, "right") });
-      paint(o);
-      press("Next"); // → 3
-      const second = LADDER.questions[2]!;
-      paint({ ...o, attempt: judged(second.id, "right") });
-      press("Next"); // → 5
-      expect(host.textContent).toContain("Question number 5?");
-      paint({ ...o, attempt: null });
-      press("Previous"); // → 3
-      expect(host.textContent).toContain("Question number 3?");
-      press("Show all 6");
-      act(() => {
-        const rows = [...host.querySelectorAll("button")].filter((b) =>
-          (b.textContent ?? "").includes("Question number 4?"),
-        );
-        rows[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-      expect(host.textContent).toContain("Question number 4?");
-      expect(host.textContent).toContain("Question 4 of 6");
-      press("Previous");
-      expect(host.textContent).toContain("Question number 5?");
-    });
-
-    /**
-     * **Picking the row you are already on must not throw away your answer.**
-     *
-     * `move` aborts a mark in flight and clears the draft and the feedback, so
-     * treating "the current one" as a move lets a reader destroy a half-typed
-     * answer by tapping the highlighted row. The index version guarded this;
-     * the rewrite lost the guard and GPT Sol's code review caught it.
-     */
-    it("does not disturb the current attempt when its own row is picked", () => {
-      paint(owner({ quiz: LADDER }));
-      cleared.length = 0;
-      press("Show all 6");
-      act(() => {
-        const rows = [...host.querySelectorAll(".quiz-list-row")] as HTMLElement[];
-        rows[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-      expect(cleared, "the attempt was cleared by picking the current row").toEqual([]);
-      expect(host.textContent).toContain("Question number 1?");
-      /* The list still closed — the gesture did something. */
-      expect(buttons("Hide the list")).toEqual([]);
-    });
   });
 
   /**
    * **The verdict lands last, and Next must not outrun it.**
    *
    * It is judged from the *finished* mark, so it arrives with the terminal
-   * frame — after the reader has read every word. A Next pressed in that window
-   * would select with no verdict and abort the classifier on the way out:
-   * adaptation quietly switched off, on a screen that looks entirely normal.
-   * GPT Sol's first finding on the built code, and the one that would have
-   * shipped.
+   * frame — after the reader has read every word. The next step's premise
+   * depends on it, so a Next pressed in that window would arrive with no
+   * verdict and abort the classifier on the way out: the help quietly stuck
+   * on, on a screen that looks entirely normal. GPT Sol's first finding on the
+   * ladder's built code, and it holds for the premise the same way.
    */
   describe("while the mark is still arriving", () => {
     const marking = (id: string): Attempt => ({
@@ -793,30 +818,33 @@ describe("the quiz gets harder when you are right and easier when you are wrong"
       error: null,
     });
 
-    it("will not step the ladder before the verdict has landed", () => {
-      paint(owner({ quiz: LADDER, attempt: marking(opening.id) }));
+    it("will not move on before the verdict has landed", () => {
+      paint(owner({ quiz: PATH, attempt: marking(first.id) }));
       const [next] = buttons("Next");
       expect(next?.disabled, "Next was live while the verdict was still in flight").toBe(true);
     });
 
     it("leaves Previous and the list live, so a reader can still walk away", () => {
-      const o = owner({ quiz: LADDER, attempt: judged(opening.id, "right") });
+      const o = owner({ quiz: PATH });
       paint(o);
       press("Next");
-      paint({ ...o, attempt: marking(LADDER.questions[2]!.id) });
+      paint({ ...o, attempt: marking(second.id) });
       const [prev] = buttons("Previous");
       expect(prev?.disabled, "a reader waiting on a mark was trapped").toBe(false);
-      expect(buttons("Show all 6").length).toBe(1);
+      expect(buttons("Show all 3").length).toBe(1);
     });
 
-    it("moves again once the mark is done", () => {
-      const o = owner({ quiz: LADDER });
-      paint({ ...o, attempt: marking(opening.id) });
+    it("moves again once the mark is done, and the verdict decides the premise", () => {
+      const o = owner({ quiz: PATH });
+      paint(o);
+      press("Next");
+      paint({ ...o, attempt: marking(second.id) });
       expect(buttons("Next")[0]?.disabled).toBe(true);
-      paint({ ...o, attempt: judged(opening.id, "right") });
+      paint({ ...o, attempt: judged(second.id, "right") });
       expect(buttons("Next")[0]?.disabled).toBe(false);
       press("Next");
-      expect(host.textContent).toContain("Question number 3?");
+      expect(stem()).toBe(third.question);
+      expect(premiseShown()).toBeNull();
     });
   });
 });

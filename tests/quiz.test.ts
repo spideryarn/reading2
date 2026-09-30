@@ -1,23 +1,27 @@
 /**
- * **The quiz stage's pure half** — ordering, the band spread, and what
+ * **The quiz stage's pure half** — the path's order, the premise, and what
  * validation throws away. No network, no model.
  *
  * Every case here is a way the stage would be wrong *quietly*. A quiz that
- * comes back with twelve plausible questions about nothing in particular looks
+ * comes back with twenty plausible questions about nothing in particular looks
  * exactly like one that works (docs/reusable/silent-success.md), so the things
  * worth pinning are the ones with no visible symptom:
  *
- * - **the order**, because the first draft of the plan proposed `ease + value`
- *   and a test asserting the behaviour it produces, which is the opposite of
- *   what Greg asked for. See `puts an easy peripheral question before a hard
- *   central one` below — it is the assertion that goes red on the wrong rule;
- * - **the spread**, because a model asked nicely for one does not give it (the
- *   spike measured `ease` never leaving 2–4 across 24 questions);
- * - **the drops**, because a dropped question is indistinguishable from one the
- *   model chose not to set;
+ * - **the order**, because since `quiz/5` the model's order *is* the path —
+ *   each step leaning on the one before — and a sort anywhere would ask a step
+ *   before the one it leans on while looking like a perfectly good list;
+ * - **the premise**, because one that gives away its own question's answer
+ *   turns a step into a reading exercise, and nothing on screen says so;
+ * - **the drops, and where they fall**, because a dropped question is
+ *   indistinguishable from one the model chose not to set, and a drop in the
+ *   middle of a path is a hole the next step has to be answerable across;
  * - **the stamp field names**, because getting those wrong makes every quiz
  *   permanently non-current with nothing anywhere going red. That one is the
  *   whole of GPT Sol's finding 3 on the plan.
+ *
+ * Until 2026-09-30 this file also pinned a band sort and a band-spread gate.
+ * Both went with the band itself —
+ * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md.
  *
  * The prompts themselves are pinned at the bottom, in the shape
  * tests/remember-prompt.test.ts uses: a rule is here by name because it is the fix
@@ -32,19 +36,16 @@ import {
   MAX_QUESTIONS,
   PROMPT_VERSION,
   QUIZ_SYSTEM,
-  SPREAD_FROM,
   buildQuiz,
   emptyDropped,
-  missingBandEnds,
-  orderQuestions,
   validateEvidence,
+  withOldClientBands,
 } from "../src/quiz.js";
 import { GRADE_WORDS, gradeWords, QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
 import { readerFailureOf } from "../src/job-failure.js";
 import { kindOfMessage, worthRetrying } from "../src/messages.js";
-import { sanitise } from "../src/monitoring-scrub.js";
+import type { Block, QuizDropped, QuizResponse } from "../src/types.js";
 import { CAPABLE_MODEL } from "../src/models.js";
-import type { Block, QuizBand, QuizDropped, QuizQuestion } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -63,533 +64,277 @@ const blocks: Block[] = [
   block("spya-cccccc", "Brains are not computers, and the metaphor has been hugely influential."),
 ];
 
-const question = (
-  id: string,
-  band: QuizBand,
-  value: number,
+/** A quote each block really contains, so a raw question built on it survives. */
+const QUOTES: Record<string, string> = {
+  "spya-aaaaaa": "does not make anything actually wet",
+  "spya-bbbbbb": "consciousness is mostly about being",
+  "spya-cccccc": "Brains are not computers",
+};
+
+/**
+ * One question as the model would send it — valid unless told otherwise.
+ * `blockId` picks where its answer lives; `over` replaces any field, and an
+ * explicit `undefined` removes one.
+ */
+const raw = (
+  n: number,
+  over: Record<string, unknown> = {},
   blockId = "spya-aaaaaa",
-): QuizQuestion => ({
-  id,
-  question: `What about ${id}?`,
-  referenceAnswer: "Something the article says.",
-  evidence: [{ blockId, quote: "a quote", start: 0 }],
-  band,
-  value,
+): Record<string, unknown> => ({
+  question: `Question number ${n}?`,
+  referenceAnswer: `Answer number ${n}.`,
+  evidence: [{ blockId, quote: QUOTES[blockId] }],
+  ...over,
 });
 
-const ids = (questions: readonly QuizQuestion[]): string[] => questions.map((q) => q.id);
+/** A question whose only evidence is a quote the article does not contain. */
+const unanchored = (n: number): Record<string, unknown> =>
+  raw(n, { evidence: [{ blockId: "spya-aaaaaa", quote: "a sentence the article lacks" }] });
 
-describe("the order the reader meets the questions in", () => {
+const build = (questions: unknown[], dropped: QuizDropped = emptyDropped()) =>
+  buildQuiz({ questions }, { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped });
+
+const texts = (questions: readonly { question: string }[]): string[] => questions.map((q) => q.question);
+
+describe("the path is the model's order", () => {
   /**
-   * **THE test of this file.**
-   *
-   * Greg asked for "easy-first-then-getting-harder, and central-or-important-
-   * first", in that order. The first draft of the plan implemented it as
-   * `ease + value` descending, under which hard-central `(ease 1, value 5)` and
-   * easy-peripheral `(ease 5, value 1)` both sum to 6 and the value tie-break
-   * then puts the **hard** one first — the exact reverse of the first clause.
-   * The plan even proposed a test asserting that. GPT Sol's finding 4.
-   *
-   * So this is the assertion the previous design got backwards, written out the
-   * right way round and commented so nobody "fixes" it back.
+   * **THE test of this file, since `quiz/5`.** The model sets the questions in
+   * the order they build on one another, and that order is the path. Until
+   * 2026-09-30 the server sorted the batch by band, then value, then position
+   * on the page; the three questions below are in an order every one of those
+   * keys would change — the last one's answer is first on the page — so any
+   * sort that comes back goes red here.
    */
-  it("puts an easy peripheral question before a hard central one", () => {
-    const easyPeripheral = question("spya-easy01", "easy", 1);
-    const hardCentral = question("spya-hard01", "hard", 5);
-    expect(ids(orderQuestions([hardCentral, easyPeripheral], blocks))).toEqual([
-      "spya-easy01",
-      "spya-hard01",
+  it("keeps the questions in the order the model gave them", () => {
+    const quiz = build([
+      raw(3, {}, "spya-cccccc"),
+      raw(1, {}, "spya-bbbbbb"),
+      raw(2, { band: "hard", value: 5 }, "spya-aaaaaa"),
+    ]);
+    expect(texts(quiz.questions)).toEqual([
+      "Question number 3?",
+      "Question number 1?",
+      "Question number 2?",
     ]);
   });
 
-  it("runs easy, then medium, then hard, whatever the values say", () => {
-    const given = [
-      question("spya-hard01", "hard", 5),
-      question("spya-med001", "medium", 5),
-      question("spya-easy01", "easy", 1),
-    ];
-    expect(ids(orderQuestions(given, blocks))).toEqual([
-      "spya-easy01",
-      "spya-med001",
-      "spya-hard01",
+  it("keeps the order across a drop, closing the gap rather than reshuffling", () => {
+    const quiz = build([raw(1), unanchored(2), raw(3), raw(4)]);
+    expect(texts(quiz.questions)).toEqual([
+      "Question number 1?",
+      "Question number 3?",
+      "Question number 4?",
     ]);
   });
 
-  it("puts the central question first WITHIN a band", () => {
-    const given = [question("spya-easy01", "easy", 2), question("spya-easy02", "easy", 5)];
-    expect(ids(orderQuestions(given, blocks))).toEqual(["spya-easy02", "spya-easy01"]);
+  it("stores no band or value, even when the model still sends them", () => {
+    /* A cached model habit, or an old prompt's output replayed through the
+       validator: the fields are not read, so they are not stored. A stored band
+       would be a judgement nothing makes any more, sitting in every artefact. */
+    const quiz = build([raw(1, { band: "easy", value: 4 })]);
+    expect(quiz.questions[0]).not.toHaveProperty("band");
+    expect(quiz.questions[0]).not.toHaveProperty("value");
   });
 
-  it("breaks a tie by where the answer sits on the page", () => {
-    /* Ties are the common case rather than the edge case — the spike found four
-       distinct sums over twelve questions — so "then the model's own order"
-       would mean *arbitrary* for most of the list. Document order is the honest
-       answer to "these two are equally easy and equally central", and it reads
-       well: a tied group arrives in the order the reader met it. */
-    const later = question("spya-late01", "medium", 3, "spya-cccccc");
-    const earlier = question("spya-erly01", "medium", 3, "spya-aaaaaa");
-    expect(ids(orderQuestions([later, earlier], blocks))).toEqual([
-      "spya-erly01",
-      "spya-late01",
-    ]);
-  });
-
-  it("sorts a question whose evidence is in no known block last, not first", () => {
-    /* `toQuestions` drops these, so this is defence in depth — but the wrong
-       answer here is the dangerous one: an unknown block position defaulting to
-       0 would put a question nobody can check at the top of the list. */
-    const unknown = question("spya-unkn01", "medium", 3, "spya-zzzzzz");
-    const known = question("spya-know01", "medium", 3, "spya-cccccc");
-    expect(ids(orderQuestions([unknown, known], blocks))).toEqual([
-      "spya-know01",
-      "spya-unkn01",
-    ]);
-  });
-
-  it("leaves the input array alone", () => {
-    const given = [question("spya-hard01", "hard", 5), question("spya-easy01", "easy", 1)];
-    orderQuestions(given, blocks);
-    expect(ids(given)).toEqual(["spya-hard01", "spya-easy01"]);
+  it("stamps the new prompt version", () => {
+    expect(PROMPT_VERSION).toBe("quiz/5");
   });
 });
 
-describe("both ends of the band scale", () => {
-  /* Asking nicely does not work — the spike's two runs produced 24 questions
-     and `ease` never left 2–4 on either. So a batch is *required* to use both
-     ends, and one that uses neither is a failed generation.
+describe("the premise", () => {
+  const PREMISE = "The piece says a simulated storm makes nothing wet.";
 
-     **What "required" means changed on 2026-09-03.** It used to be a
-     proportion, `min(3, floor(n / 4))`, and the tests that pinned that
-     arithmetic are gone with it — see `missingBandEnds` in src/quiz.ts and
-     docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
-     for why the proportion was the wrong thing to be measuring. The two things
-     those tests were protecting survive here: a batch too short to carry a
-     spread is asked for nothing, and a full batch that came back flat fails.
-     The third — "three of each end of a full twelve" — is now the *prompt's*
-     target rather than the gate's floor, and is pinned in "the generation
-     prompt" below. */
-
-  /**
-   * Every batch size the rule applies to — generated rather than listed,
-   * because a hand-picked list is how the first draft of this block claimed to
-   * cover every gated size while skipping 6, 7, 10 and 11.
-   */
-  const gated = Array.from({ length: MAX_QUESTIONS - SPREAD_FROM + 1 }, (_, i) => SPREAD_FROM + i);
-
-  /** `n` questions, of which one is `easy`, one is `hard`, and the rest medium. */
-  const oneOfEachEnd = (n: number): QuizQuestion[] => [
-    question("spya-easy01", "easy", 4),
-    question("spya-hard01", "hard", 5),
-    ...Array.from({ length: n - 2 }, (_, i) =>
-      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
-    ),
-  ];
-
-  /** `n` questions with `band` at one end and nothing at the other. */
-  const oneEndOnly = (n: number, band: QuizBand): QuizQuestion[] => [
-    question("spya-end001", band, 4),
-    ...Array.from({ length: n - 1 }, (_, i) =>
-      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
-    ),
-  ];
-
-  it.each(gated)("is satisfied at %i by one question at each end", (n) => {
-    /* One of each is the whole rule, at every gated size. The batch that failed
-       in production — nine questions, one `hard` — differs from this only in
-       the count, which is exactly the thing that should not have mattered. */
-    expect(missingBandEnds(oneOfEachEnd(n))).toEqual([]);
+  it("is kept when the model gives one", () => {
+    const quiz = build([raw(1), raw(2, { premise: `  ${PREMISE}  ` })]);
+    expect(quiz.questions[0]).not.toHaveProperty("premise");
+    expect(quiz.questions[1]?.premise).toBe(PREMISE);
   });
 
-  it.each(gated)("names the missing end at %i when the batch reaches only one", (n) => {
-    expect(missingBandEnds(oneEndOnly(n, "easy"))).toEqual(["hard"]);
-    expect(missingBandEnds(oneEndOnly(n, "hard"))).toEqual(["easy"]);
+  it("is left off, and the question kept, when it is empty or not a string", () => {
+    const quiz = build([raw(1, { premise: "   " }), raw(2, { premise: 42 }), raw(3, { premise: null })]);
+    expect(quiz.questions).toHaveLength(3);
+    for (const q of quiz.questions) expect(q).not.toHaveProperty("premise");
   });
 
-  it("names both ends of a batch that has neither", () => {
-    const flat = Array.from({ length: MAX_QUESTIONS }, (_, i) =>
-      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
-    );
-    expect(missingBandEnds(flat)).toEqual(["easy", "hard"]);
-  });
-
-  it("asks nothing of a batch one question short of the boundary", () => {
-    /* The exemption side of `SPREAD_FROM`, and the reason it exists: a
-       three-question article is not a failed generation. "Up to twelve, fewer
-       where the article does not support twelve" is the count rule, and a
-       spread rule firing here would turn that ceiling into a floor and so
-       instruct the model to pad. */
-    const short = Array.from({ length: SPREAD_FROM - 1 }, (_, i) =>
-      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
-    );
-    expect(missingBandEnds(short)).toEqual([]);
-    expect(missingBandEnds([])).toEqual([]);
-    expect(missingBandEnds([question("spya-med001", "medium", 3)])).toEqual([]);
-  });
-
-  it("asks for both ends the moment the batch reaches the boundary", () => {
-    /* The other side of the same line. Both sides are asserted because the
-       boundary is a product decision rather than a fact about arithmetic, and
-       the old rule's boundary fell out of a `floor()` where nobody could see
-       it. */
-    const atBoundary = Array.from({ length: SPREAD_FROM }, (_, i) =>
-      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
-    );
-    expect(missingBandEnds(atBoundary)).toEqual(["easy", "hard"]);
-  });
-
-  it("builds the batch production rejected: nine questions, one of them hard", () => {
-    /* The reported failure, 2026-09-03. Nine survivors with a single `hard`
-       question were refused because the old quota wanted two — discarding a
-       paid 36-second call over a batch that carries both ends and orders
-       perfectly well. It has to build. */
-    const bands = [
-      "easy",
-      "easy",
-      "easy",
-      "medium",
-      "medium",
-      "medium",
-      "medium",
-      "medium",
-      "hard",
-    ];
-    const quiz = buildQuiz(
-      {
-        questions: bands.map((band, i) => ({
-          question: `Question number ${i}?`,
-          referenceAnswer: "Because the article says so.",
-          band,
-          value: 3,
-          evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
-        })),
-      },
-      { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
-    );
-    expect(quiz.questions).toHaveLength(9);
-    expect(quiz.questions.filter((q) => q.band === "hard")).toHaveLength(1);
-  });
-
-  it("fails the stage rather than writing a full batch with no spread", () => {
-    const questions = Array.from({ length: 12 }, (_, i) => ({
-      question: `Question number ${i}?`,
-      referenceAnswer: "Because the article says so.",
-      band: "medium",
-      value: 3,
-      evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
-    }));
-    /* The reader's half, which is where that sentence lives now — `.toThrow`
-       matches `Error.message`, and `Error.message` is the diagnostic since the
-       seam split the two audiences (src/job-failure.ts § Two strings, not one). */
-    expect(readerOf(questions)).toMatch(/all came out at the same middling level/);
+  it("is dropped when it only repeats the question", () => {
+    const quiz = build([raw(1, { premise: "question NUMBER 1?" })]);
+    expect(quiz.questions).toHaveLength(1);
+    expect(quiz.questions[0]).not.toHaveProperty("premise");
   });
 
   /**
-   * **The refusal, taken apart into its two audiences.**
-   *
-   * Since stage 2 of
-   * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
-   * a refused batch throws *two* sentences: `Error.message` is the diagnostic,
-   * for the log and Sentry, and `readerFailureOf` is what src/jobs.ts persists
-   * onto `job.error` and `step.error` and the band renders in red. Every
-   * assertion below has to say which one it is about, and the copy rules apply
-   * to the second.
-   *
-   * The step label handed to `readerFailureOf` is only used by the *generic*
-   * sentence, which none of these reach — every one of them declares its own.
-   * It is spelled out rather than imported from `STEPS` so this file stays a
-   * test of the quiz's pure half and drags in no pipeline.
+   * **The giveaway, at its crudest.** A premise is shown above its question
+   * whenever the reader did not just get the step before right, so one that
+   * contains this question's reference answer hands the reader the answer —
+   * on exactly the screens where they were struggling. The prompt forbids it;
+   * this catches the verbatim case, and subtler ones are the eval's.
    */
-  const STEP_LABEL = "Writing the questions";
+  it("is dropped when it contains the question's own reference answer", () => {
+    const quiz = build([
+      raw(1, {
+        referenceAnswer: "Because simulation is not the real thing.",
+        premise: "Seth says, because simulation is not the real thing, that nothing is wet.",
+      }),
+    ]);
+    expect(quiz.questions).toHaveLength(1);
+    expect(quiz.questions[0]).not.toHaveProperty("premise");
+  });
 
-  const refused = (
-    bands: readonly string[],
-    quote = "does not make anything actually wet",
-  ): { reader: string; diagnostic: string; err: unknown } => {
-    const questions = bands.map((band, i) => ({
-      question: `Question number ${i}?`,
-      referenceAnswer: "Because the article says so.",
-      band,
-      value: 3,
-      evidence: [{ blockId: "spya-aaaaaa", quote }],
-    }));
-    try {
-      buildQuiz(
-        { questions },
-        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
-      );
-    } catch (err) {
-      return {
-        reader: readerFailureOf(err, STEP_LABEL).message,
-        diagnostic: (err as Error).message,
-        /* **The thrown object, not just its text.** The monitoring case below
-           has to hand `sanitise` what `captureFailure` would actually hand it.
-           Rebuilding an `Error` from `diagnostic` passes today — `sanitise`
-           reads only `.message` — and would keep passing if it ever stopped
-           doing so, which is a test asserting a path production does not
-           run. */
-        err,
-      };
-    }
-    throw new Error("the batch was supposed to be refused");
-  };
+  it("does not fail the question when it is dropped", () => {
+    /* The positive control for the three above: a premise is optional help,
+       and a bad one costs the help, never the step. */
+    const quiz = build([raw(1, { premise: "question number 1?" }), raw(2)]);
+    expect(texts(quiz.questions)).toEqual(["Question number 1?", "Question number 2?"]);
+  });
+});
 
-  /** Just the reader's half, which is what most of the cases below are about. */
-  const failing = (bands: readonly string[], quote?: string): string =>
-    (quote === undefined ? refused(bands) : refused(bands, quote)).reader;
-
-  /** The same, from a raw question list rather than a list of bands. */
-  const readerOf = (questions: readonly unknown[]): string => {
-    try {
-      buildQuiz(
-        { questions },
-        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
-      );
-    } catch (err) {
-      return readerFailureOf(err, STEP_LABEL).message;
-    }
-    throw new Error("the batch was supposed to be refused");
-  };
-
-  /** `n` bands: `band` once, then medium. */
-  const oneEndOnlyBands = (band: string, n: number): string[] =>
-    Array.from({ length: n }, (_, i) => (i === 0 ? band : "medium"));
-
-  /** Those bands as questions the validator will accept, in the given order. */
-  const askable = (bands: readonly string[]): unknown[] =>
-    bands.map((band, i) => ({
-      question: `Question number ${i}?`,
-      referenceAnswer: "Because the article says so.",
-      band,
-      value: 3,
-      evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
-    }));
-
+describe("gaps in the path", () => {
   /**
-   * The refusal from a raw list, **with the counters the run itself filled in**
-   * — `refused` above starts from bands and throws its `dropped` away, and the
-   * over-cap cases below are about a number only the real loop can produce.
+   * **A drop in the middle breaks the path; a drop at the end shortens it.**
+   * Only the first is worth a signal — the step after a hole leans on a step
+   * the reader will never see, and the walk shows every premise on a batch
+   * with one (src/web/quiz-ladder.ts § `showPremise`). So `gaps` counts
+   * dropped questions with a kept question somewhere after them.
    */
-  const refusedRaw = (
-    questions: readonly unknown[],
-  ): { diagnostic: string; err: unknown; dropped: QuizDropped } => {
+  it("counts a question dropped in the middle", () => {
     const dropped = emptyDropped();
-    try {
-      buildQuiz({ questions }, { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped });
-    } catch (err) {
-      return { diagnostic: (err as Error).message, err, dropped };
-    }
-    throw new Error("the batch was supposed to be refused");
-  };
+    build([raw(1), unanchored(2), raw(3)], dropped);
+    expect(dropped.unanchored).toBe(1);
+    expect(dropped.gaps).toBe(1);
+  });
 
-  it("names the end that is missing, and counts what survived rather than what was sent", () => {
-    /* The count is the one GPT Sol reproduced and the reason this test grew a
-       second case. `fresh.length` is survivors, so a message saying the service
-       "wrote" that many is false whenever validation dropped anything — twelve
-       back with seven unanchored reported five written. Both cases below assert
-       the count, and the dropped-heavy one is what makes the wording load-
-       bearing rather than incidental. */
-    const noHard = failing(oneEndOnlyBands("easy", 5));
-    expect(noHard).toContain("5 survived checking");
-    expect(noHard).toContain("no hard one among them");
+  it("does not count a question dropped at the end", () => {
+    const dropped = emptyDropped();
+    build([raw(1), raw(2), unanchored(3)], dropped);
+    expect(dropped.unanchored).toBe(1);
+    expect(dropped.gaps).toBe(0);
+  });
 
-    const noEasy = failing(oneEndOnlyBands("hard", 7));
-    expect(noEasy).toContain("7 survived checking");
-    expect(noEasy).toContain("no easy one among them");
+  it("counts a run of drops, and every kind of drop, before a kept question", () => {
+    const dropped = emptyDropped();
+    build([raw(1), null, raw(1), unanchored(3), raw(4), unanchored(5)], dropped);
+    /* A malformed one, a duplicate and an unanchored one sit between two kept
+       questions: three gaps. The last is a tail drop and is not one. */
+    expect(dropped.malformed).toBe(1);
+    expect(dropped.duplicate).toBe(1);
+    expect(dropped.unanchored).toBe(2);
+    expect(dropped.gaps).toBe(3);
+  });
 
-    /* Twelve sent, seven of them naming a quote the article does not contain,
-       so five survive and the sentence must describe five *survivors*. */
-    const afterDrops = readerOf(
-      Array.from({ length: 12 }, (_, i) => ({
-        question: `Question number ${i}?`,
-        referenceAnswer: "Because the article says so.",
-        band: i === 0 ? "easy" : "medium",
-        value: 3,
-        evidence: [
-          {
-            blockId: "spya-aaaaaa",
-            quote: i < 5 ? "does not make anything actually wet" : "a sentence the article lacks",
-          },
-        ],
-      })),
+  it("counts a drop before the first kept question, because the path lost its start", () => {
+    const dropped = emptyDropped();
+    build([unanchored(1), raw(2)], dropped);
+    expect(dropped.gaps).toBe(1);
+  });
+
+  it("is carried onto the artefact, where the walk reads it", () => {
+    const quiz = build([raw(1), unanchored(2), raw(3)]);
+    expect(quiz.dropped.gaps).toBe(1);
+  });
+});
+
+describe("how many", () => {
+  it(`keeps ${MAX_QUESTIONS} and counts the rest, without calling them gaps`, () => {
+    const dropped = emptyDropped();
+    const quiz = build(
+      Array.from({ length: MAX_QUESTIONS + 3 }, (_, i) => raw(i)),
+      dropped,
     );
-    expect(afterDrops).toContain("5 survived checking");
-    /* Twelve is the number the *diagnostic* carries — the reader is told what
-       survived and nothing about what was sent, because the difference is a
-       validator's business. */
-    expect(afterDrops).not.toContain("12");
-  });
-
-  it("does not overstate what a batch missing one end would read like", () => {
-    /* Five easy-and-medium questions with no hard one DO build up from easier
-       to harder; they just stop short of the hard end. An earlier draft said
-       they "would not build up from easier to harder", which is a claim about
-       the batch that is plainly false to anyone looking at it — GPT Sol's, and
-       the kind of overstatement that makes a reader distrust the rest. */
-    const noHard = failing(oneEndOnlyBands("easy", 5));
-    expect(noHard).toContain("would not cover the full range");
-    expect(noHard).not.toContain("would not build up");
-  });
-
-  it("carries nothing a reader cannot act on, and says what they can", () => {
-    /* What went wrong in production was not a missing fact but three extra
-       ones: a source-file reference, a section name, and an instruction
-       addressed to whoever tunes the prompt.
-
-       Note what is NOT excluded. The words `easy` and `hard` appear, doing
-       ordinary work in an English sentence — "no hard one among them" is not
-       jargon. What the regex rejects is the band as a *quoted name*, which is
-       our vocabulary for a scale the panel never shows
-       (src/web/QuizPanel.tsx sees neither band nor value). */
-    const both = [failing(oneEndOnlyBands("easy", 5)), failing(oneEndOnlyBands("hard", 7))];
-    for (const message of both) {
-      expect(message).not.toMatch(/src\/|\.ts|§|prompt|wanted|"easy"|"hard"|"medium"/);
-      /* Something to do, said as copy.md rule 3 asks — how it usually goes,
-         rather than a bare "try again", and in the words on the button the
-         reader is looking at ("Write the questions" / "Write them again",
-         src/web/QuizPanel.tsx). Trying again is what Greg had to guess at on the
-         day, and it worked. */
-      expect(message).toContain("Writing the questions again usually");
-    }
-  });
-
-  /**
-   * **The seam, from this side of it.**
-   *
-   * tests/step-failure-seam.test.ts proves that an *undeclared* error cannot
-   * reach the reader; this proves the other half for the failure that started
-   * it. The band arithmetic and the pointer to the prompt were what Greg was
-   * shown in production on 2026-09-03. They are still written — a 1-in-4
-   * failure rate is exactly what somebody wants those figures for — they just
-   * go to the log now.
-   */
-  it("keeps the arithmetic for the log and out of the reader's sentence", () => {
-    const { reader, diagnostic } = refused(oneEndOnlyBands("easy", 9));
-
-    /* The reader's half: a code to quote, and none of the three things
-       docs/project/copy.md says must not be there. */
-    expect(reader).toMatch(/\[quiz-spread\]$/);
-    expect(reader).not.toContain("src/quiz.ts");
-    expect(reader).not.toMatch(/easy 1, medium 8/);
-
-    /* The developer's: the counts, the band as a name, and the thing to change
-       if this keeps happening. Asserted rather than assumed, because a split
-       that quietly dropped the diagnostic would look exactly like a split that
-       worked. */
-    expect(diagnostic).toContain("9 of 9 survived");
-    expect(diagnostic).toContain("missing hard");
-    expect(diagnostic).toContain("easy 1, medium 8, hard 0");
-    expect(diagnostic).toContain("src/quiz.ts");
-    /* And they really are two strings, not one string read twice. */
-    expect(diagnostic).not.toBe(reader);
-  });
-
-  /**
-   * **The deferred cap bug's trigger, in the one line that fires when it does.**
-   *
-   * `toQuestions` defers a real defect — the `MAX_QUESTIONS` cap truncates in
-   * the model's arrival order, so a batch whose only `hard` question came back
-   * last loses it and is then refused here for missing an end the model
-   * supplied. `dropped.overCap` is the number that makes a run worth a look,
-   * and until 2026-09-03 it appeared nowhere in this diagnostic, so the one
-   * line written when the gate fires said nothing about the cap at all.
-   *
-   * **The count arrives through the real truncation, not injected.** The first
-   * version of this test wrote `overCap: 4` straight into the counters, so it
-   * pinned the formatting and could not see what the number *means* — which is
-   * how a false causal sentence ("a non-zero over-cap count is the deferred bug
-   * manufacturing this failure") got past it and had to be caught by review
-   * instead (docs/plans/260903e-stage1-review-sol.md § 1). A number the test
-   * hands to the code under test proves nothing about the number the code
-   * computes.
-   *
-   * **This is not a test that pins the defect.** It asserts the *signal*, not
-   * the behaviour: fixing the cap would leave it green, because a fixed cap
-   * still reports how many items it never reached.
-   */
-  it("counts the unexamined tail by actually overflowing the cap", () => {
-    /* Sixteen valid questions, one easy and the rest medium. Twelve survive,
-       the loop never reaches the last four, and no `hard` question exists
-       anywhere in the batch — so the gate refuses it, and `overCap` is 4
-       because the cap really truncated rather than because the test said so. */
-    const { diagnostic, dropped, err } = refusedRaw(
-      askable(oneEndOnlyBands("easy", MAX_QUESTIONS + 4)),
-    );
-    expect(dropped.overCap, "the cap itself has to produce the number").toBe(4);
-    expect(diagnostic).toContain(`${MAX_QUESTIONS} of ${MAX_QUESTIONS + 4} survived`);
-    expect(diagnostic).toContain("4 of them never examined");
-    /* And the reader is told none of it — the seam, from this side, for the
-       field this test added. */
-    expect(readerFailureOf(err, STEP_LABEL).message).not.toContain("cap");
+    expect(quiz.questions).toHaveLength(MAX_QUESTIONS);
+    expect(dropped.overCap).toBe(3);
+    /* Past the cap is the end of the path, not a hole in it. */
+    expect(dropped.gaps).toBe(0);
   });
 
   /**
    * **What the over-cap number is not.** It counts array elements the loop
-   * never reached, and those may be malformed, duplicate, unanchored or simply
-   * the wrong band. GPT Sol's reproduction is the case below: twelve good
-   * questions and a thirteenth that is not a question at all. `overCap` is 1,
-   * `malformed` is 0 — because nothing looked at it — and a diagnostic that
-   * reads that 1 as "our cap threw away the hard one" is asserting something no
-   * counter here checked.
+   * never reached, and those may be malformed, duplicate or unanchored. GPT
+   * Sol's reproduction: a full batch and one more item that is not a question
+   * at all. `overCap` is 1, `malformed` is 0 — because nothing looked at it.
    */
-  it("does not claim the cap cost us a question when the tail was junk", () => {
-    const questions: unknown[] = askable(oneEndOnlyBands("easy", MAX_QUESTIONS));
+  it("counts the unexamined tail without judging it", () => {
+    const dropped = emptyDropped();
+    const questions: unknown[] = Array.from({ length: MAX_QUESTIONS }, (_, i) => raw(i));
     questions.push({ band: "hard" });
-    const { diagnostic, dropped } = refusedRaw(questions);
-
+    build(questions, dropped);
     expect(dropped.overCap).toBe(1);
     expect(dropped.malformed, "the tail item was never examined, so nothing judged it").toBe(0);
-    expect(diagnostic).toContain("1 of them never examined");
-    /* The false sentence, in the shapes it could come back in. Nothing here may
-       say the cap cost us anything, or that the number points at the deferred
-       bug rather than at the model. */
-    expect(diagnostic).not.toMatch(/manufactur|deferred|thing to fix|discarded|thrown away/);
   });
+});
 
-  /**
-   * **The diagnostic reaches Sentry, which is the only channel with a reader.**
-   *
-   * `authored` in src/monitoring-scrub.ts withholds a step's free text, and
-   * this diagnostic was free text until 2026-09-03 — so the comment at the
-   * throw site saying it went "to the log and to Sentry" was half wrong, and
-   * the half that was true is the channel nobody tails
-   * (docs/project/sentry-error-monitoring.md § Nothing alerts). `{ authored }`
-   * is the sanctioned remedy and this is what proves it took: withheld is
-   * false, and the sentence arrives whole.
-   */
-  it("does not have its arithmetic withheld from monitoring", () => {
-    const { err } = refused(oneEndOnlyBands("easy", 9));
-    const seen = sanitise(err);
-    expect(seen.withheld, "the band-spread diagnostic was withheld from Sentry").toBe(false);
-    expect(seen.error.message).toContain("easy 1, medium 8, hard 0");
-  });
+/**
+ * **The one refusal left**: every question named a passage the article does
+ * not contain. Its reader's sentence and its diagnostic are two strings, since
+ * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
+ * stage 2 split them — `Error.message` for the log and Sentry,
+ * `readerFailureOf` for the band in red.
+ */
+describe("when nothing survives", () => {
+  const STEP_LABEL = "Writing the questions";
 
-  /**
-   * `retry`, and it has to be declared rather than inferred: the sentence used
-   * to carry no code at all, so `failureKindOf` answered `undefined` and the
-   * button survived by the compatibility rule rather than by anybody meaning
-   * it. Now it is meant. src/job-failure.ts § Which way to be wrong.
-   */
-  it("says out loud that another go is worth having", () => {
-    const { reader } = refused(oneEndOnlyBands("easy", 9));
-    expect(kindOfMessage(reader)).toBe("retry");
-    expect(worthRetrying(reader)).toBe(true);
-  });
+  const refused = (questions: unknown[]): { reader: string; diagnostic: string; err: unknown } => {
+    try {
+      build(questions);
+    } catch (err) {
+      return { reader: readerFailureOf(err, STEP_LABEL).message, diagnostic: (err as Error).message, err };
+    }
+    throw new Error("the batch was supposed to be refused");
+  };
 
-  /**
-   * The other refusal in the same function, migrated with it: every question
-   * naming a passage the article does not contain. Its old sentence was a tally
-   * of five drop reasons, which is a debugging aid on a reader's screen.
-   */
   it("tells the reader why there are no questions without reciting the drop counts", () => {
-    const { reader, diagnostic } = refused(
-      oneEndOnlyBands("easy", 5),
-      "a sentence this article does not contain",
-    );
+    const { reader, diagnostic } = refused([unanchored(1), unanchored(2)]);
     expect(reader).toMatch(/\[quiz-unanchored\]$/);
     expect(reader).toContain("could be tied back to a passage");
     expect(reader).not.toMatch(/malformed|duplicates|block id/);
     expect(diagnostic).toContain("malformed");
     expect(diagnostic).toContain("duplicates");
+  });
+
+  it("says out loud that another go is worth having", () => {
+    const { reader } = refused([unanchored(1)]);
+    expect(kindOfMessage(reader)).toBe("retry");
+    expect(worthRetrying(reader)).toBe(true);
+  });
+});
+
+/**
+ * **The one-week bridge for tabs still running the band ladder.** An old tab
+ * reads `question.band` on every Next and throws without one, so the GET route
+ * adds `band: "easy", value: 3` — in the response, never the stored artefact.
+ */
+describe("withOldClientBands", () => {
+  const response = (): QuizResponse => ({
+    quiz: build([raw(1), raw(2, { premise: "Something said before." })]),
+    stale: false,
+    outdated: false,
+  });
+
+  it("gives every question a band and a value an old ladder can walk", () => {
+    const out = withOldClientBands(response());
+    for (const q of out.quiz.questions) {
+      expect(q).toMatchObject({ band: "easy", value: 3 });
+    }
+    /* Everything else rides through untouched. */
+    expect(out.quiz.questions[1]?.premise).toBe("Something said before.");
+    expect(out.stale).toBe(false);
+  });
+
+  it("keeps a band and value an old artefact already has", () => {
+    /* A `quiz/4` artefact still in the store carries real bands. The bridge
+       must not flatten them to `easy`, or an old tab reading an old quiz would
+       lose the ladder it was built for. */
+    const r = response();
+    const old = { ...r.quiz.questions[0], band: "hard", value: 5 };
+    const out = withOldClientBands({ ...r, quiz: { ...r.quiz, questions: [old as never] } });
+    expect(out.quiz.questions[0]).toMatchObject({ band: "hard", value: 5 });
+  });
+
+  it("does not touch the artefact it was given", () => {
+    const r = response();
+    const before = JSON.stringify(r);
+    withOldClientBands(r);
+    expect(JSON.stringify(r)).toBe(before);
+    expect(r.quiz.questions[0]).not.toHaveProperty("band");
   });
 });
 
@@ -603,8 +348,6 @@ describe("what the model says, and what we believe of it", () => {
             {
               question: "Where does the invented block live?",
               referenceAnswer: "Nowhere at all.",
-              band: "easy",
-              value: 4,
               evidence: [{ blockId: "spya-zzzzzz", quote: "does not make anything actually wet" }],
             },
           ],
@@ -628,8 +371,6 @@ describe("what the model says, and what we believe of it", () => {
           {
             question: "What does a simulated rainstorm not do?",
             referenceAnswer: "It does not make anything wet.",
-            band: "easy",
-            value: 4,
             evidence: [
               { blockId: "spya-aaaaaa", quote: "a sentence the article never contains at all" },
               { blockId: "spya-aaaaaa", quote: "does not make anything actually wet" },
@@ -680,8 +421,6 @@ describe("what the model says, and what we believe of it", () => {
     const one = {
       question: "What does a simulated rainstorm not do?",
       referenceAnswer: "It does not make anything wet.",
-      band: "easy",
-      value: 4,
       evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
     };
     const quiz = buildQuiz(
@@ -692,20 +431,22 @@ describe("what the model says, and what we believe of it", () => {
     expect(dropped.duplicate).toBe(1);
   });
 
-  it("drops a question with no band, or a band it invented", () => {
+  it("drops a question with no question in it, or that is not an object at all", () => {
+    /* A band the model invented used to be malformed too; since `quiz/5` a band
+       is not read, so an unknown one is simply ignored ("stores no band or
+       value", above). */
     const dropped = emptyDropped();
     const base = {
       question: "What does a simulated rainstorm not do?",
       referenceAnswer: "It does not make anything wet.",
-      value: 4,
       evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
     };
     expect(() =>
       buildQuiz(
         {
           questions: [
-            { ...base, band: "trivial" },
-            { ...base, question: "And another?", band: undefined },
+            { ...base, question: "   " },
+            { ...base, question: undefined },
             null,
           ],
         },
@@ -726,8 +467,6 @@ describe("what the model says, and what we believe of it", () => {
           questions: [
             {
               question: "What does a simulated rainstorm not do?",
-              band: "easy",
-              value: 4,
               evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
             },
           ],
@@ -736,24 +475,6 @@ describe("what the model says, and what we believe of it", () => {
       ),
     ).toThrow();
     expect(dropped.malformed).toBe(1);
-  });
-
-  it("keeps twelve and counts the rest", () => {
-    const bands: QuizBand[] = ["easy", "easy", "easy", "hard", "hard", "hard"];
-    const questions = Array.from({ length: 15 }, (_, i) => ({
-      question: `Question number ${i}?`,
-      referenceAnswer: "Because the article says so.",
-      band: bands[i] ?? "medium",
-      value: 3,
-      evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
-    }));
-    const dropped = emptyDropped();
-    const quiz = buildQuiz(
-      { questions },
-      { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped },
-    );
-    expect(quiz.questions).toHaveLength(MAX_QUESTIONS);
-    expect(dropped.overCap).toBe(3);
   });
 
   it("refuses to write an empty quiz when nothing survived", () => {
@@ -767,8 +488,6 @@ describe("what the model says, and what we believe of it", () => {
             {
               question: "What does a simulated rainstorm not do?",
               referenceAnswer: "It does not make anything wet.",
-              band: "easy",
-              value: 4,
               evidence: [{ blockId: "spya-zzzzzz", quote: "does not make anything actually wet" }],
             },
           ],
@@ -796,8 +515,6 @@ describe("the stamp the store will read off the artefact", () => {
         {
           question: "What does a simulated rainstorm not do?",
           referenceAnswer: "It does not make anything wet.",
-          band: "easy",
-          value: 4,
           evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
         },
       ],
@@ -837,8 +554,6 @@ describe("the stamp the store will read off the artefact", () => {
           {
             question: "What does a simulated rainstorm not do?",
             referenceAnswer: "It does not make anything wet.",
-            band: "easy",
-            value: 4,
             evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
           },
         ],
@@ -878,45 +593,71 @@ describe("the generation prompt", () => {
     expect(QUIZ_SYSTEM).toContain("NOT AN ANSWER KEY");
   });
 
-  it("asks for the spread structurally, in both bands, and leans it easy", () => {
-    /* **The lean is the whole of SPIDERYARN-READING2-21**, Greg, 2026-09-05:
-       *"The quiz questions are too hard. Certainly, they should start much,
-       much easier."* The ordering already puts `easy` first; what was missing
-       was enough genuinely easy questions for it to put there, and a batch of
-       three-and-three opens with three and is uphill from the fourth.
-
-       **The easy end went up and the hard end stayed at three**, which is the
-       half a review had to put back. `missingBandEnds` measures what SURVIVED
-       validation, so a prompt asking for two hard questions halves the margin:
-       lose both to a bad quote and a paid batch is thrown away, which is
-       260903c wearing a different number. The lead the reader meets is decided
-       by the easy end anyway.
-       docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md. */
-    expect(QUIZ_SYSTEM).toContain("THE SPREAD IS NOT OPTIONAL");
-    expect(QUIZ_SYSTEM).toMatch(/at least five "easy"/);
-    expect(QUIZ_SYSTEM).toMatch(/at least three "hard"/);
-    expect(QUIZ_SYSTEM).not.toMatch(/at least three "easy"/);
+  /**
+   * **The path, stated as the structure of the prompt** rather than as a
+   * wish. The first probe without the premise field asked for "build on one
+   * another" in prose and mostly got the article walked in document order
+   * with nothing leaning on anything —
+   * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md
+   * § The shape.
+   */
+  it("sets the quiz as a path that ends at the takeaways", () => {
+    expect(QUIZ_SYSTEM).toContain("THE QUIZ IS A PATH");
+    expect(QUIZ_SYSTEM).toMatch(/two to four takeaways/);
+    expect(QUIZ_SYSTEM).toContain("END AT THE TAKEAWAYS");
   });
 
-  it("says what easy means in a way a model cannot round up", () => {
-    /* A band is a judgement the model makes about its own question, so "too
-       hard" is answered by moving the DEFINITION and not only the quota — a
-       batch of three easy questions that are not easy is the same complaint
-       with a different distribution. The test of `easy` is the reader, not the
-       question's shape. */
+  it("asks for a premise that restates only the step immediately before", () => {
+    /* The walk keys on the verdict for the question at index - 1
+       (src/web/quiz-ladder.ts § `showPremise`), which is only right if the
+       premise restates that step and no earlier one. GPT Sol's R2-1. */
+    expect(QUIZ_SYSTEM).toContain("THE PREMISE — HOW A STEP LEANS ON THE ONE BEFORE");
+    expect(QUIZ_SYSTEM).toContain("IMMEDIATELY BEFORE");
+  });
+
+  it("forbids a premise that gives the step away", () => {
+    /* A premise is shown exactly when the reader is struggling, so one that
+       carries this question's answer hands it over on the screens that matter
+       most. `readPremise` in src/quiz.ts catches the verbatim case; this is the
+       rule the model is given for the rest. */
+    expect(QUIZ_SYSTEM).toContain("THE PREMISE RESTATES THE ANSWER JUST GIVEN, AND ADDS NOTHING");
+  });
+
+  it("treats a premise that says something no question asked as a missing step", () => {
+    /* Added after the eval run: a premise carrying a fact the path never asked
+       for is a step the model skipped, stated as given — and the reader shown
+       it is told something they were never asked to work out. */
+    expect(QUIZ_SYSTEM).toContain("IF THE PREMISE SAYS SOMETHING NO QUESTION ASKED, A STEP IS MISSING.");
+  });
+
+  it("requires the question to stand on its own, because the premise is sometimes hidden", () => {
+    /* A reader who got the step before right sees the question alone; "why
+       does this rule it out?" would then be a question about nothing. */
+    expect(QUIZ_SYSTEM).toContain("THE QUESTION MUST BE A WHOLE QUESTION WITHOUT ITS PREMISE");
+  });
+
+  it("keeps every step small", () => {
+    /* SPIDERYARN-READING2-21, Greg, 2026-09-05: *"The quiz questions are too
+       hard. Certainly, they should start much, much easier."* Since the path,
+       "easy" is not a band the model picks but the size of every step. */
+    expect(QUIZ_SYSTEM).toContain("EVERY QUESTION IS SMALL");
+    expect(QUIZ_SYSTEM).toContain("ONE OR TWO SENTENCES");
     expect(QUIZ_SYSTEM).toMatch(/without effort/);
-    /* `\s+` across the line break, because the band table is indented prose and
-       a regex pinned to one line breaks on a re-wrap rather than on a change of
-       meaning. */
-    expect(QUIZ_SYSTEM).toMatch(/If a reader\s+who understood the piece would have to stop/);
+    expect(QUIZ_SYSTEM).toContain("A PREMISE DOES NOT MAKE A BIG STEP SMALL");
   });
 
   it("asks for the questions to be about what the argument leans on", () => {
-    /* The other half of the report: *"they should focus on what's most
-       important."* That is a rule about which questions get SET — `value` only
-       orders what has already been chosen, so a batch of peripheral questions
-       is a batch of peripheral questions however it is sorted. */
-    expect(QUIZ_SYSTEM).toContain("MOST OF THE BATCH IS ABOUT WHAT MATTERS MOST");
+    /* The other half of READING2-21: *"they should focus on what's most
+       important."* A rule about which questions get SET. */
+    expect(QUIZ_SYSTEM).toContain("KEEP TO WHAT MATTERS");
+  });
+
+  it("asks for no band, no spread and no value any more", () => {
+    /* The three fields the path replaced. A prompt that still asked for them
+       would spend the model's attention on a judgement nothing reads, and the
+       validator would silently drop what it produced. */
+    expect(QUIZ_SYSTEM).not.toMatch(/\bBAND\b|\bSPREAD\b|\bVALUE\b/);
+    expect(QUIZ_SYSTEM).not.toMatch(/"band"|"value"|at least (three|five) "(easy|hard)"/);
   });
 
   it("does not promise a retry that does not exist, or describe the gate at all", () => {
@@ -929,8 +670,8 @@ describe("the generation prompt", () => {
        would watch the false one come back without a word. This is the negative
        half, and it is deliberately wider than the one sentence: any description
        of what our gate does is a description that goes stale when the gate
-       moves, which is exactly what happened here within a day. State the target
-       and let src/quiz.ts § missingBandEnds enforce the floor. */
+       moves, which is exactly what happened here within a day — and the gate it
+       described, the band spread, is itself gone since 2026-09-30. */
     expect(QUIZ_SYSTEM).not.toMatch(/asked again|thrown away whole|press the button/i);
   });
 

@@ -1,0 +1,108 @@
+{
+  "arm": "before-2",
+  "slug": "olah-a4-spya-ujr7p0",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:54:13.938Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1
+  },
+  "questions": [
+    {
+      "question": "What are the two distinct ideas the author says get lumped together under the label \"distributed representations\"?",
+      "referenceAnswer": "Composition, where independent features (like color and shape) combine to represent objects, and superposition, where more features are packed into fewer neurons than there are dimensions, relying on sparsity and a non-linearity to retrieve them. The author argues these are different strategies with different properties, not points on one spectrum.",
+      "evidence": [
+        "spya-fyxmks"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What is the main cost of the \"dense\" maximal superposition code that can represent all colored shapes with only four neurons?",
+      "referenceAnswer": "You lose the ability to linearly select most individual colors or shapes (or sets of them) with a probe, and you generally can't represent objects \"between\" features, like a purple square with rounded corners.",
+      "evidence": [
+        "spya-xwq6ty"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "In the pure \"local code\" example, where every neuron represents one specific (shape, color) pair, what surprising advantage does this seemingly wasteful scheme have?",
+      "referenceAnswer": "Despite using a neuron for every combination, it is extremely flexible: it can represent arbitrary sets of stimuli at once, and a future layer can linearly select almost any combination of features (e.g. firing for black circles and white triangles but not black triangles or white circles), which other codes cannot do.",
+      "evidence": [
+        "spya-hbmajb"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "Why does the compositional code need far fewer neurons than the local code, according to the article?",
+      "referenceAnswer": "Because independent features can compose together, n feature neurons (like separate color and shape neurons) can represent an exponential number of combinations, roughly exp(n), rather than needing a separate neuron for every possible combination as the local code does.",
+      "evidence": [
+        "spya-g8cztv"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What kind of generalization benefit does the compositional (\"semi-local\") code offer that the article calls \"non-local generalization\"?",
+      "referenceAnswer": "Because objects are represented by combining independent features like color and shape, learning something about one combination (e.g. green circles) can transfer to another combination sharing a feature (e.g. green squares), even without direct data on it.",
+      "evidence": [
+        "spya-s9fc6n"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "Why does the dense/maximal superposition code have to abandon the independent color and shape features used by the compositional code?",
+      "referenceAnswer": "The article explains that maximal superposition is only possible if there isn't composition, so the dense code has to go back to using non-composing (color, shape) combination features, like the local code, rather than independently composing color and shape features.",
+      "evidence": [
+        "spya-kq5p9m"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does the author caution against concluding, just because a linear probe can detect \"red\" in the local code example, that the code actually has a \"red\" feature?",
+      "referenceAnswer": "The local code represents whole (color, shape) pairs, not independent color and shape features, so even though a probe can pick out the direction corresponding to redness across the red-associated neurons, it doesn't mean the underlying representation is organized around a distinct \"red\" feature the way a compositional code would be.",
+      "evidence": [
+        "spya-n30s4d"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "In Thorpe's \"semi-distributed\" code, how does the author suggest we should think about which neuron groupings correspond to which features?",
+      "referenceAnswer": "Even though individual neurons are polysemantic (each responds to a few different things), the author suggests thinking of linear combinations of neurons, i.e. directions, as corresponding to features - for example, one pair of neurons summing to represent \"Green\" and another pair summing to represent \"Square.\"",
+      "evidence": [
+        "spya-vw7xv6"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Using the article's argument about \"volume,\" why can't a representation have both full composition and full superposition of the same features at once?",
+      "referenceAnswer": "With m bits/neurons there is an exponential amount of representational volume, exp(m). Storing n features that can arbitrarily compose requires exp(n) volume, which uses up essentially all of it, leaving no room to additionally cram in far more items via superposition; superposition only works when there's no composition, letting exp(m) unrelated items be packed in instead.",
+      "evidence": [
+        "spya-xcrca8"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "How can composition and superposition coexist in the same representation, according to the article's discussion of sparsity?",
+      "referenceAnswer": "When features are sparse, meaning most combinations of them are rare or mutually exclusive rather than dense, the compositional space has \"holes\" or low-probability regions of unused volume, and these unused regions can be exploited to store additional features in superposition alongside the composing ones.",
+      "evidence": [
+        "spya-ajbh7f"
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ]
+}

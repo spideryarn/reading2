@@ -1,7 +1,7 @@
 # Quiz questions that build up to the takeaways
 
-**Status: revised after GPT Sol's plan review (round 1: "do not build", seven P1s); round 2
-pending.** Written 2026-09-30 in `worktree-quiz-build-up`, from
+**Status: building.** Plan reviewed twice by GPT Sol: round 1 "do not build" (seven P1s), round 2
+"build with the listed fixes" (two P1s, both adopted — § Review log). Written 2026-09-30 in `worktree-quiz-build-up`, from
 [SPIDERYARN-READING2-5W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5W) (report
 `spya-jc2ub9`, an admin suggestion from Greg's own account, provenance checked by
 `scripts/feedback-reporter.ts`, exit 0).
@@ -57,9 +57,10 @@ the path never changes order                 what adapts is how much help a step
                                                   would ever be conscious?
 ```
 
-Each question may carry a **premise**: one sentence stating what an earlier step established, which
-this one builds on. It is shown **unless the reader has just shown they have it** — the previous
-question on the path was answered and judged right. Get it right, and the next step asks you to
+Each question may carry a **premise**: one sentence restating the answer to **the question
+immediately before it**, which this one builds on. It is shown **unless the reader has just shown
+they have it** — they came here by Next from that question and were judged right on it — and it is
+always shown in a batch with a gap in its middle (below). Get it right, and the next step asks you to
 carry the thread yourself; get it wrong or skip, and the next step hands you the thread first.
 
 Why this is right:
@@ -97,16 +98,17 @@ leaves open, the reference answer as a draft not a key, the evidence rules, the 
 start with what the piece plainly says; each step leans on the ones before; end at the takeaways and
 why they hold, each still one small step from the last.
 
-**New — THE PREMISE:** optional, one sentence, stating something an **earlier** question on the path
-asked for. Rules, each with a bad/good example:
+**New — THE PREMISE:** optional, one sentence, restating the answer to the question **immediately
+before** (R2-1). Rules, each with a bad/good example:
 
-- It is never this question's answer, nor a hint at it.
-- The question must read as a whole question without it (it is sometimes hidden).
-- It states an earlier step's answer, so it must not be the only place an earlier *unanswered*
-  question's answer appears in the list — which is why the list never shows premises (below).
-- **A premise does not make a big step small** (Sol F3's third leak): "Given X, why does the whole
-  argument hold?" is still a leap. If the step from the premise to the answer is more than a
-  sentence of thought, add the missing step.
+- **It restates, and adds nothing** — no consequence, reason or inference, and above all not the
+  next step, which is what this question asks for (R2-4: the paraphrased giveaway no string match
+  can catch).
+- **The question must be whole without it** — no "this", "that", "it", "the result", "given this"
+  pointing back (R2-4: a stem like "why does that follow?" reads fine in an eval that always shows
+  the premise, and is unreadable after a right answer).
+- **A premise does not make a big step small** (Sol F3's third leak).
+- The list never shows premises (below), because each is an earlier question's answer.
 
 **Changes:** up to **twenty**, fewer where the piece does not support twenty; the reference answer
 one or two sentences; "stands on its own" becomes "reads as a whole question without its premise".
@@ -129,15 +131,19 @@ successor. In the baseline runs **three of ten batches dropped a whole question*
 quote, so fail-closed would throw away roughly a third of paid batches — the 260903c failure again.
 What limits the damage instead: the premise field carries a step's conclusion into its successor, so
 a gap costs the reader the *work* of one step, not the ability to answer the next; and `gaps` makes
-it visible, which Sol rightly said the existing totals could not. If `gaps` turns out to be common,
-the next move is Sol's second option — predecessor ids and transitive drops.
+it visible, which Sol rightly said the existing totals could not. **Round 2 found the hole in that
+argument** — a right answer on the step *before* the gap would hide the premise that bridges it —
+and the smaller safeguard Sol offered is adopted: **a batch with any gap shows every premise.** The
+trigger for escalating to predecessor ids and transitive drops: any batch in the `after` arm, or
+more than one in ten production batches (the pipeline logs `gaps`), with two or more gaps.
 
 ### Wire compatibility (Sol F2)
 
 - **An old client tab reading a new quiz** would call its ladder with `band: undefined` and throw on
   Next. The GET route therefore adds `band: "easy", value: 3` to every question that lacks them,
-  **in the response only, never in the stored artefact**, with a comment dating its removal (a week
-  after deploy). An old ladder given an all-`easy` batch walks it front to back — the path.
+  **in the response only, never in the stored artefact.** An old ladder given an all-`easy` batch
+  walks it front to back — the path. It stays until there is an enforceable client-version boundary,
+  not for a week (R2-3): a tab can outlive any date.
 - **A new client reading an old (`quiz/4`) quiz** walks the stored band-sorted pool in order with no
   premises: easy first, as before, minus the ladder. The first draft claimed readers would be
   offered *Write them again*; that is false since 2026-09-29, when Greg decided `outdated` is not
@@ -150,10 +156,11 @@ the next move is Sol's second option — predecessor ids and transitive drops.
 
 - **Next goes to the next question in the array; Previous to the one before.** An index. "Question
   *n* of *N*" is the position on the path.
-- `quiz-ladder.ts` becomes the premise rule: `showPremise(questions, index, verdicts)` — true unless
-  the question before it on the path has a `right` verdict in this session. Verdicts are kept in
-  React state by question id, set when a mark reaches `done`; never rendered, logged or stored, as
-  now. No `.sort()`, as now.
+- `quiz-ladder.ts` becomes the premise rule, `showPremise`: no premise → nothing; a batch with
+  `gaps` → shown; hidden **only** when the reader arrived by Next from the question before and that
+  question's verdict is `right`; shown otherwise (a list jump, Previous, a wrong or absent verdict).
+  Verdicts are kept in React state by question id, set when a mark reaches `done`; never rendered,
+  logged or stored, as now. No `.sort()`, as now.
 - **Next still waits while a mark is arriving**, because the next step's premise depends on the
   verdict.
 - **Show all N lists question stems only, never premises** (Sol F3): premises are earlier answers,
@@ -163,9 +170,9 @@ the next move is Sol's second option — predecessor ids and transitive drops.
 
 ### Not changed
 
-- `QUIZ_MARK_SYSTEM`. The marker is handed the question **with its premise, whether or not the
-  reader saw it** — the premise is context the marker may use, never something it reveals, and
-  this keeps the mark request's wire shape as it is. Shorter marks for shorter questions are
+- `QUIZ_MARK_SYSTEM`. The marker is handed **the question alone, never its premise** (R2-2): the
+  reader may not have seen it, and a marker told it was part of THE QUESTION would restate it. The
+  question is whole without it by the prompt's rule. Shorter marks for shorter questions are
   deferred.
 - `batchId`, the 409, the mark stream, answer-binding, dictation, "not stored", the verdict call.
 
@@ -188,9 +195,10 @@ through [`evals/quiz-build-up.ts`](../../evals/quiz-build-up.ts):
   skipping reader would see it (every premise shown — the worst case for giveaways). **Each pair
   carries a source pack** (Sol F5): the article's outline with its gists, and every evidence passage
   either quiz cites. A fresh subagent that reads only the pairs file judges *effort per question*,
-  *builds up to the takeaways*, *fidelity*, and three giveaways — a question containing its own
-  answer, a premise revealing an answer the reader has not reached, a premise bolted onto a step
-  that is still a leap.
+  *builds up to the takeaways*, *fidelity*, four giveaways — a question containing its own answer, a
+  premise revealing an answer the reader has not reached, a premise bolted onto a step that is still
+  a leap, a premise that adds the next step — and *alone*: is every question understandable with its
+  premise hidden, as a reader who got the last one right sees it (R2-4).
 - **The eval refuses a partial comparison** (Sol F6): exact slug-set equality, unique slugs, five of
   them, arm names matching their directories, and `before`/`before-2` on the same prompt hash.
 - `before` vs `before-2` is the control; `before` vs `after` is the result.
@@ -216,7 +224,8 @@ Sol reviews the code before the push.
 - **Showing the takeaways at the end** — a closing card. The prompt decides them privately;
   surfacing them is a new field, new UI, and a summary, which the product is careful with.
 - **Predecessor ids and transitive drops**, if `gaps` is common.
-- **Removing the route's compatibility fields**, a week after deploy.
+- **Removing the route's compatibility fields**, once there is a client-version boundary to hang it
+  on.
 
 ## Simpler options passed over
 
@@ -234,3 +243,14 @@ above). F2 adopted (response-only compatibility fields; the `outdated` claim cor
 (list shows stems only; premise rules; eval checks three giveaways). **F4 overruled** in favour of
 counting — reason above. F5, F6, F8 adopted in the eval. F7 does not arise now that the verdict
 stays; the pipeline's band log is replaced.
+
+**Round 2** ([review](260930c-quiz-questions-that-build-up-to-the-takeaways-review-sol-2.md);
+build with the listed fixes; no P0s): F3, F5, F6, F7 resolved; F4's overrule accepted as sound with
+an incomplete mitigation. **R2-1 (P1)** adopted: premises restate only the immediately preceding
+answer; hidden only on arrival by Next after a right verdict; always shown in a batch with gaps.
+**R2-2** adopted: the marker gets the stem only (the first build had prepended the premise; reverted).
+**R2-3** adopted: the compatibility fields have no removal date. **R2-4 (P1)** adopted: "adds
+nothing" and the backward-pointer ban, with examples, and the eval's *alone* judgement. **R2-5**
+adopted: the eval refuses a new arm without its token and budget fields; the three older arms show
+a dash. The `after` arm was restarted on the revised prompt; a half-run on the round-1 prompt was
+stopped and discarded.

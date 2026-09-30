@@ -1,0 +1,159 @@
+{
+  "arm": "after-1",
+  "slug": "cargocult-spya-rz663q",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "60082c3be76f7aaee11393b33733b668a049093dbc0ea45c103e4b53a8536ce9",
+  "at": "2026-09-30T04:57:35.440Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "After noticing how many people believe in UFOs, astrology, ESP, and mysticism, what did Feynman conclude about the world we live in?",
+      "referenceAnswer": "He concluded that it's not a scientific world, since so many widely held beliefs are never actually tested by whether they work.",
+      "evidence": [
+        "spya-bcgpc3"
+      ]
+    },
+    {
+      "question": "What term does Feynman coin for research that follows all the outward forms of science but doesn't actually produce real results, like the educational and psychological studies he mentions?",
+      "referenceAnswer": "He calls it 'Cargo Cult Science.'",
+      "evidence": [
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "question": "What image of South Sea islanders does Feynman use to explain what he means by this term?",
+      "referenceAnswer": "He describes islanders who build fake runways, control towers, and headphones out of bamboo, imitating everything they saw during the war so planes would land again, but no planes ever land because the form is copied perfectly while something essential is missing.",
+      "evidence": [
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "question": "What does Feynman say is generally missing from Cargo Cult Science that causes the 'planes' not to land?",
+      "referenceAnswer": "A kind of scientific integrity, an utter honesty that involves leaning over backwards to be fair to alternative explanations, is missing.",
+      "evidence": [
+        "spya-afgs74"
+      ]
+    },
+    {
+      "question": "Given that leaning-over-backwards integrity, what specifically does Feynman say a scientist must report about an experiment or theory?",
+      "referenceAnswer": "Everything that might make the result invalid, not just what supports the intended conclusion, including other possible causes and details that could throw doubt on the interpretation.",
+      "evidence": [
+        "spya-afgs74"
+      ]
+    },
+    {
+      "question": "How does Feynman's Wesson Oil advertising example illustrate a subtler kind of dishonesty than an outright lie?",
+      "referenceAnswer": "The claim that Wesson Oil doesn't soak through food is technically true, but it misleadingly implies this is special to Wesson Oil when in fact no oil soaks through food at a certain temperature; the problem is the false implication conveyed, not the literal fact stated.",
+      "evidence": [
+        "spya-bpyx8n",
+        "spya-bpyx8n"
+      ]
+    },
+    {
+      "question": "What happened with measurements of the electron's charge after Millikan's original oil-drop experiment produced a slightly incorrect value?",
+      "referenceAnswer": "Later measurements crept upward only gradually over time, each a little bigger than the last, instead of jumping straight to the higher, more correct value.",
+      "evidence": [
+        "spya-s9msxy"
+      ]
+    },
+    {
+      "question": "Why, according to Feynman, did it take so long for scientists to accept the true, higher value for the electron's charge?",
+      "referenceAnswer": "When a result came out much higher than Millikan's, researchers assumed something was wrong and searched hard for an error, but when a result was close to Millikan's they didn't look so hard, so they kept unconsciously discarding the numbers that were too far off.",
+      "evidence": [
+        "spya-uj9v2h"
+      ]
+    },
+    {
+      "question": "What does Feynman identify as the first principle of avoiding this kind of self-deception in science?",
+      "referenceAnswer": "That you must not fool yourself, since you are the easiest person for you to fool.",
+      "evidence": [
+        "spya-ed9mzv"
+      ]
+    },
+    {
+      "question": "What does Feynman say you should do if you set out to test a theory, regardless of how the result turns out?",
+      "referenceAnswer": "You should publish the result whichever way it comes out, since only publishing favorable results distorts the true picture.",
+      "evidence": [
+        "spya-jk7mj4"
+      ]
+    },
+    {
+      "question": "Using the example of a senator asking for advice about drilling in his state, what does Feynman say about withholding an unfavorable scientific finding?",
+      "referenceAnswer": "If you don't publish the result because it doesn't favor the outcome the government or politicians wanted, you are not giving real scientific advice, you are being used.",
+      "evidence": [
+        "spya-s05sub"
+      ]
+    },
+    {
+      "question": "In the rat experiment by the researcher Feynman calls 'Mr. Young,' how did the rats manage to find the door with food even after he eliminated visual, textural, and smell cues?",
+      "referenceAnswer": "The rats could tell which door was correct by the sound the floor made when they ran over it, which Young only eliminated by putting the corridor in sand.",
+      "evidence": [
+        "spya-npdc6n"
+      ]
+    },
+    {
+      "question": "Why does Feynman call Young's experiment 'an A-Number-1 experiment' from a scientific standpoint?",
+      "referenceAnswer": "Because it uncovered the actual clues the rats were using rather than what experimenters assumed they were using, showing what needs to be controlled for rat experiments to be trustworthy.",
+      "evidence": [
+        "spya-yzzxkw"
+      ]
+    },
+    {
+      "question": "What happened to Young's careful methods and findings in later rat-running research?",
+      "referenceAnswer": "Later experimenters ignored his work entirely, never adopting his controls like putting the corridor in sand, and his papers went uncited because he was seen as not having 'discovered anything about the rats.'",
+      "evidence": [
+        "spya-wye8g6"
+      ]
+    },
+    {
+      "question": "What happened to the size of the effects found in Rhine's and others' ESP experiments as they refined their techniques in response to criticism?",
+      "referenceAnswer": "The effects kept getting smaller and smaller until they eventually disappeared altogether.",
+      "evidence": [
+        "spya-rbpppq"
+      ]
+    },
+    {
+      "question": "What training policy did the resigning director of the Institute of Parapsychology recommend for future students?",
+      "referenceAnswer": "He said they should only train students who had already shown an ability to produce PSI results, rather than spending time on interested students who only got chance-level results.",
+      "evidence": [
+        "spya-g203mu"
+      ]
+    },
+    {
+      "question": "Why does Feynman call this training policy dangerous?",
+      "referenceAnswer": "Because it teaches students to produce a certain desired result rather than teaching them how to run an experiment with genuine scientific integrity.",
+      "evidence": [
+        "spya-g203mu"
+      ]
+    },
+    {
+      "question": "What shortcut did a physicist at the National Accelerator Laboratory take when comparing his deuterium (heavy hydrogen) results to light hydrogen?",
+      "referenceAnswer": "Instead of running the light-hydrogen comparison himself on the same apparatus, he used someone else's light-hydrogen data that had been collected on a completely different apparatus.",
+      "evidence": [
+        "spya-m95kqm"
+      ]
+    },
+    {
+      "question": "Why, according to Feynman, was this physicist unable to run the light-hydrogen experiment himself on the same apparatus?",
+      "referenceAnswer": "He couldn't get time on the expensive, heavily booked accelerator program because the people running it wanted only new results, for public-relations and funding reasons, and a repeat of a known result wouldn't count as new.",
+      "evidence": [
+        "spya-m95kqm"
+      ]
+    },
+    {
+      "question": "What final wish does Feynman offer the graduating students, given everything he has said about integrity in science?",
+      "referenceAnswer": "He wishes them the luck to work somewhere they are free to maintain full scientific integrity, without being forced by pressure to protect their job or funding to compromise it.",
+      "evidence": [
+        "spya-ndyj3t"
+      ]
+    }
+  ]
+}

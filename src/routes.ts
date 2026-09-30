@@ -267,6 +267,7 @@ import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { markAnswerStream } from "./quiz-mark.js";
+import { withOldClientBands } from "./quiz.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
@@ -2122,7 +2123,13 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
     for await (const event of markAnswerStream({
       meta: article.meta,
       blocks: article.blocks,
-      /* The three things the request may not name. */
+      /* The three things the request may not name.
+
+         **The question alone, never its premise.** The reader may not have
+         been shown the premise, and a marker handed it as part of THE QUESTION
+         would restate it back to them — the question reads as a whole without
+         it, by the prompt's rule. GPT Sol's R2-2 on
+         docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md. */
       question: question.question,
       referenceAnswer: question.referenceAnswer,
       evidence: question.evidence,
@@ -7779,8 +7786,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          third staleness fact to add and offering one would be a banner about a
          thing that cannot have happened. `QuizResponse` in src/types.ts has two
          fields where `IdeasResponse` has three.
-         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
-      send(res, 200, await loadQuiz(slugPart(captures, 1)));
+         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+
+         `withOldClientBands` is a one-week bridge for tabs still running the
+         band ladder — src/quiz.ts says when it goes. */
+      send(res, 200, withOldClientBands(await loadQuiz(slugPart(captures, 1))));
     },
   },
 

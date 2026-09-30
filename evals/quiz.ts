@@ -8,7 +8,7 @@
  * **This one spends money**, and it is the reason stage 1 of
  * docs/plans/260831al-review-quiz-sub-mode.md is prompts-and-eval with no
  * routes, no store and no panel. In this feature the prompt *is* the product:
- * the artefact, the band and the ordering are plumbing around two pages of
+ * the artefact, the panel and the walk are plumbing around two pages of
  * instructions, and nothing deterministic can tell you whether those two pages
  * work. tests/quiz.test.ts pins where the words are; only a model can say what
  * they do.
@@ -19,8 +19,8 @@
  * question, so the first thing anybody looks at is a real batch. Read it for
  * the things the spike found and the prompt now bans: a question about where
  * something sits in the piece, two questions joined by "and", a reference
- * answer that is one semicolon-spliced sentence, a batch bunched in the middle
- * of the band scale.
+ * answer that is one semicolon-spliced sentence, and — since `quiz/5` — a
+ * premise that gives its own question away.
  *
  * **Marking** does NOT use those questions. Its eight cases carry their own
  * question, reference answer and evidence, hand-written against this article,
@@ -100,7 +100,7 @@ import { readArticleFromDir } from "../tests/helpers/article-from-dir.js";
 import { FIXTURE_ROOT } from "../tests/helpers/require-fixture.js";
 import { fallbackHeadTitle } from "../src/source-hash.js";
 import { findQuote } from "../src/quote-match.js";
-import type { Block, Meta, QuizBand, QuizEvidence } from "../src/types.js";
+import type { Block, Meta, QuizEvidence } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -289,8 +289,8 @@ const CASES: readonly MarkCase[] = [
     name: "illPosed",
     /* **No verdict is the right answer here**, not a failure to reach one. The
        article does not settle the question, so grading the reader either way is
-       a judgement the piece cannot support — and absence simply holds the band,
-       which is the outcome a reader would want from an unfair question. */
+       a judgement the piece cannot support — and absence simply shows the next
+       step's premise, which is the outcome a reader would want from an unfair question. */
     expectVerdict: "none",
     /* Doubles as Sol's "reference unsupported by its evidence": the draft
        over-claims, and the reader is the one being careful. The article says we
@@ -489,8 +489,6 @@ function longestFragment(quote: string): string {
     .reduce((best, part) => (part.length > best.length ? part : best), "");
 }
 
-const BAND_MARK: Record<QuizBand, string> = { easy: "easy  ", medium: "medium", hard: "hard  " };
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   /* **The committed corpus by default, not `data/`.** The eight marking cases
@@ -531,16 +529,16 @@ async function main(): Promise<void> {
     say("## The batch");
     say();
     say(
-      "Read for what the prompt bans and the spike found anyway: a question about where something sits in the piece, two questions joined by “and”, a reference answer that is one semicolon-spliced sentence, a batch bunched in the middle of the band scale.",
+      "Read for what the prompt bans and the spike found anyway: a question about where something sits in the piece, two questions joined by “and”, a reference answer that is one semicolon-spliced sentence — and, since the quiz became a path, a premise that gives away its own question's answer, or a path that is a list with nothing leaning on anything.",
     );
     say();
     try {
       const run = await generateQuiz({ article });
       const { quiz } = run;
-      const count = (band: QuizBand) => quiz.questions.filter((q) => q.band === band).length;
+      const premised = quiz.questions.filter((q) => q.premise).length;
       say(
-        `${quiz.questions.length} questions — ${count("easy")} easy, ${count("medium")} medium, ` +
-          `${count("hard")} hard. \`${run.model}\`, ${(run.elapsedMs / 1000).toFixed(1)}s, ` +
+        `${quiz.questions.length} questions, ${premised} with a premise. ` +
+          `\`${run.model}\`, ${(run.elapsedMs / 1000).toFixed(1)}s, ` +
           `${run.inputTokens} in / ${run.outputTokens} out.`,
       );
       say();
@@ -548,13 +546,17 @@ async function main(): Promise<void> {
       say(
         `Dropped: ${d.unanchored} unanchored, ${d.unknownIds} bad ids, ${d.unquoted} unquoted, ` +
           `${d.malformed} malformed, ${d.duplicate} duplicates, ${d.truncated} over the evidence ` +
-          `cap, ${d.overCap} over the question cap.`,
+          `cap, ${d.overCap} over the question cap, ${d.gaps ?? 0} gaps mid-path.`,
       );
       say();
       for (const [i, q] of quiz.questions.entries()) {
         say(`### ${i + 1}. ${q.question}`);
         say();
-        say(`\`${BAND_MARK[q.band]}\` · value ${q.value} · ${q.evidence.map((e) => e.blockId).join(" ")}`);
+        if (q.premise) {
+          say(`*Premise:* ${q.premise}`);
+          say();
+        }
+        say(q.evidence.map((e) => `\`${e.blockId}\``).join(" "));
         say();
         say(q.referenceAnswer);
         say();
@@ -562,9 +564,9 @@ async function main(): Promise<void> {
         say();
       }
     } catch (err) {
-      /* A failed generation is a RESULT, not a crash — a batch with no band
-         spread throws by design, and the message says which end was missing.
-         Losing the marking half over it would be the wrong trade. */
+      /* A failed generation is a RESULT, not a crash — a batch where nothing
+         anchored throws by design, and the message says so. Losing the marking
+         half over it would be the wrong trade. */
       say("### generation FAILED");
       say();
       say("```");

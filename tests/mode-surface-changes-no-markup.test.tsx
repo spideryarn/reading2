@@ -1129,8 +1129,6 @@ const QUIZ: Quiz = {
       evidence: [
         { blockId: "spya-bbbbbb" as BlockId, quote: "The instrument was built", start: 0 },
       ],
-      band: "easy",
-      value: 3,
     },
   ],
   dropped: {

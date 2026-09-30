@@ -3634,8 +3634,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         cacheArticle: ctx.cacheArticle,
       });
       const questions = run.quiz.questions;
-      const bands = { easy: 0, medium: 0, hard: 0 };
-      for (const q of questions) bands[q.band]++;
       plog.info(
         {
           slug: ctx.slug,
@@ -3647,14 +3645,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           cacheWriteTokens: run.cacheWriteTokens,
           ms: run.elapsedMs,
           questions: questions.length,
-          /* The band spread, because it is the one thing about a batch that is
-             invisible from outside and that the ordering depends on entirely.
-             A batch of twelve that is all `medium` fails the quota and never
-             gets here; a batch of three that is all `medium` passes, correctly,
-             and is worth being able to see afterwards. */
-          easy: bands.easy,
-          medium: bands.medium,
-          hard: bands.hard,
+          /* **How much of the path leans on what came before, and where it
+             broke.** `premised` counts the steps carrying a premise — a
+             path with none is a list again, which is the failure the premise
+             field exists to prevent. `gaps` is dropped questions that had a
+             kept one after them: a hole in the middle of the path rather than
+             a shorter path. docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md. */
+          premised: questions.filter((q) => q.premise).length,
+          gaps: run.dropped.gaps ?? 0,
           /* The quality signals, in the shape `ideas` and `timeline` established
              and for the same reason: every one of them is invisible from
              outside, because a dropped question looks exactly like a question

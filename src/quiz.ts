@@ -30,83 +30,37 @@
  *
  * ## What the model is asked for, and what it is not
  *
- *   question         one question mark, one thing asked
- *   referenceAnswer  two or three sentences — a DRAFT, not an answer key
- *   band             easy | medium | hard — how the answer is REACHED
- *   value            1–5, how central the thing asked about is
+ *   premise          optional: one sentence restating the answer just
+ *                    before — shown or hidden by the walk
+ *   question         one question mark, one thing asked, answerable in a
+ *                    sentence or two, whole without its premise
+ *   referenceAnswer  one or two sentences — a DRAFT, not an answer key
  *   evidence         [{ blockId, quote }], validated as `ideas` validates them
  *
- * It is **not** asked for a 1–5 ease score, and that is the plan's finding
- * rather than a preference: the spike measured two runs on a real article and
- * `ease` never left 2–4 across 24 questions, so the scale it was sorting by had
- * four values and a five-way tie. A band is a judgement about *how the answer
- * is reached*, which a model can make consistently, rather than a guess at how
- * a stranger will do. `QuizBand` in src/types.ts has the table.
+ * **In order.** The array the model returns is the path the reader walks, and
+ * nothing here re-sorts it.
  *
- * ## The order, which is the feature Greg actually asked for
+ * ## A path, not a pool, since 2026-09-30
  *
- * > the questions should be ordered by a combination of ease and value (i.e.
- * > easy-first-then-getting-harder, and central-or-important-first).
+ * > For the quiz mode, maybe what we want is, like, more questions, but try and
+ * > make them easier, where maybe only a sentence or two is needed, and make the
+ * > questions build on one another gradually, and so that each answer is not
+ * > that effortful, but that by the time you've answered a whole bunch of them,
+ * > you know, you've kind of gradually built up towards an understanding of why
+ * > it is the way, you know, what the key takeaways are.
  * >
- * > — Greg, 2026-08-31
+ * > — Greg, 2026-09-29 (SPIDERYARN-READING2-5W)
  *
- * Two clauses, and they are ranked in the order he said them. The first draft
- * of the plan implemented them as `ease + value` descending, which is the
- * **opposite** of the first clause: hard-central `(1,5)` and easy-peripheral
- * `(5,1)` both sum to 6, and the value tie-break then puts the hard one first.
- * `orderQuestions` below is lexicographic instead — band, then value, then
- * document position — and tests/quiz.test.ts asserts the case that gets it
- * wrong.
- *
- * ## Both ends, and what happens on a short article
- *
- * A batch is required to use both ends of the band scale, because asking nicely
- * does not work — that is what the spike measured. But "at least five easy and
- * three hard" is right for a full twelve and is an *instruction to pad* a piece
- * that only supports four questions, and padding here produces a question about
- * nothing rather than a weak one the reader can skip.
- *
- * **So the requirement is presence at each end, enforced against what
- * survived**: `missingBandEnds` asks for one `easy` and one `hard` from any
- * batch of `SPREAD_FROM` or more, and nothing at all below that. A batch that
- * came back all-`medium` is a failed generation and throws; a genuinely short
- * article cannot fail on bands. The count rule is separate and is a ceiling
- * rather than a floor: **up to twelve, fewer where the article does not support
- * twelve.**
- *
- * **The prompt asks for more than the gate demands, and that is deliberate.**
- * It asks for five `easy` and three `hard` in a full batch; the gate refuses
- * only a batch missing an end outright. A target and a floor are different
- * things, and lowering the prompt's ask to one would make the emergency floor
- * the normal distribution.
- *
- * **The target leans easy since 2026-09-05** — it was three and three — because
- * Greg said the quiz was too hard and *"should start much, much easier"*
- * (SPIDERYARN-READING2-21;
- * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md).
- * **The easy end went up; the hard end did not come down**, and that asymmetry
- * is a correction from GPT Sol on the built change rather than the first
- * instinct. Asking for two hard would have leaned the batch a little further
- * easier and halved the margin the gate actually runs on: `missingBandEnds`
- * measures what **survived validation**, so with two asked for, losing both to
- * a bad quote throws away a paid batch, where three has to lose three. That is
- * the failure of 260903c wearing a different number, and the lead the reader
- * meets is decided by the easy end anyway.
- *
- * ### It used to be a proportion, and that was the bug
- *
- * Until 2026-09-03 this was `bandQuota` = `min(3, floor(n / 4))`, and a
- * production build failed after 36 seconds and $0.06 because nine survivors
- * carrying one `hard` question owed two. The batch satisfied the invariant the
- * ordering actually needs — it used both ends — and was thrown away anyway.
- *
- * The interesting part is not the boundary but the representation. The code's
- * own error message said the batch "has to carry both ends", which is a floor
- * of one; the arithmetic demanded a proportion. **A number is what let the
- * prose and the rule drift apart while both looked right**, so the number is
- * gone rather than retuned: a helper that answers *which ends are missing*
- * cannot quietly grow back into a quota while still sounding like a presence
- * check. docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md.
+ * Until then a batch was twelve independent questions, each tagged with a
+ * `band` (easy / medium / hard) and a `value` (1–5), sorted band → value →
+ * document position here and walked by an adaptive ladder in the panel. A
+ * sequence whose questions lean on one another cannot be sorted by band or
+ * hopped across by a ladder without breaking the steps that keep each one small,
+ * so the band, the value, the sort, the spread gate and the ladder all went
+ * together. What they were for — *start easy, stay at the right level* — the
+ * path does by construction: every step is small.
+ * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md, and
+ * docs/plans/260907d-make-the-quiz-adaptive.md for what was retired.
  *
  * ## What the stage refuses
  *
@@ -137,8 +91,8 @@
  * hard a question is depends on who is reading, which is the argument `ideas`
  * accepted — and it is deferred because it costs six more touchpoints and makes
  * every quiz stale the moment somebody edits their profile. Adding it later
- * needs no migration, since `profileHash` is a field on a JSON artefact. Define
- * the bands for a well-read non-specialist first.
+ * needs no migration, since `profileHash` is a field on a JSON artefact. Write
+ * the path for a well-read non-specialist first.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -154,7 +108,7 @@ import { mintUniqueId } from "./ids.js";
    near-duplicate of it here would drift. */
 import { normaliseName } from "./ideas.js";
 import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED, QUIZ_NOTHING_ANCHORED, quizBandsNotSpread } from "./messages.js";
+import { MODEL_REFUSED, QUIZ_NOTHING_ANCHORED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -173,7 +127,6 @@ import type {
   BlockId,
   Meta,
   Quiz,
-  QuizBand,
   QuizDropped,
   QuizEvidence,
   QuizQuestion,
@@ -198,18 +151,26 @@ import type {
  * the honest offer: theirs is a harder quiz than the one this prompt now sets.
  *
  * `quiz/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * **`quiz/5`, 2026-09-30: a path, not a pool.** Up to twenty smaller questions,
+ * each answerable in a sentence or two and leaning on the ones before, ending at
+ * the piece's takeaways and why they hold; no band, no value. See the header.
+ * Every stored quiz is `outdated` after this, which is right: it is a pool, and
+ * its reader is offered the path.
  */
-export const PROMPT_VERSION = "quiz/4";
+export const PROMPT_VERSION = "quiz/5";
 
 /**
  * The most questions one batch may carry into the artefact.
  *
- * Greg asked for "batches of a dozen or so", and twelve is a **ceiling, not a
- * target**: the prompt says fewer is fine and the plan is explicit that a
- * minimum of six is an instruction to pad a short piece. Enforced here as well
- * as asked for in the prompt, because nothing makes a model obey a number.
+ * **Twenty, since 2026-09-30**, from twelve: Greg asked for *"more questions,
+ * but … easier"*, and a path of small steps needs more of them to arrive
+ * anywhere. Still a **ceiling, not a target** — the prompt says a short piece
+ * gets a short path, and a minimum would be an instruction to pad. Enforced here
+ * as well as asked for in the prompt, because nothing makes a model obey a
+ * number.
  */
-export const MAX_QUESTIONS = 12;
+export const MAX_QUESTIONS = 20;
 
 /**
  * The most pieces of evidence one question may carry.
@@ -221,45 +182,7 @@ export const MAX_QUESTIONS = 12;
  */
 export const MAX_EVIDENCE = 3;
 
-/**
- * **The smallest batch that has to carry both ends of the band scale.**
- *
- * Four, and it is named rather than left to fall out of arithmetic. The rule it
- * replaced was `min(3, floor(n / 4))`, whose boundary was wherever `floor()`
- * happened to put it — nobody could see it, and nobody challenged it. This
- * constant is the same boundary stated on purpose: the old quota first asked
- * for something at four, and that behaviour is worth keeping.
- *
- * Below it, nothing is asked. Demanding a spread from a three-question article
- * is an instruction to pad, which docs/plans/260831al-review-quiz-sub-mode.md
- * decided against: a padded question is a question about nothing, which is
- * worse than a weak one the reader can skip. A short piece gets a short quiz,
- * and that is a correct answer rather than a failed generation.
- *
- * The consequence, stated honestly because the plan's first draft got it wrong:
- * the rule is monotonic only among batches of four or more. Three `medium`
- * questions pass and a fourth `medium` fails. That is the price of the
- * exemption and it is worth paying.
- */
-export const SPREAD_FROM = 4;
-
-const BANDS: ReadonlySet<string> = new Set<QuizBand>(["easy", "medium", "hard"]);
-
-/**
- * The two ends a batch has to carry. `medium` is what is left over.
- *
- * A type rather than a subset of `QuizBand` by convention, so that
- * `missingBandEnds` cannot be read as possibly returning `medium` and nothing
- * downstream has to write a dead branch for a case that cannot arise.
- */
-export type QuizBandEnd = Extract<QuizBand, "easy" | "hard">;
-
-const SPREAD_ENDS: readonly QuizBandEnd[] = ["easy", "hard"];
-
-/** Where a band sorts. Lower is earlier. */
-const BAND_ORDER: Record<QuizBand, number> = { easy: 0, medium: 1, hard: 2 };
-
-export type { Quiz, QuizBand, QuizEvidence, QuizQuestion, QuizQuestionId };
+export type { Quiz, QuizEvidence, QuizQuestion, QuizQuestionId };
 
 /**
  * The artefact's own types live in src/types.ts, beside `Ideas` and `Timeline`
@@ -279,6 +202,7 @@ export function emptyDropped(): QuizDropped {
     malformed: 0,
     duplicate: 0,
     unanchored: 0,
+    gaps: 0,
   };
 }
 
@@ -317,79 +241,14 @@ function text(value: unknown): string {
 /** One question as the model returns it, before any of it has been believed. */
 interface RawQuestion {
   question?: unknown;
+  premise?: unknown;
   referenceAnswer?: unknown;
-  band?: unknown;
-  value?: unknown;
   evidence?: unknown;
 }
 
 interface RawEvidence {
   blockId?: unknown;
   quote?: unknown;
-}
-
-/**
- * **Which ends of the band scale this batch does not reach at all.**
- *
- * Empty is the pass. The rule is presence, not proportion — a batch with one
- * `easy` and one `hard` among twelve is unbalanced but it still runs from one
- * end of the scale to the other, which is the only thing `orderQuestions` needs
- * from it. Below `SPREAD_FROM` nothing is asked; see that constant for why.
- *
- * **It returns bands rather than counts on purpose.** The predecessor returned
- * `{ band, want, have }` and drifted from its own prose within one commit — the
- * header has the story. There is no number here to tune, so there is no number
- * to get quietly wrong.
- *
- * Measured against what **survived** validation, not against what the model
- * returned. A batch whose only `easy` question was dropped as unanchored is a
- * batch with no easy questions in it, whatever the model intended.
- */
-export function missingBandEnds(questions: readonly QuizQuestion[]): QuizBandEnd[] {
-  if (questions.length < SPREAD_FROM) return [];
-  return SPREAD_ENDS.filter((band) => !questions.some((q) => q.band === band));
-}
-
-/**
- * How many survivors sit in one band.
- *
- * **For the diagnostic only** — the sentence that goes to the log when a batch
- * is refused, so that the spread we actually got is visible to whoever is
- * deciding whether the prompt needs changing. The reader is told which end is
- * missing and never a count per band, because the panel shows neither band nor
- * value; `missingEndsInReaderWords` below is their half.
- */
-function countBand(questions: readonly QuizQuestion[], band: QuizBand): number {
-  return questions.filter((q) => q.band === band).length;
-}
-
-/**
- * The same gap, said to somebody who has never heard of a band — and `null`
- * when there is no gap.
- *
- * `easy` / `medium` / `hard` are the model's vocabulary and ours; the panel
- * never puts any of the three on the screen (src/web/QuizPanel.tsx orders by
- * band and shows neither it nor the value). So a failure that quoted the word
- * `"hard"` at a reader would be handing them a token with nothing behind it,
- * which is the same mistake as quoting a file path at them —
- * docs/project/copy.md rule 1. The words `easy` and `hard` still appear,
- * unquoted and doing ordinary work in an English sentence; what does not is the
- * band as a *name*.
- *
- * **Total, and `null` is why.** An earlier draft took the missing ends and
- * assumed there was at least one, which is true of every call it has but is not
- * true of every call it could have: `missingEndsInReaderWords([])` said there
- * was no hard question. Returning `null` for the passing case makes the caller
- * handle it, so the branch cannot be forgotten and the guard is not written
- * twice in two places that could disagree.
- */
-function missingEndsInReaderWords(missing: readonly QuizBandEnd[]): string | null {
-  const noEasy = missing.includes("easy");
-  const noHard = missing.includes("hard");
-  if (noEasy && noHard) return "they all came out at the same middling level";
-  if (noEasy) return "there is no easy one among them to start on";
-  if (noHard) return "there is no hard one among them to finish on";
-  return null;
 }
 
 /**
@@ -454,31 +313,37 @@ export function validateEvidence(
 }
 
 /**
- * A `value` we can sort by, or `null` if the model did not give one.
+ * The premise, if it is one worth showing — or `undefined`.
  *
- * Out of range is **clamped rather than dropped**, and that asymmetry is
- * deliberate: `value: 7` is a good question with a sloppy number on it, and
- * throwing away the question over the number costs the reader something real.
- * A `value` that is not a number at all is different — there is nothing to
- * clamp, and the field is the sort key within a band, so the question has no
- * place to go.
+ * **It degrades, never fails the question.** A premise is optional help; a
+ * question whose premise is wrong is still a question. So an empty one, one
+ * that merely repeats the question, or one that contains the question's own
+ * reference answer outright (the giveaway the prompt forbids, caught at its
+ * crudest) is removed and the question kept. Subtler giveaways are the eval's
+ * to find, not a string match's.
  */
-function readValue(raw: unknown): number | null {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
-  return Math.min(5, Math.max(1, Math.round(raw)));
+function readPremise(raw: unknown, question: string, referenceAnswer: string): string | undefined {
+  const premise = text(raw);
+  if (!premise) return undefined;
+  const p = normaliseName(premise);
+  if (p === normaliseName(question)) return undefined;
+  if (p.includes(normaliseName(referenceAnswer))) return undefined;
+  return premise;
 }
 
 /**
  * Turn what the model said into questions, believing as little of it as
  * possible.
  *
- * The drop rule is **a question, a reference answer, a usable band, a usable
- * value, and at least one surviving piece of evidence**. The first four are
- * what makes a question askable; the fifth is what makes it checkable, and it
- * is the one `ideas` shares.
+ * The drop rule is **a question, a reference answer, and at least one
+ * surviving piece of evidence**. The first two are what makes a question
+ * askable; the third is what makes it checkable, and it is the one `ideas`
+ * shares.
  *
- * Everything else degrades rather than failing the batch: eleven good questions
- * must not be lost because one came back with `band: "trivial"`.
+ * Everything else degrades rather than failing the batch: nineteen good
+ * questions must not be lost because one came back malformed. **The order is
+ * kept** — it is the path — so a dropped question leaves a gap one step wide;
+ * the prompt's premise rule is what keeps the next step answerable across it.
  */
 export function toQuestions(
   raw: unknown,
@@ -489,75 +354,63 @@ export function toQuestions(
   const out: QuizQuestion[] = [];
   const seen = new Set<string>();
   const raws = Array.isArray(raw) ? raw : [];
+  /* **Drops since the last kept question.** They become `gaps` only when a
+     later question is kept, because a drop at the very end shortens the path
+     and a drop in the middle breaks it — and only the second is worth a
+     signal. docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md
+     § F4, which also says why this counts rather than failing the batch. */
+  let pending = 0;
+  const drop = (reason: "malformed" | "duplicate" | "unanchored") => {
+    dropped[reason]++;
+    pending++;
+  };
   for (const [i, item] of raws.entries()) {
     if (!item || typeof item !== "object") {
-      dropped.malformed++;
+      drop("malformed");
       continue;
     }
     const r = item as RawQuestion;
     const question = text(r.question);
     const referenceAnswer = text(r.referenceAnswer);
-    const bandText = text(r.band).toLowerCase();
-    const value = readValue(r.value);
-    if (!question || !referenceAnswer || !BANDS.has(bandText) || value === null) {
-      dropped.malformed++;
+    if (!question || !referenceAnswer) {
+      drop("malformed");
       continue;
     }
     /* Before the evidence, because a duplicate costs nothing to reject and
        validating its quotes would inflate the counters with work we are about
        to throw away. A model that asks the same thing twice has spent one of
-       the twelve on nothing, which is worth counting. */
+       the twenty on nothing, which is worth counting. */
     const key = normaliseName(question);
     if (seen.has(key)) {
-      dropped.duplicate++;
+      drop("duplicate");
       continue;
     }
     const evidence = validateEvidence(r.evidence, blocks, dropped);
     if (evidence.length === 0) {
-      dropped.unanchored++;
+      drop("unanchored");
       continue;
     }
     seen.add(key);
+    dropped.gaps = (dropped.gaps ?? 0) + pending;
+    pending = 0;
+    const premise = readPremise(r.premise, question, referenceAnswer);
     out.push({
       id: mintUniqueId(taken),
       question,
+      ...(premise ? { premise } : {}),
       referenceAnswer,
       evidence,
-      band: bandText as QuizBand,
-      value,
     });
     /* **The cap is enforced here, not merely requested in the prompt.** Nothing
        makes the model obey a number, and everything else in this file believes
        as little as possible of what came back.
 
-       **It can manufacture a spread failure, and that is a known deferral.**
-       The cap keeps the *first* twelve survivors in the model's own order,
-       which is not the band order the reader eventually meets. So thirteen
-       valid questions whose only `hard` one came back thirteenth lose it here,
-       and `buildQuiz`'s spread gate then refuses the batch for missing an end
-       that the model did supply — GPT Sol reproduced exactly that
-       (docs/plans/260903c-stage1-review-sol.md § 3). Over-cap is meant to
-       degrade, not to fail.
-
-       Deferred rather than fixed, 2026-09-03. It needs the model to overshoot a
-       cap the prompt already asks it to respect, and a fix is not a smaller
-       edit than the bug: moving the gate above this loop would pass a batch
-       whose stored twelve still lack an end, so the cap would have to *choose*
-       its twelve — keeping one of each end and dropping the least central
-       middle — which is a selection rule and a new set of decisions about what
-       to sacrifice. "Simplest version first": it waits for something to show it
-       is needed. What would show it is `dropped.overCap` being non-zero on a
-       run that also failed on bands — and **that number is now in the band
-       gate's own diagnostic**, `buildQuiz` below, which is the only line
-       written when this fires. It was not until 2026-09-03: the trigger this
-       comment names was absent from the one place it could fire, so the
-       deferral had a sentence and no signal.
-
        **What that number is worth knowing about.** It counts the elements after
        the break — the ones this loop never examines — so it is a hint and not a
        finding. A non-zero count is consistent with this bug and equally
-       consistent with the model appending junk, a duplicate, or a thirteenth
-       `medium`: none of those cost us anything. Read it as "how much of the
+       consistent with the model appending junk or a duplicate, and on a path
+       it means the model walked further than we keep — the end of its route,
+       which is where the takeaways are. Worth watching for that reason. Read it as "how much of the
        answer went unread", and if you want to know whether a usable question
        was in there, look at the raw answer. */
     if (out.length === MAX_QUESTIONS) {
@@ -566,54 +419,6 @@ export function toQuestions(
     }
   }
   return out;
-}
-
-/**
- * **Band, then value, then where the answer sits on the page.**
- *
- * Greg's two clauses, ranked in the order he stated them, with a third key
- * because ties are the common case rather than the edge case — the spike found
- * four distinct scores over twelve questions, with a five-way tie in one run.
- * "Then the model's own order" would therefore mean *arbitrary* for most of the
- * list; document order is the honest answer to "these two are equally easy and
- * equally central", and it reads well, because a tied group arrives in the
- * order the reader met it.
- *
- * **Pure**, and exported so it can be tested without a model. The order is
- * fixed at write time and never re-derived, for the reason `inReadingOrder` in
- * src/ideas.ts learned first: anything that walks the list to assign a number
- * or a colour would move every row on the page if the list re-sorted itself
- * between reads.
- */
-export function orderQuestions(
-  questions: readonly QuizQuestion[],
-  blocks: readonly { id: BlockId }[],
-): QuizQuestion[] {
-  const position = new Map<BlockId, number>();
-  for (const [i, b] of blocks.entries()) position.set(b.id, i);
-  /* `MAX_SAFE_INTEGER` for an id we do not know, so it sorts LAST. Defaulting
-     to 0 would put a question nobody can check at the top of the list, which is
-     the wrong direction to be wrong in. */
-  const rank = (q: QuizQuestion): number => {
-    let first = Number.MAX_SAFE_INTEGER;
-    for (const e of q.evidence) {
-      const at = position.get(e.blockId);
-      if (at !== undefined && at < first) first = at;
-    }
-    return first;
-  };
-  return questions
-    .map((question, i) => ({ question, i, rank: rank(question) }))
-    .sort((a, b) => {
-      const bands = BAND_ORDER[a.question.band] - BAND_ORDER[b.question.band];
-      if (bands !== 0) return bands;
-      if (a.question.value !== b.question.value) return b.question.value - a.question.value;
-      if (a.rank !== b.rank) return a.rank - b.rank;
-      // Index last, so two questions alike on every key have a reason for their
-      // order rather than an accident of sort stability.
-      return a.i - b.i;
-    })
-    .map((x) => x.question);
 }
 
 /** The artefact, from what the model said plus what we could verify of it. */
@@ -663,74 +468,6 @@ export function buildQuiz(
     );
   }
 
-  /* **Structural, because a nagging sentence in the prompt could not achieve
-     it.** The spike asked for a spread twice and got 2–4 both times. See
-     `missingBandEnds` for why the requirement is presence at each end rather
-     than a proportion of what survived.
-
-     **The reader's sentence is `quizBandsNotSpread` in src/messages.ts**, which
-     is where it has been since 2026-09-04. It was written inline here the day
-     before, with no bracketed code, because at that moment one string had to
-     serve both audiences and the reader won the tie — see the note in
-     src/messages.ts for the two phrases in it that are load-bearing. Stage 2
-     split the seam, so the wording moved to the file docs/project/copy.md says
-     every reader-facing failure lives in, and the band arithmetic below stays
-     here for the log. */
-  const missing = missingBandEnds(fresh);
-  const gap = missingEndsInReaderWords(missing);
-  if (gap !== null) {
-    /* **The diagnostic is what the reader's sentence deliberately withholds**:
-       the counts, the bands as names, the over-cap tally, and the pointer to
-       the thing to change if this keeps happening. All of it goes to the log
-       and to Sentry, and none of it to the card.
-
-       **`overCap` is here because it is the one number that could point at
-       *us*.** `toQuestions` above defers a known bug — the cap truncates in the
-       model's arrival order, so a batch whose only `hard` question came back
-       thirteenth loses it and lands here — and this throw is the run on which
-       that would show. Until 2026-09-03 the number was absent from the only
-       place it could ever fire, which made the deferral unobservable.
-
-       **It is reported as what it counts and nothing more: array elements the
-       loop never reached.** They may be malformed, duplicate, unanchored, or
-       simply another `medium`; nothing looked at them, so a non-zero count is
-       not evidence that a usable question was thrown away, and the first draft
-       of this sentence said it was (GPT Sol,
-       docs/plans/260903e-stage1-review-sol.md § 1 — twelve good questions plus
-       one malformed tail item gives `overCap: 1` and cost us nothing). Proving
-       the stronger claim would mean validating the tail we deliberately did not
-       validate. The honest number is still the useful one: "13 came back, 12
-       were looked at" is what a developer needs to decide where to look.
-
-       **The other five drop counters are deliberately not here.** They already
-       have a home — the zero-survivors throw above reports all of them, which
-       is the failure where "what did the validator refuse" is the whole
-       question. Here it is not: this gate only fires with `SPREAD_FROM` or more
-       survivors, so plenty got through, and the one thing that changes what to
-       do about it is whether a *valid* question was thrown away by our cap or
-       the model simply never wrote one. Five more numbers would bury that.
-
-       **`{ authored }`, so it actually arrives.** As free text this string was
-       withheld from Sentry by `authored` in src/monitoring-scrub.ts, so the
-       paragraph above claiming it reached Sentry was wrong for as long as it
-       stood — and the log is the channel nobody tails. Every character here is
-       ours: integers, and band names off the `SPREAD_ENDS` constant rather than
-       out of the model's answer. src/job-failure.ts § `{ authored }`. **Do not
-       interpolate a question, a quote or a provider's words into this string**
-       — that is what the claim forbids. */
-    throw stageFailure(quizBandsNotSpread(fresh.length, gap), {
-      authored:
-        `quiz band spread: ${fresh.length} of ${parsed.questions.length} survived, missing ` +
-        `${missing.join(" and ")} (easy ${countBand(fresh, "easy")}, medium ` +
-        `${countBand(fresh, "medium")}, hard ${countBand(fresh, "hard")}), ` +
-        `${d.overCap} of them never examined, the cap having stopped the loop first. ` +
-        "Unexamined is not rejected — malformed, duplicate, unanchored and wrong-band all " +
-        "look the same from here — so that number says how much of the answer went unread, " +
-        "not that a usable question was lost. If this keeps landing here, the " +
-        "prompt's spread rule is the thing to change — src/quiz.ts § the generation prompt.",
-    });
-  }
-
   return {
     version: PROMPT_VERSION,
     /* **`CAPABLE_MODEL`, the name, not the address.** Every staleness check
@@ -749,7 +486,8 @@ export function buildQuiz(
        finding 3, and tests/quiz.test.ts asserts it. */
     sourceHash: opts.sourceHash,
     batchId,
-    questions: orderQuestions(fresh, opts.blocks),
+    /* The model's order, untouched: it is the path the reader walks. */
+    questions: fresh,
     dropped: { ...opts.dropped },
     generatedAt: new Date().toISOString(),
     elapsedMs: opts.elapsedMs,
@@ -795,77 +533,144 @@ export interface QuizRun {
  * the spike actually produced on `data/noema-mythology-of-conscious-ai`, and
  * those are the ones tests/quiz.test.ts pins by name.
  *
- * **The 2026-09-03 edit to THE SPREAD IS NOT OPTIONAL deleted a sentence and
- * added nothing**, and both halves of that are deliberate.
+ * **What a `PROMPT_VERSION` bump is for**, since the call has been made both
+ * ways here: it marks every stored quiz `outdated`, which rebuilds nothing but
+ * puts a *Write them again* button in front of every reader who has one. So it
+ * goes up when what a *question* is changes — `quiz/3` (easier, 2026-09-05),
+ * `quiz/5` (a path, 2026-09-30) — and not for a wording fix, like the
+ * 2026-09-03 edit that deleted a false promise of a retry.
  *
- * What went was *"is thrown away whole and the article is asked again"*. The
- * second clause was simply false — nothing retries, at any layer — and the
- * first became false the same day, when the gate stopped refusing a full batch
- * for having two of an end instead of three. A prompt that describes our
- * machinery is a prompt that goes stale when the machinery moves, and this one
- * did, within a day of being written.
+ * **The prompt describes what a good quiz is, and none of our machinery.** Two
+ * of the old sections broke that rule and went stale within a day (a retry that
+ * never existed; a floor the gate enforced that the prompt then advertised).
+ * The history is in the commit log and in docs/plans/260903c-… and 260905g-….
  *
- * **The gate's actual floor is not stated here on purpose.** GPT Sol's
- * argument, which I accept: "three of each" and "one of each end is enough to
- * pass" are two definitions of *not optional* sitting in one paragraph, and
- * publishing the lower one invites the model to aim at it. The prompt states
- * the target; `missingBandEnds` enforces the floor; the reader is who the
- * difference is for, and the model cannot see it either way.
+ * **Why the path's rules are shaped the way they are**
+ * (docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md):
  *
- * **No `PROMPT_VERSION` bump**, recorded because it is the kind of call that
- * otherwise gets made silently. The contract above is "changes what a
- * *question* is", and the questions asked for — the count, the bands, the
- * distribution — did not move; only a false claim about failure handling went.
- * Bumping would mark every existing quiz `outdated`, which does not rebuild
- * anything on its own but does put a "Write them again" button in front of
- * every reader who has one (src/web/QuizPanel.tsx), inviting a paid rebuild
- * apiece for a wording fix.
- *
- * **The 2026-09-05 edit did bump, and it is the same test answered the other
- * way.** Greg: *"The quiz questions are too hard. Certainly, they should start
- * much, much easier. And they should focus on what's most important."* So
- * `easy` was redefined against the reader rather than the sentence, the target
- * distribution moved to five and three, and a section was added asking for the
- * questions to sit on what the argument leans on. Every one of those changes
- * what a question is, and a reader whose quiz predates it is holding a harder
- * quiz than this prompt now sets — which is exactly what `outdated` is for.
+ * - The takeaways are decided **privately** and never output. A field for them
+ *   would be a summary the reader never asked for, and a thing to validate.
+ * - The premise restates **only the answer immediately before**, and adds
+ *   nothing. That is what lets the walk key its show/hide on the previous
+ *   question's verdict alone (src/web/quiz-ladder.ts § `showPremise`), and
+ *   "adds nothing" is the guard against the paraphrased giveaway a string match
+ *   cannot catch — the premise that restates the last answer and then states
+ *   the next step as well. GPT Sol's R2-1 and R2-4.
+ * - The question must be whole **without** its premise, with the backward
+ *   pointers ("this", "that result") named as banned, because a reader who got
+ *   the last one right sees the question alone.
+ * - "Two things joined by and" now has a cheap fix the old prompt lacked: set
+ *   them as two steps. That is the path doing the work the ban used to do by
+ *   prohibition alone.
  */
 export const QUIZ_SYSTEM = `You are setting short-answer questions on an article, for the person who has
 just read it.
 
-They will answer in a couple of sentences, from memory, WITHOUT the piece in
-front of them. Every question must be answerable that way: from what the article
-says, by somebody who read it once and was paying attention.
+They will answer from memory, WITHOUT the piece in front of them, one question at
+a time, in the order you set them. Every question must be answerable that way:
+from what the article says, by somebody who read it once and was paying
+attention, and who has been walked through the questions before it.
 
-WHAT A GOOD QUESTION IS
+THE QUIZ IS A PATH
 
+This is not a pile of separate questions. It is a route, walked in small steps,
+that ends with the reader understanding what the piece is for.
+
+Before you write a question, decide privately what a reader should come away
+with — the two to four takeaways that matter most — and why each one holds, in
+the article's own terms. Do not write them down. The quiz is the way there.
+
+Then walk it:
+
+- START WITH WHAT THE PIECE PLAINLY SAYS. The first questions are about things the
+  article states outright, that a reader recalls without effort.
+- EACH QUESTION LEANS ON THE ONES BEFORE IT. Once the reader has said what X is,
+  the next question can ask what X is for, or what follows from it, or what the
+  author sets against it. Every step is small.
+- END AT THE TAKEAWAYS, AND AT WHY THEY HOLD. The last few questions ask the reader
+  to put the earlier steps together: what the piece is really claiming, and why
+  the author thinks it is true. Even these are one small step from the question
+  before — if the last question is a leap, the path is missing steps. Add them.
+
+The reader should never feel a question is hard. They should feel, by the end,
+that they have understood something.
+
+THE PREMISE — HOW A STEP LEANS ON THE ONE BEFORE
+
+Most questions after the first few carry a "premise": ONE sentence restating the
+answer to the question IMMEDIATELY BEFORE this one, which this question builds
+on. It is how the steps stay small, and it is what makes the quiz a path rather
+than a list. If a question does not lean on the one just before it, leave the
+premise out.
+
+  BEFORE    What does Seth say brains do that computers do not?
+  PREMISE   Seth ties consciousness to being alive, not to computing.
+  QUESTION  Why does Seth doubt that a faster computer would ever be conscious?
+
+The reader who got the question before right sees the QUESTION alone. The reader
+who missed it, skipped it or jumped here sees the PREMISE first. Every rule below
+exists because of that:
+
+- THE PREMISE RESTATES THE ANSWER JUST GIVEN, AND ADDS NOTHING. No new
+  consequence, reason or inference — above all, not the next step, because the
+  next step is what this question asks for.
+
+    BAD   PREMISE   Seth ties consciousness to being alive, so a computer, which
+                    is not alive, could not be conscious however fast it ran.
+          QUESTION  Why does Seth doubt a faster computer would be conscious?
+    GOOD  PREMISE   Seth ties consciousness to being alive, not to computing.
+          QUESTION  Why does Seth doubt a faster computer would be conscious?
+
+- IF THE PREMISE SAYS SOMETHING NO QUESTION ASKED, A STEP IS MISSING. The
+  premise may only say what the question just before it asked for. When you
+  want the reader to know a new thing before this question, that new thing is
+  its own step: ask it as a question first, then lean on it here. Never slip it
+  in through a premise.
+
+    BEFORE    What does Seth call the idea that the right computation is enough
+              for consciousness?
+    BAD       PREMISE   Seth thinks brains, unlike computers, cannot be split
+                        into software and hardware.
+    GOOD      PREMISE   Seth calls it computational functionalism.
+
+- THE QUESTION MUST BE A WHOLE QUESTION WITHOUT ITS PREMISE. Name the thing. No
+  "this", "that", "these", "it", "the result", "the previous answer", "given
+  this", "if so" pointing back at the premise or the question before.
+
+    BAD   QUESTION  Why does that rule out a conscious computer?
+    BAD   QUESTION  What does this imply about simulated brains?
+    GOOD  QUESTION  Why does Seth doubt a faster computer would be conscious?
+
+- A PREMISE DOES NOT MAKE A BIG STEP SMALL. "Why does the whole argument hold?"
+  is still a leap with a sentence in front of it. If getting from the premise to
+  the answer takes more than a sentence of thought, a step is missing. Add it.
+
+EVERY QUESTION IS SMALL
+
+- It can be answered in ONE OR TWO SENTENCES, without effort, by a reader who has
+  been walked through the questions before it. If the reader would have to stop and work
+  something out, it is two steps. Ask the first one, then the second.
 - It has an answer the article actually gives, and the article settles it.
 - It asks for understanding, not for a token to be retrieved. "What year did X
   happen" is a lookup; "why does the author think X had to happen when it did"
-  is a question. Prefer the second, always.
-- It can be answered in one to three sentences. If a full answer needs a
-  paragraph, it is really three questions — ask the best one.
-- It stands on its own. The reader sees the question and nothing else.
+  is a question. Small is not the same as trivial.
 
 ONE QUESTION MARK, ONE THING ASKED
 
 The test is removal, not phrasing: if you can delete one half of the sentence
 and the other half is still a whole question, it was two questions with a
-conjunction hiding the seam. Ask the better one.
+conjunction hiding the seam. On a path the fix is easy: they are two steps, so
+set them as two.
 
   BAD   What does Seth say we should do, and not do, given our uncertainty?
   GOOD  What does Seth say we should not do, given our uncertainty?
 
   BAD   What is substrate independence and why does Seth reject it?
-  GOOD  Why does Seth reject substrate independence?
+  GOOD  What is substrate independence?  …then…  Why does Seth reject it?
 
 Never append "and why?" to a question. It is the commonest form of this and it
 survives every other check, because it reads as one question with its reason
-attached. Ask the why on its own — it is always the better half, and the what is
-usually contained in the answer to it.
-
-  BAD   What does Seth say we should never deliberately try to do, and why?
-  GOOD  Why does Seth say nobody should set out to build a conscious machine?
+attached. Ask the why on its own, as the next step.
 
 This is a rule about the SHAPE of the sentence rather than a preference about
 length. A reader answering two questions in a couple of sentences answers
@@ -875,8 +680,8 @@ WHAT IS NOT A QUESTION HERE
 
 - Anything answerable without having read the piece. If a well-informed person
   could answer it from general knowledge, it tests nothing.
-- Anything answerable from the title, or from the wording of the question. Never
-  put the answer in the question.
+- Anything answerable from the title, or from the wording of the question or its
+  premise. Never put a question's own answer in either.
 - A question about the article as an OBJECT — its structure, its length, how
   many arguments it makes, what its sections are called. The reader is being
   asked about the subject, not about the document.
@@ -896,11 +701,19 @@ WHAT IS NOT A QUESTION HERE
 
   Before you write a question down, read its first eight words. If any of them
   locate the answer in the document rather than in the subject, delete them —
-  the question is almost always better without.
+  the question is almost always better without. (A premise is about the
+  subject — "Seth ties consciousness to being alive." — and is not this.)
 - Trivia: a name, date or number that carries no weight in the argument.
 - A question whose answer is a matter of opinion, or one the piece raises and
   deliberately leaves open. If the article does not settle it, there is nothing
   to check an answer against.
+
+KEEP TO WHAT MATTERS
+
+The path goes through what the argument leans on. A detail nothing rests on is a
+detour, however neatly it asks — leave it out. The claim the whole piece rests on
+is usually also the one it states most plainly, once, in a sentence a reader
+remembers: that is a good early step, not only a destination.
 
 THE REFERENCE ANSWER
 
@@ -916,9 +729,10 @@ one.
   than a fact, say so — "he argues that…".
 - Include the part of the answer a reader is most likely to leave out.
 - Do not include anything the question did not ask for.
-- Two or three sentences, WITH FULL STOPS. One sentence held together by
-  semicolons is three sentences with the punctuation filed off, and it is what
-  comes out if you do not watch for it.
+- One or two sentences, WITH FULL STOPS. One sentence held together by
+  semicolons is several sentences with the punctuation filed off, and it is what
+  comes out if you do not watch for it. If the answer needs three, the question
+  was two steps.
 - If you cannot write a confident answer from the article's own words, the
   question is wrong. Drop it and set a different one.
 
@@ -939,95 +753,33 @@ One to three blocks per question. If the answer really lives in more than three,
 the question is too broad. A question you cannot anchor at all will be thrown
 away, so do not offer it.
 
-BAND — HOW THE ANSWER IS REACHED
-
-Not how clever the reader is. How the answer is got to:
-
-  "easy"   — stated plainly in one passage, and the reader is recalling it.
-             They answer it without effort, from one attentive read. If a reader
-             who understood the piece would have to stop and work something out,
-             it is not easy.
-  "medium" — a distinction or a connection the article draws between two
-             statements.
-  "hard"   — a move the argument makes across several passages, which the reader
-             has to reconstruct.
-
-Every question is easier to write than it is to answer, because you have the
-article in front of you and the reader has only what they remember of it. So a
-question that sits between two bands belongs in the harder one — and it is then
-not one of the easy questions this batch needs, so go and find a real one.
-
-THE SPREAD IS NOT OPTIONAL
-
-A full batch must contain at least five "easy" and at least three "hard". This
-is not a target to aim near — it is a condition, and both ends of it are.
-
-The reader meets the easy end first, so those are the questions they start on,
-and starting on something they can actually answer is most of what makes them
-carry on to the rest. A quiz that opens uphill is one they close.
-
-It is here because it does not happen by itself. Asked politely for a spread, a
-model returns twelve questions in the middle and the reader then meets them in
-an arbitrary order, which is the whole thing this ordering exists to prevent.
-
-If you cannot find five easy questions worth asking, you have not looked at the
-parts of the piece a reader remembers most easily — what it is named for, the
-distinction it opens with, the example everybody takes away. If you cannot find
-three hard ones, you have not found what the argument actually turns on.
-
-VALUE — HOW CENTRAL THE THING ASKED ABOUT IS
-
-  5 — you cannot say you have read this piece without knowing this
-  4 — a load-bearing part of the argument
-  3 — worth knowing, and it supports something that matters
-  2 — true and worth asking, and the main argument survives without it
-  1 — true, and nothing else in the piece leans on it
-
-Band and value are different axes and must not be collapsed into one. The
-hardest question about the central claim is band "hard", value 5. Something
-memorable that the argument does not lean on is band "easy", value 2. Both exist
-in most pieces.
-
-MOST OF THE BATCH IS ABOUT WHAT MATTERS MOST
-
-Set the questions on what the argument leans on. Most of a batch should be value
-4 or 5; ask a value 1 or 2 question only where it is genuinely worth a reader's
-minute. A detail nothing rests on is a detail, however neatly it asks.
-
-This is a rule about which questions you SET, not about the number you write
-beside them. Scoring a peripheral question 5 does not make it central.
-
-And note what the two rules together are asking for, because it is a real
-question and not a compromise: AN EASY QUESTION ABOUT A CENTRAL THING IS THE
-BEST QUESTION IN THE BATCH. Most pieces have several — the claim the whole
-article rests on is usually also the one it states most plainly, once, in a
-sentence a reader remembers.
-
 HOW MANY
 
-Up to twelve. Fewer where the article does not support twelve — a short piece
-gets a short quiz, and that is a correct answer. Do not pad: a padded question
-is a question about nothing, which is worse than a weak one the reader can skip.
+Up to twenty. Fewer where the article does not support twenty — a short piece
+gets a short path, and that is a correct answer. Do not pad: a padded question
+is a question about nothing, which is worse than one fewer step.
 
-Cover the piece. Do not set eight questions on its first third.
+Cover the piece. The takeaways usually draw on all of it, so the path should
+too; do not spend half the steps on its first third.
 
 ${plainWords("ask", "explain")}
 
 OUTPUT
 
-JSON only, no prose, no code fence:
+JSON only, no prose, no code fence. The questions in the order the reader walks
+them:
 
 {"questions": [
   {
+    "premise": "...",
     "question": "...",
     "referenceAnswer": "...",
-    "band": "easy|medium|hard",
-    "value": 4,
     "evidence": [{"blockId": "spya-k3m9qt", "quote": "..."}]
   }
 ]}
 
-Every field is required on every question.
+"premise" is optional: leave it out of a question that leans on nothing
+earlier. Every other field is required on every question.
 
 THE ANSWER MUST PARSE. Inside a string, use only the article's own quotation
 marks, which are curly, or single quotes. A straight double quote inside a
@@ -1040,7 +792,7 @@ line break inside a string either.`;
  * The skeleton before the full text, in the order `arc`, `glossary`, `ideas`
  * and `timeline` already use — it is what lets the model judge what the
  * argument turns on rather than what the article says most often, which is
- * exactly the judgement the `hard` band and the `value` scale both depend on.
+ * exactly the judgement the takeaways at the end of the path depend on.
  * It is also why this stage's freshness hash covers the tree.
  *
  * **Nothing about the reader goes in here**, and nothing about the call: the
@@ -1073,13 +825,14 @@ function parseJson(raw: string): { questions?: unknown } {
 /**
  * The answer budget, in tokens.
  *
- * Twelve questions, each carrying a question, two or three sentences of
- * reference answer, two scores and up to three verbatim quotes — call it 500
- * tokens apiece with the JSON around it, and then room to be wrong about that.
+ * Twenty questions, each carrying a question, one or two sentences of
+ * reference answer and up to three verbatim quotes — call it 400 tokens apiece
+ * with the JSON around it, and then room to be wrong about that. (Twelve at the
+ * old length measured about 5–9k output tokens, 2026-09-30.)
  * Undersizing does not degrade: it throws `truncationFailure` and loses the
  * whole pass, so this sits well clear rather than close.
  */
-export const ANSWER_TOKENS = 10_000;
+export const ANSWER_TOKENS = 14_000;
 
 export async function generateQuiz(opts: {
   /**
@@ -1220,5 +973,30 @@ export async function generateQuiz(opts: {
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
     cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     elapsedMs: Date.now() - started,
+  };
+}
+
+/**
+ * **What an old client tab needs to read a new quiz.** Kept until there is
+ * an enforceable client-version boundary: a tab can stay open for longer than
+ * any date we might pick, and the fields cost one spread (GPT Sol's R2-3).
+ *
+ * A browser tab opened before `quiz/5` still runs the band ladder, which reads
+ * `question.band` on every Next and throws on a question that has none. So the
+ * GET route adds `band: "easy", value: 3` to any question without them. An old
+ * ladder given an all-easy batch walks it front to back — which is the path.
+ *
+ * **In the response only, never the artefact.** Writing made-up bands into
+ * the store would leave a fake judgement behind in every quiz for ever; this
+ * is one spread per request, and deleting it later needs no migration.
+ * GPT Sol's F2 on docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md.
+ */
+export function withOldClientBands<R extends { quiz: Quiz }>(response: R): R {
+  return {
+    ...response,
+    quiz: {
+      ...response.quiz,
+      questions: response.quiz.questions.map((q) => ({ band: "easy", value: 3, ...q })),
+    },
   };
 }

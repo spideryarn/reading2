@@ -36,6 +36,8 @@ import { blindCoin } from "./plain-words/run.js";
 const OUT = path.join(import.meta.dirname, "results", "quiz-build-up");
 
 interface ArmQuestion {
+  /** Present on the new prompt's output only. */
+  premise?: string;
   question: string;
   referenceAnswer: string;
   evidence: string[];
@@ -51,8 +53,21 @@ interface ArmFile {
   sourceSha256: string;
   at: string;
   dropped: Record<string, number>;
+  /** Missing on the two `before` arms, which were run before this was recorded. */
+  outputTokens?: number;
+  elapsedMs?: number;
+  maxTokens?: number;
   questions: ArmQuestion[];
 }
+
+/** The five articles the plan names. A comparison over fewer is refused. */
+const PLANNED = [
+  "cargocult-spya-rz663q",
+  "entropy-24-00930-spya-pywwkq",
+  "greatwork-spya-yw4d3t",
+  "noema-mythology-of-conscious-ai",
+  "olah-a4-spya-ujr7p0",
+];
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 /** Sentences, roughly: a terminal mark followed by space or the end. */
@@ -65,7 +80,36 @@ function readArm(arm: string): ArmFile[] {
     .readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .sort()
-    .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as ArmFile);
+    .map((f) => {
+      const file = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as ArmFile;
+      /* The file says which arm it is; a copy dropped into the wrong folder is
+         the silent way to compare a prompt with itself. */
+      if (file.arm !== arm) throw new Error(`${arm}/${f} says it is arm ${file.arm}`);
+      if (`${file.slug}.json` !== f) throw new Error(`${arm}/${f} says it is ${file.slug}`);
+      if (!Array.isArray(file.questions)) throw new Error(`${arm}/${f} has no questions array`);
+      /* The budget evidence is required of every arm run after it was
+         recorded (GPT Sol's R2-5); the two `before` arms and the `after-1`
+         probe predate it, and say so as a dash rather than a guess. */
+      const predates = ["before", "before-2", "after-1"].includes(arm);
+      if (!predates && (file.outputTokens === undefined || file.maxTokens === undefined)) {
+        throw new Error(`${arm}/${f} is missing outputTokens or maxTokens`);
+      }
+      return file;
+    });
+}
+
+/**
+ * **Refuse a partial comparison** rather than inner-joining one (GPT Sol's F6
+ * on the plan): an arm that is missing an article, or has an extra one, would
+ * otherwise produce a plausible three-pair file calling itself the five.
+ */
+function checkedArm(arm: string): ArmFile[] {
+  const files = readArm(arm);
+  const slugs = files.map((f) => f.slug).sort();
+  if (JSON.stringify(slugs) !== JSON.stringify([...PLANNED].sort())) {
+    throw new Error(`arm ${arm} has ${slugs.join(", ")}; the plan names ${PLANNED.join(", ")}`);
+  }
+  return files;
 }
 
 /* ------------------------------------------------------------- report -- */
@@ -74,7 +118,7 @@ function report(): void {
   const arms = fs.existsSync(OUT) ? fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()) : [];
   for (const arm of arms.sort()) {
     console.log(`\n== ${arm}`);
-    console.log("slug\tn\tq words (mean)\tref words (mean)\tref >2 sentences\tq with ' and '");
+    console.log("slug\tn\tq words (mean)\tref words (mean)\tref >2 sentences\tq with ' and '\twith premise\tgaps\tdropped\tout tokens\ts");
     for (const f of readArm(arm)) {
       const qs = f.questions;
       const mean = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1) : "-");
@@ -86,6 +130,11 @@ function report(): void {
           mean(qs.map((q) => words(q.referenceAnswer))),
           qs.filter((q) => sentences(q.referenceAnswer) > 2).length,
           qs.filter((q) => / and /.test(q.question)).length,
+          qs.filter((q) => q.premise).length,
+          f.dropped.gaps ?? "-",
+          Object.entries(f.dropped).filter(([k, v]) => k !== "gaps" && v).map(([k, v]) => `${k}:${v}`).join(",") || "0",
+          f.outputTokens ?? "-",
+          f.elapsedMs ? Math.round(f.elapsedMs / 1000) : "-",
         ].join("\t"),
       );
     }
@@ -94,41 +143,93 @@ function report(): void {
 
 /* -------------------------------------------------------------- pairs -- */
 
-function pairs(a: string, b: string): void {
-  const fa = new Map(readArm(a).map((f) => [f.slug, f]));
-  const fb = new Map(readArm(b).map((f) => [f.slug, f]));
+async function pairs(a: string, b: string): Promise<void> {
+  const fa = new Map(checkedArm(a).map((f) => [f.slug, f]));
+  const fb = new Map(checkedArm(b).map((f) => [f.slug, f]));
+  /* A control compares a prompt with ITSELF, so two arms both called `before`
+     that were run on different prompt bytes are not a control. */
+  if (a.replace(/-\d+$/, "") === b.replace(/-\d+$/, "")) {
+    for (const [slug, qa] of fa) {
+      const qb = fb.get(slug);
+      if (qb && (qa.sourceSha256 !== qb.sourceSha256 || qa.promptVersion !== qb.promptVersion)) {
+        throw new Error(`${a} and ${b} differ in prompt on ${slug}: not a control`);
+      }
+    }
+  }
+
+  /* **The source pack** (GPT Sol's F5): a judge who has only the two quizzes
+     cannot tell a settled question from a plausible one, or the piece's
+     takeaways from a quiz's guess at them. So each pair carries the article's
+     outline with its gists, and every passage either quiz cites. */
+  loadEnvLocal();
+  const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
+  const { loadArticle } = await import("../src/store/index.js");
+  const { partsOf } = await import("../src/arc.js");
+  const packs = new Map<string, string>();
+  await runAsOwner(environmentOwnerId(), async () => {
+    for (const slug of fa.keys()) {
+      const article = await loadArticle(slug);
+      const byId = new Map(article.blocks.map((bl) => [bl.id, bl.text]));
+      const cited = new Set([...(fa.get(slug)?.questions ?? []), ...(fb.get(slug)?.questions ?? [])].flatMap((q) => q.evidence));
+      const outline = partsOf(article.tree)
+        .map((p, i) => `  PART ${i + 1}: ${p.title}\n    ${p.gist ?? "(no gist)"}`)
+        .join("\n");
+      const passages = article.blocks
+        .filter((bl) => cited.has(bl.id))
+        .map((bl) => `  [${bl.id}] ${byId.get(bl.id)}`)
+        .join("\n\n");
+      packs.set(slug, `### The article's outline\n\n${outline}\n\n### Every passage either quiz cites, in article order\n\n${passages}`);
+    }
+  });
+
   const coin = blindCoin(260930);
+  /* As a reader who skipped every question would meet them: every premise
+     shown. That is the worst case for a premise giving something away, which
+     is the case worth judging. */
   const render = (f: ArmFile) =>
     f.questions
-      .map((q, i) => `  ${i + 1}. ${q.question}\n     — ${q.referenceAnswer}`)
+      .map((q, i) => {
+        const premise = q.premise ? `     (premise: ${q.premise})\n` : "";
+        return `${premise}  ${i + 1}. ${q.question}\n     — ${q.referenceAnswer}  [${q.evidence.join(" ")}]`;
+      })
       .join("\n");
   const out: string[] = [
     `# Blind pairs: two quizzes on each article`,
     "",
-    "Each pair is two whole quizzes, X and Y, set on the same article, in the order a reader would meet",
-    "them. The reader answers from memory, without the article, having read it once. Judge each pair on:",
+    "Each pair is two whole quizzes, X and Y, set on the same article, in the order a reader meets them.",
+    "The reader answers from memory, without the article, having read it once. A '(premise: …)' line is",
+    "shown above a question when the reader has not just answered the step before it correctly; it states",
+    "something an earlier question established. The source pack before each pair is the article's outline",
+    "and every passage either quiz cites. Judge each pair on:",
     "",
     "1. **effort** — which quiz asks less of the reader per question: answerable in a sentence or two,",
     "   without having to stop and work something out? (X|Y|same)",
-    "2. **build** — which quiz builds up: each question leaning on what earlier ones established, so",
-    "   that by the end the reader has worked their way to the piece's key takeaways and why they hold?",
-    "   (X|Y|same)",
+    "2. **build** — which quiz builds up: each question leaning on what earlier ones established, so that",
+    "   by the end the reader has worked their way to the piece's key takeaways (judge against the source",
+    "   pack) and why they hold? (X|Y|same)",
     "3. **fidelity** — does either quiz ask something the article does not settle, or carry a reference",
-    "   answer that bends, overstates or blurs what the article says? Name the question number. (ok|X- …|Y- …)",
-    "4. **giveaway** — does either quiz put a question's own answer inside the question? (ok|X- …|Y- …)",
+    "   answer that bends, overstates or blurs what the cited passages say? Name question numbers.",
+    "4. **giveaways**, three kinds, naming question numbers: (a) a question or its premise contains its",
+    "   OWN answer; (b) a premise reveals the answer to an earlier question in a way that would spoil it",
+    "   for a reader scanning ahead; (c) a premise bolted onto a step that is still a big leap; (d) a premise",
+    "   that goes beyond restating the previous answer and states this question's answer or next step.",
+    "5. **alone** — a reader who got the previous question right sees a question WITHOUT its premise line.",
+    "   For each quiz with premises: is every question understandable with its premise hidden? Name those",
+    "   that are not (e.g. 'why does that follow?'). (ok|X- …|Y- …)",
     "",
-    "Answer one line per pair: `<n> effort=X|Y|same build=X|Y|same fid=ok|X-|Y- give=ok|X-|Y- [why, briefly]`.",
+    "Answer one line per pair:",
+    "`<n> effort=X|Y|same build=X|Y|same fid=ok|X-|Y-|XY- give=ok|X-|Y-|XY- alone=ok|X-|Y-|XY- [why, briefly, with question numbers]`.",
     "",
   ];
   const key: string[] = [];
   let n = 0;
   for (const [slug, qa] of fa) {
     const qb = fb.get(slug);
-    if (!qb) continue;
+    if (!qb) throw new Error(`unreachable: ${slug} passed checkedArm but is missing from ${b}`);
     n++;
     const flip = coin();
     const [x, y] = flip ? [qb, qa] : [qa, qb];
-    out.push(`## ${n}. ${slug}`, "", "### X", "", render(x), "", "### Y", "", render(y), "");
+    out.push(`## ${n}. ${slug}`, "", packs.get(slug) ?? "", "", "### X", "", render(x), "", "### Y", "", render(y), "");
     key.push(`${n}\t${slug}\tX=${x.arm}\tY=${y.arm}`);
   }
   const base = path.join(OUT, `pairs-${a}-vs-${b}`);
@@ -147,7 +248,8 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const { loadArticle } = await import("../src/store/index.js");
-  const { generateQuiz, PROMPT_VERSION } = await import("../src/quiz.js");
+  const { generateQuiz, PROMPT_VERSION, ANSWER_TOKENS } = await import("../src/quiz.js");
+  const { budgetFor } = await import("../src/token-budget.js");
   const sourceSha256 = createHash("sha256")
     .update(fs.readFileSync(path.join(import.meta.dirname, "..", "src", "quiz.ts")))
     .digest("hex");
@@ -166,9 +268,13 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         sourceSha256,
         at: new Date().toISOString(),
         dropped: { ...run.dropped },
+        outputTokens: run.outputTokens,
+        elapsedMs: run.elapsedMs,
+        maxTokens: budgetFor("quiz", ANSWER_TOKENS),
         questions: run.quiz.questions.map((q) => {
           const extra = q as unknown as { band?: string; value?: number };
           return {
+            ...(q.premise ? { premise: q.premise } : {}),
             question: q.question,
             referenceAnswer: q.referenceAnswer,
             evidence: q.evidence.map((e) => e.blockId),
@@ -205,7 +311,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const a = flag("--a");
     const b = flag("--b");
     if (!a || !b) throw new Error("pairs needs --a <arm> --b <arm>");
-    pairs(a, b);
+    await pairs(a, b);
+    process.exit(0);
   } else {
     throw new Error("usage: quiz-build-up.ts generate --arm before|after[-N] <slug>... | report | pairs --a <arm> --b <arm>");
   }

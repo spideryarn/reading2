@@ -489,10 +489,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      src/token-budget.ts. */
   "ai-too-long": "blocked",
   "ai-over-room": "bug",
-  /* Writing quiz questions, `quiz-`. Both are `retry` and both mean it: the
-     batch is written afresh on every call, so a second one genuinely can come
-     out better. See `quizBandsNotSpread` and `QUIZ_NOTHING_ANCHORED`. */
-  "quiz-spread": "retry",
+  /* Writing quiz questions, `quiz-`. `retry`, and it means it: the batch is
+     written afresh on every call, so a second one genuinely can come out
+     better. See `QUIZ_NOTHING_ANCHORED`. Its sibling `quiz-spread` went on
+     2026-09-30 with the band spread it refused
+     (docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md). */
   "quiz-unanchored": "retry",
   /* Not a model call. `db-` rather than `ai-` so that a reader quoting four
      characters, and whoever they quote them to, can tell the two apart at a
@@ -1655,43 +1656,6 @@ export const ANSWER_RAN_PAST_ITS_ROOM: ReaderFacingFailure = {
 };
 
 /* ------------------------------------------------------------------------ quiz -- */
-
-/**
- * **The batch came back without both ends of the scale.**
- *
- * Written inline at its throw site on 2026-09-03 and moved here the next day —
- * inline because at that moment one string had to be both the reader's sentence
- * and the developer's, and the reader won the tie. With the seam split it can
- * be what it should have been: a `ReaderFacingFailure` with a kind and a code,
- * while the band arithmetic goes to the log.
- *
- * The wording is unchanged from the reviewed version, and two phrases in it are
- * load-bearing:
- *
- * - **"survived checking against it"** rather than "the AI service wrote", with
- *   `survived` the count of what got through validation. A draft said "wrote",
- *   which is false the moment anything is dropped: twelve back with seven
- *   unanchored reported that the service wrote five. It is also the panel's own
- *   phrase for the same event (src/web/QuizPanel.tsx), so a reader who meets
- *   both gets one vocabulary. ⟨Sol⟩
- * - **"cover the full range"** rather than "build up from easier to harder":
- *   easy-plus-medium with no hard *does* build up, it just stops short, and a
- *   claim the reader can see is false costs the rest of the sentence. ⟨Sol⟩
- *
- * `gap` is `missingEndsInReaderWords` (src/quiz.ts) — the missing end said to
- * somebody who has never heard of a band. The words `easy` and `hard` appear in
- * it doing ordinary work in an English sentence; the band as a *name* never
- * does, because the panel shows neither band nor value.
- */
-export function quizBandsNotSpread(survived: number, gap: string): ReaderFacingFailure {
-  return {
-    kind: "retry",
-    message:
-      `Of the questions written for this article, ${survived} survived checking against it — but ` +
-      `${gap}, so they would not cover the full range from easier to harder. Writing the ` +
-      `questions again usually gets a better spread. [quiz-spread]`,
-  };
-}
 
 /**
  * **Every question named a passage the article does not contain.**
