@@ -1315,6 +1315,7 @@ export async function runExpansionWave(opts: {
       blocks,
       outline: seed.outline,
       recipe,
+      power: opts.power,
       index,
     });
     const key = checkpointKey(

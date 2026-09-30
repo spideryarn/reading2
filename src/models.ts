@@ -288,6 +288,17 @@ export function generatorFor(power: ModelPower): string {
 }
 
 /**
+ * **The durable token inside stored citation fingerprints for this model
+ * generation.** It is deliberately a literal rather than
+ * `CAPABLE_MODEL_OPENROUTER`: the current capable model will change, while the
+ * hashes already stored in Postgres cannot be passed back through
+ * `generationKey`. Keeping the first generation's wire id preserves today's
+ * hashes and lets a later capable-tier replacement join the same generation by
+ * adding its spellings to `generationKey` without detaching those rows.
+ */
+export const CAPABLE_GENERATION_KEY = "anthropic/claude-sonnet-5";
+
+/**
  * **Which generation of work a model id belongs to, for freshness only.**
  *
  * The four spellings of the capable and high-power models — stored and wire,
@@ -297,11 +308,13 @@ export function generatorFor(power: ModelPower): string {
  * (Greg: *"a way to switch back again, though you wouldn't want to rerun
  * things"*), while a genuinely different model still does.
  *
- * **The canonical value is `CAPABLE_MODEL_OPENROUTER` on purpose.** Two content
+ * **The canonical value is `CAPABLE_GENERATION_KEY` on purpose.** Two content
  * hashes put this key inside them (`lookupContextHash`, `investigateContextHash`)
  * and every stored row was hashed over that exact string, so choosing it keeps
- * every existing hash byte-identical. Equality is the only other thing anyone
- * does with the value.
+ * every existing hash byte-identical. It must not follow the current capable
+ * model constant: that constant will move, and an opaque stored hash cannot be
+ * remapped afterwards. Equality is the only other thing anyone does with the
+ * value.
  *
  * **Never a checkpoint key.** A checkpoint is reuse of a paid-for answer, and
  * reusing a Sonnet answer on an Opus run and calling it Opus is the lie this
@@ -314,7 +327,7 @@ export function generationKey(modelId: string): string {
     case CAPABLE_MODEL_OPENROUTER:
     case HIGH_POWER_MODEL:
     case HIGH_POWER_MODEL_OPENROUTER:
-      return CAPABLE_MODEL_OPENROUTER;
+      return CAPABLE_GENERATION_KEY;
     default:
       return modelId;
   }

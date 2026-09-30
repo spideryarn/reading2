@@ -22,6 +22,7 @@ import { type LookupContext, lookupContextHash } from "../src/citation-lookup.js
 import { messagesWireBody } from "../src/messages-stream.js";
 import {
   CAPABLE_MODEL,
+  CAPABLE_GENERATION_KEY,
   CAPABLE_MODEL_OPENROUTER,
   DISPLAY_NAME,
   generationKey,
@@ -98,8 +99,13 @@ describe("freshness treats standard and high as one generation", () => {
 
   it("keeps the canonical key byte-identical to what stored citation hashes used", () => {
     /* Every existing lookup and investigation was hashed over the wire id. A
-       canonical value of anything else would detach all of them on deploy. */
-    expect(generationKey(CAPABLE_MODEL_OPENROUTER)).toBe(CAPABLE_MODEL_OPENROUTER);
+       canonical value of anything else would detach all of them on deploy. It
+       is a durable fingerprint token in its own right, not an alias for the
+       current capable model constant: the latter will move on the next model
+       upgrade, while stored hashes cannot be rewritten by `generationKey`. */
+    expect(CAPABLE_GENERATION_KEY).toBe("anthropic/claude-sonnet-5");
+    expect(generationKey(CAPABLE_MODEL_OPENROUTER)).toBe(CAPABLE_GENERATION_KEY);
+    expect(generationKey(HIGH_POWER_MODEL_OPENROUTER)).toBe(CAPABLE_GENERATION_KEY);
     expect(generationKey("someone/else-9")).toBe("someone/else-9");
   });
 

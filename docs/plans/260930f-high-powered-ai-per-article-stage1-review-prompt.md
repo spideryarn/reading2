@@ -1,5 +1,7 @@
 # Code review, Stages 1–2: 260930f high-powered AI per article
 
+CANDIDATE: commit 9b611dfe (parent 3f83c9a7). `git show --stat 9b611dfe` lists every changed path.
+
 You are the code reviewer AND fixer for one stage. Repo: this worktree. The candidate is the commit
 named in `CANDIDATE` below (`git show --stat <sha>` lists every changed path; start with the files
 under "Start here", which do not limit scope). The plan is

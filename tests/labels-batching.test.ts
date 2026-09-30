@@ -1252,7 +1252,17 @@ describe("prefixIsCacheable", () => {
     // under Sonnet 5's 1,024. So the warm-up that serialises the first batch to
     // write a cache entry has nothing to write, and skipping it is the right
     // call rather than a shortcut.
-    expect(prefixIsCacheable(renderOutline(fixture(6, 7).tree))).toBe(false);
+    expect(prefixIsCacheable(renderOutline(fixture(6, 7).tree), "standard")).toBe(false);
+  });
+
+  it("uses Opus's lower floor for a high-power article", () => {
+    /* This real outline is between the two measured floors: too short for
+       Sonnet's 1,024-token prefix, but long enough for Opus's 512. Treating the
+       second answer like the first fans every label batch out at once and
+       throws away the cache hit the high-power run could have used. */
+    const outline = renderOutline(fixture(6, 7).tree);
+    expect(prefixIsCacheable(outline, "standard")).toBe(false);
+    expect(prefixIsCacheable(outline, "high")).toBe(true);
   });
 
   it("is true once the prefix clears the floor", () => {
@@ -1261,7 +1271,7 @@ describe("prefixIsCacheable", () => {
     // pass whatever the threshold said. Four characters a token, so 4,096
     // characters is comfortably over 1,024 tokens even with the system prompt
     // discounted entirely.
-    expect(prefixIsCacheable("x".repeat(4_096))).toBe(true);
+    expect(prefixIsCacheable("x".repeat(4_096), "standard")).toBe(true);
   });
 });
 

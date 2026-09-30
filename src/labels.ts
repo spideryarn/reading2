@@ -61,9 +61,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { createHash } from "node:crypto";
-import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
+import { underCacheFloor } from "./article-prompt.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { generatorFor, type ModelPower } from "./models.js";
+import { generatorFor, type ModelPower, modelFor } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { codeOfMessage, kindOfMessage, MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -1159,8 +1159,8 @@ export function coversExactly(entry: LabelCheckpointEntry, batch: Batch): boolea
  * accepted is calling the result a fact, which is why the field it feeds is
  * named `estimatedCacheable`.
  */
-export function prefixIsCacheable(prefix: string): boolean {
-  return estimateTokens(SYSTEM + prefix) >= CACHE_FLOOR_TOKENS;
+export function prefixIsCacheable(prefix: string, power: ModelPower): boolean {
+  return !underCacheFloor(SYSTEM + prefix, modelFor("labels", power));
 }
 
 /**
@@ -2510,7 +2510,7 @@ export async function generateLabels(opts: {
      See docs/research/260826b-prompt-caching-anthropic.md § Concurrency and
      docs/project/prompt-caching.md § The floor. */
   const prefix = batches[0] ? batchParts(batches[0], opts.blocks, outline).shared : "";
-  const estimatedCacheable = prefixIsCacheable(prefix);
+  const estimatedCacheable = prefixIsCacheable(prefix, opts.power);
   const queue = new PQueue({ concurrency: estimatedCacheable ? 1 : CONCURRENCY });
 
   let done = 0;

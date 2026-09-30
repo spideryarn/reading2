@@ -68,6 +68,7 @@ listed here; the names under each are files in `docs/project/`.
   `public-shelf.md` (the other one: `/read/public`, for strangers) ·
   `public-readable-sharing.md` (what we tell the author of a republished article) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
+  `high-powered-ai.md` (one article on Opus instead of Sonnet) ·
   `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages) ·
   `website-text.md` (the landing page, the contact address) ·

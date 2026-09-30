@@ -281,6 +281,40 @@ wrong:
 - Docs: a new `docs/project/high-powered-ai.md` (owner: reading-view-overview.md), a line in
   setup-dev.md § Which model everything uses, the note, and the deferred half below.
 
+### What landed
+
+The UI half, 2026-09-30.
+
+- **`src/web/HighPowerSwitch.tsx`**, mounted first inside `RerunSection` in `Metadata.tsx`, above
+  the whole-article row and the mode rows it changes the model for. It draws nothing unless
+  `isAdmin(useSession().user?.id)`. It is a native checkbox tinted like the experimental switch on
+  `/profile`, with the help text beneath it and `On since <date>` when on. The box is controlled by
+  the server's last answer, never by the click. It is disabled until the metadata has answered and
+  while the `PUT` is out. A failure reads `Not saved — <the server's message>` and leaves the box as
+  it was. A success calls the page's `refresh`.
+- **Where it sits has a cost.** The section is shut by default, so an admin sees whether an article
+  is on only after opening *Re-run AI processing*. Section's `aside` slot on the heading row could
+  say it while shut. That was not built.
+- **`tests/metadata-high-power-switch.test.tsx`** has 7 tests, mounted through `Metadata`. It covers
+  six things:
+  - it is absent for a reader and present for the admin;
+  - it already reads as on when the column is set;
+  - it sends `PUT /api/admin/article/:slug/high-power` with `{on:true}` and then `{on:false}`, and
+    re-reads the metadata after each;
+  - it is disabled while the write is out;
+  - a 404 leaves the box unchanged and shows the message;
+  - a race, below.
+- **The browser check found a bug that the first five tests missed.** It ran under Playwright on the
+  box, against this worktree's own vite on :5391, signed in as the local admin, on
+  `the-mythology-of-conscious-ai-spya-rn5m0q`. The box was first re-synced from the page's read in
+  an effect keyed on `saving`. Finishing a save therefore re-applied the read from before the write:
+  switching off drew *On since …* again until the refresh landed. The race test holds the refresh
+  open. It went red on that code and green once the sync moved to a render-time adjustment on `read`
+  alone. A re-run in the browser then showed on → reload still on → off, with no stale line. The
+  shots are `260930f-shot-high-power-off.png` and `260930f-shot-high-power-on.png`.
+- **Not done here:** the plan's fuller browser check (run a cheap mode with the switch on and confirm
+  Opus in the technical details and in `ai_calls`). It spends a real model call.
+
 ## Deferred — written up for Greg, not built
 
 These are his decisions; each is small once decided.
@@ -360,6 +394,17 @@ file and is not kept.
   five accepted as found; none overruled. Not re-reviewed as a plan: the changes are additions Sol
   itself proposed, and the code review will see them built.
 
+- **Code review, Stages 1–2** (GPT Sol, write-capable, candidate 9b611dfe):
+  [prompt](260930f-high-powered-ai-per-article-stage1-review-prompt.md),
+  [answer](260930f-high-powered-ai-per-article-stage1-review-sol.md). `VERDICT: ship`, no P0/P1. It
+  fixed two P2s itself, red-first: F1, the labels and hierarchy-expansion cache estimates still used
+  Sonnet's 1,024 floor on Opus (so a high-power run could skip a warm-up it qualified for); F2,
+  `generationKey` returned the mutable `CAPABLE_MODEL_OPENROUTER`, so the next capable-tier move
+  would have detached every stored citation lookup — now a frozen literal,
+  `CAPABLE_GENERATION_KEY`, pinned byte-for-byte by a test. Its fixes were read and the gates re-run
+  here. It could not run the three Postgres-backed suites (no loopback in its sandbox); they were run
+  here.
+
 ## Status
 
-Plan reviewed and revised; building Stages 1–2.
+Stages 1–3 built. Stage 3 review next.

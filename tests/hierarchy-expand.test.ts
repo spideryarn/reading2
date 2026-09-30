@@ -394,7 +394,8 @@ describe("the constants a scoped call is made with", () => {
        for the whole cascade without a single test noticing. Fifty tokens of
        daylight is what makes that hard to do by accident. */
     expect(estimateTokens(EXPAND_SYSTEM)).toBeGreaterThan(CACHE_FLOOR_TOKENS + 50);
-    expect(expansionPrefixIsCacheable("")).toBe(true);
+    expect(expansionPrefixIsCacheable("", "standard")).toBe(true);
+    expect(expansionPrefixIsCacheable("", "high")).toBe(true);
   });
 });
 
@@ -409,6 +410,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
 
     /* A breakpoint is a POSITION: everything from the top of the request
@@ -454,6 +456,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     const [, first, second] = request.own.split(/^SECTION /m);
     /* Split on the header rather than searched whole: both markers appear in a
@@ -471,6 +474,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     expect(request.own).toContain(
       "  The Whole Work — It argues one thing at length.\n" +
@@ -486,6 +490,7 @@ describe("the expansion request", () => {
       blocks: withNote,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     /* The id travels and the prose does not — the one thing a second renderer
        would be free to forget. Numbering restarts at 0 within the slice, which
@@ -518,6 +523,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     expect(short.estimatedCacheable).toBe(true);
 
@@ -526,6 +532,7 @@ describe("the expansion request", () => {
       blocks,
       outline: `${OUTLINE}\n${"3. A Chapter — It says something at some length about the matter.\n".repeat(60)}`,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     expect(long.estimatedCacheable).toBe(true);
   });
@@ -545,15 +552,27 @@ describe("the expansion request", () => {
     expect(expectedChildren(pending(0, 39), dense, CASCADE_RECIPE)).toBe(20);
     expect(expectedChildren(pending(0, 39), plain, CASCADE_RECIPE)).toBe(5);
 
-    const withHeadings = expansionRequest({ briefings, blocks: dense, outline: OUTLINE, recipe: CASCADE_RECIPE });
-    const without = expansionRequest({ briefings, blocks: plain, outline: OUTLINE, recipe: CASCADE_RECIPE });
+    const withHeadings = expansionRequest({
+      briefings,
+      blocks: dense,
+      outline: OUTLINE,
+      recipe: CASCADE_RECIPE,
+      power: "standard",
+    });
+    const without = expansionRequest({
+      briefings,
+      blocks: plain,
+      outline: OUTLINE,
+      recipe: CASCADE_RECIPE,
+      power: "standard",
+    });
     expect(withHeadings.maxTokens).toBeGreaterThan(without.maxTokens);
     expect(withHeadings.maxTokens - without.maxTokens).toBe((20 - 5) * 200);
   });
 
   it("refuses to assemble a request with no targets at all", () => {
     expect(() =>
-      expansionRequest({ briefings: [], blocks, outline: OUTLINE, recipe: CASCADE_RECIPE }),
+      expansionRequest({ briefings: [], blocks, outline: OUTLINE, recipe: CASCADE_RECIPE, power: "standard" }),
     ).toThrow(/at least one target/);
   });
 });

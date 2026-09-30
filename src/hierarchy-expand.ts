@@ -48,7 +48,7 @@
  *   Every refusal is an `ExpansionRefused` and retryable; how many times is the
  *   executor's decision and the plan gives it a fixed attempt budget.
  */
-import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
+import { estimateTokens, underCacheFloor } from "./article-prompt.js";
 import {
   bodyHeadingsIn,
   bodyWordsIn,
@@ -598,8 +598,8 @@ export function expectedChildren(
 }
 
 /** Is the shared prefix long enough for the model to take it? See `estimatedCacheable`. */
-export function expansionPrefixIsCacheable(outline: string): boolean {
-  return estimateTokens(EXPAND_SYSTEM + outline) >= CACHE_FLOOR_TOKENS;
+export function expansionPrefixIsCacheable(outline: string, power: ModelPower): boolean {
+  return !underCacheFloor(EXPAND_SYSTEM + outline, modelFor("hierarchy", power));
 }
 
 /**
@@ -618,9 +618,11 @@ export function expansionRequest(opts: {
   /** `renderFrozenOutline` of wave 1's root. The same string for every call of the run. */
   outline: string;
   recipe: CascadeRecipe;
+  /** The model whose cache floor decides whether this prefix is eligible. */
+  power: ModelPower;
   index?: BlockIndex;
 }): ExpansionRequest {
-  const { briefings, blocks, outline, recipe } = opts;
+  const { briefings, blocks, outline, recipe, power } = opts;
   if (briefings.length === 0) {
     throw new Error("An expansion request needs at least one target; this one carried none.");
   }
@@ -648,7 +650,7 @@ export function expansionRequest(opts: {
     own,
     maxTokens,
     effort,
-    estimatedCacheable: expansionPrefixIsCacheable(shared),
+    estimatedCacheable: expansionPrefixIsCacheable(shared, power),
     params: {
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },

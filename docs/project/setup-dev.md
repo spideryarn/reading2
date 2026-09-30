@@ -311,6 +311,10 @@ drifted a version behind.
 | **PDF figure locator** | Gemini 3 Flash — `google/gemini-3-flash-preview` | OpenRouter, not a tier — `PDF_FIGURE_LOCATOR_MODEL`. Asked only about a figure the other routes refused ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md) § Stage 2) |
 | **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. The one job not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 
+**One article can move up a tier.** High-powered AI swaps the capable tier's Sonnet 5 for Opus 5.5
+(`anthropic/claude-opus-5.5`, stamped `claude-opus-5-5`) for that article's calls only —
+[high-powered-ai.md](high-powered-ai.md).
+
 **Every one of those goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
 whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol
 the request is written in — and that axis has its own doc: [ai-gateway.md](ai-gateway.md). The short

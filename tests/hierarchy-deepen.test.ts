@@ -292,6 +292,7 @@ function canonicalFor(
     blocks,
     outline: seed.outline,
     recipe,
+    power: "standard",
   });
   return canonicalExpansionRequest({
     power: "standard",
@@ -342,6 +343,7 @@ describe("the expansion checkpoint's key", () => {
       blocks: BLOCKS,
       outline: SEED.outline,
       recipe: ONE_PER_CALL,
+      power: "standard",
     });
     expect(canonicalFor(first).request).toEqual(messagesWireBody("hierarchy", request.params, "standard"));
   });
@@ -462,6 +464,7 @@ describe("the expansion checkpoint's key", () => {
         blocks,
         outline: SEED.outline,
         recipe: ONE_PER_CALL,
+        power: "standard",
       }).params;
     expect(requestOver(fatter), "the fixture's two bodies do not render alike").toEqual(
       requestOver(BLOCKS),
