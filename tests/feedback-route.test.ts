@@ -347,7 +347,7 @@ afterEach(() => {
  * spread" a thing this file can see rather than a thing the store happens to do.
  */
 describe("GET /api/feedback", () => {
-  it("answers the reader's own list, four fields a report, and never caches it", async () => {
+  it("answers the reader's own list, five fields a report, and never caches it", async () => {
     listAnswer = {
       reports: [
         {

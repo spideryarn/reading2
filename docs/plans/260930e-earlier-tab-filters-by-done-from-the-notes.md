@@ -89,8 +89,8 @@ generated module works in all three and is boring.
 - the committed map equals what the script produces from the notes now (the script exports its pure
   function; the test calls it) — so a note written without re-running the script goes red at
   `npm test`, with the command to run in the failure message;
-- every note has a header, with a known ending and well-formed ids — so a note that forgets it goes
-  red too, rather than silently leaving its report "not done";
+- every header present has a known ending and well-formed ids — a headerless note deliberately stays
+  out of the map and reads as not shipped, as § What stays unwritten explains;
 - the combination rule above, on hand-made inputs.
 
 ### The wire shape gains one field, and the read gains one parameter
@@ -148,7 +148,7 @@ already near the top of some notes: several of those are article or session ids.
 - **No row id:** the wordmark note (`260929_0429-…`), relayed by the Overseer without a Sentry
   issue: `reports: none`.
 
-148 reports: 144 shipped, 3 declined, 1 awaiting.
+149 reports: 145 shipped, 3 declined, 1 awaiting (including this report's new note).
 
 **Nothing in the production database is touched**, so there is no command for Greg or the Overseer
 to run. Greg's permission to mark production rows is noted and not needed.

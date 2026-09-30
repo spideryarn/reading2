@@ -7,9 +7,7 @@
  * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
  */
 import { FEEDBACK_NOTE_ENDINGS } from "./feedback-endings.generated.js";
-
-export const FEEDBACK_ENDINGS = ["shipped", "declined", "awaiting"] as const;
-export type FeedbackEnding = (typeof FEEDBACK_ENDINGS)[number];
+export { FEEDBACK_ENDINGS, type FeedbackEnding } from "./feedback-ending-values.js";
 
 /**
  * **Has a change for this report shipped, in the build that is answering?**

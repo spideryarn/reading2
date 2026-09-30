@@ -4,7 +4,7 @@
  * conflict here, merge the notes and re-run it; never pick a side.
  * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
  */
-import type { FeedbackEnding } from "./feedback-ending.js";
+import type { FeedbackEnding } from "./feedback-ending-values.js";
 
 export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-a0ep9m": "shipped",

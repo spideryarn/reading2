@@ -32,11 +32,11 @@
  * note's header back. On a merge conflict in the generated file, merge the
  * notes and re-run this; never pick a side.
  */
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { FEEDBACK_ENDINGS, type FeedbackEnding } from "../src/feedback-ending.js";
+import { FEEDBACK_ENDINGS, type FeedbackEnding } from "../src/feedback-ending-values.js";
 import { isMain } from "../src/is-main.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,6 +73,7 @@ export function parseNoteHeader(text: string): NoteHeader | null | string {
   for (const line of match[1].split("\n")) {
     const pair = /^([a-z]+):\s*(.*)$/.exec(line.trim());
     if (!pair?.[1]) return `unreadable header line: ${JSON.stringify(line)}`;
+    if (fields.has(pair[1])) return `duplicate header field: ${pair[1]}`;
     fields.set(pair[1], (pair[2] ?? "").trim());
   }
   const unknown = [...fields.keys()].filter((key) => !HEADER_FIELDS.has(key));
@@ -95,6 +96,8 @@ export function parseNoteHeader(text: string): NoteHeader | null | string {
   }
   const bad = reports.filter((id) => !REPORT_ID.test(id));
   if (bad.length > 0) return `not a report id: ${bad.join(", ")}`;
+  const repeated = reports.filter((id, index) => reports.indexOf(id) !== index);
+  if (repeated.length > 0) return `report id named more than once: ${[...new Set(repeated)].join(", ")}`;
 
   const header: NoteHeader = { reports, ending: ending as FeedbackEnding };
   const parts = fields.get("parts");
@@ -177,13 +180,30 @@ export function renderModule(endings: ReadonlyMap<string, FeedbackEnding>): stri
     " * conflict here, merge the notes and re-run it; never pick a side.",
     " * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.",
     " */",
-    'import type { FeedbackEnding } from "./feedback-ending.js";',
+    'import type { FeedbackEnding } from "./feedback-ending-values.js";',
     "",
     "export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {",
     ...lines,
     "};",
     "",
   ].join("\n");
+}
+
+/**
+ * Put one rendered module at `generatedPath`. A missing file is stale, not an
+ * error: this is the command that must be able to recreate it. `--check` still
+ * refuses either missing or different output without writing.
+ */
+export function syncGenerated(
+  text: string,
+  generatedPath: string = GENERATED_PATH,
+  check = false,
+): "unchanged" | "written" | "stale" {
+  const current = existsSync(generatedPath) ? readFileSync(generatedPath, "utf8") : null;
+  if (current === text) return "unchanged";
+  if (check) return "stale";
+  writeFileSync(generatedPath, text);
+  return "written";
 }
 
 function main(): void {
@@ -193,22 +213,22 @@ function main(): void {
     process.exit(1);
   }
   const text = renderModule(endings);
-  const current = readFileSync(GENERATED_PATH, "utf8");
-  if (process.argv.includes("--check")) {
-    if (current !== text) {
-      console.error(
-        "src/feedback-endings.generated.ts is out of date: npx tsx scripts/feedback-endings.ts",
-      );
-      process.exit(1);
-    }
+  const checking = process.argv.includes("--check");
+  const outcome = syncGenerated(text, GENERATED_PATH, checking);
+  if (outcome === "stale") {
+    console.error(
+      "src/feedback-endings.generated.ts is out of date: npx tsx scripts/feedback-endings.ts",
+    );
+    process.exit(1);
+  }
+  if (checking) {
     console.log(`✓ ${endings.size} reports, up to date`);
     return;
   }
-  if (current === text) {
+  if (outcome === "unchanged") {
     console.log(`✓ ${endings.size} reports, unchanged`);
     return;
   }
-  writeFileSync(GENERATED_PATH, text);
   console.log(`✓ wrote ${endings.size} reports to src/feedback-endings.generated.ts`);
 }
 

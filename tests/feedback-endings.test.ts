@@ -4,7 +4,9 @@
  * "shipped" comes from.
  * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +17,7 @@ import {
   parseNoteHeader,
   readNotes,
   renderModule,
+  syncGenerated,
 } from "../scripts/feedback-endings.js";
 import { isFeedbackShipped, shippedFeedbackIds } from "../src/feedback-ending.js";
 import { FEEDBACK_NOTE_ENDINGS } from "../src/feedback-endings.generated.js";
@@ -48,6 +51,24 @@ describe("the committed map", () => {
     expect(isFeedbackShipped("constructor")).toBe(false);
     expect(isFeedbackShipped("__proto__")).toBe(false);
   });
+
+  it("can recreate missing or conflicted generated output, while check mode only reports it", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "feedback-endings-"));
+    const target = path.join(dir, "feedback-endings.generated.ts");
+    const rendered = "the rendered module\n";
+    try {
+      expect(syncGenerated(rendered, target, true)).toBe("stale");
+      expect(syncGenerated(rendered, target)).toBe("written");
+      expect(readFileSync(target, "utf8")).toBe(rendered);
+
+      writeFileSync(target, "<<<<<<< ours\n=======\n>>>>>>> theirs\n");
+      expect(syncGenerated(rendered, target)).toBe("written");
+      expect(readFileSync(target, "utf8")).toBe(rendered);
+      expect(syncGenerated(rendered, target, true)).toBe("unchanged");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("parseNoteHeader", () => {
@@ -77,6 +98,16 @@ describe("parseNoteHeader", () => {
     ["no ending", "reports: spya-aaaaaa", /ending must be one of/],
     ["no reports", "ending: shipped", /names no report id/],
     ["a Sentry short id instead", "reports: SPIDERYARN-READING2-63\nending: shipped", /not a report id/],
+    [
+      "one report id twice",
+      "reports: spya-aaaaaa, spya-aaaaaa\nending: shipped\nparts: 2",
+      /report id named more than once/,
+    ],
+    [
+      "a duplicate field",
+      "reports: spya-aaaaaa\nending: shipped\nending: declined",
+      /duplicate header field/,
+    ],
     ["an unknown field", "reports: spya-aaaaaa\nending: shipped\nstatus: live", /unknown header field/],
     ["parts of one", "reports: spya-aaaaaa\nending: shipped\nparts: 1", /parts must be/],
     ["parts on two reports", "reports: spya-aaaaaa, spya-bbbbbb\nending: shipped\nparts: 2", /exactly one report/],
@@ -120,11 +151,20 @@ describe("combineEndings — one report, several notes", () => {
       { name: "d.md", text: "# no header\n" },
       { name: "e.md", text: note("reports: spya-eeeeee\nending: nope") },
       { name: "f.md", text: note("reports: none\nending: shipped") },
+      { name: "g.md", text: note("reports: spya-gggggg\nending: shipped\nparts: 3") },
+      {
+        name: "h.md",
+        text: note("reports: spya-gggggg, spya-gggggg\nending: shipped"),
+      },
     ]);
     expect([...endings]).toEqual([
       ["spya-aaaaaa", "shipped"],
       ["spya-cccccc", "awaiting"],
+      ["spya-gggggg", "awaiting"],
     ]);
-    expect(problems).toEqual([expect.stringMatching(/^e\.md: ending must be one of/)]);
+    expect(problems).toEqual([
+      expect.stringMatching(/^e\.md: ending must be one of/),
+      expect.stringMatching(/^h\.md: report id named more than once/),
+    ]);
   });
 });

@@ -5253,14 +5253,15 @@ export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
  * tab shows it** — `GET /api/feedback`.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * **Four fields, written out, and derived from nothing.** Not a `Pick` of
+ * **Five fields, written out.** Not a `Pick` of
  * `FeedbackReport` or of the admin row: a field added to either of those must
  * not widen what this response carries by itself. The email, the address, the
  * diagnostics and the screenshot stay behind — a list whose job is "what did I
  * say" has no use for them, and the address can carry the reader's own search
  * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
- * rule). Here rather than in src/store/contracts.ts because the dialog reads it,
- * and nothing under src/web/ may import the store.
+ * rule). Four come from the store; the route derives `shipped` from this build's
+ * note map. Here rather than in src/store/contracts.ts because the dialog reads
+ * it, and nothing under src/web/ may import the store.
  */
 export interface EarlierFeedback {
   id: string;
