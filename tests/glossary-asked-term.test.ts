@@ -47,6 +47,8 @@ import type { ExplainEnding } from "../src/explain.js";
 import { type AskedTermQuestion, makeAskAboutTerm } from "../src/term-lookup.js";
 import { MAX_TERM } from "../src/vocabulary.js";
 import type { Article, AskedTermAnswer, Block, Tree } from "../src/types.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 
 /** One paragraph, with an id a test can name. */
 function para(id: string, text: string): Block {
@@ -91,14 +93,15 @@ function media(id: string): Block {
  * check and not a stand-in for one.
  */
 function harness(
-  opts: { blocks?: Block[]; notYours?: boolean; ending?: ExplainEnding } = {},
+  opts: { blocks?: Block[]; notYours?: boolean; ending?: ExplainEnding; highPowerSince?: string } = {},
 ) {
   const blocks = opts.blocks ?? [para("spya-aaaaaa", "An opening paragraph.")];
   const meta = { slug: "harness", title: "A piece" };
   const tree = { rootId: blocks[0]?.id, nodes: {} } as unknown as Tree;
-  const article = { meta, blocks, tree } as unknown as Article;
+  const article = { meta, blocks, tree, highPowerSince: opts.highPowerSince ?? null } as unknown as Article;
 
   const asked: { blockId: string; quote: string }[] = [];
+  const powers: string[] = [];
 
   const prepare = makeAskAboutTerm({
     reader: {
@@ -119,6 +122,7 @@ function harness(
        "an answer that stopped part-way" below. */
     explainStream: async function* (req) {
       asked.push({ blockId: req.blockId, quote: req.quote });
+      powers.push(req.power);
       yield { type: "delta", text: "An " };
       yield { type: "delta", text: "answer." };
       yield {
@@ -140,7 +144,7 @@ function harness(
   const ask = async (slug: string, term: unknown, signal?: AbortSignal) =>
     drain(await prepare(slug, term), signal);
 
-  return { ask, prepare, asked };
+  return { ask, prepare, asked, powers };
 }
 
 /**
@@ -176,6 +180,23 @@ async function refusal(work: Promise<unknown>): Promise<{ status?: number; messa
     message: outcome.err.message,
   };
 }
+
+describe("High-powered AI (plan 260930f) — an asked term's explain follows the article", () => {
+  const blocks = [para("spya-bbbbbb", "Later the piece discusses Attention Heads at some length.")];
+  const since = "2026-09-30T00:00:00.000Z";
+
+  it("asks at high power for an administrator's high-powered article", async () => {
+    const h = harness({ blocks, highPowerSince: since });
+    await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () => h.ask("harness", "attention head"));
+    expect(h.powers).toEqual(["high"]);
+  });
+
+  it("asks at standard power when the owner is not an administrator", async () => {
+    const h = harness({ blocks, highPowerSince: since });
+    await runAsOwner(DEV_OWNER_ID, () => h.ask("harness", "attention head"));
+    expect(h.powers).toEqual(["standard"]);
+  });
+});
 
 describe("a term the article uses", () => {
   const blocks = [

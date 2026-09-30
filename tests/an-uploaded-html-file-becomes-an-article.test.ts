@@ -99,6 +99,7 @@ async function readyToVerify(
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
+    power: "standard" as const,
   };
   return { id, ctx };
 }

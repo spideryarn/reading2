@@ -130,7 +130,7 @@ import {
   PROVIDER_UNREADABLE,
 } from "./messages.js";
 import { stageFailure } from "./job-failure.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import { collectSearchEvidence, whereSearchCountCameFrom, type Usage } from "./openrouter-stream.js";
 import { readJsonOrNull } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
@@ -1784,6 +1784,8 @@ export async function generateDebate(opts: {
   article: Article;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
+  /** Which capable model debates it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
   /**
    * **The capture journal, and production passes none.**
    *
@@ -1814,7 +1816,7 @@ export async function generateDebate(opts: {
     title: articleMeta?.title ?? fallbackHeadTitle(tree),
     byline: articleMeta?.byline ?? null,
   };
-  const model = modelFor("debate");
+  const model = modelFor("debate", opts.power);
   const started = Date.now();
 
   /* **The argument, not the apparatus** — applied at the call site, as

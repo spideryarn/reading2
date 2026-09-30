@@ -231,6 +231,7 @@ afterAll(async () => {
  */
 function ctxFor(): StepContext {
   return {
+    power: "standard",
     slug: SLUG,
     report: () => undefined,
     signal: new AbortController().signal,

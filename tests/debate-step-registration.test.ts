@@ -75,6 +75,7 @@ let store: MemoryArtifactStore;
 
 function ctxFor(): StepContext {
   return {
+    power: "standard",
     slug: SLUG,
     report: () => undefined,
     signal: new AbortController().signal,
@@ -259,8 +260,8 @@ describe("what the store records when the debate step has run", () => {
       /* The premise, asserted rather than assumed: with the override in place
          the resolver and the constant are two different strings, so the
          assertion below can tell them apart. */
-      expect(modelFor("debate")).toBe("test-only/debate-override");
-      expect(modelFor("debate")).not.toBe(CAPABLE_MODEL);
+      expect(modelFor("debate", "standard")).toBe("test-only/debate-override");
+      expect(modelFor("debate", "standard")).not.toBe(CAPABLE_MODEL);
 
       const debate = await runAndWrite();
       expect(debate.generator).toBe("test-only/debate-override");

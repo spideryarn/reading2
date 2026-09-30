@@ -249,7 +249,7 @@ describe("the label batch checkpoints", () => {
          somehow resumed would make this pass for the wrong reason. */
       await noAuth(async () => {
         await expect(
-          generateLabels({ tree, blocks, slug: "test", checkpoints: store }),
+          generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store }),
         ).rejects.toThrow();
       });
     });
@@ -349,6 +349,7 @@ describe("the scoped expansion checkpoints", () => {
 
     const written = await logLinesWhile(async () => {
       await runExpansionWave({
+        power: "standard",
         slug: "deepen-log",
         checkpoints: store,
         execute: async () => freeAnswer(answer),
@@ -372,6 +373,7 @@ describe("the scoped expansion checkpoints", () => {
     const { batches, blocks, seed, ancestorsOf, answer } = expansionFixture();
     const run = async (): Promise<void> => {
       await runExpansionWave({
+        power: "standard",
         slug: "deepen-log",
         checkpoints: store,
         execute: async () => freeAnswer(answer),

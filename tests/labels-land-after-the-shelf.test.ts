@@ -385,6 +385,7 @@ function fakeHierarchy(): PipelineStep<"hierarchy"> {
 const REGISTRY: StepRegistry = { ...STEPS, hierarchy: fakeHierarchy() };
 
 const PARTS: AdvanceParts = {
+  power: async () => "standard",
   session: (job, attempt) =>
     openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
   steps: REGISTRY,

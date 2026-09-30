@@ -107,7 +107,7 @@ import { RESERVED_ATTRS } from "./reserved.js";
 import { whyUnusable } from "./store/artifacts.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
-import { PDF_READER_MODEL } from "./models.js";
+import { modelFor, PDF_READER_MODEL } from "./models.js";
 import {
   baselineFor,
   foldLine,
@@ -3537,8 +3537,8 @@ async function main() {
   console.log(`Pages:  ${pass.pages.length}${pass.isScan ? " (a scan — no text layer)" : ""}`);
   console.log(`Chunks: ${planChunks(pass).map((c) => c.pages.join("–")).join(", ")}`);
   const result = await runPdfExtract({
-    frontMatter: openRouterFrontMatterReader(),
-    authors: openRouterAuthorsReader(),
+    frontMatter: openRouterFrontMatterReader(modelFor("pdf-frontmatter", "standard")),
+    authors: openRouterAuthorsReader(modelFor("pdf-frontmatter", "standard")),
     bytes,
     url,
     /* **Nothing is remembered between runs of this command**, and that is a

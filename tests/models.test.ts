@@ -77,7 +77,7 @@ describe("which wire each task is on", () => {
     /* The decision of 2026-08-27, pinned so that reversing it has to be
        deliberate. Before it, the seven pipeline stages went straight to
        Anthropic's own API and this loop would have failed on all seven. */
-    for (const task of ALL_TASKS) expect(resolveModel(task).provider).toBe("openrouter");
+    for (const task of ALL_TASKS) expect(resolveModel(task, "standard").provider).toBe("openrouter");
   });
 });
 
@@ -86,9 +86,9 @@ describe("the model id a task sends", () => {
     /* Both wires now address the model the same way: the Anthropic-compatible
        endpoint wants `anthropic/claude-sonnet-5` exactly as chat/completions
        does. Until 2026-08-27 `labels` sent the bare `claude-sonnet-5`. */
-    expect(modelFor("labels")).toBe(CAPABLE_MODEL_OPENROUTER);
-    expect(modelFor("explain")).toBe(CAPABLE_MODEL_OPENROUTER);
-    expect(modelFor("labels")).toContain("/");
+    expect(modelFor("labels", "standard")).toBe(CAPABLE_MODEL_OPENROUTER);
+    expect(modelFor("explain", "standard")).toBe(CAPABLE_MODEL_OPENROUTER);
+    expect(modelFor("labels", "standard")).toContain("/");
   });
 
   it("keeps the unprefixed spelling out of every request", () => {
@@ -98,7 +98,7 @@ describe("the model id a task sends", () => {
        OpenRouter is a 404, and *changing the stamps to match the wire* would
        mark the whole corpus stale and regenerate it at full price. Two
        spellings, two jobs. See src/models.ts. */
-    for (const task of ALL_TASKS) expect(modelFor(task)).not.toBe(CAPABLE_MODEL);
+    for (const task of ALL_TASKS) expect(modelFor(task, "standard")).not.toBe(CAPABLE_MODEL);
   });
 
   it("lets the environment override it, and says that it did", () => {
@@ -107,7 +107,7 @@ describe("the model id a task sends", () => {
        promises "what the server is configured with" has to see the override
        the caller sees, which means one resolver rather than two. */
     process.env.SPIDERYARN_CHAT_MODEL = "someone/else-9";
-    expect(resolveModel("chat")).toEqual({
+    expect(resolveModel("chat", "standard")).toEqual({
       id: "someone/else-9",
       provider: "openrouter",
       wire: "chat",
@@ -120,9 +120,9 @@ describe("the model id a task sends", () => {
        captured at import time can be captured before `.env.local` has been
        read. This is what makes the default parameter at each call site still
        behave as it did. */
-    expect(resolveModel("chat").source).toBe("default");
+    expect(resolveModel("chat", "standard").source).toBe("default");
     process.env.SPIDERYARN_CHAT_MODEL = "someone/else-9";
-    expect(resolveModel("chat").source).toBe("override");
+    expect(resolveModel("chat", "standard").source).toBe("override");
   });
 
   it("has an override variable decided for every task, even if the answer is none", () => {
@@ -149,7 +149,8 @@ describe("what a person is shown", () => {
       QUICK_MODEL_OPENROUTER,
       PDF_READER_MODEL,
       EMBEDDING_MODEL,
-      ...ALL_TASKS.map(modelFor),
+      ...ALL_TASKS.map((task) => modelFor(task, "standard")),
+      ...ALL_TASKS.map((task) => modelFor(task, "high")),
       ...NON_TASK_MODELS.map((m) => m.id),
     ];
     for (const id of sendable) expect(DISPLAY_NAME[id], `no display name for ${id}`).toBeTruthy();

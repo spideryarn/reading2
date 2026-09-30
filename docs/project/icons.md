@@ -223,7 +223,8 @@ Going forwards, then:
   from the bar (`MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx)), so the button looks like where
   it goes: Trajectory's stop card opens Glossary with `BookA`, Ideas with `Lightbulb` and FAQ with
   `BadgeQuestionMark` (`OpenIn` in [`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx)).
-- **Every icon has a tooltip.** No bare icon, anywhere.
+- **Every icon has a tooltip.** No bare icon, anywhere. If the control has a keyboard shortcut, the
+  tooltip names it — [tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
 - **Not for content.** A link whose words *are* the thing — an idea's name, an event's label, a
   section title — stays words. The rule is about labels like *In the glossary ›*, not about text
   that happens to be clickable.
@@ -247,6 +248,9 @@ doc and changes only with Greg's approval of the wording
   been reproduced off the device**: Chromium and WebKit both draw it. The suspects, and the five
   Web Inspector checks that would settle it, are in
   [260912c](../plans/260912c-send-button-icon-and-primary-style.md#what-gpt-sol-added-to-the-diagnosis).
+- [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx) — the quiz's step row as `ChevronLeft`,
+  `ChevronRight` and `List`, each in a tooltip; the Recall | Quiz switch beside it kept its words,
+  and [quiz.md § On screen](quiz.md) says why (SPIDERYARN-READING2-71).
 
 ## See also
 

@@ -93,6 +93,7 @@ describe("the stamp stage 3 writes", () => {
   const stage3 = async (store: ReturnType<typeof memoryArtefacts>) => {
     const out = await STEPS.blocks.run(
       {
+        power: "standard",
         slug: "a-slug",
         report: () => {},
         signal: new AbortController().signal,

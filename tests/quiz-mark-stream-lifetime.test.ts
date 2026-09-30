@@ -155,6 +155,7 @@ async function quizInto(dir: string): Promise<Quiz> {
       ],
     },
     {
+      power: "standard",
       slug: path.basename(dir),
       blocks,
       sourceHash: inputFingerprint(blocks, tree, meta),

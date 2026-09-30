@@ -119,6 +119,7 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
+    power: "standard" as const,
   };
   return { id, ctx, slug };
 }

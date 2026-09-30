@@ -352,7 +352,9 @@ const PINS: Pin[] = [
     file: "src/models.ts",
     kind: "function",
     name: "resolveModel",
-    checksum: "af857fa0416c4317",
+    /* Re-pinned 2026-09-30 for plan 260930f: `power` is an argument now and the
+       default id depends on it; the environment read is the same line. */
+    checksum: "d2c502aff4811cf5",
     yields: [],
     why: "indexes process.env by MODEL_ENV_VAR's value; the twelve names come from that record at runtime",
   },

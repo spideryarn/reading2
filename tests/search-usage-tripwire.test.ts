@@ -85,7 +85,7 @@ const reply = (usage: unknown) =>
       "data: [DONE]\n\n",
   );
 
-const ask = () => explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" });
+const ask = () => explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha" });
 
 /** The one success line explain writes — the only one carrying `searchesFrom`. */
 const searchesFrom = () => lines.find((l) => "searchesFrom" in l)?.searchesFrom;

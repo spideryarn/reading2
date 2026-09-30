@@ -1032,6 +1032,16 @@ export function Reader({
      route: ← / → (`useArrowNav` below) and the door after the stop's block
      (`TableView`'s `afterBlock`). `TrajectoryControl` says why it is stable. */
   const [trajectoryControl, setTrajectoryControl] = useState<TrajectoryControl | null>(null);
+  /* **The quiz's ← / →**, handed up by `QuizPanel` while it is mounted and
+     `null` once it is not — so Recall, or any other mode, leaves ← / → with the
+     browser (keyboard.md § ← / → in Quiz). One stable function
+     for the panel's life; the setter wraps it because a function passed to a
+     state setter is an updater. */
+  const [quizKeys, setQuizKeys] = useState<((dir: -1 | 1) => boolean) | null>(null);
+  const onQuizKeys = useCallback(
+    (handler: ((dir: -1 | 1) => boolean) | null) => setQuizKeys(() => handler),
+    [],
+  );
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -1133,12 +1143,15 @@ export function Reader({
      ← / → are the browser's. */
   const trajectoryKeys =
     mode === "trajectory" && trajectoryControl ? trajectoryControl.step : null;
+  /* …and the quiz's questions while Remember's Quiz half is showing — `quizKeys`
+     is only ever set while `QuizPanel` is mounted. */
+  const quizStepKeys = mode === "remember" ? quizKeys : null;
   useArrowNav(
     nav,
     article.blocks,
     sectionDepth(geometry),
     !drawerOpen,
-    trajectoryKeys,
+    trajectoryKeys ?? quizStepKeys,
   );
 
   /* **The door after the current stop's block** — TrajectoryPanel.tsx §
@@ -1772,6 +1785,7 @@ export function Reader({
             readSoFar={readSoFar}
             onJump={bandJump}
             onMode={setMode}
+            onQuizKeys={onQuizKeys}
           />
         ) : null;
       case "glossary":

@@ -95,7 +95,7 @@ import {
   TOOL_CALL_LOST,
   saidNothing,
 } from "./messages.js";
-import { modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 /* **Candidates' system prompt, and only that.** It is a hundred lines of
    instructions with no logic in it, and it lives in its own module for the
    reason that file's header gives: the *enforced* half of Candidates is
@@ -152,7 +152,8 @@ export const jobFor = (kind: ThreadKind): ConverseJob =>
  * (src/referee-claims-run.ts says so beside its own); passing the kind is what
  * stops `SPIDERYARN_REFEREE_CANDIDATES_MODEL` being the same non-event.
  */
-export const defaultModel = (kind: ThreadKind = "chat"): string => modelFor(jobFor(kind));
+export const defaultModel = (power: ModelPower, kind: ThreadKind = "chat"): string =>
+  modelFor(jobFor(kind), power);
 
 /**
  * How long the whole exchange may take.
@@ -966,6 +967,12 @@ export interface ConverseRequest {
    * tests/article-prompt.test.ts pins.
    */
   profile?: string | null;
+  /**
+   * Which capable model answers — the article's High-powered AI setting
+   * (plan 260930f). Required, so a route cannot forget to ask; `model` below
+   * still overrides it for a test or an eval.
+   */
+  power: ModelPower;
   model?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -1448,7 +1455,8 @@ export async function* converse({
      earlier in the same pattern, and `model` is below `kind` for exactly that.
      Moving it above would give every Candidates turn chat's model and chat's
      override, silently. */
-  model = defaultModel(kind),
+  power,
+  model = defaultModel(power, kind),
   signal,
   /* **`kind` above decides this**, the same way it decides `model` — a
      destructuring default may read a binding declared earlier in the same
@@ -1514,7 +1522,7 @@ export async function* converse({
      would make a number about the article move for reasons that have nothing to
      do with the article. `cachedText` under-counts anyway, tools most of all;
      src/article-prompt.ts says so. */
-  const tooShortToCache = underCacheFloor(cachedText(base));
+  const tooShortToCache = underCacheFloor(cachedText(base), model);
 
   /* The conversation as it will be sent, which grows during the turn: an
      assistant message carrying the tool calls, then one `tool` message per
@@ -1583,7 +1591,7 @@ export async function* converse({
      seconds is not a stalled stream, and killing it for that would be wrong.
      Found by a GPT Sol review, 2026-08-26. */
   const toolSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
-  const toolContext: ToolContext = { slug, meta, blocks, signal: toolSignal };
+  const toolContext: ToolContext = { slug, meta, blocks, signal: toolSignal, power };
 
   /* The last round's, read by the guards after the loop. Declared out here so
      those guards can stay where they are and keep meaning what they meant.

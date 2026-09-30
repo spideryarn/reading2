@@ -150,6 +150,7 @@ const { resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
 const ARTICLE: Article = {
+  highPowerSince: null,
   meta: { slug: SLUG, title: "Writes and Write-Nots", url: "https://paulgraham.com/writes.html" },
   blocks: [],
   assets: undefined,

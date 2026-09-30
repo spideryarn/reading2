@@ -388,6 +388,7 @@ async function statusOf(tx: Tx): Promise<string | undefined> {
 
 /** Nothing here sends the article anywhere, so there is no prefix to pay for. */
 const ctx: StepContext = {
+  power: "standard",
   slug: SLUG,
   report: () => {},
   signal: new AbortController().signal,

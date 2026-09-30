@@ -121,7 +121,7 @@ describe("hoisting the structure prompt's three values", () => {
    * OUTPUT) went out as `toc/9`, 2026-09-28 — plan 260926a § Stage 3.
    */
   it("mints one stable key for the toc/9 structure request", () => {
-    expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
+    expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params, "standard"))).toBe(
       "749c4a601f07fea7",
     );
   });

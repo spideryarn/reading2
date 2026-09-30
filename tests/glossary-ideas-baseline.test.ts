@@ -394,7 +394,7 @@ describe("the previous artefact, as the store answers it", () => {
     opts: { previous: Glossary | null; profile?: string | null },
   ) {
     const { generateGlossary } = await import("../src/glossary.js");
-    const run = await generateGlossary({ article: await articleIn(dir), ...opts });
+    const run = await generateGlossary({ power: "standard", article: await articleIn(dir), ...opts });
     await writeFile(
       path.join(dir, "glossary.json"),
       JSON.stringify(run.glossary, null, 2),
@@ -417,7 +417,7 @@ describe("the previous artefact, as the store answers it", () => {
     opts: { previous: Ideas | null },
   ) {
     const { generateIdeas } = await import("../src/ideas.js");
-    const run = await generateIdeas({ article: await articleIn(dir), ...opts });
+    const run = await generateIdeas({ power: "standard", article: await articleIn(dir), ...opts });
     await writeFile(path.join(dir, "ideas.json"), JSON.stringify(run.ideas, null, 2), "utf-8");
     store.plant("a", "ideas", "ideas", run.ideas);
     return run;
@@ -1004,7 +1004,7 @@ describe("the previous artefact, over the Postgres store", () => {
        one this code actually produces rather than a hand-built object that
        happens to satisfy the reader. */
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const first = await generateGlossary({ article: await articleIn(a.dir), previous: null });
+    const first = await generateGlossary({ power: "standard", article: await articleIn(a.dir), previous: null });
     await publishColumn("glossary", first.glossary);
 
     await withStore(SLUG, async (store) => {
@@ -1013,6 +1013,7 @@ describe("the previous artefact, over the Postgres store", () => {
 
       answers.push(glossaryAnswer("Corrigibility", "Noema"));
       const second = await generateGlossary({
+        power: "standard",
         article: await articleIn(a.dir),
         previous,
         profile: "a physicist",
@@ -1032,12 +1033,13 @@ describe("the previous artefact, over the Postgres store", () => {
     const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility"));
-    const first = await generateGlossary({ article: await articleIn(a.dir), previous: null });
+    const first = await generateGlossary({ power: "standard", article: await articleIn(a.dir), previous: null });
     await publishColumn("glossary", first.glossary);
 
     await withStore(SLUG, async (store) => {
       answers.push(glossaryAnswer("Noema"));
       const second = await generateGlossary({
+        power: "standard",
         article: await articleIn(a.dir),
         previous: await previousGlossaryFrom(store, SLUG),
       });
@@ -1078,7 +1080,7 @@ describe("the previous artefact, over the Postgres store", () => {
     const block = quotable(a.blocks);
 
     answers.push(ideasAnswer(block, "Writing is a test of thought"));
-    const first = await generateIdeas({ article: await articleIn(a.dir), previous: null });
+    const first = await generateIdeas({ power: "standard", article: await articleIn(a.dir), previous: null });
     await publishColumn("ideas", first.ideas);
 
     await withStore(SLUG, async (store) => {
@@ -1086,7 +1088,7 @@ describe("the previous artefact, over the Postgres store", () => {
       expect(previous?.ideas).toHaveLength(1);
 
       answers.push(ideasAnswer(block, "Writing is a test of thought"));
-      const second = await generateIdeas({ article: await articleIn(a.dir), previous });
+      const second = await generateIdeas({ power: "standard", article: await articleIn(a.dir), previous });
       expect(second.ideas.ideas[0]?.id).toBe(first.ideas.ideas[0]?.id);
     });
   }, 60_000);
@@ -1148,7 +1150,7 @@ describe("the previous artefact, over the Postgres store", () => {
     const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const real = (await generateGlossary({ article: await articleIn(a.dir), previous: null })).glossary;
+    const real = (await generateGlossary({ power: "standard", article: await articleIn(a.dir), previous: null })).glossary;
 
     expect(
       await pgRefusals("glossary", "entries", { ...real }, previousGlossaryFrom),
@@ -1163,7 +1165,7 @@ describe("the previous artefact, over the Postgres store", () => {
     answers.push(
       ideasAnswer(quotable(a.blocks), "Writing is a test of thought", "Prose is a tool"),
     );
-    const real = (await generateIdeas({ article: await articleIn(a.dir), previous: null })).ideas;
+    const real = (await generateIdeas({ power: "standard", article: await articleIn(a.dir), previous: null })).ideas;
     expect(real.ideas).toHaveLength(2);
 
     expect(await pgRefusals("ideas", "ideas", { ...real }, previousIdeasFrom)).toEqual(
@@ -1196,7 +1198,7 @@ describe("the previous artefact, over the Postgres store", () => {
     const { generateGlossary, previousGlossaryFrom } = await import("../src/glossary.js");
 
     answers.push(glossaryAnswer("Corrigibility", "Noema"));
-    const first = (await generateGlossary({ article: await articleIn(a.dir), previous: null })).glossary;
+    const first = (await generateGlossary({ power: "standard", article: await articleIn(a.dir), previous: null })).glossary;
     await publishColumn("glossary", first);
 
     const begun = await owner.runAsOwner(admin.ADMIN_USER_ID_LOCAL as OwnerId, () =>
@@ -1230,6 +1232,7 @@ describe("the previous artefact, over the Postgres store", () => {
           answers.push(glossaryAnswer("Corrigibility", "Noema"));
           const previous = await previousGlossaryFrom(store, SLUG);
           const second = await generateGlossary({
+            power: "standard",
             article: await articleIn(a.dir),
             previous,
             profile: "a physicist",

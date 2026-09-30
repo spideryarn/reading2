@@ -288,6 +288,7 @@ function tree(slug: string, blocks: Block[]): Article["tree"] {
 
 const ARTICLES: Record<string, Article> = {
   [A]: {
+    highPowerSince: null,
     meta: { slug: A, title: "A piece", url: "https://example.com/a", byline: "Somebody" },
     blocks: BLOCKS,
     tree: tree(A, BLOCKS),
@@ -299,6 +300,7 @@ const ARTICLES: Record<string, Article> = {
     sourceGuess: undefined,
   },
   [B]: {
+    highPowerSince: null,
     meta: { slug: B, title: "Another piece", url: "https://example.com/b", byline: "Somebody" },
     blocks: B_BLOCKS,
     tree: tree(B, B_BLOCKS),

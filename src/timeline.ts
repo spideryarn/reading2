@@ -109,7 +109,7 @@ import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -770,6 +770,8 @@ export function buildTimeline(
     slug: string;
     blocks: readonly Block[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     /** The publication day, or null — and null is the common case on this shelf. */
     frame: string | null;
     elapsedMs: number;
@@ -831,7 +833,7 @@ export function buildTimeline(
 
   return {
     version: PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* **Fixed at write time and never re-derived.** The panel colours and
@@ -1202,6 +1204,8 @@ export async function generateTimeline(opts: {
    * only when `sourceHash` matches — so nothing else here would notice.
    */
   previous: Timeline | null;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<TimelineRun> {
   const { blocks, tree, meta: articleMeta } = opts.article;
 
@@ -1273,7 +1277,7 @@ export async function generateTimeline(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, frame }) }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
@@ -1320,6 +1324,7 @@ export async function generateTimeline(opts: {
 
   const dropped = emptyDropped();
   const timeline = buildTimeline(parseJson(raw), {
+    power: opts.power,
     slug: opts.article.slug,
     blocks,
     sourceHash,
@@ -1339,7 +1344,7 @@ export async function generateTimeline(opts: {
     words,
     frame,
     dropped,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

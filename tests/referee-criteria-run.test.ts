@@ -71,6 +71,7 @@ const DIVERGING: RefereeCriterionConfig = {
 const LITERATURE: RefereeCriterionConfig = { kind: "literature" };
 
 const req = (config: RefereeCriterionConfig = SINGLE): CriterionRequest => ({
+  power: "standard",
   meta,
   blocks: BLOCKS,
   criterion: "Are the controls adequate?",

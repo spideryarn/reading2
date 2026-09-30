@@ -329,7 +329,7 @@ export const liveGenerator: Generator = async ({ system, user, maxTokens }) => {
     output_config: { effort: PRODUCTION_EFFORT },
     system,
     messages: [{ role: "user", content: user }],
-  });
+  }, { power: "standard" });
   const message = await call.finalMessage();
   const text = message.content
     .map((b) => (b.type === "text" ? b.text : ""))

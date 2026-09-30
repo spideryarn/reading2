@@ -744,6 +744,7 @@ const CTX = {
   report: () => {},
   signal: new AbortController().signal,
   cacheArticle: false,
+  power: "standard" as const,
 };
 
 describe("recoverPdfFigures", () => {

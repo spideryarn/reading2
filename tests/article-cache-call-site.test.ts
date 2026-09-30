@@ -211,6 +211,7 @@ async function walk(steps: StepName[]): Promise<void> {
        than hanging it. One spare turn past the number of steps. */
     for (let turn = 0; turn <= steps.length; turn++) {
       const advanced = await advanceJobWith(job.id, {
+        power: async () => "standard",
         session,
         steps: { ...STEPS, ...registry } as never,
       });

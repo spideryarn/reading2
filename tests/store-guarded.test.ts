@@ -162,6 +162,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
+    ["../src/store/pg-high-power.js", "pgHighPowerStore", "high-power"],
     ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
     ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
   ];
@@ -359,6 +360,8 @@ describe("no Postgres store is selected without a guard", () => {
       "pgFetchAllowanceStore",
       "pgGlossaryLookupStore",
       "pgGlossaryStore",
+      /* High-powered AI's switch, 2026-09-30: its parameter is an article's slug. */
+      "pgHighPowerStore",
       "pgJobStore",
       "pgLibrarySearch",
       "pgLinkPreviewStore",

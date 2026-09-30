@@ -392,7 +392,8 @@ export function PrivacyPage() {
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
-          aids, chat and search; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
+          aids, chat and search, and <code>claude-opus-5-5</code> in its place on an article switched
+          to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
           <code>gpt-6-luna</code> to choose the topics above your shelf, for which it is shown your
           articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
           one;{" "}

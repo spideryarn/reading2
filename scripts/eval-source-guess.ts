@@ -155,7 +155,7 @@ for (const c of candidates) {
 
     try {
       const { result: found, report } = await collectSpend(() =>
-        defaultFind(workToFind(article.meta), { timeoutMs: remaining(), line }),
+        defaultFind(workToFind(article.meta), { power: "standard", timeoutMs: remaining(), line }),
       );
       for (const call of report.calls) {
         if (call.cost.source === "provider") row.costNanos += call.cost.costNanos;

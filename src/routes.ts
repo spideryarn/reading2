@@ -240,6 +240,7 @@ import {
   adminStore,
   commentStore,
   feedbackStore,
+  highPowerStore,
   realtimeSessionStore,
   sourceStore,
   visibilityStore,
@@ -378,6 +379,8 @@ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from
 import { routeProfileIsStale } from "./trajectory.js";
 import {
   type ArticleStage,
+  articlePower,
+  type ModelPower,
   NON_TASK_MODELS,
   type Provider,
   STAGE_EFFORT,
@@ -449,7 +452,7 @@ import {
    with the client's picker so a fifth stance cannot be accepted here and
    missing from the menu. src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
-import type { CommentAnchor, ResetResponse } from "./types.js";
+import type { Article, CommentAnchor, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -933,6 +936,19 @@ export function contentDisposition(
 /** An error carrying the HTTP status it should be reported as. */
 function httpError(status: number, message: string): Error {
   return Object.assign(new Error(message), { status });
+}
+
+/**
+ * **Which capable model a request-path call about this article uses** —
+ * High-powered AI, docs/plans/260930f-high-powered-ai-per-article.md.
+ *
+ * `loadArticle` is owner-scoped, so the ambient owner is the article's owner
+ * and `articlePower` can ask whether they are an administrator. Every route that
+ * streams a capable-tier answer about an article passes this; the functions it
+ * reaches require it, so one that forgot would not compile.
+ */
+function powerOf(article: Pick<Article, "highPowerSince">): ModelPower {
+  return articlePower(article.highPowerSince, currentOwnerId());
 }
 
 /**
@@ -1695,6 +1711,7 @@ async function answer(
   let text = "";
   try {
     for await (const event of explainStream({
+      power: powerOf(article),
       meta: article.meta,
       blocks: article.blocks,
       blockId,
@@ -2160,6 +2177,7 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
   let text = "";
   try {
     for await (const event of markAnswerStream({
+      power: powerOf(article),
       meta: article.meta,
       blocks: article.blocks,
       /* The three things the request may not name.
@@ -3104,6 +3122,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     });
 
     for await (const event of converse({
+      power: powerOf(article),
       meta: article.meta,
       blocks: article.blocks,
       history: thread.messages.slice(0, -2), // everything before this turn
@@ -3854,6 +3873,9 @@ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
     slug,
     meta: article.meta,
     blocks: article.blocks,
+    /* A live session's meaning search is a capable-tier call like typed chat's
+       — plan 260930f; the compiler found this one, the plan's list did not. */
+    power: powerOf(article),
   });
 }
 
@@ -4170,6 +4192,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     let hits: SearchHit[] = [];
     let model = "";
     for await (const event of findPassagesStream({
+      power: powerOf(article),
       meta: article.meta,
       blocks: article.blocks,
       criterion: run.criterion,
@@ -4424,6 +4447,7 @@ async function runRefereeCriterion(
     let results: RefereeResult[] = [];
     let model = "";
     for await (const event of runCriterionStream({
+      power: powerOf(article),
       meta: article.meta,
       blocks: article.blocks,
       criterion: row.criterion,
@@ -4565,7 +4589,11 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
        quietly become the ranking this sub-mode is built to have none of.
        GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
     let claimsOmitted = 0;
-    for await (const event of runClaimsStream({ meta: article.meta, blocks: article.blocks })) {
+    for await (const event of runClaimsStream({
+      meta: article.meta,
+      blocks: article.blocks,
+      power: powerOf(article),
+    })) {
       if (event.type === "claim") {
         frame("claim", { claim: event.claim });
         continue;
@@ -4671,7 +4699,13 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
   const { frame } = sse(res);
   let chars = 0;
   try {
-    for await (const event of mirrorStream({ blocks: article.blocks, comments, criteria, slug })) {
+    for await (const event of mirrorStream({
+      blocks: article.blocks,
+      comments,
+      criteria,
+      slug,
+      power: powerOf(article),
+    })) {
       if (event.type === "delta") {
         chars += event.text.length;
         frame("delta", { chars });
@@ -4972,6 +5006,24 @@ function checkUploadOrigin(
  * `rightsConfirmed: 1` are shapes a hand-written client produces, and reading
  * either as a confirmation would record a confirmation nobody gave.
  */
+/**
+ * `{ on: boolean }` for `PUT /api/admin/article/:slug/high-power`, or a 400.
+ *
+ * Strict in the way `parseVisibilityRequest` below is: an unknown key is
+ * refused rather than ignored, and `"true"` is not `true` — a switch that reads
+ * a string as on is a switch that doubles a bill by accident. Plan 260930f.
+ */
+export function parseHighPowerRequest(body: unknown): { on: boolean } {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "Expected an object with on: true or false");
+  }
+  const { on, ...rest } = body as Record<string, unknown>;
+  /* Not interpolated, for `parseVisibilityRequest`'s reason. */
+  if (Object.keys(rest).length) throw httpError(400, "That request had fields this endpoint does not accept");
+  if (typeof on !== "boolean") throw httpError(400, "on must be true or false");
+  return { on };
+}
+
 export function parseVisibilityRequest(body: unknown): {
   visibility: Visibility;
   rightsConfirmed: boolean;
@@ -5660,7 +5712,9 @@ function modelsInUse(): { tasks: ModelReport[] } {
        the raw table would have printed `high` beside a stage running at
        `medium`. */
     const effort = task in STAGE_EFFORT ? effortFor(task as ArticleStage) : undefined;
-    const { id, provider, source } = resolveModel(task);
+    /* `standard`: this page reports the app's configuration, not one
+       article's — High-powered AI is per article (plan 260930f). */
+    const { id, provider, source } = resolveModel(task, "standard");
     return {
       task,
       model: displayName(id),
@@ -7159,6 +7213,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const report = await adminStore.readFeedbackAcrossOwners(owner, id);
       if (!report) throw httpError(404, "There is no such report.");
       send(res, 200, { report });
+    },
+  },
+
+  /* **High-powered AI, switched on or off for one article** —
+     docs/plans/260930f-high-powered-ai-per-article.md, decision 8.
+
+     In the admin namespace so the namespace gate decides who may call it — a
+     reader is a 403 before this handler runs, and nothing here repeats the
+     check. But **owner-scoped all the same**: the admin namespace reads across
+     owners, and this deliberately does not write across them, so another
+     owner's slug is the store's 404 (`ownedSlug`). Answers what the column now
+     holds; switching on twice keeps the first `since`. Nothing re-runs: the
+     next `Run it again` is what uses it. */
+  {
+    kind: "pattern",
+    method: "PUT",
+    pattern: /^\/api\/admin\/article\/([\w.%-]+)\/high-power$/,
+    /* A settings write: it calls no model, so there is nothing to attribute. */
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const { on } = parseHighPowerRequest(await readBody(req));
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, await highPowerStore.set(slugPart(captures, 1), on));
     },
   },
 

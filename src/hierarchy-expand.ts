@@ -48,7 +48,7 @@
  *   Every refusal is an `ExpansionRefused` and retryable; how many times is the
  *   executor's decision and the plan gives it a fixed attempt budget.
  */
-import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
+import { estimateTokens, underCacheFloor } from "./article-prompt.js";
 import {
   bodyHeadingsIn,
   bodyWordsIn,
@@ -74,7 +74,7 @@ import {
 import type { BuildReport, ModelNode } from "./hierarchy.js";
 import { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 import type { MessagesBody } from "./messages-stream.js";
-import { type Effort, modelFor } from "./models.js";
+import { type Effort, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
 import { budgetFor, THINKING_HEADROOM } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
@@ -598,8 +598,8 @@ export function expectedChildren(
 }
 
 /** Is the shared prefix long enough for the model to take it? See `estimatedCacheable`. */
-export function expansionPrefixIsCacheable(outline: string): boolean {
-  return estimateTokens(EXPAND_SYSTEM + outline) >= CACHE_FLOOR_TOKENS;
+export function expansionPrefixIsCacheable(outline: string, power: ModelPower): boolean {
+  return !underCacheFloor(EXPAND_SYSTEM + outline, modelFor("hierarchy", power));
 }
 
 /**
@@ -618,9 +618,11 @@ export function expansionRequest(opts: {
   /** `renderFrozenOutline` of wave 1's root. The same string for every call of the run. */
   outline: string;
   recipe: CascadeRecipe;
+  /** The model whose cache floor decides whether this prefix is eligible. */
+  power: ModelPower;
   index?: BlockIndex;
 }): ExpansionRequest {
-  const { briefings, blocks, outline, recipe } = opts;
+  const { briefings, blocks, outline, recipe, power } = opts;
   if (briefings.length === 0) {
     throw new Error("An expansion request needs at least one target; this one carried none.");
   }
@@ -648,7 +650,7 @@ export function expansionRequest(opts: {
     own,
     maxTokens,
     effort,
-    estimatedCacheable: expansionPrefixIsCacheable(shared),
+    estimatedCacheable: expansionPrefixIsCacheable(shared, power),
     params: {
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
@@ -1256,6 +1258,8 @@ export function recordCandidate(opts: {
   retries?: number;
   fanOut?: number | null;
   index?: BlockIndex;
+  /** The power the wave ran at, so the record names the model that was asked. */
+  power: ModelPower;
 }): CandidateRecord {
   const { node, blocks, recipe } = opts;
   const index = opts.index ?? indexBlocks(blocks);
@@ -1283,7 +1287,7 @@ export function recordCandidate(opts: {
     authoredHeadings: bodyHeadingsIn(node, blocks, index),
     retries: opts.retries ?? 0,
     fanOut: opts.fanOut ?? null,
-    model: modelFor("hierarchy"),
+    model: modelFor("hierarchy", opts.power),
     effort: EXPAND_EFFORT,
     promptVersion: EXPANSION_PROMPT_STAMP,
   };

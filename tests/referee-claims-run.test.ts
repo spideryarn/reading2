@@ -204,7 +204,7 @@ describe("the request", () => {
      nothing. These read the body that actually went to `fetch`. */
   async function sentBody(): Promise<Record<string, unknown>> {
     fetchMock.mockResolvedValue(reply([CLAIM]));
-    await runClaims({ meta, blocks: BLOCKS });
+    await runClaims({ power: "standard", meta, blocks: BLOCKS });
     const init = fetchMock.mock.calls[0]?.[1] as { body: string };
     return JSON.parse(init.body) as Record<string, unknown>;
   }
@@ -250,7 +250,7 @@ describe("reading the answer back", () => {
     fetchMock.mockResolvedValue(reply([CLAIM]));
     const streamed: Claim[] = [];
     let done: Claim[] | undefined;
-    for await (const e of runClaimsStream({ meta, blocks: BLOCKS })) {
+    for await (const e of runClaimsStream({ power: "standard", meta, blocks: BLOCKS })) {
       if (e.type === "claim") streamed.push(e.claim);
       else done = e.outcome.claims;
     }
@@ -261,7 +261,7 @@ describe("reading the answer back", () => {
 
   it("keeps a claim the model found nothing for, and says nothing was discarded", async () => {
     fetchMock.mockResolvedValue(reply([{ ...CLAIM, passages: [] }]));
-    const { claims } = await runClaims({ meta, blocks: BLOCKS });
+    const { claims } = await runClaims({ power: "standard", meta, blocks: BLOCKS });
     expect(claims).toHaveLength(1);
     expect(claims[0]?.passages).toEqual([]);
     expect(claims[0]?.discarded).toBe(0);
@@ -272,7 +272,7 @@ describe("reading the answer back", () => {
        an error — the panel has a sentence for it, and the sentence is about the
        run rather than about the paper. */
     fetchMock.mockResolvedValue(reply([]));
-    const { claims } = await runClaims({ meta, blocks: BLOCKS });
+    const { claims } = await runClaims({ power: "standard", meta, blocks: BLOCKS });
     expect(claims).toEqual([]);
   });
 
@@ -289,14 +289,14 @@ describe("reading the answer back", () => {
           { blockId: "spya-ywq345", quote: "nowhere", claim: "two" },
         ]),
       );
-      await expect(runClaims({ meta, blocks: BLOCKS })).rejects.toThrow(CLAIMS_UNUSABLE);
+      await expect(runClaims({ power: "standard", meta, blocks: BLOCKS })).rejects.toThrow(CLAIMS_UNUSABLE);
     });
 
     it("is not raised when one claim survived, because a partial answer still ran", async () => {
       fetchMock.mockResolvedValue(
         reply([CLAIM, { blockId: "spya-zwt234", quote: "nowhere", claim: "two" }]),
       );
-      const { claims } = await runClaims({ meta, blocks: BLOCKS });
+      const { claims } = await runClaims({ power: "standard", meta, blocks: BLOCKS });
       expect(claims).toHaveLength(1);
     });
   });
@@ -321,7 +321,7 @@ describe("reading the answer back", () => {
           "data: [DONE]\n\n",
       ),
     );
-    await expect(runClaims({ meta, blocks: BLOCKS })).rejects.toThrow();
+    await expect(runClaims({ power: "standard", meta, blocks: BLOCKS })).rejects.toThrow();
   });
 });
 
@@ -353,7 +353,7 @@ describe("what the provider says about how it stopped", () => {
           "data: [DONE]\n\n",
       ),
     );
-    await expect(runClaims({ meta, blocks: BLOCKS })).rejects.toThrow(/\[ai-no-room\]/);
+    await expect(runClaims({ power: "standard", meta, blocks: BLOCKS })).rejects.toThrow(/\[ai-no-room\]/);
   });
 
   it("refuses a run the provider itself said it errored out of, even though it parses", async () => {
@@ -379,7 +379,7 @@ describe("what the provider says about how it stopped", () => {
     let sawDone = false;
     let thrown: Error | undefined;
     try {
-      for await (const e of runClaimsStream({ meta, blocks: BLOCKS })) {
+      for await (const e of runClaimsStream({ power: "standard", meta, blocks: BLOCKS })) {
         if (e.type === "claim") shown.push(e.claim);
         else sawDone = true;
       }
@@ -405,7 +405,7 @@ describe("what the provider says about how it stopped", () => {
           "data: [DONE]\n\n",
       ),
     );
-    const { claims } = await runClaims({ meta, blocks: BLOCKS });
+    const { claims } = await runClaims({ power: "standard", meta, blocks: BLOCKS });
     expect(claims).toHaveLength(1);
   });
 });

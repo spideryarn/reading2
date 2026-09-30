@@ -172,7 +172,7 @@ describe("two passes, one artefact", () => {
       answer({ fenced: CLAIM_ROW, searches: 5, annotations: [BLOG] }),
     ];
 
-    const run = await generateDebate({ article });
+    const run = await generateDebate({ power: "standard", article });
 
     expect(calls).toHaveLength(2);
     expect(calls.every((c) => c.job === "debate")).toBe(true);
@@ -202,7 +202,7 @@ describe("two passes, one artefact", () => {
    */
   it("sends the identity to pass A and the article to pass B", async () => {
     answers = [answer({ searches: 2 }), answer({ searches: 2 })];
-    await generateDebate({ article });
+    await generateDebate({ power: "standard", article });
 
     const [passA, passB] = calls.map((c) => JSON.stringify(c.body));
     expect(passA).toContain("gregs-private-baking-notes.example");
@@ -218,7 +218,7 @@ describe("two passes, one artefact", () => {
    */
   it("asks for the web search on both passes, each with its own result cap", async () => {
     answers = [answer({ searches: 2 }), answer({ searches: 2 })];
-    await generateDebate({ article });
+    await generateDebate({ power: "standard", article });
 
     const tools = calls.map(
       (c) => (c.body.tools as { type: string; parameters: Record<string, number | string> }[])[0]!,
@@ -247,7 +247,7 @@ describe("two passes, one artefact", () => {
       answer({ fenced: "[]", searches: 2, annotations: [BLOG] }),
     ];
 
-    const run = await generateDebate({ article });
+    const run = await generateDebate({ power: "standard", article });
 
     expect(run.debate.direct.counts.returnedSources).toBe(2);
     expect(run.debate.direct.counts.reportedRows).toBe(1);
@@ -266,7 +266,7 @@ describe("two passes, one artefact", () => {
       answer({ fenced: CLAIM_ROW, searches: 4, annotations: [BLOG] }),
     ];
 
-    const run = await generateDebate({ article });
+    const run = await generateDebate({ power: "standard", article });
 
     expect(run.debate.direct.rows).toEqual([]);
     expect(run.debate.direct.counts.reportedRows).toBe(0);
@@ -309,7 +309,7 @@ describe("the fence the answer is read out of", () => {
       answer({ fenced: row, searches: 3, annotations: [BLOG] }),
     ];
 
-    const run = await generateDebate({ article });
+    const run = await generateDebate({ power: "standard", article });
 
     expect(run.debate.claims.counts.keptRows).toBe(1);
     expect(run.debate.claims.rows[0]?.applies).toContain("```");
@@ -326,7 +326,7 @@ describe("the fence the answer is read out of", () => {
       answer({ fenced: "[]", searches: 3, annotations: [BLOG] }),
     ];
 
-    const run = await generateDebate({ article });
+    const run = await generateDebate({ power: "standard", article });
 
     expect(run.debate.direct.counts.keptRows).toBe(1);
   });
@@ -381,7 +381,7 @@ describe("either pass failing fails the whole step", () => {
     it(`refuses when ${name}, without buying pass B`, async () => {
       answers = [bad, answer({ fenced: CLAIM_ROW, searches: 4, annotations: [BLOG] })];
 
-      await expect(generateDebate({ article })).rejects.toThrow();
+      await expect(generateDebate({ power: "standard", article })).rejects.toThrow();
       /* **One call, not two.** The sequencing is the mitigation the plan claims
          for a failed pass A, and a sequencing that quietly became concurrent
          would still satisfy every assertion about the artefact. */
@@ -395,7 +395,7 @@ describe("either pass failing fails the whole step", () => {
       answer({ searches: 0 }),
     ];
 
-    await expect(generateDebate({ article })).rejects.toThrow();
+    await expect(generateDebate({ power: "standard", article })).rejects.toThrow();
     expect(calls).toHaveLength(2);
   });
 
@@ -409,7 +409,7 @@ describe("either pass failing fails the whole step", () => {
   it("gives the reader a retryable sentence about the search, not an empty result", async () => {
     answers = [answer({ searches: 0 })];
 
-    const err = await generateDebate({ article }).catch((e: unknown) => e);
+    const err = await generateDebate({ power: "standard", article }).catch((e: unknown) => e);
     const { message } = readerFailureOf(err, "debate");
 
     expect(message).toMatch(/did not run/i);
@@ -425,7 +425,7 @@ describe("either pass failing fails the whole step", () => {
   it("says nothing about what the provider actually sent", async () => {
     answers = [answer({ fenced: "not json at all" })];
 
-    const err = (await generateDebate({ article }).catch((e: unknown) => e)) as Error;
+    const err = (await generateDebate({ power: "standard", article }).catch((e: unknown) => e)) as Error;
 
     expect(err.message).not.toContain("not json at all");
     expect(err.message).toMatch(/was not JSON/);

@@ -535,6 +535,7 @@ function metadataFor(slug: string): ArticleMetadata {
     profile: "PROFILE_SENTINEL a physicist who reads slowly",
     purpose: "PURPOSE_SENTINEL for the thesis chapter due Friday",
     archivedAt: null,
+    highPowerSince: null,
     sharing: { visibility: "private", publicAt: null, personalised: ["glossary"] },
   };
 }

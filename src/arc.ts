@@ -37,7 +37,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { CAPABLE_MODEL, effortFor, generatorFor, type ModelPower, sameGenerator } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import type { Article } from "./article-input.js";
@@ -204,6 +204,8 @@ export function buildArc(
   tree: Tree,
   slug: string,
   sourceHash: string,
+  /** The power the arc was written at — the stamp names the model that wrote it. */
+  power: ModelPower,
 ): Arc {
   const parts = partsOf(tree);
   if (sentences.length !== parts.length) {
@@ -218,7 +220,7 @@ export function buildArc(
     // check is the whole reason this function refuses to guess.
     text: sentences[i]!.trim(),
   }));
-  return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, entries, sourceHash };
+  return { version: PROMPT_VERSION, generator: generatorFor(power), slug, entries, sourceHash };
 }
 
 /**
@@ -282,7 +284,9 @@ export function isStale(
 ): boolean {
   if (!arc.sourceHash) return true;
   if (arc.version !== PROMPT_VERSION) return true;
-  if (arc.generator !== CAPABLE_MODEL) return true;
+  /* By generation, not by string: an arc Opus wrote on a high-powered article
+     is current against Sonnet and the other way round (plan 260930f). */
+  if (!sameGenerator(arc.generator, CAPABLE_MODEL)) return true;
   return arc.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
@@ -352,7 +356,8 @@ export async function generateArc(opts: {
    * docs/project/prompt-caching.md.
    */
   cacheArticle?: boolean;
-
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<ArcRun> {
   /* `meta` is `null` when the article has no metadata, and that is a state
      rather than a failure — the head of the prompt simply loses its lines, and
@@ -411,7 +416,7 @@ export async function generateArc(opts: {
         { type: "text" as const, text: SYSTEM },
       ],
       messages: [{ role: "user", content: renderPrompt(tree) }],
-    }, { ...(opts.signal ? { signal: opts.signal } : {}) });
+    }, { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
       const report = opts.onProgress;
@@ -456,11 +461,17 @@ export async function generateArc(opts: {
     .map((b) => b.text)
     .join("");
 
-  const arc = buildArc(parseJson(raw).arc, tree, tree.slug, inputFingerprint(blocks, tree, meta));
+  const arc = buildArc(
+    parseJson(raw).arc,
+    tree,
+    tree.slug,
+    inputFingerprint(blocks, tree, meta),
+    opts.power,
+  );
 
   return {
     arc,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     parts,
     blocks: blocks.length,
     inputTokens: message.usage.input_tokens,

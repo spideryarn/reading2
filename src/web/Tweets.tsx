@@ -46,7 +46,7 @@
  * ## Borrowed back from the original, 2026-08-25
  *
  * The thread's own numbers in a line of prose rather than pills, and a copy
- * button a screen reader can follow. Deliberately left there: the thread
+ * button a screen reader can follow (an icon since 2026-09-30). Deliberately left there: the thread
  * summary, the green→amber→red character bar, the threading line, the hover
  * transforms, and "Post to Bluesky", which was a styled button wired to
  * `alert()`.
@@ -54,7 +54,7 @@
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, Copy, PenLine, RotateCw, TriangleAlert } from "lucide-react";
+import { Check, Copy, PenLine, RotateCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
@@ -67,6 +67,7 @@ import { articleStats } from "./stats.js";
 import type { UseTweets } from "./useTweets.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { howLong } from "./relative-time.js";
+import { TipNote, Tooltip } from "./Tooltip.js";
 
 /** How long a copy button says it worked before going back to normal. */
 const COPIED_MS = 1600;
@@ -248,6 +249,8 @@ export function ThreadCounts({
       <CopyButton
         text={() => threadMarkdown(thread, article)}
         label="Copy the thread"
+        what="thread"
+        tip="Copy the whole thread, each post numbered, with the article's title and link at the top"
         className="tw:ml-auto"
       />
     </div>
@@ -320,7 +323,13 @@ export function ThreadPosts({
               >
                 {tweet.chars}/{thread.limit}
               </span>
-              <CopyButton text={() => tweet.text} label="Copy" className="tw:ml-auto" />
+              <CopyButton
+                text={() => tweet.text}
+                label="Copy this post"
+                what="post"
+                tip="Copy this post's text"
+                className="tw:ml-auto"
+              />
             </div>
           </li>
         ))}
@@ -376,23 +385,43 @@ function RunFoot({ job, owner }: { job: Job | null; owner: UseTweets }) {
 /**
  * Copy something, and say whether it worked.
  *
+ * **An icon, since 2026-09-30**, its words in a tooltip and its name in
+ * `aria-label`. Greg (SPIDERYARN-READING2-6H): *"Let's just have the icon. I
+ * don't think we need the text copy. Maybe there's a tooltip. Perhaps the same
+ * for copy the thread."* — docs/project/icons.md, every icon has a tooltip.
+ *
  * `navigator.clipboard` needs a secure context, and an iframe or an http origin
  * that is not localhost will reject the write. Saying so is the point: a copy
- * button that silently does nothing is docs/reusable/silent-success.md.
+ * button that silently does nothing is docs/reusable/silent-success.md. So
+ * **a refused copy keeps its words**, visibly, for as long as the state lasts;
+ * a tick is enough for one that worked. The status is a sibling of the button,
+ * not inside it, so the button stays square, and it is always mounted so a
+ * screen reader hears the change.
  *
  * One state this cannot report: `writeText` can return a promise that never
  * settles, when the permission prompt has nowhere to appear. A timeout would
  * turn that into a "Couldn't copy" that might be a lie, so it is left alone.
+ *
+ * On a touch screen a tap copies at once, and a card a browser shows from the
+ * tap's compatibility mouse events closes as it does. Copying is harmless, so
+ * there is no reveal-then-commit (docs/project/touch.md).
  *
  * `text` is a function so the whole-thread markdown is built on the click.
  */
 function CopyButton({
   text,
   label,
+  what,
+  tip,
   className,
 }: {
   text(): string;
+  /** The button's name: stable, whatever the state. */
   label: string;
+  /** What is copied, for the status line: "Post copied". */
+  what: "post" | "thread";
+  /** The tooltip — what the icon cannot say. */
+  tip: string;
   className?: string;
 }) {
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
@@ -403,33 +432,52 @@ function CopyButton({
     return () => clearTimeout(t);
   }, [state]);
 
+  const status =
+    state === "done" ? `${what === "post" ? "Post" : "Thread"} copied` : state === "failed" ? `Couldn't copy the ${what}` : "";
+
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="xs"
-      className={className}
-      title={label}
-      /* Without it the accessible name comes from `title` and stays on "Copy"
-         through every state, so "Couldn't copy" is announced as nothing. */
-      aria-label={state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
-      onClick={() => {
-        // No `?.`: on an origin with no clipboard it would silently do nothing.
-        if (!navigator.clipboard) {
-          setState("failed");
-          return;
-        }
-        navigator.clipboard
-          .writeText(text())
-          .then(() => setState("done"))
-          .catch(() => setState("failed"));
-      }}
-    >
-      {state === "done" ? <Check size={12} className="tw:text-highlight" /> : <Copy size={12} />}
-      <span aria-live="polite">
-        {state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
+    <span className={`tw:inline-flex tw:items-center tw:gap-1.5 ${className ?? ""}`}>
+      <span
+        aria-live="polite"
+        aria-atomic="true"
+        className={state === "failed" ? "tw:text-xs tw:text-destructive" : "tw:sr-only"}
+      >
+        {status}
       </span>
-    </Button>
+      {/* Off while the tick or the failure is showing, which closes a card a
+          tap opened: on a touch screen nothing else would until the next tap
+          elsewhere, and it sat over the post above (WebKit, 2026-09-30).
+          `enabled` rather than a conditional wrapper, which would remount the
+          button and drop keyboard focus (Tooltip.tsx § `enabled`). */}
+      <Tooltip placement="top" enabled={state === "idle"} content={<TipNote>{tip}</TipNote>}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="tw:pointer-coarse:size-10"
+          aria-label={label}
+          onClick={() => {
+            // No `?.`: on an origin with no clipboard it would silently do nothing.
+            if (!navigator.clipboard) {
+              setState("failed");
+              return;
+            }
+            navigator.clipboard
+              .writeText(text())
+              .then(() => setState("done"))
+              .catch(() => setState("failed"));
+          }}
+        >
+          {state === "done" ? (
+            <Check size={12} aria-hidden="true" className="tw:text-highlight" />
+          ) : state === "failed" ? (
+            <X size={12} aria-hidden="true" className="tw:text-destructive" />
+          ) : (
+            <Copy size={12} aria-hidden="true" />
+          )}
+        </Button>
+      </Tooltip>
+    </span>
   );
 }
 

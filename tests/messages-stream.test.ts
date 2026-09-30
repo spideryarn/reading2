@@ -177,7 +177,7 @@ async function recordOne(usage: Record<string, unknown> = {}) {
   const t = stubTransport(cannedStream(usage));
   try {
     const { report } = await collectSpend(async () => {
-      await streamMessage("hierarchy", A_BODY).finalMessage();
+      await streamMessage("hierarchy", A_BODY, { power: "standard" }).finalMessage();
     });
     expect(report.calls).toHaveLength(1);
     return report.calls[0]!;
@@ -198,7 +198,7 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        const call = streamMessage("hierarchy", A_BODY);
+        const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
         await call.finalMessage();
       });
 
@@ -223,7 +223,7 @@ describe("streamMessage — the recording lifecycle", () => {
        article is fine, and the cache is never read again. */
     const t = stubTransport(cannedStream());
     try {
-      await streamMessage("hierarchy", A_BODY).finalMessage();
+      await streamMessage("hierarchy", A_BODY, { power: "standard" }).finalMessage();
       expect(t.seenRequests).toHaveLength(1);
       expect(t.seenRequests[0]?.body.provider).toEqual({
         order: ["anthropic"],
@@ -244,11 +244,11 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       for (const task of ["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
-        await streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }).finalMessage();
+        await streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }, { power: "standard" }).finalMessage();
       }
       const sent = t.seenRequests.map((r) => r.body.model);
       expect(sent).toEqual(sent.map((_, i) => modelFor(
-        (["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!,
+        (["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!, "standard",
       )));
       /* And specifically: the prefixed spelling, never the artefact stamp. */
       for (const m of sent) {
@@ -277,10 +277,10 @@ describe("streamMessage — the recording lifecycle", () => {
         ...A_BODY,
         provider: { order: ["something-else"] },
         model: "openai/gpt-4o",
-      } as unknown as typeof A_BODY).finalMessage();
+      } as unknown as typeof A_BODY, { power: "standard" }).finalMessage();
       const sent = t.seenRequests[0]?.body;
       expect((sent?.provider as { order?: string[] })?.order).toEqual(["anthropic"]);
-      expect(sent?.model).toBe(modelFor("hierarchy"));
+      expect(sent?.model).toBe(modelFor("hierarchy", "standard"));
     } finally {
       t.restore();
     }
@@ -347,7 +347,7 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        const call = streamMessage("arc", A_BODY);
+        const call = streamMessage("arc", A_BODY, { power: "standard" });
         const first = await call.finalMessage();
         const second = await call.finalMessage();
         expect(second).toBe(first);
@@ -362,7 +362,7 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream({ cost: undefined }));
     try {
       const { report } = await collectSpend(async () => {
-        await streamMessage("labels", A_BODY).finalMessage();
+        await streamMessage("labels", A_BODY, { power: "standard" }).finalMessage();
       });
       /* The row exists and admits it does not know — rather than not existing,
          which is a hole in the bill that nothing points at. */
@@ -379,7 +379,7 @@ describe("streamMessage — the recording lifecycle", () => {
     try {
       const { report } = await collectSpend(async () => {
         await expect(
-          streamMessage("ideas", A_BODY).finalMessage(),
+          streamMessage("ideas", A_BODY, { power: "standard" }).finalMessage(),
         ).rejects.toThrow();
       });
       expect(report.calls).toHaveLength(1);
@@ -393,8 +393,8 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        await streamMessage("hierarchy", A_BODY).finalMessage();
-        await streamMessage("arc", A_BODY).finalMessage();
+        await streamMessage("hierarchy", A_BODY, { power: "standard" }).finalMessage();
+        await streamMessage("arc", A_BODY, { power: "standard" }).finalMessage();
       });
       expect(t.seenRequests).toHaveLength(2);
       expect(report.calls.map((c) => c.job)).toEqual(["hierarchy", "arc"]);
@@ -410,9 +410,9 @@ describe("streamMessage — the recording lifecycle", () => {
     try {
       const { report } = await collectSpend(async () => {
         await Promise.all([
-          streamMessage("labels", A_BODY).finalMessage(),
-          streamMessage("labels", A_BODY).finalMessage(),
-          streamMessage("labels", A_BODY).finalMessage(),
+          streamMessage("labels", A_BODY, { power: "standard" }).finalMessage(),
+          streamMessage("labels", A_BODY, { power: "standard" }).finalMessage(),
+          streamMessage("labels", A_BODY, { power: "standard" }).finalMessage(),
         ]);
       });
       expect(report.calls).toHaveLength(3);

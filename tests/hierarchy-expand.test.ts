@@ -394,7 +394,8 @@ describe("the constants a scoped call is made with", () => {
        for the whole cascade without a single test noticing. Fifty tokens of
        daylight is what makes that hard to do by accident. */
     expect(estimateTokens(EXPAND_SYSTEM)).toBeGreaterThan(CACHE_FLOOR_TOKENS + 50);
-    expect(expansionPrefixIsCacheable("")).toBe(true);
+    expect(expansionPrefixIsCacheable("", "standard")).toBe(true);
+    expect(expansionPrefixIsCacheable("", "high")).toBe(true);
   });
 });
 
@@ -409,6 +410,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
 
     /* A breakpoint is a POSITION: everything from the top of the request
@@ -454,6 +456,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     const [, first, second] = request.own.split(/^SECTION /m);
     /* Split on the header rather than searched whole: both markers appear in a
@@ -471,6 +474,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     expect(request.own).toContain(
       "  The Whole Work — It argues one thing at length.\n" +
@@ -486,6 +490,7 @@ describe("the expansion request", () => {
       blocks: withNote,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     /* The id travels and the prose does not — the one thing a second renderer
        would be free to forget. Numbering restarts at 0 within the slice, which
@@ -518,6 +523,7 @@ describe("the expansion request", () => {
       blocks,
       outline: OUTLINE,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     expect(short.estimatedCacheable).toBe(true);
 
@@ -526,6 +532,7 @@ describe("the expansion request", () => {
       blocks,
       outline: `${OUTLINE}\n${"3. A Chapter — It says something at some length about the matter.\n".repeat(60)}`,
       recipe: CASCADE_RECIPE,
+      power: "standard",
     });
     expect(long.estimatedCacheable).toBe(true);
   });
@@ -545,15 +552,27 @@ describe("the expansion request", () => {
     expect(expectedChildren(pending(0, 39), dense, CASCADE_RECIPE)).toBe(20);
     expect(expectedChildren(pending(0, 39), plain, CASCADE_RECIPE)).toBe(5);
 
-    const withHeadings = expansionRequest({ briefings, blocks: dense, outline: OUTLINE, recipe: CASCADE_RECIPE });
-    const without = expansionRequest({ briefings, blocks: plain, outline: OUTLINE, recipe: CASCADE_RECIPE });
+    const withHeadings = expansionRequest({
+      briefings,
+      blocks: dense,
+      outline: OUTLINE,
+      recipe: CASCADE_RECIPE,
+      power: "standard",
+    });
+    const without = expansionRequest({
+      briefings,
+      blocks: plain,
+      outline: OUTLINE,
+      recipe: CASCADE_RECIPE,
+      power: "standard",
+    });
     expect(withHeadings.maxTokens).toBeGreaterThan(without.maxTokens);
     expect(withHeadings.maxTokens - without.maxTokens).toBe((20 - 5) * 200);
   });
 
   it("refuses to assemble a request with no targets at all", () => {
     expect(() =>
-      expansionRequest({ briefings: [], blocks, outline: OUTLINE, recipe: CASCADE_RECIPE }),
+      expansionRequest({ briefings: [], blocks, outline: OUTLINE, recipe: CASCADE_RECIPE, power: "standard" }),
     ).toThrow(/at least one target/);
   });
 });
@@ -973,6 +992,7 @@ describe("what was decided about a candidate", () => {
 
   it("records the decision it actually took, with the counters behind it", () => {
     const record = recordCandidate({
+      power: "standard",
       node: pending(10, 17),
       where: "root > child 2",
       wave: 2,
@@ -1007,6 +1027,7 @@ describe("what was decided about a candidate", () => {
 
   it("says nobody was asked rather than saying finished", () => {
     const record = recordCandidate({
+      power: "standard",
       node: pending(0, 3),
       where: "root > child 1",
       wave: 1,
@@ -1027,10 +1048,10 @@ describe("what was decided about a candidate", () => {
    */
   it("counts the raw and effective yes rates, and which bound did the work", () => {
     const records: CandidateRecord[] = [
-      recordCandidate({ node: pending(0, 19), where: "a", wave: 2, depth: 1, blocks: plain, recipe: CASCADE_RECIPE, verdict: "needs-deeper" }),
-      recordCandidate({ node: pending(20, 39), where: "b", wave: 2, depth: 1, blocks: plain, recipe: CASCADE_RECIPE, verdict: "finished" }),
-      recordCandidate({ node: pending(10, 17), where: "c", wave: 2, depth: 1, blocks: twoHeadings, recipe: CASCADE_RECIPE, verdict: "finished" }),
-      recordCandidate({ node: pending(0, 19), where: "d", wave: 1, depth: 1, blocks: plain, recipe: CASCADE_RECIPE }),
+      recordCandidate({ power: "standard", node: pending(0, 19), where: "a", wave: 2, depth: 1, blocks: plain, recipe: CASCADE_RECIPE, verdict: "needs-deeper" }),
+      recordCandidate({ power: "standard", node: pending(20, 39), where: "b", wave: 2, depth: 1, blocks: plain, recipe: CASCADE_RECIPE, verdict: "finished" }),
+      recordCandidate({ power: "standard", node: pending(10, 17), where: "c", wave: 2, depth: 1, blocks: twoHeadings, recipe: CASCADE_RECIPE, verdict: "finished" }),
+      recordCandidate({ power: "standard", node: pending(0, 19), where: "d", wave: 1, depth: 1, blocks: plain, recipe: CASCADE_RECIPE }),
     ];
     const tally = tallyVerdicts(records);
     expect(tally).toEqual({
@@ -1079,6 +1100,7 @@ describe("what makes one repeat's records pairable with another's", () => {
 
   it("carries the derived range, which is block ids and therefore safe to write down", () => {
     const record = recordCandidate({
+      power: "standard",
       node: pending(10, 17),
       where: "root > child 1 > child 1",
       wave: 2,
@@ -1095,6 +1117,7 @@ describe("what makes one repeat's records pairable with another's", () => {
   it("gives two different splits of one parent different identities", () => {
     const at = (from: number, to: number): CandidateRecord =>
       recordCandidate({
+        power: "standard",
         node: pending(from, to),
         where: "root > child 1 > child 2",
         wave: 2,
@@ -1111,6 +1134,7 @@ describe("what makes one repeat's records pairable with another's", () => {
 
   it("carries one for a node nobody was asked about too", () => {
     const record = recordCandidate({
+      power: "standard",
       node: pending(0, 19),
       where: "root > child 1",
       wave: 1,

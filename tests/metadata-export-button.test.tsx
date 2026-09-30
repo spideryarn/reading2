@@ -62,6 +62,7 @@ const { Metadata } = await import("../src/web/Metadata.js");
 const SLUG = "a-piece";
 
 const ARTICLE: Article = {
+  highPowerSince: null,
   meta: { slug: SLUG, title: "A piece" },
   blocks: [
     {

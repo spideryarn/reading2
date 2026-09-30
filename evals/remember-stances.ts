@@ -213,7 +213,7 @@ async function rememberOnce(
      mistake a cut-off answer for a short one. GPT Sol's review, finding 1. */
   let truncated = false;
   let stopped = false;
-  for await (const event of converse({
+  for await (const event of converse({ power: "standard",
     meta,
     blocks,
     history,

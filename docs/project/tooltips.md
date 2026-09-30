@@ -189,6 +189,44 @@ set — the second paragraph is where the unguessable fact goes, which is exactl
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
+### A shortcut is named on its card
+
+**Any control that has a keyboard shortcut says so in its tooltip.** This file is the single home of
+that rule; [keyboard.md](keyboard.md) and [icons.md](icons.md) point here.
+
+> Add tooltips for the previous and next buttons in the trajectory mode, explaining what they are
+> briefly and especially showing the keyboard shortcuts.
+>
+> And more generally, any time we have a keyboard shortcut, it should be mentioned in the relevant
+> tooltip.
+>
+> — Greg, 2026-09-30 (SPIDERYARN-READING2-74)
+
+The key is a fact a reader cannot guess by pressing the button, so keep it in the card's prose where
+it reads naturally. Trajectory says *While reading, press ←.* on ‹ › and on its door's *Next stop ›*;
+Chat says *Enter to send* and *Shift+Enter for a new line*; Metadata says *⌘Enter / Ctrl-Enter opens
+it from the article*; Commands names *⌘K / Ctrl-K*; and Quiz says *Previous question (←)*. There is no `keys` prop yet: these cards
+keep the keys in sentences, which read better here than a keycap row
+([260930h](../plans/260930h-trajectory-info-button-on-the-controls-row-and-shortcut-keys-in-tooltips.md)).
+
+Three things make it easy to get wrong:
+
+- **The card must still open when the control cannot be pressed.** A natively `disabled` button is
+  no reliable tooltip trigger ([§ the shelf's action row](#controltip-which-is-what-most-of-them-are-now)),
+  so a control whose key matters most when it looks unavailable wants `aria-disabled`, as Chat's
+  Send has. Trajectory's › at the end of a pass is still natively disabled, which is a known gap.
+- **Say when the key does not work.** ← / → step Trajectory only through keynav's guards — no
+  modifier, no auto-repeat, not while a text box has focus, and not while the Dock drawer is open
+  ([keyboard.md](keyboard.md), § ← / → in Trajectory). The buttons remain mounted behind that
+  drawer, so a bare *Or press ←* would be false there; the cards say *While reading, press ←.*
+  Check the equivalent for any new card.
+- **These are hover and focus cards.** On a touch device a tap on ‹ › steps at once, and the card
+  is not readable there. That is on purpose: a phone has no ← to learn about, and reveal-then-commit
+  on a mode's main control would cost every step a second tap.
+
+Not every shortcut in the app has been checked against this yet; the rule arrived on 2026-09-30
+with Trajectory's arrows.
+
 ### The bar, and the two shapes of the same modes
 
 **The bottom bar joined on 2026-09-07**, on the same ask again — Greg: *"Make sure all the modes in

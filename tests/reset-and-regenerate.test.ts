@@ -362,6 +362,7 @@ function partsFor(calls: Calls, opts: { failHierarchy?: boolean } = {}): Advance
     assets: fakeAssets(),
   };
   return {
+    power: async () => "standard",
     session: (job, attempt) =>
       openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
     steps,

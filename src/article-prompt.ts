@@ -40,6 +40,7 @@
  * one head, which costs search a handful of tokens and buys the only thing that
  * matters here.
  */
+import { isHighPowerModel } from "./high-power-model.js";
 import type { Block, Meta } from "./types.js";
 
 /**
@@ -234,7 +235,21 @@ export function estimateTokens(text: string): number {
 export const CACHE_FLOOR_TOKENS = 1_024;
 
 /**
- * True when marking this block would silently buy nothing.
+ * **Opus 5.5's minimum cacheable prefix — the high-power model's** (plan
+ * 260930f, Sol F5). Measured live through OpenRouter's messages wire on
+ * 2026-09-30: a 502-token prefix was accepted and cached nothing, a 543-token
+ * one was written and then read back; Sonnet 5 at 912 cached nothing, as its
+ * 1,024 says. So 512, which is also the figure Anthropic gives for Opus.
+ * Numbers in docs/plans/260930f-high-powered-ai-per-article.md § Measurements.
+ */
+export const HIGH_POWER_CACHE_FLOOR_TOKENS = 512;
+
+/**
+ * True when marking this block would silently buy nothing — **for the model the
+ * call is going to**, because the floor is the model's and the two capable
+ * models' floors differ by half. Asking with Sonnet's would log a false "too
+ * short" on every 512–1,023-token prefix a high-powered article sends, which is
+ * the costly direction to be wrong in (see `cachedText`).
  *
  * Callers **log** this rather than throwing. A short article is a perfectly
  * good article; it just cannot be cached, and the right response to that is a
@@ -242,8 +257,9 @@ export const CACHE_FLOOR_TOKENS = 1_024;
  * out loud at all is that the alternative is zeros in the usage fields that
  * look exactly like a cache that has stopped working.
  */
-export function underCacheFloor(text: string): boolean {
-  return estimateTokens(text) < CACHE_FLOOR_TOKENS;
+export function underCacheFloor(text: string, model: string): boolean {
+  const floor = isHighPowerModel(model) ? HIGH_POWER_CACHE_FLOOR_TOKENS : CACHE_FLOOR_TOKENS;
+  return estimateTokens(text) < floor;
 }
 
 /**

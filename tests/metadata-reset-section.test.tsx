@@ -81,6 +81,7 @@ const RESET_URL = `/api/article/${SLUG}/reset`;
 const IMPORT_STEPS: StepName[] = ["fetch", "extract", "blocks", "hierarchy", "labels", "assets"];
 
 const ARTICLE: Article = {
+  highPowerSince: null,
   meta: { slug: SLUG, title: "A piece" },
   blocks: [
     {

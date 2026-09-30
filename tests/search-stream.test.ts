@@ -26,7 +26,7 @@ const BLOCKS = [
   { id: "spya-p7w2dn", text: "A thermostat has no interior. There is nothing it is like to be one." },
 ] as Block[];
 
-const req = (): SearchRequest => ({ meta, blocks: BLOCKS, criterion: "arguments against dualism" });
+const req = (): SearchRequest => ({ power: "standard", meta, blocks: BLOCKS, criterion: "arguments against dualism" });
 
 const HIT1 = { blockId: "spya-k3m9qt", quote: "mind is software", confidence: 90, reasoning: "r1" };
 const HIT2 = { blockId: "spya-p7w2dn", quote: "no interior", confidence: 70, reasoning: "r2" };

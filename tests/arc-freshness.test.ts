@@ -24,7 +24,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { inputFingerprint, isStale, PROMPT_VERSION } from "../src/arc.js";
-import { CAPABLE_MODEL } from "../src/models.js";
+import { CAPABLE_MODEL, HIGH_POWER_MODEL } from "../src/models.js";
 import type { Arc, Block, Meta, Tree, TreeNode } from "../src/types.js";
 
 function block(id: string, text: string): Block {
@@ -196,5 +196,11 @@ describe("isStale", () => {
 
   it("is true when a different model wrote it", () => {
     expect(isStale({ ...arc(), generator: "some/other-model" }, BLOCKS, tree(), META)).toBe(true);
+  });
+
+  it("is false for an arc the high-power model wrote — switching back re-runs nothing", () => {
+    /* docs/plans/260930f-high-powered-ai-per-article.md decision 6: Sonnet and
+       Opus are one generation for freshness, in both directions. */
+    expect(isStale({ ...arc(), generator: HIGH_POWER_MODEL }, BLOCKS, tree(), META)).toBe(false);
   });
 });

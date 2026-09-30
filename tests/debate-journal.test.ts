@@ -154,7 +154,7 @@ describe("a successful run", () => {
   it("writes three lines per pass, in order, the first of them before dispatch", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4, annotations: [BLOG] })];
 
-    await generateDebate({ article, journal });
+    await generateDebate({ power: "standard", article, journal });
 
     expect(written.map((e) => e.event)).toEqual([
       "attempt-started",
@@ -174,7 +174,7 @@ describe("a successful run", () => {
   it("names the two passes and matches each response to its own start", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4 })];
 
-    await generateDebate({ article, journal });
+    await generateDebate({ power: "standard", article, journal });
 
     const starts = of("attempt-started");
     expect(starts.map((s) => s.pass)).toEqual(["direct", "claims"]);
@@ -188,7 +188,7 @@ describe("a successful run", () => {
   it("records the search configuration that actually went on the wire", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4 })];
 
-    await generateDebate({ article, journal });
+    await generateDebate({ power: "standard", article, journal });
 
     const [direct] = of("attempt-started");
     const sent = calls[0]?.body as { tools: { parameters: Record<string, unknown> }[] };
@@ -203,7 +203,7 @@ describe("a successful run", () => {
   it("hashes the exact prompt strings, and stores neither of them", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4 })];
 
-    await generateDebate({ article, journal });
+    await generateDebate({ power: "standard", article, journal });
 
     const [direct] = of("attempt-started");
     const user = directPrompt(meta, tree);
@@ -220,7 +220,7 @@ describe("a successful run", () => {
   it("carries the article's identity and production's own fingerprint", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4 })];
 
-    const run = await generateDebate({ article, journal });
+    const run = await generateDebate({ power: "standard", article, journal });
 
     for (const start of of("attempt-started")) {
       expect(start.article).toEqual({
@@ -238,7 +238,7 @@ describe("a successful run", () => {
   it("keeps the raw annotations, which is the whole point of capturing at all", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4, annotations: [BLOG] })];
 
-    await generateDebate({ article, journal });
+    await generateDebate({ power: "standard", article, journal });
 
     const [, claims] = of("provider-response");
     expect(claims?.response.kind).toBe("body");
@@ -252,7 +252,7 @@ describe("a successful run", () => {
   it("finishes both attempts ok, with no failure class", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4 })];
 
-    await generateDebate({ article, journal });
+    await generateDebate({ power: "standard", article, journal });
 
     expect(of("attempt-finished").map((e) => [e.outcome, e.failure])).toEqual([
       ["ok", null],
@@ -265,7 +265,7 @@ describe("a successful run", () => {
   it("writes nothing at all when no journal is passed — which is production", async () => {
     answers = [answer({ searches: 3 }), answer({ searches: 4 })];
 
-    await generateDebate({ article });
+    await generateDebate({ power: "standard", article });
 
     expect(written).toHaveLength(0);
   });
@@ -286,7 +286,7 @@ describe("an abort", () => {
     ];
 
     await expect(
-      generateDebate({ article, journal, signal: controller.signal }),
+      generateDebate({ power: "standard", article, journal, signal: controller.signal }),
     ).rejects.toThrow();
 
     /* **Two lines, not three.** There is no "the response was empty" arm to
@@ -314,7 +314,7 @@ describe("an abort", () => {
     ];
 
     await expect(
-      generateDebate({ article, journal, signal: controller.signal }),
+      generateDebate({ power: "standard", article, journal, signal: controller.signal }),
     ).rejects.toThrow();
 
     const r = reconcile(written);
@@ -338,7 +338,7 @@ describe("a non-2xx", () => {
       },
     ];
 
-    await expect(generateDebate({ article, journal })).rejects.toThrow();
+    await expect(generateDebate({ power: "standard", article, journal })).rejects.toThrow();
 
     const [response] = of("provider-response");
     expect(response?.response).toEqual({
@@ -364,7 +364,7 @@ describe("a non-2xx", () => {
       },
     ];
 
-    await expect(generateDebate({ article, journal })).rejects.toThrow();
+    await expect(generateDebate({ power: "standard", article, journal })).rejects.toThrow();
 
     /* `ProviderRefused` keeps the status, a recognised `kind` and a parsed
        `Retry-After`, and never the body — src/ai-call.ts. The classification
@@ -397,7 +397,7 @@ describe("every way a pass can fail names itself", () => {
     it(`records ${name} as ${expected}`, async () => {
       answers = [bad];
 
-      await expect(generateDebate({ article, journal })).rejects.toThrow();
+      await expect(generateDebate({ power: "standard", article, journal })).rejects.toThrow();
 
       const [finished] = of("attempt-finished");
       expect(finished?.outcome).toBe("error");
@@ -411,7 +411,7 @@ describe("every way a pass can fail names itself", () => {
   it("records a 2xx that would not parse as a null body, and says so", async () => {
     answers = [null];
 
-    await expect(generateDebate({ article, journal })).rejects.toThrow();
+    await expect(generateDebate({ power: "standard", article, journal })).rejects.toThrow();
 
     const [response] = of("provider-response");
     expect(response?.response).toEqual({

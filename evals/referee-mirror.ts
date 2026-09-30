@@ -453,7 +453,7 @@ async function main(): Promise<void> {
     const started = performance.now();
     let result: Awaited<ReturnType<typeof mirror>>;
     try {
-      result = await mirror({
+      result = await mirror({ power: "standard",
         blocks,
         comments: c.comments,
         ...(c.criteria ? { criteria: c.criteria } : {}),

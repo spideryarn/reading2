@@ -106,6 +106,7 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 const SLUG = "a-piece";
 
 const ARTICLE: Article = {
+  highPowerSince: null,
   meta: { slug: SLUG, title: "A piece" },
   blocks: [
     {

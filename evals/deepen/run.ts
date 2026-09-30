@@ -453,7 +453,7 @@ async function driveToDone(
     }
     const advanced = await withSpendAttribution(
       { jobId: job.id, articleSlug: job.slug, ownerId: EVAL_OWNER_ID },
-      () => advanceJobWith(job.id, { session: claimSession, steps, onStepSpend: opts.onStepSpend }),
+      () => advanceJobWith(job.id, { power: async () => "standard", session: claimSession, steps, onStepSpend: opts.onStepSpend }),
     );
     if (!advanced) throw new Error(`${job.slug}: job ${job.id} vanished mid-run`);
     job = advanced.job;
@@ -1295,11 +1295,11 @@ function currentMeta(databaseTarget: string): RunMeta {
        that has already moved once and taken a whole analysis with it —
        evals/cost/run.ts § structureEffort. */
     hierarchyEffort = structureRequest([]).effort;
-    /* `modelFor("hierarchy")`, which is the same door `recordCandidate` writes
+    /* `modelFor("hierarchy", "standard")`, which is the same door `recordCandidate` writes
        onto every record — so the run's metadata and the records cannot disagree
        about which model produced them. `structureRequest`'s params leave the id
        to `streamMessage`, so reading it there gives `undefined`. */
-    model = modelFor("hierarchy");
+    model = modelFor("hierarchy", "standard");
   } catch {
     /* A signature change here must not stop a paid run — `commit` recovers it. */
   }
@@ -1777,7 +1777,7 @@ export async function proveTheSeam(slug: string): Promise<SeamProof> {
 
   const pass = async (reask: boolean): Promise<number> => {
     sent = 0;
-    await deepenTree({ tree, blocks, slug, checkpoints: store, execute, recipe: CASCADE_RECIPE, reask });
+    await deepenTree({ power: "standard", tree, blocks, slug, checkpoints: store, execute, recipe: CASCADE_RECIPE, reask });
     return sent;
   };
 

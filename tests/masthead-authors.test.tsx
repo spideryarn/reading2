@@ -42,6 +42,7 @@ const FIVE: Author[] = [
 
 function article(meta: Partial<Article["meta"]>): Article {
   return {
+    highPowerSince: null,
     meta: { slug: SLUG, title: "A paper", ...meta },
     blocks: [
       { id: "spya-aaaaaa", tag: "p", kind: "text", text: "A paragraph.", words: 2, html: "<p>A paragraph.</p>", gistable: true },

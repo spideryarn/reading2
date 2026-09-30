@@ -145,7 +145,9 @@ readers never are.
   are the reference: [260825g](../plans/260825g-tweet-thread-page.md) (why it exists, and what it
   refuses to look like) and
   [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) (the mode, the
-  wide band, the links).
+  wide band, the links) and
+  [260930h](../plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md) (the band as a
+  share of the room, and icon-only copy buttons).
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
@@ -281,6 +283,9 @@ The key itself, and the four things the chord refuses to do, are
 - **[experimental-features.md](experimental-features.md)** — the switch for features that are not
   finished, on this page and at the end of the bottom bar. Off by default, some modes and four Diagram
   pictures behind it, and the rule that hiding a feature never breaks a link to it.
+- **[high-powered-ai.md](high-powered-ai.md)** — one article's capable-tier calls on Opus instead of
+  Sonnet, for a difficult piece: the switch on `/metadata`, what moves and what does not, and why
+  switching it re-runs nothing.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
 - **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle

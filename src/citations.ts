@@ -48,7 +48,7 @@ import { stageFailure } from "./job-failure.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL, type Effort } from "./models.js";
+import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { REF_ATTR } from "./notes.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
@@ -1003,6 +1003,8 @@ export function buildCitations(
     slug: string;
     blocks: readonly Block[];
     sourceHash: string;
+    /** The power it was written at — the stamp names the model (plan 260930f). */
+    power: ModelPower;
     elapsedMs: number;
     inherit: Map<string, string> | null;
     drops: CitationDrops;
@@ -1095,7 +1097,7 @@ export function buildCitations(
   const capped = parsed.capped === true || drops.overCap > 0;
   return {
     version: PROMPT_VERSION,
-    generator: CAPABLE_MODEL,
+    generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     citations: inFirstCitedOrder(citations, position),
@@ -1337,6 +1339,8 @@ export async function generateCitations(opts: {
    * run goes on reporting success and minting fresh ids.
    */
   previous: Citations | null;
+  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  power: ModelPower;
 }): Promise<CitationsRun> {
   const { blocks, tree } = opts.article;
   const realMeta: Meta | null = opts.article.meta;
@@ -1374,7 +1378,7 @@ export async function generateCitations(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt() }],
       },
-      { ...(opts.signal ? { signal: opts.signal } : {}) },
+      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
     if (opts.onProgress) {
       const report = opts.onProgress;
@@ -1409,6 +1413,7 @@ export async function generateCitations(opts: {
   const drops = emptyDrops();
   const scores = noScoreDrops();
   const citations = buildCitations(parseJson(answerText), {
+    power: opts.power,
     slug: tree.slug,
     blocks,
     sourceHash,
@@ -1424,7 +1429,7 @@ export async function generateCitations(opts: {
     coverage: coverageOf(blocks, citations),
     maxTokens,
     answerTokens,
-    model: CAPABLE_MODEL,
+    model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

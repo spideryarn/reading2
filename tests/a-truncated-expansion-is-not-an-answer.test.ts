@@ -68,7 +68,7 @@ describe("an expansion the model ran out of room for", () => {
   it("is refused even though it parses", async () => {
     answer.stopReason = "max_tokens";
     answer.text = HALF;
-    await expect(liveExpansionExecutor()(REQUEST)).rejects.toBeInstanceOf(ExpansionTruncated);
+    await expect(liveExpansionExecutor("standard")(REQUEST)).rejects.toBeInstanceOf(ExpansionTruncated);
   });
 
   /**
@@ -85,7 +85,7 @@ describe("an expansion the model ran out of room for", () => {
        All four, because the two cache figures are the ones a shared prefix
        moves and the ones an optional field would have quietly left at zero.
        src/hierarchy-deepen.ts § `ExpansionAnswer`. */
-    await expect(liveExpansionExecutor()(REQUEST)).resolves.toEqual({
+    await expect(liveExpansionExecutor("standard")(REQUEST)).resolves.toEqual({
       text: HALF,
       usage: {
         inputTokens: 1_100,

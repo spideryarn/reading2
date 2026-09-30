@@ -180,7 +180,13 @@
    can claim to hold every model this app sends without repeating anybody's
    literal. src/embeddings.ts owns that decision; this file only needs the
    string. */
+import { isAdmin } from "./admin.js";
 import { EMBEDDING_MODEL } from "./embeddings.js";
+import {
+  HIGH_POWER_MODEL,
+  HIGH_POWER_MODEL_OPENROUTER,
+  isHighPowerModel,
+} from "./high-power-model.js";
 
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
@@ -240,6 +246,117 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  * what was lost, in the shape of evals/results/effort-vs-quality.md.
  */
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
+
+/**
+ * **The high-power model — the capable tier's replacement on one article, when
+ * its owner has switched High-powered AI on.** Two literals, like the capable
+ * tier's: the stored name (what a `generator` stamp says) and the OpenRouter
+ * address (what goes on the wire). Not derived from each other, for the reason
+ * § Do not derive one spelling from the other gives — and this pair is the proof
+ * of it: dashes in the name, a dot in the slug.
+ *
+ * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's $2 / $10 —
+ * exactly twice, which is what Greg asked for ("broadly double"). Checked for
+ * request compatibility before it was chosen: it rejects `thinking: {type:
+ * "disabled"}` and a forced `tool_choice`, and `src/` sends neither; and its
+ * default effort is `medium` where Sonnet 5's is `high`, which is why the two
+ * effort seams (`messagesWireBody`, and `outgoing` in src/ai-call.ts) send
+ * `high` explicitly to it where a call would otherwise take the default.
+ * docs/plans/260930f-high-powered-ai-per-article.md, decisions 1–2.
+ *
+ * The literals themselves sit in src/high-power-model.ts, a leaf, so the chat
+ * wire's effort seam can ask `isHighPowerModel` without an import cycle.
+ */
+export { HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, isHighPowerModel };
+
+/**
+ * **Which of the two capable models an article's calls go to.** `"high"` only
+ * for an article whose `high_power_since` is set *and* whose owner is an
+ * administrator (plan 260930f decision 4) — the caller decides that; this file
+ * only answers what each value means.
+ *
+ * **A required argument everywhere it is taken, never ambient state**
+ * (decision 5): a call site that has not decided does not compile, where an
+ * `AsyncLocalStorage` scope would have let a call outside it run Sonnet under a
+ * switch that says Opus, silently.
+ */
+export type ModelPower = "standard" | "high";
+
+/** The **name** a stage stamps into `generator` for the power it ran at. */
+export function generatorFor(power: ModelPower): string {
+  return power === "high" ? HIGH_POWER_MODEL : CAPABLE_MODEL;
+}
+
+/**
+ * **The durable token inside stored citation fingerprints for this model
+ * generation.** It is deliberately a literal rather than
+ * `CAPABLE_MODEL_OPENROUTER`: the current capable model will change, while the
+ * hashes already stored in Postgres cannot be passed back through
+ * `generationKey`. Keeping the first generation's wire id preserves today's
+ * hashes and lets a later capable-tier replacement join the same generation by
+ * adding its spellings to `generationKey` without detaching those rows.
+ */
+export const CAPABLE_GENERATION_KEY = "anthropic/claude-sonnet-5";
+
+/**
+ * **Which generation of work a model id belongs to, for freshness only.**
+ *
+ * The four spellings of the capable and high-power models — stored and wire,
+ * standard and high — are one generation; every other id, an environment
+ * override included, is its own. So switching an article's power in either
+ * direction does not make what it already has look stale and pay to redo it
+ * (Greg: *"a way to switch back again, though you wouldn't want to rerun
+ * things"*), while a genuinely different model still does.
+ *
+ * **The canonical value is `CAPABLE_GENERATION_KEY` on purpose.** Two content
+ * hashes put this key inside them (`lookupContextHash`, `investigateContextHash`)
+ * and every stored row was hashed over that exact string, so choosing it keeps
+ * every existing hash byte-identical. It must not follow the current capable
+ * model constant: that constant will move, and an opaque stored hash cannot be
+ * remapped afterwards. Equality is the only other thing anyone does with the
+ * value.
+ *
+ * **Never a checkpoint key.** A checkpoint is reuse of a paid-for answer, and
+ * reusing a Sonnet answer on an Opus run and calling it Opus is the lie this
+ * must not tell — `labels.ts`'s `batchFingerprint` uses the real model.
+ * Plan 260930f decisions 6–7.
+ */
+export function generationKey(modelId: string): string {
+  switch (modelId) {
+    case CAPABLE_MODEL:
+    case CAPABLE_MODEL_OPENROUTER:
+    case HIGH_POWER_MODEL:
+    case HIGH_POWER_MODEL_OPENROUTER:
+      return CAPABLE_GENERATION_KEY;
+    default:
+      return modelId;
+  }
+}
+
+/** Were `a` and `b` written by the same generation? `generationKey` says what that means. */
+export function sameGenerator(a: string, b: string): boolean {
+  return generationKey(a) === generationKey(b);
+}
+
+/**
+ * **The power an article's calls run at**: high only when its
+ * `high_power_since` is set **and** its owner is an administrator.
+ *
+ * The second half should never matter in v1 — only an administrator can set the
+ * column — and it is there so a row copied, restored or hand-edited onto a
+ * reader's article cannot quietly double what we spend on it before the billing
+ * half exists. When the reader-facing half lands, this is the one line that
+ * changes. Plan 260930f decision 4.
+ *
+ * One function, used by the job runner and by every request-path route, so the
+ * rule has one spelling.
+ */
+export function articlePower(
+  highPowerSince: string | Date | null | undefined,
+  ownerId: string | null | undefined,
+): ModelPower {
+  return highPowerSince != null && isAdmin(ownerId) ? "high" : "standard";
+}
 
 /**
  * **The model that transcribes a PDF** — its own line, because it is its own
@@ -893,8 +1010,12 @@ export const TASK_TIER: Record<Task, Tier> = {
  * now (`modelFor`), and this one takes a tier, which is the thing it actually
  * depends on.
  */
-function openRouterIdForTier(tier: Tier): string {
-  return tier === "quick" ? QUICK_MODEL_OPENROUTER : CAPABLE_MODEL_OPENROUTER;
+function openRouterIdForTier(tier: Tier, power: ModelPower): string {
+  if (tier === "quick") return QUICK_MODEL_OPENROUTER;
+  /* **Only the capable tier moves.** The quick tier's jobs were put there because
+     they do not need reasoning, and doubling them buys nothing (plan 260930f
+     decision 2). */
+  return power === "high" ? HIGH_POWER_MODEL_OPENROUTER : CAPABLE_MODEL_OPENROUTER;
 }
 
 /**
@@ -1228,22 +1349,33 @@ export type ResolvedModel = {
  * modules call `loadEnvLocal()` inside a function rather than at import, so an
  * id captured at module load can be captured before `.env.local` has been read.
  */
-export function resolveModel(task: Task): ResolvedModel {
+export function resolveModel(task: Task, power: ModelPower): ResolvedModel {
   const wire = TASK_WIRE[task];
   const envVar = MODEL_ENV_VAR[task];
   const override = envVar ? process.env[envVar] : undefined;
+  /* **An override still wins at high power.** It is somebody running a
+     comparison on purpose, and the comparison is what they asked for. */
   if (override) return { id: override, provider: GATEWAY, wire, source: "override" };
   /* One spelling now, for every task on either wire: OpenRouter's. The Skin
      wants `anthropic/claude-sonnet-5` exactly as chat/completions does. */
-  return { id: openRouterIdForTier(TASK_TIER[task]), provider: GATEWAY, wire, source: "default" };
+  return {
+    id: openRouterIdForTier(TASK_TIER[task], power),
+    provider: GATEWAY,
+    wire,
+    source: "default",
+  };
 }
 
 /**
  * **The model id a task actually sends** — the whole of it, environment
  * included. This is the only task-level model question with a public answer.
+ *
+ * `power` is required: the article a call is for decides it, and a caller that
+ * has not asked would quietly send Sonnet on a high-powered article (plan
+ * 260930f decision 5). Scripts and evals pass `"standard"`.
  */
-export function modelFor(task: Task): string {
-  return resolveModel(task).id;
+export function modelFor(task: Task, power: ModelPower): string {
+  return resolveModel(task, power).id;
 }
 
 /**
@@ -1277,6 +1409,10 @@ export function modelFor(task: Task): string {
 export const DISPLAY_NAME: Record<string, string> = {
   "claude-sonnet-5": "claude-sonnet-5",
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
+  /* The high-power model, plan 260930f — sent only for an administrator's
+     article with High-powered AI switched on. */
+  "claude-opus-5-5": "claude-opus-5-5",
+  "anthropic/claude-opus-5.5": "claude-opus-5-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",
   "voyageai/voyage-4": "voyage-4",
   /* `google/gemini-3.1-flash-lite` was here for dictation until 2026-09-07 and

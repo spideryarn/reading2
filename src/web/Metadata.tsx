@@ -287,6 +287,7 @@ import { ProfileBox } from "./ProfileBox.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { PageContents } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
+import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
 import { ResetArticle } from "./ResetArticle.js";
 import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
@@ -1368,6 +1369,11 @@ function RerunSection({
 }) {
   return (
     <Section label="Re-run AI processing" collapsible keepMounted>
+      {/* **High-powered AI**, administrator only — it draws nothing for anybody
+          else. First in the section, above the rows it changes the model for:
+          switching it re-runs nothing, and the rows below are how you ask.
+          docs/plans/260930f-high-powered-ai-per-article.md, decision 8. */}
+      <HighPowerSwitch slug={slug} since={provenance?.highPowerSince} onChanged={onFinished} />
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
           shipped while the placeholder it replaces did not is that a button

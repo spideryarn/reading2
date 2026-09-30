@@ -715,6 +715,13 @@
       "when": 1790771082035,
       "tag": "20260930122442_crossrefs",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1790776404153,
+      "tag": "20260930135324_article_high_power_since",
+      "breakpoints": true
     }
   ]
 }
