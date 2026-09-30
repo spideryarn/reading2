@@ -16,7 +16,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Comment, ThreadSummary } from "../src/types.js";
 import { type AskedQuestion, orderDrawer } from "../src/web/comment-nav.js";
-import { Dock } from "../src/web/Dock.js";
+import { Dock, fitSignature } from "../src/web/Dock.js";
 import { askedQuestions } from "../src/web/useChatAnchors.js";
 import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
@@ -183,6 +183,15 @@ describe("the Comments drawer lists the questions the reader asked", () => {
     expect(host.querySelector(".cmt-spinner")).not.toBeNull();
   });
 
+  it("says the comments are still coming over the questions it already has", () => {
+    paint({ questions: [HELP], commentsLoaded: false });
+    act(() => {
+      vi.advanceTimersByTime(SLOW_AFTER_MS + 1);
+    });
+    expect(host.textContent).toContain("In 1998 the lab");
+    expect(host.querySelector(".cmt-spinner")).not.toBeNull();
+  });
+
   it("opens the conversation, not a comment, when the row is pressed", () => {
     const onOpenAsked = vi.fn();
     const onOpenComment = vi.fn();
@@ -197,6 +206,15 @@ describe("the Comments drawer lists the questions the reader asked", () => {
     expect(host.querySelector(".dock-count")?.textContent).toBe("3");
   });
 
+  it("changes the fit signature when a question takes the visible count from 9 to 10", () => {
+    const rest = [[], undefined, undefined, undefined] as const;
+    const nine = fitSignature(...rest, { comments: [], count: 9 }, null, false);
+    const ten = fitSignature(...rest, { comments: [], count: 10 }, null, false);
+    expect(nine).toContain("|9|");
+    expect(ten).toContain("|10|");
+    expect(ten).not.toBe(nine);
+  });
+
   it("does not say 'Nothing marked yet' while the questions are still loading", () => {
     paint({ askedLoaded: false });
     act(() => {
@@ -209,5 +227,41 @@ describe("the Comments drawer lists the questions the reader asked", () => {
     paint({ askedError: "Couldn't reach the server. [net-down]" });
     expect(host.textContent).not.toContain("Nothing marked yet");
     expect(host.textContent).toContain("Couldn't load the questions you asked");
+  });
+
+  it("does not draw or open asked rows on the visitor arm, even if one is injected", () => {
+    const onOpenAsked = vi.fn();
+    act(() => {
+      root.render(
+        /* The assertion deliberately injects a field the visitor union forbids,
+           so this cast is the test input rather than a shortcut around typing. */
+        // biome-ignore lint/suspicious/noExplicitAny: hostile runtime prop for the ownership gate
+        createElement(Dock as any, {
+          slug: "a-piece",
+          view: "article" as const,
+          experimental: EXPERIMENTAL_OFF,
+          drawer: {
+            visitor: true as const,
+            comments: [COMMENT],
+            paragraphs: new Map([[FIRST, "In 1998 the lab found something odd."]]),
+            panel: "questions" as const,
+            onPanel: () => {},
+            onOpenComment: () => {},
+            /* Deliberately beyond the visitor union: the runtime gate must be
+               ownership, not merely a well-behaved caller's empty list. */
+            asked: {
+              questions: [HELP],
+              loaded: true,
+              error: null,
+              blocks: BLOCKS,
+              onOpen: onOpenAsked,
+            },
+          },
+        }),
+      );
+    });
+    expect(host.querySelector(".dock-question.asked")).toBeNull();
+    expect(host.textContent).not.toContain("Question");
+    expect(onOpenAsked).not.toHaveBeenCalled();
   });
 });

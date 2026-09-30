@@ -1823,7 +1823,6 @@ export function Dock({
                         kind: "owner",
                         loaded: own.loaded && (own.asked?.loaded ?? true),
                         loadError: own.loadError,
-                        askedLoaded: own.asked?.loaded ?? true,
                         askedError: own.asked?.error ?? null,
                       }
                     : { kind: "visitor" }
@@ -3591,8 +3590,6 @@ type QuestionsAccess =
       /** Both lists — comments and, when present, asked questions. */
       loaded: boolean;
       loadError: string | null;
-      /** `false` only while the asked questions are still out. */
-      askedLoaded?: boolean;
       askedError?: string | null;
     }
   | { kind: "visitor" };
@@ -3686,14 +3683,16 @@ function Questions({
       </p>
     );
   }
-  /* **Rows known, questions still out**: the list so far, with the wait said
-     over it, so a list of comments is not read as everything the reader has —
-     the same reason `couldNotLoad` sits over a list. GPT Sol, finding 4. */
-  const askedStillOut = access.kind === "owner" && access.askedLoaded === false;
+  /* **Rows known, either list still out**: the list so far, with the wait said
+     over it, so comments without questions — or questions without comments —
+     are not read as everything the reader has. This deliberately uses the
+     combined `loaded` fact above rather than checking only the new list. GPT
+     Sol, finding 4. */
+  const stillLoading = !loaded;
   return (
     <>
       {couldNotLoad}
-      {askedStillOut && <QuestionsLoading />}
+      {stillLoading && <QuestionsLoading />}
       <ol className="dock-questions">
         {entries.map((entry) => {
           const passage = (

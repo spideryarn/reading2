@@ -76,8 +76,10 @@ the owner. No new table, no migration, no new endpoint.
    for a "?" press it is *"Help me understand."* on every row.
 5. **Opening:** close the drawer, then `jumpToComment(chatRows, id, openChatThread, jumpTo)` —
    `comment-jump.ts` is already generic over `{ id, blockId }` and takes the opener as a parameter,
-   so the three-way *here / away / nowhere* check and the one-history-entry push come for free.
-   `openChatThread` sets `?thread=` and clears `?note=` in the same tick, so it is one entry.
+   so the three-way *here / away / nowhere* check and its at-most-one history entry come for free.
+   `openChatThread` sets `?thread=` and clears `?note=` in the same tick. An away passage pushes;
+   from Remember, switching to Chat also pushes even when the passage is here or gone, so Back can
+   return to Remember. The setters are batched, so either route is still one entry rather than two.
 6. **The count on the Comments button** counts both, so the number matches the list it opens.
 7. **Loading:** the drawer's "not loaded yet" state waits for both lists, so a reader with only
    questions is not told *"Nothing marked yet"* while the chat summaries are in the air — the bug
@@ -143,5 +145,7 @@ the rules above where they disagree.
    questions are still out, a failed load says so (`useChatAnchors.error`, now cleared when a new
    fetch starts), and *"Nothing marked yet"* waits for both.
 5. **The Dock's fit signature** uses the same combined count the chip draws, so 9→10 re-measures.
-6. **History, precisely:** at most one entry, and exactly one when the passage was away. *Here* and
-   orphan rows move nothing and push nothing, as for comments.
+6. **History, precisely:** at most one entry, and exactly one when the passage was away. Outside
+   Remember, *here* and orphan rows move nothing and push nothing, as for comments. In Remember,
+   both still move nothing, but the deliberate switch to Chat pushes one entry so Back returns to
+   Remember; nuqs batches that mode change with the thread and any away jump.

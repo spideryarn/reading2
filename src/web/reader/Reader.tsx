@@ -1393,10 +1393,13 @@ export function Reader({
    *
    * Opening one is the drawer's jump, the same function a comment row goes
    * through (comment-jump.ts): it is generic over `{ id, blockId }` and takes
-   * the opener as a parameter, so the *here / away / nowhere* check and the one
-   * pushed history entry are the comment row's exactly. `openChatThread` writes
-   * `?thread=` and clears `?note=` in the same tick, so they land on that one
-   * entry — at most one, and exactly one when the passage was away.
+   * the opener as a parameter, so the *here / away / nowhere* check is the
+   * comment row's exactly. `openChatThread` writes `?thread=` and clears
+   * `?note=` in the same tick, so they land with any jump on at most one entry,
+   * and exactly one when the passage was away. Remember is
+   * the deliberate extra case: even for a passage already here (or gone), its
+   * switch into Chat is itself one pushed entry, so Back can return to Remember.
+   * The thread, panel close and any jump are still batched into that one entry.
    *
    * **Where it opens depends on the mode**, because `overlay` above is
    * suppressed in two of them: in Chat mode the band shows `?thread=` already,
