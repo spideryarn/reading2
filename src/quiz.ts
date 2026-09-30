@@ -627,6 +627,20 @@ exists because of that:
   its own step: ask it as a question first, then lean on it here. Never slip it
   in through a premise.
 
+- CONTEXT IS NOT A PREMISE. A dense piece — a paper above all — tempts you to
+  use the premise to set the scene: what was measured, on what, by which
+  method. Do not. If the reader needs that setting to understand the question,
+  put it briefly IN THE QUESTION ("In the mouse cortical cultures, how did…"),
+  or make it a step of its own. A premise that sets the scene is hidden from
+  exactly the reader who was doing well, and leaves them a question about a
+  setting they were never given.
+
+    BEFORE    What is synergy, in the article's sense?
+    BAD       PREMISE   The researchers applied the method to thousands of
+                        groups of three neurons in mouse brain tissue.
+    GOOD      PREMISE   Synergy is information that only the sources together
+                        carry, not either one alone.
+
     BEFORE    What does Seth call the idea that the right computation is enough
               for consciousness?
     BAD       PREMISE   Seth thinks brains, unlike computers, cannot be split
@@ -834,6 +848,22 @@ function parseJson(raw: string): { questions?: unknown } {
  */
 export const ANSWER_TOKENS = 14_000;
 
+/**
+ * **Room to think, above the shared default** — 64k rather than
+ * `THINKING_HEADROOM`'s 40k, since `quiz/5`.
+ *
+ * The path prompt asks the model to decide the piece's takeaways before it
+ * writes a question and then to plan a route to them, and that is planning a
+ * long paper can spend heavily on: measured 2026-09-30, *A landscape of
+ * consciousness* used 48,896 output tokens, thinking included, against the old
+ * 54k ceiling, in 7.5 minutes. Running out is not a degraded answer but a
+ * `truncationFailure` that throws away the paid batch, so the room sits well
+ * clear. It costs nothing unless it is used. `labels` and the referee claims
+ * run set their own room the same way.
+ * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md.
+ */
+export const THINKING_ROOM = 64_000;
+
 export async function generateQuiz(opts: {
   /**
    * **The article, handed in — never a directory to open.**
@@ -875,7 +905,7 @@ export async function generateQuiz(opts: {
   const evidence = blocks.filter(isBodyEvidence);
   const words = articleWordCounts(blocks).body;
   const started = Date.now();
-  const maxTokens = budgetFor("quiz", ANSWER_TOKENS);
+  const maxTokens = budgetFor("quiz", ANSWER_TOKENS, THINKING_ROOM);
 
   let message: Anthropic.Message;
   try {

@@ -207,6 +207,54 @@ through [`evals/quiz-build-up.ts`](../../evals/quiz-build-up.ts):
 enough to catch a regression and to see whether "builds up" happened at all, not to measure how much
 better. Whether twenty is fatiguing is a question for readers after release.
 
+## What the measurements said
+
+All arms, screens and blind reads are in [`evals/results/quiz-build-up/`](../../evals/results/quiz-build-up/).
+
+| arm | prompt | questions per quiz | ref. answer words (mean of means) | steps with a premise | gaps |
+|---|---|---|---|---|---|
+| `before`, `before-2` | `quiz/4` | 10–12 | ~48 | — | — |
+| `after-1` (probe, no premise field) | first draft | 19–20 | ~29 | 0 | — |
+| `after` | premise field, round-2 rules | 17–20 | ~30 | 9–16 | two batches with one each |
+| `after-2` | + "a premise that says what no question asked means a missing step" | 15–20 | ~33 | 5–19 | none |
+| `after-3` (shipped; 3 articles) | + "context is not a premise" | 17–19 | — | — | — |
+
+**Blind reads**, each by a fresh Opus subagent that saw only the pairs file (with the source pack):
+
+- **Control, `before` vs `before-2`:** effort went 4–0–1 to one side and build-up 3–1–1, and the judge
+  said *"none of the ten quizzes really builds up; each is a set of standalone recall questions"*.
+  So on five pairs a 4–0 split is noise.
+- **Result, `before` vs `after`:** `after` won **effort 5/5 and build-up 5/5**, and the judge traced a
+  concrete build sequence through every new quiz. Given the control's 4–0, the count alone is weak;
+  the qualitative difference — standalone recall versus a traced route — is the stronger signal.
+  The recurring defect: in three quizzes a premise stated something no question had asked.
+- **The premise fix, `after` vs `after-2`:** the judge misread the pair-1 premises (it took Q1's
+  restated answer, printed above Q2, as Q2's own answer; checked by hand), so its pair-1 count is
+  discarded. On the other four, `after-2` had fewer stray premises in three and **far more on the
+  dense paper** (*Revealing the Dynamics…*): there the model uses premises to set context ("the
+  researchers applied PID to thousands of triads …") rather than to restate, and one previews half
+  of its own question's answer. Shipped anyway: the essays improved, the paper's context-premises
+  still leave each stem readable on its own, and a sixth noisy five-pair round would not settle it.
+  **Known limitation, named for the next pass:** on dense papers the premise drifts from
+  restatement to context; the reader Greg reported from was on a paper.
+
+**Sol's code review rated the dense-paper drift P1** (W1), so it got one more pass rather than an
+overrule: a rule that **context is not a premise** — a scene-setting fact goes briefly into the
+question or becomes its own step. `after-3`, on the paper, *A landscape of consciousness* and the
+Olah explainer, not blind-judged (my count, reading the paper's quiz): scene-setting premises on the
+paper fell from about **15 of 19** (the blind judge's count on `after-2`) to about **5 of 14**. One of
+the five reproduces the prompt's own BAD example almost word for word. **Improved, not solved** —
+and it goes to Greg as a named limitation rather than a quiet overrule: on a paper, some premises
+still set context, which a reader who is doing well never sees, and whose question then names a
+setting they were not given.
+
+**The budget did not hold, and that was the most useful thing `after-3` found.** *A landscape of
+consciousness* spent **48,896 output tokens, thinking included, against a 54k ceiling**, over 7.5
+minutes; the other articles stayed under 16k. The path prompt plans before it writes, and a long
+paper plans at length. A truncation throws the paid batch away, so the quiz now has its own thinking
+room, `THINKING_ROOM` = 64k (ceiling 78k), as `labels` and the referee claims run do. Watch the
+pipeline's `outputTokens` for quiz jobs on long papers.
+
 ## Stages
 
 1. **Prompt, stage, wire, walk.** One stage, because the type change crosses the seam and nothing

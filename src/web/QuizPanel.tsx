@@ -213,6 +213,16 @@ export function QuizPanel({
   const [verdicts, setVerdicts] = useState<ReadonlyMap<QuizQuestionId, QuizVerdict>>(
     () => new Map(),
   );
+  /**
+   * Which batch the verdict-recording effect has seen.
+   *
+   * The reset effect and the recording effect run from the same render. On a
+   * replacement batch, that render can still carry the old completed attempt;
+   * if question ids were reused, clearing the map and then recording that
+   * attempt would put the old verdict straight back. This ref makes the first
+   * effect pass for a new batch a reset-only pass.
+   */
+  const verdictBatch = useRef(quiz?.batchId);
   const [typed, setTyped] = useState("");
   /** The whole ordered batch, open. Closes again as soon as one is picked. */
   const [listing, setListing] = useState(false);
@@ -385,6 +395,10 @@ export function QuizPanel({
    * arrives before the clear lands.
    */
   useEffect(() => {
+    if (verdictBatch.current !== quiz?.batchId) {
+      verdictBatch.current = quiz?.batchId;
+      return;
+    }
     if (attempt?.status !== "done") return;
     const { questionId, verdict } = attempt;
     if (!questions.some((q) => q.id === questionId)) return;
@@ -395,7 +409,7 @@ export function QuizPanel({
       else next.delete(questionId);
       return next;
     });
-  }, [attempt, questions]);
+  }, [attempt, questions, quiz?.batchId]);
 
   /**
    * **Whether the question on screen carries its premise.** The rule is

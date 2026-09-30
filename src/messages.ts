@@ -148,7 +148,7 @@ export function codeOfMessage(message: string): string | null {
 export function kindOfMessage(message: string): FailureKind | null {
   const code = codeOfMessage(message);
   if (!code) return null;
-  const known = CODE_KINDS[code];
+  const known = CODE_KINDS[code] ?? RETIRED_CODE_KINDS[code];
   if (known) return known;
   /* `[ai-409]` and friends — the fall-through branches, which mint a code from
      the status. Same rule they use: a refusal we have no theory about will be
@@ -604,6 +604,19 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "pay-down": "retry",
 };
 
+/**
+ * Codes no live message mints, kept because stored sentences outlive the code
+ * path that wrote them.
+ *
+ * These stay separate from `CODE_KINDS`: that table is checked against the
+ * messages this module can produce now, while `kindOfMessage` is also an
+ * authorship and classification boundary for historical job errors. Removing
+ * a factory must not turn one of our old sentences into untrusted prose.
+ */
+const RETIRED_CODE_KINDS: Readonly<Record<string, FailureKind>> = {
+  /* The band-spread refusal retired with the quiz's bands in quiz/5. */
+  "quiz-spread": "retry",
+};
 
 /**
  * A provider call that came back with an HTTP status instead of an answer.

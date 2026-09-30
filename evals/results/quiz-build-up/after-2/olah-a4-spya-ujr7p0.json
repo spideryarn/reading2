@@ -1,0 +1,139 @@
+{
+  "arm": "after-2",
+  "slug": "olah-a4-spya-ujr7p0",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "63e5e904575af4b3aef43163bbed8387b8537bed9df35026810b5c964b5714d5",
+  "at": "2026-09-30T05:25:16.096Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 5689,
+  "elapsedMs": 53094,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "What two distinct ideas does the article say get lumped together under the term \"distributed representations\"?",
+      "referenceAnswer": "The article says the term actually contains two different ideas: composition and superposition.",
+      "evidence": [
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "premise": "The article distinguishes composition and superposition as two ideas within distributed representations.",
+      "question": "What is a \"local code,\" as Thorpe describes it, in terms of how neurons represent shape-color combinations?",
+      "referenceAnswer": "A local code has a separate neuron for each (shape, color) pair, so each neuron responds to just one specific combination and there is no superposition.",
+      "evidence": [
+        "spya-kcjqdw"
+      ]
+    },
+    {
+      "premise": "A local code has one neuron per (shape, color) combination.",
+      "question": "Although this local code seems wasteful, what flexible ability does it give a later layer that reads from it with a linear function?",
+      "referenceAnswer": "A later neuron could linearly select almost any arbitrary combination of stimuli, such as firing for black circles and white triangles but not black triangles or white circles, something other codes can't achieve.",
+      "evidence": [
+        "spya-hbmajb"
+      ]
+    },
+    {
+      "question": "In a \"semi-local\" or compositional code, what does the network represent with neurons instead of one neuron per (shape, color) pair?",
+      "referenceAnswer": "It represents independent features like color and shape separately, and these features combine (compose) to encode a given object.",
+      "evidence": [
+        "spya-qcd003",
+        "spya-xcdtte"
+      ]
+    },
+    {
+      "premise": "A compositional code uses separate color and shape features that combine to represent objects.",
+      "question": "Compared to the local code, why does this compositional approach need far fewer neurons?",
+      "referenceAnswer": "Because a set of n features can compose into potentially exp(n) different combinations, so many fewer neurons are needed than one per possible combination.",
+      "evidence": [
+        "spya-g8cztv"
+      ]
+    },
+    {
+      "premise": "Composition lets a few features combine into exponentially many combinations.",
+      "question": "What does the article mean by the \"non-local generalization\" benefit of compositional codes?",
+      "referenceAnswer": "Because features are shared across combinations, data learned about one combination, like green circles, can improve the network's handling of another combination sharing a feature, like green squares.",
+      "evidence": [
+        "spya-s9fc6n"
+      ]
+    },
+    {
+      "question": "What can a \"dense\" or maximal-superposition code do that makes it so much more efficient in terms of neurons?",
+      "referenceAnswer": "It can represent far more, totally unrelated objects than there are neurons, packing exponentially many possibilities into very few neurons using superposition.",
+      "evidence": [
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "premise": "A dense superposition code can represent far more objects than it has neurons.",
+      "question": "What key ability does this dense code lose, according to the article?",
+      "referenceAnswer": "It loses the ability to linearly select most colors or shapes (or sets of them) with a probe, and it can't represent things \"between\" features, like a purple rounded square.",
+      "evidence": [
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "premise": "The dense code loses linear probeability and can't represent in-between combinations.",
+      "question": "Why does this maximally-superposed code have to go back to using (color, shape) pair features rather than independent color and shape features?",
+      "referenceAnswer": "Because maximal superposition is only possible when there is no composition, so the code needs features that don't compose, forcing it back to combined pair features.",
+      "evidence": [
+        "spya-kq5p9m"
+      ]
+    },
+    {
+      "question": "Rather than seeing local, semi-local, and dense codes as points on one spectrum of being more or less \"distributed,\" what does the article say they actually represent?",
+      "referenceAnswer": "It argues the semi-local and dense codes use two totally different, orthogonal strategies, composition and superposition, which are fundamentally competing rather than points on a single scale.",
+      "evidence": [
+        "spya-dzemsa"
+      ]
+    },
+    {
+      "premise": "Composition and superposition are described as orthogonal, competing strategies rather than degrees of one spectrum.",
+      "question": "Using the idea of representational \"volume,\" why can't a code have both full composition and full superposition at the same time?",
+      "referenceAnswer": "With m neurons there is exp(m) volume available; storing n fully composable features already uses up exp(n) of that volume, so composable features can only be stored within that budget, while storing items in superposition instead requires no composition and a non-linearity to retrieve them.",
+      "evidence": [
+        "spya-xcrca8"
+      ]
+    },
+    {
+      "premise": "Full composition and full superposition compete for the same exponential representational volume.",
+      "question": "Despite this tension, how can composition and superposition coexist within a single code, according to the article?",
+      "referenceAnswer": "When composition is limited or sparse, meaning many feature combinations rarely or never occur, this leaves unused \"holes\" in the compositional space that can be used to store other features in superposition.",
+      "evidence": [
+        "spya-ajbh7f"
+      ]
+    },
+    {
+      "premise": "Sparse, limited composition leaves unused space that can hold features in superposition.",
+      "question": "In Thorpe's final \"semi-distributed\" code, how are the color and shape features arranged to combine both strategies?",
+      "referenceAnswer": "It still represents objects by composing color and shape features together, but it puts the color features in superposition with each other and the shape features in superposition with each other.",
+      "evidence": [
+        "spya-fknpfa"
+      ]
+    },
+    {
+      "question": "Why does the article think it matters to distinguish composition from superposition instead of lumping both under \"distributed representations\"?",
+      "referenceAnswer": "Because they have very different properties for generalization and for what can be linearly computed from them, and conflating them leads to mistaken claims, such as assuming a representation gets both non-local generalization and extra capacity together when really one property goes with composition and the other with superposition.",
+      "evidence": [
+        "spya-st3tz8",
+        "spya-sq6424"
+      ]
+    },
+    {
+      "premise": "Composition and superposition have different properties and get wrongly conflated as one idea.",
+      "question": "Why does the article say understanding this distinction matters for reverse engineering and understanding neural networks?",
+      "referenceAnswer": "Because when representations are compositional, they can be understood in terms of a linear number of independent features rather than an exponential amount of volume, which the author sees as critical to truly understanding neural networks.",
+      "evidence": [
+        "spya-v47ca7"
+      ]
+    }
+  ]
+}

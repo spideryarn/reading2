@@ -7788,8 +7788,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          fields where `IdeasResponse` has three.
          docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
 
-         `withOldClientBands` is a one-week bridge for tabs still running the
-         band ladder — src/quiz.ts says when it goes. */
+         `withOldClientBands` is the bridge for tabs still running the band
+         ladder; it stays until there is an enforceable client-version boundary
+         — src/quiz.ts says why. */
       send(res, 200, withOldClientBands(await loadQuiz(slugPart(captures, 1))));
     },
   },

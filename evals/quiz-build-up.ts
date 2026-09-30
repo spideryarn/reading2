@@ -91,8 +91,8 @@ function readArm(arm: string): ArmFile[] {
          recorded (GPT Sol's R2-5); the two `before` arms and the `after-1`
          probe predate it, and say so as a dash rather than a guess. */
       const predates = ["before", "before-2", "after-1"].includes(arm);
-      if (!predates && (file.outputTokens === undefined || file.maxTokens === undefined)) {
-        throw new Error(`${arm}/${f} is missing outputTokens or maxTokens`);
+      if (!predates && (file.outputTokens === undefined || file.maxTokens === undefined || file.elapsedMs === undefined)) {
+        throw new Error(`${arm}/${f} is missing outputTokens, maxTokens or elapsedMs`);
       }
       return file;
     });
@@ -148,7 +148,9 @@ async function pairs(a: string, b: string): Promise<void> {
   const fb = new Map(checkedArm(b).map((f) => [f.slug, f]));
   /* A control compares a prompt with ITSELF, so two arms both called `before`
      that were run on different prompt bytes are not a control. */
-  if (a.replace(/-\d+$/, "") === b.replace(/-\d+$/, "")) {
+  /* Only `before` is a control: the `after-N` arms are successive prompt
+     drafts, so theirs differ on purpose. */
+  if (a.startsWith("before") && b.startsWith("before")) {
     for (const [slug, qa] of fa) {
       const qb = fb.get(slug);
       if (qb && (qa.sourceSha256 !== qb.sourceSha256 || qa.promptVersion !== qb.promptVersion)) {
@@ -248,7 +250,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const { loadArticle } = await import("../src/store/index.js");
-  const { generateQuiz, PROMPT_VERSION, ANSWER_TOKENS } = await import("../src/quiz.js");
+  const { generateQuiz, PROMPT_VERSION, ANSWER_TOKENS, THINKING_ROOM } = await import("../src/quiz.js");
   const { budgetFor } = await import("../src/token-budget.js");
   const sourceSha256 = createHash("sha256")
     .update(fs.readFileSync(path.join(import.meta.dirname, "..", "src", "quiz.ts")))
@@ -270,7 +272,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         dropped: { ...run.dropped },
         outputTokens: run.outputTokens,
         elapsedMs: run.elapsedMs,
-        maxTokens: budgetFor("quiz", ANSWER_TOKENS),
+        maxTokens: budgetFor("quiz", ANSWER_TOKENS, THINKING_ROOM),
         questions: run.quiz.questions.map((q) => {
           const extra = q as unknown as { band?: string; value?: number };
           return {

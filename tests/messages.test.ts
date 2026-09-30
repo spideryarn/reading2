@@ -277,6 +277,18 @@ describe("the code table and the messages are one fact, not two", () => {
   });
 });
 
+describe("retired reader-facing codes", () => {
+  it("still classifies a stored quiz-spread failure", () => {
+    /* Jobs written before quiz/5 can keep this sentence indefinitely. Retiring
+       the band-spread refusal must not make its bracketed code cease to be one
+       of ours: `kindOfMessage` is also the authorship allowlist used before a
+       stored sentence may reach a reader or monitoring. */
+    expect(kindOfMessage("The questions did not cover the full range. [quiz-spread]")).toBe(
+      "retry",
+    );
+  });
+});
+
 describe("whether the interface offers another go", () => {
   it("offers one exactly when the message says one could work", () => {
     for (const f of EVERY) expect(worthRetrying(f.message), f.message).toBe(canRetry(f.kind));

@@ -1,0 +1,142 @@
+{
+  "arm": "after-2",
+  "slug": "cargocult-spya-rz663q",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "63e5e904575af4b3aef43163bbed8387b8537bed9df35026810b5c964b5714d5",
+  "at": "2026-09-30T05:22:08.387Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 6607,
+  "elapsedMs": 66005,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "What term does Feynman coin for scientific-looking work that follows every proper form but produces no real results?",
+      "referenceAnswer": "He calls it Cargo Cult Science, comparing it to South Sea islanders who built fake runways, control huts, and bamboo antennas hoping planes would land, imitating the outward form of the wartime airfields without understanding what actually made planes land.",
+      "evidence": [
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "premise": "He calls this Cargo Cult Science after islanders who built fake airfields hoping planes would land.",
+      "question": "What single quality does Feynman say is missing in Cargo Cult Science that keeps the 'planes' from landing?",
+      "referenceAnswer": "He says what's missing is scientific integrity - a kind of utter honesty and 'leaning over backwards' to report anything that might make your own results invalid.",
+      "evidence": [
+        "spya-afgs74"
+      ]
+    },
+    {
+      "premise": "The missing quality is scientific integrity, an honesty about reporting anything that might undermine your own results.",
+      "question": "What does Feynman say is the first and most important principle of this integrity?",
+      "referenceAnswer": "The first principle is that you must not fool yourself, since you are the easiest person to fool; once you've managed that, being honest with other scientists follows naturally.",
+      "evidence": [
+        "spya-ed9mzv"
+      ]
+    },
+    {
+      "question": "What example does Feynman give of scientists gradually fooling themselves when measuring the electron's charge after Millikan?",
+      "referenceAnswer": "Millikan's original measurement was slightly too low due to a wrong value for the viscosity of air, and later researchers' results crept upward only gradually over time because they distrusted and re-examined values too far above Millikan's number while accepting values close to it too readily.",
+      "evidence": [
+        "spya-s9msxy",
+        "spya-uj9v2h"
+      ]
+    },
+    {
+      "premise": "Scientists unconsciously discounted results that differed too much from Millikan's accepted number.",
+      "question": "What does Feynman say a scientist must do about facts that disagree with a theory they are advocating?",
+      "referenceAnswer": "He says you must put down all the facts that disagree with your theory, as well as those that agree with it, not just the evidence that supports your conclusion.",
+      "evidence": [
+        "spya-rxj5wa"
+      ]
+    },
+    {
+      "question": "What example about cigarette advertising does Feynman use to illustrate the problem of selective publication?",
+      "referenceAnswer": "He notes that a cigarette company might publicize a low-nicotine property as proof the cigarette is good for you while staying silent about other harmful properties like tar content, similar to how publishing scientific results only when they support a desired conclusion is dishonest.",
+      "evidence": [
+        "spya-jk7mj4"
+      ]
+    },
+    {
+      "question": "What advice does Feynman give about scientific advice to government, using the example of a senator asking about where to drill?",
+      "referenceAnswer": "If your finding favors drilling in another state rather than the senator's own, you must still publish that result rather than suppress it; using only the results that support the desired political outcome and hiding the rest means you're being used, not giving real scientific advice.",
+      "evidence": [
+        "spya-s05sub"
+      ]
+    },
+    {
+      "question": "What example does Feynman give about being honest with the public, involving a friend who studied cosmology?",
+      "referenceAnswer": "His friend planned to claim practical applications for cosmology research on the radio so as to keep getting funding, even though there weren't any real applications; Feynman considered this dishonest, since a scientist should tell the public the truth about their work rather than invent a justification.",
+      "evidence": [
+        "spya-mjty2q"
+      ]
+    },
+    {
+      "question": "What flaw did Feynman point out in a psychology student's plan to test whether rats would still perform behavior A under new circumstances Y?",
+      "referenceAnswer": "She only intended to test under the new circumstances Y, without first repeating the original experiment under the original circumstances X in her own lab to confirm she could reproduce result A, so she wouldn't actually know whether the change to Y was responsible for any difference.",
+      "evidence": [
+        "spya-w9nnq6",
+        "spya-tf8rj2"
+      ]
+    },
+    {
+      "premise": "Feynman told her she needed to first replicate the original experiment before changing conditions.",
+      "question": "What did her professor tell her when she proposed doing this, and what did that reveal about the field's usual practice?",
+      "referenceAnswer": "The professor refused, saying the experiment had already been done and repeating it would waste time, revealing that the general policy in psychology at the time was not to repeat others' experiments but only to change conditions and observe the outcome.",
+      "evidence": [
+        "spya-v0xcd7"
+      ]
+    },
+    {
+      "question": "What error at the National Accelerator Laboratory troubled Feynman regarding an experiment on deuterium?",
+      "referenceAnswer": "The researcher compared his heavy hydrogen (deuterium) results to someone else's older data on light hydrogen taken with different apparatus, instead of running the light hydrogen comparison himself, because lab managers eager for fast new results wouldn't give him time on the machine for a result they considered already known.",
+      "evidence": [
+        "spya-m95kqm"
+      ]
+    },
+    {
+      "question": "How did Mr. Young's 1937 experiment finally reveal how rats knew which door had food?",
+      "referenceAnswer": "After ruling out the appearance, smell, and lighting of the doors, he found the rats were using the sound of the floor to tell which door was correct, and he could only stop this cue by covering the corridor floor in sand, which forced the rats to actually learn to enter the correct door.",
+      "evidence": [
+        "spya-npdc6n"
+      ]
+    },
+    {
+      "premise": "Young discovered the rats were using floor sound as a cue and eliminated it by using sand.",
+      "question": "What happened to later rat-running research after Young's discovery, and why does Feynman treat this as an example of Cargo Cult Science?",
+      "referenceAnswer": "Later experimenters never cited Young's work or adopted his careful controls like the sand-covered corridor, continuing to run rats the same old way without controlling for the real cues the rats were using, showing scientific form without the actual rigor that would make the results meaningful.",
+      "evidence": [
+        "spya-wye8g6"
+      ]
+    },
+    {
+      "question": "What trend does Feynman describe in ESP research by parapsychologists like Rhine as their experimental methods were tightened?",
+      "referenceAnswer": "As critics pushed for better controls, the measured ESP effects grew smaller and smaller until they nearly vanished, and some researchers began arguing that expecting a repeatable experiment was itself an unreasonable demand.",
+      "evidence": [
+        "spya-rbpppq",
+        "spya-rbpppq"
+      ]
+    },
+    {
+      "question": "What troubling policy did a parapsychology institute's outgoing director propose about which students to train?",
+      "referenceAnswer": "He proposed training only students who had already shown they could produce positive PSI results, rather than ambitious students who only got chance-level results, which Feynman warns teaches students to get a desired outcome rather than to experiment with real scientific integrity.",
+      "evidence": [
+        "spya-g203mu"
+      ]
+    },
+    {
+      "question": "What final wish does Feynman leave the graduating class with?",
+      "referenceAnswer": "He wishes them the luck to end up somewhere they are free to maintain the kind of scientific integrity he described, without being pressured by concerns about their position or funding into abandoning it.",
+      "evidence": [
+        "spya-ndyj3t"
+      ]
+    }
+  ]
+}

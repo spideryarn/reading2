@@ -777,6 +777,27 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
     expect(premiseShown()).toBe(P2);
   });
 
+  it("does not put the old verdict back while clearing a replacement batch", () => {
+    const old = owner({ quiz: PATH, attempt: judged(first.id, "right") });
+    paint(old);
+    press("Next");
+    expect(premiseShown()).toBeNull();
+
+    /* The replacement deliberately reuses ids, and the old completed attempt
+       deliberately survives this render. The reset effect calls
+       `clearAttempt`, but effects from this same render still see the old prop:
+       recording it again after clearing the map would silently carry a verdict
+       across batches. */
+    paint({
+      ...old,
+      quiz: { ...PATH, batchId: "spya-batch2" },
+      attempt: judged(first.id, "right"),
+    });
+    expect(host.textContent).toContain("Question 1 of 3");
+    press("Next");
+    expect(premiseShown()).toBe(P2);
+  });
+
   /**
    * **The rule that makes this adaptive rather than a gauge.** quiz.md: quoting
    * a difficulty at a reader is handing them a token with nothing behind it.
