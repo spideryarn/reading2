@@ -39,19 +39,38 @@ export const MAX_WEAK_SECTIONS = 3;
 /**
  * The indices of the distinct sections a question's evidence is in, in
  * evidence order. A block the page does not have — a stale id from an older
- * batch — counts nowhere, and so does a section with no title, because a row
- * that cannot be named cannot be pointed at. (Evidence is body-only by
- * construction, `isBodyEvidence` in src/quiz.ts, so the notes never arise.)
+ * batch — counts nowhere, and so do a supplement and a section with no title,
+ * because neither is part of the argument this feature is measuring and an
+ * unnamed row cannot be pointed at. Evidence is body-only by construction
+ * (`isBodyEvidence` in src/quiz.ts); the supplement check keeps that policy
+ * true if malformed or older artefact data reaches this pure boundary.
+ *
+ * **A block before the first section is in none.** `sectionIndexContaining`
+ * clamps a row above the first section into it, which is right for "where is
+ * the reader" (`?at=`, the return chip) and wrong for "what is this passage
+ * about": it would invent evidence for the first section. Checked here rather
+ * than changed there, because those callers want the clamp. GPT Sol's code
+ * review.
  */
 export function sectionsOfQuestion(
   question: QuizQuestion,
   sections: readonly Section[],
   rowOf: ReadonlyMap<BlockId, number>,
 ): number[] {
+  const first = sections[0]?.row;
   const out: number[] = [];
   for (const e of question.evidence) {
+    const row = rowOf.get(e.blockId);
+    if (row === undefined || first === undefined || row < first) continue;
     const i = sectionIndexContaining(sections, rowOf, e.blockId);
-    if (i === null || out.includes(i) || !sections[i]?.title.trim()) continue;
+    if (
+      i === null ||
+      out.includes(i) ||
+      sections[i]?.supplement ||
+      !sections[i]?.title.trim()
+    ) {
+      continue;
+    }
     out.push(i);
   }
   return out;

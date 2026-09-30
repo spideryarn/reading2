@@ -26,6 +26,17 @@ what was built.**
 7. **Weakest is a share, not a count**: the largest share of judged answers wrong, then most wrong,
    then article order.
 
+## GPT Sol's code review
+
+[The review](260930i-quiz-scores-answers-by-section-and-says-where-to-look-again-code-review-sol.md):
+no P0 or P1; three P2s, which it fixed — a block before the first section was clamped into it,
+supplements were not refused at the join (`Section.supplement` is new, set by `buildSections`), and
+the tests did not earn the batch-reset and prop-chain claims (the `sections` prop is now required
+down the chain). **One of its fixes was moved, not kept as written**: it changed
+`sectionIndexContaining` to return null above the first section, but `?at=` and the return chip
+call that too and want the clamp, so the check lives in `sectionsOfQuestion` instead. Its regression
+test was confirmed to go red without the check.
+
 ## What Greg asked for
 
 > (A follow-up idea about how to improve the quiz. This might be overcomplicating it, but if there's a

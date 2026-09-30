@@ -1341,11 +1341,49 @@ describe("where to look again", () => {
     expect(host.textContent).toContain("Question 1 of 3");
   });
 
+  it("returns to a later missed question as a jump, so its premise is shown", () => {
+    const o = owner({ quiz: PATH });
+    paintSections(o);
+    press("Next question");
+    paintSections({ ...o, attempt: judged(second.id, "wrong") });
+    press("Next question");
+    expect(stem()).toBe("Question number 3?");
+
+    press("Back to a question on Middle");
+    expect(stem()).toBe(second.question);
+    expect(host.querySelector(".quiz-premise")?.textContent).toBe("The second step's premise.");
+  });
+
   it("drops the section once its answer is judged right again", () => {
     const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
     paintSections(o);
     expect(block()).not.toBeNull();
     paintSections({ ...o, attempt: judged(first.id, "right") });
+    expect(block()).toBeNull();
+  });
+
+  it("drops the old wrong verdict when a newer finished mark has no verdict", () => {
+    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(o);
+    expect(block()).not.toBeNull();
+    paintSections({ ...o, attempt: judged(first.id) });
+    expect(block()).toBeNull();
+  });
+
+  it("forgets the section on a replacement batch, even while the old completed attempt is still in props", () => {
+    const old = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
+    paintSections(old);
+    expect(block()).not.toBeNull();
+
+    /* The replacement deliberately reuses question ids and the old attempt
+       survives the first render. Without both the map reset and the
+       reset-only verdict pass, "Opening" comes straight back on the new batch. */
+    paintSections({
+      ...old,
+      quiz: { ...PATH, batchId: "spya-batch2" },
+      attempt: judged(first.id, "wrong"),
+    });
+    expect(stem(), "the reset hid the new batch instead of clearing the old verdict").toBe(first.question);
     expect(block()).toBeNull();
   });
 

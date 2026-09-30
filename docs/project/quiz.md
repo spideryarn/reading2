@@ -353,9 +353,10 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 
 - **Attempts are not stored.** A reload starts fresh. `batchId` is the shape that keeps the door
   open; nothing else about v1 assumes statelessness. **The adaptive walk did not change this**: the
-  path, the position in it and the hidden verdict are React state and die with the attempt, and the
-  verdict is not written to a log either — a per-answer right/wrong on a log line is a stored grade
-  wearing a different hat, and [privacy.md](privacy.md) makes a public promise about it.
+  path, the position in it and the hidden verdict map are React state and die with the visit (the
+  verdict map also resets on a new batch). The verdict is not written to a log either — a per-answer
+  right/wrong on a log line is a stored grade wearing a different hat, and
+  [privacy.md](privacy.md) makes a public promise about it.
 - **No reader profile in the stamp**, so no `profileChanged` on the response. Adding one later needs
   no migration — it would be a field on the JSON.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,

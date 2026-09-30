@@ -91,7 +91,7 @@ export function RememberBand({
   slug: string;
   blocks: Map<string, string>;
   /** The tree and block positions, for the quiz's "Where to look again" — `QuizPanel`'s `sections`. */
-  sections?: QuizSections | undefined;
+  sections: QuizSections;
   /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
@@ -184,7 +184,7 @@ function QuizSubBand({
   subMode: React.ReactNode;
   blocks: Map<string, string>;
   readSoFar?: ReadSoFar | undefined;
-  sections?: QuizSections | undefined;
+  sections: QuizSections;
   onJump(id: BlockId): void;
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {

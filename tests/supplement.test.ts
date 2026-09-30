@@ -550,6 +550,7 @@ describe("a reader standing mid-Notes", () => {
     expect(inNotes.length).toBe(1);
     expect(inNotes[0]!.title).toBe("Notes");
     expect(inNotes[0]!.blockId).toBe(blocks[firstNoteRow]!.id);
+    expect(inNotes[0]!.supplement).toBe(true);
     // `?at=` therefore stores the supplement's first block, whatever note the
     // reader stopped on.
     const active = activeSectionIndex(sections.map((s) => s.row), midNoteRow);

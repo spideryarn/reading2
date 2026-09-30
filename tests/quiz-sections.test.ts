@@ -18,7 +18,13 @@
 import { describe, expect, it } from "vitest";
 import type { BlockId, QuizQuestion, QuizVerdict } from "../src/types.js";
 import type { Section } from "../src/web/position.js";
-import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "../src/web/quiz-sections.js";
+import {
+  firstWrongIn,
+  type SectionTally,
+  sectionTally,
+  sectionsOfQuestion,
+  weakSections,
+} from "../src/web/quiz-sections.js";
 
 const bid = (n: number) => `spya-b${String(n).padStart(5, "0")}` as BlockId;
 const rowOf = new Map(Array.from({ length: 12 }, (_, i) => [bid(i), i] as const));
@@ -61,6 +67,23 @@ describe("sectionTally", () => {
       ["Intro", 1, 1],
       ["Body", 0, 1],
     ]);
+  });
+
+  it("does not invent containment before the first section, in a supplement, or for a stale id", () => {
+    const bounded: Section[] = [
+      { row: 3, blockId: bid(3), nodeId: "body", title: "Body" },
+      {
+        row: 9,
+        blockId: bid(9),
+        nodeId: "notes",
+        title: "Notes",
+        supplement: true,
+      },
+    ];
+    expect(sectionsOfQuestion(q("before", 1), bounded, rowOf)).toEqual([]);
+    expect(sectionsOfQuestion(q("body", 4), bounded, rowOf)).toEqual([0]);
+    expect(sectionsOfQuestion(q("notes", 10), bounded, rowOf)).toEqual([]);
+    expect(sectionsOfQuestion(q("stale", -1), bounded, rowOf)).toEqual([]);
   });
 });
 

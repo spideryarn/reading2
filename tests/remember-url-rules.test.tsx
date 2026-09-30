@@ -35,6 +35,9 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
 import { MODES, modeParam, REMEMBER_VIEWS, rememberParam } from "../src/web/params.js";
+import type { QuizSections } from "../src/web/QuizPanel.js";
+
+const NO_QUIZ_SECTIONS: QuizSections = { sections: [], rowOf: new Map() };
 
 /* -------------------------------------------------------------- parsing -- */
 
@@ -78,6 +81,8 @@ describe("the sub-mode parameter is `?remember=`", () => {
 
 /** The props the panel was last handed. Stubbed: this file is about the URL. */
 let panel: Record<string, unknown> | undefined;
+/** The Quiz panel separately, for the Remember → Quiz prop seam. */
+let quizPanel: Record<string, unknown> | undefined;
 
 vi.mock("../src/web/ChatPanel.js", () => ({
   ChatPanel: (props: Record<string, unknown>) => {
@@ -88,7 +93,10 @@ vi.mock("../src/web/ChatPanel.js", () => ({
 
 /** The Quiz half, stubbed for the same reason — it fetches an artefact. */
 vi.mock("../src/web/QuizPanel.js", () => ({
-  QuizPanel: () => null,
+  QuizPanel: (props: Record<string, unknown>) => {
+    quizPanel = props;
+    return null;
+  },
   RememberSubModeToggle: () => null,
 }));
 
@@ -132,6 +140,7 @@ enableHistorySync();
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   panel = undefined;
+  quizPanel = undefined;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -173,7 +182,11 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(search: string, band: "remember" | "conversation"): Promise<void> {
+async function mount(
+  search: string,
+  band: "remember" | "conversation",
+  sections: QuizSections = NO_QUIZ_SECTIONS,
+): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () => {
     root.render(
@@ -184,6 +197,7 @@ async function mount(search: string, band: "remember" | "conversation"): Promise
           ? createElement(RememberBand, {
               slug: "a-piece",
               blocks: new Map<string, string>(),
+              sections,
               onJump: () => {},
               onMode: () => {},
             })
@@ -214,6 +228,14 @@ describe("`?remember=` and `?thread=` cannot both be honoured", () => {
   it("leaves a thread alone when Recall is the half that is open", async () => {
     await mount("?mode=remember&thread=spya-k3m9qt", "remember");
     expect(param("thread")).toBe("spya-k3m9qt");
+  });
+});
+
+describe("the Quiz prop seam", () => {
+  it("carries the Reader's section projection through RememberBand and QuizSubBand", async () => {
+    const sections = { sections: [], rowOf: new Map() };
+    await mount("?mode=remember&remember=quiz", "remember", sections);
+    expect(quizPanel?.sections).toBe(sections);
   });
 });
 
