@@ -51,6 +51,88 @@ describe("referenceListFrom", () => {
     expect(list?.entries.size).toBe(6);
   });
 
+  it("stops at a numbering gap instead of swallowing later entries into the preceding work", () => {
+    const gapped = ENTRIES.slice(0, ENTRIES.findIndex((line) => line.startsWith("6."))).concat([
+      "7. Wrong-neighbour, A. (2024) This must not become part of entry 5.",
+    ]);
+    const list = referenceListFrom(["References", ...gapped]);
+    expect([...(list?.entries.keys() ?? [])]).toEqual([1, 2, 3, 4, 5]);
+    expect(list?.entries.get(5)).not.toContain("Wrong-neighbour");
+  });
+
+  it("accepts a zero-based list and superscript numbers emitted on their own lines", () => {
+    const zeroBased = Array.from(
+      { length: 5 },
+      (_, i) => `${i}. Author ${i} (202${i}) A reference title. Journal ${i}, 1–2`,
+    );
+    expect([...(referenceListFrom(["References", ...zeroBased])?.entries.keys() ?? [])]).toEqual([
+      0, 1, 2, 3, 4,
+    ]);
+
+    const separateNumbers = Array.from({ length: 5 }, (_, i) => [
+      String(i + 1),
+      `Author ${i + 1} (202${i}) A reference title. Journal ${i + 1}, 1–2`,
+    ]).flat();
+    const split = referenceListFrom(["References", ...separateNumbers]);
+    expect([...(split?.entries.keys() ?? [])]).toEqual([1, 2, 3, 4, 5]);
+    expect(split?.entries.get(1)).toBe("1 Author 1 (2020) A reference title. Journal 1, 1–2");
+
+    const inlineSuperscripts = Array.from(
+      { length: 5 },
+      (_, i) => `${i + 1} Author ${i + 1} (202${i}) A reference title. Journal ${i + 1}, 1–2`,
+    );
+    expect([...(referenceListFrom(["References", ...inlineSuperscripts])?.entries.keys() ?? [])]).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+  });
+
+  /* A page number printed alone at a page foot is never furniture
+     (`repeatedLines` skips lines that short), so it reaches this parser inside
+     the list. It must neither end the list nor ride in an entry. */
+  it("reads straight through a page number printed alone between two entries", () => {
+    const lines = ["References", ...ENTRIES.slice(0, 9), "12", ...ENTRIES.slice(9)];
+    const list = referenceListFrom(lines);
+    expect([...(list?.entries.keys() ?? [])]).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(list?.entries.get(4)).toBe("4. Ryan, J.D. et al. (2000) Amnesia is a deficit in relational memory. Psychol. Sci. 11, 454–461");
+  });
+
+  it("keeps a continuation that starts with a small number as text", () => {
+    const lines = ["References", ...ENTRIES.slice(0, 7), "2 vols. Oxford University Press", ...ENTRIES.slice(7)];
+    const list = referenceListFrom(lines);
+    expect(list?.entries.size).toBe(6);
+    expect(list?.entries.get(3)).toContain("2 vols. Oxford University Press");
+  });
+
+  it("refuses a contents-style section list after a References heading", () => {
+    expect(
+      referenceListFrom([
+        "References",
+        "1. Introduction ........ 1",
+        "2. Background ........ 3",
+        "3. Methods ........ 7",
+        "4. Results ........ 12",
+        "5. Discussion ........ 19",
+        "6. Conclusion ........ 23",
+      ]),
+    ).toBeNull();
+  });
+
+  it("fails closed on a row-interleaved two-column layer", () => {
+    const interleaved = [
+      "1. Left, A. (2020) First left-column reference.",
+      "6. Right, A. (2020) First right-column reference.",
+      "2. Left, B. (2021) Second left-column reference.",
+      "7. Right, B. (2021) Second right-column reference.",
+      "3. Left, C. (2022) Third left-column reference.",
+      "8. Right, C. (2022) Third right-column reference.",
+      "4. Left, D. (2023) Fourth left-column reference.",
+      "9. Right, D. (2023) Fourth right-column reference.",
+      "5. Left, E. (2024) Fifth left-column reference.",
+      "10. Right, E. (2024) Fifth right-column reference.",
+    ];
+    expect(referenceListFrom(["References", ...interleaved])).toBeNull();
+  });
+
   it("falls back to an earlier heading when the later one has no list under it", () => {
     const lines = ["References", ...ENTRIES, "Appendix", "References", "See the main list."];
     expect(referenceListFrom(lines)?.entries.size).toBe(6);

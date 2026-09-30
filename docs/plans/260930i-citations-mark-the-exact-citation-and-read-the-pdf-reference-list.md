@@ -177,3 +177,31 @@ flashes the `[8]` phrase rather than its paragraph.
 Real text: the paper the reports came from splits into all 130 entries, running headers gone;
 entry 8 is *Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity
 across individuals. Nat. Neurosci. 20, 115–125*.
+
+### GPT Sol, code review (2026-09-30) — "ready after the fixes", no P0
+
+Sol fixed in place, and each fix was read before it was kept:
+
+- **P1** a numbering gap or a row-interleaved two-column layer glued another work onto an entry —
+  an entry's own label out of sequence now ends the list;
+- **P1** a contents page under a `References` line (`1. Introduction …… 1`) read as a list —
+  refused;
+- **P1** two different numbered entries with the same short title, author and year folded into one
+  row — the entry number is now identity in both folds, and `mergeInto` refuses two numbers;
+- **P2** zero-based lists and superscript numbers; `[8, p. 12]` read as 8 and `[2019]` not read at
+  all; author names must come before the title in the entry (an invented "Neural Activity" could
+  match title words); `no-raw` told apart from `not-pdf` on the log line, and a parser's error
+  message no longer logged (it can quote the document); the screen-reader text carries the
+  authors; the cite-flash CSS test checks the computed cascade.
+- **Not fixed, P2**: an abort cannot interrupt `pass0`'s page walk, only be noticed after it. A
+  change to the shared PDF parser, left as a follow-up.
+
+**One of Sol's fixes was itself a regression, and was narrowed.** It let a line that is only a
+number start an entry, and ended the list at any number out of sequence. `repeatedLines` never
+counts a line of three characters or fewer as furniture, so a page number printed alone at a page
+foot reaches the parser inside the list and would have ended it at the first bibliography page
+break. Now only an entry's own label (`8.`, `[8]`, `8)`) out of sequence ends the list; a bare
+number out of sequence is dropped as a page number, and a run-in one (`2 vols. Oxford`) stays text.
+Two tests pin it, and the first was red against Sol's version. Checked on the corpus in
+`evals/pdf/` too: the three with a bibliography are author–year and give no list either way, and
+the reported paper still gives all 130 entries.

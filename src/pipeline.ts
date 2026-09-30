@@ -1753,16 +1753,19 @@ async function pdfReferenceList(
   store: ArtifactReads,
 ): Promise<{
   list: NumberedReferenceList | null;
-  state: "not-pdf" | "scan" | "no-list" | "found" | "unreadable";
+  state: "no-raw" | "not-pdf" | "scan" | "no-list" | "found" | "unreadable";
   ms: number;
 }> {
   const started = Date.now();
   const manifest = await store.read(ctx.slug, "fetch", "raw");
-  if (manifest?.kind !== "pdf") return { list: null, state: "not-pdf", ms: 0 };
+  if (manifest === null) return { list: null, state: "no-raw", ms: Date.now() - started };
+  if (manifest.kind !== "pdf") return { list: null, state: "not-pdf", ms: Date.now() - started };
   try {
+    ctx.signal?.throwIfAborted();
     const bytes = await readRawBytes(manifest, { slug: ctx.slug });
     ctx.signal?.throwIfAborted();
     const pass = await pass0(bytes, { maxPages: MAX_PAGES });
+    ctx.signal?.throwIfAborted();
     /* A scan has no text layer to read a list from (Sol F7). */
     if (pass.isScan) return { list: null, state: "scan", ms: Date.now() - started };
     /* Running headers and footers out first (`pageLines`), so a journal's
@@ -1774,7 +1777,18 @@ async function pdfReferenceList(
   } catch (err) {
     ctx.signal?.throwIfAborted();
     plog.warn(
-      { slug: ctx.slug, step: "citations", err: err instanceof Error ? err.message : String(err) },
+      {
+        slug: ctx.slug,
+        step: "citations",
+        /* A parser error can repeat document text in its message. Log only a
+           class (and our own bounded reason), never a stranger's PDF. */
+        why:
+          err instanceof RawDocumentUnavailable
+            ? `${err.name}:${err.reason}`
+            : err instanceof Error
+              ? err.name
+              : typeof err,
+      },
       `citations ${ctx.slug}: could not read the PDF's reference list; going on without it`,
     );
     return { list: null, state: "unreadable", ms: Date.now() - started };

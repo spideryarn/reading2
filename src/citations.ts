@@ -315,6 +315,8 @@ export interface Draft {
   mentions: CitationPlace[];
   /** CitedWork § `entry`. */
   entry?: string;
+  /** The PDF-list identity used only while folding; omitted from `CitedWork`. */
+  entryNumber?: number;
 }
 
 /**
@@ -348,6 +350,16 @@ export function verifyEntry(
   return entry;
 }
 
+function claimedEntryNumber(raw: unknown): number | null {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\s*\d{1,4}\s*$/.test(raw)
+        ? Number(raw)
+        : NaN;
+  return Number.isInteger(n) ? n : null;
+}
+
 /**
  * **Every number a bracketed cite names** — `[8]`, `[1,2]`, `[3–5]`,
  * `(e.g., [16,17])`. A range is expanded when it is short enough to be one.
@@ -355,8 +367,17 @@ export function verifyEntry(
 export function markerNumbers(quotes: readonly string[]): Set<number> {
   const out = new Set<number>();
   for (const quote of quotes) {
-    for (const m of quote.matchAll(/\[(\d[\d\s,;–—‐‑-]*)\]/g)) {
-      for (const part of (m[1] ?? "").split(/[,;]/)) for (const n of numbersIn(part)) out.add(n);
+    for (const m of quote.matchAll(/\[(\d[^\]]*)\]/g)) {
+      const parts = (m[1] ?? "").split(/[,;]/);
+      const found = parts.flatMap(numbersIn);
+      /* A bracketed four-digit number is overwhelmingly a year, not a
+         reference number. The list itself is capped at 60k characters and its
+         splitter accepts at most three digits, so it cannot contain entry
+         2019. */
+      for (const n of found) {
+        if (n >= 1000 && n <= 2999) continue;
+        out.add(n);
+      }
     }
   }
   return out;
@@ -381,7 +402,8 @@ function numbersIn(part: string): number[] {
  *   own characters; a title the entry does not contain means the model's
  *   metadata and the entry it named disagree, so the *entry* is dropped and the
  *   row stays as it would have been without one;
- * - every **author** name must be a word of the entry, or the authors go;
+ * - every **author** name must be a word before the title in the entry, or the
+ *   authors go;
  * - the **year** must be a year of the entry, and the entry's own token is
  *   kept — `1983a`, not `1983`.
  */
@@ -396,13 +418,17 @@ function locateInEntry(
     return null;
   }
   const title = entry.slice(span.start, span.end).replace(/[.,;:\s]+$/u, "");
-  const words = new Set(keyWords(entry).split(" "));
+  /* Author names must occur before the title they are said to have written.
+     Looking across the whole entry lets an invented author such as "Neural
+     Activity" validate against those words in the title. */
+  const authorWords = new Set(keyWords(entry.slice(0, span.start)).split(" "));
   const names = (fields.authors ?? "")
     .replace(/\bet al\.?\s*$/i, "")
     .split(/\s*(?:;|,|\s&\s|\band\b)\s*/)
     .map((n) => keyWords(n))
     .filter(Boolean);
-  const authorsHere = names.length > 0 && names.every((n) => n.split(" ").every((w) => words.has(w)));
+  const authorsHere =
+    names.length > 0 && names.every((n) => n.split(" ").every((w) => authorWords.has(w)));
   if (fields.authors && !authorsHere) drops.authorsUnfound++;
   const digits = fields.year?.match(/\d{4}/)?.[0];
   const year = digits ? entry.match(new RegExp(`\\b${digits}[a-z]?\\b`))?.[0] : undefined;
@@ -524,6 +550,10 @@ function readDraft(
   const listed = list && w.entry !== undefined ? verifyEntry(w.entry, list, mentions, drops) : null;
   const said = saidFields(w, title);
   const located = listed === null ? null : locateInEntry(said, listed, drops);
+  /* Identity follows only an entry that survived the title check. A rejected
+     claim must not merge otherwise-unrelated rows merely because both named
+     the same number. */
+  const entryNumber = located === null ? null : claimedEntryNumber(w.entry);
   const entry = located === null ? undefined : capEntry(listed!);
   const fields = located ?? said;
   const authors = fields.authors ?? "";
@@ -540,6 +570,7 @@ function readDraft(
     ...(reference ? { reference } : {}),
     mentions,
     ...(entry ? { entry } : {}),
+    ...(entryNumber === null ? {} : { entryNumber }),
   };
 }
 
@@ -1062,6 +1093,11 @@ function canonicalUrl(value: string): string {
 
 /** Fold `b` into `a`: `a`'s fields win, `b` fills the gaps, the places are unioned. */
 function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
+  if (a.entryNumber !== undefined && b.entryNumber !== undefined && a.entryNumber !== b.entryNumber) {
+    throw new Error(
+      `citations: refused to merge reference-list entries ${a.entryNumber} and ${b.entryNumber}`,
+    );
+  }
   const mentions = [...a.mentions];
   for (const m of b.mentions) {
     if (mentions.some((x) => x.blockId === m.blockId && x.start === m.start)) continue;
@@ -1073,6 +1109,7 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
   }
   const reference = a.reference ?? b.reference;
   const entry = a.entry ?? b.entry;
+  const entryNumber = a.entryNumber ?? b.entryNumber;
   const authors = a.authors ?? b.authors;
   const year = a.year ?? b.year;
   const relevance = maxOf(a.relevance, b.relevance);
@@ -1087,6 +1124,7 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
     ...(reference ? { reference } : {}),
     mentions,
     ...(entry ? { entry } : {}),
+    ...(entryNumber === undefined ? {} : { entryNumber }),
   };
 }
 
@@ -1190,9 +1228,31 @@ export function buildCitations(
      (the shorthand and the full entry), BEFORE the links, so the merged row
      derives its link from the union of both rows' places. */
   const drafts = toDrafts(parsed.works, blocks, drops, opts.scores, opts.referenceList ?? null);
-  const byWork = mergeBy(
+  /* A numbered entry is stronger identity than model-written metadata. Fold
+     duplicate rows for one entry first, then use the old work key only where
+     there is no numbered identity. Two real entries can share a short title,
+     author and year; folding those would put the first work's entry on both
+     works' mentions. */
+  const byEntry = mergeBy(
     drafts.map((draft) => ({ draft })),
-    ({ draft }) => keysOf({ ...draft, url: "", linkFrom: "search" }).workKey,
+    ({ draft }) => (draft.entryNumber === undefined ? null : `entry:${draft.entryNumber}`),
+    drops,
+    (a, b) => ({ draft: mergeInto(a.draft, b.draft, drops) }),
+  );
+  const workKeyOf = (draft: Draft) =>
+    keysOf({ ...draft, url: "", linkFrom: "search" }).workKey;
+  const numberedByWork = new Map<string, number>();
+  for (const { draft } of byEntry) {
+    if (draft.entryNumber === undefined) continue;
+    const key = workKeyOf(draft);
+    numberedByWork.set(key, (numberedByWork.get(key) ?? 0) + 1);
+  }
+  const byWork = mergeBy(
+    byEntry,
+    ({ draft }) => {
+      const key = workKeyOf(draft);
+      return draft.entryNumber === undefined || numberedByWork.get(key) === 1 ? key : null;
+    },
     drops,
     (a, b) => ({ draft: mergeInto(a.draft, b.draft, drops) }),
   );
@@ -1211,9 +1271,25 @@ export function buildCitations(
   /* 3 — fold again on the identifier: two rows the article links to one DOI or
      one address are one work. The better-evidenced link is kept. */
   const RANK: Record<CitationLinkFrom, number> = { doi: 0, arxiv: 1, article: 2, web: 3, search: 4 };
+  const idKeyOf = (w: (typeof linked)[number]) =>
+    keysOf({ ...w.draft, url: w.url, linkFrom: w.linkFrom }).idKey;
+  const numberedById = new Map<string, Set<number>>();
+  for (const w of linked) {
+    const key = idKeyOf(w);
+    if (key === null || w.draft.entryNumber === undefined) continue;
+    const numbers = numberedById.get(key) ?? new Set<number>();
+    numbers.add(w.draft.entryNumber);
+    numberedById.set(key, numbers);
+  }
   const folded = mergeBy(
     linked,
-    (w) => keysOf({ ...w.draft, url: w.url, linkFrom: w.linkFrom }).idKey,
+    (w) => {
+      const idKey = idKeyOf(w);
+      if (idKey === null) return null;
+      const claims = numberedById.get(idKey)?.size ?? 0;
+      if (claims <= 1) return idKey;
+      return w.draft.entryNumber === undefined ? null : `${idKey}|entry:${w.draft.entryNumber}`;
+    },
     drops,
     (a, b) => ({
       draft: mergeInto(a.draft, b.draft, drops),
@@ -1249,11 +1325,12 @@ export function buildCitations(
 
   const citations: CitedWork[] = keyed.map((w) => {
     const old = counts.get(w.key) === 1 ? opts.inherit?.get(w.key) : undefined;
+    const { entryNumber: _entryNumber, ...draft } = w.draft;
     return {
       id: old ?? mintUniqueId(taken),
       key: w.key,
-      ...w.draft,
-      ...placesOf(w.draft, blocks, position, markers),
+      ...draft,
+      ...placesOf(draft, blocks, position, markers),
       url: w.url,
       linkFrom: w.linkFrom,
     };

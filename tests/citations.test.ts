@@ -738,6 +738,114 @@ describe("an entry in a PDF's reference list", () => {
     expect(invented.drops.yearUnfound).toBe(1);
   });
 
+  it("does not validate an invented author from words that occur only in the title", () => {
+    const { rows, drops } = withList([chen({ authors: "Neural Activity" })]);
+    expect(rows[0]?.entry).toBe(ENTRY_8);
+    expect(rows[0]?.authors).toBeUndefined();
+    expect(drops.authorsUnfound).toBe(1);
+  });
+
+  it("does not merge two different numbered entries just because their work fields key alike", () => {
+    const sameFields = {
+      title: "Memory",
+      authors: "Lee",
+      year: "2020",
+      why: "Two separately numbered works happen to share short metadata.",
+      ...scored,
+    };
+    const list: NumberedReferenceList = {
+      entries: new Map([
+        [1, "1. Lee, H. (2020) Memory. Journal A 1, 1–2"],
+        [2, "2. Lee, H. (2020) Memory. Journal B 2, 3–4"],
+      ]),
+    };
+    const body = block("spya-b00002", "The two editions differ [1,2].");
+    const drops = emptyDrops();
+    const out = buildCitations(
+      {
+        works: [
+          { ...sameFields, mentions: [{ block: body.id, quote: "differ [1,2]" }], entry: 1 },
+          { ...sameFields, mentions: [{ block: body.id, quote: "differ [1,2]" }], entry: 2 },
+        ],
+      },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: [body],
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit: null,
+        drops,
+        scores: noScoreDrops(),
+        referenceList: list,
+      },
+    );
+    expect(out.citations).toHaveLength(2);
+    expect(out.citations.map((row) => row.entry)).toEqual([...list.entries.values()]);
+  });
+
+  it("folds two model rows that claim the same numbered entry into one work", () => {
+    const first = chen();
+    const second = chen({
+      title: "Shared structure in neural activity",
+      why: "The same numbered work returned a second time.",
+    });
+    const { rows, drops } = withList([first, second]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entry).toBe(ENTRY_8);
+    expect(drops.merged).toBe(1);
+  });
+
+  it("still folds an unnumbered shorthand row into its one compatible numbered entry", () => {
+    const shorthand = chen({ entry: undefined });
+    const full = chen({ mentions: [{ block: "spya-b00001", quote: "TV episodes [8]" }] });
+    const { rows, drops } = withList([shorthand, full]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entry).toBe(ENTRY_8);
+    expect(drops.merged).toBe(1);
+  });
+
+  it("locates punctuation, a colon subtitle, diacritics and a surname particle", () => {
+    const list: NumberedReferenceList = {
+      entries: new Map([
+        [
+          1,
+          "1. van der Meer, García (2018) Memory: a view from within. Journal of Examples 4, 1–9",
+        ],
+      ]),
+    };
+    const body = block("spya-b00003", "This follows the earlier account [1].");
+    const drops = emptyDrops();
+    const out = buildCitations(
+      {
+        works: [
+          {
+            title: "Memory: a view from within.",
+            authors: "van der Meer, García",
+            year: "2018",
+            why: "The account followed here.",
+            ...scored,
+            mentions: [{ block: body.id, quote: "account [1]" }],
+            entry: 1,
+          },
+        ],
+      },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: [body],
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit: null,
+        drops,
+        scores: noScoreDrops(),
+        referenceList: list,
+      },
+    );
+    expect(out.citations[0]?.title).toBe("Memory: a view from within");
+    expect(out.citations[0]?.authors).toBe("van der Meer, García");
+  });
+
   it("ignores an entry when there is no list", () => {
     const { rows } = build([chen()], BODY);
     expect(rows[0]?.entry).toBeUndefined();
@@ -772,6 +880,11 @@ describe("numbered cites", () => {
       3, 4, 5, 16, 17, 20, 21,
     ]);
     expect([...markerNumbers(["Tulving (1983)"])]).toEqual([]);
+  });
+
+  it("keeps a citation before a page locator and ignores years and figure labels", () => {
+    expect([...markerNumbers(["the result [8, p. 12]"])]).toEqual([8]);
+    expect([...markerNumbers(["the 2019 sample [2019]", "the apparatus [Fig. 3]"])]).toEqual([]);
   });
 });
 

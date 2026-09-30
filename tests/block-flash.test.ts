@@ -356,8 +356,25 @@ describe("flashBlock with a cited work", () => {
   });
 
   it("has a wash for a cite mark in the stylesheet", () => {
-    const css = readFileSync("src/web/styles/prose.css", "utf8");
+    const proseCss = readFileSync("src/web/styles/prose.css", "utf8");
+    const css = `${proseCss}\n${readFileSync("src/web/styles/annotations.css", "utf8")}`
+      .replaceAll("var(--highlight-wash)", "rgb(1, 2, 3)")
+      /* jsdom's shorthand cascade bug is documented by the passage test above. */
+      .replaceAll("background: none;", "background-color: transparent;");
+    const style = document.createElement("style");
+    style.textContent = css;
+    document.head.append(style);
+    document.body.innerHTML = `<table><tbody><tr><td class="text">
+      <mark id="cite-still" class="cite passage-flash-still">x</mark>
+      <mark id="cite-moving" class="cite passage-flash">y</mark>
+    </td></tr></tbody></table>`;
+    expect(getComputedStyle(document.querySelector("#cite-still") as Element).backgroundColor).toBe(
+      "rgb(1, 2, 3)",
+    );
+    /* jsdom does not reliably expand this animation shorthand in the combined
+       production sheets; the source assertion below owns the moving half. */
     expect(css).toMatch(/td\.text mark\.cite\.passage-flash\s*\{\s*animation:\s*passage-flash 1\.2s/);
     expect(css).toMatch(/td\.text mark\.cite\.passage-flash-still\s*\{\s*background-color:/);
+    style.remove();
   });
 });

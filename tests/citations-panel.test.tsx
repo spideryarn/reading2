@@ -648,10 +648,28 @@ describe("the by-line", () => {
     expect(by?.classList.contains("cite-by-more")).toBe(true);
     expect(by?.textContent).toBe(`Chen et al. · 2017 — ${entry}`);
     expect(by?.querySelector(".sr-only")?.textContent).toBe(` — ${entry}`);
+    const card = await cardFor(by as Element);
+    expect(card.head).toBe("Chen et al. · 2017");
+    expect(card.what).toBe(entry);
+    expect(card.how).toContain("article's own reference list");
     /* Nothing shortened and no entry: no card, no affordance promising one. */
     const plain = row(bare.id).querySelector(".cite-by");
     expect(plain?.textContent).toBe("Tulving · 1983");
     expect(plain?.classList.contains("cite-by-more")).toBe(false);
+  });
+
+  it("keeps the full author list in the accessibility tree when the visible by-line is shortened", async () => {
+    const listed = work({
+      id: "spya-f2u3l4",
+      title: "Many authors",
+      authors: "Porter, Vollrath, Shao",
+      year: "2019",
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    await draw(owner({ citations: artefact([listed]) }));
+    const by = row(listed.id).querySelector(".cite-by");
+    expect(by?.querySelector(".sr-only")?.textContent).toContain("Porter, Vollrath, Shao");
   });
 });
 

@@ -963,6 +963,7 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
     >
       <p className="cite-by cite-by-more">
         {by}
+        {shortened && <span className="sr-only"> — authors: {work.authors}</span>}
         {entry && <span className="sr-only"> — {entry}</span>}
       </p>
     </Tooltip>
