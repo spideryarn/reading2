@@ -1,6 +1,6 @@
 ---
 reports: spya-ddpn5x
-ending: awaiting
+ending: declined
 ---
 # Use my ChatGPT subscription to pay, for a cheaper price
 
@@ -47,3 +47,5 @@ The first step that costs nothing is Greg applying through OpenAI's form. The fi
 the most is an eval of Sol on our stages (~$10–20).
 
 **Ending: Awaiting Greg** — parked, plan written.
+
+**Declined for now**, 2026-10-01 — Greg: *"Ok, out of scope for now."* The plan stays as the research.

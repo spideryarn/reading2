@@ -1,3 +1,7 @@
+---
+reports: spya-esua8w
+ending: shipped
+---
 # Ask why you are reading, and a Trajectory for that intent
 
 SPIDERYARN-READING2-60, from Greg (admin, verified by account id), on `nihms-536461-spya-nr87dn`. The

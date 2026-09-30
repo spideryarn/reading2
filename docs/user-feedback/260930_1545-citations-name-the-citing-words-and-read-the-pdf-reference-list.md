@@ -1,3 +1,7 @@
+---
+reports: spya-bjzvj9, spya-tfa4wq
+ending: shipped
+---
 # Citations: the row names the citing words, and a PDF's reference list gives authors and year
 
 [SPIDERYARN-READING2-6J](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6J) and
