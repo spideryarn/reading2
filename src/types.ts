@@ -1897,6 +1897,17 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /**
+   * **Present, as `true`, only when we hold no copy of the source document** —
+   * `raw_source_kind` is null, which src/db/schema.ts calls "a real answer": an
+   * article imported before we kept them. The shelf's rebuild reads it: with no
+   * web address to re-fetch, a rebuild is over the stored copy, and here there
+   * is none (feedback 6B, docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
+   *
+   * Absent in the ordinary case, like `visibility`, so every fixture and cached
+   * row that predates it still means "we hold it" — the common answer.
+   */
+  noStoredSource?: true;
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 

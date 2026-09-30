@@ -126,9 +126,18 @@ function controls(): HTMLElement[] {
   return [...host.querySelectorAll<HTMLElement>("[data-action]")];
 }
 
-/** The one whose accessible name starts with this. */
+/**
+ * The one whose accessible name starts with this — or, for `"rerun"`, the
+ * re-fetch button by its `data-action`, because since feedback 6B its name
+ * depends on the article: *Re-fetch and rebuild*, or *Rebuild from the stored
+ * copy* where there is nothing to fetch.
+ */
 function control(name: string): HTMLElement {
-  const hit = controls().filter((el) => (el.getAttribute("aria-label") ?? "").startsWith(name));
+  const hit = controls().filter((el) =>
+    name === "rerun"
+      ? el.getAttribute("data-action") === "rerun"
+      : (el.getAttribute("aria-label") ?? "").startsWith(name),
+  );
   expect(hit, `no single control named ${name}`).toHaveLength(1);
   return hit[0] as HTMLElement;
 }
@@ -294,7 +303,7 @@ describe("a control that cannot act", () => {
    */
   it("is aria-disabled rather than natively disabled, so its card can still be opened", () => {
     render(NO_URL);
-    for (const name of ["Re-fetch", "Open the original"]) {
+    for (const name of ["Open the original"]) {
       const el = control(name);
       expect(el.getAttribute("aria-disabled"), `${name} is aria-disabled`).toBe("true");
       expect(
@@ -328,7 +337,7 @@ describe("a control that cannot act", () => {
     document.body.addEventListener("click", heard);
     render(NO_URL, shelf);
     act(() => {
-      control("Re-fetch").dispatchEvent(
+      control("Open the original").dispatchEvent(
         new MouseEvent("click", { bubbles: true, cancelable: true }),
       );
     });
@@ -341,14 +350,96 @@ describe("a control that cannot act", () => {
 
   /**
    * **The re-fetch needs the same gate as the link, not a weaker one.** Keyed on
-   * `entry.url` alone it offered a live button over a `javascript:` address —
+   * `entry.url` alone it offered a live re-fetch over a `javascript:` address —
    * and `src/fetch.ts` refuses anything but http(s), so the job was accepted and
    * failed at its first step. That is the dead button the 2026-08-27 fix
    * removed, reached by the other door. GPT Sol, 2026-09-05.
+   *
+   * **Since feedback 6B (2026-09-30) the button is live anyway, and rebuilds
+   * without fetching** — so the gate now decides which step is forced, and a
+   * `javascript:` address must still never be handed to stage 1 as a re-fetch.
    */
-  it("refuses the re-fetch for an address stage 1 would not follow", () => {
-    render(NOT_WEB);
-    expect(control("Re-fetch").getAttribute("aria-disabled")).toBe("true");
+  it.each([
+    ["no address", () => NO_URL],
+    ["an address stage 1 would not follow", () => NOT_WEB],
+  ])("with %s, rebuilds from the stored copy and never forces a fetch", async (_case, entry) => {
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    render(entry());
+    const rerun = control("rerun");
+    expect(rerun.getAttribute("aria-disabled"), "the rebuild is drawn unavailable").not.toBe(
+      "true",
+    );
+    expect(rerun.getAttribute("aria-label")).toBe("Rebuild from the stored copy (nothing to fetch)");
+    await act(async () => {
+      rerun.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    });
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/jobs");
+    expect(JSON.parse(String(init.body))).toEqual({ slug: entry().slug, force: ["extract"] });
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * **And unavailable where there is no stored copy either** — `fetch` would
+   * run for want of its artefact and fail with "No source URL". The card must
+   * still open (aria-disabled, not disabled) and the click must stop here.
+   * GPT Sol's plan review, 2026-09-30.
+   */
+  it("refuses the rebuild where there is no address and no stored copy", async () => {
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const heard = vi.fn();
+    document.body.addEventListener("click", heard);
+    render({ ...NO_URL, noStoredSource: true });
+    const rerun = control("rerun");
+    expect(rerun.getAttribute("aria-disabled")).toBe("true");
+    expect(rerun.hasAttribute("disabled")).toBe(false);
+    expect(rerun.getAttribute("aria-label")).toBe("Rebuild (no web address and no stored copy)");
+    act(() => {
+      rerun.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(heard).not.toHaveBeenCalled();
+    const card = await cardFor(control("rerun"));
+    expect(card.what).toMatch(/no stored copy/);
+    document.body.removeEventListener("click", heard);
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * A stored copy does not matter where there is a web address: the re-fetch
+   * makes a new one.
+   */
+  it("still re-fetches a web article even when we hold no stored copy", async () => {
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    render({ ...FETCHED, noStoredSource: true });
+    await act(async () => {
+      control("Re-fetch and rebuild").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    });
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ slug: FETCHED.slug, force: ["fetch"] });
+    vi.unstubAllGlobals();
+  });
+
+  it("still re-fetches where the address is a web page", async () => {
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    render(FETCHED);
+    await act(async () => {
+      control("Re-fetch and rebuild").dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    });
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ slug: FETCHED.slug, force: ["fetch"] });
+    vi.unstubAllGlobals();
   });
 
   /**
@@ -368,7 +459,7 @@ describe("a control that cannot act", () => {
        Read from what `cardFor` returns rather than from `document.body` after
        the fact: `cardFor` closes the card on its way out, so a check on the body
        afterwards is a check on markup that is no longer there. */
-    for (const name of ["Re-fetch", "Open the original"]) {
+    for (const name of ["rerun", "Open the original"]) {
       const card = await cardFor(control(name));
       expect(`${card.head} ${card.what} ${card.how}`).not.toContain("javascript:");
     }
@@ -419,9 +510,9 @@ describe("each card", () => {
    * easiest to pad. GPT Sol, 2026-09-05.
    */
   it("belongs to the control it was opened from, and says more than the label", async () => {
-    for (const entry of [FETCHED, NO_URL, NOT_WEB, SHARED]) {
+    for (const entry of [FETCHED, NO_URL, NOT_WEB, SHARED, { ...NO_URL, noStoredSource: true as const }]) {
       render(entry);
-      for (const name of ["Edit title", "Re-fetch", "Open the original", "Copy link", "Archive"]) {
+      for (const name of ["Edit title", "rerun", "Open the original", "Copy link", "Archive"]) {
         const where = `${name} on ${entry.visibility ?? "a private article"}/${entry.url ?? "no url"}`;
         const card = await cardFor(control(name));
         expect(card.head, `${where}: the card is headed by some other control`).not.toBe("");
@@ -447,14 +538,38 @@ describe("each card", () => {
    */
   it("says something different when the action is unavailable", async () => {
     render(FETCHED);
-    const live = await cardFor(control("Re-fetch"));
+    const live = await cardFor(control("Open the original"));
     act(() => root.render(null));
 
     render(NO_URL);
-    const dead = await cardFor(control("Re-fetch"));
+    const dead = await cardFor(control("Open the original"));
 
     expect(dead.head, "both are still the same control").toBe(live.head);
     expect(dead.what, "the unavailable card repeats the working one").not.toBe(live.what);
+  });
+
+  /**
+   * **The rebuild says it will not fetch** — Greg, feedback 6B: *"it should
+   * just skip the refetching (and perhaps indicate that in the tooltip)"*. A
+   * card that still read "Fetches the page again" would be the false claim.
+   */
+  it("says that nothing is fetched where there is nothing to fetch", async () => {
+    render(FETCHED);
+    const refetch = await cardFor(control("rerun"));
+    act(() => root.render(null));
+    expect(refetch.what).toMatch(/Fetches the page again/);
+
+    for (const entry of [NO_URL, NOT_WEB]) {
+      render(entry);
+      const rebuild = await cardFor(control("rerun"));
+      act(() => root.render(null));
+      expect(rebuild.head).toBe("Rebuild");
+      expect(rebuild.what).toMatch(/nothing is fetched/);
+      expect(rebuild.what).not.toMatch(/Fetches the page again/);
+      expect(`${rebuild.what} ${rebuild.how}`, "the card inferred an upload").not.toMatch(
+        /upload/i,
+      );
+    }
   });
 
   /**

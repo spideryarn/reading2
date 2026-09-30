@@ -440,6 +440,12 @@ const PRESENCE_OF = {
   hasArc: "arc",
   hasTweets: "tweets",
   hasGlossary: "glossary",
+  /* Whether we hold the source document, for the shelf's rebuild (feedback 6B).
+     The kind rather than the digest because the kind is what `readRaw`
+     (src/store/artifacts-pg.ts) needs to rebuild the manifest `fetch`'s skip
+     check looks for; `article_revisions_raw_source_both` keeps the two
+     together. */
+  hasRawSource: "rawSourceKind",
 } as const satisfies Record<string, keyof typeof articleRevisions.$inferSelect>;
 
 /** Exported for the test that guards the policy. Not a read seam. */
@@ -885,7 +891,10 @@ const REVISION_READ_POLICY: Record<
      but that reads the whole table rather than coming through here. */
   rawContentType: {},
   rawEncoding: {},
-  rawSourceKind: { rawSource: "value" },
+  /* `library: "presence"` since 2026-09-30: the shelf's rebuild needs to know
+     whether there is a stored copy to rebuild from, and nothing else (feedback
+     6B; `LibraryEntry.noStoredSource`). */
+  rawSourceKind: { rawSource: "value", library: "presence" },
   rawSourceSha256: { rawSource: "value" },
   /* Raw-source provenance, arriving 2026-08-28 with another agent's
      delete-the-importer work. Reached through src/store/export.ts and the
@@ -1066,6 +1075,7 @@ export const REVISION_PROJECTIONS = {
     hasArc: sql<boolean>`${articleRevisions.arc} is not null`.as("has_arc"),
     hasTweets: sql<boolean>`${articleRevisions.tweets} is not null`.as("has_tweets"),
     hasGlossary: sql<boolean>`${articleRevisions.glossary} is not null`.as("has_glossary"),
+    hasRawSource: sql<boolean>`${articleRevisions.rawSourceKind} is not null`.as("has_raw_source"),
   },
   metadata: {
     id: articleRevisions.id,
@@ -2677,6 +2687,9 @@ const rawPgArticleReader: ArticleReader = {
              TypeScript cannot see the guarantee for. `describeArticle` keeps
              the key only when it says `public`. */
           visibility: row.article.visibility as Visibility,
+          /* Presence, in Postgres, like `has` above: whether the shelf's
+             rebuild has a stored copy to work from (feedback 6B). */
+          sourceHeld: row.revision.hasRawSource,
         }),
       );
     }

@@ -77,9 +77,8 @@ vi.mock("../src/log.js", async (importActual) => {
 });
 
 const { closeDb, getDb } = await import("../src/db/client.js");
-const { articleRevisions, articles, blockIdentities, comments, revisionBlocks } = await import(
-  "../src/db/schema.js"
-);
+const { articleRevisions, articles, blockIdentities, comments, rawSources, revisionBlocks } =
+  await import("../src/db/schema.js");
 const { currentOwnerId } = await import("../src/owner.js");
 const { pgArticleReader } = await import("../src/store/pg.js");
 const { deriveLibraryScalars } = await import("../src/library-scalars.js");
@@ -88,6 +87,14 @@ import { pgReady } from "./helpers/pg-ready.js";
 import { type ScratchArticle, scratchArticleInPg } from "./helpers/scratch-article.js";
 
 /* ------------------------------------------------------------- the fixture -- */
+
+/**
+ * **The stored source document the plain article has, and no other does** —
+ * for `noStoredSource` (feedback 6B). A fixed digest of this file's own, so
+ * `onConflictDoNothing` makes the insert idempotent across runs; the row is
+ * content-addressed and harmless to leave.
+ */
+const STORED_SHA = "5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1f5e1fc5a0";
 
 /** Distinct from every other file's, and tests/fixture-ids.test.ts enforces it. */
 const A = {
@@ -347,6 +354,16 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
       { id: B.ruleD, tag: "hr", kind: "other", text: "", words: 0, html: "<hr>", gistable: false },
     ] as unknown as Block[];
 
+    await db
+      .insert(rawSources)
+      .values({
+        sha256: STORED_SHA,
+        kind: "html",
+        bytes: 1,
+        contentType: "text/html",
+        verifiedAt: new Date(),
+      })
+      .onConflictDoNothing();
     await db.insert(articleRevisions).values([
       {
         id: R.plain,
@@ -360,6 +377,8 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
            that would not deserialise is a fixture that proves less than it
            looks. */
         glossary: EMPTY_GLOSSARY,
+        rawSourceSha256: STORED_SHA,
+        rawSourceKind: "html",
         ...deriveLibraryScalars({ blocks: plainBlocks, tree: plainTree }),
       },
       {
@@ -623,6 +642,20 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
         .set({ wordCount: null, blockCount: null, partCount: null, sectionCount: null, rootGist: null })
         .where(inArray(articleRevisions.id, [R.unscalared, R.unscalaredToo]));
     }
+  });
+
+  /**
+   * **Whether we hold the source**, answered in Postgres — the shelf's rebuild
+   * is unavailable without it where there is no web address (feedback 6B,
+   * docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
+   * Marked only when absent, so an ordinary article carries no key.
+   */
+  it("marks the articles we hold no stored source for, and only those", async () => {
+    const entries = await pgArticleReader.listArticles({ archived: false });
+    const by = new Map(entries.map((e) => [e.slug, e]));
+    expect(by.get(SLUG.plain), "the fixture's plain article is missing").toBeDefined();
+    expect(by.get(SLUG.plain)).not.toHaveProperty("noStoredSource");
+    expect(by.get(SLUG.untitled)?.noStoredSource).toBe(true);
   });
 
   it("counts each article's comments, and zero for one that has none", async () => {

@@ -165,7 +165,15 @@ do to an article was open it. Then Greg asked for the verbs:
 Five buttons, revealed on hover and on focus: **Edit title**, **Re-fetch and rebuild**, **Open the
 original**, **Copy link**, **Archive**. Re-run is not new machinery — it is
 `POST /api/jobs { slug, force: ["fetch"] }`, the route the add box already uses; without the `force`
-the queue skips every step whose artefact is on disk, which is every step.
+the queue skips every step whose artefact is on disk, which is every step. Where there is no web
+address to fetch it is **Rebuild** instead — the same job with `force: ["extract"]`, so `fetch`
+skips over the copy we already hold and everything after it runs again (the job
+[`enqueueReset`](../../src/jobs.ts) queues, without the reset plan):
+
+> It *could* rebuild them though, and so I feel like that button should still be active - it should
+> just skip the refetching (and perhaps indicate that in the tooltip).
+>
+> — Greg, 2026-09-30 ([260930d](../plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md))
 
 The plan, the decisions and what was deliberately left out are in
 [260826k-library-shelf-actions-and-search.md](../plans/260826k-library-shelf-actions-and-search.md).
@@ -189,7 +197,7 @@ places that reveal before they act.
 
 ### When a button cannot do its job
 
-Two of the five need a source URL, and until 2026-09-05 they were simply **not drawn** without one —
+Two of the five used to need a source URL, and until 2026-09-05 they were simply **not drawn** without one —
 each absence a real fix (a re-fetch with nothing to fetch, an anchor pointed at a `javascript:` URL),
 each made by deleting the control. The cost only shows across cards:
 
@@ -200,8 +208,12 @@ each made by deleting the control. The cost only shows across cards:
 > — Greg, 2026-09-05
 
 So all five are always drawn, and the precondition decides whether the button *works* rather than
-whether it exists. The card and the accessible name both say **which** absence it is: no address
-recorded at all, versus an address we will not follow. The card never says *why* there is no address
+whether it exists. Since 2026-09-30 the re-fetch without an address becomes a rebuild from the
+stored copy (above), and says so — one card for both absences, since they do the same thing. It is
+unavailable only when we hold **no stored copy** either (`LibraryEntry.noStoredSource`,
+`raw_source_kind is null`: an article imported before we kept them), because `fetch` would then run
+for want of its artefact and fail. **Open the original**'s card and accessible name say **which**
+absence it is: no address recorded at all, versus an address we will not follow. No card says *why* there is no address
 — "you uploaded this" is a claim assembled from a gap in our own files, and a revision can be
 published with no `requested_url` and no `final_url`, which is the same refusal
 [`Metadata.tsx`](../../src/web/Metadata.tsx) § `uploaded` makes.
@@ -210,7 +222,7 @@ published with no `requested_url` and no `final_url`, which is the same refusal
 *web* URL", on the reasoning that a non-web address is still an address — but it is not an address
 stage 1 will follow ([`src/fetch.ts`](../../src/fetch.ts) refuses anything but http(s)), so a
 `javascript:` article got a live button over a job that always failed at its first step. GPT Sol,
-2026-09-05.
+2026-09-05. The same test now decides whether the button forces `fetch` or `extract`.
 
 **`aria-disabled`, never the `disabled` attribute**, and that is the whole feature rather than a
 detail: a natively disabled button is out of the tab order and suppresses activation, and engines

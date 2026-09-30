@@ -220,8 +220,8 @@ describe("a finger", () => {
    */
   it("can still read a control that is unavailable", () => {
     render(NO_URL);
-    press(control("Re-fetch"), "touch");
-    expect(openCardHead()).toBe("Re-fetch and rebuild");
+    press(control("Open the original"), "touch");
+    expect(openCardHead()).toBe("Open the original");
     expect(openCardText(), "an unavailable control invited a second press").not.toContain(
       "Tap again",
     );

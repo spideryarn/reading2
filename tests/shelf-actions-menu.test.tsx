@@ -344,18 +344,61 @@ describe("an unavailable item", () => {
   it("says why in its own words, and does nothing", async () => {
     const fetch = vi.fn(async () => new Response("{}", { status: 202 }));
     vi.stubGlobal("fetch", fetch);
-    const rerun = tapOpen(NO_URL, "Re-fetch and rebuild");
-    expect(rerun.textContent?.trim()).toBe("Re-fetch and rebuild (no address recorded)");
+    const open = tapOpen(NO_URL, "Open the original");
+    expect(open.textContent?.trim()).toBe("Open the original page (no address recorded)");
+    expect(open.tagName, "an unavailable open was drawn as a link").not.toBe("A");
+    expect(open.getAttribute("aria-disabled")).toBe("true");
+    click(open);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetch, "an unavailable open made a request").not.toHaveBeenCalled();
+  });
+
+  /**
+   * **Rebuild where there is nothing to fetch** — feedback 6B, Greg,
+   * 2026-09-30. The item is live, says it will not fetch, and forces `extract`
+   * rather than `fetch`, so the queue skips the fetch over the stored copy.
+   */
+  it.each([
+    ["no address", () => NO_URL, "Rebuild from the stored copy (nothing to fetch)"],
+    [
+      "an address stage 1 will not follow",
+      () => NOT_WEB,
+      "Rebuild from the stored copy (nothing to fetch)",
+    ],
+  ])("with %s, rebuilds without fetching", async (_case, entry, words) => {
+    const fetch = vi.fn(async () => new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetch);
+    const rerun = tapOpen(entry(), "Rebuild");
+    expect(rerun.textContent?.trim()).toBe(words);
+    expect(rerun.getAttribute("aria-disabled")).not.toBe("true");
+    click(rerun);
+    await act(async () => {
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/jobs");
+    expect(JSON.parse(String(init.body))).toEqual({ slug: entry().slug, force: ["extract"] });
+    expect(shelf.report, "the queued rebuild was reported as a failure").not.toHaveBeenCalled();
+  });
+
+  /**
+   * **Nothing to fetch and no stored copy** — an article imported before we
+   * kept source documents. Forcing `extract` would make `fetch` run and fail,
+   * so the item is unavailable and says why. GPT Sol's plan review.
+   */
+  it("with no address and no stored copy, is unavailable and queues nothing", async () => {
+    const fetch = vi.fn(async () => new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetch);
+    const rerun = tapOpen({ ...NO_URL, noStoredSource: true }, "Rebuild");
+    expect(rerun.textContent?.trim()).toBe("Rebuild (no web address and no stored copy)");
     expect(rerun.getAttribute("aria-disabled")).toBe("true");
     click(rerun);
     await act(async () => {
       await Promise.resolve();
     });
-    expect(fetch, "an unavailable re-fetch queued a job").not.toHaveBeenCalled();
-
-    const open = item("Open the original");
-    expect(open.textContent?.trim()).toBe("Open the original page (no address recorded)");
-    expect(open.tagName, "an unavailable open was drawn as a link").not.toBe("A");
+    expect(fetch, "a rebuild with nothing to rebuild from queued a job").not.toHaveBeenCalled();
   });
 
   /**
@@ -373,8 +416,5 @@ describe("an unavailable item", () => {
       (menu() as HTMLElement).querySelector("a"),
       "the menu drew an anchor for a javascript: address",
     ).toBeNull();
-    expect(item("Re-fetch").textContent?.trim()).toBe(
-      "Re-fetch and rebuild (the recorded address cannot be fetched)",
-    );
   });
 });
