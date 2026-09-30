@@ -1,14 +1,16 @@
 # Quiz questions that build up to the takeaways
 
-**Status: planned, awaiting plan review.** Written 2026-09-30 in `worktree-quiz-build-up`, from
+**Status: revised after GPT Sol's plan review (round 1: "do not build", seven P1s); round 2
+pending.** Written 2026-09-30 in `worktree-quiz-build-up`, from
 [SPIDERYARN-READING2-5W](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5W) (report
 `spya-jc2ub9`, an admin suggestion from Greg's own account, provenance checked by
 `scripts/feedback-reporter.ts`, exit 0).
 
 Context: [quiz.md](../project/quiz.md) · the earlier report
 [260905_1800](../user-feedback/260905_1800-quiz-questions-too-hard.md) and Greg's decision there ·
-[260907d](260907d-make-the-quiz-adaptive.md), the adaptive ladder this plan retires ·
-[prompting-guide.md](../project/prompting-guide.md).
+[260907d](260907d-make-the-quiz-adaptive.md), the adaptive ladder ·
+[prompting-guide.md](../project/prompting-guide.md). Reviews:
+[round 1](260930c-quiz-questions-that-build-up-to-the-takeaways-review-sol.md).
 
 ## What Greg asked for
 
@@ -28,182 +30,207 @@ Four things in it:
 4. **The run arrives somewhere**: by the end the reader has worked up to the key takeaways, and
    *why* they hold.
 
-## The one thing this collides with, and the call
+## The shape: a path, with adaptive scaffolding
 
-The quiz today is **a pool, not a path**. The server sorts twelve independent questions by band
-(`easy` → `medium` → `hard`), then value, then position in the document; since 2026-09-07 the client
-walks that pool **adaptively** — a right answer steps up a band, a wrong one steps down — with a
-hidden right/wrong verdict from a second, small model call per answer.
+The quiz today is **a pool, not a path**: twelve independent questions, sorted on the server by band
+(`easy` → `medium` → `hard`), then value, then document position, and walked by an adaptive ladder —
+a right answer steps up a band, a wrong one steps down — driven by a hidden right/wrong verdict from
+a second, small model call per answer.
 
-A sequence whose questions build on one another cannot be walked that way. Question 6 leans on
-question 5; a ladder that jumps from an `easy` question to the first unseen `hard` one skips the
-steps that make the `hard` one small. The two designs want different things from the order:
+A sequence whose questions build on one another cannot be sorted by band, and cannot be hopped
+across by a band ladder: question 6 leans on question 5. So **the order becomes the model's, and it
+is the path**. That much of the first draft stands.
+
+What changed on review is what happens to adaptivity. The first draft retired it. **GPT Sol (F1)
+showed a way to keep it that fits the path rather than fighting it**, and it is the better design:
 
 ```
-today — a pool, walked by a ladder          asked for — a path, walked in order
+the path never changes order                 what adapts is how much help a step carries
 
-   easy   ● ● ● ● ●                          1 → 2 → 3 → 4 → … → 17 → 18
-   medium ● ● ●          ← right: step up      small steps, each leaning on the last,
-   hard   ● ● ●          → wrong: step down    arriving at the takeaways and why
+  1 → 2 → 3 → 4 → … → 17 → 18                 Q5 after a right answer to Q4:
+                                                  Why does Seth doubt a faster computer
+                                                  would ever be conscious?
+
+                                               Q5 after a wrong answer, a skip, or a jump:
+                                                  Seth ties consciousness to being alive.
+                                                  Why does Seth doubt a faster computer
+                                                  would ever be conscious?
 ```
 
-**The call: the path replaces the ladder.** The quiz walks the model's sequence in order; the ladder
-and its hidden verdict are retired. Reasons:
+Each question may carry a **premise**: one sentence stating what an earlier step established, which
+this one builds on. It is shown **unless the reader has just shown they have it** — the previous
+question on the path was answered and judged right. Get it right, and the next step asks you to
+carry the thread yourself; get it wrong or skip, and the next step hands you the thread first.
 
-- **Adaptivity was a means, and the path reaches its end by construction.** Greg chose the ladder on
-  2026-09-06 to get *"start easy, stay at the right level"* without a control. A path of small steps
-  starts easy because every step is small, and it stays at the right level because the difficulty is
-  carried by the sequence rather than by any one question.
-- **Keeping both is not a smaller version of either.** Adapting within a chain would need a new idea
-  of what "easier" means there (repeat a step? insert a scaffold? skip one?) and a second structure
-  on each question to support it. That is the kind of machinery "simplest version first" says to
-  wait for evidence on.
-- **It removes a model call per answer**, and the one piece of hidden per-reader judgement the
-  feature carried.
+Why this is right:
 
-**No difficulty control comes back**, in any form: no slider, no band on screen, no "easier / harder"
-anywhere. Report 21's decision stands. The words `easy`, `medium`, `hard`, `harder`, `easier`,
-`difficulty` and `level` still never reach the page, and the panel test that says so stays.
+- **It keeps Greg's 2026-09-06 decision** (adaptive, no control) instead of silently superseding it
+  with a request that did not mention it. Sol's point, and fair: the first draft had no mandate to
+  delete it.
+- **Adaptivity becomes pedagogical rather than a difficulty dial**: more scaffolding when it helps,
+  less giveaway when it is not needed. Still no control, still nothing on screen that names a level.
+- **The premise is a field, not a clause**, so the build-up is structural — the prompt has to state
+  what each step leans on — and the display can decide when to show it. The first probe run without
+  the field (`after-1`, below) mostly walked the article in document order with few questions
+  leaning on anything: asking for "build on one another" in prose alone did not produce it.
+- **It keeps the verdict machinery as it is** — `src/quiz-verdict.ts`, the `done` frame, the cost
+  category — so nothing is retired and Sol's F7 (historical spend reclassified) does not arise.
 
-**This is the product trade-off in this plan, named so Greg decides it rather than inherits it.**
-A reader who already knows the piece cold now walks the same small steps as one who does not; under
-the ladder they would have been stepped up. *Show all* is still there for that reader, and so is
-Next without answering. If that turns out to matter, the deferred version is below.
+**No difficulty control comes back**, in any form. The words `easy`, `medium`, `hard`, `harder`,
+`easier`, `difficulty` and `level` still never reach the page, and the panel test that says so
+stays.
 
 ## What changes
 
 ### The prompt (`QUIZ_SYSTEM`, `quiz/4` → `quiz/5`)
 
-The prompt **is** the feature, so this is most of the work. What goes, what stays, what is new:
+The prompt **is** the feature.
 
-**Stays**, because none of it is about bands: one question mark / one thing asked (with its examples),
-nothing answerable without having read the piece, nothing about where something sits in the
-document, nothing the piece leaves open, the reference answer as a draft not a key, the evidence
-rules, the parse rules, `plainWords("ask", "explain")`.
+**Stays**, because none of it is about bands: one question mark / one thing asked, nothing answerable
+without having read the piece, nothing about where something sits in the document, nothing the piece
+leaves open, the reference answer as a draft not a key, the evidence rules, the parse rules,
+`plainWords("ask", "explain")`.
 
-**Goes:** `BAND`, `THE SPREAD IS NOT OPTIONAL`, `VALUE` and the `band`/`value` output fields. Their
-job was to feed a sort; there is no sort.
+**Goes:** `BAND`, `THE SPREAD IS NOT OPTIONAL`, `VALUE`, and `band`/`value` in the output.
 
-**New — THE QUIZ IS A PATH.** In the prompt's own register:
+**New — THE QUIZ IS A PATH:** decide the two to four takeaways privately first, and why each holds;
+start with what the piece plainly says; each step leans on the ones before; end at the takeaways and
+why they hold, each still one small step from the last.
 
-- Decide first, privately, the two to four things a reader should come away with — the takeaways —
-  and why each holds. The quiz is the route there.
-- Walk it in small steps. Early questions are about what the piece plainly states; each later one
-  leans on what the earlier ones established. The last few ask the reader to put the steps together
-  into the takeaways, and into why they hold. Even those are one small step from the question before.
-- **Every question is answerable in a sentence or two, without effort**, by a reader who has answered
-  the ones before it. If a question needs the reader to stop and work something out, it is two
-  questions — ask the first.
-- **A later question may state, as its premise, what an earlier question established** — *"Given
-  that the author thinks X, why does …?"* — which is how the steps stay small. It must never contain
-  its own answer. (That is the old "never put the answer in the question" rule, narrowed: a premise
-  from an earlier step is not a giveaway, it is the build.)
-- Keep it about what matters. The path goes through what the argument leans on; a detail nothing
-  rests on is a detour.
+**New — THE PREMISE:** optional, one sentence, stating something an **earlier** question on the path
+asked for. Rules, each with a bad/good example:
 
-**Changes:** *"up to twelve"* → *"up to twenty, fewer where the piece does not support twenty"*; the
-reference answer *"two or three sentences"* → *"one or two"*; "It stands on its own. The reader sees
-the question and nothing else" → "the reader sees this question and the ones before it".
+- It is never this question's answer, nor a hint at it.
+- The question must read as a whole question without it (it is sometimes hidden).
+- It states an earlier step's answer, so it must not be the only place an earlier *unanswered*
+  question's answer appears in the list — which is why the list never shows premises (below).
+- **A premise does not make a big step small** (Sol F3's third leak): "Given X, why does the whole
+  argument hold?" is still a leap. If the step from the premise to the answer is more than a
+  sentence of thought, add the missing step.
 
-**Why twenty and not more.** Greg said "more", and "a whole bunch". Twenty is two thirds more than
-today, fits one answer budget comfortably, and is a ceiling — a short piece still gets a short quiz.
-It is a constant; if the eval or a reader says the path is too short to reach the takeaways, it moves.
+**Changes:** up to **twenty**, fewer where the piece does not support twenty; the reference answer
+one or two sentences; "stands on its own" becomes "reads as a whole question without its premise".
 
-### The stage (`src/quiz.ts`, `src/types.ts`)
+### The stage (`src/quiz.ts`, `src/types.ts`, `src/pipeline.ts`)
 
-- `QuizQuestion` loses `band` and `value`; `QuizBand` goes. Stored quizzes still carry the fields in
-  their JSON, which is harmless — nothing reads them, and every one of those quizzes is `outdated`
-  after the version bump anyway, so its reader is offered *Write them again*.
-- `toQuestions` stops requiring band and value.
-- `orderQuestions`, `missingBandEnds`, `SPREAD_FROM`, the spread gate in `buildQuiz` and its reader
-  message `quizBandsNotSpread` go. **The order stored is the model's order**, which is the path.
-- `MAX_QUESTIONS` 12 → 20; `ANSWER_TOKENS` sized for twenty shorter questions (the stage runs with
-  adaptive thinking inside the same budget, so it goes up rather than down: 10 000 → 16 000).
-- **A question dropped in validation leaves a gap in the path.** Accepted: the premise rule means a
-  later question restates what it leans on, so a missing step makes the walk steeper by one step,
-  not unanswerable. The drop counts already on the artefact are how we would see it happening often.
+- `QuizQuestion` gains `premise?: string` and loses `band` and `value`; `QuizBand` goes.
+- `toQuestions` reads `premise` (trimmed, dropped if empty; a premise equal to the question or
+  containing the reference answer verbatim is removed rather than failing the question), stops
+  requiring band and value, and **records how many dropped questions had an accepted successor** —
+  a new `QuizDropped.gaps` counter, logged by the pipeline in place of the band counts.
+- `orderQuestions`, `missingBandEnds`, `SPREAD_FROM`, the spread gate and its reader sentence
+  `quizBandsNotSpread` go. **The order stored is the model's.**
+- `MAX_QUESTIONS` 12 → 20. `ANSWER_TOKENS` 10 000 → 14 000 (the first probe: twenty questions in
+  ~7.4k output tokens, thinking included, against a ceiling of answer + 40k thinking headroom).
 
-### The walk (`src/web/QuizPanel.tsx`, `src/web/useQuiz.ts`)
+**Sol F4 — a dropped mid-path question — is answered by counting, not failing, and that is an
+overrule with a reason.** Sol proposed failing the batch whenever a dropped question has an accepted
+successor. In the baseline runs **three of ten batches dropped a whole question** for an unfound
+quote, so fail-closed would throw away roughly a third of paid batches — the 260903c failure again.
+What limits the damage instead: the premise field carries a step's conclusion into its successor, so
+a gap costs the reader the *work* of one step, not the ability to answer the next; and `gaps` makes
+it visible, which Sol rightly said the existing totals could not. If `gaps` turns out to be common,
+the next move is Sol's second option — predecessor ids and transitive drops.
 
-- **Next goes to the next question in the array; Previous to the one before.** An index, as it was
-  before 2026-09-07. "Question *n* of *N*" is then the position on the path, which is what it looks
-  like it means.
-- *Show all N* stays, and picking from it jumps there. **The list shows later questions, whose
-  premises are earlier answers** — a reader who opens it sees some answers in the premises further
-  down. Accepted: the list is an explicit "show me everything", and hiding rows would be a second
-  mechanism for a reader who chose to look.
-- Next no longer waits for a mark to finish: it waited only so the verdict could land.
+### Wire compatibility (Sol F2)
 
-### Retired
+- **An old client tab reading a new quiz** would call its ladder with `band: undefined` and throw on
+  Next. The GET route therefore adds `band: "easy", value: 3` to every question that lacks them,
+  **in the response only, never in the stored artefact**, with a comment dating its removal (a week
+  after deploy). An old ladder given an all-`easy` batch walks it front to back — the path.
+- **A new client reading an old (`quiz/4`) quiz** walks the stored band-sorted pool in order with no
+  premises: easy first, as before, minus the ladder. The first draft claimed readers would be
+  offered *Write them again*; that is false since 2026-09-29, when Greg decided `outdated` is not
+  worth bothering the reader about (SPIDERYARN-READING2-55) and moved re-running to Metadata. So an
+  existing quiz stays a pool until someone re-runs it. Accepted: it degrades to the pre-adaptive
+  behaviour, not to anything broken, and forcing invalidation would contradict that decision.
+- The `done` frame is unchanged.
 
-- `src/web/quiz-ladder.ts` and `tests/quiz-ladder.test.ts`.
-- `src/quiz-verdict.ts`, `tests/quiz-verdict.test.ts`, the `verdict` on the mark's `done` frame, and
-  `QuizVerdict`. Its registrations (`ai-call.ts`, `cost-categories.ts`, `models.ts`,
-  `plain-words.ts`' exempt list) go too, **unless** historical spend rows need the category name to
-  stay readable — the build checks that before deleting it, and keeps the name if they do.
-- `evals/quiz.ts` loses its band counts and the verdict labels on its marking cases; the marking half
-  is otherwise untouched.
+### The walk (`src/web/QuizPanel.tsx`, `src/web/quiz-ladder.ts`)
+
+- **Next goes to the next question in the array; Previous to the one before.** An index. "Question
+  *n* of *N*" is the position on the path.
+- `quiz-ladder.ts` becomes the premise rule: `showPremise(questions, index, verdicts)` — true unless
+  the question before it on the path has a `right` verdict in this session. Verdicts are kept in
+  React state by question id, set when a mark reaches `done`; never rendered, logged or stored, as
+  now. No `.sort()`, as now.
+- **Next still waits while a mark is arriving**, because the next step's premise depends on the
+  verdict.
+- **Show all N lists question stems only, never premises** (Sol F3): premises are earlier answers,
+  and scanning the list must not answer rows the reader has not reached. Opening a question from the
+  list shows its premise unless the rule above hides it.
+- The premise is drawn as a quiet lead-in line above the question, not as part of it.
 
 ### Not changed
 
-- `QUIZ_MARK_SYSTEM`. Shorter questions may want shorter marks, but the marking prompt's tone is the
-  most-measured thing in this feature and a change to it is its own piece of work. Deferred below.
-- `batchId`, the 409 on a replaced batch, the mark stream, the answer-binding, dictation, "not
-  stored".
+- `QUIZ_MARK_SYSTEM`. The marker is handed the question **with its premise, whether or not the
+  reader saw it** — the premise is context the marker may use, never something it reveals, and
+  this keeps the mark request's wire shape as it is. Shorter marks for shorter questions are
+  deferred.
+- `batchId`, the 409, the mark stream, answer-binding, dictation, "not stored", the verdict call.
 
 ## Measuring it
 
 [prompting-guide.md § Measuring a prompt change](../project/prompting-guide.md#measuring-a-prompt-change),
-through a new [`evals/quiz-build-up.ts`](../../evals/quiz-build-up.ts) shaped on
-`evals/plain-words/run.ts`:
+through [`evals/quiz-build-up.ts`](../../evals/quiz-build-up.ts):
 
-- **Five local articles** of different kinds: *The Mythology of Conscious AI* (essay, the quiz eval's
-  own article), *Revealing the Dynamics of Neural Information Processing…* (a paper, the kind the
-  report came from), *Cargo Cult Science* (a talk), *How to Do Great Work* (a long essay), *Distributed
-  Representations: Composition & Superposition* (technical explainer).
-- Production's own `generateQuiz`. **`before` and `before-2`** on the commit before the prompt edit
-  (the second is the control), **`after`** on the commit with it. Each run records a hash of
-  `src/quiz.ts`.
-- **Screens** (`report`): questions per quiz, mean words per question and per reference answer,
-  reference answers over two sentences, questions containing " and ".
-- **Blind pairs** (`pairs`): one pair per article, a whole quiz against a whole quiz — the change is
-  to the shape of the sequence, which one question cannot show. A fresh subagent that reads only the
-  pairs file judges *effort per question*, *does it build up to the takeaways*, *fidelity* and
-  *giveaway* (an answer inside its own question — the risk the premise rule creates). `before` vs
-  `before-2` is the control; `before` vs `after` is the result.
-- **Read the outputs anyway**, for the premise rule turning into giveaways, and for the path arriving
-  at the takeaways or merely stopping.
+- **Five local articles**: *The Mythology of Conscious AI* (essay; the quiz eval's own article),
+  *Revealing the Dynamics of Neural Information Processing…* (a paper, the kind the report came
+  from), *Cargo Cult Science* (a talk), *How to Do Great Work* (a long essay), *Distributed
+  Representations: Composition & Superposition* (a technical explainer).
+- Production's own `generateQuiz`. **`before` and `before-2`** ran on commit `d9c5cec7`, before any
+  prompt edit (the second is the control). `after-1` was a probe of the first prompt draft without a
+  premise field and is kept, not judged. **`after`** runs on the built commit.
+- **Screens** (`report`): count, mean words per question and per reference answer, reference answers
+  over two sentences, questions containing " and ", share with a premise, drops and `gaps`, output
+  tokens and elapsed time (Sol F8).
+- **Blind pairs** (`pairs`): one per article, a whole quiz against a whole quiz, rendered as a
+  skipping reader would see it (every premise shown — the worst case for giveaways). **Each pair
+  carries a source pack** (Sol F5): the article's outline with its gists, and every evidence passage
+  either quiz cites. A fresh subagent that reads only the pairs file judges *effort per question*,
+  *builds up to the takeaways*, *fidelity*, and three giveaways — a question containing its own
+  answer, a premise revealing an answer the reader has not reached, a premise bolted onto a step
+  that is still a leap.
+- **The eval refuses a partial comparison** (Sol F6): exact slug-set equality, unique slugs, five of
+  them, arm names matching their directories, and `before`/`before-2` on the same prompt hash.
+- `before` vs `before-2` is the control; `before` vs `after` is the result.
 
-**What this cannot show**, said now: five pairs is a handful, and the question count will often
-unblind the judge. It is enough to catch a regression and to see whether "builds up" happened at all;
-it is not a measurement of how much better.
+**What this cannot show**: five pairs is a handful, and the question count unblinds the judge. It is
+enough to catch a regression and to see whether "builds up" happened at all, not to measure how much
+better. Whether twenty is fatiguing is a question for readers after release.
 
 ## Stages
 
-1. **Prompt and stage.** `QUIZ_SYSTEM`, the stage and types, `tests/quiz.test.ts`, the eval run.
-   Gate: `npm test` on the quiz suites, `npm run typecheck`, the eval's screens and blind read.
-2. **The walk, and retiring the ladder and verdict.** Panel, hook, mark stream, registrations, tests,
-   `evals/quiz.ts`. Gate: quiz suites, typecheck, lint on touched files, and a browser check that the
-   walk goes 1 → 2 → 3 and Previous goes back.
-3. **Docs and bookkeeping.** `quiz.md` rewritten around the path (the ladder sections become a short
-   "until 2026-09-30" note with a link to 260907d), the user-feedback note, this plan's status.
+1. **Prompt, stage, wire, walk.** One stage, because the type change crosses the seam and nothing
+   in between compiles. Tests red-first where behaviour is new: the premise rule, `gaps`, the
+   route's compatibility fields, the list showing no premises.
+2. **Measure.** `after`, screens, blind read; iterate the prompt if the read says so.
+3. **Docs and bookkeeping.** `quiz.md` rewritten around the path (the band sections become a short
+   "until 2026-09-30" note), the user-feedback note, this plan's status.
 
-Sol reviews this plan read-only before stage 1, and the code before the push.
+Sol reviews the code before the push.
 
 ## Deferred, named
 
-- **Adapting within the path.** If a reader who knows the piece finds the small steps slow: let a
-  right answer skip the next step where the model marked it as a stepping stone. Needs a per-question
-  flag and the verdict back. Wait for a reader to say so.
-- **Shorter marks for shorter questions.** `QUIZ_MARK_SYSTEM` untouched; revisit if marks now dwarf
-  the questions they answer.
-- **Showing the takeaways at the end** — a closing "what this path was building to" card. The prompt
-  decides the takeaways privately; surfacing them is a new field and a new piece of UI, and it would
-  be a summary, which the product is careful with.
+- **Shorter marks for shorter questions.** `QUIZ_MARK_SYSTEM` untouched.
+- **Showing the takeaways at the end** — a closing card. The prompt decides them privately;
+  surfacing them is a new field, new UI, and a summary, which the product is careful with.
+- **Predecessor ids and transitive drops**, if `gaps` is common.
+- **Removing the route's compatibility fields**, a week after deploy.
 
 ## Simpler options passed over
 
-- **Prompt only, ladder kept.** Ask for smaller, building questions and leave the sort and the
-  ladder alone. Cheapest, and it cannot deliver point 3: the server would re-sort the chain by band
-  and the ladder would then hop across it.
+- **Prompt only, ladder and sort kept.** Cheapest, and it cannot deliver point 3: the server would
+  re-sort the chain by band and the ladder would hop across it.
+- **A linear path with the ladder and verdict retired** — the first draft. Simpler code, but it
+  deletes a behaviour Greg chose without his say, and the probe showed prose alone does not make the
+  questions lean on each other.
 - **Keep the pool, raise the count to twenty, shorten every question.** Delivers 1 and 2, not 3 or 4.
+
+## Review log
+
+**Round 1** (Sol, read-only, 2026-09-30): do not build; F1–F7 P1, F8 P2. F1 adopted (the design
+above). F2 adopted (response-only compatibility fields; the `outdated` claim corrected). F3 adopted
+(list shows stems only; premise rules; eval checks three giveaways). **F4 overruled** in favour of
+counting — reason above. F5, F6, F8 adopted in the eval. F7 does not arise now that the verdict
+stays; the pipeline's band log is replaced.
