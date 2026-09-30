@@ -1912,7 +1912,7 @@ interface PdfNote {
  * word (`3It is important`, `1Max Planck`). Not `1-2:` (a verse range), not
  * `1970 was`, and not a letter (`a To test`), which prose could not be searched for.
  */
-const NOTE_LABEL = /^(\d{1,3}|[⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3}|[*†‡§¶]{1,3})(?:\.?\s+|(?=\p{L}))/u;
+const NOTE_LABEL = /^([1-9]\d{0,2}|[¹²³⁴⁵⁶⁷⁸⁹][⁰¹²³⁴⁵⁶⁷⁸⁹]{0,2}|[*†‡§¶]{1,3})(?:\.?\s+|(?=\p{L}))/u;
 
 /** The prose a marker may sit in. Captions and headings are left alone. */
 const CITING: ReadonlySet<RecordType> = new Set<RecordType>(["paragraph", "quote", "listitem"]);

@@ -162,6 +162,17 @@ describe("digits that are not markers", () => {
     ).toContain("report2 says");
   });
 
+  it("does not treat zero as a note label", () => {
+    const records = [
+      lead,
+      r(2, "paragraph", "The implementation calls these version0 and release⁰."),
+      r(2, "footnote", "0 This is not a numbered note."),
+      r(2, "footnote", "⁰ Nor is this."),
+    ];
+    expect(links(records)).toEqual([]);
+    expect(listed(records)).toEqual(["0 This is not a numbered note.", "⁰ Nor is this."]);
+  });
+
   it("links a superscript after a number or another superscript, where plain digits would be refused", () => {
     expect(
       links([

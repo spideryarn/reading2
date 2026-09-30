@@ -41,3 +41,30 @@ switch to Sonnet — which nothing in the survey argues for, at about ten times 
 import.
 
 Plan: [260930e](../plans/260930e-pdf-transcription-glitches.md).
+
+## Follow-up, 2026-09-30: Greg's answers, and footnotes shipped
+
+> yeah, we could list them at the end somehow. and/or perhaps better still, make them clickable
+> inline with a tooltip, then no need to list them at the end? go with whatever's simplest
+>
+> — Greg, 2026-09-30 (relayed by the Overseer), on footnotes
+
+> sure, sounds good, but as i say, i'm more worried about things working well going forwards
+>
+> — Greg, 2026-09-30, on re-rendering the articles already on the shelf
+
+**Ending: Shipped** — on `dev`, not deployed. A newly imported PDF now shows its footnotes in a
+Notes list at the end, and a marker in the prose (`…nonphysicalists13`) opens the same hover card a
+web article's footnote does. Both came from one change, because the PDF renderer now writes the note
+markup the web path already had. No prompt change, so no import costs more. On every cached
+production chunk: 314 notes shown, 238 linked, and all 238 read by hand and right.
+
+**Re-rendering the articles already on shelves: not done, and written up.** It needs a deploy first,
+14 of the 23 would need a fresh paid transcription (they were read under older prompts), and every
+later stage would re-run. Greg owns all 23, so after a deploy "Start this article again" on the
+Metadata page does it one article at a time; the six live ones that re-render without a new
+transcription are listed in the plan.
+
+Still open for Greg: the trailing-author gap in the author check (on awaiting-approval.md).
+
+Plan: [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).

@@ -108,7 +108,7 @@ set of links was identical.
   cost Kuhn's `[bare/naked grain/ kernel35]` in all four copies. Numeric citation lists are already
   refused by rule 2, so the fence went.
 
-Tests: [`tests/pdf-footnotes.test.ts`](../../tests/pdf-footnotes.test.ts), eighteen cases, each red
+Tests: [`tests/pdf-footnotes.test.ts`](../../tests/pdf-footnotes.test.ts), nineteen cases, each red
 before the code, run through `splitIntoBlocks` so they check what the reading view gets.
 
 ## Options passed over
@@ -155,6 +155,17 @@ against it.
 | F5 | Visible notes still scored as hidden | Accepted and written down at `RENDERED` |
 | F6 | "Zero per import" is true of transcription only | Wording corrected; re-render costed in Stage 2 |
 | F7 | Stage 3, the client and citations say every note stamp came through `canonicaliseNotes` | The three comments name the PDF renderer as the second writer |
+
+## The code review, and what was done with it
+
+GPT Sol, write-enabled, 2026-10-01 —
+[260930k-pdf-footnotes-shown-and-linked-code-review-sol.md](260930k-pdf-footnotes-shown-and-linked-code-review-sol.md).
+Verdict *"approve after one low-severity fix"*: a label of `0` (or `⁰`) was accepted, outside the
+stated `1–999`; tightened, with a test red first. Read and kept. It also probed the piece spans, the
+two cursors, escaping, several markers in one block, `<li value>` surviving stage 3 and being read
+by `buildNoteIndex`, and the downstream consumers (titles, figures, assets, word counts, scoring),
+and found nothing else. Its advisory: `renderHtml`, `candidatesIn` and `findMarkers` are over the
+lint's complexity notice; left as they are.
 
 ## Stage 2 (optional) — re-rendering the PDF articles already on the shelf: stopped at the write-up
 
