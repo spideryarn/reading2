@@ -5,7 +5,7 @@ worktree). The change under review is `git diff 0593b571..fd03e37e` — three co
 
 - `0646e12b` the plan: `docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md`
   (read it first; § Stage 1, § Stage 2, § Tests are the spec). Your earlier plan review is
-  `docs/plans/260930e-plan-review-sol.md`; findings F1–F8 were taken as the plan says.
+  `docs/plans/260930e-ask-why-plan-review-sol.md`; findings F1–F8 were taken as the plan says.
 - `2313b333` stage 1: `src/web/AddPage.tsx` (the purpose box, the completion state machine
   `running | ready | saving | opened`, the once-guard), `src/web/purpose.ts` (new), `src/web/Metadata.tsx`
   (now uses `savePurpose`), `src/web/useJobs.ts` + `src/web/AddArticle.tsx` (F3: retry answers with the

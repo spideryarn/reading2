@@ -4,8 +4,8 @@ Read-only review. Do not change any file.
 
 Review the plan at `docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md`
 (untracked in this worktree; read it from disk). The design consult that led to it is
-`docs/plans/260930e-design-consult-prompt.md` and your own earlier answer
-`docs/plans/260930e-design-consult-sol.md`.
+`docs/plans/260930e-ask-why-design-consult-prompt.md` and your own earlier answer
+`docs/plans/260930e-ask-why-design-consult-sol.md`.
 
 Check the plan against the code, especially:
 

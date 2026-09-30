@@ -1,7 +1,8 @@
 # Ask why you are reading, and a Trajectory for that intent
 
-Status: planned 2026-09-30. Sentry SPIDERYARN-READING2-60, from Greg (admin, verified by account id),
-on `nihms-536461-spya-nr87dn`. Note: to be written in `docs/user-feedback/` at the end.
+Status: shipped on `dev` 2026-09-30, not deployed. Sentry SPIDERYARN-READING2-60, from Greg (admin, verified by account id),
+on `nihms-536461-spya-nr87dn`. Note:
+[260930_0905](../user-feedback/260930_0905-ask-why-you-are-reading-and-a-route-for-it.md).
 
 > So the feedback I keep getting is that people want to come with an intent and perhaps a
 > background, but a specific focused intent for what they want to get from the paper. So we
@@ -185,10 +186,10 @@ above the list (and in the empty state):
 ## Progress
 
 - 2026-09-30: consulted Opus and GPT Sol on the design
-  ([prompt](260930e-design-consult-prompt.md), [Sol's answer](260930e-design-consult-sol.md); Opus's
+  ([prompt](260930e-ask-why-design-consult-prompt.md), [Sol's answer](260930e-ask-why-design-consult-sol.md); Opus's
   answer summarised above). Plan written.
-- 2026-09-30: GPT Sol plan review ([prompt](260930e-plan-review-prompt.md),
-  [answer](260930e-plan-review-sol.md); exit 0, file fresh). Verdict *revise before build*. Taken:
+- 2026-09-30: GPT Sol plan review ([prompt](260930e-ask-why-plan-review-prompt.md),
+  [answer](260930e-ask-why-plan-review-sol.md); exit 0, file fresh). Verdict *revise before build*. Taken:
   F1 (P0 — never send an empty draft), F2 (a state machine for completion), F3 (to be confirmed
   red-first), F4, F5, F6 (no box in the empty state; `ensure` after the awaited save), F7 (claim
   narrowed, no new machinery), F8 (the test matrix). Sol also said the simplest v1 is stage 1 plus a
@@ -215,3 +216,18 @@ above the list (and in the empty state):
   banner the *box* is not drawn (the banner already offers *Plan it again*; two asks for one job),
   though a set purpose's line is; and **Edit** carries the view state (`carriedSearch`), as the
   dock's and masthead's Metadata links do, so its href has `?mode=trajectory`.
+- 2026-09-30: stages 1 and 2 committed (`2313b333`, `fd03e37e`).
+- 2026-09-30: GPT Sol code review, write-capable ([prompt](260930e-ask-why-code-review-prompt.md),
+  [answer](260930e-ask-why-code-review-sol.md); exit 0, file fresh): three findings, all fixed by the
+  reviewer red-first — C1 (P1) a purpose draft or a late save could follow the add page to a new
+  `/add/` address; C2 (P2) a double press in Trajectory could PATCH twice; C3 (P1) Trajectory's
+  saved purpose could show on the next article. Its trace confirmed the save → profile resolution →
+  `profileHash` mismatch → unforced re-plan path. Committed as `966badb5`. A read-only round 2 on
+  those fixes alone ([prompt](260930e-ask-why-code-review-2-prompt.md),
+  [answer](260930e-ask-why-code-review-2-sol.md); exit 0, fresh): no findings, approve.
+- 2026-09-30: browser check (Sonnet, Playwright, own dev server, commit `966badb5`): a typed
+  purpose held the add page at *Ready*, *Save and open* opened the article and Metadata showed the
+  sentence; an empty box opened straight away as before; in Trajectory the box, the press, a
+  trajectory-only job running to done, and the *Reading for* line with a working Edit, with no
+  horizontal overflow at 390px. It left test purposes on two local articles (`todo`,
+  `pow-spya-fvrt2e`).
