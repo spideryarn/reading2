@@ -337,6 +337,54 @@ export function quotaRules(tiers: readonly TierRow[]): QuotaRules {
   };
 }
 
+/** The two facts of a subscription row that say which tier, if any, it is paying for. */
+export interface PlanFacts {
+  readonly priceId: string | null | undefined;
+  readonly status: string | null | undefined;
+}
+
+/**
+ * A sync that moved an account onto a bigger plan: `from` is `null` for the
+ * free tier, which is not a row.
+ */
+export interface PlanUpgrade {
+  readonly from: TierRow | null;
+  readonly to: TierRow;
+}
+
+/**
+ * **Did this change buy more?** `null` unless it did.
+ *
+ * **The two sides are asked different questions, on purpose.** *After* is the
+ * tier the account is now paid up for — an entitled status and a price some
+ * tier sells, the rule `entitlementFromRow` (src/store/pg-billing.ts) uses,
+ * without the period, which says whether a sync is due rather than what was
+ * bought. *Before* is the tier the account **held**, paid up or not: any
+ * status on a recognised price except one whose subscription is over or never
+ * started (`canceled`, `incomplete_expired`, `incomplete`). Otherwise an
+ * `unpaid` → `active` recovery would read as a purchase. GPT Sol, plan review.
+ * Ranked by allowance, as `choiceRules` ranks, never by `sortOrder`.
+ *
+ * So free → paid is an upgrade (a first purchase — including the first payment
+ * of an `incomplete` checkout landing — or coming back after a cancellation),
+ * a smaller → larger plan is one, and a renewal, a `past_due` or `unpaid` →
+ * `active` recovery, a downgrade or a cancellation is not.
+ */
+export function planUpgrade(
+  before: PlanFacts,
+  after: PlanFacts | null,
+  tiers: readonly TierRow[],
+): PlanUpgrade | null {
+  const from =
+    before.status != null && !isTerminalStatus(before.status) && before.status !== "incomplete"
+      ? tierForPrice(before.priceId, tiers)
+      : null;
+  const to = after && isEntitledStatus(after.status) ? tierForPrice(after.priceId, tiers) : null;
+  if (!to) return null;
+  if (from && to.ingestsPerPeriod <= from.ingestsPerPeriod) return null;
+  return { from, to };
+}
+
 /** What that tier allows over the period Stripe says the subscription is in. */
 export function entitlementForTier(tier: TierRow, period: { start: Date; end: Date }): Entitlement {
   return {
