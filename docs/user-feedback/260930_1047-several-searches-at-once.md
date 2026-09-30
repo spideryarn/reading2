@@ -1,3 +1,7 @@
+---
+reports: spya-xxt0z5
+ending: shipped
+---
 # Several searches at once
 
 SPIDERYARN-READING2-5V (report `spya-xxt0z5`), a suggestion from Greg (admin), in production, build
