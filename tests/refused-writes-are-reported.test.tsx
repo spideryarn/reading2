@@ -383,10 +383,10 @@ describe("the shelf's rebuild button, when the queue refuses the job", () => {
   it("reports it, rather than going quiet as though the job were queued", async () => {
     const reported: string[] = [];
     const shelf = { report: (m: string) => reported.push(m) } as unknown as Shelf;
-    /* `url` is load-bearing on the fixture, not decoration: the button is drawn
-       only for an article that came from a page, because there is nothing to
-       re-fetch for one that came from a PDF. Without it this test would look for
-       a control that is correctly absent. */
+    /* `url` is load-bearing on the fixture, not decoration: it is what makes
+       this the *re-fetch* rather than the rebuild-only form the button takes
+       where there is no address (feedback 6B), and so what the name below
+       finds. */
     const entry = {
       slug: "a-slug",
       title: "A piece",

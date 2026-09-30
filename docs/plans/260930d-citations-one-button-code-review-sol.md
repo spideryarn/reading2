@@ -1,0 +1,32 @@
+Verdict: **approve with the fixes made**. No unresolved P0–P2 findings. No commit was made.
+
+### Findings
+
+- **C-1 · P1** — [src/citation-investigate.ts:607](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/citation-investigate.ts:607): an initially assessed lookup could become stale on the required re-read, yet the longer paid reading still started. Now it reruns step 1 against the fresh row and re-reads again. Red→green: [tests/citation-investigate.test.ts:878](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigate.test.ts:878).
+
+- **C-2 · P1** — [src/citation-investigate.ts:542](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/citation-investigate.ts:542): a new no-match could reuse an older `unreadable` match, contradicting “continue unconfirmed.” A no-match now conditionally removes only the find observed at the start; [the store delete](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/store/pg-citation-finds.ts:51) cannot erase a concurrent newer result. Red→green: [tests/citation-investigate.test.ts:775](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigate.test.ts:775).
+
+- **C-3 · P2** — [src/citation-find.ts:469](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/citation-find.ts:469): arbitrary store or programming `TypeError("fetch failed"/"terminated")` errors were classified as provider failures. Transport errors are now branded only at the provider boundary. Provider failures stop before the second call; store failures and bugs propagate. Red→green: [tests/citation-investigate.test.ts:850](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigate.test.ts:850).
+
+- **C-4 · P2** — [src/routes.ts:1938](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/routes.ts:1938): an admitted client that never iterated the generator leaked its allowance until lease expiry. The returned run now has an idempotent release, and the route releases it on every exit, including a dead socket or SSE setup failure. Red→green: [tests/citation-investigate.test.ts:654](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigate.test.ts:654). All exercised paths call the underlying `finish` exactly once.
+
+- **C-5 · P2** — [src/citation-find.ts:647](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/citation-find.ts:647): the `/find` refactor held its concurrency allowance through judging and saving, unlike the old route. It now releases immediately after the provider call while preserving `/find`’s original raw transport errors. Red→green: [tests/citation-investigate.test.ts:693](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigate.test.ts:693).
+
+- **C-6 · P1** — [src/web/useCitations.ts:367](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/web/useCitations.ts:367): a found lookup could leave the older verdict and investigation visible if its re-read failed. The client now applies only safe link fields, preserves article-provided links, removes derived attachments, then lets the server reattach current data. Red→green: [tests/citations-investigate-client.test.tsx:410](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citations-investigate-client.test.tsx:410); the late-reply/link suite also passed.
+
+- **C-7 · P2** — [src/web/useCitations.ts:455](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/web/useCitations.ts:455): if the lookup frame was lost, stale derived fields could remain and partial-success copy could be omitted. Derived fields are now hidden at `stage:finding`, while lookup timestamps let a successful failure re-read prove that a replacement attached. Red→green: [client lost-frame test](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citations-investigate-client.test.tsx:460) and [partial-copy test](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citations-panel.test.tsx:1071).
+
+- **C-8 · P2** — [src/web/CitationInvestigation.tsx:101](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/web/CitationInvestigation.tsx:101): `matchedHost === null` cannot distinguish an absent result from a matching result with an empty extract. Copy now truthfully says the search “did not return an extract from it.” Red→green: [tests/citation-investigation-view.test.ts:111](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigation-view.test.ts:111).
+
+- **C-9 · P3** — [src/web/CitationInvestigation.tsx:280](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/web/CitationInvestigation.tsx:280): the shared mouse/touch ControlTip falsely implied every existing lookup skips step 1 and every quick-check result is stored. The copy now promises only current checked readings are skipped and only matching results are kept. Red→green: [tests/citations-panel.test.tsx:941](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citations-panel.test.tsx:941).
+
+- **C-10 · P3** — [tests/citation-investigate.test.ts:367](/home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/tests/citation-investigate.test.ts:367): unsafe optional chaining in the reviewed test failed static lint. Fixed; targeted Biome check went red→green.
+
+### Verification
+
+- Six permitted suites: **187 passed**.
+- Direct TypeScript checks: all four projects passed.
+- Targeted Biome: no errors; six non-blocking existing advisories remain, chiefly broader complexity and an unrelated fragment. Reported, not fixed.
+- `git diff --check`: passed.
+- The supplied PostgreSQL log remains the database evidence: **437 passed on 6a0930f2**. The new conditional find removal was typechecked and unit-tested, but PostgreSQL tests were not rerun without loopback.
+- Existing documentation/user-feedback changes were left untouched.

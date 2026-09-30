@@ -22,7 +22,7 @@
  */
 import { ChevronDown, ChevronUp, ExternalLink, Microscope } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { CitationInvestigation } from "../types.js";
+import type { CitationInvestigation, CitationLookup, InvestigateStage } from "../types.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { useTapReveal } from "./useTapReveal.js";
@@ -32,6 +32,9 @@ import { useTapReveal } from "./useTapReveal.js";
 /** Over a kept answer, collapsed or not: whose words these are, and from what. */
 export const INVESTIGATION_LABEL = "the AI's reading of web search extracts";
 
+/** While the press's first step looks for the work's own page (plan 260930d). */
+export const INVESTIGATE_FINDING = "Finding the work…";
+
 /** Under the button until the first words land. The words are the progress after that. */
 export const INVESTIGATE_WAIT =
   "It searches the web and then writes, which can take up to a minute. If it finishes, the answer is kept on this row even if you leave.";
@@ -39,14 +42,8 @@ export const INVESTIGATE_WAIT =
 /** Sol Q-4: a failed *Investigate again* replaced nothing, and says so. */
 export const INVESTIGATE_PREVIOUS_KEPT = "The new investigation was not kept; the previous one is still shown.";
 
-/**
- * Beside a kept answer on a row nobody has looked up. *Look it up* is the
- * other half of the plan (verbatim evidence, checked by code), and it is a
- * separate charge, so this offers it and does not run it. A row that has a
- * lookup already shows its reading above, so this line is not drawn there.
- */
-export const INVESTIGATE_OFFER_LOOKUP =
-  "Not looked up yet: Look it up, above, checks one matching page's extract against what the article uses it for, and shows only passages code found in it.";
+/** Plan 260930d P-4: the first step found and kept a page, and the reading after it failed. */
+export const INVESTIGATE_LOOKUP_KEPT = "The longer investigation failed; the quick check was kept.";
 
 /* ------------------------------------------------ what was read, in words -- */
 
@@ -74,11 +71,25 @@ function sourceHosts(sources: readonly { url: string }[]): string[] {
  *
  * N is `extractsRead`, the results with a non-empty extract; the hosts are the
  * kept `sources`, which are those same results after the URL filter, so a
- * source dropped there leaves the count and loses its host. The identity line
- * credits *Look it up* only when the server found its page among this answer's
- * own extracts (`matchedHost` non-null).
+ * source dropped there leaves the count and loses its host.
+ *
+ * **The identity line has three answers** (plan 260930d P-4):
+ *
+ * - the first check's page was among this answer's own extracts
+ *   (`matchedHost` non-null, which only the server can say);
+ * - the first check matched a page, but this search did not return an extract
+ *   from it — `matchedHost` is null and the row's `lookup` identified a page
+ *   (`assessed` or `unreadable`, as `matchedPageOf` in
+ *   src/citation-investigate-context.ts decides). **Read from the row, not
+ *   stored**: an investigation attaches only while its fingerprint matches,
+ *   and the fingerprint covers the matched page, so an attached answer was
+ *   written with a match exactly when the row's lookup is one of those two;
+ * - otherwise, nothing was confirmed to be the work.
  */
-export function investigationProvenance(inv: InvestigationProvenanceInput): string {
+export function investigationProvenance(
+  inv: InvestigationProvenanceInput,
+  lookup?: Pick<CitationLookup, "state" | "host"> | null,
+): string {
   const one = inv.extractsRead === 1;
   const hosts = sourceHosts(inv.sources);
   const where = hosts.length > 0 ? ` (${hosts.join(", ")})` : "";
@@ -87,10 +98,13 @@ export function investigationProvenance(inv: InvestigationProvenanceInput): stri
     ? `Web search returned an extract for one result${where}, ${words}.`
     : `Web search returned extracts for ${inv.extractsRead} results${where}, the longest ${words}.`;
   const [them, it] = one ? ["that extract", "it"] : ["those extracts", "them"];
+  const firstCheckHost = lookup?.state === "assessed" || lookup?.state === "unreadable" ? lookup.host : null;
   const identity =
     inv.matchedHost !== null
-      ? `One result (${inv.matchedHost}) was matched to the work by Look it up.`
-      : "We could not confirm that any result is this work itself.";
+      ? `One result (${inv.matchedHost}) is the page an earlier quick check matched to the work.`
+      : firstCheckHost !== null
+        ? `An earlier quick check matched a page on ${firstCheckHost}; this search did not return an extract from it.`
+        : "We could not confirm that any result is this work itself.";
   return [
     returned,
     "We did not fetch any page ourselves; an extract may be an abstract or part of a paper's text.",
@@ -162,6 +176,10 @@ export interface InvestigateFailureHere {
   message: string;
   /** The stored investigation's `at` when the press was made, or null for none. */
   previousAt: string | null;
+  /** The attached lookup's `at` when the press was made, or null for none. */
+  previousLookupAt: string | null;
+  /** The press's first step stored a page before the failure (plan 260930d P-4). */
+  lookupKept: boolean;
 }
 
 /**
@@ -170,26 +188,44 @@ export interface InvestigateFailureHere {
  */
 export type InvestigationView =
   | { kind: "none" }
+  /** Pressed, and the first step is looking for the work's own page (plan 260930d). */
+  | { kind: "finding" }
   /** Pressed, and no words yet. */
   | { kind: "waiting" }
   /** Words arriving: the stream so far, never drawn as kept. */
   | { kind: "arriving"; text: string }
-  /** The error sentence **in place of** whatever had streamed; `previous` is what is still stored. */
-  | { kind: "failed"; message: string; previous: CitationInvestigation | null }
+  /**
+   * The error sentence **in place of** whatever had streamed; `previous` is
+   * what is still stored and attached after the re-read, and `lookupKept`
+   * says the first step's page was kept (P-4).
+   */
+  | { kind: "failed"; message: string; previous: CitationInvestigation | null; lookupKept: boolean }
   | { kind: "kept"; investigation: CitationInvestigation };
 
 export function investigationViewOf(
   stored: CitationInvestigation | undefined,
-  here: { running: boolean; draft: string | null; failed: InvestigateFailureHere | null },
+  here: {
+    running: boolean;
+    stage?: InvestigateStage | null;
+    draft: string | null;
+    failed: InvestigateFailureHere | null;
+    /** The lookup still attached after the failure re-read, or null for none. */
+    lookupAt: string | null;
+  },
 ): InvestigationView {
-  if (here.running) return here.draft ? { kind: "arriving", text: here.draft } : { kind: "waiting" };
+  if (here.running) {
+    if (here.draft) return { kind: "arriving", text: here.draft };
+    return here.stage === "finding" ? { kind: "finding" } : { kind: "waiting" };
+  }
   if (here.failed !== null) {
     /* The error does not prove nothing was kept (a save can succeed and the
        frame after it be lost), and the hook re-reads the list after a failure.
        A stored answer newer than the one there at the press is that answer:
        draw it, not the failure. */
     if (stored !== undefined && stored.at !== here.failed.previousAt) return { kind: "kept", investigation: stored };
-    return { kind: "failed", message: here.failed.message, previous: stored ?? null };
+    const lookupKept =
+      here.failed.lookupKept || (here.lookupAt !== null && here.lookupAt !== here.failed.previousLookupAt);
+    return { kind: "failed", message: here.failed.message, previous: stored ?? null, lookupKept };
   }
   return stored === undefined ? { kind: "none" } : { kind: "kept", investigation: stored };
 }
@@ -197,10 +233,12 @@ export function investigationViewOf(
 /* ------------------------------------------------------------ the button -- */
 
 /**
- * ***Investigate***, beside *Look it up* on every owner row. `aria-disabled`
- * and a guard in the handler, not `disabled`, for *Look it up*'s reason: the
- * card saying what a press costs must stay readable in the state where the
- * button will not go (CitationsPanel.tsx § the Look it up button).
+ * ***Investigate***, on every owner row — the one button since plan 260930d,
+ * which merged *Look it up* into it as its first step. `aria-disabled` and a
+ * guard in the handler, not `disabled`: the card saying what a press costs
+ * must stay readable in the state where the button will not go (a `disabled`
+ * button emits no pointer or focus events, so Floating UI never opens it —
+ * CriteriaPanel.tsx § Run this criterion made the same call).
  */
 export function InvestigateButton({
   id,
@@ -232,12 +270,15 @@ export function InvestigateButton({
       content={
         <ControlTip
           head={label}
-          /* Each clause bounded by what the code does: the search is the
-             provider's (no count promised), what is read is extracts
-             (src/citation-investigate.ts never fetches a page), the profile
-             part is the prompt's *For you*, only with a profile. */
-          what="Searches the web for this work and writes a short reading of how it bears on this article — and on you, if you have written a profile or why you're reading this one."
-          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it does not fetch the page itself, and is told not to quote the extracts. The answer is kept on this row; a new one replaces it only if it finishes."
+          /* Each clause bounded by what the code does (plan 260930d): the
+             first step is *Look it up* (src/citation-find.ts), skipped only
+             for a current assessed lookup — "a current checked reading";
+             "passages code found" is `verifyQuote`; no search count is
+             promised (the provider's); what is read is extracts — neither
+             step fetches a page; the profile part is the prompt's *For you*,
+             only with a profile; both are stored per row. */
+          what="First it searches the web for this work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Then it writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
+          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it never fetches the paper itself. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. When the quick check finds a matching page, its result is kept on this row. The longer reading is kept on this row when it finishes; a new one replaces the old one only then."
           tap={reveal.tap}
         />
       }
@@ -271,14 +312,14 @@ export function InvestigationBlock({
   id,
   view,
   busy,
-  hasLookup,
+  lookup,
   onInvestigate,
 }: {
   id: string;
   view: InvestigationView;
   busy: boolean;
-  /** The row carries a *Look it up* reading, drawn by the row itself. */
-  hasLookup: boolean;
+  /** The row's current lookup, drawn by the row itself — here only for the identity line. */
+  lookup: CitationLookup | undefined;
   onInvestigate(id: string): void;
 }) {
   /* Open a fresh answer that has just streamed in, rather than folding away
@@ -307,6 +348,12 @@ export function InvestigationBlock({
   switch (view.kind) {
     case "none":
       return null;
+    case "finding":
+      return (
+        <p className="cite-inv-wait" role="status">
+          {INVESTIGATE_FINDING}
+        </p>
+      );
     case "waiting":
       return (
         <p className="cite-inv-wait" role="status">
@@ -326,6 +373,11 @@ export function InvestigationBlock({
           <p className="cite-inv-error" role="status">
             {view.message} {again}
           </p>
+          {/* P-4: the quick check landed before the failure; the row above
+              already shows it, from the re-read. */}
+          {view.lookupKept && <p className="cite-inv-previous">{INVESTIGATE_LOOKUP_KEPT}</p>}
+          {/* Only an investigation that still attaches after the re-read —
+              the first step's new match can detach the earlier one. */}
           {view.previous && (
             <>
               <p className="cite-inv-previous">{INVESTIGATE_PREVIOUS_KEPT}</p>
@@ -334,7 +386,7 @@ export function InvestigationBlock({
                 open={open}
                 onToggle={() => setOpen((o) => !o)}
                 again={again}
-                hasLookup={hasLookup}
+                lookup={lookup}
               />
             </>
           )}
@@ -348,7 +400,7 @@ export function InvestigationBlock({
             open={open}
             onToggle={() => setOpen((o) => !o)}
             again={again}
-            hasLookup={hasLookup}
+            lookup={lookup}
           />
         </div>
       );
@@ -362,21 +414,20 @@ export function InvestigationBlock({
 /**
  * **A kept answer.** Folded: the label and the first part, with a toggle, so
  * the list stays a list. Open: every part, what was read, the sources, the
- * date and *Investigate again*, and the offer of *Look it up* on a row that has
- * none.
+ * date and *Investigate again*.
  */
 function Kept({
   investigation,
   open,
   onToggle,
   again,
-  hasLookup,
+  lookup,
 }: {
   investigation: CitationInvestigation;
   open: boolean;
   onToggle(): void;
   again: React.ReactNode;
-  hasLookup: boolean;
+  lookup: CitationLookup | undefined;
 }) {
   const parts = investigationParts(investigation.answer);
   const shown = open ? parts : parts.slice(0, 1);
@@ -397,7 +448,7 @@ function Kept({
       </button>
       {open && (
         <>
-          <p className="cite-inv-prov">{investigationProvenance(investigation)}</p>
+          <p className="cite-inv-prov">{investigationProvenance(investigation, lookup)}</p>
           {sources.length > 0 && (
             <ul className="cite-inv-sources">
               {sources.map((s) => (
@@ -415,7 +466,6 @@ function Kept({
           <p className="cite-inv-foot">
             Investigated {new Date(investigation.at).toLocaleDateString()} · {again}
           </p>
-          {!hasLookup && <p className="cite-inv-offer">{INVESTIGATE_OFFER_LOOKUP}</p>}
         </>
       )}
     </>

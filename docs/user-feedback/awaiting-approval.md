@@ -44,7 +44,7 @@ cost. **One of them was written as a deploy blocker and the deploy went out anyw
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
 
-- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. Two calls left open: (1) offer *Investigate* only once *Look it up* has identified the work, so code rather than the model decides which search result is the paper (an extra paid press each time); (2) 5G's proposed stage, reading the paper itself. Both are set out in the plan · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named)
+- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. One call still open: 5G's proposed stage, reading the paper itself · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named). *Its other call — have code identify the work before the reading — was answered by Greg's own report 75 the same day: one button that runs the quick check first ([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)). The assumption taken there — losing the separate 3¢ press, and with it 20-an-hour lookups — is in that plan's § The one product call, with its one-line fallback.*
 
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data

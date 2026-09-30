@@ -33,7 +33,7 @@
  * not a citation count.
  */
 import { ScoreBars } from "./ScoreBars.js";
-import { BookOpen, BookText, ExternalLink, RotateCcw, Search, TriangleAlert } from "lucide-react";
+import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
   type BlockId,
@@ -42,6 +42,7 @@ import {
   type CitedInSpideryarn,
   type CitedMatchedBy,
   type CitedWork,
+  type InvestigateStage,
 } from "../types.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
@@ -67,8 +68,6 @@ import {
   thresholdTop,
   type ThresholdResult,
 } from "./threshold.js";
-import { ControlTip, Tooltip } from "./Tooltip.js";
-import { useTapReveal } from "./useTapReveal.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -556,22 +555,14 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
                     showInSpideryarn={owner !== null}
                     onJump={onJump}
-                    /* The owner's alone: a visitor's row draws no *Look it up*. */
-                    find={
-                      owner === null
-                        ? null
-                        : {
-                            finding: owner.finding,
-                            note: owner.findNote?.id === work.id ? owner.findNote : null,
-                            onFind: owner.find,
-                          }
-                    }
-                    /* The owner's alone too, and never on the hover card. */
+                    /* The owner's alone, and never on the hover card. */
                     investigate={
                       owner === null
                         ? null
                         : {
                             running: owner.investigating,
+                            stage: owner.investigating === work.id ? owner.investigateStage : null,
+                            note: owner.findNote?.id === work.id ? owner.findNote : null,
                             draft: owner.investigateDraft?.id === work.id ? owner.investigateDraft.text : null,
                             failed: owner.investigateFailed?.id === work.id ? owner.investigateFailed : null,
                             onInvestigate: (id) => void owner.investigate(id),
@@ -711,19 +702,18 @@ function BarSlider({
 
 /* ------------------------------------------------------------------ a row -- */
 
-/** A row's *Look it up* (was *Find it*) — the owner's alone, so `null` on a visitor's row. */
-interface RowFind {
-  /** The work whose *Look it up* is running anywhere in the list, or null. */
-  finding: string | null;
-  /** What this row's last *Look it up* said, when it found nothing or failed. */
-  note: FindNote | null;
-  onFind(id: string): Promise<void>;
-}
-
-/** A row's *Investigate* — the owner's alone, so `null` on a visitor's row. Plan 260930a. */
+/**
+ * A row's *Investigate* — the owner's alone, so `null` on a visitor's row.
+ * Plan 260930a; since plan 260930d the one button, with *Look it up* (was
+ * *Find it*) as its first step.
+ */
 interface RowInvestigate {
-  /** The work whose *Investigate* is streaming anywhere in the list, or null. */
+  /** The work whose *Investigate* is running anywhere in the list, or null. */
   running: string | null;
+  /** This row's step while its press is out — `finding` the work, then `reading`. */
+  stage: InvestigateStage | null;
+  /** What this row's last press's lookup said when it found no page. */
+  note: FindNote | null;
   /** This row's words so far, while its run is out. */
   draft: string | null;
   /** This row's last run, when it did not end in a stored answer. */
@@ -736,7 +726,6 @@ function WorkRow({
   unscored,
   showInSpideryarn,
   onJump,
-  find,
   investigate,
 }: {
   work: ShownWork;
@@ -744,7 +733,6 @@ function WorkRow({
   /** Owner-only even if malformed visitor JSON carries the optional field. */
   showInSpideryarn: boolean;
   onJump(id: BlockId): void;
-  find: RowFind | null;
   investigate: RowInvestigate | null;
 }) {
   /* **No source at all when the public boundary refused the address** — a
@@ -752,19 +740,12 @@ function WorkRow({
      stays, drawn as a citation with no link, and says nothing about why: the
      `publicMeta` rule, since there is nothing a visitor could do differently. */
   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
-  const finding = find?.finding ?? null;
-  const note = find?.note ?? null;
+  const note = investigate?.note ?? null;
   const scores = scoresOf(work);
   const by = [work.authors, work.year].filter(Boolean).join(" · ");
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
-  /* A row already looked up offers the same press again, and says so. */
-  const lookLabel = work.lookup === undefined ? "Look it up" : "Look it up again";
-  /* *Look it up* is paid, and its card is what says so: a finger's first tap
-     opens the card, its second presses (useTapReveal.ts). Called here, not
-     inside the `find !== null` branch, because a hook cannot be conditional. */
-  const lookReveal = useTapReveal(finding === null);
 
   return (
     <li
@@ -813,85 +794,6 @@ function WorkRow({
             search Scholar ↗
           </a>
         )}
-        {/* *Look it up*, on every owner row since plan 260929g stage 2 (R-3) —
-            it was *Find it*, on searched rows only, until then. Held closed
-            while any row's lookup runs, not just this one — each is a paid
-            search, and a list that fires five because five were clicked spends
-            money on a mis-click (GlossaryPanel.tsx § Check the web makes the
-            same call). */}
-        {find !== null && (
-          <Tooltip
-            placement="bottom"
-            keepSide
-            className="tip-soon"
-            open={lookReveal.open}
-            onOpenChange={lookReveal.onOpenChange}
-            content={
-              <ControlTip
-                head={lookLabel}
-                /* **What the button does not promise is the half 3K asked for**,
-                   and each clause below is bounded by what the code actually
-                   checks rather than by what the sentence wants to say:
-
-                   — not "one web search" and not "one model call". Nothing
-                     bounds how many searches the provider runs inside the call
-                     (docs/project/citations.md § It is one call, not one
-                     search), and a reader should not meet "model call" at all.
-                     Both are pinned in tests/citations-panel.test.tsx.
-                   — not "its own page". `namesTitle` / `pageNamesTitle` accept a
-                     result whose title *or excerpt* carries the work's title, so
-                     a review or a discussion of the paper can pass. "clearly
-                     matches the title" is what is actually tested for.
-                   — not a fixed price, because the attached search is variable
-                     work. */
-                /* — not "a real link", and not "reads the paper". What it
-                     reads is the search result's **extract** (usually the
-                     abstract), never the full work, and a result passing the
-                     identity rule can still be somebody else's page about it
-                     (plan 260929g R-1). "only where code found those exact
-                     words" is `verifyQuote` (src/citation-lookup.ts): a quote
-                     not in the extract is dropped, and a verdict without one
-                     falls back to not-in-extract.
-                   — "a link the article gave never changes" is R-3:
-                     `attachFinds` upgrades only searched rows, and the client
-                     patch (useCitations.ts § applyFound) does the same. */
-                what="Searches the web for this work. If a result clearly matches it, the AI reads that result's search extract — usually its abstract, not the full work — against what the article uses it for, and shows a passage only where code found those exact words in the extract."
-                how="It costs money: a paid web provider, and a few seconds. On a row with only a Scholar search, the matching result also becomes its link; a link the article gave never changes. A press that finds no match stores nothing, and pressing again just spends again."
-                tap={lookReveal.tap}
-              />
-            }
-          >
-            {/* **`aria-disabled`, not `disabled`.** A `disabled` button emits no
-                pointer or focus events, so Floating UI never hears about it and
-                the card saying what this press costs is unreadable in exactly
-                the state a reader wants it — standing in front of a dead button
-                wondering what is missing. CriteriaPanel.tsx § Run this criterion
-                made the same call for the same reason.
-
-                **`aria-disabled` does not stop an activation**, so the inertness
-                moved into the handler rather than being lost: `onFind` is not
-                called while another row's find is out. That catches the click,
-                the Enter and the Space alike, because all three arrive here as
-                one. The hook has its own `findLive` guard underneath
-                (useCitations.ts § find), so this is the second of two rather
-                than the only one. */}
-            <button
-              type="button"
-              className="gloss-btn cite-find"
-              aria-disabled={finding !== null}
-              onPointerDown={lookReveal.onPointerDown}
-              onPointerCancel={lookReveal.onPointerCancel}
-              onClick={(e) => {
-                if (!lookReveal.commit(e)) return;
-                if (finding !== null) return;
-                void find.onFind(work.id);
-              }}
-            >
-              <Search size={11} aria-hidden="true" />
-              {finding === work.id ? "Looking…" : lookLabel}
-            </button>
-          </Tooltip>
-        )}
         {investigate !== null && (
           <InvestigateButton
             id={work.id}
@@ -906,8 +808,10 @@ function WorkRow({
           <BlockRef id={work.firstCited} onJump={onJump} />
         </span>
       </p>
+      {/* The press's first step found no page: said quietly, and the
+          reading below goes on unconfirmed (plan 260930d P-5). */}
       {note && (
-        <p className={`cite-find-note${note.kind === "failed" ? " failed" : ""}`} role="status">
+        <p className="cite-find-note" role="status">
           {note.message}
         </p>
       )}
@@ -916,11 +820,13 @@ function WorkRow({
           id={work.id}
           view={investigationViewOf(work.investigation, {
             running: investigate.running === work.id,
+            stage: investigate.stage,
             draft: investigate.draft,
             failed: investigate.failed,
+            lookupAt: work.lookup?.at ?? null,
           })}
           busy={investigate.running !== null}
-          hasLookup={work.lookup !== undefined}
+          lookup={work.lookup}
           onInvestigate={investigate.onInvestigate}
         />
       )}
