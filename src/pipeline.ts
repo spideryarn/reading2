@@ -119,6 +119,11 @@ import {
   inputFingerprint as illustratedFingerprint,
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "./illustrated.js";
+import {
+  figuresFingerprint,
+  loadArticleFigures,
+  MAX_FIGURE_BYTES,
+} from "./illustrated-figures.js";
 import { storePlateImage } from "./illustrated-image.js";
 import { isStale as sketchIsStale } from "./sketch.js";
 import { type IllustratedPlate, plateDrawn, plateFailed } from "./illustrated-plate.js";
@@ -159,7 +164,13 @@ import {
   TRAJECTORY_NO_QUOTES,
   TRAJECTORY_ONLY_ABSTRACT_QUOTES,
 } from "./messages.js";
-import { type RejectReason, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
+import {
+  canonicalKey,
+  type RejectReason,
+  MAX_UPLOAD_BYTES,
+  rejectionFailure,
+  stagingKey,
+} from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
@@ -3917,12 +3928,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * `null` when there is no usable Sketch, which is "we cannot tell" and
      * therefore not-current — the same answer `tryReadArticle` gives its
      * neighbours, and it makes the step run, which is where the refusal is.
+     *
+     * **And the paper's stored figures, when it has any** — the manifest's
+     * entries, not the blocks, for the reason `figuresFingerprint` gives
+     * (src/illustrated-figures.ts). An article with none stamps exactly what it
+     * stamped before figures were an input.
      */
     stamp: async (ctx, store) => {
       const sketch = await store.read(ctx.slug, "sketch", "sketch");
       if (!usableSketch(sketch)) return null;
+      const assets = await store.read(ctx.slug, "assets", "assets");
       return {
-        inputHash: illustratedFingerprint(sketch),
+        inputHash: illustratedFingerprint(sketch, undefined, figuresFingerprint(assets)),
         promptVersion: ILLUSTRATED_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         /* **The Sketch's, never `ctx.profile`.** The stamp has to predict what
@@ -3967,6 +3984,38 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         refuseToIllustrate("wrong-profile");
       }
 
+      /* **The article's own figures, as ingredients** — Greg, 2026-09-30:
+         "make sure we feed in the figures from the paper". A missing manifest
+         and a manifest with no stored pictures are both *no figures*, which is
+         the plate this step drew before paper figures became an input; a
+         figure whose bytes will not load is left out rather than failing the run
+         (src/illustrated-figures.ts). The figures are in the fingerprint,
+         through `figuresFingerprint`, so a paper whose figures arrive later
+         reads stale.
+
+         **`blobStore()`, not `postgresBlobStore()`**, for the reason
+         src/fetch.ts § *Why `blobStore()`* gives and `sendArticleAsset`
+         repeats: the figures were written through `storeRawSource`'s default,
+         which is `blobStore()`, so reading them through anything else would be
+         a split brain by construction. What it cannot do is tell "the bucket
+         is missing" from "these figures are missing", so a paper that has
+         stored figures and could load none of them is a warning below rather
+         than a quiet figureless plate. */
+      const assets = await store.read(ctx.slug, "assets", "assets");
+      const blobs = blobStore();
+      const figureSurvey = await loadArticleFigures(article.blocks, assets, (sha256, ext) =>
+        blobs.get(canonicalKey(sha256, ext), {
+          maxBytes: MAX_FIGURE_BYTES,
+          ...(ctx.signal ? { signal: ctx.signal } : {}),
+        }),
+      );
+      if (figureSurvey.stored > 0 && figureSurvey.skipped.unreadable === figureSurvey.stored) {
+        plog.warn(
+          { slug: ctx.slug, step: "illustrated", figuresStored: figureSurvey.stored },
+          `illustrated ${ctx.slug}: none of the paper's ${figureSurvey.stored} stored figure(s) could be read — painting without them`,
+        );
+      }
+
       const run = await generateIllustrated({
         article,
         sketch,
@@ -3988,13 +4037,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         onProgress: ctx.report,
         signal: ctx.signal,
         cacheArticle: ctx.cacheArticle,
+        figures: figureSurvey.figures,
       });
 
       /* **Written here rather than in `generateIllustrated`**, which writes
          nothing on purpose (its header says why): the hash of the Sketch is a
          store-shaped fact, and a stage that stamped itself could not be
          re-rendered from a saved brief by the eval. */
-      run.illustrated.sourceHash = illustratedFingerprint(sketch);
+      run.illustrated.sourceHash = illustratedFingerprint(
+        sketch,
+        undefined,
+        figuresFingerprint(assets),
+      );
       run.illustrated.profileHash = sketch.profileHash ?? null;
 
       /* **The bytes, one plate at a time, and a failure here is that plate's
@@ -4048,6 +4102,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           faults: run.report.faults.length,
           written: run.report.written,
           kept: run.report.kept,
+          /* Counts only — never a caption, which is the article's prose. */
+          figuresStored: figureSurvey.stored,
+          figuresOffered: figureSurvey.figures.length,
+          figuresSkipped: figureSurvey.skipped,
+          figuresDrawn: run.draws.reduce((n, d) => n + d.figures, 0),
         },
         `illustrated ${ctx.slug}: ${stored} of ${run.illustrated.plates.length} plate(s) drawn`,
       );
