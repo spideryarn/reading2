@@ -92,6 +92,7 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     timeline: article.timeline !== undefined,
     trajectory: article.trajectory !== undefined,
     faq: article.faq !== undefined,
+    simpleSummary: article.simpleSummary !== undefined,
     citations: article.citations !== undefined,
     debate: article.debate !== undefined,
     sketch: article.sketch !== undefined,

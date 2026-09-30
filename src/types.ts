@@ -2325,6 +2325,12 @@ export interface PublicArtefacts {
    */
   faq: boolean;
   /**
+   * **Since 2026-09-30** — a stored Simple, Summary's plain-words sub-mode.
+   * Readable by a visitor from the day it was built; only *making* one is the
+   * owner's. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+   */
+  simpleSummary: boolean;
+  /**
    * **The tenth, since 2026-09-29** — a stored Citations list, each work's
    * address re-judged at the boundary and the owner's *Find it* results left
    * behind. SPIDERYARN-READING2-56, plan 260929c stage 3.

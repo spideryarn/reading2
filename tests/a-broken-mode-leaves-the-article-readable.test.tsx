@@ -1459,6 +1459,7 @@ const NOTHING_AVAILABLE: PublicArtefacts = {
   sketch: false,
   trajectory: false,
   faq: false,
+  simpleSummary: false,
   citations: false,
   debate: false,
 };

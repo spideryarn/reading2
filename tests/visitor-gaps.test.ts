@@ -71,6 +71,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   sketch: false,
   trajectory: false,
   faq: false,
+  simpleSummary: false,
   citations: false,
   debate: false,
 };
@@ -84,6 +85,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   sketch: true,
   trajectory: true,
   faq: true,
+  simpleSummary: true,
   citations: true,
   debate: true,
 };
@@ -118,6 +120,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     sketch: built === "sketch",
     trajectory: built === "trajectory",
     faq: built === "faq",
+    simpleSummary: built === "simpleSummary",
     citations: built === "citations",
     debate: built === "debate",
   };
@@ -515,6 +518,7 @@ describe("what the payload says it has", () => {
       sketch: false,
       trajectory: false,
       faq: false,
+      simpleSummary: false,
       citations: false,
       debate: false,
     });
@@ -524,6 +528,9 @@ describe("what the payload says it has", () => {
         glossary: { entries: [{ id: "t", name: "T", kind: "concept", aliases: [], blocks: [] }] },
       }),
     ).toMatchObject({ glossary: true, quotes: false });
+    expect(
+      artefactsIn({ ...BARE, simpleSummary: { paragraphs: [{ text: "About.", ids: [] }] } }),
+    ).toMatchObject({ simpleSummary: true, faq: false });
   });
 
   /**

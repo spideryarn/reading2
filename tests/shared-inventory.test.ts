@@ -44,6 +44,7 @@ const NOTHING: PublicArtefacts = {
   sketch: false,
   trajectory: false,
   faq: false,
+  simpleSummary: false,
   citations: false,
   debate: false,
 };
@@ -57,6 +58,7 @@ const EVERYTHING: PublicArtefacts = {
   sketch: true,
   trajectory: true,
   faq: true,
+  simpleSummary: true,
   citations: true,
   debate: true,
 };
@@ -400,6 +402,7 @@ describe("reading the flags off the wire", () => {
       sketch: true,
       trajectory: true,
       faq: true,
+      simpleSummary: true,
       citations: true,
       debate: true,
     };
@@ -479,6 +482,7 @@ describe("what counts as shareable", () => {
       sketch: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       glossary: STALE,
@@ -500,6 +504,7 @@ describe("what counts as shareable", () => {
       sketch: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       glossary: { ...STALE, entries: [] },
@@ -514,6 +519,7 @@ describe("what counts as shareable", () => {
       sketch: null,
       trajectory: null,
       faq: null,
+      simpleSummary: null,
       citations: null,
       debate: null,
       glossary: null,
@@ -521,5 +527,31 @@ describe("what counts as shareable", () => {
       quotes: null,
     });
     expect(none).toEqual(NOTHING);
+  });
+
+  it("reports a stored Simple, and only that", () => {
+    const available = shareableArtefacts({
+      arc: null,
+      tweets: null,
+      timeline: null,
+      sketch: null,
+      trajectory: null,
+      faq: null,
+      simpleSummary: {
+        version: "simple/1",
+        generator: "test",
+        slug: "x",
+        sourceHash: "0000000000000000",
+        generatedAt: "2020-01-01T00:00:00.000Z",
+        elapsedMs: 1,
+        paragraphs: [],
+      },
+      citations: null,
+      debate: null,
+      glossary: null,
+      ideas: null,
+      quotes: null,
+    });
+    expect(available).toEqual({ ...NOTHING, simpleSummary: true });
   });
 });

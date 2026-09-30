@@ -1427,6 +1427,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         /* Planted since 2026-09-29, so present. */
         trajectory: true,
         faq: true,
+        /* Not planted, so absent — the `false` is the half that matters. */
+        simpleSummary: false,
         citations: true,
         debate: true,
       },

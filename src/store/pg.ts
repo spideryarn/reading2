@@ -2567,6 +2567,7 @@ export function shareableArtefacts(revision: {
   sketch: Sketch | null;
   trajectory: Trajectory | null;
   faq: Faq | null;
+  simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
 }): PublicArtefacts {
@@ -2580,6 +2581,7 @@ export function shareableArtefacts(revision: {
     sketch: revision.sketch,
     trajectory: revision.trajectory,
     faq: revision.faq,
+    simpleSummary: revision.simpleSummary,
     citations: revision.citations,
     debate: revision.debate,
   };
@@ -2593,6 +2595,7 @@ export function shareableArtefacts(revision: {
     sketch: present.sketch !== null,
     trajectory: present.trajectory !== null,
     faq: present.faq !== null,
+    simpleSummary: present.simpleSummary !== null,
     citations: present.citations !== null,
     debate: present.debate !== null,
   };
@@ -3353,6 +3356,7 @@ const rawPgArticleReader: ArticleReader = {
           sketch: revision.sketch as Sketch | null,
           trajectory: revision.trajectory as Trajectory | null,
           faq: revision.faq as Faq | null,
+          simpleSummary: revision.simpleSummary as SimpleSummary | null,
           citations: revision.citations as Citations | null,
           debate: revision.debate as Debate | null,
         }),
