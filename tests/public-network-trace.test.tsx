@@ -168,6 +168,8 @@ const PUBLIC_IDEA = "Measurement precedes theory";
 const PUBLIC_TWEET = "The first post.";
 const PUBLIC_CUE = "Watch the example carry the claim.";
 const PUBLIC_QUESTION = "Where does the argument come from?";
+/** The first paragraph of a stored Simple, in plain words. */
+const PUBLIC_SIMPLE = "This piece is about where an argument comes from.";
 const PUBLIC_WORK = "An information integration theory of consciousness";
 /** A stored Debate row's quotation from a stranger's page, since plan 260929c stage 4. */
 const PUBLIC_DEBATE_QUOTE = "The integration measure cannot be computed for any real brain.";
@@ -1290,6 +1292,43 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent).not.toContain("Try again");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **A stored Simple is shown to a visitor, and nothing is spent** — Summary's
+   * plain-words sub-mode (plan 260930i). The paragraphs and their doors come
+   * off the payload; there is no `/api/simple/` read, no job and no run button,
+   * and the trace is the one public GET.
+   */
+  it("draws a stored Simple from the payload, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      simpleSummary: {
+        paragraphs: [
+          { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
+          { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
+        ],
+      },
+    };
+    await open("?mode=summary&summary=simple");
+
+    const band = host.querySelector(".mode-band.summ");
+    expect(band, "the Summary band is open").not.toBeNull();
+    expect(readable(band as Element)).toContain(PUBLIC_SIMPLE);
+    expect(band?.querySelectorAll(".simple-para a.block-ref[data-block-link]").length).toBe(2);
+    /* None of the owner's verbs. */
+    expect(host.textContent).not.toContain("Write it");
+    expect(host.textContent).not.toContain("Try again");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  it("tells a visitor no Simple has been made, and asks for none", async () => {
+    await open("?mode=summary&summary=simple");
+    expect(host.textContent).toContain("Nobody has made a plain-words version of this piece yet.");
+    expect(host.textContent).not.toContain("Write it");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
 
   /**

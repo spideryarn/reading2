@@ -68,6 +68,7 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     ...(article.timeline === undefined ? {} : { timeline: article.timeline }),
     ...(article.trajectory === undefined ? {} : { trajectory: article.trajectory }),
     ...(article.faq === undefined ? {} : { faq: article.faq }),
+    ...(article.simpleSummary === undefined ? {} : { simpleSummary: article.simpleSummary }),
     ...(article.citations === undefined ? {} : { citations: article.citations }),
     ...(article.debate === undefined ? {} : { debate: article.debate }),
     ...(article.sketch === undefined ? {} : { sketch: article.sketch }),

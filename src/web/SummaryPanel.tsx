@@ -78,7 +78,7 @@
  * spends has to carry, and the reason `GlossaryPanel` and `IdeasPanel` are
  * three times the size of this one.
  */
-import { type MouseEvent, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { BlockId } from "../types.js";
 import { BlockRange, BlockRef } from "./BlockRef.js";
@@ -98,11 +98,24 @@ interface Props {
   atRow: number | null;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
+  /**
+   * The Gists | Simple switch, built by the band (SummaryMode.tsx), which
+   * owns `?summary=` and the press. Absent in a test about the outline alone.
+   */
+  subMode?: ReactNode;
+  /**
+   * **Simple's view, when Simple is the sub-mode open** — drawn in place of
+   * the Depth row and the outline. Null or absent means Gists. Built by the
+   * band so the owner/visitor seam stays a component boundary there, and this
+   * panel stays a pure function of what it is handed.
+   * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+   */
+  simple?: ReactNode;
 }
 
 const DEPTH_LABELS = ["article", "parts", "sections"];
 
-export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
+export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simple }: Props) {
   useRenderCount("SummaryPanel");
   /**
    * Which sections the reader has closed.
@@ -193,8 +206,12 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
           docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
 
       <div className="summ-controls">
+        {subMode}
         {/* Their structure panel's one control, and the one thing it proved:
-            a single depth cut-off over a whole document is usable. */}
+            a single depth cut-off over a whole document is usable. Gists
+            only: Simple has no depth, and `?deep=` just waits for the reader
+            to come back. */}
+        {simple == null && (
         <fieldset className="summ-row">
           <legend className="summ-label">Depth</legend>
           {DEPTH_LABELS.map((label, d) => (
@@ -215,8 +232,10 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
             </button>
           ))}
         </fieldset>
+        )}
       </div>
 
+      {simple != null ? simple : (
       <div className="summ-scroll" ref={scroll}>
         {/* **Nothing to outline, which is not the same as nothing to read.**
             `tree-invariants.ts` permits a root that is a leaf — one block, and
@@ -262,6 +281,7 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
           <p className="summ-quiet">This article has no usable tree to summarise.</p>
         )}
       </div>
+      )}
     </ModeSurface>
   );
 }

@@ -283,9 +283,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   summary: {
     description:
       "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
-    how: "The sentences are the tree's own, written when the article was ingested, so nothing here is generated on demand. There is one axis and no length control — a shorter summary of the same thing is a different level of the tree, not a second request.",
-    /* Both spellings, because the reader's keyboard is not ours to choose. */
-    aliases: ["summarise", "summarize", "gist"],
+    how: "The sentences are the tree's own, written when the article was ingested — a shorter summary of the same thing is a different level of the tree, not a second request. Its Simple view is the one part a model writes: a few plain-words paragraphs, written once and kept.",
+    /* Both spellings, because the reader's keyboard is not ours to choose.
+       `simple` for the sub-mode (plan 260930i), which the bar opens on Gists. */
+    aliases: ["summarise", "summarize", "gist", "simple"],
     experimental: false,
   },
   diagram: {

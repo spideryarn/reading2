@@ -1139,6 +1139,29 @@ export const deepParam = createParser<number>({
   .withDefault(1)
   .withOptions({ history: "push" });
 
+/** Summary's two sub-modes: the tree's gists, or a plain-words orientation. */
+export const SUMMARY_VIEWS = ["gists", "simple"] as const;
+export type SummaryView = (typeof SUMMARY_VIEWS)[number];
+
+/**
+ * Which half of Summary is open — `gists` (the default, omitted) or `simple`,
+ * a few short paragraphs in everyday words
+ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md). *Which thing, within
+ * this mode*, so the shape of `?remember=` and `?referee=`: in the URL, because
+ * it changes the whole band, and pushed, because switching is a deliberate act
+ * Back should undo. `?deep=` keeps its value and is simply unused under Simple.
+ *
+ * **Writing it never spends.** Only a press on the Simple chip arms the run
+ * (SummaryMode.tsx § `SummarySubModeToggle`); Back, a pasted link and a
+ * last-view restore arrive here and buy nothing.
+ */
+export const summaryParam = createParser<SummaryView>({
+  parse: (v) => (SUMMARY_VIEWS.includes(v as SummaryView) ? (v as SummaryView) : null),
+  serialize: (v) => v,
+})
+  .withDefault("gists")
+  .withOptions({ history: "push" });
+
 /* ------------------------------------------------------------ referee mode --
    The mode for somebody who has been asked to peer-review the piece. One
    parameter, and it names which of the four sub-modes is open.

@@ -722,6 +722,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   illustrated: true,
   tweets: true,
   quiz: true,
+  /* Summary's Simple chip — armed one level down, never by the mode button. */
+  simple: true,
   claims: true,
   candidates: true,
 };
