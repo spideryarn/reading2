@@ -325,6 +325,15 @@ releases with no way to see what was in it but to scroll all of it.
   copy stage is unchanged and may go on emitting that link** — 69 committed lines already carry it,
   so the page has to handle them regardless. Each release also links the commit it was built from.
 
+And one on 2026-09-30, from Greg's feedback (SPIDERYARN-READING2-6P):
+*"I wonder if we could show them as human readable, e.g. `3d ago`, `3h ago`"*.
+
+- **A release's date says how long ago it shipped** — `3 days ago` in its heading, `3d ago` in the
+  contents list — with the exact UTC stamp on hover, and back to the UTC date past a month. No
+  library: it is `src/web/relative-time.ts`, the one the shelf already uses, on a `useNow` clock so a
+  tab left open does not rot.
+  [260930i](../plans/260930i-changelog-release-dates-as-relative-time.md).
+
 ## Running it
 
 **`run docs/project/changelog.md`** means this section. The deterministic stages are committed as
