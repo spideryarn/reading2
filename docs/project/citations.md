@@ -246,7 +246,7 @@ Nothing runs for every row. The design, its two plan reviews, the probe and the 
 
 **It never quotes a source, and code makes sure of that before a word is sent.** Verbatim evidence
 belongs to *Look it up*, the one path whose quotes code has found in an extract. Investigate
-paraphrases and names the host. The server holds back anything in quotation marks (`"`, `“`, `‘`)
+paraphrases and names the host. The server holds back anything in quotation marks (`"`, `“`, `‘`, and the marks other languages quote with, such as `«…»` and `„…“`)
 or on a `>` line until code finds it in the article, the work's title or reference, or *Look it up*'s
 verified quotes. Anything else stops the answer, nothing is kept, and the reader's screen is
 cleared ([`investigate-quote-guard.ts`](../../src/investigate-quote-guard.ts)).

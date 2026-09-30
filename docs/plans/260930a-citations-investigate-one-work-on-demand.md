@@ -286,3 +286,13 @@ day** ($18); **per reader 20 a day, 8 an hour, one at a time**.
   that need `npm run build:fleet` in a fresh worktree (known, not this work). The fourth,
   `env-reads-are-literal`, pinned "fourteen" model overrides; Investigate's job is the fifteenth.
   Updated.
+- **Opus adversarial check of the guard** (the settlement the rule requires after the narrow
+  re-checks): found the quotation marks of other languages unguarded (`«…»`, `„…“`, `「…」` and
+  others; P1: a model writing about a French or German paper uses them) and the rest of the
+  invisible-character class before a `>` (bidi marks, combining marks, fillers; P2). Both fixed
+  red-first: a `PAIRS` table of openers and their closers, `isBlank` as the class (`\s`, `\p{Cf}`,
+  `\p{Mn}`, `\p{Me}`, the fillers), full-width `＞`, and a delta ending on half a surrogate pair now
+  waits for the rest. Mutations of the class and the surrogate hold each turn tests red. **Accepted
+  and named in the guard's header:** backticks, `‛…’`, `‚…‘`, `″`, and `>` look-alikes such as `›` or
+  `❯` — forms a reader is unlikely to take as a quotation and the model unlikely to write. Discovery
+  on the guard is closed.

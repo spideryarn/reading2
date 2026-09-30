@@ -19,9 +19,15 @@
  *
  * ## The rules
  *
- * - **Straight `"` and curly `“…”`**: held from the opening mark to its close
- *   (`"` toggles, `“` closes only on `”`), then checked.
- * - **Block quotes**: a line whose first non-blank character is `>` is held to
+ * - **Paired quotation marks**: held from the opening mark to its close, then
+ *   checked. `PAIRS` is the table: straight `"` and full-width `＂` toggle, `“`
+ *   closes on `”`, and the marks other languages quote with — `«…»`, `‹…›`,
+ *   `„…“`, `「…」`, `『…』`, `〝…〞` and a few more — each close on theirs. The
+ *   prompt asks for straight or curly double quotes only, but a model writing
+ *   about a French or German paper uses the marks of its language, and a reader
+ *   reads them as quotation. Opus's adversarial check, 2026-09-30.
+ * - **Block quotes**: a line whose first visible character is `>` (or the
+ *   full-width `＞`, `﹥`) is held to
  *   the end of the line and checked. `\n`, `\r`, U+2028 and U+2029 all end a
  *   line (Sol's G-1: a lone `\r` once let a `>` line through). Leading blanks
  *   on a line are held until the first other character says which it is.
@@ -61,8 +67,11 @@
  *
  * What this does not guard, said plainly because the plan says it: straight
  * single quotes (left to the prompt — they are apostrophes far more often than
- * quotation marks), and verbatim prose without quotation marks, which carries
- * no attribution and is what the provenance's *instructed not to quote* covers.
+ * quotation marks); verbatim prose without quotation marks, which carries no
+ * attribution and is what the provenance's *instructed not to quote* covers;
+ * and the rare forms a reader is unlikely to take as a quotation or the model
+ * to write — backticks, `‛…’`, `‚…‘`, the double prime `″`, and `>` look-alikes
+ * such as `›` or `❯` at a line start (Opus's check, items 3 and 5).
  *
  * Pure, and imports nothing that calls a model — so every rule is a unit test
  * (tests/investigate-quote-guard.test.ts).
@@ -96,8 +105,8 @@ type Mode =
   | "text"
   /** Blanks at the start of a line, held until the line shows whether it is a block quote. */
   | "indent"
-  | "straight"
-  | "curly-double"
+  /** Inside a pair of quotation marks from `PAIRS`; `closers` says which end it. */
+  | "paired"
   /** From a `‘` to the end of its paragraph. */
   | "paragraph"
   | "blockquote";
@@ -105,26 +114,68 @@ type Mode =
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 const TRAILING_PUNCTUATION = /[\s,.;:!?]+$/u;
 const OPEN_SINGLE = "‘";
+
+/**
+ * **Every opening quotation mark this holds, and the marks that close it.** A
+ * mark that is its own close (`"`, `＂`, `”` as Swedish writes it) toggles.
+ * `“` is an opener and also a closer of `„`, which is German; while a `„` span
+ * is held, a `“` closes it rather than opening another.
+ */
+const PAIRS: ReadonlyMap<string, string> = new Map([
+  ['"', '"'],
+  ["＂", "＂"],
+  ["“", "”"],
+  ["”", "”"],
+  ["‟", "”“"],
+  ["„", "“”"],
+  ["«", "»"],
+  ["»", "«»"],
+  ["‹", "›"],
+  ["「", "」"],
+  ["『", "』"],
+  ["〝", "〞〟"],
+  ["﹁", "﹂"],
+  ["﹃", "﹄"],
+]);
+
+/** What starts a block-quote line, besides `>`: its full-width forms. */
+const BLOCKQUOTE_MARKS: ReadonlySet<string> = new Set([">", "＞", "﹥"]);
 const CLOSE_SINGLE = "’";
 
 function isLineBreak(c: string): boolean {
   return c === "\n" || c === "\r" || c === " " || c === " ";
 }
 
-/** Invisible characters `\s` does not count as space, which can still sit before a `>`. */
-const ZERO_WIDTH = /[​-‍⁠]/u;
+/**
+ * What a reader cannot see and `\s` does not count: format characters
+ * (zero-width spaces, bidi marks and isolates, soft hyphen, tags), combining
+ * marks with nothing to combine with, and the Hangul fillers and blank Braille
+ * cell that draw as nothing.
+ */
+const INVISIBLE = /[\p{Cf}\p{Mn}\p{Me}\u115F\u1160\u3164\uFFA0\u2800]/u;
 
 /**
  * **Any character a reader cannot see before a `>`**, not only space and tab.
- * A narrow check of the paragraph-hold version found ` > fabricated line`
- * streaming unguarded: the no-break space cleared `atLineStart`, so the `>` was
- * never seen as a block quote. `\s` covers every Unicode space separator and
- * U+FEFF; the zero-width ones are added by hand. Line breaks are not blanks —
- * `isLineBreak` owns those.
+ * A narrow check of the paragraph-hold version found a no-break space before a
+ * `>` streaming unguarded — it cleared `atLineStart`, so the `>` was never seen
+ * as a block quote — and Opus's check then found the rest of the class: bidi
+ * marks, combining marks, fillers. So the rule is the class, not a list of the
+ * characters found so far. Line breaks are not blanks — `isLineBreak` owns those.
  */
 function isBlank(c: string): boolean {
-  return !isLineBreak(c) && (/\s/u.test(c) || ZERO_WIDTH.test(c));
+  return !isLineBreak(c) && (/\s/u.test(c) || INVISIBLE.test(c));
 }
+
+/** A held block-quote line's words: the leading blanks and quote marks dropped. */
+function quotedLine(held: string): string {
+  const chars = [...held];
+  let i = 0;
+  while (i < chars.length && (isBlank(chars[i] ?? "") || BLOCKQUOTE_MARKS.has(chars[i] ?? ""))) i += 1;
+  return chars.slice(i).join("");
+}
+
+/** The first half of a surrogate pair: a delta that ends on one waits for the rest. */
+const HIGH_SURROGATE = /[\uD800-\uDBFF]$/u;
 
 /**
  * @param allowed the texts a quotation may come from — the article's blocks,
@@ -148,6 +199,10 @@ export function createQuoteGuard(
   let atLineStart = true;
   /** In `paragraph`: a line break has been seen, with only blanks since. */
   let blankLineOpen = false;
+  /** In `paired`: the marks that close the held span. */
+  let closers = "";
+  /** Half a surrogate pair left at the end of the last delta. */
+  let split = "";
   let failed: Extract<GuardStep, { ok: false }> | null = null;
 
   function found(words: string): boolean {
@@ -211,7 +266,7 @@ export function createQuoteGuard(
       held += c;
       return "";
     }
-    if (atLineStart && c === ">") {
+    if (atLineStart && BLOCKQUOTE_MARKS.has(c)) {
       mode = "blockquote";
       held += c;
       return "";
@@ -221,8 +276,11 @@ export function createQuoteGuard(
     held = "";
     mode = "text";
     atLineStart = isLineBreak(c);
-    if (c === '"') return open("straight", indent, c);
-    if (c === "“") return open("curly-double", indent, c);
+    const closedBy = PAIRS.get(c);
+    if (closedBy !== undefined) {
+      closers = closedBy;
+      return open("paired", indent, c);
+    }
     if (c === OPEN_SINGLE && !singlesChecked) {
       blankLineOpen = false;
       return open("paragraph", indent, c);
@@ -248,7 +306,7 @@ export function createQuoteGuard(
 
       case "blockquote": {
         if (isLineBreak(c)) {
-          const line = settle(held.replace(/^[\s>]+/u, ""));
+          const line = settle(quotedLine(held));
           if (line === null) return { ok: false, cause: "not-found", text: "" };
           atLineStart = true;
           return { ok: true, text: line + c };
@@ -272,12 +330,10 @@ export function createQuoteGuard(
         return { ok: true, text: "" };
       }
 
-      case "straight":
-      case "curly-double": {
+      case "paired": {
         held += c;
         if (held.length - 1 > cap) return { ok: false, cause: "unclosed", text: "" };
-        const closes = (mode === "straight" && c === '"') || (mode === "curly-double" && c === "”");
-        if (!closes) return { ok: true, text: "" };
+        if (!closers.includes(c)) return { ok: true, text: "" };
         const span = settle(held.slice(1, -1));
         if (span === null) return { ok: false, cause: "not-found", text: "" };
         atLineStart = false;
@@ -298,8 +354,17 @@ export function createQuoteGuard(
 
   function push(delta: string): GuardStep {
     if (failed) return failed;
+    /* A chunk boundary can fall inside a surrogate pair, and half a pair is not
+       a character any rule recognises — it would clear `atLineStart` before
+       the invisible character it belongs to was seen. So it waits. */
+    let whole = split + delta;
+    split = "";
+    if (HIGH_SURROGATE.test(whole)) {
+      split = whole.slice(-1);
+      whole = whole.slice(0, -1);
+    }
     let out = "";
-    for (const c of delta) {
+    for (const c of whole) {
       const step = feed(c, false);
       out += step.text;
       if (!step.ok) return stop({ ...step, text: out });
@@ -309,6 +374,15 @@ export function createQuoteGuard(
 
   function end(): GuardStep {
     if (failed) return failed;
+    if (split !== "") {
+      /* A lone half-pair at the very end: nothing can complete it now. */
+      const last = split;
+      split = "";
+      const step = feed(last, false);
+      if (!step.ok) return stop(step);
+      const rest = end();
+      return { ...rest, text: step.text + rest.text };
+    }
     switch (mode) {
       case "text":
         return { ok: true, text: "" };
@@ -319,7 +393,7 @@ export function createQuoteGuard(
         return { ok: true, text: out };
       }
       case "blockquote": {
-        const line = settle(held.replace(/^[\s>]+/u, ""));
+        const line = settle(quotedLine(held));
         return line === null ? stop({ ok: false, cause: "not-found", text: "" }) : { ok: true, text: line };
       }
       case "paragraph": {
@@ -329,8 +403,7 @@ export function createQuoteGuard(
         const tail = end();
         return { ...tail, text: decided.text + tail.text };
       }
-      case "straight":
-      case "curly-double":
+      case "paired":
         return stop({ ok: false, cause: "unclosed", text: "" });
       default: {
         const never: never = mode;

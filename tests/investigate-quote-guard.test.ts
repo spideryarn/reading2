@@ -290,6 +290,43 @@ describe("the investigate quote guard: paragraph hold and line breaks", () => {
     }
   });
 
+  it("guards a blockquote after any invisible character, as a class (Opus check, item 2)", () => {
+    for (const hidden of ["‎", "‏", "‪", "⁦", "؜", "­", "͏", "̀", "ㅤ", "⠀", "\u{E0020}"]) {
+      const text = `Some prose here.\n${hidden}> fabricated line`;
+      expectEverySplit(text, [], { released: "Some prose here.\n", failed: { cause: "not-found" } });
+    }
+  });
+
+  it("guards a full-width block-quote mark", () => {
+    for (const mark of ["＞", "﹥"]) {
+      expectEverySplit(`${mark} fabricated line`, [], { released: "", failed: { cause: "not-found" } });
+    }
+  });
+
+  it("holds the quotation marks of other languages (Opus check, item 1)", () => {
+    const fabricated = "the results were entirely fabricated by the team";
+    for (const [open, close] of [
+      ["«", "»"],
+      ["‹", "›"],
+      ["„", "“"],
+      ["„", "”"],
+      ["「", "」"],
+      ["『", "』"],
+      ["＂", "＂"],
+      ["〝", "〞"],
+      ["»", "«"],
+      ["”", "”"],
+    ]) {
+      const text = `Some prose here. ${open}${fabricated}${close} ok`;
+      expectEverySplit(text, [], { released: "Some prose here. ", failed: { cause: "not-found" } });
+    }
+  });
+
+  it("releases the article's own words in a language's own marks", () => {
+    const text = "The piece says «The article defines fitness precisely.» and moves on.";
+    expectEverySplit(text, ["The article defines fitness precisely."], { released: text, failed: null });
+  });
+
   it("guards a blockquote after U+2028, U+2029 and CRLF line endings", () => {
     for (const lb of [" ", " ", "\r\n"]) {
       const text = `Safe prose${lb}> fabricated line`;
