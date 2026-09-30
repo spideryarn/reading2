@@ -250,7 +250,7 @@ function archivedRows(): string[] {
 /** The Archived chip beside Unread. */
 function archivedChip(): HTMLButtonElement {
   const found = [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find((b) =>
-    (b.getAttribute("aria-label") ?? "").startsWith("Archived"),
+    (b.getAttribute("aria-label") ?? "").startsWith("Include archived"),
   );
   if (!found) throw new Error("no Archived chip");
   return found;

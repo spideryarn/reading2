@@ -271,7 +271,7 @@ and every check anybody ran with a mouse would look fine.
 So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
 case nothing. `GET /api/library?archived=1` is the other half of the shelf.
 
-The **Archived** chip beside Unread is the other way back, and it is not optional decoration:
+The **Include archived** chip beside Unread (it read just *Archived* until 2026-09-30, below) is the other way back, and it is not optional decoration:
 without it Archive is permanent from the interface the moment the nine-second Undo strip goes, which
 would make "nothing is destroyed" true of the database and false of the product. It is off by
 default and does not fetch until turned on (`?archived=1`, a direct link included).
@@ -295,11 +295,25 @@ The chip is drawn **whenever the shelf has answered**, even over an empty active
 without the sort chips — because a reader whose every article is archived must still be able to
 reach them (GPT Sol R2); the empty-shelf message comes from the combined list.
 
+**The chip reaches both halves of the search box**, and until 2026-09-30 it reached one. The cards
+were searched across the archive; the passages (`GET /api/library/search`) never were. Greg had
+archived an article by accident, with no byline or site name on its card, and searched for its
+author to put it back: *"I couldn't find a way to find that Wolfram bigger brains article with the
+search box when it was archived, and it felt like a bug"* (SPIDERYARN-READING2-72, plan
+[260930d](../plans/260930d-shelf-search-finds-archived-articles-and-the-archived-chip-says-include.md)).
+Now the hook sends `&archived=1` with the chip, the response echoes it so an answer for the other
+chip state is dropped, and a passage from an archived article wears the same **Archived** mark as the
+card. With the chip off, a passage search that finds nothing says that archived articles were not
+searched. The chip's words changed at the same time, from **Archived** to **Include archived**:
+beside Unread, which narrows, a bare *Archived* read as "only archived" — *"I couldn't tell if that
+button meant, when clicked, include both active and archived, or only include archived."*
+
 **An archived article is still readable by direct link.** Only the shelf filters. That is a decision
 rather than an oversight — the shelf is a shelf, not an access control list, and a link that stops
 working is a worse surprise than a card that is out of sight. The library *search* is the exception:
-an archived article is out of the index entirely, because a hit that opens an article you archived
-reads as a ghost.
+an archived article is out of the index unless the reader turns on Include archived, because an
+unmarked hit that opens an article you archived reads as a ghost. Chat's `search_library` never
+turns it on.
 
 **And archiving takes it out of the public listing too**, which is the one place the shelf rule bends.
 [`publicLibraryQuery`](../../src/store/public-library.ts) asks for `visibility = 'public'`, a

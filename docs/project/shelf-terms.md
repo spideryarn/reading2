@@ -141,14 +141,15 @@ taking twelve and then dropping zeros would leave the row short with live pills 
 >
 > — Greg, 2026-09-29
 
-The switch is the **Archived** chip beside **Unread**, off by default, and its state is in the URL as
+The switch is the **Include archived** chip beside **Unread**, off by default, and its state is in the URL as
 `?archived=1`. When on, topics are chosen over active **and** archived articles, and the archived
 articles **join the shelf's one list** — sorted with everything else, narrowed by search, Unread and
 topics, counted in "n of m", each marked *Archived* and offering **Put back** where Archive would be
 ([library.md § Archive](library.md#archive-and-undo-is-the-confirmation)). One list rather than a
 second section at the foot is what lets sort and topics work across both, which is what Greg asked
 for. The count line names both halves — *"4 of 41 articles (3 active + 1 archived)"*. Passage search
-still covers active articles only.
+covers the archived articles too since 2026-09-30, each passage marked
+([library.md § Archive](library.md#archive-and-undo-is-the-confirmation); plan 260930d).
 
 While the archive is loading or has failed, topics wait (the question includes the archive, and it
 has not arrived) but the active rows stay painted. **Offline, topics are unavailable** — the terms

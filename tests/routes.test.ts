@@ -553,6 +553,16 @@ describe("the shelf routes", () => {
     expect(Array.isArray(body.hits)).toBe(true);
   });
 
+  it("echoes whether the archive was searched, so a client can drop the other chip state's answer", async () => {
+    // Plan 260930d: pressing Include archived changes the question without
+    // changing the words, so the words alone cannot tell two answers apart.
+    const off = await call("GET", "/api/library/search?q=the");
+    expect((off.body as unknown as { archived: boolean }).archived).toBe(false);
+    const on = await call("GET", "/api/library/search?q=the&archived=1");
+    expect(on.status).toBe(200);
+    expect((on.body as unknown as { archived: boolean }).archived).toBe(true);
+  });
+
   it("answers an empty search with an empty list, not an error", async () => {
     const r = await call("GET", "/api/library/search?q=");
     expect(r.status).toBe(200);

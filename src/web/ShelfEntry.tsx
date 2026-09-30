@@ -478,7 +478,7 @@ const TIPS = {
     how: "Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it. The card goes when the server has agreed, not before, so a failed archive cannot leave you looking at a shelf it is missing from.",
   },
   /**
-   * **Archive while Archived is on**, when the card does not leave: the
+   * **Archive while Include archived is on**, when the card does not leave: the
    * archived articles are on the shelf too, so the promise above — *takes the
    * article off the shelf*, *the card goes* — would be false as the reader
    * watched it (plan 260929a, Sol R4). What changes is the mark and the button.
@@ -486,12 +486,12 @@ const TIPS = {
   archiveShown: {
     head: "Archive",
     what: "Moves the article to the archive, and offers an Undo for nine seconds afterwards.",
-    how: "While Archived is on, the card stays where it is, marked Archived, with Put back in place of this button; turn Archived off and it is gone from the shelf. Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it.",
+    how: "While Include archived is on, the card stays where it is, marked Archived, with Put back in place of this button; turn Include archived off and it is gone from the shelf. Nothing is destroyed and the link still opens — it is the listing it leaves, including the public one if you have shared it.",
   },
   restore: {
     head: "Put back",
     what: "Puts this archived article back on the shelf.",
-    how: "The card stays where it is and loses its Archived mark, and it stays on the shelf when Archived is turned off. The same un-archive as the Undo after archiving, and as Put back on the article's own page.",
+    how: "The card stays where it is and loses its Archived mark, and it stays on the shelf when Include archived is turned off. The same un-archive as the Undo after archiving, and as Put back on the article's own page.",
   },
 } as const;
 
