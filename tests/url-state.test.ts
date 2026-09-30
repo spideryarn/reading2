@@ -24,6 +24,8 @@ import {
   diagramAxisParam,
   diagramHueParam,
   diagramParam,
+  FAQ_ORDERS,
+  faqOrderParam,
   modeParam,
   orderParam,
   confParam,
@@ -216,6 +218,19 @@ describe("glossary mode parameters", () => {
     // And an order from a later version degrades to the default rather than
     // to an empty list.
     expect(sortParam.parse("frequency")).toBeNull();
+  });
+});
+
+describe("faq mode parameters", () => {
+  /* SPIDERYARN-READING2-67, plan 260930d: the two scores behind `prioritised`
+     are orders of their own. */
+  it("reads and writes every FAQ order, defaults to prioritised, and drops an unknown one", () => {
+    for (const order of ["prioritised", "document", "centrality", "difficulty"] as const) {
+      expect(FAQ_ORDERS).toContain(order);
+      expect(faqOrderParam.parse(faqOrderParam.serialize(order))).toBe(order);
+    }
+    expect(faqOrderParam.defaultValue).toBe("prioritised");
+    expect(faqOrderParam.parse("hardest")).toBeNull();
   });
 });
 

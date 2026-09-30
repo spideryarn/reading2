@@ -9,16 +9,26 @@
  * ## One at a time, and the list underneath it
  *
  * The default is one question, because the point of a quiz is to answer rather
- * than to shop. *Show all twelve* is there because Greg asked for it and the
- * reason is a real one — a reader who cannot answer this question may be able
- * to answer the next, and hunting for that by pressing Next twelve times is
- * worse than reading a list. Picking from the list closes it again, so the band
- * is back to one question and a box.
+ * than to shop. *Show all N* is there because Greg asked for it and the reason
+ * is a real one — a reader who cannot answer this question may be able to
+ * answer the next, and hunting for that by pressing Next a dozen times is worse
+ * than reading a list. Picking from the list closes it again, so the band is
+ * back to one question and a box.
  *
- * The order is the artefact's and is **never re-sorted here** — easy questions
- * first and central ones within a band, decided by src/quiz.ts § `orderQuestions`
- * against the whole batch. A panel that sorted would be a second opinion about
- * the same list, and the two would drift.
+ * ## The order is the path
+ *
+ * Since `quiz/5` the batch is a path the model set, each step leaning on the
+ * ones before and ending at what the piece is for, and it is **never re-sorted
+ * here**: Next is the next question in the array and Previous the one before.
+ * A panel that sorted would be a second opinion about the same list, and on a
+ * path it would ask a step before the one it leans on.
+ *
+ * **What adapts is the help, not the order.** A step may carry a premise — the
+ * answer to the step before, restated — drawn as a quiet line above the
+ * question, and hidden only when the reader has just come here with Next from a
+ * step judged right. The rule is src/web/quiz-ladder.ts § `showPremise`; this
+ * file owns the two facts it needs, the verdicts and how the reader arrived.
+ * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md § The walk.
  *
  * ## "Show a reference answer", and the word that is not "the"
  *
@@ -53,9 +63,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { MessageCircleQuestionMark, TriangleAlert } from "lucide-react";
-import type { BlockId, QuizQuestion, QuizQuestionId } from "../types.js";
+import type { BlockId, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
-import { firstQuestion, nextQuestion } from "./quiz-ladder.js";
+import { showPremise } from "./quiz-ladder.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
 import type { RememberView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
@@ -164,22 +174,55 @@ export function QuizPanel({
   const questions = quiz?.questions ?? [];
 
   /**
-   * **The questions this reader has met, in the order they met them** — which
-   * since the quiz went adaptive is no longer the order the server put them in.
+   * **Where on the path the reader is** — an index into the artefact's array,
+   * which is the path. Next adds one, Previous takes one away, and "Question
+   * *n* of *N*" is this plus one.
    *
-   * Unique, and that matters twice: it is what stops a question being offered
-   * again, and it is what keeps "Question *n* of 12" from ever exceeding twelve.
+   * Until 2026-09-30 this was a `seen` list and a cursor into it, because the
+   * band ladder made the order the reader met the questions in differ from the
+   * server's. On a path they are the same order, so the second list had
+   * nothing left to record.
    *
-   * Deliberately not in the URL, for the reason the index was not: the rule
-   * `?at=` and `?thread=` serve is that a shared link lands you where the
-   * link-maker was, and what a link would frame here is an answer that does not
-   * survive a reload anyway. A *path* through the questions is less shareable
-   * still. It arrives with stored attempts.
-   * docs/plans/260831al-review-quiz-sub-mode.md § Which question is open.
+   * Deliberately not in the URL: the rule `?at=` and `?thread=` serve is that a
+   * shared link lands you where the link-maker was, and what a link would frame
+   * here is an answer that does not survive a reload anyway. It arrives with
+   * stored attempts. docs/plans/260831al-review-quiz-sub-mode.md § Which
+   * question is open.
    */
-  const [seen, setSeen] = useState<QuizQuestionId[]>([]);
-  /** Where in `seen` the reader is. Previous and Next walk this. */
-  const [cursor, setCursor] = useState(0);
+  const [at, setAt] = useState(0);
+  /**
+   * **The reader came to this question by pressing Next on the one before.**
+   *
+   * One of the two facts `showPremise` needs from here, and the one a verdict
+   * map cannot supply: a `right` on step 4 is evidence the reader is holding
+   * step 5's thread only if they walked straight from 4 to 5. A pick from the
+   * list, Previous, the opening question and a new batch all set it false.
+   * GPT Sol's R2-1 on the plan.
+   */
+  const [arrivedByNext, setArrivedByNext] = useState(false);
+  /**
+   * **How each answered question was judged, this session** — by question id,
+   * the latest finished mark's verdict.
+   *
+   * Needed as state because the attempt is not enough: `move` clears it, so
+   * by the time step 5 is on screen step 4's attempt is gone, and so is the
+   * verdict it carried. **Never rendered, logged or stored**, for the reason
+   * `Attempt.verdict` in useQuiz.ts gives: it is the grade the marking prompt
+   * refuses to give, and it exists only to decide whether a premise is shown.
+   */
+  const [verdicts, setVerdicts] = useState<ReadonlyMap<QuizQuestionId, QuizVerdict>>(
+    () => new Map(),
+  );
+  /**
+   * Which batch the verdict-recording effect has seen.
+   *
+   * The reset effect and the recording effect run from the same render. On a
+   * replacement batch, that render can still carry the old completed attempt;
+   * if question ids were reused, clearing the map and then recording that
+   * attempt would put the old verdict straight back. This ref makes the first
+   * effect pass for a new batch a reset-only pass.
+   */
+  const verdictBatch = useRef(quiz?.batchId);
   const [typed, setTyped] = useState("");
   /** The whole ordered batch, open. Closes again as soon as one is picked. */
   const [listing, setListing] = useState(false);
@@ -188,10 +231,11 @@ export function QuizPanel({
 
   const box = useRef<HTMLTextAreaElement | null>(null);
 
-  /* A new batch is a new set of questions with new ids, so an index and a
-     half-typed answer from the old one mean nothing. Keyed on `batchId` rather
-     than on the question count, because twelve questions replaced by twelve
-     different ones is the case that matters and a count would not see it.
+  /* A new batch is a new set of questions with new ids, so an index, the
+     verdicts and a half-typed answer from the old one mean nothing. Keyed on
+     `batchId` rather than on the question count, because a dozen questions
+     replaced by a dozen different ones is the case that matters and a count
+     would not see it.
 
      **`clearAttempt` is on this list and it is not cosmetic.** The mark belongs
      to the batch it was computed against, so it goes with the rest — but the
@@ -200,23 +244,23 @@ export function QuizPanel({
      return`, so leaving it there gives the new batch an Answer button that is
      enabled and does nothing at all. Nothing goes red and nothing is logged;
      the reader just presses it. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new batch invalidates the index, the draft and the mark, and none is read here; `clearAttempt` is stable
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new batch invalidates the index, the verdicts, the draft and the mark, and none is read here; `clearAttempt` is stable
   useEffect(() => {
     owner.clearAttempt();
-    /* The walk starts at the front of the server's array. Not "an easy one":
-       `orderQuestions` puts the highest-value question of the *lowest band
-       present* first, which is usually easy but need not be — a batch below
-       `SPREAD_FROM` is exempt from the spread rule entirely. src/web/quiz-ladder.ts
-       § firstQuestion. */
-    const opening = firstQuestion(questions);
-    setSeen(opening ? [opening.id] : []);
-    setCursor(0);
+    /* The walk starts at the front of the path, and nobody arrived there by
+       Next. The verdicts go with the batch: a new batch of the same article
+       can reuse nothing, and a map that outlived it would be keyed on ids
+       that now name different questions — or, if a test or a future writer
+       kept the ids, the same ones with a different path around them. */
+    setAt(0);
+    setArrivedByNext(false);
+    setVerdicts(new Map());
     setTyped("");
     setListing(false);
     setShowAnswer(false);
   }, [quiz?.batchId]);
 
-  const question: QuizQuestion | undefined = questions.find((q) => q.id === seen[cursor]);
+  const question: QuizQuestion | undefined = questions[at];
 
   /**
    * **Dictation, in the box the reader is most likely to talk into.**
@@ -312,7 +356,7 @@ export function QuizPanel({
    */
   const superseded = mine !== null && typed.trim() !== mine.answer;
 
-  const move = (path: QuizQuestionId[], to: number) => {
+  const move = (to: number, byNext: boolean) => {
     /* The attempt on screen belongs to the question that is leaving, and
        `clearAttempt` also aborts a mark still in flight — one live request per
        attempt, and the old one goes when the reader moves on. */
@@ -323,49 +367,77 @@ export function QuizPanel({
        looked up one answer would meet the next question with its answer already
        under it — which is not a quiz. */
     setShowAnswer(false);
-    setSeen(path);
-    setCursor(to);
+    setAt(to);
+    setArrivedByNext(byNext);
   };
 
   /**
-   * **How the answer on screen moves the ladder, if it does.**
+   * **Remember how each finished mark was judged**, before `move` clears it.
    *
-   * Only a mark that reached `done` for *this* question carries a verdict, so
-   * skipping, a failed mark and an abandoned stream all come out `undefined` —
-   * which src/web/quiz-ladder.ts reads as *hold the band*. That is the designed
-   * outcome rather than an error path, and it is why nothing here needs a
-   * fallback.
+   * Only a mark that reached `done` carries a verdict, so skipping, a failed
+   * mark and an abandoned stream record nothing — and nothing reads as *show
+   * the premise*. That is the designed outcome rather than an error path, and
+   * it is why nothing here needs a fallback.
+   *
+   * **The latest mark wins, including one with no verdict.** A reader who goes
+   * back and answers a step again has told us something newer than the first
+   * verdict; a classifier that failed on the second try leaves no evidence
+   * either way, and absence errs towards help. So `undefined` deletes.
    *
    * **`superseded` is deliberately not consulted.** A reader who edits the box
    * after their mark arrives stops the question counting as answered — the mark
    * on screen is about words they have changed — but they did answer it, and it
-   * was judged. The ladder learned something real and un-learning it would mean
-   * a keystroke changing which question comes next.
+   * was judged. Un-learning that would mean a keystroke deciding whether the
+   * next step carries its premise.
+   *
+   * Guarded on the question being in this batch, because the attempt can
+   * outlive a batch by one render — the reset effect clears it, but the prop
+   * arrives before the clear lands.
    */
-  const verdictHere =
-    question && attempt?.questionId === question.id && attempt.status === "done"
-      ? attempt.verdict
-      : undefined;
+  useEffect(() => {
+    if (verdictBatch.current !== quiz?.batchId) {
+      verdictBatch.current = quiz?.batchId;
+      return;
+    }
+    if (attempt?.status !== "done") return;
+    const { questionId, verdict } = attempt;
+    if (!questions.some((q) => q.id === questionId)) return;
+    setVerdicts((was) => {
+      if (was.get(questionId) === verdict) return was;
+      const next = new Map(was);
+      if (verdict) next.set(questionId, verdict);
+      else next.delete(questionId);
+      return next;
+    });
+  }, [attempt, questions, quiz?.batchId]);
 
   /**
-   * The question the ladder would offer next, or nothing if the reader has seen
-   * them all. Computed rather than stored, so the Next button cannot promise a
-   * question that selection would then decline to produce.
+   * **Whether the question on screen carries its premise.** The rule is
+   * src/web/quiz-ladder.ts § `showPremise`; what this supplies is the verdict
+   * on the step before, how the reader got here, and whether validation left
+   * a hole in the path.
    */
-  const upcoming = question
-    ? nextQuestion(questions, seen, question.band, verdictHere)
-    : undefined;
+  const before = at > 0 ? questions[at - 1] : undefined;
+  const premised =
+    question !== undefined &&
+    showPremise({
+      question,
+      previousVerdict: before ? verdicts.get(before.id) : undefined,
+      arrivedByNext,
+      batchHasGaps: (quiz?.dropped.gaps ?? 0) > 0,
+    });
 
   /**
    * **The mark for the question on screen is still arriving.**
    *
    * The verdict is the last thing to land — it is judged from the finished
    * mark, so it arrives with `done`, after the reader has already read every
-   * word. Pressing Next in that window would select with *no* verdict, take
-   * the no-verdict row, and abort the classifier on the way out: adaptation
-   * silently switched off, on a screen that looks completely normal. GPT Sol's
-   * finding 1 on the built code, and it is the sort of thing that would have
-   * been found months later, if ever.
+   * word. And the next step's premise depends on it: pressing Next in that
+   * window would arrive with *no* verdict, show a premise the reader may not
+   * need, and abort the classifier on the way out — adaptation silently
+   * switched off, on a screen that looks completely normal. GPT Sol's finding
+   * 1 on the band ladder's built code, and it holds for the premise the same
+   * way.
    *
    * So Next waits. It is usually imperceptible — one word from a quick-tier
    * model — and it is bounded by that call's own short deadline. **Previous and
@@ -374,48 +446,34 @@ export function QuizPanel({
    * it always did.
    */
   const stillMarking = mine?.status === "marking";
-  /** Forward through history, or a new pick at the tail. */
-  const canGoNext = !stillMarking && (cursor < seen.length - 1 || Boolean(upcoming));
+  const canGoNext = !stillMarking && at < questions.length - 1;
 
   const goNext = () => {
-    if (stillMarking) return;
-    /* **Inside history: retrace, and select nothing.** Only an answer given at
-       the tail moves the ladder — a reader who has gone back is retracing, and
-       the question after B is C because that is where they were. The verdict on
-       a question answered back there is deliberately not applied: it would have
-       to insert a question into the middle of a path the reader has already
-       walked. docs/project/quiz.md says so, narrowed after GPT Sol's finding 2
-       caught the doc claiming otherwise. */
-    if (cursor < seen.length - 1) {
-      move(seen, cursor + 1);
-      return;
-    }
-    if (!upcoming) return;
-    move([...seen, upcoming.id], seen.length);
+    if (!canGoNext) return;
+    move(at + 1, true);
   };
 
   /**
-   * Picking a question by hand out of the list.
+   * Picking a question by hand out of the list — a jump to that step on the
+   * path, which Next and Previous then walk on from.
    *
-   * **The pick itself moves nothing** — the reader reached past the ladder, so
-   * the ladder learns nothing from the reach. Answering the question they
-   * picked *does* move it, on the next Next, because a finished mark is
-   * evidence wherever the question came from.
+   * **A jump is not an arrival by Next**, so the step shows its premise
+   * whatever the verdict on the one before it: the reader did not just carry
+   * that thread here.
    */
   const pick = (id: QuizQuestionId) => {
-    const already = seen.indexOf(id);
+    const to = questions.findIndex((q) => q.id === id);
     /* **Picking the row you are already on closes the list and does nothing
        else.** `move` aborts a mark in flight and throws away the draft and the
        feedback, so treating "the current one" as a move would let a reader
        destroy their own half-typed answer by tapping the row that is already
-       highlighted. The index version guarded this with `if (i !== at)`; the
-       guard was lost in the rewrite and GPT Sol's finding 3 caught it. */
-    if (already === cursor) {
+       highlighted. Lost once in a rewrite, and GPT Sol's finding 3 on the
+       ladder caught it. */
+    if (to === at || to < 0) {
       setListing(false);
       return;
     }
-    if (already >= 0) move(seen, already);
-    else move([...seen, id], seen.length);
+    move(to, false);
     setListing(false);
   };
 
@@ -511,7 +569,7 @@ export function QuizPanel({
             <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
               <div className="quiz-one">
                 <p className="gloss-count">
-                  Question {cursor + 1} of {questions.length}
+                  Question {at + 1} of {questions.length}
                   {/* Dropped while the box holds something that has not been
                       marked, because this line sits directly above that box and
                       reads as a claim about what is in it. The tick in the list
@@ -520,6 +578,12 @@ export function QuizPanel({
                       true whatever the reader is typing now. */}
                   {answered.has(question.id) && !superseded && " — answered"}
                 </p>
+                {/* **The premise, as a lead-in rather than part of the
+                    question**: its own element, quieter, above the stem. The
+                    question reads as a whole without it — the prompt insists —
+                    so hiding it leaves nothing dangling. Never in the list
+                    below; see `QuestionList`. */}
+                {premised && <p className="quiz-premise">{question.premise}</p>}
                 <p className="quiz-question">{question.question}</p>
 
                 <textarea
@@ -609,14 +673,14 @@ export function QuizPanel({
                 />
 
                 <div className="quiz-step">
-                  {/* Walks the order the reader met the questions in, which is
-                      the only order they could recognise. After
-                      A → B → C → Previous to B → pick D, this goes back to C
-                      rather than B: `seen` is the encounter order, and the
-                      alternative needs a second stack to serve one rare
-                      gesture. Named in the plan rather than discovered as a
-                      bug. */}
-                  <button type="button" disabled={cursor === 0} onClick={() => move(seen, cursor - 1)}>
+                  {/* One step back along the path — the question before this
+                      one in the array, wherever the reader came from. After a
+                      jump from the list that is the step the jump skipped to,
+                      not the one they were on before it: the path is the only
+                      order there is, and a history stack would be a second
+                      one. Not an arrival by Next, so the step shows its
+                      premise. */}
+                  <button type="button" disabled={at === 0} onClick={() => move(at - 1, false)}>
                     Previous
                   </button>
                   <button type="button" disabled={!canGoNext} onClick={goNext}>
@@ -782,19 +846,20 @@ function ReferenceAnswer({
  * Greg asked for this: *"we should give the user the option to reveal a bunch of
  * questions at a time so they can pick which one(s) to answer"*. A reader who
  * cannot answer this one may be able to answer the next, and finding that out by
- * pressing Next twelve times is worse than reading a list.
+ * pressing Next a dozen times is worse than reading a list.
  *
- * **Nothing here sorts, and this list is still the server's order** — including
- * since the quiz went adaptive, when it stopped being the order the reader meets
- * the questions in. `orderQuestions` in src/quiz.ts has done it once, against
- * bands and values this component never sees, and it remains the sole authority
- * for the static ranking (src/web/quiz-ladder.ts § the amended invariant). The
- * consequence is worth knowing: a reader who opens this list part-way through
- * will find their ticks scattered down it rather than gathered at the top.
+ * **Nothing here sorts** — the order is the path, the same order Next walks.
  *
- * The rows are not numbered — the band says "Question 3 of 12" above, that
- * number counts the path rather than this list, and two numberings that have to
- * agree are a second source of truth.
+ * **Stems only, never premises.** A premise restates the answer to the step
+ * before it, so a list that drew them would answer rows the reader has not
+ * reached yet, all at once, to anybody who opened it to choose. GPT Sol's F3
+ * on docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md.
+ * Opening a question from here shows its premise on the question itself,
+ * because a jump is not an arrival by Next (src/web/quiz-ladder.ts).
+ *
+ * The rows are not numbered — the band says "Question 3 of 12" above, and two
+ * numberings that have to agree are a second source of truth even when, as on
+ * a path, they happen to.
  */
 function QuestionList({
   questions,
@@ -803,8 +868,8 @@ function QuestionList({
   onPick,
 }: {
   questions: readonly QuizQuestion[];
-  /** Keyed by id rather than index, because the reader's position is a place in
-      their own path now, not an offset into this array. */
+  /** Keyed by id rather than index: an id says which row without trusting that
+      two arrays line up. */
   currentId: string;
   answered: ReadonlySet<string>;
   onPick(id: string): void;

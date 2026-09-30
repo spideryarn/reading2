@@ -360,7 +360,8 @@ export interface QuizMarkResult {
   /**
    * **Whether the reader got it right — never shown to them.**
    *
-   * The adaptive ladder steps on this (src/web/quiz-ladder.ts); the panel renders
+   * The walk reads this to decide whether the next step carries its premise
+   * (src/web/quiz-ladder.ts § `showPremise`); the panel renders
    * it nowhere, and nothing writes it down. It is judged by a separate call
    * (src/quiz-verdict.ts) that reads the finished `reply` above rather than by
    * this prompt, so that `QUIZ_MARK_SYSTEM` — which spends two pages refusing to

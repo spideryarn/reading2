@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * FAQ mode's panel: a row is a question and the article's own passages — no
- * written answer — and the foot keeps both halves of the promise.
+ * written answer — and the (i) in the order row keeps both halves of the
+ * promise (in the foot until SPIDERYARN-READING2-62).
  * docs/project/faq.md, src/web/FaqPanel.tsx.
  */
 import { act, createElement } from "react";
@@ -103,6 +104,9 @@ afterEach(async () => {
 });
 
 const jumps: BlockId[] = [];
+const ABOUT = '.gloss-sort-trail [aria-label="About these passages"]';
+const about = () => host.querySelector<HTMLButtonElement>(ABOUT)!;
+const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
 const orders: FaqOrder[] = [];
 const bars: (number | null)[] = [];
 
@@ -190,18 +194,62 @@ describe("FaqPanel", () => {
     ]);
   });
 
-  it("says the words are checked and the pairing is the model's reading, in the foot", async () => {
+  /* SPIDERYARN-READING2-62: the promise left the foot for an (i) at the end of
+     the order row, as Trajectory's did for 52. Plan 260930d. */
+  it("says the words are checked and the pairing is the model's reading, behind an (i) rather than on the page", async () => {
     await draw(owner());
     expect(FAQ_PROMISE).toContain("checked against it");
     expect(FAQ_PROMISE).toContain("the model's reading");
-    expect(host.textContent).toContain(FAQ_PROMISE);
-    expect(host.textContent).not.toContain("left out in checking");
+    expect(host.textContent).not.toContain(FAQ_PROMISE);
+    expect(host.querySelector(".faq-foot")).toBeNull();
     expect(host.textContent).not.toContain("Find them again");
+    const info = about();
+    expect(info.hasAttribute("title"), "a tooltip, not a title").toBe(false);
+    expect(info.closest(".gloss-sort-group"), "beside the order group, not announced as an order").toBeNull();
+    expect(tip()).toBeNull();
+    /* A tap — a click with no hover first — opens it: touch has no hover. */
+    await act(async () => info.click());
+    expect(tip()).toBe(FAQ_PROMISE);
+    expect(info.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => info.click());
+    expect(info.getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
+    /* The keyboard reaches it too: focus opens it, Escape closes it. */
+    await act(async () => info.focus());
+    expect(info.getAttribute("aria-expanded"), "focus opens it").toBe("true");
+    await act(async () =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    expect(info.getAttribute("aria-expanded"), "Escape closes it").toBe("false");
+    await act(async () => info.click());
+    await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(info.getAttribute("aria-expanded"), "a press elsewhere closes it").toBe("false");
+    await act(async () => info.blur());
   });
 
-  it("adds a quiet dropped count only when something was dropped", async () => {
+  it("gives a visitor the promise behind the same (i), and never the owner's dropped count", async () => {
+    await drawAccess({ kind: "visitor", faq: { questions: [FRIDGE, ISOLATED] } });
+    expect(host.textContent).not.toContain(FAQ_PROMISE);
+    await act(async () => about().click());
+    expect(tip()).toBe(FAQ_PROMISE);
+    await act(async () => about().click());
+  });
+
+  it("draws no order for a single question, only the (i)", async () => {
+    await draw(owner({ faq: artefact([{ ...FRIDGE, difficulty: 0.5, centrality: 0.8 }]) }), { order: "difficulty" });
+    expect(host.querySelector(".gloss-sort-group")).toBeNull();
+    expect(host.querySelector("#faq-bar")).toBeNull();
+    expect(host.querySelector(".score-bars")).toBeNull();
+    expect(host.querySelector(ABOUT)).not.toBeNull();
+  });
+
+  it("adds a quiet dropped count to the (i) only when something was dropped", async () => {
     await draw(owner({ faq: artefact([FRIDGE], { ...NOTHING_DROPPED, unquoted: 2 }) }));
-    expect(host.textContent).toContain("2 more questions or passages the model gave were left out in checking.");
+    expect(host.textContent).not.toContain("left out in checking");
+    await act(async () => about().click());
+    expect(tip()).toBe(
+      `${FAQ_PROMISE}2 more questions or passages the model gave were left out in checking.`,
+    );
+    await act(async () => about().click());
   });
 
   it("treats no questions as an answer, with no retry and no promise", async () => {
@@ -210,6 +258,7 @@ describe("FaqPanel", () => {
     expect(host.textContent).toContain(FAQ_NONE);
     expect(host.textContent).not.toContain("Find them again");
     expect(host.textContent).not.toContain(FAQ_PROMISE);
+    expect(host.querySelector(ABOUT)).toBeNull();
   });
 
   it("offers to find them when nobody has", async () => {
@@ -383,7 +432,9 @@ describe("the prioritised order", () => {
     ]) {
       await drawAccess(access);
       expect(questionsShown()).toEqual([ISOLATED.question, FRIDGE.question]);
-      expect(host.querySelector(".gloss-sort")).toBeNull();
+      /* The row is there for the (i) alone: no order to offer. */
+      expect(host.querySelector(".gloss-sort-group")).toBeNull();
+      expect(host.querySelector(ABOUT)).not.toBeNull();
       expect(host.querySelector("#faq-bar")).toBeNull();
       expect(host.querySelector(".score-bars")).toBeNull();
     }
@@ -405,5 +456,51 @@ describe("the prioritised order", () => {
     expect(host.querySelector<HTMLInputElement>("#faq-bar")?.max).toBe("0.9");
     const pressed = host.querySelector<HTMLButtonElement>('.gloss-sort-btn[aria-pressed="true"]');
     expect(pressed?.textContent).toBe("prioritised");
+  });
+});
+
+/* -------------------------------------- the single-score orders, 260930d --
+   SPIDERYARN-READING2-67: sort by either score the prioritised order is built
+   from, as the Glossary sorts by `hardest` and `most central`. */
+describe("the single-score orders", () => {
+  const buttons = () => [...host.querySelectorAll<HTMLButtonElement>(".gloss-sort-btn")].map((b) => b.textContent);
+
+  it("offers most central and hardest beside prioritised and reading order, and pushes each", async () => {
+    await draw(owner({ faq: artefact(SCORED) }));
+    expect(buttons()).toEqual(["prioritised", "reading order", "most central", "hardest"]);
+    for (const label of ["most central", "hardest"]) {
+      await act(async () =>
+        [...host.querySelectorAll<HTMLButtonElement>(".gloss-sort-btn")].find((b) => b.textContent === label)?.click(),
+      );
+    }
+    expect(orders).toEqual(["centrality", "difficulty"]);
+  });
+
+  it("under most central draws every question, most central first, with no bar and only the centrality score", async () => {
+    await draw(owner({ faq: artefact(SCORED) }), { order: "centrality", bar: 0.9 });
+    /* FRIDGE and BROAD tie on 0.8, so reading order breaks it. */
+    expect(questionsShown()).toEqual([FRIDGE.question, BROAD.question, NARROW.question]);
+    expect(host.querySelector("#faq-bar")).toBeNull();
+    const label = row(BROAD.id).querySelector(".score-bars")?.getAttribute("aria-label") ?? "";
+    expect(label).toMatch(/centrality/);
+    expect(label).not.toMatch(/difficulty/);
+    expect(host.querySelector<HTMLButtonElement>('.gloss-sort-btn[aria-pressed="true"]')?.textContent).toBe(
+      "most central",
+    );
+  });
+
+  it("under hardest draws every question, hardest first, with only the difficulty score", async () => {
+    await draw(owner({ faq: artefact(SCORED) }), { order: "difficulty" });
+    expect(questionsShown()).toEqual([NARROW.question, FRIDGE.question, BROAD.question]);
+    expect(host.querySelector("#faq-bar")).toBeNull();
+    const label = row(NARROW.id).querySelector(".score-bars")?.getAttribute("aria-label") ?? "";
+    expect(label).toMatch(/difficulty/);
+    expect(label).not.toMatch(/centrality/);
+  });
+
+  it("falls back to reading order when a URL asks for a score the list does not have", async () => {
+    await draw(owner({ faq: artefact([ISOLATED, FRIDGE]) }), { order: "difficulty" });
+    expect(questionsShown()).toEqual([ISOLATED.question, FRIDGE.question]);
+    expect(host.querySelector(".score-bars")).toBeNull();
   });
 });

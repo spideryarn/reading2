@@ -1,0 +1,172 @@
+{
+  "arm": "after",
+  "slug": "greatwork-spya-yw4d3t",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "d5fca6f8a04b7f11ebf96ecf419a5b0782cb897932a473e2c3fd10f6fe9cac79",
+  "at": "2026-09-30T05:13:54.967Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 8266,
+  "elapsedMs": 75571,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "What three qualities does the article say the work you choose to pursue needs to have?",
+      "referenceAnswer": "It needs to be something you have a natural aptitude for, that you have a deep interest in, and that offers scope to do great work.",
+      "evidence": [
+        "spya-aeqwcs"
+      ]
+    },
+    {
+      "premise": "The article says you don't need to worry much about whether a field offers scope for great work, since ambitious people are already too conservative on that score.",
+      "question": "What does the article recommend doing if you're not yet sure what to work on?",
+      "referenceAnswer": "Guess — pick something and get going, since the way to figure out what to work on is by working, and it's fine if you guess wrong sometimes.",
+      "evidence": [
+        "spya-ntdmun"
+      ]
+    },
+    {
+      "premise": "Figuring out what to work on happens through actually working, not through advance analysis.",
+      "question": "What kind of curiosity does the article say signals you've found the right thing to work on?",
+      "referenceAnswer": "An excessive curiosity — curiosity about something to a degree that would bore most other people.",
+      "evidence": [
+        "spya-k8tqsc"
+      ]
+    },
+    {
+      "premise": "Excessive curiosity is the sign of having found the right thing to pursue.",
+      "question": "What four steps does the article describe as the general process followed by nearly everyone who's done great work?",
+      "referenceAnswer": "Choose a field, learn enough to reach the frontier of knowledge in it, notice the gaps at that frontier, and explore the promising ones.",
+      "evidence": [
+        "spya-kr0zrr"
+      ]
+    },
+    {
+      "premise": "The third of these steps is noticing gaps at the frontier of knowledge.",
+      "question": "Why does the article say noticing these gaps takes skill?",
+      "referenceAnswer": "Because your brain naturally wants to ignore such gaps so it can keep a simpler model of the world.",
+      "evidence": [
+        "spya-zrq0qf"
+      ]
+    },
+    {
+      "question": "Instead of following a detailed plan, what strategy does the article say most people who've done great work actually use, calling it 'staying upwind'?",
+      "referenceAnswer": "At each stage do whatever seems most interesting and gives you the best options for the future, rather than deciding in advance and executing a fixed plan.",
+      "evidence": [
+        "spya-zzu2w0"
+      ]
+    },
+    {
+      "premise": "Staying upwind means choosing whatever seems most interesting at each stage rather than following a fixed plan.",
+      "question": "What kind of 'lie' does the article say is often permissible when starting a new project?",
+      "referenceAnswer": "It's okay to underestimate, in your own mind, how much work the project will actually take — as in thinking 'how hard could it be?'",
+      "evidence": [
+        "spya-vammz4"
+      ]
+    },
+    {
+      "question": "Of the two forms of procrastination the article distinguishes, which does it call far more dangerous?",
+      "referenceAnswer": "Per-project procrastination — putting off starting an ambitious project year after year, since the delays are measured in years rather than days.",
+      "evidence": [
+        "spya-e9jhjz"
+      ]
+    },
+    {
+      "premise": "Per-project procrastination, putting off an ambitious project for years, is the more dangerous kind.",
+      "question": "Why does the article say this kind of procrastination is hard to notice in yourself?",
+      "referenceAnswer": "Because it disguises itself as work — you're busy and industrious on something else, so it never sets off the alarm that idleness would.",
+      "evidence": [
+        "spya-q0jujr"
+      ]
+    },
+    {
+      "question": "Using the example of writing a page a day, what does the article say is the key to benefiting from the compounding effect of work over time?",
+      "referenceAnswer": "Consistency — getting something done every day, rather than a lot on some days and nothing on others.",
+      "evidence": [
+        "spya-gvh3ek"
+      ]
+    },
+    {
+      "question": "Rather than merely trying to be good at your field, what does the article say you should aim to be?",
+      "referenceAnswer": "The best — the article argues that if you don't try to be the best, you won't even be good.",
+      "evidence": [
+        "spya-tyvegp"
+      ]
+    },
+    {
+      "premise": "The article says you should aim to be the best rather than merely good.",
+      "question": "How does the article distinguish genuine style from affectation?",
+      "referenceAnswer": "Style is doing things in a distinctive way without trying to; affectation is trying to seem distinctive, which is really pretending to be someone other than yourself doing the work.",
+      "evidence": [
+        "spya-aah3tw",
+        "spya-kyybds"
+      ]
+    },
+    {
+      "premise": "Affectation means, in effect, pretending someone other than you is doing the work.",
+      "question": "What does the article identify as the core of being earnest, the positive quality it recommends instead of affectation?",
+      "referenceAnswer": "Intellectual honesty — having an exceptionally sharp, unbiased eye for the truth.",
+      "evidence": [
+        "spya-jq7znf"
+      ]
+    },
+    {
+      "question": "When work could be seen either as creation or as discovery, which does the article say you should err toward?",
+      "referenceAnswer": "Discovery — try thinking of yourself as a mere conduit through which the ideas take their natural shape.",
+      "evidence": [
+        "spya-u9w5qs"
+      ]
+    },
+    {
+      "question": "What image does the article use to describe how original thinkers generate new ideas?",
+      "referenceAnswer": "It compares them to an angle grinder throwing off sparks — original thinkers can't help throwing off new ideas about whatever they focus on.",
+      "evidence": [
+        "spya-hx6p3y"
+      ]
+    },
+    {
+      "question": "What two ways does the article distinguish for being comfortable enough to break the rules that block new ideas?",
+      "referenceAnswer": "Being 'aggressively independent-minded' (enjoying breaking rules, which gives you extra energy) and being 'passively independent-minded' (simply not caring about or noticing rules, as novices and outsiders often do).",
+      "evidence": [
+        "spya-yxc5r7"
+      ]
+    },
+    {
+      "question": "What does the article say matters even more than originality in solving problems?",
+      "referenceAnswer": "Originality in choosing which problem to work on in the first place — this is what distinguishes people who discover whole new fields.",
+      "evidence": [
+        "spya-k7swrh"
+      ]
+    },
+    {
+      "premise": "Choosing the right problem matters even more than skill in solving it.",
+      "question": "Rather than planning a project in advance, what approach does the article recommend for developing it?",
+      "referenceAnswer": "Start with something small and simple, then evolve it through a series of successive versions, letting the final result become more ambitious than anything you could have planned.",
+      "evidence": [
+        "spya-ngbzxc"
+      ]
+    },
+    {
+      "question": "What advantages does the article say the young have, compared with the advantages of the old?",
+      "referenceAnswer": "The young have energy, time, optimism, and freedom, while the old have knowledge, efficiency, money, and power.",
+      "evidence": [
+        "spya-sw6ay5"
+      ]
+    },
+    {
+      "question": "Between having many colleagues and having very good ones, which does the article say matters more?",
+      "referenceAnswer": "Quality matters more — it's better, even necessary, to have one or two truly great colleagues than a building full of merely pretty good ones.",
+      "evidence": [
+        "spya-eny6fh"
+      ]
+    }
+  ]
+}

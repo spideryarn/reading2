@@ -5,7 +5,8 @@
    `.tl-item`) come from glossary.css and timeline.css unchanged — and each
    passage's solid left rule is `.gloss-part-senseHere`, the article-provenance
    treatment, reused rather than re-declared. What is here is only the inside of
-   a row: the question, its passages, and the jump beside each.
+   a row: the question, its passages, and the jump beside each — and the
+   promise's (i), which was the foot's until SPIDERYARN-READING2-62.
 
    Loaded after citations.css; it sets no property the sheets it borrows from set
    on the same element, so its place in the cascade decides nothing between
@@ -54,12 +55,32 @@
 }
 .faq-jump:hover { border-color: var(--highlight); color: var(--highlight-ink); }
 
-/* A rule above it, so the promise reads as being about the list rather than the
-   last row's — the lesson citations.css's `.cite-foot` records. */
+/* Only a running job's progress now, with a rule above it so it reads as being
+   about the list rather than the last row's — citations.css's `.cite-foot`. */
 .faq-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
-.faq-note {
-  margin: 0 0 0.3rem;
+
+/* **The promise's (i)**, at the right-hand end of the order row
+   (`.gloss-sort-trail`), holding the two sentences that were the foot
+   (SPIDERYARN-READING2-62). Quiet, like Trajectory's `.traj-about` and Quotes'
+   `.quotes-why`: a footnote, not a control the reader needs. Sized to the
+   order buttons beside it rather than the house control height, so the row
+   does not grow for it. */
+.faq-about {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: none;
   color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.35;
+  cursor: pointer;
 }
+.faq-about:hover { color: var(--ink); background: var(--surface-raised); }
+.faq-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
+.faq-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.faq-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
+.faq-about-card p { margin: 0; }
+.faq-about-card p + p { margin-top: 0.4rem; }

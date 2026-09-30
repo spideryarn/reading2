@@ -208,6 +208,7 @@ function isDrawableEntry(value: unknown): boolean {
     typeof has.arc === "boolean" &&
     typeof has.tweets === "boolean" &&
     typeof has.glossary === "boolean" &&
+    typeof e.sourceReusable === "boolean" &&
     maybe(e.byline, str) &&
     maybe(e.siteName, str) &&
     maybe(e.url, str) &&

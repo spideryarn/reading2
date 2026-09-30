@@ -56,10 +56,25 @@
   padding: 0 0.7rem 0.7rem;
 }
 
+/* The premise: what the step before established, restated as a lead-in. Quiet
+   and a little smaller so it reads as the thread handed over rather than part
+   of the question, and tight against the question it leads into. Shown or not
+   by src/web/quiz-ladder.ts § showPremise; never in the list. */
+.quiz-premise {
+  margin: 0.4rem 0 0;
+  font-size: 0.94rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
 .quiz-question {
   margin: 0.4rem 0 0.7rem;
   font-size: 1.03rem;
   line-height: 1.45;
+}
+
+.quiz-premise + .quiz-question {
+  margin-top: 0.2rem;
 }
 
 .quiz-answer {

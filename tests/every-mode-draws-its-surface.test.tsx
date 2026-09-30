@@ -270,7 +270,7 @@ const DEBATE_TITLE = "The Leiden replication";
 /* A work's title, which is what a row leads with — drawn from the artefact,
    so a panel that drew its controls and no rows would not satisfy it. */
 const CITATION_TITLE = "Elements of Episodic Memory";
-/* A question — the row's own content, not the foot's promise, which is a
+/* A question — the row's own content, not the (i) card's promise, which is a
    constant a panel with no rows would still be free to draw. */
 const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
 /* The current stop's role — drawn on the current row only, so a panel that

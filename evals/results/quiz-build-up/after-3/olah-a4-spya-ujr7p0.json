@@ -1,0 +1,148 @@
+{
+  "arm": "after-3",
+  "slug": "olah-a4-spya-ujr7p0",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "546b29ed47654e7b715acc52a79fea68875516aa825fddc144e64c511602d28e",
+  "at": "2026-09-30T05:45:36.154Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 6437,
+  "elapsedMs": 56006,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "What two distinct ideas does the article say the term 'distributed representations' is often understood to contain?",
+      "referenceAnswer": "Composition and superposition — two different strategies that both get called 'distributed representations'.",
+      "evidence": [
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "premise": "Distributed representations are said to split into composition and superposition.",
+      "question": "What relationship does the article say holds between composition and superposition, even though a single code can use both?",
+      "referenceAnswer": "They are fundamentally in tension with each other — a trade-off, not two freely combinable strategies.",
+      "evidence": [
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "question": "In Thorpe's pure 'local code' example, what does each individual neuron represent?",
+      "referenceAnswer": "Each neuron stands for one specific (shape, color) pair, such as one neuron just for red circles.",
+      "evidence": [
+        "spya-kcjqdw"
+      ]
+    },
+    {
+      "premise": "In the local code, each neuron corresponds to a single (shape, color) pair.",
+      "question": "Despite seeming wasteful, what does the article say a local code allows a later neuron to do using a linear function, that other codes can't achieve?",
+      "referenceAnswer": "It can linearly select very specific arbitrary combinations, for example firing for black circles and white triangles but not black triangles or white circles.",
+      "evidence": [
+        "spya-hbmajb"
+      ]
+    },
+    {
+      "question": "In the local code example, what does the article point out about probing for a 'red' feature, even though no single feature for 'red' is actually represented?",
+      "referenceAnswer": "A linear probe would successfully predict 'red', yet the article argues the code shouldn't really be understood as containing a 'red' feature at all.",
+      "evidence": [
+        "spya-n30s4d"
+      ]
+    },
+    {
+      "question": "In the 'semi-local' compositional code, what kind of features are represented, instead of one neuron per (color, shape) pair?",
+      "referenceAnswer": "Independent features like color and shape separately, which then compose together to represent a full (color, shape) object.",
+      "evidence": [
+        "spya-xcdtte"
+      ]
+    },
+    {
+      "premise": "The compositional code encodes color and shape as separate features that combine.",
+      "question": "What does the article's example of 'non-local generalization' say happens when a network learns about green circles?",
+      "referenceAnswer": "That learning can improve the representation of green squares too, because the shared 'green' feature transfers across combinations.",
+      "evidence": [
+        "spya-s9fc6n"
+      ]
+    },
+    {
+      "question": "How does the compositional code let a network represent something like an intermediate 'purple shape' or a 'rounded square'?",
+      "referenceAnswer": "By mixing features together, such as blending red and blue to get purple, or adding in some circle to get a rounded square.",
+      "evidence": [
+        "spya-v5n7sx"
+      ]
+    },
+    {
+      "question": "In the 'dense' maximal superposition code, how many neurons does the article say are enough to represent all the colored shapes?",
+      "referenceAnswer": "Only four neurons, the same way four bits can represent sixteen numbers.",
+      "evidence": [
+        "spya-bzhkhu"
+      ]
+    },
+    {
+      "premise": "The dense superposition code needs only four neurons to represent all the colored shapes.",
+      "question": "What two costs does the article say come with this dense superposition code?",
+      "referenceAnswer": "You generally can't linearly select most individual colors or shapes (or sets of them), and you can't represent objects 'between' features, like a purple square with rounded corners.",
+      "evidence": [
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "question": "Why does the dense superposition code have to go back to using combined (color, shape) features rather than the independent color and shape features used in the semi-local code?",
+      "referenceAnswer": "Because maximal superposition is only possible when there is no composition, so the code needs a set of non-composing features.",
+      "evidence": [
+        "spya-kq5p9m"
+      ]
+    },
+    {
+      "question": "Rather than seeing the local, semi-local, and dense codes as points on one continuous scale of 'how distributed' they are, how does the article say we should instead see the semi-local and dense codes?",
+      "referenceAnswer": "As using two totally different, orthogonal strategies — composition for the semi-local code and superposition for the dense code — not just different degrees of the same thing.",
+      "evidence": [
+        "spya-dzemsa"
+      ]
+    },
+    {
+      "premise": "Composition and superposition are treated as orthogonal strategies rather than degrees of one spectrum.",
+      "question": "In terms of the exponential 'volume' available from a fixed number of bits, why does the article say composition and superposition can't both fully claim that volume at once?",
+      "referenceAnswer": "Fully composable features that combine arbitrarily need exponential volume to store, so that volume can only be spent on composition or on superposition: composition uses it up directly to store composable features, while superposition instead packs in exponentially many separate items without composing them, at the cost of needing a non-linearity to retrieve them.",
+      "evidence": [
+        "spya-xcrca8"
+      ]
+    },
+    {
+      "question": "According to the article, what mistake do people sometimes make when they credit 'distributed representations' with both non-local generalization and representing more features than neurons?",
+      "referenceAnswer": "They treat these as if they come together, when actually they trade off against each other, since non-local generalization comes from composition while representing more features than neurons comes from superposition.",
+      "evidence": [
+        "spya-sq6424"
+      ]
+    },
+    {
+      "question": "Under what condition does the article say composition and superposition can coexist within the same code?",
+      "referenceAnswer": "When composition is limited and features are sparse, so combinations are rare, leaving low-probability 'holes' in the compositional space that can be used to store other features in superposition.",
+      "evidence": [
+        "spya-qbuyka",
+        "spya-ajbh7f"
+      ]
+    },
+    {
+      "premise": "Sparse, limited composition can leave room for superposition within the same code.",
+      "question": "In Thorpe's 'semi-distributed' code, how are the color features and shape features each encoded?",
+      "referenceAnswer": "The color features are put in mutual superposition among a set of neurons, and separately the shape features are put in mutual superposition among another set of neurons, with color and shape still composing together.",
+      "evidence": [
+        "spya-fknpfa"
+      ]
+    },
+    {
+      "question": "Why does the article conclude that distinguishing composition from superposition matters for mechanistically understanding neural networks?",
+      "referenceAnswer": "Because when representations use composition, they can be understood in terms of a linear number of independent features rather than an exponential amount of volume, which is seen as critical for truly understanding how networks work.",
+      "evidence": [
+        "spya-v47ca7"
+      ]
+    }
+  ]
+}

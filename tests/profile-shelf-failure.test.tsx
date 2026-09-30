@@ -57,6 +57,7 @@ const ARTICLE: LibraryEntry = {
   sections: 9,
   comments: 0,
   opens: 2,
+  sourceReusable: true,
   has: { arc: false, tweets: false, glossary: false },
 };
 

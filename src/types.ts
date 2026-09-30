@@ -1897,6 +1897,19 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /**
+   * Whether the pipeline can safely reuse the stored source document. A
+   * rebuild with no web address leaves `fetch` unforced, so this is exactly
+   * that step's skip condition on the current published revision: a
+   * `raw_source_kind` and a completed `fetch` run must both be present. Either
+   * missing means the job would attempt stage 1 and fail for want of an address
+   * (feedback 6B,
+   * docs/plans/260930d-shelf-rebuild-for-articles-with-no-fetchable-address.md).
+   *
+   * Required so a cached row written before this fact existed is rejected,
+   * rather than silently treated as safe (`src/web/lib/cached-shelf.ts`).
+   */
+  sourceReusable: boolean;
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 
@@ -2062,12 +2075,20 @@ export interface LibraryHit {
    */
   text: string;
   rank: number;
+  /**
+   * The article is archived. Only ever true when the search was asked to
+   * include the archive (`?archived=1`, the shelf's Include archived chip), and
+   * the client marks such a passage the way it marks the card.
+   */
+  archived: boolean;
 }
 
 /** What GET /api/library/search returns. */
 export interface LibrarySearchResponse {
   /** Echoed back, so a late response can be dropped by a client that has moved on. */
   query: string;
+  /** Echoed too: whether archived articles were searched (`?archived=1`). */
+  archived: boolean;
   hits: LibraryHit[];
   /** How many articles those hits are spread across — the line above the list. */
   articles: number;
@@ -4110,39 +4131,23 @@ export type CitationsFound = CitationsResponse;
    find out, so the counts have to survive the write.  */
 
 /**
- * **How the answer is reached** — a judgement about the question, not a guess
- * at how a stranger will do.
- *
- * That distinction is the whole reason this is a three-valued band rather than
- * the 1–5 `ease` score the first draft asked for. A spike on a real article
- * (docs/plans/260831al-review-quiz-sub-mode.md § Quotas) measured what a model
- * actually does with an open 1–5 scale: `ease` never left 2–4 across 24
- * questions. A scale whose ends are never used is not a scale, and the sort it
- * feeds is then arbitrary for most of the list.
- *
- * | band | the answer is… |
- * |---|---|
- * | `easy` | stated in one passage, and the reader is recalling it |
- * | `medium` | a distinction or a connection the article draws between two statements |
- * | `hard` | a move the argument makes across several passages, which the reader has to reconstruct |
- */
-export type QuizBand = "easy" | "medium" | "hard";
-
-/**
  * **Whether the reader got a question right — judged in private, shown to
  * nobody.**
  *
- * The adaptive ladder steps on this: right, and the next question is harder;
- * wrong, and it is easier (src/web/quiz-ladder.ts).
+ * The walk adapts on this, without ever reordering the path: right, and the
+ * next step is asked without its premise; wrong or absent, and the premise is
+ * shown (src/web/quiz-ladder.ts § `showPremise`). Until 2026-09-30 it stepped
+ * a band ladder instead — docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md.
  * [`src/quiz-verdict.ts`](quiz-verdict.ts) produces it by reading the finished
  * mark, and it rides the terminal `done` frame.
  *
  * **Two values and an absence, not three.** Greg's rule is binary, and a
  * `partly` in the middle would absorb most short-answer responses and leave the
- * ladder stationary while looking adaptive. Absence — `undefined` — is a
+ * walk stationary while looking adaptive. Absence — `undefined` — is a
  * designed outcome rather than an error: the classifier failed, timed out,
- * declined an ill-posed question, or the mark never finished. It means *hold
- * the band*, so every failure in this feature is quiet.
+ * declined an ill-posed question, or the mark never finished. It means *show
+ * the premise*, so every failure in this feature is quiet and errs towards
+ * help.
  *
  * It lives here rather than beside the ladder because both sides speak it: the
  * server puts it on `done`, the client reads it off. docs/project/quiz.md § It
@@ -4173,10 +4178,28 @@ export type QuizQuestionId = string;
 export interface QuizQuestion {
   /** `mintUniqueId`, so it is a block id by construction. Minted per batch. */
   id: QuizQuestionId;
-  /** One question mark, one thing asked. */
+  /**
+   * One question mark, one thing asked, answerable in a sentence or two. Reads
+   * as a whole question **without** its premise, because the premise is
+   * sometimes hidden.
+   */
   question: string;
   /**
-   * Two or three sentences of model prose, written **before** any reader's
+   * **The answer to the question immediately before, restated in one
+   * sentence**, which this question builds on. Optional — the opening steps
+   * have none.
+   *
+   * Shown above the question unless the reader came here by Next from the step
+   * before and was judged right on it, in a batch with no gaps
+   * (src/web/quiz-ladder.ts § `showPremise`); **never sent to the marker**,
+   * which sees the question alone;
+   * **never shown in the all-questions list**, because it is an earlier
+   * question's answer and scanning the list must not answer rows the reader
+   * has not reached. Since `quiz/5`, 2026-09-30.
+   */
+  premise?: string;
+  /**
+   * One or two sentences of model prose, written **before** any reader's
    * attempt was seen.
    *
    * **A fallible draft, not an answer key**, and the naming is deliberate all
@@ -4187,9 +4210,6 @@ export interface QuizQuestion {
   referenceAnswer: string;
   /** Non-empty, or the question is dropped. */
   evidence: QuizEvidence[];
-  band: QuizBand;
-  /** 1 (peripheral) – 5 (central). The sort key within a band. */
-  value: number;
 }
 
 /**
@@ -4208,12 +4228,20 @@ export interface QuizDropped {
   truncated: number;
   /** Questions past `MAX_QUESTIONS`, discarded whole. */
   overCap: number;
-  /** Questions missing a field, or with an unusable band or value. Dropped. */
+  /** Questions missing a field. Dropped. */
   malformed: number;
   /** Questions asking the same thing as one already kept. Dropped. */
   duplicate: number;
   /** Questions that lost **every** piece of evidence and were dropped whole. */
   unanchored: number;
+  /**
+   * **Dropped questions that had a kept question after them** — a gap in the
+   * middle of the path rather than a shorter path. Counted over every drop
+   * above except `overCap`. Optional because artefacts before `quiz/5` have
+   * none; a quiz that is a pool has no middle to have a gap in.
+   * docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md § F4.
+   */
+  gaps?: number;
 }
 
 /** The artefact. `data/<slug>/quiz.json`. */
@@ -4234,7 +4262,11 @@ export interface Quiz {
   batchId: string;
   /** Blocks, tree and metadata — `articleWithIdsFingerprint`. */
   sourceHash: string;
-  /** **Already sorted** — bands, then value, then document order. Never re-sorted. */
+  /**
+   * **The path, in the order it is walked** — the model's own order, since
+   * `quiz/5`. Never re-sorted. (A `quiz/4` artefact still in the store holds a
+   * band-sorted pool here, easy first, and is walked the same way.)
+   */
   questions: QuizQuestion[];
   /** What validation threw away. See `QuizDropped`. */
   dropped: QuizDropped;

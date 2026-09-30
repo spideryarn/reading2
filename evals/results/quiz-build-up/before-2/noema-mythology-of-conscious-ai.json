@@ -1,0 +1,131 @@
+{
+  "arm": "before-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:50:36.214Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "How does Seth distinguish intelligence from consciousness?",
+      "referenceAnswer": "Intelligence is about doing — the ability to achieve complex goals by flexible means — while consciousness is about being, the subjective experience of what it is like to be something. Seth stresses that just because the two go together in humans doesn't mean they must go together in general, including in machines.",
+      "evidence": [
+        "spya-nj888h",
+        "spya-j0a9rq"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What does Seth mean by 'computational functionalism'?",
+      "referenceAnswer": "It's the assumption that implementing the right kind of computation, or information processing, is by itself enough to produce consciousness. Seth argues this assumption is so deeply embedded in how people think about minds that it's rarely even recognized as an assumption, and he believes it may well be false.",
+      "evidence": [
+        "spya-wepmnr"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What three overlapping psychological biases does Seth say make us prone to see AI as conscious?",
+      "referenceAnswer": "Anthropocentrism (seeing things through the lens of being human), human exceptionalism (placing humans at the top of every hierarchy), and anthropomorphism (projecting humanlike qualities onto nonhuman things based on superficial similarities).",
+      "evidence": [
+        "spya-h4mwb2",
+        "spya-her4zk"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "Why does Seth object to saying that AI systems 'hallucinate' when they produce falsehoods?",
+      "referenceAnswer": "Because in humans, hallucination means a conscious experience that has lost its grip on reality, so using that word for AI implicitly credits the machine with the capacity for experience. He suggests 'confabulate' instead, since confabulation is about producing false information without necessarily involving any inner experience.",
+      "evidence": [
+        "spya-t29n67"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What does Seth say the 'Garland test' from the film 'Ex Machina' actually tests?",
+      "referenceAnswer": "It doesn't test whether a machine is genuinely conscious. It tests whether a human observer can still be persuaded that a machine is conscious even after being shown that it's just a machine.",
+      "evidence": [
+        "spya-kqs33c"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "Why does Seth say the 'neural replacement' thought experiment fails to prove that consciousness could survive being moved into silicon?",
+      "referenceAnswer": "The thought experiment assumes each biological neuron could be swapped for a functionally identical silicon one, but Seth notes some neurons perform biological jobs, like clearing away metabolic waste, that only a living neuron can do. Since a true silicon equivalent isn't possible, the argument fails at its very first step.",
+      "evidence": [
+        "spya-ahtr6e",
+        "spya-un9fjn"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "What example does Seth use to explain why simulating a process is not the same as producing it?",
+      "referenceAnswer": "He points out that a simulation of the digestive system does not actually digest anything, just as a simulated rainstorm doesn't make anything wet. In the same way, a computer simulation of the brain would only produce real consciousness if consciousness itself turns out to be a purely computational process, which he doubts.",
+      "evidence": [
+        "spya-npjt4j"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does Seth argue nobody should deliberately set out to create conscious AI, even though he admits his own arguments against machine consciousness might be wrong?",
+      "referenceAnswer": "Because succeeding would introduce new beings capable of suffering into the world, potentially at massive scale, which he calls an ethical disaster. And if we then granted such machines rights, as arguably we should if they are conscious, we would lose the ability to control or shut them down.",
+      "evidence": [
+        "spya-yverz7",
+        "spya-yverz7"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "Why does Seth think it's a mistake to treat the brain as if it were simply hardware running an algorithm?",
+      "referenceAnswer": "He argues that brain activity is so deeply and dynamically integrated across scales, from metabolism to individual neurons maintaining themselves, that it's likely impossible to cleanly separate what the brain does from what it materially is. This contrasts with digital computers, which are deliberately engineered to keep software and hardware separate.",
+      "evidence": [
+        "spya-zw2m7u"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "How does Seth connect the brain's regulation of the body to his argument that life matters for consciousness?",
+      "referenceAnswer": "He argues that experiences like emotion and mood arise from the brain's predictions about the body's physiological state, made in service of the brain's core job of keeping the body alive. He traces this prediction process down to the self-sustaining, self-regenerating activity of living cells, suggesting conscious experience may be inseparable from being a living, metabolizing system rather than a pure information-processing algorithm.",
+      "evidence": [
+        "spya-b59nm2",
+        "spya-vys3vj"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "What unexamined assumption does Seth say underlies Nick Bostrom's simulation hypothesis?",
+      "referenceAnswer": "Bostrom assumes, without defending it, that 'a computer running a suitable program would be conscious.' Seth points out that if this assumption is false, then the mere fact that we are conscious would rule out the possibility that we exist inside a simulation.",
+      "evidence": [
+        "spya-xdy4fe"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "Why does Seth say machines that merely seem conscious create ethical dangers separate from those posed by machines that really are conscious?",
+      "referenceAnswer": "With merely seeming-conscious AI, we face a dilemma: either we choose to care about it and distort our circles of moral concern by extending it protections it doesn't need, or we choose not to care and risk psychologically brutalizing ourselves by treating something that feels conscious as if it has no inner life. Either path distorts our judgment even though no actual suffering is at stake.",
+      "evidence": [
+        "spya-n0bnf9"
+      ],
+      "band": "hard",
+      "value": 4
+    }
+  ]
+}

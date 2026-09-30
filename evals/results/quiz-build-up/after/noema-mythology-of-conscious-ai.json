@@ -1,0 +1,172 @@
+{
+  "arm": "after",
+  "slug": "noema-mythology-of-conscious-ai",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "d5fca6f8a04b7f11ebf96ecf419a5b0782cb897932a473e2c3fd10f6fe9cac79",
+  "at": "2026-09-30T05:09:13.357Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 1,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "gaps": 1
+  },
+  "outputTokens": 11791,
+  "elapsedMs": 111411,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "Why does Seth say it matters, for the AI systems themselves, whether they are conscious?",
+      "referenceAnswer": "Because consciousness brings with it moral status, the possibility of suffering, and perhaps rights, so it matters whether AI systems actually have it.",
+      "evidence": [
+        "spya-e68t9h"
+      ]
+    },
+    {
+      "premise": "Seth says AI consciousness matters for the AI itself because of moral status and potential suffering.",
+      "question": "Why does Seth say how we think about AI consciousness matters for us, regardless of whether AI actually is conscious?",
+      "referenceAnswer": "Believing our AI companions really feel things can be exploited to manipulate our psychological vulnerabilities, distort our ethical priorities, and brutalize our minds; and if we grant AI systems rights, we may lose the ability to turn them off even if they work against our interests.",
+      "evidence": [
+        "spya-z2b4ny"
+      ]
+    },
+    {
+      "premise": "Seth warns that believing AI really feels things can distort our own psychology and ethics, and granting it rights could strip us of control.",
+      "question": "What does Seth warn happens to our understanding of ourselves if we confuse ourselves too readily with our machine creations?",
+      "referenceAnswer": "We not only overestimate the machines, we also underestimate ourselves.",
+      "evidence": [
+        "spya-sge6a2"
+      ]
+    },
+    {
+      "question": "How does Seth define intelligence, as distinct from consciousness?",
+      "referenceAnswer": "Intelligence is mainly about doing: the ability to achieve complex goals by flexible means, focused on functional capacities like transforming inputs into outputs.",
+      "evidence": [
+        "spya-nj888h"
+      ]
+    },
+    {
+      "premise": "Seth defines intelligence as the ability to achieve complex goals by flexible means, a matter of doing.",
+      "question": "How does Seth define consciousness, in contrast, drawing on the philosopher Thomas Nagel?",
+      "referenceAnswer": "Consciousness is mostly about being: an organism is conscious if there is something it is like to be that organism, the experiential aspect of perception and mind.",
+      "evidence": [
+        "spya-j0a9rq"
+      ]
+    },
+    {
+      "premise": "Consciousness, unlike intelligence, is about there being something it is like to be a subject.",
+      "question": "What three psychological biases does Seth say cause people to bundle intelligence and consciousness together?",
+      "referenceAnswer": "Anthropocentrism (seeing things through the lens of being human), human exceptionalism (putting the human species above all others), and anthropomorphism (projecting humanlike qualities onto nonhuman things based on superficial similarities).",
+      "evidence": [
+        "spya-h4mwb2",
+        "spya-her4zk"
+      ]
+    },
+    {
+      "premise": "One of these biases is human exceptionalism, the habit of putting humans at the top of every hierarchy of minds.",
+      "question": "Why does language make people especially likely to believe an AI system is conscious?",
+      "referenceAnswer": "Because language is a cornerstone of human exceptionalism, so systems like chatbots that use language pull our psychological strings in a way other AI, like the protein-structure predictor AlphaFold, does not.",
+      "evidence": [
+        "spya-k6fpme"
+      ]
+    },
+    {
+      "premise": "Language, more than other AI capabilities, triggers the sense that a machine might be conscious.",
+      "question": "What word does Seth suggest is more accurate than 'hallucinate' for describing when AI systems produce false information?",
+      "referenceAnswer": "Confabulate, since hallucination implies a conscious experience that has lost its grip on reality, while confabulation is about making things up without realizing it, a matter of doing rather than experiencing.",
+      "evidence": [
+        "spya-t29n67"
+      ]
+    },
+    {
+      "question": "What does Seth call the temptation felt by AI creators to see themselves as bringing about something god-like?",
+      "referenceAnswer": "He calls it the temptation of the techno-rapture, the feeling of bringing humankind what was once the province of the divine, paired with the promise of immortality through escaping our biological bodies into a silicon-enabled cloud.",
+      "evidence": [
+        "spya-v4sduf"
+      ]
+    },
+    {
+      "premise": "Computational functionalism holds that performing the right computations is by itself enough to produce consciousness.",
+      "question": "What is Seth's first argument against this claim, concerning the relationship between brains and computers?",
+      "referenceAnswer": "Brains are not computers: unlike a computer's clean separation between software and hardware, there is no sharp separation between what a brain does and what it physically is, since brain activity is deeply integrated across scales and tied to living processes like metabolism.",
+      "evidence": [
+        "spya-b0086e",
+        "spya-zw2m7u"
+      ]
+    },
+    {
+      "premise": "Seth argues brains lack the clean separation between what they do and what they physically are that computers have.",
+      "question": "What does the 'neural replacement' thought experiment try to show, and why does Seth think it fails?",
+      "referenceAnswer": "It imagines gradually swapping brain parts for functionally identical silicon equivalents to argue consciousness must be substrate-independent, but Seth says it fails because some neurons cannot be perfectly replaced by silicon, since their function is inseparable from biological processes like clearing metabolic waste.",
+      "evidence": [
+        "spya-ahtr6e",
+        "spya-un9fjn"
+      ]
+    },
+    {
+      "question": "What does Seth's example of the steam engine's Watt governor show about computation?",
+      "referenceAnswer": "It shows that some systems regulate behavior through simple physics and mechanics, doing what they do without it being useful or accurate to describe them as computational at all, undermining the idea that only computation matters for such processes.",
+      "evidence": [
+        "spya-sq9v5k"
+      ]
+    },
+    {
+      "question": "What is Seth's biological naturalism argument about why life might matter for consciousness?",
+      "referenceAnswer": "It is the idea, following philosopher John Searle, that being alive is necessary for consciousness, since conscious experiences like emotion and mood seem tied to the body's living regulation of itself, rooted in the self-producing nature of biological material.",
+      "evidence": [
+        "spya-hj5y6s",
+        "spya-pfkhtt"
+      ]
+    },
+    {
+      "premise": "Seth suggests consciousness may depend on being a living, self-regulating organism rather than just processing information.",
+      "question": "According to Seth, why doesn't a computer simulation of something bring that thing into being, unless the thing itself is a computational process?",
+      "referenceAnswer": "Simulations generally lack the causal powers and intrinsic properties of what they simulate, just as a simulation of the digestive system does not actually digest anything and a simulation of a rainstorm does not make anything wet.",
+      "evidence": [
+        "spya-npjt4j"
+      ]
+    },
+    {
+      "premise": "Seth argues a simulation of something is not the same as creating that thing, unless the thing itself is inherently computational.",
+      "question": "What contradiction does Seth identify in the dream of uploading one's mind into a highly detailed simulated brain to live forever?",
+      "referenceAnswer": "The more detailed and biologically realistic such a brain simulation would need to be, the more it suggests that non-computational, biological factors matter for consciousness, meaning a person is no more likely to actually exist in such a simulation than a real hailstorm is likely to arise inside a weather-forecasting computer.",
+      "evidence": [
+        "spya-xvm37k"
+      ]
+    },
+    {
+      "question": "Given the deep uncertainty over whether real machine consciousness is possible, what does Seth say we should still avoid doing?",
+      "referenceAnswer": "We should not deliberately set out to create conscious AI, since doing so would be an ethical disaster, introducing new moral subjects into the world and, with them, the potential for new forms of suffering.",
+      "evidence": [
+        "spya-yverz7"
+      ]
+    },
+    {
+      "premise": "Seth argues we should avoid deliberately creating actually conscious AI because of the risk of new suffering.",
+      "question": "Why does Seth say AI that merely seems conscious, without actually being conscious, raises its own separate ethical risks?",
+      "referenceAnswer": "We might grant such systems rights they don't actually need, needlessly limiting our control over them, and more broadly we either distort our moral concern by caring about them or risk brutalizing our own minds by treating conscious-seeming things as if they feel nothing.",
+      "evidence": [
+        "spya-n0bnf9"
+      ]
+    },
+    {
+      "premise": "Seth warns that convincingly conscious-seeming AI could lead us to wrongly grant rights or wrongly deny moral concern.",
+      "question": "What does Seth's comparison to the Müller-Lyer illusion suggest about our ability to stop feeling that an AI is conscious?",
+      "referenceAnswer": "Just as the two lines in the Müller-Lyer illusion always look different in length even once you know they are equal, our feeling that an AI is conscious may persist no matter how well we understand intellectually that it is not.",
+      "evidence": [
+        "spya-xk9gne"
+      ]
+    },
+    {
+      "premise": "Even knowing an AI is not conscious, Seth suggests we may be unable to stop feeling that it is.",
+      "question": "In Seth's closing argument, what kind of 'soul' does he say actually matters, as opposed to a disembodied, rational Cartesian essence?",
+      "referenceAnswer": "Not a disembodied, human-exceptionalist undying essence, but an inchoate feeling of just being alive, something closer to breath than thought and to living flesh than machine.",
+      "evidence": [
+        "spya-w8z40d"
+      ]
+    }
+  ]
+}

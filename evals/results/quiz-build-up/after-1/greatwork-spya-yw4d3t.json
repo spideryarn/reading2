@@ -1,0 +1,160 @@
+{
+  "arm": "after-1",
+  "slug": "greatwork-spya-yw4d3t",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "60082c3be76f7aaee11393b33733b668a049093dbc0ea45c103e4b53a8536ce9",
+  "at": "2026-09-30T05:00:11.264Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "The author says he made this essay by collecting techniques for doing great work from many different fields and looking at their intersection. What did he conclude about the shape of that intersection, as opposed to it being just one idea like 'work hard'?",
+      "referenceAnswer": "He found that the intersection has a definite shape of its own — a set of interrelated principles — rather than boiling down to a single point like 'work hard.'",
+      "evidence": [
+        "spya-x22sb9"
+      ]
+    },
+    {
+      "question": "What three qualities does the author say the work you choose needs to have?",
+      "referenceAnswer": "It needs to be something you have a natural aptitude for, something you have a deep interest in, and something that offers scope to do great work.",
+      "evidence": [
+        "spya-aeqwcs"
+      ]
+    },
+    {
+      "question": "Since young people often don't know what they're good at or what different kinds of work are really like, what method does the author recommend for figuring out what to work on?",
+      "referenceAnswer": "He says the way to figure it out is by working: if you're not sure what to work on, guess, pick something, and get going, even if you sometimes guess wrong.",
+      "evidence": [
+        "spya-ntdmun"
+      ]
+    },
+    {
+      "question": "What kind of curiosity does the author say you should look for in yourself when trying to identify what to work on?",
+      "referenceAnswer": "An excessive curiosity — curiosity about something to a degree that would bore most other people.",
+      "evidence": [
+        "spya-k8tqsc"
+      ]
+    },
+    {
+      "question": "Once you've found something you're excessively curious about, what four steps does the author say practically everyone who's done great work has followed?",
+      "referenceAnswer": "Choose a field, learn enough to get to one of the frontiers of knowledge, notice the gaps there, and explore the most promising ones.",
+      "evidence": [
+        "spya-kr0zrr"
+      ]
+    },
+    {
+      "question": "Rather than planning out ambitious achievements in advance, what approach does the author recommend, which he calls 'staying upwind'?",
+      "referenceAnswer": "At each stage, do whatever seems most interesting and gives you the best options for the future, instead of committing to a fixed plan.",
+      "evidence": [
+        "spya-zzu2w0"
+      ]
+    },
+    {
+      "question": "The author distinguishes procrastination on a daily basis from procrastination on a whole project. Which one does he say is far more dangerous?",
+      "referenceAnswer": "Per-project procrastination — putting off starting an ambitious project year after year — is far the more dangerous kind.",
+      "evidence": [
+        "spya-e9jhjz"
+      ]
+    },
+    {
+      "question": "What example does the author use to show why steady, small daily effort matters more than working a lot on some days and nothing on others?",
+      "referenceAnswer": "He points out that writing just a page a day doesn't sound like much, but doing it every day adds up to a whole book in a year.",
+      "evidence": [
+        "spya-gvh3ek"
+      ]
+    },
+    {
+      "question": "What does the author say will happen to your work if you don't try to be the best in your field?",
+      "referenceAnswer": "He says you won't even end up being good — merely aiming to be good isn't ambitious enough.",
+      "evidence": [
+        "spya-tyvegp"
+      ]
+    },
+    {
+      "question": "What does the author say affectation actually is, in effect?",
+      "referenceAnswer": "It is, in effect, pretending that someone other than you is doing the work — adopting an impressive but fake persona, whose fakeness ends up showing in the work.",
+      "evidence": [
+        "spya-kyybds"
+      ]
+    },
+    {
+      "question": "What does the author identify as the core of being earnest, the positive quality he recommends in place of affectation?",
+      "referenceAnswer": "The core of being earnest is being intellectually honest.",
+      "evidence": [
+        "spya-jq7znf"
+      ]
+    },
+    {
+      "question": "Using Einstein as an example, what two seemingly opposed qualities does the author say you need in order to notice and act on a broken model of the world?",
+      "referenceAnswer": "You need to be stricter than other people about noticing where a model clashes with reality, and you need a willingness to break rules.",
+      "evidence": [
+        "spya-hsstwz",
+        "spya-xeu6p8"
+      ]
+    },
+    {
+      "question": "Why does the author say people are more conservative about choosing which problem to work on than about how to solve it?",
+      "referenceAnswer": "Because problems are bigger bets than solutions — a problem could occupy you for years while a solution might take only days — though he also thinks people are responding to fashion, undervaluing unfashionable problems.",
+      "evidence": [
+        "spya-hnvhgs"
+      ]
+    },
+    {
+      "question": "What misconception about big ideas does the author point out concerning the ratio of question to answer in them?",
+      "referenceAnswer": "People think big ideas are mostly made of answers, but often the real insight was in the question itself.",
+      "evidence": [
+        "spya-gh64ss"
+      ]
+    },
+    {
+      "question": "Of all the advantages of youth the author lists, which one does he call the biggest, and how does he say young people should use it?",
+      "referenceAnswer": "Time is the biggest advantage of youth; he says to use it in slightly frivolous ways, like learning something out of pure curiosity or building something just because it would be cool.",
+      "evidence": [
+        "spya-pnxut9",
+        "spya-pnxut9"
+      ]
+    },
+    {
+      "question": "What does the author say distinguishes the good way of copying other people's work from the bad way?",
+      "referenceAnswer": "The good way is to copy openly, rather than furtively or, worse, unconsciously without realizing you're doing it.",
+      "evidence": [
+        "spya-nckebu"
+      ]
+    },
+    {
+      "question": "What does the author say matters more than the number of colleagues you have?",
+      "referenceAnswer": "Quality matters more than quantity — it's better to have one or two truly great colleagues than a building full of merely pretty good ones.",
+      "evidence": [
+        "spya-eny6fh"
+      ]
+    },
+    {
+      "question": "Given that quality of colleagues matters more than quantity, why does the author say you should work with people you want to become like?",
+      "referenceAnswer": "Because colleagues don't just affect your work, they affect you as a person — you will end up becoming like the people you work with.",
+      "evidence": [
+        "spya-e7jt8t"
+      ]
+    },
+    {
+      "question": "If an oracle gave the secret to doing great work in a single word, what word does the author say he'd bet on?",
+      "referenceAnswer": "Curiosity.",
+      "evidence": [
+        "spya-a8tsmy"
+      ]
+    },
+    {
+      "question": "The author lists ability, interest, effort, and luck as the factors in doing great work, but says luck can't be controlled and effort can be assumed if you want to do great work. What question does he say the whole problem then boils down to?",
+      "referenceAnswer": "Whether you can find a kind of work where your ability and interest combine to produce an explosion of new ideas.",
+      "evidence": [
+        "spya-r4vhyb"
+      ]
+    }
+  ]
+}

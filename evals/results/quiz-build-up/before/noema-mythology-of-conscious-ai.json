@@ -1,0 +1,133 @@
+{
+  "arm": "before",
+  "slug": "noema-mythology-of-conscious-ai",
+  "promptVersion": "quiz/4",
+  "sourceSha256": "81d37c044b4f7dab817c872616836f24b723232aabee0f2d0ceae1e93ced7716",
+  "at": "2026-09-30T04:50:14.798Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "What distinction does Seth draw between intelligence and consciousness?",
+      "referenceAnswer": "Intelligence is about doing: the ability to achieve complex goals by flexible means, like solving a puzzle or navigating a situation. Consciousness is about being: following the philosopher Thomas Nagel, it's a matter of there being 'something it is like' to be an organism, the felt quality of experience itself.",
+      "evidence": [
+        "spya-nj888h",
+        "spya-j0a9rq"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "Why does Seth argue that nobody should deliberately try to create conscious AI?",
+      "referenceAnswer": "Doing so would introduce new moral subjects into the world capable of genuine suffering, potentially at an exponential pace, which he calls an ethical disaster. It would also create a dilemma over rights: if such systems really are conscious we may owe them rights, but granting those rights would make it much harder to control or shut them down.",
+      "evidence": [
+        "spya-yverz7"
+      ],
+      "band": "easy",
+      "value": 5
+    },
+    {
+      "question": "What three psychological biases does Seth say lead people to bundle intelligence and consciousness together?",
+      "referenceAnswer": "Anthropocentrism (seeing things through the lens of being human), human exceptionalism (putting humans at the top of every hierarchy), and anthropomorphism (projecting humanlike qualities onto nonhuman things based on superficial similarities).",
+      "evidence": [
+        "spya-h4mwb2",
+        "spya-her4zk"
+      ],
+      "band": "easy",
+      "value": 4
+    },
+    {
+      "question": "Why does Seth say Google firing Blake Lemoine doesn't settle whether his claim about LaMDA being conscious was wrong?",
+      "referenceAnswer": "Google dismissed Lemoine for violating its confidentiality policy, not because his claim about the AI's consciousness was shown to be false. Being fired for one reason isn't the same as being proven wrong about the other.",
+      "evidence": [
+        "spya-epw4h3"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "Why does Seth prefer the word 'confabulate' over 'hallucinate' to describe AI errors?",
+      "referenceAnswer": "Hallucination in humans is a conscious experience gone wrong, so calling AI errors hallucinations implicitly grants the machine a capacity for experience. Confabulation, by contrast, is about making things up without realizing it, a matter of doing rather than experiencing, which fits AI without smuggling in an assumption of consciousness.",
+      "evidence": [
+        "spya-t29n67"
+      ],
+      "band": "easy",
+      "value": 3
+    },
+    {
+      "question": "What is Seth's distinction between simulation and instantiation, and why does he think it matters for the prospect of conscious AI?",
+      "referenceAnswer": "Simulating something computationally doesn't bring it into being unless the thing itself is an algorithmic process: a simulated digestive system doesn't digest, and a simulated rainstorm doesn't make anything wet. So a computer simulation of a brain, however detailed, will only produce consciousness if consciousness is itself a computational process, which is exactly the assumption in question.",
+      "evidence": [
+        "spya-npjt4j",
+        "spya-cepmwf"
+      ],
+      "band": "medium",
+      "value": 5
+    },
+    {
+      "question": "Why does Seth argue that Chalmers' neural replacement thought experiment fails to show consciousness could survive being moved into silicon?",
+      "referenceAnswer": "The thought experiment assumes you could swap a biological neuron for a silicon one that behaves identically, but Seth points to research showing some neurons perform functions tied to actual metabolism, such as clearing waste products, which silicon can't replicate. Since a perfect silicon substitute is impossible, the argument fails at its first step.",
+      "evidence": [
+        "spya-un9fjn",
+        "spya-ahtr6e"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "How does the idea of interoceptive inference (predicting the body's internal state) support Seth's suggestion that life may matter for consciousness?",
+      "referenceAnswer": "Seth suggests the brain's primary job is to predict and regulate the body's physiological condition to keep it alive, and this drive reaches down into the metabolic activity of individual cells. Because feelings like emotion and mood map onto these predictions, consciousness may be tied to processes inseparable from being a living, self-maintaining organism rather than to information processing alone.",
+      "evidence": [
+        "spya-b59nm2",
+        "spya-vys3vj"
+      ],
+      "band": "medium",
+      "value": 4
+    },
+    {
+      "question": "What does the 'Garland test' from the film Ex Machina actually test, according to Seth?",
+      "referenceAnswer": "It doesn't test whether a machine is really conscious. It tests whether a human still feels a machine is conscious even after being shown, or told, that it is just a machine.",
+      "evidence": [
+        "spya-kqs33c"
+      ],
+      "band": "medium",
+      "value": 3
+    },
+    {
+      "question": "Why does Seth think the brain-as-computer metaphor fails to hold up for explaining consciousness?",
+      "referenceAnswer": "Unlike computers, brains have no clean separation between software and hardware; their multiscale biological activity, including metabolism and self-maintenance, can't be separated from what the brain does. Because this separation is essential to Turing computation's claim of being substrate-independent, its absence in the brain undermines the assumption that brain function is just algorithm running on biological hardware.",
+      "evidence": [
+        "spya-b0086e",
+        "spya-zw2m7u"
+      ],
+      "band": "hard",
+      "value": 5
+    },
+    {
+      "question": "Why does Seth think our biases are more likely to produce false positives about AI consciousness than about animal consciousness?",
+      "referenceAnswer": "AI can seem similar to us in ways that don't actually matter for consciousness, such as language ability, while being dissimilar in ways that may matter, such as being alive. Animals, by contrast, share the biological life that Seth thinks may be necessary for consciousness, even though they lack humanlike traits like language.",
+      "evidence": [
+        "spya-d89xf7"
+      ],
+      "band": "hard",
+      "value": 4
+    },
+    {
+      "question": "What kinds of processes does Seth say lie beyond the reach of standard Turing-style computation, and which might matter for consciousness?",
+      "referenceAnswer": "He points to functions that are continuous (infinitely divisible) or stochastic (involving genuine randomness), which strictly fall outside what a Turing machine computes, even though algorithms can approximate them. He also mentions things like electromagnetic fields and the flux of neurotransmitters as non-algorithmic phenomena that might play a critical role in consciousness.",
+      "evidence": [
+        "spya-gw0hsq",
+        "spya-n393ru"
+      ],
+      "band": "hard",
+      "value": 3
+    }
+  ]
+}

@@ -147,27 +147,24 @@ function ctxFor(): StepContext {
 
 /**
  * What the stubbed model answers: **four questions**, each anchored to a real
- * block with a real quote, one of them `easy` and one `hard`.
+ * block with a real quote, the later three leaning on the one before through a
+ * premise — the shape a real `quiz/5` run produces, so the artefact this file
+ * stamps is one a real run could have produced.
  *
- * Four rather than one, and the bands rather than whatever: `SPREAD_FROM` is
- * four, so a batch of four is required to carry one of each end and `buildQuiz`
- * throws otherwise. Reaching that requirement here rather than dodging it is
- * deliberate — the artefact this file stamps is one a real run could have
- * produced.
+ * Four was the band-spread gate's floor until 2026-09-30; it stays four
+ * because a path of one has no step that leans on anything.
  */
 async function script(): Promise<void> {
   const article = await readArticle(SLUG, store);
   const usable = article.blocks.filter(isBodyEvidence).filter((b) => b.text.length > 120);
   if (usable.length < 4) throw new Error("the fixture has too few quotable blocks");
-  const bands = ["easy", "easy", "hard", "hard"] as const;
   answers.length = 0;
   answers.push(
     JSON.stringify({
       questions: usable.slice(0, 4).map((block, i) => ({
+        ...(i > 0 ? { premise: `Passage ${i} says what it says.` } : {}),
         question: `What does the piece say in passage ${i + 1}?`,
         referenceAnswer: "It says the quoted thing. Then it moves on to the next point.",
-        band: bands[i],
-        value: 5 - i,
         evidence: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
       })),
     }),

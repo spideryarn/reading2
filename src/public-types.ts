@@ -468,9 +468,9 @@ export interface PublicTrajectory {
  *
  * **What does not cross** is the pipeline, as everywhere in this file:
  * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
- * and `dropped`, the counts validation threw away, which the owner's panel
- * prints under the list and a visitor's does not: a fact about our checking,
- * not about the piece.
+ * and `dropped`, the counts validation threw away, which the owner's (i) card
+ * includes and a visitor's does not: a fact about our checking, not about the
+ * piece.
  */
 export interface PublicFaq {
   questions: FaqQuestion[];

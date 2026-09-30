@@ -1,0 +1,151 @@
+{
+  "arm": "after-1",
+  "slug": "olah-a4-spya-ujr7p0",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "60082c3be76f7aaee11393b33733b668a049093dbc0ea45c103e4b53a8536ce9",
+  "at": "2026-09-30T05:01:26.355Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0
+  },
+  "questions": [
+    {
+      "question": "The article says the term \"distributed representations\" actually bundles together two distinct ideas. What are they?",
+      "referenceAnswer": "Composition and superposition.",
+      "evidence": [
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "question": "What simplifying assumption does the article make about the neurons in Thorpe's example codes?",
+      "referenceAnswer": "It assumes the neurons have binary activations (simply on or off), following Thorpe's own setup.",
+      "evidence": [
+        "spya-hdz82q"
+      ]
+    },
+    {
+      "question": "In Thorpe's pure \"local\" code, how is each neuron assigned to represent a stimulus?",
+      "referenceAnswer": "There is a separate neuron for every specific (shape, color) pair, so each neuron fires for one exact combination and nothing is shared across combinations.",
+      "evidence": [
+        "spya-kcjqdw"
+      ]
+    },
+    {
+      "question": "What kind of flexible selection does the article say a future neuron could do with the local code, that isn't possible with other codes?",
+      "referenceAnswer": "It could linearly combine local-code neurons to fire for an arbitrary set like black circles and white triangles, while not firing for black triangles or white circles.",
+      "evidence": [
+        "spya-hbmajb"
+      ]
+    },
+    {
+      "question": "Given that the local code fires a distinct neuron for every whole shape-color pair rather than for colors or shapes separately, why does the article doubt that the code truly has a \"red\" feature, even though a linear probe could detect \"red\" in it?",
+      "referenceAnswer": "Because the code only actually encodes whole pairs, so \"red\" is just a pattern that emerges across several pair-neurons (all the red-shape neurons together) rather than being a feature the code independently represents.",
+      "evidence": [
+        "spya-n30s4d"
+      ]
+    },
+    {
+      "question": "How does the \"semi-local\"/compositional code differ from the local code in what its neurons stand for?",
+      "referenceAnswer": "Instead of one neuron per whole shape-color pair, it has separate neurons for independent features like color and shape, which combine together to represent a given object.",
+      "evidence": [
+        "spya-xcdtte"
+      ]
+    },
+    {
+      "question": "What does the article mean by \"statistical efficiency\" as an advantage of the compositional code?",
+      "referenceAnswer": "It means non-local generalization: learning something about, say, green circles can also improve the representation of green squares, since the color feature is shared.",
+      "evidence": [
+        "spya-s9fc6n"
+      ]
+    },
+    {
+      "question": "What does the article mean by the \"extensibility\" advantage of the compositional code?",
+      "referenceAnswer": "It can represent intermediate or uncertain objects, like a purple shape as a mixture of red and blue, or a rounded square by blending in some circle.",
+      "evidence": [
+        "spya-v5n7sx"
+      ]
+    },
+    {
+      "question": "In terms of neuron count, why does composing n independent features let you represent so many more combinations than the local code needs neurons for?",
+      "referenceAnswer": "Composing n features can produce roughly exp(n) possible combinations, so far fewer neurons are needed than giving each combination its own dedicated neuron.",
+      "evidence": [
+        "spya-g8cztv"
+      ]
+    },
+    {
+      "question": "What especially notable ability does the article highlight for the \"dense\"/maximal superposition code?",
+      "referenceAnswer": "It can represent far more, totally unrelated objects than the number of neurons it has, similar to how a few bits can encode many numbers.",
+      "evidence": [
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "question": "What two costs does the article say come with the dense/superposition code's efficiency?",
+      "referenceAnswer": "You generally can't linearly probe out most individual colors, shapes, or sets of them, and you can't represent objects \"between\" the features, such as a purple square with rounded corners.",
+      "evidence": [
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "question": "The dense code switched back to using whole (color, shape) pair features instead of independent color and shape features. Why does the article say this switch was necessary?",
+      "referenceAnswer": "Because maximal superposition is only possible when there's no composition, so the dense code has to use features that don't compose, which meant returning to pair-based features.",
+      "evidence": [
+        "spya-kq5p9m"
+      ]
+    },
+    {
+      "question": "Rather than seeing local, semi-local, and highly-distributed codes as points on one \"how distributed\" continuum, what alternative view does the article offer for the semi-local and highly-distributed codes?",
+      "referenceAnswer": "It sees them as using two totally different, orthogonal strategies — composition and superposition — rather than just varying degrees of the same thing.",
+      "evidence": [
+        "spya-dzemsa"
+      ]
+    },
+    {
+      "question": "Given m bits of capacity, what volume argument does the article give for why composition and superposition compete with each other?",
+      "referenceAnswer": "Storing n features that can arbitrarily compose requires exp(n) volume, so with m bits you can only fully compose up to m features; but with no composition, you could instead store exp(m) separate items via superposition, retrievable only with a nonlinearity, so the two strategies compete for the same exponential volume.",
+      "evidence": [
+        "spya-xcrca8"
+      ]
+    },
+    {
+      "question": "The article says sometimes distributed representations are credited with two benefits at once. What are those two benefits, and why does the article say they actually trade off?",
+      "referenceAnswer": "The two benefits are non-local generalization and representing more features than there are neurons; they trade off because the first comes from composition and the second from superposition, which compete for the same representational volume.",
+      "evidence": [
+        "spya-sq6424"
+      ]
+    },
+    {
+      "question": "Given that composition and superposition compete for the same volume, what condition does the article say allows them to be mixed within one code anyway?",
+      "referenceAnswer": "When composition is limited, meaning features are sparse and many combinations rarely co-occur, leaving low-probability \"holes\" in the compositional space that can be used to store other features in superposition.",
+      "evidence": [
+        "spya-ajbh7f"
+      ]
+    },
+    {
+      "question": "In Thorpe's final \"semi-distributed\" code, how are the color and shape features arranged to combine both strategies?",
+      "referenceAnswer": "The color features are placed in mutual superposition with each other, and the shape features are placed in mutual superposition with each other, while color and shape still compose together to represent the overall object.",
+      "evidence": [
+        "spya-fknpfa"
+      ]
+    },
+    {
+      "question": "Why does the article's conclusion say it matters, for understanding neural networks, whether a representation uses composition rather than superposition?",
+      "referenceAnswer": "Because a compositional representation can be understood in terms of a linear number of independent features rather than needing to search an exponential amount of volume, which the article calls critical for truly understanding neural networks.",
+      "evidence": [
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "question": "How does the author ask readers to treat this note, compared to a fully developed research paper?",
+      "referenceAnswer": "As informal ideas a colleague is sharing, more like a typical blog post than a paper, with mistakes very possible.",
+      "evidence": [
+        "spya-tj6yyz"
+      ]
+    }
+  ]
+}

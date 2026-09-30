@@ -9,7 +9,7 @@
  *
  *   GET    /api/library         every article on the shelf, for the homepage
  *                                `?archived=1` for the other half
- *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
+ *   GET    /api/library/search   `?q=…&limit=…&archived=1` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
  *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
@@ -166,7 +166,7 @@ import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
    here and thrown away; `ChatConflict` is what they throw and what this file
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
-import { ChatConflict, withEdit, withRetry } from "./chat.js";
+import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
@@ -268,6 +268,7 @@ import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { markAnswerStream } from "./quiz-mark.js";
+import { withOldClientBands } from "./quiz.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
@@ -2154,7 +2155,13 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
     for await (const event of markAnswerStream({
       meta: article.meta,
       blocks: article.blocks,
-      /* The three things the request may not name. */
+      /* The three things the request may not name.
+
+         **The question alone, never its premise.** The reader may not have
+         been shown the premise, and a marker handed it as part of THE QUESTION
+         would restate it back to them — the question reads as a whole without
+         it, by the prompt's rule. GPT Sol's R2-2 on
+         docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md. */
       question: question.question,
       referenceAnswer: question.referenceAnswer,
       evidence: question.evidence,
@@ -3421,7 +3428,7 @@ async function spokenChat(
   threadId: string,
   body: unknown,
 ): Promise<{ thread: ChatThread }> {
-  const { question, answer, passages, tools, interrupted, expectedTailId } = (body ??
+  const { question, answer, passages, tools, interrupted, expectedTailId, kind } = (body ??
     {}) as Record<string, unknown>;
   if (typeof question !== "string" || typeof answer !== "string") {
     throw httpError(400, "Expected { question, answer, expectedTailId }");
@@ -3431,6 +3438,12 @@ async function spokenChat(
      them would let a caller skip the guard by omission. */
   if (expectedTailId !== null && typeof expectedTailId !== "string") {
     throw httpError(400, "expectedTailId is required, and is null for an empty conversation");
+  }
+  /* **Absent, `chat` or `remember`.** The kind the tab began this conversation
+     as, used only if this exchange is what creates it; a contradiction with a
+     stored thread is `withSpokenTurn`'s 409. `SpokenTurn.kind` in src/chat.ts. */
+  if (kind !== undefined && !isSpokenKind(kind)) {
+    throw httpError(400, "kind must be chat or remember");
   }
   /* An empty question is ordinary — the transcriber fails — and so is an empty
      answer, if the reader hung up mid-breath. Both empty is not a turn, and
@@ -3468,6 +3481,7 @@ async function spokenChat(
       ...(parseSpokenPassages(passages, known) ?? {}),
       ...(parseSpokenTools(tools) ?? {}),
       ...(interrupted === true ? { interrupted: true } : {}),
+      ...(kind !== undefined ? { kind } : {}),
       model: LIVE_MODEL,
     }),
   ).then((t) => t.thread);
@@ -4749,7 +4763,9 @@ function slugPart(m: RegExpExecArray, group: number): string {
 const MAX_LIBRARY_HITS = 30;
 
 /**
- * `GET /api/library/search?q=…&limit=…` — every article at once.
+ * `GET /api/library/search?q=…&limit=…&archived=1` — every article at once,
+ * and the archived ones too with `archived=1` (the shelf's Include archived
+ * chip; plan 260930d).
  *
  * The query is read from the URL rather than a body because this is a read, and
  * a read that cannot be linked to or retried is a read that has given something
@@ -4772,11 +4788,17 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
      every comparison you would write instead. */
   const limit = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 1), MAX_LIBRARY_HITS) : MAX_LIBRARY_HITS;
 
-  const { hits, capped } = await librarySearch.searchLibrary(query, limit);
+  /* `=== "1"`, the same reading as the shelf's own `?archived=1` below. */
+  const archived = params.get("archived") === "1";
+
+  const { hits, capped } = await librarySearch.searchLibrary(query, limit, { includeArchived: archived });
   return {
     // Echoed so a client can drop a response that arrived after it moved on.
-    // Debounced typing produces out-of-order responses as a matter of course.
+    // Debounced typing produces out-of-order responses as a matter of course —
+    // and so does pressing the chip, which changes the question without
+    // changing the words.
     query,
+    archived,
     hits,
     articles: new Set(hits.map((h) => h.slug)).size,
     capped,
@@ -7811,8 +7833,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          third staleness fact to add and offering one would be a banner about a
          thing that cannot have happened. `QuizResponse` in src/types.ts has two
          fields where `IdeasResponse` has three.
-         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1. */
-      send(res, 200, await loadQuiz(slugPart(captures, 1)));
+         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+
+         `withOldClientBands` is the bridge for tabs still running the band
+         ladder; it stays until there is an enforceable client-version boundary
+         — src/quiz.ts says why. */
+      send(res, 200, withOldClientBands(await loadQuiz(slugPart(captures, 1))));
     },
   },
 

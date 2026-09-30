@@ -1,0 +1,166 @@
+{
+  "arm": "after-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "promptVersion": "quiz/5",
+  "sourceSha256": "63e5e904575af4b3aef43163bbed8387b8537bed9df35026810b5c964b5714d5",
+  "at": "2026-09-30T05:20:10.531Z",
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "outputTokens": 15174,
+  "elapsedMs": 124069,
+  "maxTokens": 54000,
+  "questions": [
+    {
+      "question": "How does Seth define intelligence, in contrast to how he defines consciousness?",
+      "referenceAnswer": "Intelligence is about doing — the ability to achieve complex goals by flexible means — while consciousness is about being, meaning there is something it is like to be that organism (subjective experience).",
+      "evidence": [
+        "spya-nj888h",
+        "spya-j0a9rq"
+      ]
+    },
+    {
+      "premise": "Seth distinguishes intelligence (doing) from consciousness (being).",
+      "question": "What three psychological biases does Seth say lead people to assume that anything intelligent, like AI, must also be conscious?",
+      "referenceAnswer": "Anthropocentrism (seeing things through a human lens), human exceptionalism (placing humans above everything else), and anthropomorphism (projecting human qualities onto nonhuman things).",
+      "evidence": [
+        "spya-h4mwb2",
+        "spya-her4zk"
+      ]
+    },
+    {
+      "premise": "These three biases (anthropocentrism, human exceptionalism, anthropomorphism) lead us to assume anything intelligent must be conscious.",
+      "question": "Why does Seth think language is especially effective at making people believe an AI system, like a chatbot, is conscious?",
+      "referenceAnswer": "Because language is a cornerstone of human exceptionalism, so producing fluent language makes an AI seem distinctively human-minded, unlike a system such as DeepMind's AlphaFold, which does similarly complex computation without triggering the same reaction.",
+      "evidence": [
+        "spya-k6fpme",
+        "spya-k6fpme"
+      ]
+    },
+    {
+      "premise": "Seth notes that fluent language use makes AI seem conscious in a way other complex AI systems do not.",
+      "question": "Why does Seth object to describing AI errors, such as false claims made by chatbots, as \"hallucinations\"?",
+      "referenceAnswer": "Because in humans, hallucination refers to a conscious experience that has lost touch with reality, so calling AI errors \"hallucinations\" implicitly credits the AI with a capacity for experience; he prefers \"confabulate,\" which describes making things up without implying any conscious experience.",
+      "evidence": [
+        "spya-t29n67"
+      ]
+    },
+    {
+      "question": "What term does Seth use for the assumption that implementing the right kind of computation is sufficient to produce consciousness?",
+      "referenceAnswer": "Computational functionalism.",
+      "evidence": [
+        "spya-wepmnr"
+      ]
+    },
+    {
+      "premise": "Seth calls this assumption computational functionalism.",
+      "question": "What is Seth's first argument against computational functionalism, regarding brains versus computers?",
+      "referenceAnswer": "He argues that brains are not computers — there is no sharp separation between \"software\" (mindware) and \"hardware\" (wetware) as there is in digital computers, because the brain's rich biological activity is inseparable from what it does.",
+      "evidence": [
+        "spya-b0086e",
+        "spya-zw2m7u"
+      ]
+    },
+    {
+      "premise": "Seth argues brains, unlike computers, have no clean separation between mindware and wetware.",
+      "question": "Why does Seth think the \"neural replacement\" thought experiment, which imagines swapping brain neurons for silicon equivalents, fails to show that consciousness is substrate-independent?",
+      "referenceAnswer": "Because some neurons perform biological functions — like using activity spikes to clear metabolic waste — that a silicon chip cannot replicate, so a truly seamless silicon replacement for a neuron is impossible; only another biological neuron could do the job.",
+      "evidence": [
+        "spya-un9fjn",
+        "spya-ahtr6e"
+      ]
+    },
+    {
+      "premise": "Seth argues a perfect silicon replacement for a neuron is impossible because of biological functions like waste clearance.",
+      "question": "What point does Seth use the steam engine's mechanical governor to illustrate?",
+      "referenceAnswer": "That some systems achieve regulation and control through simple physical mechanics rather than computation, showing that not everything a brain-like system does needs to be described in computational terms at all.",
+      "evidence": [
+        "spya-sq9v5k"
+      ]
+    },
+    {
+      "question": "What does Seth mean by \"biological naturalism,\" the idea that life probably matters for consciousness?",
+      "referenceAnswer": "The idea, following philosopher John Searle, that being a living organism is likely necessary (though maybe not sufficient) for having consciousness.",
+      "evidence": [
+        "spya-hj5y6s"
+      ]
+    },
+    {
+      "premise": "Biological naturalism says being alive is likely necessary for consciousness.",
+      "question": "How does Seth connect the brain's regulation of bodily processes, like heart rate, to the idea that life matters for consciousness?",
+      "referenceAnswer": "He argues that conscious experiences like emotion and mood arise from the brain's predictions used to control and regulate the body's physiological state, and since these predictions are rooted in the self-sustaining processes of living metabolism, consciousness appears deeply tied to being a living, self-regenerating organism rather than to information processing alone.",
+      "evidence": [
+        "spya-b59nm2",
+        "spya-da9tvt"
+      ]
+    },
+    {
+      "question": "What does Seth mean by the distinction between \"simulation\" and \"instantiation\"?",
+      "referenceAnswer": "He means that computationally simulating something, such as digestion or a brain, does not actually bring about that thing — a simulation of the digestive system doesn't digest anything — so a computer simulation of the brain will only produce actual consciousness if consciousness itself turns out to be purely computational.",
+      "evidence": [
+        "spya-npjt4j"
+      ]
+    },
+    {
+      "premise": "Seth argues a simulation of the brain would only produce real consciousness if consciousness is purely computational.",
+      "question": "What unexamined assumption does Seth say Nick Bostrom's \"simulation hypothesis\" (the idea we might be living inside a computer simulation) depends on?",
+      "referenceAnswer": "That a computer running a suitable program would be conscious — in other words, it silently assumes computational functionalism is true.",
+      "evidence": [
+        "spya-xdy4fe"
+      ]
+    },
+    {
+      "question": "Given all this uncertainty about whether computation can produce consciousness, what does Seth say we should never deliberately try to do?",
+      "referenceAnswer": "We should never deliberately try to create actually conscious AI, since doing so would introduce new moral subjects capable of suffering, and if we granted them rights, we might be unable to control or shut them down.",
+      "evidence": [
+        "spya-yverz7"
+      ]
+    },
+    {
+      "premise": "Seth says we should never deliberately try to create real machine consciousness.",
+      "question": "What distinction does Seth draw between AI that is actually conscious and AI that merely seems conscious?",
+      "referenceAnswer": "He argues these pose distinct ethical problems: while it's highly uncertain whether any AI is truly conscious, systems that convincingly seem conscious — triggering our belief that they have feelings — already exist and require separate ethical consideration regardless of whether they are really conscious.",
+      "evidence": [
+        "spya-x63ycg"
+      ]
+    },
+    {
+      "premise": "Conscious-seeming AI, even if not truly conscious, raises its own distinct ethical issues.",
+      "question": "What risk does Seth identify in wrongly granting rights to an AI system that merely seems conscious but is not?",
+      "referenceAnswer": "It would needlessly restrict our ability to control or shut down the system, since it doesn't actually need those rights, given that it isn't really conscious.",
+      "evidence": [
+        "spya-n0bnf9"
+      ]
+    },
+    {
+      "premise": "Wrongly granting rights to non-conscious but conscious-seeming AI could needlessly limit our control over it.",
+      "question": "What does Seth say the Müller-Lyer visual illusion shows about our feelings toward conscious-seeming AI?",
+      "referenceAnswer": "Just as the illusion makes two equal-length lines look different no matter how many times you're told they're the same, our feeling that an AI is conscious may persist even when we intellectually know it is not.",
+      "evidence": [
+        "spya-xk9gne"
+      ]
+    },
+    {
+      "question": "What warning does Seth give about confusing the richness of biological brains with the information-processing of AI chatbots?",
+      "referenceAnswer": "He warns that doing so mechanizes our self-understanding and does our minds, brains and bodies a grave injustice, leading us to overestimate machines while underestimating ourselves.",
+      "evidence": [
+        "spya-vnkr36"
+      ]
+    },
+    {
+      "premise": "Seth warns that confusing human minds with AI overestimates machines and underestimates ourselves.",
+      "question": "What kind of \"soul\" does Seth conclude actually matters, as opposed to the disembodied Cartesian soul imagined in dreams of silicon rapture?",
+      "referenceAnswer": "Not a disembodied, purely rational essence separable from the body, but an inchoate feeling of just being alive — something rooted more in breath and biological life than in abstract thought or mechanical computation.",
+      "evidence": [
+        "spya-w8z40d"
+      ]
+    }
+  ]
+}
