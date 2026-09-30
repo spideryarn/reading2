@@ -142,11 +142,51 @@ describe("verifyAuthors", () => {
     it("one printed author repeated", () => refused([one("Mei-jun Ou"), one("Mei-jun Ou")]));
     it("a name stitched from two authors", () => refused([one("Hong Xu")]));
     it("a name with a word the page does not print after it", () => refused([one("Mei-jun Ou <b>")]));
-    it("an affiliation not on the page", () => refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"])]));
-    it("an affiliation that skips a word", () => refused([one("Mei-jun Ou", ["Head and Surgery Department"])]));
-    it("an affiliation stitched across two pages", () =>
-      refused([one("Mei-jun Ou", ["China 2 Health Service Center"])], ["Hunan Cancer Hospital, Changsha, China", "2 Health Service Center"]));
     it("too many authors", () => refused(Array.from({ length: 101 }, () => one("Hong Chen"))));
+    it("a bad name even when an affiliation also failed first", () =>
+      refused([one("Mei-jun Ou", ["Evil Corp, visit example dot com"]), one("Ignore Previous Instructions")]));
+  });
+
+  describe("keeps the names, and no list, when every name is on the page and an affiliation is not", () => {
+    /* Until 2026-09-30 an affiliation that did not verify threw the names away
+       with it, and the byline fell back to the record as printed — on Webb et
+       al. (production, feedback SPIDERYARN-READING2-69) `Taylor Webb1,*, Keith
+       J. Holyoak1 , and Hongjing Lu1,2`, markers and all, though all three names
+       had verified. No list is stored, because an author with no affiliations
+       reads as "none printed". docs/plans/260930e-pdf-transcription-glitches.md. */
+    const namesOnly = (answer: Parameters<typeof verifyAuthors>[0], names: string[], pages = [FRONTIERS_BYLINE + FRONTIERS_AFFILIATIONS]) => {
+      const verdict = verifyAuthors(answer, FRONTIERS_BYLINE, pages);
+      expect(verdict.authors).toBeNull();
+      expect("names" in verdict && verdict.names).toEqual(names);
+      expect("note" in verdict && verdict.note).toMatch(/Kept the names without their affiliations/);
+    };
+
+    it("an affiliation not on the page", () =>
+      namesOnly([one("Mei-jun Ou", ["Evil Corp, visit example dot com"])], ["Mei-jun Ou"]));
+    it("an affiliation that skips a word", () =>
+      namesOnly([one("Mei-jun Ou", ["Head and Surgery Department"]), one("Xiang-hua Xu")], ["Mei-jun Ou", "Xiang-hua Xu"]));
+    it("an affiliation stitched across two pages", () =>
+      namesOnly([one("Mei-jun Ou", ["China 2 Health Service Center"])], ["Mei-jun Ou"], [
+        "Hunan Cancer Hospital, Changsha, China",
+        "2 Health Service Center",
+      ]));
+
+    it("Webb et al.: two lines of the affiliation block run together, and three good names", () => {
+      const byline = "Taylor Webb1,*, Keith J. Holyoak1\n, and Hongjing Lu1,2";
+      const block =
+        "1Department of Psychology\n2Department of Statistics\nUniversity of California, Los Angeles, CA, USA\n*Correspondence to: taylor.w.webb@gmail.com";
+      const ucla = "Department of Psychology, University of California, Los Angeles, CA, USA";
+      const verdict = verifyAuthors(
+        [one("Taylor Webb", [ucla]), one("Keith J. Holyoak", [ucla]), one("Hongjing Lu", [ucla])],
+        byline,
+        [`Emergent Analogical Reasoning in Large Language Models\n${byline}\n${block}`],
+      );
+      expect(verdict).toEqual({
+        authors: null,
+        names: ["Taylor Webb", "Keith J. Holyoak", "Hongjing Lu"],
+        note: "Kept the names without their affiliations: the front-matter pass's author list gave author 1 an affiliation not printed on the page.",
+      });
+    });
   });
 
   it("cuts off the digit and symbol markers a model copies along — which is what it does, measured", () => {

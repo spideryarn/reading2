@@ -43,6 +43,7 @@ cost. **One of them was written as a deploy blocker and the deploy went out anyw
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
 
+- 2026-09-30 · SPIDERYARN-READING2-69 (shipped) · PDF transcription glitches. Two calls left open: (1) a PDF's footnotes are transcribed but never shown — show them at the end, unlinked (cheap), or with linked markers (a prompt change every re-import pays for); (2) whether to re-render the PDF articles already on the shelf so they get the paragraph joins (free where chunks are still checkpointed; rewrites real readers' articles) · [260930e](../plans/260930e-pdf-transcription-glitches.md#deferred-and-named)
 - 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. Two calls left open: (1) offer *Investigate* only once *Look it up* has identified the work, so code rather than the model decides which search result is the paper (an extra paid press each time); (2) 5G's proposed stage, reading the paper itself. Both are set out in the plan · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named)
 
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**

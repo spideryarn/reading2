@@ -388,22 +388,41 @@ describe("a word broken across a chunk seam", () => {
     expect(out[1]!.text).toBe("derstorm that afternoon.");
   });
 
-  it("does not reach across a record renderHtml would not join", async () => {
-    /* A footnote is transcribed and then dropped (see RENDERED), and dropping
-       it resets renderHtml's cursor — so the two paragraphs are never joined,
-       and moving a word between them would put it in a paragraph the reader
-       sees end before it. RED if the RENDERED reset goes: the repair fires and
-       the article says "dispatcher" in one paragraph and "and went into the
-       rear cabin." in the next, with nothing between them.
+  it("mends across a footnote at the foot of the page, because renderHtml now joins there", async () => {
+    /* Until 2026-09-30 a footnote reset renderHtml's cursor, the paragraph was
+       never joined, and this test asserted the word stayed broken — "the
+       honest, conservative half of the trade". Production said otherwise: the
+       model marks the page-4 half `continues` and a footnote or running footer
+       sits between the halves at the foot of nearly every academic page
+       (docs/plans/260930e-pdf-transcription-glitches.md). renderHtml now joins
+       across page furniture at a page turn, so this mends too — the two
+       functions share `continuationTargets`. */
+    const pass = await pass0(HARDER);
+    const records = [
+      paragraph(3, "The captain passed the dis"),
+      { ...paragraph(3, "1. Ibid., p. 44."), type: "footnote" as const },
+      paragraph(4, "patcher and went into the rear cabin.", true),
+    ];
+    const out = mendSeamHyphens(records, pass);
+    expect(out[0]!.text).toBe("The captain passed the dispatcher");
+    expect(out[2]!.text).toBe("and went into the rear cabin.");
+    expect(renderHtml(out, "T", RAW_SHA)).toContain(
+      "<p>The captain passed the dispatcher and went into the rear cabin.</p>",
+    );
+  });
 
-       Stated as the limitation it is: a footnote at the foot of page 3 leaves
-       the seam broken. That is renderHtml's non-joining, not this function's —
-       and it is the honest, conservative half of the trade. */
+  it("does not reach across a record renderHtml would not join", async () => {
+    /* A reference-list entry between the halves is not page furniture: it ends
+       the flow, renderHtml starts a new paragraph, and moving a word between
+       the two would put it in a paragraph the reader sees end before it. RED
+       if `continuationTargets` bridges every unrendered type: the article says
+       "dispatcher" in one paragraph and "and went into the rear cabin." in the
+       next. */
     const pass = await pass0(HARDER);
     const out = mendSeamHyphens(
       [
         paragraph(3, "The captain passed the dis"),
-        { ...paragraph(3, "1. Ibid., p. 44."), type: "footnote" as const },
+        { ...paragraph(3, "Keul, A. G. (2021). Ball lightning."), type: "reference" as const },
         paragraph(4, "patcher and went into the rear cabin.", true),
       ],
       pass,

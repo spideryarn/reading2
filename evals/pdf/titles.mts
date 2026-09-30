@@ -430,7 +430,9 @@ const tidyWithAuthors: Arm = async (sample, pass, fixture) => {
       };
   const verdict = await readAuthors(frontMatterWindow(sample.transcript), bylineIds, reader);
   const authors = verdict.authors;
-  return authors ? { ...front, byline: authors.map((a) => a.name).join("; "), authors } : front;
+  if (authors) return { ...front, byline: authors.map((a) => a.name).join("; "), authors };
+  /* The stage's own rule since 260930e: every name verified, an affiliation not. */
+  return "names" in verdict ? { ...front, byline: verdict.names.join("; ") } : front;
 };
 
 /**

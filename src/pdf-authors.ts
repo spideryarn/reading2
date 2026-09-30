@@ -217,7 +217,18 @@ const findAffiliation = (have: Word[], want: string[]): FoundSpan | null => {
 
 const oneLine = (s: string) => s.replace(/\s+/gu, " ").trim();
 
-export type AuthorsVerdict = { authors: Author[] } | { authors: null; note: string | null };
+export type AuthorsVerdict =
+  | { authors: Author[] }
+  | { authors: null; note: string | null }
+  /**
+   * **Every name is on the page and an affiliation is not.** The names, and no
+   * list: an author stored with no affiliations reads as "none printed", which
+   * is false. Before 2026-09-30 this was the arm above, and the byline fell back
+   * to the record as printed — `Taylor Webb1,*, Keith J. Holyoak1 , and Hongjing
+   * Lu1,2` on production — though all three names had verified.
+   * docs/plans/260930e-pdf-transcription-glitches.md § Stage 2.
+   */
+  | { authors: null; names: string[]; note: string };
 
 /**
  * Find the model's authors on the page, and return the page's text for them.
@@ -236,13 +247,17 @@ export function verifyAuthors(
     authors: null,
     note: `Kept the byline as printed: the front-matter pass's author list ${why}.`,
   });
-  const { maxAuthors, maxAffiliations, maxNameChars, maxAffiliationChars } = AUTHOR_LIMITS;
+  const { maxAuthors, maxNameChars } = AUTHOR_LIMITS;
   if (answer.length > maxAuthors) return refuse(`had ${answer.length} names, over ${maxAuthors}`);
 
   const byline = wordsOf(bylineText);
   const pageWords = pages.map((text) => ({ text, words: wordsOf(text) }));
   const out: Author[] = [];
   let nextNameWord = 0;
+  /* The first affiliation that failed, if one has. The names are still checked
+     to the end — a bad name refuses everything, as it always did — and only then
+     does this decide between the list and the names alone. */
+  let affiliationFailed: string | null = null;
   for (const [n, proposed] of answer.entries()) {
     /* Start after the preceding author's span. Without this, every proposal is
        an independent existential check: the model can reverse two real names
@@ -271,29 +286,52 @@ export function verifyAuthors(
     if (!NAME_SHAPE.test(name) || name.length > maxNameChars) {
       return refuse(`had a name that is not shaped like one (author ${n + 1})`);
     }
-    if (proposed.affiliations.length > maxAffiliations) {
-      return refuse(`gave author ${n + 1} over ${maxAffiliations} affiliations`);
-    }
     const affiliations: string[] = [];
-    for (const wanted of proposed.affiliations) {
-      const want = words(wanted);
-      let found: string | null = null;
-      for (const page of pageWords) {
-        const span = want.length ? findAffiliation(page.words, want) : null;
-        if (span) {
-          found = trimAffiliation(oneLine(page.text.slice(span.start, span.end)), markers);
-          break;
-        }
-      }
-      if (found === null) return refuse(`gave author ${n + 1} an affiliation not printed on the page`);
-      if (!AFFILIATION_SHAPE.test(found) || found.length > maxAffiliationChars) {
-        return refuse(`had an affiliation that is not shaped like one (author ${n + 1})`);
-      }
-      if (!affiliations.includes(found)) affiliations.push(found);
+    if (affiliationFailed === null) {
+      affiliationFailed = affiliationsFor(proposed.affiliations, n, pageWords, markers, affiliations);
     }
     out.push({ name, affiliations });
   }
+  if (affiliationFailed !== null) {
+    return {
+      authors: null,
+      names: out.map((a) => a.name),
+      note: `Kept the names without their affiliations: the front-matter pass's author list ${affiliationFailed}.`,
+    };
+  }
   return { authors: out };
+}
+
+/**
+ * One author's affiliations, found on the page and pushed onto `into` — or why
+ * not, in the words the Metadata page's note ends with.
+ */
+function affiliationsFor(
+  proposed: readonly string[],
+  n: number,
+  pageWords: readonly { text: string; words: Word[] }[],
+  markers: ReadonlySet<string>,
+  into: string[],
+): string | null {
+  const { maxAffiliations, maxAffiliationChars } = AUTHOR_LIMITS;
+  if (proposed.length > maxAffiliations) return `gave author ${n + 1} over ${maxAffiliations} affiliations`;
+  for (const wanted of proposed) {
+    const want = words(wanted);
+    let found: string | null = null;
+    for (const page of pageWords) {
+      const span = want.length ? findAffiliation(page.words, want) : null;
+      if (span) {
+        found = trimAffiliation(oneLine(page.text.slice(span.start, span.end)), markers);
+        break;
+      }
+    }
+    if (found === null) return `gave author ${n + 1} an affiliation not printed on the page`;
+    if (!AFFILIATION_SHAPE.test(found) || found.length > maxAffiliationChars) {
+      return `had an affiliation that is not shaped like one (author ${n + 1})`;
+    }
+    if (!into.includes(found)) into.push(found);
+  }
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────────── the call
