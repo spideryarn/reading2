@@ -47,6 +47,18 @@ Since `faq/4`:
   breaking ties. *Reading order* is one tap away. The two raw scores are drawn on each row; the
   compound never is. The bar starts at `0.20` and is the reader's to move (`?faqby=`, `?faqbar=` —
   [url-state.md](url-state.md)).
+- **Each score is also an order of its own**, since 2026-09-30 — *most central* and *hardest*,
+  the Glossary's words for the same two scores. Greg (SPIDERYARN-READING2-67):
+
+  > the prioritisation must be based on some dimension (or more than one). Let's also make it
+  > possible to sort by that too (just as in Glossary we can sort by "hardest", "most central" etc,
+  > as well as by "prioritised"
+
+  They behave as the Glossary's do: every question, no bar, highest first, a missing score last, and
+  each row draws only the score it was placed by. *Hardest* rather than *easiest* first because the
+  prioritised order already leads with the approachable questions, so the new view is the one it
+  buries. Each button is offered only when some question carries its score
+  ([260930d](../plans/260930d-faq-provenance-into-a-tooltip-and-sort-by-centrality-and-difficulty.md)).
 
 **Why not the Glossary's compound.** `difficulty × centrality` measures the cost of *not knowing a
 term*, and sends easy-and-central to the bottom — exactly the question Greg asked to see first. So
@@ -62,8 +74,8 @@ up: a dense but central question falls below an easy peripheral one.
 7–1 across two runs — while the prompt's wording on its own was inside the noise of two runs of the
 old prompt. Neither let summary questions back in.
 
-**A list from before `faq/4`** has no scores, so it offers neither the order nor the bar and is
-drawn in reading order exactly as it was. The rule and its arithmetic are
+**A list from before `faq/4`** has no scores, so it offers no order and no bar and is drawn in
+reading order exactly as it was. The rule and its arithmetic are
 [`src/web/faq-order.ts`](../../src/web/faq-order.ts), on the threshold machinery the Glossary and
 Citations share ([`src/web/threshold.ts`](../../src/web/threshold.ts)).
 
@@ -73,7 +85,13 @@ The plan's § The one product call says why, and what adding one later would tak
 
 ## The promise, and where it stops
 
-The foot says both halves, and the second one is not optional:
+An **(i)** at the right-hand end of the order row says both halves, and the second one is not
+optional. It was a line in the band's foot until Greg, 2026-09-30 (SPIDERYARN-READING2-62):
+
+> In FAQ mode, move this text […] into a tooltip, e.g. behind an `(i)` icon.
+
+— the move Trajectory made for its own promise (SPIDERYARN-READING2-52). Hover, focus or a tap opens
+it; the row is drawn for the (i) alone when a list has no orders to offer.
 
 - **The quoted words are the article's own, checked against it.** `verifyPassage` in
   [`src/faq.ts`](../../src/faq.ts) needs the block to exist and `findQuote(…, "spaced")` to find the
@@ -81,7 +99,7 @@ The foot says both halves, and the second one is not optional:
   quote is dropped rather than cut.
 - **Which passage answers which question is the model's reading.** Nothing checks the pairing.
 
-When validation left anything out, a quiet line under the promise gives the count (questions and
+When validation left anything out, a second line in the same card gives the count (questions and
 passages together; the kinds are on the artefact and in the stage's log line).
 
 ## Not Quiz, not Ideas

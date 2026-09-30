@@ -21,8 +21,9 @@
  * `verifyPassage` in src/faq.ts — so drawing it with the solid left rule, the
  * treatment Ideas and the Glossary give *what comes from the article*, is true.
  * What nothing checks is that the passage answers the question: that is the
- * model's reading. The foot says both halves (Sol F3), and must keep saying the
- * second.
+ * model's reading. The promise says both halves (Sol F3), and must keep saying
+ * the second. It was the band's foot; since SPIDERYARN-READING2-62 it is
+ * behind an (i) at the end of the order row (`AboutPassages`).
  *
  * ## Not Quiz, not Ideas
  *
@@ -36,24 +37,28 @@
  * default order is *prioritised*: what survives the bar on
  * `centrality × (1 − difficulty)`, the most central and approachable first —
  * Greg's *"start with a few that are a little bit more high level"*
- * (SPIDERYARN-READING2-5D). *Reading order* is one tap away. The rule is in
- * src/web/faq-order.ts; the two raw scores are drawn on each row in the
- * prioritised order, never the compound. A list from before `faq/4` has no
- * scores, so it offers neither control and is drawn in reading order, as it
- * always was. docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
+ * (SPIDERYARN-READING2-5D). *Reading order* is one tap away, and since
+ * SPIDERYARN-READING2-67 so are *most central* and *hardest*, the two scores
+ * the compound is built from, as the Glossary offers them. The rule is in
+ * src/web/faq-order.ts; a row draws the raw scores it was placed by, never the
+ * compound. A list from before `faq/4` has no scores, so it offers no order
+ * and no bar and is drawn in reading order, as it always was.
+ * docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md,
+ * docs/plans/260930d-faq-provenance-into-a-tooltip-and-sort-by-centrality-and-difficulty.md.
  *
  * Still no marks in the prose and no `?faq=` selection — `selectPassages`
  * answers `NOTHING` (src/web/reader/passages.ts).
  */
-import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { BadgeQuestionMark, Info, RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
 import {
+  availableOrders,
   barMax,
-  canPrioritise,
   effectiveOrder,
   FAQ_BAR_DEFAULT,
   type FaqOrder,
@@ -68,12 +73,13 @@ import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
+import { Tooltip } from "./Tooltip.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
 
 /**
- * **The honest promise**, pinned under the list. Both halves are load-bearing:
+ * **The honest promise**, behind the (i) in the order row. Both halves are load-bearing:
  * the first is what `verifyPassage` proves, the second is what it does not.
  */
 export const FAQ_PROMISE =
@@ -179,21 +185,13 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
       /* **No head.** The Dock names the mode, and there is no count, order or
          control that needs a row of its own — so no `.band-head` at all, as
          Summary and Search have none. */
-      /* Pinned under the scroller, so the promise is about the whole list rather
-         than read as the last row's. No re-run here: a fresh list offers none,
-         the rule Greg set for the Glossary and Quotes; the stale banner carries
-         it. A job started from Metadata still needs its progress, Stop and
-         failure here, including on an outdated list, so that transient status
-         shares this one footer with the permanent promise. */
-      foot={
-        ready && (questions.length > 0 || showJob) ? (
-          <div className="faq-foot">
-            {questions.length > 0 && <p className="faq-note">{FAQ_PROMISE}</p>}
-            {questions.length > 0 && dropped && <p className="faq-note">{dropped}</p>}
-            {showJob && run("Find them again", true)}
-          </div>
-        ) : null
-      }
+      /* Only a job's progress now: a job started from Metadata still needs its
+         progress, Stop and failure here, including on an outdated list. No
+         re-run otherwise — a fresh list offers none, the rule Greg set for the
+         Glossary and Quotes; the stale banner carries it. The promise that
+         used to live here is behind the (i) in the order row since
+         SPIDERYARN-READING2-62 (`AboutPassages`). */
+      foot={showJob ? <div className="faq-foot">{run("Find them again", true)}</div> : null}
     >
       {owner?.error && (
         <div className="faq-read-error">
@@ -240,10 +238,20 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
 
           {questions.length === 0 && <p className="gloss-quiet">{FAQ_NONE}</p>}
 
-          {/* Only when the list can be prioritised at all: a list from before
-              `faq/4` has no scores, and a control that would visibly do
-              nothing is worse than none (GlossaryPanel.tsx § SortBar). */}
-          {canPrioritise(questions) && <OrderBar order={order} onOrder={onOrder} />}
+          {/* The orders there is something to do with — none for a list from
+              before `faq/4`, which has no scores, because a control that would
+              visibly do nothing is worse than none (GlossaryPanel.tsx §
+              SortBar) — and, at the row's right-hand end, the promise behind
+              its (i). The row is drawn for the (i) alone when there are no
+              orders to offer. */}
+          {questions.length > 0 && (
+            <OrderBar
+              options={availableOrders(questions)}
+              order={order}
+              onOrder={onOrder}
+              about={<AboutPassages dropped={dropped} />}
+            />
+          )}
 
           {/* Only in the order it belongs to. */}
           {order === "prioritised" && (
@@ -254,7 +262,7 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
             <div className="tl-scroll">
               <ol className="tl-list faq-list">
                 {shown.map((q) => (
-                  <QuestionRow key={q.id} question={q} prioritised={order === "prioritised"} onJump={onJump} />
+                  <QuestionRow key={q.id} question={q} order={order} onJump={onJump} />
                 ))}
               </ol>
             </div>
@@ -267,33 +275,98 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
 
 /* --------------------------------------------------------------- controls -- */
 
-function OrderBar({ order, onOrder }: { order: FaqOrder; onOrder(order: FaqOrder): void }) {
-  const options: { key: FaqOrder; label: string; title: string }[] = [
-    {
-      key: "prioritised",
-      label: "prioritised",
-      title:
-        "The most central and approachable questions first — the threshold below decides how many",
-    },
-    { key: "document", label: "reading order", title: "Every question, in the order the piece raises it" },
-  ];
+/** Each order's button: the Glossary's words for the two scores (GlossaryPanel.tsx § sortOptions). */
+const ORDER_BUTTON: Record<FaqOrder, { label: string; title: string }> = {
+  prioritised: {
+    label: "prioritised",
+    title: "The most central and approachable questions first — the threshold below decides how many",
+  },
+  document: { label: "reading order", title: "Every question, in the order the piece raises it" },
+  centrality: {
+    label: "most central",
+    title: "Every question, the ones the model judged most of the argument turns on first",
+  },
+  difficulty: {
+    label: "hardest",
+    title: "Every question, the ones the model judged need the most of the piece first",
+  },
+};
+
+/**
+ * The order buttons, and at the right-hand end the (i). **The (i) is beside
+ * the group, not in it**, for the reason GlossaryPanel.tsx § SortBar gives: the
+ * group is what a screen reader announces as "Order the questions by".
+ */
+function OrderBar({
+  options,
+  order,
+  onOrder,
+  about,
+}: {
+  options: readonly FaqOrder[];
+  order: FaqOrder;
+  onOrder(order: FaqOrder): void;
+  about: ReactNode;
+}) {
   return (
-    /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-       list, not form controls — GlossaryPanel.tsx § SortBar says why. */
-    <div className="gloss-sort" role="group" aria-label="Order the questions by">
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
-          aria-pressed={order === option.key}
-          title={option.title}
-          onClick={() => onOrder(option.key)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="gloss-sort">
+      {options.length > 0 && (
+        /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+           list, not form controls — GlossaryPanel.tsx § SortBar says why. */
+        <div className="gloss-sort-group" role="group" aria-label="Order the questions by">
+          {options.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`gloss-sort-btn${order === key ? " on" : ""}`}
+              aria-pressed={order === key}
+              title={ORDER_BUTTON[key].title}
+              onClick={() => onOrder(key)}
+            >
+              {ORDER_BUTTON[key].label}
+            </button>
+          ))}
+        </div>
+      )}
+      <span className="gloss-sort-trail">{about}</span>
     </div>
+  );
+}
+
+/**
+ * **The honest promise, behind an (i)** — Greg, 2026-09-30
+ * (SPIDERYARN-READING2-62): *"move this text … into a tooltip, e.g. behind an
+ * `(i)` icon"*. It was the band's foot. The words are unchanged, and both
+ * halves still load-bearing; the dropped count, a footnote to the first half,
+ * came with it. Controlled, as Trajectory's *About this route* is (the same
+ * move, SPIDERYARN-READING2-52), so a tap toggles it on a touch device with no
+ * hover; hover and focus open it too.
+ */
+function AboutPassages({ dropped }: { dropped: string | null }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Tooltip
+      content={
+        <>
+          <p>{FAQ_PROMISE}</p>
+          {dropped && <p>{dropped}</p>}
+        </>
+      }
+      placement="bottom"
+      open={open}
+      onOpenChange={setOpen}
+      className="faq-about-card"
+    >
+      <button
+        type="button"
+        className={`faq-about${open ? " on" : ""}`}
+        aria-label="About these passages"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <Info size={14} />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -331,16 +404,16 @@ function FaqBarSlider({
 
 function QuestionRow({
   question,
-  prioritised,
+  order,
   onJump,
 }: {
   question: FaqQuestion;
-  /** Draw the scores this row was placed by — only in the order that used them. */
-  prioritised: boolean;
+  /** The order in force: a row draws the scores it was placed by (faq-order.ts § scoresOf). */
+  order: FaqOrder;
   onJump(id: BlockId): void;
 }) {
-  const scores = prioritised ? scoresOf(question) : [];
-  const unscored = prioritised && priorityOf(question) === undefined;
+  const scores = scoresOf(question, order);
+  const unscored = order === "prioritised" && priorityOf(question) === undefined;
   return (
     <li
       className="tl-item faq-item"

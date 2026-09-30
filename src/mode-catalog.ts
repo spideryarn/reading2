@@ -466,9 +466,9 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          order is still reading order (`inReadingOrder`, src/faq.ts), which
          the *reading order* button shows and a list without scores falls back
          to. No frequency score exists: nobody's asking is counted.
-       Not the band foot's "checked against it" sentence, which is already on
-       screen (GPT Sol D3). About the mode, not the press, and no price. */
-    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first, and reading order is one tap away.",
+       Not the "checked against it" sentence, which the panel's (i) already
+       says (GPT Sol D3). About the mode, not the press, and no price. */
+    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first; reading order, most central and hardest are one tap away.",
     /* Not `questions`: `question` is Chat's, and a prefix of it would tie the two
        in the command bar. `faq` itself is this mode's label, which an alias may
        not repeat (tests/mode-catalog.test.ts). */
