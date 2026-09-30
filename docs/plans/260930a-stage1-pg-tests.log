@@ -1,0 +1,19 @@
+
+ RUN  v4.1.11 /home/greg/code/spideryarn2/.claude/worktrees/fb5q-citations-investigate
+
+  [private lane] spideryarn_test_260930013245_8e0af281f93942cf8b6a07b80534fa9f in 3.9s, leased as spideryarn-test-lease-463820, priced reader/researcher
+ ✓  unit  tests/public-dto.test.ts (52 tests) 45ms
+ ✓  private-postgres  tests/citation-investigate-route.test.ts (6 tests) 1942ms
+     ✓ streams, writes `done` only once stored, and a fresh read has it on the row  1059ms
+ ✓  private-postgres  tests/store-shelf-pg.test.ts (35 tests) 1930ms
+       ✓ states `public` and `private` on the article payload, never omits either  843ms
+ ✓  private-postgres  tests/store-export-covers-tables.test.ts (14 tests) 1189ms
+ ✓  private-postgres  tests/db-schema-drift.test.ts (20 tests) 328ms
+
+ Test Files  5 passed (5)
+      Tests  127 passed (127)
+   Start at  02:32:44
+   Duration  25.84s (transform 6.98s, setup 950ms, import 13.67s, tests 5.43s, environment 1ms)
+
+  [private lane] dropped spideryarn_test_260930013245_8e0af281f93942cf8b6a07b80534fa9f
+EXIT=0
