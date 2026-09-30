@@ -23,7 +23,14 @@ wiring.
 | Box | Scope | Stored | Edited at |
 |---|---|---|---|
 | **About you** | you, always | `reader_profiles.profile` | `/profile` |
-| **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata` |
+| **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Trajectory's band |
+
+The purpose is asked for in two more places since 2026-09-30, both writing through
+[`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved
+before the modes are queued, and Trajectory's *What do you want from this piece?* over a ready
+route with none set ([trajectory.md](trajectory.md),
+[plan 260930e](../plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md)).
+Metadata is still where it is edited.
 
 Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
 with the rest of the filesystem store.
