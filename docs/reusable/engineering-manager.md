@@ -107,6 +107,9 @@ family — never pin a version number here:
 - **GPT Sol** — the default for cross-family input and review (above).
 - **GPT Astra** — only for really complicated or critical work.
 - **GPT Luna** — anything lighter; capable and cheap, and a different family, so the variety is free.
+  **Never a stand-in for Sol** on a review or on important work because Sol's usage limit ran out:
+  the work waits for the limit instead (Greg, 2026-09-30: *"I'd rather we stop working than risk
+  pushing lower-quality stuff."*).
 
 The GPT models run through [codex-cli-as-subagent.md](codex-cli-as-subagent.md). Only a GPT model is
 the cross-family check; an Opus second opinion is a different mind, not a different family. Greg,

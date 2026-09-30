@@ -316,7 +316,10 @@ recurring form.
   entries — [feedback-reports.md § Into the Overseer's queue](feedback-reports.md#into-the-overseers-queue).
   The default login is the only one signed in to Sentry, and that is by decision: Greg, 2026-09-11,
   *"we do not want to use the Mindstone account for Sentry or any other hosting/services"*, so pool
-  accounts run report sessions and never the sweep.
+  accounts run report sessions and never the sweep. **Since 2026-09-30 there are none:** Greg asked
+  for the Mindstone login to be removed from the box altogether (*"we shouldn't be using that account
+  here"*), so it is out of `~/.claude-accounts/registry.json` and logged out, and every session runs
+  on the default login.
 - **[changelog.md](changelog.md)**, every six hours, since 2026-09-12 — Greg: *"run a changelog.md at
   some point in the next few hours if you haven't recently - make sure that's part of your regularly
   scheduled things you do"*. The same shape as the feedback sweep: a tmux loop (`changelog-loop`)
@@ -338,7 +341,11 @@ recurring form.
   reads live from the box and prints beside the Claude reading. Greg, 2026-09-09: *"it's absolutely
   critical that we have GPT (e.g. for cross-model-family reviews), so if we are running out of
   ChatGPT usage limits, that's as important as running out of Claude usage limits … Basically we
-  can't continue working without both."*
+  can't continue working without both."* And when Sol runs out, **work stops; it does not step
+  down.** Greg, 2026-09-30: *"DO NOT fall back to Luna for important stuff or skip the GPT reviews.
+  If we run out of usage limits for Sol, then we accept that yes that blocks further progress … I'd
+  rather we stop working than risk pushing lower-quality stuff."* Pause the sessions that need a
+  review, tell Greg, and resume when the limit resets.
   <br>**Since 2026-09-10 that command also prints one block per REGISTERED account** — every Claude
   and Codex subscription the box can launch work on, not just the one you are logged in as — and the
   Usage limits tab draws the same readings as sections. What each says and what it may not claim is
