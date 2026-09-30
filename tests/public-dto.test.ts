@@ -1094,6 +1094,14 @@ describe("the artefacts a shared link carries", () => {
           contextHash: "invhashsentinel0",
           promptVersion: "citation-investigate/1",
         },
+        /* Attached only by the owner's GET route. A non-vacuous sentinel for
+           the public DTO's field-by-field omission (plan 260930b). */
+        inSpideryarn: {
+          slug: "private-match-spya-g8h9j2",
+          whose: "yours",
+          matchedBy: "doi",
+          title: "private matched-title sentinel",
+        },
       },
       {
         id: "w-cred",
@@ -1706,6 +1714,15 @@ describe("the artefacts a shared link carries", () => {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+  });
+
+  /** Nor the owner's read-time link to another article (plan 260930b). */
+  it("carries no in-Spideryarn match, anywhere", () => {
+    const json = JSON.stringify(built);
+    expect(json).not.toContain('"inSpideryarn"');
+    expect(json).not.toContain("private-match-spya-g8h9j2");
+    expect(json).not.toContain("private matched-title sentinel");
+    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("inSpideryarn");
   });
 
   /**

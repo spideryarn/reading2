@@ -8,6 +8,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
+import type { PublicCitations } from "../src/public-types.js";
 import type { BlockId, Citations, CitedWork, Job } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
 
@@ -209,6 +210,21 @@ async function draw(o: UseCitations, bar: number | null = null) {
         order: "prioritised",
         onOrder: () => {},
         bar,
+        onBar: () => {},
+        onJump: () => {},
+      }),
+    ),
+  );
+}
+
+async function drawVisitor(citations: PublicCitations) {
+  await act(async () =>
+    root.render(
+      createElement(CitationsPanel, {
+        access: { kind: "visitor", citations },
+        order: "prioritised",
+        onOrder: () => {},
+        bar: null,
         onBar: () => {},
         onJump: () => {},
       }),
@@ -1151,5 +1167,19 @@ describe("a row whose work is already an article here", () => {
     expect(line?.querySelector("a")?.textContent).toBe("On the public shelf");
     expect(line?.querySelector(".cite-here-how")?.textContent).toContain("matched by title");
     expect(line?.querySelector(".cite-here-how")?.textContent).toContain("Central, as shared");
+  });
+
+  it("never renders an owner attachment on a visitor's row, even from a malformed payload", async () => {
+    const leaked = work({
+      ...CENTRAL,
+      inSpideryarn: { slug: "private-spya-g8h9j2", whose: "yours", matchedBy: "doi", title: "Private copy" },
+    });
+    /* PublicCitedWork cannot name this field. The cast models a wire payload
+       that violated that type, so the panel's visitor arm is independently
+       pinned rather than trusting a compile-time promise about JSON. */
+    const citations = { citations: [leaked], capped: false } as unknown as PublicCitations;
+    await drawVisitor(citations);
+    expect(row(leaked.id).querySelector(".cite-here")).toBeNull();
+    expect(host.textContent).not.toContain("Private copy");
   });
 });

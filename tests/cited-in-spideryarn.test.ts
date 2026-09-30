@@ -69,6 +69,14 @@ describe("identityOf", () => {
     expect(identityOf("https://notarxiv.org/abs/2001.08361")).toEqual({});
     expect(identityOf("not a url")).toEqual({});
   });
+
+  it("requires the canonical host's whole path to identify the work", () => {
+    expect(identityOf("https://doi.org/redirect/10.1038/nature14539")).toEqual({});
+    expect(identityOf("https://doi.org:8443/10.1038/nature14539")).toEqual({});
+    expect(identityOf("https://arxiv.org/redirect/arxiv.org/abs/2001.08361")).toEqual({});
+    expect(identityOf("https://arxiv.org/abs/2001.08361/another-paper")).toEqual({});
+    expect(identityOf("https://arxiv.org/pdf/2001.08361v2.pdf")).toEqual({ arxiv: "2001.08361" });
+  });
 });
 
 describe("matchOf", () => {

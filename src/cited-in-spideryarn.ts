@@ -27,7 +27,7 @@
  *   positively agree. The weakest, and the row says so.
  */
 
-import { firstAuthor, identifiersIn, keyWords, keysOf } from "./citations.js";
+import { firstAuthor, keyWords, keysOf } from "./citations.js";
 import type { Citations, CitedInSpideryarn, CitedMatchedBy, CitedWork } from "./types.js";
 import { sameTarget } from "./urls.js";
 
@@ -50,6 +50,20 @@ export interface CitedCandidate {
 
 const RANK: Record<CitedMatchedBy, number> = { doi: 0, arxiv: 1, address: 2, title: 3 };
 
+/** A DOI resolver path, whole: no prefix/suffix that merely contains a DOI. */
+const DOI_PATH = /^\/(10\.\d{4,9}\/[^\s"'<>?#]+)$/i;
+const ARXIV_ID = "(\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?\\/\\d{7})";
+const ARXIV_PAGE_PATH = new RegExp(`^/(?:abs|html)/${ARXIV_ID}(?:v\\d+)?/?$`, "i");
+const ARXIV_PDF_PATH = new RegExp(`^/pdf/${ARXIV_ID}(?:v\\d+)?(?:\\.pdf)?/?$`, "i");
+
+function decodedPath(pathname: string): string | null {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+}
+
 /** The DOI or arXiv id a candidate's address *is*, by host and path — or nothing. */
 export function identityOf(url: string): { doi?: string; arxiv?: string } {
   let u: URL;
@@ -59,14 +73,19 @@ export function identityOf(url: string): { doi?: string; arxiv?: string } {
     return {};
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return {};
+  /* A non-default port is a different service, not the canonical resolver.
+     Credentials are never part of a public resolver address either. */
+  if (u.port !== "" || u.username !== "" || u.password !== "") return {};
   const host = u.hostname.toLowerCase().replace(/\.$/, "");
+  const path = decodedPath(u.pathname);
+  if (path === null) return {};
   if (host === "doi.org" || host === "dx.doi.org" || host === "www.doi.org") {
-    const [doi] = identifiersIn([u.pathname]).dois;
+    const doi = DOI_PATH.exec(path)?.[1];
     return doi === undefined ? {} : { doi: doi.toLowerCase() };
   }
   if (host === "arxiv.org" || host === "www.arxiv.org" || host === "export.arxiv.org") {
-    const [arxiv] = identifiersIn([`arxiv.org${u.pathname}`]).arxivs;
-    return arxiv === undefined ? {} : { arxiv };
+    const arxiv = ARXIV_PAGE_PATH.exec(path)?.[1] ?? ARXIV_PDF_PATH.exec(path)?.[1];
+    return arxiv === undefined ? {} : { arxiv: arxiv.toLowerCase() };
   }
   return {};
 }

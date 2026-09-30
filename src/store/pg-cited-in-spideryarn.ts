@@ -48,6 +48,7 @@ import { getDb } from "../db/client.js";
 import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import { publicSourceUrl } from "../urls.js";
+import { guardDbStore } from "./db-errors.js";
 
 /** Longer than any title, byline or URL worth matching; the cap is in the statement. */
 const TEXT_CHARS = 300;
@@ -86,7 +87,7 @@ export function citedCandidatesQuery(db: Pick<ReturnType<typeof getDb>, "select"
 }
 
 /** Every candidate for the signed-in reader, except the article being read. */
-export async function citedCandidates(exceptSlug: string): Promise<CitedCandidate[]> {
+async function citedCandidates(exceptSlug: string): Promise<CitedCandidate[]> {
   const rows = await citedCandidatesQuery(getDb(), currentOwnerId());
   return rows
     .filter((row) => row.slug !== exceptSlug)
@@ -105,4 +106,7 @@ export async function citedCandidates(exceptSlug: string): Promise<CitedCandidat
     });
 }
 
-export const pgCitedInSpideryarnStore = { citedCandidates };
+const rawPgCitedInSpideryarnStore = { citedCandidates };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgCitedInSpideryarnStore = guardDbStore("cited-in-spideryarn", rawPgCitedInSpideryarnStore);

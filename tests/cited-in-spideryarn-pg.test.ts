@@ -19,7 +19,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
-import { citedCandidates, citedCandidatesQuery } from "../src/store/pg-cited-in-spideryarn.js";
+import { citedCandidatesQuery, pgCitedInSpideryarnStore } from "../src/store/pg-cited-in-spideryarn.js";
 import type { BlockId, CitedWork } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -88,6 +88,7 @@ function asReader<T>(owner: OwnerId, fn: () => Promise<T>): Promise<T> {
 }
 
 const ours = (slug: string) => slug.startsWith("cited-pg-");
+const citedCandidates = pgCitedInSpideryarnStore.citedCandidates.bind(pgCitedInSpideryarnStore);
 
 const CITING: CitedWork = {
   id: "spya-c7ewq3",

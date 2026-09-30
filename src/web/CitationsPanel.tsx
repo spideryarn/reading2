@@ -554,6 +554,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
                     key={work.id}
                     work={work}
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
+                    showInSpideryarn={owner !== null}
                     onJump={onJump}
                     /* The owner's alone: a visitor's row draws no *Look it up*. */
                     find={
@@ -733,12 +734,15 @@ interface RowInvestigate {
 function WorkRow({
   work,
   unscored,
+  showInSpideryarn,
   onJump,
   find,
   investigate,
 }: {
   work: ShownWork;
   unscored: boolean;
+  /** Owner-only even if malformed visitor JSON carries the optional field. */
+  showInSpideryarn: boolean;
   onJump(id: BlockId): void;
   find: RowFind | null;
   investigate: RowInvestigate | null;
@@ -785,7 +789,7 @@ function WorkRow({
           work.title
         )}
       </p>
-      {work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
+      {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && <p className="cite-by">{by}</p>}
       <p className="cite-why">
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
