@@ -205,3 +205,12 @@ number out of sequence is dropped as a page number, and a run-in one (`2 vols. O
 Two tests pin it, and the first was red against Sol's version. Checked on the corpus in
 `evals/pdf/` too: the three with a bibliography are author–year and give no list either way, and
 the reported paper still gives all 130 entries.
+
+## Landed
+
+On `dev` 2026-09-30 (021e2e30, 0a38e456, ee77f445), not deployed. Browser check on the local
+`scaling-hypothesis` article: rows show the citing words, and a click flashes one `mark.cite` and no
+paragraph; it found doubled quotes on a cited title, fixed in ee77f445. Full suite: the only reds were
+the four a fresh worktree always has (no `api-dist/`, no fleet client build) and one panel test that
+ran while it was being edited, green alone. Existing lists change only when Citations is re-run.
+Note: [docs/user-feedback/260930_1545-…](../user-feedback/260930_1545-citations-name-the-citing-words-and-read-the-pdf-reference-list.md).
