@@ -122,3 +122,6 @@ to confirm nothing moved there.
   sag 6.9px, seam ±6.9px, abseil 20.1px, nothing clipped. The Dock's wordmark (2560px wide, where
   its word shows) is unchanged: abseil 8.75px, unclipped, pluck 2.0px.
 - Gates: the nine scoped suites (347 tests) and `npm run typecheck` green before commit.
+- Full suite after push (one run, tmux): 1216 files passed, 5 failed, every one a missing build in a
+  fresh worktree — `api-dist/vercel.js` (cold-start-lazy-imports, pdf-bundle-trace) and
+  `tools/fleet/web/dist` (the three fleet route/access suites). None touches this change.
