@@ -805,9 +805,10 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     category: "database-integration",
     evidence: "static-only",
     reason:
-      "Born on Postgres. It seeds two articles under two owners through `scratchArticleInPg`, " +
-      "drives `handleApi`, and writes `articles.high_power_since` through the admin route — so " +
-      "the owner scoping it asserts IS the Postgres owner filter. Only `fetch` is stubbed.",
+      "Born on Postgres. It seeds three articles under three owners through `scratchArticleInPg`, " +
+      "drives `handleApi`, and writes `articles.high_power_since` through " +
+      "`PUT /api/article/:slug/high-power` — charging a reader's `ingest_events` since 260930k — " +
+      "so the owner scoping it asserts IS the Postgres owner filter. Only `fetch` is stubbed.",
   },
   "tests/high-power-step.test.ts": {
     category: "database-integration",
@@ -2540,6 +2541,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and its oracle is those rows — so the private lane is right and nothing in
      it needs the shared stack. */
   "tests/billing-half-units.test.ts": "private-postgres",
+  /* 260930k: High-powered AI as a second charged row. `pgReady`, its own two
+     seeded owners, its own articles, ledger rows and one inactive tier, and its
+     oracle is those rows — the private lane, as billing-half-units. */
+  "tests/billing-high-power.test.ts": "private-postgres",
   "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
@@ -3269,6 +3274,19 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      `auth.users` foreign key. */
   "tests/billing-half-units.test.ts": {
     "0b110a1f-0000-4000-8000-0000000000a1": { kind: "seeded" },
+  },
+  /* 260930k's two owners: the one charged, and the one whose article it must
+     not reach. `seedAuthUser` in `beforeEach`; articles, ledger rows and the
+     billing anchor all hang off the `auth.users` foreign key. */
+  "tests/billing-high-power.test.ts": {
+    "0b1f0a1e-0000-4000-8000-0000000c6c01": { kind: "seeded" },
+    "0b1f0a1e-0000-4000-8000-0000000c6c02": { kind: "seeded" },
+  },
+  /* 260930k's reader, who switches their own article on and is charged for it.
+     `seedAuthUser` in `beforeAll`; the ledger rows and the billing anchor hang
+     off the `auth.users` foreign key. */
+  "tests/high-power-routes.test.ts": {
+    "0b1f0a1e-0000-4000-8000-00000000c6c2": { kind: "seeded" },
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },

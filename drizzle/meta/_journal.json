@@ -736,6 +736,13 @@
       "when": 1790786220989,
       "tag": "20260930163700_simple_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1790808642016,
+      "tag": "20260930225042_ingest_events_kind",
+      "breakpoints": true
     }
   ]
 }

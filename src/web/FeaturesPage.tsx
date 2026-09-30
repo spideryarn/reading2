@@ -288,6 +288,14 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               buttons (no `action` is passed, on either marketing page), so
               without this the one page that can take the press is reachable
               only from the bar and the footer. */}
+          {/* Greg, 2026-09-30 (SPIDERYARN-READING2-6C): High-powered AI "should
+              double the processing cost per-article". Priced in articles, never
+              in money. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md. */}
+          <p className="tw:mt-6 tw:max-w-[62ch] tw:leading-relaxed">
+            <strong className="tw:text-foreground">High-powered AI.</strong> Claude Opus instead of
+            Sonnet for one article, when the reading is hard. It counts double against your
+            allowance.
+          </p>
           <p className="tw:mt-6 tw:text-sm">
             <Link
               href={PRICING_HREF}

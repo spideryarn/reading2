@@ -220,6 +220,9 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     used,
     sharedHalfPrice: usage.chargedHalfPrice,
     atLimit: atTheWall(entitlement, usage),
+    /* Upgrades, apart from the ingests: `used` is articles added, and one
+       high-powered article is not two of those (`ReaderPlan.highPower`). */
+    highPower: usage.highPowerFullPrice + usage.highPowerHalfPrice,
   };
 
   if (entitlement.tier === "paid") {

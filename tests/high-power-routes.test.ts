@@ -1,14 +1,18 @@
 /**
  * **High-powered AI, through the routes** — docs/plans/260930f-high-powered-ai-per-article.md,
- * Stage 2.
+ * Stage 2, and docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md,
+ * which opened it to readers.
  *
  * Two halves, both against Postgres and the real `handleApi`:
  *
- * 1. **The switch**, `PUT /api/admin/article/:slug/high-power` — an
- *    administrator gets 200 and the column back; a reader is refused by the
- *    admin namespace gate (403) before the handler runs; another owner's slug is
- *    a 404 even to the administrator (owner-scoped, decision 8); a body that is
- *    not exactly `{ on: boolean }` is a 400. `GET /api/metadata/:slug` carries it.
+ * 1. **The switch**, `PUT /api/article/:slug/high-power` — an administrator
+ *    gets 200 and the column back and **writes no ledger row**; a reader gets
+ *    the same on their own article and is **charged once** (one `high_power`
+ *    row, not refunded by switching off, not charged again by switching back
+ *    on), or a 402 when it does not fit; another owner's slug is a 404 to
+ *    either; a body that is not exactly `{ on: boolean }` is a 400.
+ *    `GET /api/metadata/:slug` carries it. The billing arithmetic itself is
+ *    tests/billing-high-power.test.ts.
  * 2. **Every request-path route family sends Opus for a high-powered article**
  *    (Sol F4: per family, not one representative) — explain, chat, search,
  *    quiz marking, the three referee streams and a live session's meaning
@@ -26,7 +30,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Verifier } from "../src/auth.js";
@@ -37,28 +41,53 @@ import { CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL_OPENROUTER } from "../src/mo
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { buildQuiz, inputFingerprint } from "../src/quiz.js";
 import type { Block, Quiz, Tree } from "../src/types.js";
+import type { OwnerId } from "../src/owner.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
 const SLUG = "test-high-power-routes";
 /** Somebody else's article — the environment's owner, not the administrator. */
 const OTHERS = "test-high-power-routes-others";
+/** A reader's own article — the half 260930k added. */
+const READERS = "test-high-power-routes-reader";
 
 await pgReady({
   suite: "tests/high-power-routes.test.ts",
-  tables: ["spideryarn.articles", "spideryarn.revision_blocks", "spideryarn.comments", "spideryarn.chat_threads"],
+  tables: [
+    "spideryarn.articles",
+    "spideryarn.revision_blocks",
+    "spideryarn.comments",
+    "spideryarn.chat_threads",
+    "spideryarn.ingest_events",
+    "spideryarn.billing_accounts",
+  ],
 });
 
 const { handleApi } = await import("../src/routes.js");
 const { commentStore, chatStore } = await import("../src/store/index.js");
 
-/** Somebody signed in who is not the administrator. */
+/**
+ * **A reader of this file's own**, not the administrator. Fixed, so a killed
+ * run's ledger rows are swept by the next one rather than added to; and its own,
+ * because the free allowance is three articles and a shared identity's rows
+ * would change what the 402 case below sees.
+ */
+const READER = "0b1f0a1e-0000-4000-8000-00000000c6c2" as OwnerId;
+
+/** Signs in as that reader. */
 const acceptAReader: Verifier = async () => ({
   ok: true,
-  claims: { sub: randomUUID(), email: "a-reader@example.test", role: "authenticated", is_anonymous: false },
+  claims: { sub: READER, email: `reader-${READER}@example.test`, role: "authenticated", is_anonymous: false },
+});
+
+/** Somebody signed in who is neither the administrator nor `READER`. */
+const acceptAStranger: Verifier = async () => ({
+  ok: true,
+  claims: { sub: randomUUID(), email: "a-stranger@example.test", role: "authenticated", is_anonymous: false },
 });
 
 interface Reply {
@@ -174,6 +203,7 @@ async function quizInto(dir: string): Promise<Quiz> {
 
 let mine: ScratchArticle | undefined;
 let others: ScratchArticle | undefined;
+let readers: ScratchArticle | undefined;
 let quiz: Quiz | undefined;
 let block = "";
 let quote = "";
@@ -189,6 +219,13 @@ beforeAll(async () => {
      says, and on a machine where that is the administrator this would be a
      second article of the caller's own. */
   others = await scratchArticleInPg(OTHERS, { ownerId: DEV_OWNER_ID });
+  await seedAuthUser(getDb(), {
+    id: READER,
+    email: `reader-${READER}@example.test`,
+    onConflictDoNothing: true,
+  });
+  await sweepReaderLedger();
+  readers = await scratchArticleInPg(READERS, { ownerId: READER });
   const long = mine.blocks.find((b) => b.text.length > 40);
   if (!long) throw new Error("the fixture has no block long enough to quote");
   block = long.id;
@@ -207,8 +244,32 @@ afterAll(async () => {
   else process.env.OPENROUTER_API_KEY = realKey;
   await mine?.remove();
   await others?.remove();
+  await readers?.remove();
+  await sweepReaderLedger();
+  await getDb().execute(sql`delete from auth.users where id = ${READER}::uuid`).catch(() => {});
   await closeDb();
 });
+
+/** The reader's ledger and billing anchor — theirs alone, so swept by owner. */
+async function sweepReaderLedger(): Promise<void> {
+  await getDb().execute(sql`delete from spideryarn.ingest_events where owner_id = ${READER}::uuid`);
+  await getDb().execute(sql`delete from spideryarn.billing_accounts where owner_id = ${READER}::uuid`);
+}
+
+/** `ingest_events` rows of each kind for one owner. */
+async function ledgerOf(owner: string): Promise<{ ingest: number; highPower: number }> {
+  const result = await getDb().execute(sql`
+    select count(*) filter (where kind = 'ingest')::int as ingest,
+           count(*) filter (where kind = 'high_power')::int as high_power
+      from spideryarn.ingest_events where owner_id = ${owner}::uuid`);
+  const rows = (Array.isArray(result) ? result : (result as unknown as { rows: unknown[] }).rows) as {
+    ingest: number;
+    high_power: number;
+  }[];
+  const row = rows[0];
+  if (!row) throw new Error("a count returned no row");
+  return { ingest: Number(row.ingest), highPower: Number(row.high_power) };
+}
 
 beforeEach(() => {
   sent.length = 0;
@@ -224,8 +285,14 @@ async function columnOf(articleId: string): Promise<Date | null> {
 
 /* =============================================================== the switch == */
 
-describe("PUT /api/admin/article/:slug/high-power", { timeout: 60_000 }, () => {
-  const url = `/api/admin/article/${SLUG}/high-power`;
+describe("PUT /api/article/:slug/high-power", { timeout: 60_000 }, () => {
+  const url = `/api/article/${SLUG}/high-power`;
+  const readersUrl = `/api/article/${READERS}/high-power`;
+
+  beforeEach(async () => {
+    await sweepReaderLedger();
+    await getDb().update(articles).set({ highPowerSince: null }).where(eq(articles.id, readers!.articleId));
+  });
 
   it("switches it on for the administrator's own article, and answers when", async () => {
     const r = await call("PUT", url, { on: true });
@@ -248,16 +315,78 @@ describe("PUT /api/admin/article/:slug/high-power", { timeout: 60_000 }, () => {
     expect(await columnOf(mine!.articleId)).toBeNull();
   });
 
-  it("refuses a reader with 403 — the namespace gate, before the handler", async () => {
-    const r = await call("PUT", url, { on: true }, acceptAReader);
-    expect(r.status).toBe(403);
-    expect(await columnOf(mine!.articleId)).toBeNull();
+  /**
+   * **The administrator is exempt, as with ingests**: the route sends them to
+   * the uncharged store method, so switching on writes no ledger row at all.
+   * Counted before and after rather than assumed empty — this is the shared
+   * local admin identity, and somebody's local use may have left rows.
+   */
+  it("charges the administrator nothing: no ledger row is written", async () => {
+    await call("PUT", url, { on: false });
+    const before = await ledgerOf(TEST_OWNER);
+    const r = await call("PUT", url, { on: true });
+    expect(r.status).toBe(200);
+    expect(await columnOf(mine!.articleId)).toBeInstanceOf(Date);
+    expect(await ledgerOf(TEST_OWNER)).toEqual(before);
+  });
+
+  it("lets a reader switch their own article on, and charges them once", async () => {
+    const r = await call("PUT", readersUrl, { on: true }, acceptAReader);
+    expect(r.status).toBe(200);
+    expect(typeof r.body.highPowerSince).toBe("string");
+    expect(await columnOf(readers!.articleId)).toBeInstanceOf(Date);
+    expect(await ledgerOf(READER)).toEqual({ ingest: 0, highPower: 1 });
+    /* The metadata page reads it for the owner. */
+    const meta = await call("GET", `/api/metadata/${READERS}`, undefined, acceptAReader);
+    expect(meta.body.highPowerSince).toBe(r.body.highPowerSince);
+  });
+
+  it("switches a reader's article off without a refund, and back on without a second charge", async () => {
+    const on = await call("PUT", readersUrl, { on: true }, acceptAReader);
+    expect(on.status).toBe(200);
+
+    const off = await call("PUT", readersUrl, { on: false }, acceptAReader);
+    expect(off.status).toBe(200);
+    expect(off.body.highPowerSince).toBeNull();
+    expect(await columnOf(readers!.articleId)).toBeNull();
+    /* Off refunds nothing: the Opus calls were spent. */
+    expect(await ledgerOf(READER)).toEqual({ ingest: 0, highPower: 1 });
+
+    const again = await call("PUT", readersUrl, { on: true }, acceptAReader);
+    expect(again.status).toBe(200);
+    expect(await columnOf(readers!.articleId)).toBeInstanceOf(Date);
+    /* And on again is free: still one row. */
+    expect(await ledgerOf(READER)).toEqual({ ingest: 0, highPower: 1 });
+  });
+
+  it("is a 402 for a reader with no room, and changes nothing", async () => {
+    /* Three private articles' worth already spent — six of the free six
+       half-units — and this article private, so the upgrade costs two. */
+    await getDb().execute(sql`
+      insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
+      select ${READER}::uuid, now(), now() from generate_series(1, 3)`);
+    const r = await call("PUT", readersUrl, { on: true }, acceptAReader);
+    expect(r.status).toBe(402);
+    expect(String(r.body.error)).toContain("[pay-high-power]");
+    expect(await columnOf(readers!.articleId)).toBeNull();
+    expect(await ledgerOf(READER)).toEqual({ ingest: 3, highPower: 0 });
   });
 
   it("is a 404 for another owner's article, even to the administrator", async () => {
-    const r = await call("PUT", `/api/admin/article/${OTHERS}/high-power`, { on: true });
+    const r = await call("PUT", `/api/article/${OTHERS}/high-power`, { on: true });
     expect(r.status).toBe(404);
     expect(await columnOf(others!.articleId)).toBeNull();
+  });
+
+  it("is a 404 for another owner's article to a reader, and charges them nothing", async () => {
+    const r = await call("PUT", `/api/article/${OTHERS}/high-power`, { on: true }, acceptAReader);
+    expect(r.status).toBe(404);
+    expect(await columnOf(others!.articleId)).toBeNull();
+    expect(await ledgerOf(READER)).toEqual({ ingest: 0, highPower: 0 });
+    /* And a stranger cannot switch the reader's article either. */
+    const stranger = await call("PUT", readersUrl, { on: true }, acceptAStranger);
+    expect(stranger.status).toBe(404);
+    expect(await columnOf(readers!.articleId)).toBeNull();
   });
 
   it.each([
@@ -266,9 +395,13 @@ describe("PUT /api/admin/article/:slug/high-power", { timeout: 60_000 }, () => {
     ["an extra field", { on: true, also: 1 }],
     ["not an object", [true]],
   ])("is a 400 for %s, and changes nothing", async (_what, body) => {
+    await call("PUT", url, { on: false });
     const r = await call("PUT", url, body);
     expect(r.status).toBe(400);
     expect(await columnOf(mine!.articleId)).toBeNull();
+    const reader = await call("PUT", readersUrl, body, acceptAReader);
+    expect(reader.status).toBe(400);
+    expect(await ledgerOf(READER)).toEqual({ ingest: 0, highPower: 0 });
   });
 });
 
@@ -276,10 +409,10 @@ describe("PUT /api/admin/article/:slug/high-power", { timeout: 60_000 }, () => {
 
 describe("every request-path route family sends Opus for a high-powered article (Sol F4)", { timeout: 60_000 }, () => {
   beforeAll(async () => {
-    await call("PUT", `/api/admin/article/${SLUG}/high-power`, { on: true });
+    await call("PUT", `/api/article/${SLUG}/high-power`, { on: true });
   });
   afterAll(async () => {
-    await call("PUT", `/api/admin/article/${SLUG}/high-power`, { on: false });
+    await call("PUT", `/api/article/${SLUG}/high-power`, { on: false });
   });
 
   beforeEach(async () => {
@@ -352,13 +485,34 @@ describe("every request-path route family sends Opus for a high-powered article 
     expect(sent).toEqual([HIGH_POWER_MODEL_OPENROUTER]);
   });
 
+  /**
+   * **The reader half** (260930k decision 6): `articlePower` no longer asks
+   * whether the owner is an administrator, so a reader's own high-powered
+   * article sends Opus too. Switched on through the route, as the reader, so
+   * this is the charged path end to end — and back to Sonnet when off.
+   */
+  it("a reader's high-powered article sends Opus too, and Sonnet once it is off", async () => {
+    await sweepReaderLedger();
+    const on = await call("PUT", `/api/article/${READERS}/high-power`, { on: true }, acceptAReader);
+    expect(on.status).toBe(200);
+    try {
+      await call("POST", `/api/search/${READERS}`, { criterion: "where does it argue?" }, acceptAReader);
+      expect(sent).toEqual([HIGH_POWER_MODEL_OPENROUTER]);
+    } finally {
+      await call("PUT", `/api/article/${READERS}/high-power`, { on: false }, acceptAReader);
+    }
+    sent.length = 0;
+    await call("POST", `/api/search/${READERS}`, { criterion: "where does it argue?" }, acceptAReader);
+    expect(sent).toEqual([CAPABLE_MODEL_OPENROUTER]);
+  });
+
   it("and back to Sonnet the moment it is switched off", async () => {
-    await call("PUT", `/api/admin/article/${SLUG}/high-power`, { on: false });
+    await call("PUT", `/api/article/${SLUG}/high-power`, { on: false });
     try {
       await call("POST", `/api/search/${SLUG}`, { criterion: "where does it argue?" });
       expect(sent).toEqual([CAPABLE_MODEL_OPENROUTER]);
     } finally {
-      await call("PUT", `/api/admin/article/${SLUG}/high-power`, { on: true });
+      await call("PUT", `/api/article/${SLUG}/high-power`, { on: true });
     }
   });
 });

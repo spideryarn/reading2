@@ -1,7 +1,9 @@
 # High-powered AI
 
 Parent: [reading-view-overview.md](reading-view-overview.md). The build, and every decision behind
-it, is [260930f](../plans/260930f-high-powered-ai-per-article.md).
+it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
+and [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md) (readers, and what
+it costs them).
 
 **One switch per article, on `/metadata`, that moves that article's capable-tier calls from Claude
 Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argument that takes several
@@ -15,10 +17,34 @@ in [the plan](../plans/260930f-high-powered-ai-per-article.md#what-this-is-in-on
 > that will benefit from greater intelligence, like chat or summary or trajectory or, well, probably
 > most of them.
 
-**Today it is the administrator's alone.** The half that lets a reader turn it on — it would count
-as two articles against their plan, one if the article is public — is written up in the plan and
-waiting on Greg, because it is billing. Until then a non-admin reader cannot make us spend Opus on
-their article.
+## What it costs a reader
+
+> it should double the processing cost per-article - that's how I'd think about it.
+>
+> — Greg, 2026-09-30
+
+**Switching it on counts as one more article against the reader's allowance, and half of one while
+the article is public.** Added to the ingest, that makes a private article cost two articles and a
+public one cost one. It is **charged once per article, in the period it is switched on, and never
+refunded**:
+
+- switching off gives nothing back;
+- switching on again charges nothing.
+
+**It must fit whole.** If the allowance doesn't have room, the switch is refused with
+`[pay-high-power]` and nothing changes.
+
+The administrator is exempt, as with ingests. The mechanism is billing's:
+[billing.md § High-powered AI counts double](billing.md#high-powered-ai-counts-double).
+
+**The copy states the price in articles, never in money.** That applies to the switch, `/pricing`
+and `/features`
+([cost-tracking.md § Only the administrator ever sees a figure](cost-tracking.md#only-the-administrator-ever-sees-a-figure)).
+
+**Switching on happens only on `/metadata`, after the article is on the shelf**, not at import. The
+first pass is always Sonnet, and a reader who wants Opus throughout presses *Run it again* (free,
+as every re-run is). An import-time flag is the named next step; it needs its own plan, because
+the charge would have to ride the job.
 
 ## What it changes, and what it does not
 
@@ -46,8 +72,8 @@ their article.
 
 | | |
 |---|---|
-| The setting | `articles.high_power_since timestamptz null` — null is off. Written by `PUT /api/admin/article/:slug/high-power` (`{ on: boolean }`), inside the `/api/admin` namespace so the existing administrator gate is the whole of the permission check, and scoped to the caller's **own** article ([admin.md](admin.md)) |
-| Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts): the column is set **and** the owner is an administrator. The second half is what keeps a copied or hand-edited row from spending Opus on a reader before billing knows about it. Once billing and reader access exist, this is the one model-selection line that changes |
+| The setting | `articles.high_power_since timestamptz null` — null is off. Written by `PUT /api/article/:slug/high-power` (`{ on: boolean }`), scoped to the caller's **own** article. A reader's switch-on goes through `chargeAndSwitchOnHighPower` ([`src/billing/admission.ts`](../../src/billing/admission.ts)): the charge row and the column commit in one transaction. The administrator's switch, and every switch-off, go through the uncharged `highPowerStore.set` |
+| Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts): the column is set. Until 2026-09-30 it also required an administrator owner, because nothing charged a reader. Now the only writer that sets the column for a reader charges in the same transaction |
 | Which model | `modelFor(task, power)` / `resolveModel(task, power)` — `power` is a **required** argument all the way down (`StepContext.power`, `streamMessage`'s options, every request-path stream), so a call that forgets to decide does not compile. Chosen over an `AsyncLocalStorage` scope because its failure is silent and it loses context across a streamed response |
 | Freshness | `generationKey` / `sameGenerator`: the stamp comparison and the two citation fingerprints treat Sonnet and Opus as one generation. Checkpoint keys (labels batches, hierarchy structure, deepening) stay exact, because there the question is *which model paid for this answer* |
 

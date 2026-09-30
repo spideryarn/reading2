@@ -435,6 +435,18 @@ model — the first version would have gone on passing after a name left the pro
 that too. The page says "the **default** models", because
 `SPIDERYARN_*_MODEL` can override several jobs at runtime and no test can see that.
 
+**One model is named generally, by Greg's decision.** High-powered AI's model appears as "Opus or a
+similar frontier model", not as `claude-opus-5-5`. Greg, 2026-09-30: *"approved changes to Privacy
+(though keep it a bit general, e.g. "Opus or similar frontier model")"*. The test keeps a short table
+of approved general wordings (`GENERAL_WORDING`), so that model is still covered. Editing the
+sentence away turns the test red, exactly as dropping an id would. Add to that table only with
+Greg's say-so.
+
+**The inventory had a hole, found the same day.** Illustrated's painter,
+`google/gemini-3.1-flash-image` (`IMAGE_MODEL`, `src/illustrated.ts`), was sent text and images and
+was in neither `DISPLAY_NAME` nor the page. It is in both now, and `tests/models.test.ts` lists it
+among the sendable models. GPT Sol, [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md).
+
 **Everything else on the page is prose that a person has to re-read.** Go and look at it when any of
 these moves:
 

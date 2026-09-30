@@ -296,6 +296,19 @@ function Faq() {
           Re-running one that is already on your shelf is free too.
         </Answer>
 
+        <Answer q="What is High-powered AI?">
+          {/* Greg, 2026-09-30: *"it should double the processing cost
+              per-article"*. The price is said in articles and never in money —
+              *"i don't want any regular users to know how much AI processing of
+              their articles costs"*, the same day. It is one more charge row
+              for the article, once, never refunded (`switchOnHighPower`,
+              src/store/pg-billing.ts). docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md. */}
+          For a difficult piece, you can switch one article to a stronger AI model from its
+          Metadata page. That doubles what the article counts against your allowance — one more
+          article, or half of one if the article is shared publicly. Switching it off doesn&apos;t
+          give it back, and switching it on again costs nothing more.
+        </Answer>
+
         <Answer q="What happens when I reach my limit?">
           {/* [tissue] *Reading is never gated* is Greg's, 2026-09-02. The
               second sentence offered a subscriber no upgrade until 2026-09-04,

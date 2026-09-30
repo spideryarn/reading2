@@ -46,6 +46,8 @@ function user(over: Partial<AdminUser> = {}): AdminUser {
     plan: "free",
     ingests: 0,
     ingestsShared: 0,
+    highPower: 0,
+    highPowerShared: 0,
     ingestLimit: 3,
     ingestWindow: "lifetime",
     ...over,

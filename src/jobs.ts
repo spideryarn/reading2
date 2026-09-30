@@ -2142,7 +2142,7 @@ export const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS, p
 
 /**
  * **The article's power for one step** — `articlePower` over the row's
- * `high_power_since` and the job's owner (plan 260930f decision 4).
+ * `high_power_since` (plan 260930k decision 6).
  *
  * **No row is a failure, never `standard`.** The plan expected a fresh
  * ingest to have no row yet; it always does by now, because the claim opens
@@ -2162,7 +2162,7 @@ export async function readStepPower(job: Job): Promise<ModelPower> {
         "setting to read. The claim opens the draft before any step, and that creates the row.",
     );
   }
-  return articlePower(row.highPowerSince, job.ownerId);
+  return articlePower(row.highPowerSince);
 }
 
 /**

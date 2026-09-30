@@ -342,6 +342,7 @@ import {
 } from "./billing/checkout.js";
 import { readBillingSummary } from "./billing/summary.js";
 import {
+  chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
   withIngestSlot,
   withRetrySlot,
@@ -952,7 +953,7 @@ function httpError(status: number, message: string): Error {
  * reaches require it, so one that forgot would not compile.
  */
 function powerOf(article: Pick<Article, "highPowerSince">): ModelPower {
-  return articlePower(article.highPowerSince, currentOwnerId());
+  return articlePower(article.highPowerSince);
 }
 
 /**
@@ -5011,7 +5012,7 @@ function checkUploadOrigin(
  * either as a confirmation would record a confirmation nobody gave.
  */
 /**
- * `{ on: boolean }` for `PUT /api/admin/article/:slug/high-power`, or a 400.
+ * `{ on: boolean }` for `PUT /api/article/:slug/high-power`, or a 400.
  *
  * Strict in the way `parseVisibilityRequest` below is: an unknown key is
  * refused rather than ignored, and `"true"` is not `true` — a switch that reads
@@ -7222,29 +7223,6 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **High-powered AI, switched on or off for one article** —
-     docs/plans/260930f-high-powered-ai-per-article.md, decision 8.
-
-     In the admin namespace so the namespace gate decides who may call it — a
-     reader is a 403 before this handler runs, and nothing here repeats the
-     check. But **owner-scoped all the same**: the admin namespace reads across
-     owners, and this deliberately does not write across them, so another
-     owner's slug is the store's 404 (`ownedSlug`). Answers what the column now
-     holds; switching on twice keeps the first `since`. Nothing re-runs: the
-     next `Run it again` is what uses it. */
-  {
-    kind: "pattern",
-    method: "PUT",
-    pattern: /^\/api\/admin\/article\/([\w.%-]+)\/high-power$/,
-    /* A settings write: it calls no model, so there is nothing to attribute. */
-    article: "none",
-    handler: async ({ request: { req, res } }, captures) => {
-      const { on } = parseHighPowerRequest(await readBody(req));
-      res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, await highPowerStore.set(slugPart(captures, 1), on));
-    },
-  },
-
   {
     kind: "pattern",
     method: "GET",
@@ -7753,6 +7731,44 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         res,
         200,
         await visibilityStore.set(slugPart(captures, 1), asked.visibility, asked.rightsConfirmed),
+      );
+    },
+  },
+
+  /**
+   * **High-powered AI, switched on or off for one article** — the owner's own
+   * article, anybody's account. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+   *
+   * A sub-resource of the article like `visibility` above, and owner-scoped the
+   * same way: another owner's slug is a 404. **Switching on charges**, once per
+   * article and never refunded — one more article's worth against the allowance,
+   * half while it is public (`chargeAndSwitchOnHighPower`, src/billing/admission.ts):
+   * a 402 when it does not fit, a 503 when the plan cannot be confirmed. The
+   * administrator is exempt as with ingests, and **switching off charges and
+   * refunds nothing**, so both go to the uncharged store method. It moved here
+   * from `/api/admin/article/:slug/high-power`, which was the admin-only v1
+   * (260930f decision 8); one writer of the column, not two.
+   *
+   * Answers what the column now holds. Nothing re-runs: the next `Run it again`
+   * is what uses it.
+   */
+  {
+    kind: "pattern",
+    method: "PUT",
+    pattern: /^\/api\/article\/([\w.%-]+)\/high-power$/,
+    /* A settings write, and a charge: it calls no model, so there is nothing to attribute. */
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const { on } = parseHighPowerRequest(await readBody(req));
+      const slug = slugPart(captures, 1);
+      const owner = currentOwnerId();
+      res.setHeader("Cache-Control", "private, no-store");
+      send(
+        res,
+        200,
+        on && !isAdmin(owner)
+          ? await chargeAndSwitchOnHighPower(owner, slug)
+          : await highPowerStore.set(slug, on),
       );
     },
   },

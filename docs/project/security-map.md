@@ -60,6 +60,9 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
   part is what stops a script firing twenty concurrent requests at a free account, which turns out
   to be one `insert … on conflict do nothing` in front of a `for update`. Also where test and live
   mode are kept apart, in three places, all keyed on the credential's own prefix.
+  Since 2026-09-30 it also holds High-powered AI’s charge (one more row per article, once, never
+  refunded), and the rule that AI *cost* is never shown to a non-admin lives in
+  [cost-tracking.md](cost-tracking.md#only-the-administrator-ever-sees-a-figure).
 - **[deployment.md § Who can reach it](deployment.md#who-can-reach-it)** — the app is readable by
   anybody with the address, deliberately, and it was an accident first: Vercel's protection setting
   reports itself as enabled while serving the world.

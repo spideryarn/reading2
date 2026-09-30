@@ -3,15 +3,15 @@
  * docs/plans/260930f-high-powered-ai-per-article.md.
  *
  * `articles.high_power_since` is null for off and the moment it was switched on
- * otherwise. Whether an article's calls actually go to Opus is not decided here:
- * that is `articlePower` in src/models.ts, which also asks whether the owner is
- * an administrator.
+ * otherwise. Whether an article's calls actually go to Opus is `articlePower` in
+ * src/models.ts: the column set is the answer.
  *
  * **Both methods are owner-scoped through `ownedSlug`**, so another owner's slug
  * is not found — a 404 at the route — rather than a row changed or read across
- * owners. The route that calls `set` lives in the `/api/admin` namespace, whose
- * gate reads across owners; this deliberately does not write across them
- * (decision 8).
+ * owners. `set` writes **no charge**: the route calls it only for the
+ * administrator and for switching off. A reader's switch-on goes through
+ * `switchOnHighPower` (src/store/pg-billing.ts), which charges and sets the
+ * column in one transaction — plan 260930k.
  *
  * **Idempotent, like the sharing switch** (src/store/pg-visibility.ts): asking
  * for the state an article is already in changes nothing, so switching on twice

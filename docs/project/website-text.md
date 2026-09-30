@@ -264,7 +264,7 @@ ways.
 
 ### The FAQ, and whose sentences are in it
 
-Seven questions in two columns under the cards, folding in all four *How it works* paragraphs —
+Seven questions (eight since 2026-09-30, below) in two columns under the cards, folding in all four *How it works* paragraphs —
 what you are charged in, what a month's allowance counts and when it resets, that the free allowance
 is a lifetime one, and how cancelling works. Those four are **moved word for word**;
 [marketing-pages.md § The copy is not yours to write](marketing-pages.md#the-copy-is-not-yours-to-write)
@@ -273,6 +273,14 @@ counts as an article, what happens at your limit, whether unused articles roll o
 agent-written, approved by Greg on 2026-09-04, and each carries a `[tissue]` marker in a source
 comment so a later dictation pass can find them
 ([positioning.md § Whose words](positioning.md#whose-words)).
+
+**An eighth answer, *What is High-powered AI?*, since 2026-09-30.** It is agent-written from
+Greg's *"it should double the processing cost per-article"* and carries a source comment rather than
+a `[tissue]` marker. It says what the switch costs in articles and **never in money**, because of
+Greg's rule that no reader is told what AI processing costs
+([cost-tracking.md § Only the administrator ever sees a figure](cost-tracking.md#only-the-administrator-ever-sees-a-figure)).
+`/features` gained the matching line under its plans.
+[260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md).
 
 **One of the four is no longer word for word, and the exception is worth knowing.** *"You are
 charged in your own currency"* was checked against the Stripe prices in the stage 2 code review and

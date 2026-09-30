@@ -433,7 +433,10 @@ describe("the Start this article again section", () => {
 
     const text = card()?.textContent ?? "";
     expect(text).toContain("Debate uses two");
-    expect(text).toContain("Sketch costs about $0.20");
+    /* The wait, not a price: what AI processing costs us is the administrator's
+       alone since 2026-09-30 (plan 260930k § 3). */
+    expect(text).toContain("Sketch takes about two minutes");
+    expect(text).not.toMatch(/[$£€]\s?\d/);
     expect(text).toContain("one image call per plate");
     expect(text).toContain("arc costs another model call when you next open the reading view");
   });

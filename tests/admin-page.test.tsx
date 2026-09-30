@@ -109,6 +109,8 @@ const ALICE: AdminUser = {
   planStatus: "active",
   ingests: 4,
   ingestsShared: 0,
+  highPower: 0,
+  highPowerShared: 0,
   ingestLimit: 20,
   ingestWindow: "period",
 };
@@ -137,6 +139,8 @@ const BOB: AdminUser = {
   plan: "free",
   ingests: 0,
   ingestsShared: 0,
+  highPower: 0,
+  highPowerShared: 0,
   ingestLimit: 3,
   ingestWindow: "lifetime",
 };

@@ -89,7 +89,7 @@ describe("the lapsed plan, which is the one that must not read as a bug", () => 
 
 describe("the other plan states", () => {
   it("counts a free account against its lifetime allowance, and says lifetime", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, atLimit: false });
+    const words = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false });
     expect(words).toContain("1 of 3");
     /* The word that stops a reader waiting for the 1st of the month. */
     expect(words).toMatch(/lifetime/i);
@@ -112,7 +112,7 @@ describe("the other plan states", () => {
       kind: "free",
       limit: 3,
       used: 6,
-      sharedHalfPrice: 6,
+      sharedHalfPrice: 6, highPower: 0,
       atLimit: true,
     });
     expect(words).not.toContain("6 of 3");
@@ -133,7 +133,7 @@ describe("the other plan states", () => {
       kind: "free",
       limit: 3,
       used: 4,
-      sharedHalfPrice: 2,
+      sharedHalfPrice: 2, highPower: 0,
       atLimit: true,
       /* **The server's answer, not this file's.** Whether sharing would make
          room cannot be worked out from `used` and `sharedHalfPrice` — a charged
@@ -156,7 +156,7 @@ describe("the other plan states", () => {
       { used: 4, sharedHalfPrice: 2 },
       { used: 3, sharedHalfPrice: 0 },
     ] as const) {
-      const words = rendered({ kind: "free", limit: 3, atLimit: true, ...plan });
+      const words = rendered({ kind: "free", limit: 3, atLimit: true, highPower: 0, ...plan });
       expect(words).not.toContain("Sharing more");
       expect(words).toContain("A subscription is what adds more");
     }
@@ -171,7 +171,7 @@ describe("the other plan states", () => {
    * rendering this file's header forbids. GPT Sol, 2026-09-05.
    */
   it("stops printing a ratio when the count is larger than the allowance", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 6, sharedHalfPrice: 0, atLimit: true });
+    const words = rendered({ kind: "free", limit: 3, used: 6, sharedHalfPrice: 0, highPower: 0, atLimit: true });
     expect(words).not.toContain("6 of 3");
     expect(words).toContain("6 articles added");
     expect(words).toContain("allowance of 3");
@@ -186,20 +186,54 @@ describe("the other plan states", () => {
    * inside it.
    */
   it("does not claim a count fits an allowance it is over", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 5, sharedHalfPrice: 1, atLimit: true });
+    const words = rendered({ kind: "free", limit: 3, used: 5, sharedHalfPrice: 1, highPower: 0, atLimit: true });
     expect(words).not.toContain("fit an allowance");
     expect(words).toContain("One of them is public");
     /* And the case that does fit still says so. */
-    expect(rendered({ kind: "free", limit: 3, used: 4, sharedHalfPrice: 2, atLimit: true })).toContain(
+    expect(rendered({ kind: "free", limit: 3, used: 4, sharedHalfPrice: 2, highPower: 0, atLimit: true })).toContain(
       "that is how 4 fit an allowance of 3",
     );
   });
 
   it("keeps the plain ratio while nothing is shared", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, atLimit: true });
+    const words = rendered({ kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, highPower: 0, atLimit: true });
     expect(words).toContain("3 of 3");
     /* And says nothing about sharing: a discount nobody has taken is not news. */
     expect(words).not.toMatch(/public/i);
+  });
+
+  /**
+   * **A High-powered AI upgrade is not an article added**, and one public
+   * high-powered article is not two public articles. `used` and
+   * `sharedHalfPrice` count ingests only; upgrades arrive as `highPower` and are
+   * said as their own fact, with no ratio. GPT Sol, plan 260930k review finding 1.
+   */
+  it("says High-powered AI apart from the count, and prints no ratio beside it", () => {
+    const free = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 1, highPower: 1, atLimit: false });
+    expect(free).toContain("1 articles added, on an allowance of 3");
+    expect(free).toContain("One of them is public");
+    expect(free).toContain("One of them uses High-powered AI, which counts as one more article each");
+    expect(free).not.toMatch(/\b1 of 3\b/);
+    expect(free).not.toContain("2 of them are public");
+
+    const paid = rendered({
+      kind: "paid",
+      tierId: "reader",
+      tierName: "Spideryarn Reader",
+      limit: 20,
+      used: 2,
+      sharedHalfPrice: 0,
+      highPower: 2,
+      atLimit: false,
+      periodEnd: "2026-10-03T11:37:00Z",
+      endsAt: null,
+    });
+    expect(paid).toContain("2 articles this month, on an allowance of 20");
+    expect(paid).toContain("2 of them use High-powered AI");
+    expect(paid).not.toContain("2 of 20");
+    /* The "none of them is public, so each counts in full" sentence is about
+       ingests that were cheap when added; it is not what an upgrade explains. */
+    expect(paid).not.toContain("None of them is public now");
   });
 
   it("names the tier, the month's count and the renewal date for a paid one", () => {
@@ -209,7 +243,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
-      sharedHalfPrice: 0,
+      sharedHalfPrice: 0, highPower: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
@@ -228,7 +262,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 40,
-      sharedHalfPrice: 0,
+      sharedHalfPrice: 0, highPower: 0,
       atLimit: true,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
@@ -249,7 +283,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
-      sharedHalfPrice: 0,
+      sharedHalfPrice: 0, highPower: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-10-03T11:22:33.000Z",
@@ -277,7 +311,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
-      sharedHalfPrice: 0,
+      sharedHalfPrice: 0, highPower: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-11-17T09:00:00.000Z",

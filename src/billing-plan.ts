@@ -115,6 +115,16 @@ export type ReaderPlan =
       /** The wall's own answer, not a comparison of the two numbers above. */
       readonly atLimit: boolean;
       /**
+       * **Articles switched to High-powered AI**, counted against this allowance —
+       * one more article's worth each, half while the article is public.
+       *
+       * Not in `used`, which is articles *added*: folded in, one high-powered
+       * article read as two added, and a public one as two public. The wall
+       * counts them (`atLimit`); the copy says them as their own fact.
+       * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+       */
+      readonly highPower: number;
+      /**
        * **Sharing something this account has added would get it back under the
        * wall** — the server's answer, and absent whenever it would not.
        *
@@ -148,6 +158,8 @@ export type ReaderPlan =
       readonly sharedHalfPrice: number;
       /** As `free`'s. */
       readonly atLimit: boolean;
+      /** As `free`'s. */
+      readonly highPower: number;
       /** ISO. When the allowance starts again — the renewal, not the ending. */
       readonly periodEnd: string;
       /**
@@ -441,8 +453,31 @@ function sharedClause(shared: number): string {
  * the page printed *"6 of 3 articles used"* — the exact rendering this file's
  * header forbids, arrived at from the other direction. GPT Sol found it.
  */
-function isRatio(plan: { used: number; limit: number; sharedHalfPrice: number }): boolean {
-  return plan.sharedHalfPrice === 0 && plan.used <= plan.limit;
+function isRatio(plan: {
+  used: number;
+  limit: number;
+  sharedHalfPrice: number;
+  highPower: number;
+}): boolean {
+  return plan.sharedHalfPrice === 0 && plan.highPower === 0 && plan.used <= plan.limit;
+}
+
+/**
+ * *"One of them uses High-powered AI, which counts as one more article"* — or
+ * nothing, for the account that has not switched any on.
+ *
+ * A fact beside the count rather than folded into it, and with no arithmetic
+ * after it: whether an upgrade is half-price depends on whether *its* article is
+ * public, which these integers do not say, so a *"that is how they fit"* sum here
+ * would be a guess. The wall's own answer is `atLimit`.
+ */
+function highPowerClause(highPower: number): string {
+  if (highPower === 0) return "";
+  const which = highPower === 1 ? "One of them uses" : `${highPower} of them use`;
+  return (
+    `${which} High-powered AI, which counts as one more article each ` +
+    "(half of one while the article is public). "
+  );
 }
 
 /**
@@ -467,7 +502,20 @@ function nonePublicNow(limit: number): string {
  * public is nine half-units against a budget of six, and *"that is how 5 fit an
  * allowance of 3"* is then a sentence about arithmetic that did not happen.
  */
-function howTheyStand(plan: { used: number; limit: number; sharedHalfPrice: number }): string {
+function howTheyStand(plan: {
+  used: number;
+  limit: number;
+  sharedHalfPrice: number;
+  highPower: number;
+}): string {
+  if (plan.highPower > 0) {
+    return (
+      (plan.sharedHalfPrice === 0
+        ? ""
+        : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `) +
+      highPowerClause(plan.highPower)
+    );
+  }
   if (plan.sharedHalfPrice === 0) return nonePublicNow(plan.limit);
   /* The same `× 2` `/admin/users` does, and for the same reason: the enforcement
      budget is in half-units, the page is handed integer counts, and neither end
@@ -574,9 +622,11 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
          twenty is not a ratio either. */
       const shared = isRatio(plan)
         ? ""
-        : plan.sharedHalfPrice === 0
-          ? nonePublicNow(plan.limit)
-          : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `;
+        : plan.highPower > 0
+          ? howTheyStand(plan)
+          : plan.sharedHalfPrice === 0
+            ? nonePublicNow(plan.limit)
+            : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `;
       return {
         headline: isRatio(plan)
           ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`

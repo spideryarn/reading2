@@ -31,7 +31,6 @@ import { jsdom } from "./jsdom-lazy.js";
 import { errorFields, log, since } from "./log.js";
 import { SOURCE_GUESS_BUSY, SOURCE_GUESS_LIMITED, SOURCE_GUESS_RESTING, tookTooLong } from "./messages.js";
 import { articlePower, type ModelPower, modelFor } from "./models.js";
-import { currentOwnerId } from "./owner.js";
 import { normaliseWhitespace, type PaperText, readPaperText } from "./paper-text.js";
 import { pass0 } from "./pdf.js";
 import { isSamePaper, type PaperIdentity, paperIdentity } from "./source-guess.js";
@@ -458,7 +457,7 @@ export function makeGuessSource(deps: GuessSourceDeps): (slug: string) => Promis
             meter,
             /* The reader seam is owner-scoped, so the ambient owner is this
                article's (plan 260930f, Sol F4). */
-            articlePower(article.highPowerSince, currentOwnerId()),
+            articlePower(article.highPowerSince),
           ), clock),
       };
     } catch (err) {

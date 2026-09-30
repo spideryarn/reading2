@@ -228,7 +228,7 @@ function Ingests({ user }: { user: AdminUser }) {
      would read as the wall having failed — the same rendering the half form
      below exists to avoid, arrived at from the other direction. GPT Sol,
      2026-09-05. */
-  if (user.ingestsShared === 0 && user.ingests <= user.ingestLimit) {
+  if (user.ingestsShared === 0 && user.highPower === 0 && user.ingests <= user.ingestLimit) {
     return (
       <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
         {user.ingests} / {user.ingestLimit}
@@ -243,7 +243,13 @@ function Ingests({ user }: { user: AdminUser }) {
      a whole article*), so the cell shows the enforcement pair in its own unit
      and names it. The arithmetic is done here from integer counts rather than
      sent as a total — the server has no better claim on `× 2` than the page. */
-  const halfUnits = (user.ingests - user.ingestsShared) * 2 + user.ingestsShared;
+  /* High-powered AI's upgrades are one more article's worth each, priced like
+     an ingest of the same article — so they join the same sum. */
+  const halfUnits =
+    (user.ingests - user.ingestsShared) * 2 +
+    user.ingestsShared +
+    (user.highPower - user.highPowerShared) * 2 +
+    user.highPowerShared;
   const budget = user.ingestLimit * 2;
   return (
     <span
@@ -253,6 +259,9 @@ function Ingests({ user }: { user: AdminUser }) {
            it is the one that explains a cell like `12 / 6 half` on an account
            with nothing shared: they were public when they were added. */
         (user.ingestsShared === 0 ? "none of them public now" : `${user.ingestsShared} of them public`) +
+        (user.highPower === 0
+          ? ""
+          : `, and ${user.highPower} switched to High-powered AI, which counts as one more article each`) +
         `. A public article counts as half, so that is ${halfUnits} half-slots against an ` +
         `allowance of ${user.ingestLimit} articles, which is ${budget}.`
       }
