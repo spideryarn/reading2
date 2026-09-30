@@ -697,13 +697,11 @@ describe("a file whose lines are partly broken", () => {
 });
 
 describe("a release's date", () => {
-  /* Only `Date` is faked: `useNow` keeps a real `setInterval`, and faking that
-     too would leave a timer nothing advances. The clock is pinned because the
-     whole feature is a function of it — against the real one these fixtures
-     would drift out of the 30-day window a month from now and the test would
-     change meaning without going red. */
+  /* The clock and its interval are faked together. Pinning Date keeps these
+     fixtures from drifting out of the 30-day window; advancing the interval in
+     the last test proves the page does not merely read that pinned time once. */
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-06T12:49:03Z"));
   });
   afterEach(() => {
@@ -720,10 +718,11 @@ describe("a release's date", () => {
     expect(heading?.getAttribute("dateTime")).toBe("2026-09-06T09:49:03Z");
     expect(heading?.getAttribute("title")).toBe("6 September 2026, 09:49 UTC");
     expect(spoken(heading)).toBe(", released 6 September 2026, 09:49 UTC");
-    // The heading's formatter speaks the runtime's own locale, so by number
-    // rather than by wording; it must not be the absolute stamp.
-    expect(visible(heading)).toMatch(/3/);
-    expect(visible(heading)).not.toContain("September");
+    // The heading's formatter speaks the runtime's own locale. Deriving the
+    // expected words from that same locale checks the long style without
+    // pinning the test to English.
+    const long = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    expect(visible(heading)).toBe(long.format(-3, "hour"));
 
     // The contents column's is pinned to English (relative-time.ts § narrow).
     const contents = host.querySelector('nav[aria-label="Releases"] time');
@@ -736,5 +735,14 @@ describe("a release's date", () => {
     await draw(fixtureVersions());
     expect(visible(host.querySelector("details h2 time"))).toBe("6 September 2026, 09:49");
     expect(visible(host.querySelector('nav[aria-label="Releases"] time'))).toBe("6 Sep");
+  });
+
+  it("updates while the page remains open", async () => {
+    await draw(fixtureVersions());
+    const contents = () => visible(host.querySelector('nav[aria-label="Releases"] time'));
+    expect(contents()).toBe("3h ago");
+
+    await act(async () => vi.advanceTimersByTime(31 * 60_000));
+    expect(contents()).toBe("4h ago");
   });
 });

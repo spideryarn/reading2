@@ -68,6 +68,9 @@ describe("relativeAgo", () => {
        exposed as an absence rather than decided twice. */
     expect(relativeAgo(ago(5 * HOUR), NOW)).toBe(timeAgo(ago(5 * HOUR), NOW));
     expect(relativeAgo(ago(29 * DAY), NOW)).toMatch(/day/i);
+    expect(relativeAgo(ago(30 * DAY - 1), NOW)).toMatch(/day/i);
+    expect(relativeAgo(ago(30 * DAY), NOW)).toBeUndefined();
+    expect(timeAgo(ago(30 * DAY), NOW)).toMatch(/2026/);
     expect(relativeAgo(ago(200 * DAY), NOW)).toBeUndefined();
     expect(relativeAgo("nope", NOW)).toBeUndefined();
   });

@@ -94,4 +94,9 @@ answer file.) The code had been drafted in parallel, so both landed as edits to 
 - Built: yes — `relative-time.ts` (`relativeAgo`, `RelativeStyle`), `ChangelogPage.tsx`
   (`ReleaseDate`, `useNow` in `ChangelogBody`, the contents date column `w-11` → `w-16`), tests in
   `tests/relative-time.test.ts` and `tests/changelog-page.test.tsx`, watched red first.
-- Code review (GPT Sol): pending.
+- Code review (GPT Sol, workspace-write): **approve**, no product-code defects; one P3 on the tests,
+  which it fixed: the heading's long form is now asserted against the runtime's own formatter rather
+  than a digit, the 30-day boundary is tested on both sides, and a new test advances the interval to
+  prove the dates move while the page stays open. Exit 0, fresh answer file, diff read, gates re-run.
+- Note: `docs/user-feedback/260930_0259-changelog-release-dates-as-relative-time.md` (row
+  `spya-pu7536`, ending shipped).
