@@ -44,7 +44,6 @@ export function QuizInProse({
           key={q.id}
           type="button"
           className="quiz-in-prose-q"
-          title="A question from your quiz about the passage above — answer it in Quiz"
           onClick={() => onOpen(batchId, q.id)}
         >
           <MessageCircleQuestionMark size={14} aria-hidden="true" className="quiz-in-prose-icon" />

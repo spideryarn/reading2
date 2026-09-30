@@ -1359,4 +1359,23 @@ describe("an arrival from the prose", () => {
     expect(stem()).toBe(third.question);
     expect(box()?.checked, "the tick-box should say it gave way").toBe(false);
   });
+
+  it("wins when the filter tries to move off that same unread opening question", () => {
+    const readSoFar: ReadSoFar = {
+      /* The opening question is unread and the second is read. On mount, the
+         filter effect therefore tries to move 0 -> 1 in the same commit that
+         the arrival turns the filter off and asks to stay on 0. */
+      levels: new Map([[OTHER, 4 as const]]),
+      status: "loaded",
+      bodyWords: new Map([
+        [KNOWN, 100],
+        [OTHER, 100],
+        [THIRD, 100],
+      ]),
+    };
+    const arrival: QuizArrival = { batchId: PATH.batchId, questionId: first.id };
+    paintAt(owner({ quiz: PATH }), arrival, { readSoFar });
+    expect(stem(), "the earlier filter effect overruled the prose arrival").toBe(first.question);
+    expect(host.querySelector<HTMLInputElement>(".quiz-only-read input")?.checked).toBe(false);
+  });
 });

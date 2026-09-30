@@ -409,6 +409,10 @@ function expectPlacedLines(): void {
   }
   /* The lines are siblings of the prose, never inside it. */
   expect(row(C).querySelector(".prose .quiz-in-prose")).toBeNull();
+  /* The visible question is the button's accessible name. Native `title`
+     tooltips are explicitly forbidden by docs/project/tooltips.md: they add a
+     second, hover-only sentence that a finger can never reach. */
+  expect(lineFor(Q1).getAttribute("title"), "the question grew a native tooltip").toBeNull();
 }
 
 describe("the quiz's questions in the prose", () => {

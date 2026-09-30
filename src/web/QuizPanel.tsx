@@ -402,9 +402,10 @@ export function QuizPanel({
    *
    * - **Another batch's arrival is taken and ignored** — finding 1.
    * - **The question already open is not moved to**, `pick`'s rule: `move`
-   *   aborts a mark in flight and drops the draft (finding 3). On a batch that
-   *   has only just arrived, `at` is still the old batch's index, so that
-   *   comparison is not trusted there.
+   *   aborts a mark in flight and drops the draft (finding 3). Its index is
+   *   still written last, though: the filter effect just above can be trying to
+   *   move off this unread question in the same commit. Writing the requested
+   *   index again lets the arrival win without clearing the attempt.
    * - **The tick-box gives way.** The reader asked for this question by name, so
    *   if *Only what I've read* would hide it — or the reading levels are still
    *   loading, while the walk waits — it is turned off, visibly, rather than
@@ -421,7 +422,16 @@ export function QuizPanel({
       const to = questions.findIndex((q) => q.id === arrival.questionId);
       if (to >= 0) {
         if (filtering && (waitingForReading || included[to] === false)) setOnlyRead(false);
-        if (!(sameBatch && to === at)) move(to, false);
+        if (sameBatch && to === at) {
+          /* Last writer wins over the filter effect above. This is intentionally
+             not `move`: staying on one question must preserve its live mark and
+             draft. It is still a jump, so it no longer counts as arriving by
+             Next and its premise is shown. */
+          setAt(to);
+          setArrivedByNext(false);
+        } else {
+          move(to, false);
+        }
         setListing(false);
       }
     }
