@@ -1,0 +1,60 @@
+{
+  "arm": "medium-15",
+  "effort": "medium",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T14:59:42.225Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 10406,
+  "costUsd": 0.046746,
+  "tokens": {
+    "input": 19813,
+    "output": 712,
+    "reasoning": 0
+  },
+  "ok": true,
+  "words": 299,
+  "paragraphs": [
+    {
+      "text": "This article is about how scientists try to figure out what brains are actually doing when they 'process information.' Brains take in signals from the world and turn them into behavior, but how neurons combine signals from many sources into something new is still poorly understood. The authors introduce a tool called partial information decomposition, or PID, which helps break down how neurons share and combine information.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because just watching information flow from one neuron to another does not tell you how neurons actually combine and transform that information. The authors say a new approach was needed to reveal the difference between neurons that simply relay signals and neurons that truly compute something new from multiple inputs at once.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "The key idea is that when two source neurons send signals to one target neuron, their combined information can be split into pieces: redundant information (the same message told twice), unique information (something only one source knows), and synergistic information (something you can only learn by looking at both sources together, a kind of higher-level pattern). Synergy is treated as a sign that a neuron is doing real 'computation,' not just adding up inputs. Using recordings from mouse brain cell cultures and from monkeys performing tasks, the researchers found that synergy is common, is higher in tightly connected 'rich club' neurons, grows with more feedback loops between source neurons, and changes depending on what behavior the animal is doing.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury",
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "text": "The piece also walks through practical issues: choosing how to measure 'redundancy,' picking software tools, and dealing with the fact that this math becomes extremely complex as more neurons are added. It ends by pointing to newer extensions of the method and open questions for future research, such as studying animals as they behave rather than only in dishes.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

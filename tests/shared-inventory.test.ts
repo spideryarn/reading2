@@ -345,6 +345,9 @@ const WIRE_ROW = {
      `publicCitedWork`), which is invisible to this table. */
   faq: "faq",
   citations: "citations",
+  /* Simple, from the day it was built (2026-09-30): a sub-mode of Summary, so
+     Summary's row. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  simpleSummary: "summary",
   /* And the Debate, the same day (plan 260929c stage 4). A row the boundary
      refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
      which is invisible to this table too. */

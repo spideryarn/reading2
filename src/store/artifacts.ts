@@ -46,6 +46,7 @@ import type {
   Block,
   Citations,
   Crossrefs,
+  SimpleSummary,
   Debate,
   Faq,
   Trajectory,
@@ -102,7 +103,8 @@ export type ArtifactKind =
   | "illustrated"
   | "debate"
   | "citations"
-  | "crossrefs";
+  | "crossrefs"
+  | "simple";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -212,6 +214,12 @@ export interface ArtifactMap {
    * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
    */
   crossrefs: Crossrefs;
+  /**
+   * Simple, the plain-words orientation — `SimpleSummary`, src/types.ts,
+   * written by the `simple` step.
+   * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+   */
+  simple: SimpleSummary;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -409,6 +417,9 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
   crossrefs: { field: "links", ok: isArray },
+  /* A `paragraphs` array. `buildSimpleSummary` throws on fewer than two, so an
+     empty one never reaches here from the step. */
+  simple: { field: "paragraphs", ok: isArray },
 };
 
 /**
@@ -944,6 +955,8 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
      re-run simply replaces the list. */
   crossrefs: "crossrefs",
+  /* No `BASELINE` row: nothing addresses a paragraph, so a re-run replaces. */
+  simple: "simple",
 };
 
 /**

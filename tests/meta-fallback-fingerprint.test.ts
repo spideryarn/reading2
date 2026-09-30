@@ -69,6 +69,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
 import { articleWithIds } from "../src/article-prompt.js";
+import { isBodyEvidence } from "../src/block-policy.js";
 import {
   type BlockFingerprint,
   articleWithIdsFingerprint,
@@ -369,6 +370,29 @@ describe("an article with no metadata", () => {
 
     expect(run.crossrefs.links).toHaveLength(1);
     expect(run.crossrefs.sourceHash).toBe(
+      inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
+    );
+    expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));
+  });
+
+  it("simple: hashes the absent metadata, and still sends a head", async () => {
+    /* The sixth stage of this shape, plan 260930i. Its article head must be
+       Ideas' byte for byte, while its own hash covers the rendered request. */
+    const { generateSimpleSummary, inputFingerprint } = await import("../src/simple-summary.js");
+    const block = quotable(withoutMeta.blocks);
+    const second = withoutMeta.blocks.find((b) => b.id !== block.id && isBodyEvidence(b));
+    if (!second) throw new Error("the fixture has no second body block");
+    answer = JSON.stringify({
+      paragraphs: [
+        { text: "This piece is about something.", ids: [block.id] },
+        { text: "It matters for a reason it gives.", ids: [second.id] },
+      ],
+    });
+
+    const run = await generateSimpleSummary({ article: withoutMeta });
+
+    expect(run.simpleSummary.paragraphs).toHaveLength(2);
+    expect(run.simpleSummary.sourceHash).toBe(
       inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
     );
     expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));

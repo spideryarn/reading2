@@ -1,0 +1,61 @@
+{
+  "arm": "high-15",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "cargocult-spya-rz663q",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T15:00:32.466Z",
+  "bodyWords": 3822,
+  "bodyBlocks": 41,
+  "wallMs": 10600,
+  "costUsd": 0.025776,
+  "tokens": {
+    "input": 8228,
+    "output": 932,
+    "reasoning": 229
+  },
+  "ok": true,
+  "words": 287,
+  "paragraphs": [
+    {
+      "text": "This is a speech Richard Feynman, a physicist, gave to a graduating class in 1974. He talks about things that look like science but aren't really science at all. He calls this \"Cargo Cult Science,\" named after islanders who built fake airports and control towers hoping planes full of supplies would land again, copying the outward form without understanding what actually made it work.",
+      "ids": [
+        "spya-f6b5fs",
+        "spya-wv9g0v",
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "text": "Feynman says this matters because many people believe in things like UFOs, astrology, or mind-reading, and even fields that claim to be scientific, like some education or criminal-justice methods, never actually check whether their ideas work. He argues the missing piece in fake science isn't obvious, like better equipment; it's a kind of honesty scientists are supposed to have but rarely get taught directly.",
+      "ids": [
+        "spya-bcgpc3",
+        "spya-re4634",
+        "spya-afgs74"
+      ]
+    },
+    {
+      "text": "The key idea is scientific integrity: you must report everything that might prove your own result wrong, not just the evidence that supports it, and you must always publish results whether they support your idea or not. He gives examples, like how early measurements of the electron's charge crept slowly toward the correct number over years because scientists distrusted results that differed too much from the first measurement, and a careful 1937 experiment by a researcher named Young, who painstakingly ruled out every possible clue rats could use to find food, yet other scientists later ignored his careful method and kept running sloppy experiments anyway.",
+      "ids": [
+        "spya-s9msxy",
+        "spya-uj9v2h",
+        "spya-yzzxkw"
+      ]
+    },
+    {
+      "text": "Feynman's main lesson is: the first rule is not to fool yourself, since you're the easiest person to fool, and only after that can you be honest with others. He ends by wishing the graduates the freedom to keep that kind of honesty even when their job or funding might tempt them not to.",
+      "ids": [
+        "spya-ed9mzv",
+        "spya-ndyj3t"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

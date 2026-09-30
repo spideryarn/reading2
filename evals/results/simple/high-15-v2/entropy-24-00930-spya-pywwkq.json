@@ -1,0 +1,61 @@
+{
+  "arm": "high-15-v2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:43.098Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 12171,
+  "costUsd": 0.048424,
+  "tokens": {
+    "input": 19852,
+    "output": 872,
+    "reasoning": 229
+  },
+  "ok": true,
+  "words": 239,
+  "paragraphs": [
+    {
+      "text": "This is a review article about how brains process information. It explains a math tool called partial information decomposition, or PID, which breaks down how neurons combine signals from other neurons. The authors use it to study real recordings of brain cells to see how information gets combined into new patterns.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "Figuring out how neurons process information is one of neuroscience's biggest open questions. Older tools could track information moving between neurons, but not show how neurons truly combine or transform it. PID lets researchers see three things at once: information repeated across sources (redundant), information only one source has (unique), and information that only shows up when sources are combined (synergistic).",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "Synergy, the combined kind of information, turned out to matter most for understanding computation. Studies of brain cell cultures found synergy was higher in \"rich clubs,\" tightly connected groups of well-linked neurons, and in triads with more loop-like (recurrent) connections between the two source neurons. Synergy also depended on how similar the two incoming signals were: it rose with similarity up to a point, then fell as redundancy took over instead.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "text": "The same patterns showed up in monkeys performing tasks, not just in lab cultures, and synergy shifted depending on what the brain was doing at the moment. The article also covers practical tips for using PID, its limits, such as needing huge amounts of data, and newer extensions like decomposing information across time or multiple targets.",
+      "ids": [
+        "spya-wr7f6y",
+        "spya-t8fayf",
+        "spya-aby2dp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

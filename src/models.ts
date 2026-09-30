@@ -465,6 +465,10 @@ export type Task =
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
   | "crossrefs"
+  /* Simple: a plain-words orientation, each paragraph naming its passages —
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Article-reading like
+     `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+  | "simple"
   /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      **Not article-reading**: it sends the quotes and never the article, so it
      is no `ArticleStage` and its effort is a constant in src/trajectory.ts. */
@@ -814,6 +818,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   quiz: "capable",
   faq: "capable",
   crossrefs: "capable",
+  simple: "capable",
   trajectory: "capable",
   explain: "capable",
   chat: "capable",
@@ -1039,6 +1044,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quiz: "messages",
   faq: "messages",
   crossrefs: "messages",
+  simple: "messages",
   trajectory: "messages",
   explain: "chat",
   chat: "chat",
@@ -1151,6 +1157,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quiz: null,
   faq: null,
   crossrefs: null,
+  simple: null,
   trajectory: null,
   citations: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
@@ -1412,7 +1419,8 @@ export type ArticleStage =
   | "timeline"
   | "quiz"
   | "faq"
-  | "crossrefs";
+  | "crossrefs"
+  | "simple";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -1554,6 +1562,17 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      evals/results/effort-vs-quality.md.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   crossrefs: "medium",
+  /* **`high`, MEASURED 2026-09-30, against the plan's `medium`.** Three local
+     articles at each (a dense paper, an essay, a talk), with the shipped
+     prompt: the wall clock was the same (11–12 s at `high`, 10–12 s at
+     `medium`) and so was the cost (2–5 cents), because an answer this short
+     leaves adaptive thinking little to spend. What differed was fidelity: both
+     `medium` runs on the paper turned its "recurrent connections" (which raise
+     synergy) into "feedback loops" (which, in the same paper, lower it), and the
+     `high` run kept the author's term. Evidence, not a distribution —
+     evals/simple/results-260930.md. So it IS in the `ideas` cache group now,
+     and sits beside `faq` in `STEP_ORDER` (src/step-order.ts). */
+  simple: "high",
 };
 
 /**
@@ -1613,6 +1632,9 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   /* Two block ids a row, so the ids have to be on the page — and the body
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",
+  /* Every paragraph names its passages' block ids, so the ids are on the page;
+     the body only, byte-identical to `ideas`, at `high`: it joins that prefix. */
+  simple: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

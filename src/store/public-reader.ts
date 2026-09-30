@@ -342,6 +342,12 @@ const PUBLIC_PROJECTIONS = {
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     faq: articleRevisions.faq,
     citations: articleRevisions.citations,
+    /* **Simple, from the day it was built** (2026-09-30): generated output, so
+       a visitor sees the stored one, and only making one is the owner's
+       (docs/project/new-mode.md § The artefact). No profile; the stamp is
+       dropped by `publicSimpleSummary` in ../public/dto.ts.
+       docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+    simpleSummary: articleRevisions.simpleSummary,
     /* **The eleventh, 2026-09-29: the Debate** — withheld until then for the
        cost of *running* a search (two metered web searches), which a visitor
        never pays, and because the boundary its rows must pass was not built.
@@ -778,6 +784,7 @@ export const pgPublicReader: PublicArticleReader = {
         timeline: found.revision.timeline,
         trajectory: found.revision.trajectory,
         faq: found.revision.faq,
+        simpleSummary: found.revision.simpleSummary,
         citations: found.revision.citations,
         debate: found.revision.debate,
         sketch: found.revision.sketch,

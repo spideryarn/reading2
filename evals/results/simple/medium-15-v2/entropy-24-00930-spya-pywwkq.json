@@ -1,0 +1,60 @@
+{
+  "arm": "medium-15-v2",
+  "effort": "medium",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:41.969Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 11593,
+  "costUsd": 0.047744,
+  "tokens": {
+    "input": 19852,
+    "output": 804,
+    "reasoning": 174
+  },
+  "ok": true,
+  "words": 259,
+  "paragraphs": [
+    {
+      "text": "This article is a review about how scientists study 'information processing' in the brain: how groups of neurons take in signals and turn them into something new. It introduces a tool called partial information decomposition, or PID, which breaks down how much neurons together tell us about another neuron's future activity.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because brains take in signals from the world and use them to guide behavior, but how they actually transform that information is poorly understood. Simple tools like measuring how one neuron's past activity predicts another's future (called information flow) show that information moves through circuits, but not how neurons combine different signals into something new.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "PID splits the total information two source neurons give about a target into three parts: redundant (told by either source alone), unique (only from one source), and synergistic (only clear when looking at both together). Synergy is treated as a sign of real computation, since it means the target reacts to patterns, not just totals. Studies of neurons grown in dishes found synergy was higher in densely connected 'rich club' neurons, in circuits with more feedback loops between the two sources, and when the two sources' activity was moderately, but not too, similar.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "Similar patterns showed up in monkeys performing a task, where synergy shifted depending on the stage of the task, such as rising sharply during movement in the motor brain area. The article ends by pointing to open challenges, like handling huge numbers of neurons at once and extending PID to track information over time and across multiple targets.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

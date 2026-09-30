@@ -1,0 +1,62 @@
+{
+  "arm": "high-15-v2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:43.070Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "wallMs": 11361,
+  "costUsd": 0.046416,
+  "tokens": {
+    "input": 18983,
+    "output": 845,
+    "reasoning": 167
+  },
+  "ok": true,
+  "words": 246,
+  "paragraphs": [
+    {
+      "text": "This essay asks whether artificial intelligence could ever be truly conscious, meaning it actually feels or experiences things, not just acts smart. The author, a neuroscientist, argues that being intelligent (able to do clever things) and being conscious (having real inner experience) are not the same, and that AI having one does not mean it has the other.",
+      "ids": [
+        "spya-tgnssb",
+        "spya-q23td7",
+        "spya-nj888h"
+      ]
+    },
+    {
+      "text": "The question matters because if AI ever became conscious, it would deserve moral concern and maybe rights, and could suffer. It also matters even if AI is not conscious: believing machines feel things when they do not can warp our ethics, our emotions, and how we treat real living things.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-sge6a2"
+      ]
+    },
+    {
+      "text": "The author explains why we are tempted to see consciousness in AI: human biases like assuming machines that talk like us must think and feel like us, plus hype about exponential progress and fantasies of AI as god-like or immortal. He then argues that consciousness likely requires computation is not enough. Brains are not really computers, since living biology, timing, and material stuff seem to matter in ways abstract programs do not.",
+      "ids": [
+        "spya-cvaqgs",
+        "spya-cke6sj",
+        "spya-v4sduf"
+      ]
+    },
+    {
+      "text": "He suggests consciousness may be tied to being alive, not just to processing information, and that simulating a brain on a computer is not the same as actually creating one, the way simulating rain does not make anything wet. His conclusion: real conscious AI is unlikely with current computers, but AI that merely seems conscious is already here, and that illusion is dangerous on its own.",
+      "ids": [
+        "spya-hj5y6s",
+        "spya-cqh5wq",
+        "spya-npjt4j"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 5,
+    "unanchored": 0
+  }
+}

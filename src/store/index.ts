@@ -238,6 +238,7 @@ export const loadTimeline = reader.loadTimeline.bind(reader);
 export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadFaq = reader.loadFaq.bind(reader);
 export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
+export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
 export const loadTrajectory = reader.loadTrajectory.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);

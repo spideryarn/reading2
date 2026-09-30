@@ -244,3 +244,22 @@ asked for it); the ELI12 comparison taken as a probe only. P1-2 false cache clai
 P1-3 profile — taken. P1-4 artefact stamp and validation — taken. P1-5 visitor seam — taken. P1-6
 activation — taken. P1-7 stale/outdated — taken. P2-1 *Outline* — taken (*Gists*). P2-2 test list,
 ai-gateway.md — taken.
+
+**Stage 1, built** (server). Probe on three local articles (Feynman's talk, Seth's Noema essay, an
+Entropy paper; `dongetal25` is not on this box), ~$0.70 in all —
+[evals/simple/results-260930.md](../../evals/simple/results-260930.md):
+
+- **Effort is `high`, not `medium`.** Wall clock was the same (10–12 s either way, 2–5 cents a
+  call), and every `medium` run on the paper turned "recurrent connections" into "feedback loops",
+  which the paper associates with the opposite finding; `high` kept the author's term. So `simple`
+  is in the `ideas` cache group, right after `faq`.
+- **The model overshoots a word target by about a third.** "Under 250" gave 261–339 words and two
+  of three `high` runs failed the 320-word ceiling and stored nothing. The prompt now asks for about
+  200 and never more than 250, sentences under 25 words: 239–289 in six runs, no failures. 289 is
+  close to 320; watch the failure rate.
+- **The ~11 s wait** is the number for the streaming question above.
+- **ELI12** (the probe's `pitch: 12`, which nothing in the app passes): 190–208 words, simpler,
+  loses some examples, made the same slip at `medium`.
+- The artefact kind is `simple` (every kind is named for its step, and a test derives a URL from
+  it); the column is `simple_summary`, the public key `simpleSummary`. Drop counts are logged and
+  reported, not stored.

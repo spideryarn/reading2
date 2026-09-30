@@ -188,6 +188,7 @@ const LAYOUT: {
   debate: { debate: (at) => path.join(at.dir, "debate.json") },
   citations: { citations: (at) => path.join(at.dir, "citations.json") },
   crossrefs: { crossrefs: (at) => path.join(at.dir, "crossrefs.json") },
+  simple: { simple: (at) => path.join(at.dir, "simple-summary.json") },
 };
 
 /** The two kinds that are text on disk rather than JSON. */

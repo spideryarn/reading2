@@ -440,8 +440,9 @@ describe("RESET_ROLE", () => {
     expect(extraSteps()).toEqual(
       STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels"),
     );
-    /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f). */
-    expect(extraSteps()).toHaveLength(14);
+    /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f); fifteen since
+       `simple` the same day (plan 260930i). */
+    expect(extraSteps()).toHaveLength(15);
   });
 
   it("finds every extra's column in STORAGE, one whole column each", () => {

@@ -458,7 +458,10 @@ describe("the request", () => {
     /* And contiguous with them in `STEP_ORDER`. */
     const at = (s: (typeof STEP_ORDER)[number]) => STEP_ORDER.indexOf(s);
     expect(at("faq")).toBe(at("quiz") + 1);
-    expect(at("sketch")).toBe(at("faq") + 1);
+    /* `simple` joined the group between them on 2026-09-30, at `high` (plan 260930i). */
+    expect(sharesArticleCache("faq", ["simple"])).toBe(true);
+    expect(at("simple")).toBe(at("faq") + 1);
+    expect(at("sketch")).toBe(at("simple") + 1);
   });
 
   it("offers an upper budget, never a floor, and sizes the answer from the caps", () => {

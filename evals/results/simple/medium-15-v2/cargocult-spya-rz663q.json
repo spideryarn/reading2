@@ -1,0 +1,62 @@
+{
+  "arm": "medium-15-v2",
+  "effort": "medium",
+  "pitch": 15,
+  "slug": "cargocult-spya-rz663q",
+  "version": "simple/1",
+  "sourceSha256": "606e8d17ac2bdbb88d87e082085a106b73d60798a42cb7995e1b87ab7b1956a1",
+  "at": "2026-09-30T15:02:41.974Z",
+  "bodyWords": 3822,
+  "bodyBlocks": 41,
+  "wallMs": 12344,
+  "costUsd": 0.024004,
+  "tokens": {
+    "input": 8267,
+    "output": 747,
+    "reasoning": 0
+  },
+  "ok": true,
+  "words": 289,
+  "paragraphs": [
+    {
+      "text": "This is a speech by physicist Richard Feynman, given at a college graduation in 1974. It is about spotting fake science, things that look and sound scientific but are not. He calls this \"Cargo Cult Science,\" named after island cultures that built fake airport runways and control towers hoping planes full of goods would land, copying the look of the real thing without understanding why it worked.",
+      "ids": [
+        "spya-arxt8r",
+        "spya-f6b5fs",
+        "spya-wv9g0v"
+      ]
+    },
+    {
+      "text": "Feynman says this matters because many things treated as scientific, like methods for teaching reading, or handling criminals, never actually get checked to see if they work. He compares this to old-fashioned cures that never got properly tested. Ordinary people with common sense get talked out of their own good ideas by so-called experts using these fake-scientific methods.",
+      "ids": [
+        "spya-aww976",
+        "spya-re4634",
+        "spya-g2cwvy"
+      ]
+    },
+    {
+      "text": "His main idea is that real science needs a kind of strict honesty, especially honesty with yourself, since you are the easiest person to fool. Scientists should report everything that might prove their own idea wrong, not just the evidence that supports it. He gives an example: measurements of the charge of an electron kept creeping up over time because early scientists quietly ignored results too different from a famous earlier measurement, instead of just reporting all their data.",
+      "ids": [
+        "spya-afgs74",
+        "spya-rxj5wa",
+        "spya-s9msxy"
+      ]
+    },
+    {
+      "text": "He also describes good and bad examples from research. A scientist named Young carefully ruled out every possible clue rats could use to find food, which was excellent science, but later researchers ignored his careful methods. Meanwhile, some studies of ESP (reading minds or predicting the future) kept shrinking in their results as they got better tested, yet were still defended. Feynman ends by wishing listeners the freedom to keep this kind of honesty, even when their job or funding might tempt them not to.",
+      "ids": [
+        "spya-npdc6n",
+        "spya-wye8g6",
+        "spya-rbpppq"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}

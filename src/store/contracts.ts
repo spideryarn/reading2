@@ -91,6 +91,7 @@ import type {
   QuizFound,
   FaqFound,
   CrossrefsFound,
+  SimpleSummaryFound,
   TrajectoryFound,
   TimelineFound,
   ThreadFound,
@@ -291,6 +292,13 @@ export interface ArticleReader {
    * Greg). docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
    */
   loadCrossrefs(slug: string): Promise<CrossrefsFound>;
+
+  /**
+   * Simple — the plain-words orientation — plus whether it still describes
+   * the article (`stale`, shown) and whether an older prompt wrote it
+   * (`outdated`, silent). docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+   */
+  loadSimpleSummary(slug: string): Promise<SimpleSummaryFound>;
 
   /**
    * The route through the Quotes, plus whether it still matches them — judged

@@ -340,6 +340,11 @@ export const REVISION_CARRY_POLICY: Record<
      Carrying keeps it for the day the article moves back, and costs nothing.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   crossrefs: "carry",
+  /* **Carries, like `faq`** — a replace-on-rerun artefact whose `sourceHash`
+     answers at read time whether the article moved underneath it; the panel
+     shows a stale one with a notice. Minting would empty the band until
+     somebody paid again. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  simpleSummary: "carry",
   /* **Carries, like `quotes`, which it is made of.** It holds quote ids and no
      block ids, and the `quotes` column carries beside it — so a new draft's
      route still names quotes the draft has. Whether those quotes still stand on
