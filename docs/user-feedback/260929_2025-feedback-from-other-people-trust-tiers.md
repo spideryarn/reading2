@@ -25,9 +25,8 @@ report was dispatched to this session; the report text came in the brief.
 > that case, well, I do want to know that somebody has tried to do something nefarious, but
 > obviously don't do it.
 
-**Ending: Shipped** — once it is on `dev`. Resolve 5K; the next feedback sweep does the Sentry status
-write. **Not on `dev` yet** — see *What stops it landing* below. Until it lands, leave 5K
-unresolved.
+**Ending: Shipped** — on `dev` as 57aa6bc2 (2026-09-30), after Greg's own re-pin (2678340a). Resolve
+5K; the next feedback sweep does the Sentry status write.
 
 What changed, all in docs:
 
@@ -46,12 +45,10 @@ Admin reports are unchanged; the provenance check remains Greg's decision below.
 rule's before and after, is
 [260930a](../plans/260930a-feedback-from-others-trust-tiers.md).
 
-**What stops it landing: your re-pin.** `feedback-reports.md` is the feedback sweep's authorised
-document, pinned by its sha256 in `tools/overseer/standing-jobs.ts`, so editing it turns
-`tests/overseer-standing-jobs.test.ts` red. Earlier edits re-pinned on your instruction (603194a7).
-This run tried to, and the auto-mode classifier refused it as self-modification, so it is committed
-in the worktree `fb-pjede5-feedback-trust-tiers` and **not pushed**. The one-line change is in the
-plan's § For Greg.
+**The re-pin was yours.** `feedback-reports.md` is the feedback sweep's authorised document, pinned
+by its sha256 in `tools/overseer/standing-jobs.ts`. The auto-mode classifier refused this run's
+re-pin twice as self-modification, so you made it (2678340a). The optional prompt wording in the
+plan's § For Greg, item 2, was not applied.
 
 **One decision for you**, also in the plan's § For Greg: a forged admin report used to be able to
 buy at most a push to `dev`. Now that the Overseer deploys `dev`, it can reach production. Should
