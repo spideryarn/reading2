@@ -448,6 +448,15 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 *An article can be handed to us from outside.* A bookmarklet, a share sheet, or a shortcut is now
 `spideryarn/add/` plus wherever you are, with nothing to paste.
 
+**Since 2026-09-30 it can also start the main modes.** While the import runs, the page shows a tick
+box that is on by default. When the import finishes, the page opens the article and queues one job
+per main mode: Tweets, Glossary, Quotes, Ideas, then Trajectory, which carries Quotes and Ideas in
+front of it. These are ordinary mode jobs on this queue, posted from the page, so a tab closed before
+the import finishes queues none. Which modes, what it costs, and the deferred ideal (opening the
+paper before `hierarchy`):
+[260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md) and
+[`src/web/auto-modes.ts`](../../src/web/auto-modes.ts).
+
 ### The three traps in a page whose whole job is one effect
 
 - **Queue it once.** `<StrictMode>` mounts, unmounts and mounts again in development, so a plain

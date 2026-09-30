@@ -64,10 +64,11 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
-import { useJobs } from "./useJobs.js";
+import { type UseJobs, useJobs } from "./useJobs.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { AUTO_MODES_LABEL, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } from "./auto-modes.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -106,6 +107,49 @@ const ARRIVAL_POLL_MS = 3000;
  * Derived from the message rather than written out, so the two cannot drift.
  */
 const UPLOAD_WAIT_CODE = codeOfMessage(UPLOAD_STILL_ARRIVING.message);
+
+/** Queue this completion's modes once, across repeated effects and callbacks. */
+function queueModesOnce(
+  on: boolean,
+  queuedFor: { current: string | null },
+  run: UseJobs["run"],
+  completion: string,
+  slug: string,
+): void {
+  if (!on || queuedFor.current === completion) return;
+  queuedFor.current = completion;
+  void queueAutoModes(run, slug);
+}
+
+/** Whether the file-owning tab still has a live add rather than an outcome. */
+function transferIsActive(transfer: Transfer | null): boolean {
+  const kind = transfer?.phase.kind;
+  return (
+    kind === "hashing" ||
+    kind === "granting" ||
+    kind === "sending" ||
+    kind === "queueing" ||
+    kind === "queued"
+  );
+}
+
+/** The whole interval in which the reader can still choose what follows the add. */
+function offerAutoModes(
+  job: Job | null,
+  transfer: Transfer | null,
+  alreadyArticle: string | null,
+  ok: boolean,
+  failed: boolean,
+  stillArriving: boolean,
+): boolean {
+  const activeJob = job?.status === "queued" || job?.status === "running";
+  const awaitingJob =
+    job === null &&
+    alreadyArticle === null &&
+    ok &&
+    (transferIsActive(transfer) || (transfer === null && (!failed || stillArriving)));
+  return activeJob || awaitingJob;
+}
 
 export function AddPage({ source: origin }: { source: AddSource }) {
   const queue = useJobs("watches-queue");
@@ -222,6 +266,28 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   failureRef.current = queue.lastFailure;
 
   /**
+   * **Generate the main modes once it is in** — Greg's tick box, on unless this
+   * browser was last told otherwise (src/web/auto-modes.ts).
+   *
+   * These live above both ways an add can finish because an upload can answer
+   * with an existing article instead of a job. That answer must honour the same
+   * choice as a job reaching `done`; otherwise the box shown during the upload
+   * promises work that the completion path silently skips.
+   *
+   * Read through refs in the completion effects so they keep depending on the
+   * completion alone. `queuedModesFor` is the once-guard, keyed on the job id or
+   * the existing-article answer: StrictMode runs effects twice in development,
+   * and the server would de-duplicate the second set but the log would still say
+   * it was asked.
+   */
+  const [autoModes, setAutoModes] = useState(readAutoModes);
+  const autoModesRef = useRef(autoModes);
+  autoModesRef.current = autoModes;
+  const runRef = useRef(queue.run);
+  runRef.current = queue.run;
+  const queuedModesFor = useRef<string | null>(null);
+
+  /**
    * Whether the engine is the one driving this address.
    *
    * A ref as well as the value, because the posting effect must **not** re-run
@@ -283,6 +349,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          show and nothing to wait for, so this is the same navigation the
          `done` effect below does, arriving a step earlier. */
       if ("article" in queued) {
+        const completion = `article:${queued.article}`;
+        queueModesOnce(
+          autoModesRef.current,
+          queuedModesFor,
+          runRef.current,
+          completion,
+          queued.article,
+        );
         navigate(readHref(queued.article), { replace: true });
         return;
       }
@@ -316,7 +390,16 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      arriving earlier. `replace`, for the reason that effect gives. */
   const alreadyArticle = mine?.phase.kind === "article" ? mine.phase.slug : null;
   useEffect(() => {
-    if (alreadyArticle) navigate(readHref(alreadyArticle), { replace: true });
+    if (!alreadyArticle) return;
+    const completion = `article:${alreadyArticle}`;
+    queueModesOnce(
+      autoModesRef.current,
+      queuedModesFor,
+      runRef.current,
+      completion,
+      alreadyArticle,
+    );
+    navigate(readHref(alreadyArticle), { replace: true });
   }, [alreadyArticle]);
 
   /**
@@ -386,8 +469,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 
   useEffect(() => {
     if (job?.status !== "done") return;
+    /* **Not awaited.** The router is client-side, so the POSTs carry on after
+       the page is gone, and the app-wide job engine drives what they queue from
+       the reading view. Waiting for five round trips before opening the
+       article would spend the one thing Greg asked this to save. */
+    const completion = `job:${job.id}`;
+    queueModesOnce(autoModesRef.current, queuedModesFor, runRef.current, completion, job.slug);
     navigate(readHref(job.slug), { replace: true });
-  }, [job?.status, job?.slug]);
+  }, [job?.status, job?.slug, job?.id]);
 
   /* The tab, naming what is being added — the host for an address, the filename
      for an upload. The filename only exists once the first poll has come back,
@@ -399,6 +488,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       source: origin.kind === "upload" ? (job?.upload?.filename ?? null) : ok ? source : url,
     }),
   );
+
+  /* Before a job exists, a URL is waiting for its POST and an upload is either
+     moving in this tab or still arriving in another one. The choice matters in
+     all of those states, especially the minutes-long file transfer; showing it
+     only once a job row appeared made the upload path needlessly different. */
+  const showAutoModes = offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
@@ -625,6 +720,32 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           standing disclaimer under a finished import. */}
       {job && (job.status === "queued" || job.status === "running") && (
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">{KEEP_A_TAB_OPEN}</p>
+      )}
+
+      {/* Offered for the whole add — including a file transfer before its job
+          exists — and read at the moment it finishes, so it can be changed
+          right up to then. src/web/auto-modes.ts. */}
+      {showAutoModes && (
+        <label className="tw:mt-3 tw:flex tw:items-start tw:gap-2 tw:text-sm">
+          <input
+            type="checkbox"
+            className="tw:mt-0.5"
+            checked={autoModes}
+            onChange={(event) => {
+              const on = event.target.checked;
+              /* The completion can be an already-article promise rather than a
+                 render driven by a job status. Update the ref in the gesture so
+                 that promise cannot observe the previous render's choice. */
+              autoModesRef.current = on;
+              setAutoModes(on);
+              writeAutoModes(on);
+            }}
+          />
+          <span>
+            {AUTO_MODES_LABEL}
+            <span className="tw:block tw:text-muted-foreground">{autoModesDetail()}</span>
+          </span>
+        </label>
       )}
 
       {job?.status === "done" && <Done job={job} />}
