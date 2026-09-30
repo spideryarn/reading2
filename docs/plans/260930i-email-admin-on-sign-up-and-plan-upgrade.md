@@ -15,6 +15,10 @@ account, so trusted) · Owner docs: [email.md](../project/email.md),
 **Status: built and on `dev`, not deployed.** Deploying applies one additive migration
 (`20260930144303_reader_arrivals`). Note: [260930_1515](../user-feedback/260930_1515-email-the-admin-on-sign-up-and-plan-upgrade.md).
 
+**Superseded in one respect, 2026-10-01:** both notices now carry the reader's address and link
+`/admin/users`, at Greg's request — the "no address" decision below is reversed in
+[261001b](261001b-admin-sign-up-email-carries-the-address.md).
+
 ## What exists
 
 - Resend is already the provider, with one key (`RESEND_API_KEY`, in Vercel's three environments,

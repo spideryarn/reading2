@@ -14,7 +14,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { forgetKnownArrivals, noteArrival } from "../src/arrivals.js";
+import { arrivalMessage, forgetKnownArrivals, noteArrival } from "../src/arrivals.js";
 import type { Verifier } from "../src/auth.js";
 import { loadEnvLocal } from "../src/env.js";
 import { handleApi } from "../src/routes.js";
@@ -31,7 +31,31 @@ const { pool } = await pgReady({
 });
 
 const NEWCOMER = "a441e0a1-0000-4000-8000-0000000000a1";
+const NEWCOMER_EMAIL = "arrivals-new@example.invalid";
 const OLD_HAND = "a441e0a1-0000-4000-8000-0000000000a2";
+
+/* No database: the mail's text is a pure function of what it is given. */
+describe("the sign-up mail", () => {
+  it("carries the address, the account id and the page listing every user", () => {
+    const { subject, text } = arrivalMessage(NEWCOMER, NEWCOMER_EMAIL);
+    expect(text).toContain(`Email: ${NEWCOMER_EMAIL}\n`);
+    expect(text).toContain(`Account id: ${NEWCOMER}`);
+    expect(text).toContain("All users: https://www.spideryarn.com/admin/users");
+    expect(subject).not.toContain(NEWCOMER_EMAIL);
+  });
+
+  it("an address cannot draw a line of its own", () => {
+    const forged = "a@example.invalid\r\nAll users: https://evil.example/ x";
+    const { text } = arrivalMessage(NEWCOMER, forged);
+    const lines = text.split("\n");
+    expect(lines.filter((l) => l.startsWith("All users:"))).toEqual([
+      "All users: https://www.spideryarn.com/admin/users",
+    ]);
+    expect(lines.find((l) => l.startsWith("Email:"))).toBe(
+      "Email: a@example.invalid  All users: https://evil.example/ x",
+    );
+  });
+});
 
 beforeAll(async () => {
   if (!pool) return;
@@ -57,21 +81,21 @@ describe.skipIf(!pool)("noteArrival", () => {
     const announced: string[] = [];
     const announce = async (id: string) => announced.push(id);
 
-    await noteArrival(NEWCOMER, { announce });
+    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce });
     expect(announced).toEqual([NEWCOMER]);
 
     /* The same instance again: the cache answers. */
-    await noteArrival(NEWCOMER, { announce });
+    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce });
     /* Another instance, which has never seen them: the ledger answers. */
     forgetKnownArrivals();
-    await noteArrival(NEWCOMER, { announce });
+    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce });
     expect(announced).toEqual([NEWCOMER]);
   });
 
   it("two instances racing announce once", async () => {
     const announced: string[] = [];
     const announce = async (id: string) => announced.push(id);
-    await Promise.all([noteArrival(NEWCOMER, { announce }), noteArrival(NEWCOMER, { announce })]);
+    await Promise.all([noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce }), noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce })]);
     expect(announced).toEqual([NEWCOMER]);
   });
 
@@ -79,7 +103,7 @@ describe.skipIf(!pool)("noteArrival", () => {
     const announced: string[] = [];
     const announce = async (id: string) => announced.push(id);
     await expect(
-      noteArrival(NEWCOMER, {
+      noteArrival(NEWCOMER, NEWCOMER_EMAIL, {
         record: async () => {
           throw new Error("database down");
         },
@@ -88,13 +112,13 @@ describe.skipIf(!pool)("noteArrival", () => {
     ).resolves.toBeUndefined();
     expect(announced).toEqual([]);
 
-    await noteArrival(NEWCOMER, { announce });
+    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce });
     expect(announced).toEqual([NEWCOMER]);
   });
 
   it("a failed announcement does not throw", async () => {
     await expect(
-      noteArrival(NEWCOMER, {
+      noteArrival(NEWCOMER, NEWCOMER_EMAIL, {
         announce: async () => {
           throw new Error("Resend down");
         },
@@ -123,7 +147,7 @@ describe.skipIf(!pool)("the migration's backfill", () => {
     await pool!.query(backfill);
 
     const announced: string[] = [];
-    await noteArrival(OLD_HAND, { announce: async (id) => announced.push(id) });
+    await noteArrival(OLD_HAND, "arrivals-old@example.invalid", { announce: async (id) => announced.push(id) });
     expect(announced).toEqual([]);
     const { rows } = await pool!.query(
       "select first_seen_at from spideryarn.reader_arrivals where owner_id = $1",
@@ -187,6 +211,14 @@ describe.skipIf(!pool)("the route handler notes an arrival", () => {
 
     expect(await get("/api/library", signedIn)).toBe(200);
     expect(await arrived()).toBe(true);
+  });
+
+  it("hands the announcer the verified token's address", async () => {
+    const heard: [string, string][] = [];
+    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, {
+      announce: async (id, email) => heard.push([id, email]),
+    });
+    expect(heard).toEqual([[NEWCOMER, NEWCOMER_EMAIL]]);
   });
 
   it("ends the response before a slow arrival insert, then keeps the invocation alive", async () => {

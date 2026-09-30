@@ -45,6 +45,7 @@
  */
 
 import type { AccountRow } from "./account-row.js";
+import { projectMismatch } from "./blobs.js";
 
 export type { AccountRow };
 
@@ -382,4 +383,90 @@ function totalFrom(header: string | null): { total?: number } {
   if (header === null || header.trim() === "") return {};
   const n = Number(header);
   return Number.isInteger(n) && n >= 0 ? { total: n } : {};
+}
+
+/* ------------------------------------------------ where the service is --- */
+
+/**
+ * Where the Auth service is, and the one thing that must be true of it.
+ *
+ * **The Auth project and the database must be the same project.** They are
+ * chosen by two independent environment variables, and nothing else compares
+ * them: point `SUPABASE_URL` at one project while `DATABASE_URL` names another
+ * and `/admin/users` lists the accounts of one and the articles of the other,
+ * giving every person a row of zeros. Nothing errors. `projectMismatch` in
+ * blobs.ts is the same check for the same reason on the Storage pair, and this
+ * reuses it rather than growing a second opinion about what a project ref is.
+ *
+ * Throws, naming what is wrong. Both readers of the Auth service start here:
+ * the admin page's listing (src/store/pg-admin.ts) and `accountEmail` below.
+ */
+export function authAdminEndpoint(): { url: string; key: string } {
+  const url = process.env.SUPABASE_URL?.trim();
+  /* `.trim()` on both, and empty is not configured: a `.env` line left as
+     `SUPABASE_SERVICE_ROLE_KEY=` gives a string that authenticates nothing. */
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    throw new Error(
+      "reading accounts needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY: the accounts live in " +
+        "the Auth service, not in a table this server can read. See src/store/admin-accounts.ts.",
+    );
+  }
+  const mismatch = projectMismatch(process.env.DATABASE_URL, url);
+  if (mismatch) throw new Error(`reading accounts would mix two projects: ${mismatch}`);
+  return { url, key };
+}
+
+/* ------------------------------------------------ one account's address --- */
+
+/** It runs after a response, never before one; this bounds how long it keeps the invocation alive. */
+const ACCOUNT_LOOKUP_TIMEOUT_MS = 5_000;
+
+export type AccountEmail =
+  | { readonly kind: "found"; readonly email: string }
+  /** `reason` names the class of failure, and never carries a body or an address. */
+  | { readonly kind: "unavailable"; readonly reason: string };
+
+/** A seam, for tests. Both default to the real thing. */
+export interface AccountEmailDeps {
+  readonly fetch?: typeof fetch;
+  readonly endpoint?: () => { url: string; key: string };
+}
+
+/**
+ * **One account's address, from the Auth Admin API — `GET
+ * /auth/v1/admin/users/{id}`,** the route behind Supabase's `getUserById`. For
+ * the admin's upgrade notice (src/billing/sync.ts), which runs from a Stripe
+ * webhook with no signed-in reader to read it from.
+ *
+ * **Never throws**: missing configuration, a refusal, a timeout, a body we do
+ * not recognise and an answer about somebody else all come back
+ * `unavailable`, so the notice goes out anyway and says so.
+ * docs/plans/261001b-admin-sign-up-email-carries-the-address.md.
+ */
+export async function accountEmail(ownerId: string, deps: AccountEmailDeps = {}): Promise<AccountEmail> {
+  try {
+    const { url, key } = (deps.endpoint ?? authAdminEndpoint)();
+    const base = url.replace(/\/+$/, "");
+    const res = await (deps.fetch ?? fetch)(`${base}/auth/v1/admin/users/${encodeURIComponent(ownerId)}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(ACCOUNT_LOOKUP_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      /* The status and nothing else, as `gotruePages`; still consume the body
+         so fetch can release its connection. */
+      await res.text().catch(() => "");
+      return { kind: "unavailable", reason: `the Auth service answered ${res.status}` };
+    }
+    const body = (await res.json().catch(() => null)) as { id?: unknown; email?: unknown } | null;
+    /* Checked, not assumed: an answer about another account would put the
+       wrong person's address in front of the admin. */
+    if (body?.id !== ownerId) return { kind: "unavailable", reason: "the answer was not about this account" };
+    if (typeof body.email !== "string" || body.email === "") {
+      return { kind: "unavailable", reason: "the account has no address" };
+    }
+    return { kind: "found", email: body.email };
+  } catch (err) {
+    return { kind: "unavailable", reason: err instanceof Error ? err.name : "unknown error" };
+  }
 }

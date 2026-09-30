@@ -22,8 +22,9 @@
 
 import { getDb } from "./db/client.js";
 import { readerArrivals } from "./db/schema.js";
-import { notifyAdmin } from "./email.js";
+import { notifyAdmin, oneLine } from "./email.js";
 import { errorFields, log } from "./log.js";
+import { ADMIN_USERS_URL } from "./urls.js";
 
 const logger = log("store");
 
@@ -50,7 +51,7 @@ function remember(ownerId: string): void {
 export interface ArrivalDeps {
   /** True if this call created the row, false if it was already there. */
   readonly record?: (ownerId: string) => Promise<boolean>;
-  readonly announce?: (ownerId: string) => Promise<unknown>;
+  readonly announce?: (ownerId: string, email: string) => Promise<unknown>;
 }
 
 async function recordArrival(ownerId: string): Promise<boolean> {
@@ -63,28 +64,38 @@ async function recordArrival(ownerId: string): Promise<boolean> {
 }
 
 /**
- * The mail itself. **No address**, deliberately: a copy of it in Resend's log,
- * the forwarder and an inbox would be three more places an erasure has to
- * reach, and `/admin` already shows who the account is. GPT Sol, plan review.
+ * The mail itself: the address, the account id, and the page that lists every
+ * account.
+ *
+ * **The address is in it since 2026-10-01, at Greg's request**, reversing GPT
+ * Sol's plan-review call to leave it out (each copy — Resend's log, the
+ * forwarder, an inbox — is one more place an erasure has to reach). /privacy
+ * says so. It is the reader's own text, so it goes through `oneLine` and never
+ * into the subject. docs/plans/261001b-admin-sign-up-email-carries-the-address.md.
  */
-export async function announceArrival(ownerId: string): Promise<unknown> {
-  return await notifyAdmin(
-    {
-      subject: "New sign-up on Spideryarn",
-      text: [
-        "Somebody new has signed up and signed in for the first time.",
-        "",
-        `Account id: ${ownerId}`,
-        "",
-        "Who it is: https://www.spideryarn.com/admin",
-      ].join("\n"),
-    },
-    "sign-up",
-  );
+export function arrivalMessage(ownerId: string, email: string): { subject: string; text: string } {
+  return {
+    subject: "New sign-up on Spideryarn",
+    text: [
+      "Somebody new has signed up and signed in for the first time.",
+      "",
+      `Email: ${oneLine(email)}`,
+      `Account id: ${ownerId}`,
+      "",
+      `All users: ${ADMIN_USERS_URL}`,
+    ].join("\n"),
+  };
 }
 
-/** Note that this account has made a request, and announce it if it is the first. Never throws. */
-export async function noteArrival(ownerId: string, deps: ArrivalDeps = {}): Promise<void> {
+export async function announceArrival(ownerId: string, email: string): Promise<unknown> {
+  return await notifyAdmin(arrivalMessage(ownerId, email), "sign-up");
+}
+
+/**
+ * Note that this account has made a request, and announce it if it is the
+ * first. Never throws. `email` is the verified token's (`requireUser`).
+ */
+export async function noteArrival(ownerId: string, email: string, deps: ArrivalDeps = {}): Promise<void> {
   if (known.has(ownerId)) return;
   let isNew: boolean;
   try {
@@ -96,7 +107,7 @@ export async function noteArrival(ownerId: string, deps: ArrivalDeps = {}): Prom
   remember(ownerId);
   if (!isNew) return;
   try {
-    await (deps.announce ?? announceArrival)(ownerId);
+    await (deps.announce ?? announceArrival)(ownerId, email);
   } catch (err) {
     logger.error(errorFields(err), "announcing a sign-up failed");
   }

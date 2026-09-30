@@ -43,7 +43,9 @@ import { getDb } from "../db/client.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { billingAccounts } from "../db/schema.js";
 import { errorFields, log } from "../log.js";
-import { notifyAdmin } from "../email.js";
+import { notifyAdmin, oneLine } from "../email.js";
+import { type AccountEmail, accountEmail } from "../store/admin-accounts.js";
+import { ADMIN_USERS_URL } from "../urls.js";
 import { afterResponse } from "../after-response.js";
 import { nextQuotaAdjustment } from "./quota-adjustment.js";
 import { chooseSubscription } from "./subscription.js";
@@ -113,26 +115,43 @@ export interface SyncOptions {
 }
 
 /**
- * **Tell the admin somebody bought more.** Plain text, and nothing about the
- * reader but their account id: the address lives in `auth.users`, which the
- * deployed server cannot read (src/store/admin-accounts.ts), and `/admin` can.
+ * **Tell the admin somebody bought more.** Plain text: the plans, the reader's
+ * address, their account id and the page listing every account.
+ *
+ * The address since 2026-10-01, at Greg's request (/privacy says so). It lives
+ * in `auth.users`, which the deployed server cannot read, so it is asked of the
+ * Auth Admin API (`accountEmail`, src/store/admin-accounts.ts); that never
+ * throws, and a failed lookup says so in the mail rather than stopping it.
+ * docs/plans/261001b-admin-sign-up-email-carries-the-address.md.
  */
-export async function notifyUpgrade(ownerId: string, upgrade: PlanUpgrade): Promise<unknown> {
+export function upgradeMessage(
+  ownerId: string,
+  upgrade: PlanUpgrade,
+  email: AccountEmail,
+): { subject: string; text: string } {
   const from = upgrade.from?.productName ?? "Free";
   const to = upgrade.to.productName;
-  return await notifyAdmin(
-    {
-      subject: `Plan upgrade: ${from} → ${to}`,
-      text: [
-        `An account has moved from ${from} to ${to} (${upgrade.to.ingestsPerPeriod} articles a month).`,
-        "",
-        `Account id: ${ownerId}`,
-        "",
-        "Who it is: https://www.spideryarn.com/admin",
-      ].join("\n"),
-    },
-    "plan upgrade",
-  );
+  return {
+    subject: `Plan upgrade: ${from} → ${to}`,
+    text: [
+      `An account has moved from ${from} to ${to} (${upgrade.to.ingestsPerPeriod} articles a month).`,
+      "",
+      email.kind === "found"
+        ? `Email: ${oneLine(email.email)}`
+        : `Email: (could not be looked up: ${email.reason})`,
+      `Account id: ${ownerId}`,
+      "",
+      `All users: ${ADMIN_USERS_URL}`,
+    ].join("\n"),
+  };
+}
+
+export async function notifyUpgrade(
+  ownerId: string,
+  upgrade: PlanUpgrade,
+  lookup: (ownerId: string) => Promise<AccountEmail> = accountEmail,
+): Promise<unknown> {
+  return await notifyAdmin(upgradeMessage(ownerId, upgrade, await lookup(ownerId)), "plan upgrade");
 }
 
 /**

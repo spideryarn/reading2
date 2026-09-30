@@ -434,6 +434,19 @@ and `LAST_UPDATED` moved. The scores it returns are stored against the reader
 (`shelf_topic_scores`), deleted with the account, and never logged; nor are the titles, gists or
 profile it was sent. It runs only for the shelf's owner — the public shelf gets no topics at all.
 
+## The admin's sign-up and upgrade notices carry the address
+
+**Added 2026-10-01**, at Greg's request
+([261001b](../plans/261001b-admin-sign-up-email-carries-the-address.md)): the notice the server
+mails us on a reader's first authenticated request, and on each upgrade, now carries their email
+address as well as their account id and, for an upgrade, the plan names. It was left out on
+2026-09-30 because each copy — Resend's log, Namecheap's forwarding of `hello@`, and the inbox it
+lands in — is one more place an erasure has to reach; that is still true, so the Resend entry on the
+page says what the note carries and the route it takes, and `tests/privacy-page.test.ts` holds the
+sentence. Namecheap is named there but not added to the subprocessor list: it already forwards
+every mail a reader sends `hello@`, and this is the first time the page has said so.
+[email.md](email.md) owns the mechanics.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
