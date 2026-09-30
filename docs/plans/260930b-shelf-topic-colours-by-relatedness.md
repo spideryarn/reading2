@@ -115,4 +115,11 @@ was for. Also taken:
 - [x] Build: the projection and its tests; the `--hue-*` ring and its measurement; wired into the
   pill, the row swatch and the bar; `/design`; docs (shelf-terms.md § Colour, colour-scales.md
   § Hue ring)
-- [ ] Sol code review; gates; push; note in docs/user-feedback/
+- [x] Sol code review (no P0/P1; its P2 fixes kept, except that a missing join height now falls
+  back to a full step instead of throwing in the shelf's render path)
+- [x] Browser check (Sonnet, local shelf of 38 articles and 23 topics): related topics share hues,
+  every pill's dot matches its row, colours hold when a topic is chosen, no console errors. It found
+  the ring running off `/design`, which is now fixed with a dense layout. On a 390px screen the two-digit step
+  numbers under the ring touch each other. This is accepted: `/design` is an internal page, and its
+  other scales scroll sideways there anyway.
+- [x] Note: [docs/user-feedback/260930_0425](../user-feedback/260930_0425-shelf-topic-colours-by-relatedness.md)
