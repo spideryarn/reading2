@@ -500,4 +500,30 @@ describe("what the card says after Look it up", () => {
     expect(card()?.querySelector(".prose-card-cite-verdict")).toBeNull();
     expect(card()?.querySelector(".prose-card-cite-quote")).toBeNull();
   });
+
+  /* Plan 260930a § UI: *Investigate* lives in the band, not on the hover card —
+     neither its button nor a kept answer. */
+  it("shows nothing of Investigate, even on a work that has a kept answer", () => {
+    const investigated: CitedWork = {
+      ...TULVING,
+      investigation: {
+        answer: "Does it back the claim?\nA DISTINCTIVE INVESTIGATION SENTENCE.",
+        sources: [{ url: "https://arxiv.org/abs/1" }],
+        extractsRead: 1,
+        longestExtractWords: 10,
+        matchedHost: null,
+        searches: 1,
+        searchesFrom: "x",
+        model: "test",
+        at: "2026-09-30T09:00:00.000Z",
+        contextHash: "ctx",
+        promptVersion: "1",
+      },
+    };
+    paint([investigated, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    expect(card()).not.toBeNull();
+    expect(card()?.textContent).not.toMatch(/DISTINCTIVE INVESTIGATION|Investigat/);
+    expect(card()?.querySelector(".cite-investigate, .cite-inv")).toBeNull();
+  });
 });

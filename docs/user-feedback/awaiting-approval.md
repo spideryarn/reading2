@@ -43,6 +43,8 @@ cost. **One of them was written as a deploy blocker and the deploy went out anyw
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
 
+- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. Two calls left open: (1) offer *Investigate* only once *Look it up* has identified the work, so code rather than the model decides which search result is the paper (an extra paid press each time); (2) 5G's proposed stage, reading the paper itself. Both are set out in the plan · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named)
+
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data
 > retention, so the sentence `/privacy` and every microphone had carried — *"your voice … isn't

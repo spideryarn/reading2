@@ -36,6 +36,7 @@ listed here; the names under each are files in `docs/project/`.
   `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
   `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
+  `email.md` (Resend, for auth mail and anything after it) ·
   `prompt-caching.md` ·
   `prompting-guide.md` (the plain-words rule every prompt shares, and how to measure a prompt change) ·
   `database.md` ·

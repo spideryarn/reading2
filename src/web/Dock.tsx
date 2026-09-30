@@ -1264,7 +1264,7 @@ export function fitSignature(
  * anything would be a chord that quietly breaks a browser feature.
  */
 function useCommandBarChord(
-  /** Whether there is a band to change at all — off the reading view, there is not. */
+  /** Whether this reader gets a command bar at all — a visitor does not (`DockCommands`). */
   enabled: boolean,
   /** The drawer's own setter, so the drawer can be shut before the bar opens. */
   onPanel: ((next: Panel | null) => void) | undefined,
@@ -1388,23 +1388,42 @@ function useMetadataChord(enabled: boolean, href: string): void {
  * Dock button's conditional blur after a mouse click, the command bar's close
  * and clear. Neither is part of activating a mode, so neither is in here.
  *
- * `onMode?.()` rather than a guard, because this callback is only ever handed
- * to the two surfaces the bar draws when `onMode` is present — the optional
- * call is the compiler's price for the prop being optional at all, not a second
- * arrangement anything reaches.
+ * **Off the reading view there is no `onMode`, and a mode is the mode's link.**
+ * Since 2026-09-30 the command bar is drawn on the metadata page too (Greg,
+ * SPIDERYARN-READING2-66: *"The Cmd-k Command shortcut doesn't work in
+ * Metadata mode."*), and there its mode rows go exactly where
+ * `DockModeLinks` goes — `modeLinkHref`, the one href both use — and **arm
+ * nothing**, as that link arms nothing (activation.ts § arriving is not a
+ * press). Arming first would make the bar a cheaper door than the link beside
+ * it, under a Commands card that says it opens a mode *exactly as pressing
+ * that button here does*. docs/plans/260930a-….
  */
 function useActivateMode(
   slug: string,
+  search: string,
   diagram: DiagramKind,
   onMode: Props["onMode"],
 ): (next: Mode) => void {
   return useCallback(
     (next: Mode) => {
+      if (onMode === undefined) {
+        navigate(modeLinkHref(slug, search, next));
+        return;
+      }
       armActivationForMode(slug, next, { diagram });
-      onMode?.(next);
+      onMode(next);
     },
-    [slug, diagram, onMode],
+    [slug, search, diagram, onMode],
   );
+}
+
+/**
+ * **Where a mode is, from a page that is not the reading view** — the href
+ * `DockModeLinks` draws and the command bar's mode rows follow there, one
+ * function so the two doors cannot land in different places.
+ */
+function modeLinkHref(slug: string, search: string, mode: Mode): string {
+  return readHref(slug, withMode(search, mode), "article");
 }
 
 export function Dock({
@@ -1508,7 +1527,7 @@ export function Dock({
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, diagram, onMode);
+  const activateMode = useActivateMode(slug, search, diagram, onMode);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It
@@ -1579,9 +1598,14 @@ export function Dock({
    * being rewritten this week by somebody else.
    *
    * State on the bar as a whole rather than on `DockModes`: the bar is drawn on
-   * the metadata page too (and the tweets page until 2026-09-29), where there is no `onMode` and therefore
-   * nothing for a command to do, and all three parts of it — the listener, the
-   * button and the dialog — stand down there.
+   * the metadata page too, where there is no `onMode`. **All three parts of it —
+   * the listener, the button and the dialog — stood down there until
+   * 2026-09-30**, on the grounds that a command had nothing to do without a
+   * band. That was wrong twice over: the Dock there draws every mode as a link,
+   * and most of the bar's other rows are pages. Greg, SPIDERYARN-READING2-66:
+   * *"The Cmd-k Command shortcut doesn't work in Metadata mode."* So the one
+   * condition left is the visitor's, and a mode row there follows the mode's
+   * link — `useActivateMode`.
    *
    * **The two gates are inside `DockCommands` and `DockCommandBar` rather than
    * in a `&&` here**, which is Biome rather than taste and is the same reason
@@ -1591,7 +1615,7 @@ export function Dock({
    * component states the condition it is under, which is where it is readable
    * anyway.
    */
-  const commandBar = useCommandBarChord(onMode !== undefined && !isVisitor, onPanel);
+  const commandBar = useCommandBarChord(!isVisitor, onPanel);
   /* One value for the Metadata button and its chord, so the two cannot send
      the reader to different places. Keyed on `view` rather than `onMode`, unlike
      ⌘-K: a visitor's reading view draws the Metadata button too. */
@@ -1749,8 +1773,6 @@ export function Dock({
           agent's ground this week. 260906h § The command bar. Its own gate, and
           why the gate is inside it, are on `DockCommandBar` below. */}
       <DockCommandBar
-        mode={mode}
-        onMode={onMode}
         isVisitor={isVisitor}
         /* The list the Dock drew, not a second computation of it: requirement
            4 — *the bar lists exactly what the Dock lists* — is true by
@@ -1818,8 +1840,6 @@ export function Dock({
             could not — `useCommandBarChord` binds the window, not this
             button. */}
         <DockCommands
-          mode={mode}
-          onMode={onMode}
           isVisitor={isVisitor}
           onOpen={commandBar.show}
         />
@@ -2488,7 +2508,7 @@ function DockModeLinks({
       {modes.map((m) => (
         <DockLink
           key={m.mode}
-          href={readHref(slug, withMode(search, m.mode), "article")}
+          href={modeLinkHref(slug, search, m.mode)}
           current={false}
           icon={m.icon}
           label={MODE_LABEL[m.mode]}
@@ -2765,20 +2785,9 @@ function DockFeedback({ signedIn }: { signedIn: boolean }) {
  * name.
  */
 function DockCommands({
-  mode,
-  onMode,
   isVisitor,
   onOpen,
 }: {
-  /**
-   * The two props that say there is a band to change. **They are read here
-   * rather than in a `&&` at the call site** for the reason `DockFeedback`
-   * gives: `Dock` is over Biome's cognitive-complexity ceiling and every extra
-   * conditional in its markup takes it further out. Off the reading view a
-   * command would have nothing to open, so there is no button.
-   */
-  mode: Mode | undefined;
-  onMode: Props["onMode"];
   /**
    * **A visitor gets no command bar**, and this is a capability gate rather
    * than a tidiness one. A visitor reading somebody else's shared document may
@@ -2793,7 +2802,7 @@ function DockCommands({
   isVisitor: boolean;
   onOpen(): void;
 }) {
-  if (mode === undefined || onMode === undefined || isVisitor) return null;
+  if (isVisitor) return null;
   return (
     <Tooltip
       placement="top"
@@ -2893,8 +2902,6 @@ function DockCommands({
  * somebody will one day try to clip.
  */
 function DockCommandBar({
-  mode,
-  onMode,
   isVisitor,
   modes,
   activateMode,
@@ -2902,8 +2909,6 @@ function DockCommandBar({
   openComments,
   bar,
 }: {
-  mode: Mode | undefined;
-  onMode: Props["onMode"];
   /** Owners only — `DockCommands` above carries the reasoning. */
   isVisitor: boolean;
   modes: readonly ModeUi[];
@@ -2917,15 +2922,13 @@ function DockCommandBar({
   /**
    * **Opening the Comments drawer**, bound to its panel here so that
    * `CommandBar` never learns a drawer has more than one side. Absent where
-   * there is no drawer — which today is nowhere the bar is mounted, since the
-   * reading view always passes one (Reader.tsx), and is written as an option
-   * anyway because the gate above is what makes that true rather than anything
-   * about this component.
+   * there is no drawer — the metadata page, since the bar was drawn there on
+   * 2026-09-30; the reading view always passes one (Reader.tsx).
    */
   openComments: (() => void) | undefined;
   bar: { open: boolean; show(): void; hide(): void };
 }) {
-  if (mode === undefined || onMode === undefined || isVisitor) return null;
+  if (isVisitor) return null;
   return (
     <CommandBar
       modes={modes.map((m) => m.mode)}

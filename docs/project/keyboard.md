@@ -337,6 +337,17 @@ of the Dock, just after the wordmark ([260908e](../plans/260908e-more-commands-i
 the chord is bound to the **window** in `useCommandBarChord`, not to that button, so it opens the
 same dialog from wherever the button happens to be — and everything below is unchanged by the move.
 
+**It works on the Metadata page too, since 2026-09-30**, for the article's owner:
+
+> The Cmd-k Command shortcut doesn't work in Metadata mode.
+>
+> — Greg, 2026-09-30, SPIDERYARN-READING2-66
+
+It used to stand down wherever the Dock had no mode band to switch. There, a mode row goes where
+that mode's link in the same Dock goes — back to the article in that mode — and, like the link,
+starts nothing on the way; the page and action rows work as anywhere else
+([260930a](../plans/260930a-cmd-k-on-metadata-page-and-full-wordmark-animations-on-the-shelf.md)).
+
 It obeys three of the rules above, and it is worth saying which, because they are the rules and not
 a coincidence:
 

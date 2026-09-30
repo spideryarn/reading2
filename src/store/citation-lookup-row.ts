@@ -8,7 +8,7 @@
  * have to guess about. docs/plans/260929g-check-a-cited-paper-supports-the-claim.md.
  */
 import type { citationFinds } from "../db/schema.js";
-import type { CitationLookup, CitationLookupState, CitationSupport } from "../types.js";
+import type { CitationFind, CitationLookup, CitationLookupState, CitationSupport } from "../types.js";
 
 type Row = typeof citationFinds.$inferSelect;
 type LookupColumns = Pick<
@@ -85,5 +85,23 @@ export function lookupFromRow(
     excerptWords: row.lookupExcerptWords,
     verdict,
     ...(paperDoes ? { paperDoes } : {}),
+  };
+}
+
+/**
+ * **One whole `citation_finds` row as a `CitationFind`** — `loadCitations`
+ * reads every row this way, and *Investigate* reads one (`load` in
+ * src/store/pg-citation-finds.ts). One function, so the two cannot disagree.
+ */
+export function findFromRow(row: Row): CitationFind {
+  const lookup = lookupFromRow(row);
+  return {
+    url: row.url,
+    ...(row.title ? { title: row.title } : {}),
+    host: row.host,
+    searches: row.searches,
+    model: row.model,
+    at: row.foundAt.toISOString(),
+    ...(lookup ? { lookup } : {}),
   };
 }

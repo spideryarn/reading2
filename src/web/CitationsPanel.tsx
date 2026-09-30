@@ -39,6 +39,12 @@ import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
 import { BlockRef } from "./BlockRef.js";
+import {
+  InvestigateButton,
+  type InvestigateFailureHere,
+  InvestigationBlock,
+  investigationViewOf,
+} from "./CitationInvestigation.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
@@ -52,6 +58,7 @@ import {
   type ThresholdResult,
 } from "./threshold.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { useTapReveal } from "./useTapReveal.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -67,6 +74,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
   found?: CitedWork["found"];
   /** The owner's *Look it up* reading (plan 260929g). A public row cannot carry one. */
   lookup?: CitedWork["lookup"];
+  /** The owner's kept *Investigate* answer (plan 260930a). A public row cannot carry one. */
+  investigation?: CitedWork["investigation"];
 };
 
 /* ------------------------------------------------------------- the scores -- */
@@ -544,6 +553,17 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
                             onFind: owner.find,
                           }
                     }
+                    /* The owner's alone too, and never on the hover card. */
+                    investigate={
+                      owner === null
+                        ? null
+                        : {
+                            running: owner.investigating,
+                            draft: owner.investigateDraft?.id === work.id ? owner.investigateDraft.text : null,
+                            failed: owner.investigateFailed?.id === work.id ? owner.investigateFailed : null,
+                            onInvestigate: (id) => void owner.investigate(id),
+                          }
+                    }
                   />
                 ))}
               </ol>
@@ -687,16 +707,29 @@ interface RowFind {
   onFind(id: string): Promise<void>;
 }
 
+/** A row's *Investigate* — the owner's alone, so `null` on a visitor's row. Plan 260930a. */
+interface RowInvestigate {
+  /** The work whose *Investigate* is streaming anywhere in the list, or null. */
+  running: string | null;
+  /** This row's words so far, while its run is out. */
+  draft: string | null;
+  /** This row's last run, when it did not end in a stored answer. */
+  failed: InvestigateFailureHere | null;
+  onInvestigate(id: string): void;
+}
+
 function WorkRow({
   work,
   unscored,
   onJump,
   find,
+  investigate,
 }: {
   work: ShownWork;
   unscored: boolean;
   onJump(id: BlockId): void;
   find: RowFind | null;
+  investigate: RowInvestigate | null;
 }) {
   /* **No source at all when the public boundary refused the address** — a
      visitor's row whose link carried a credential or a private host. The row
@@ -712,6 +745,10 @@ function WorkRow({
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
   /* A row already looked up offers the same press again, and says so. */
   const lookLabel = work.lookup === undefined ? "Look it up" : "Look it up again";
+  /* *Look it up* is paid, and its card is what says so: a finger's first tap
+     opens the card, its second presses (useTapReveal.ts). Called here, not
+     inside the `find !== null` branch, because a hook cannot be conditional. */
+  const lookReveal = useTapReveal(finding === null);
 
   return (
     <li
@@ -770,6 +807,8 @@ function WorkRow({
             placement="bottom"
             keepSide
             className="tip-soon"
+            open={lookReveal.open}
+            onOpenChange={lookReveal.onOpenChange}
             content={
               <ControlTip
                 head={lookLabel}
@@ -801,6 +840,7 @@ function WorkRow({
                      patch (useCitations.ts § applyFound) does the same. */
                 what="Searches the web for this work. If a result clearly matches it, the AI reads that result's search extract — usually its abstract, not the full work — against what the article uses it for, and shows a passage only where code found those exact words in the extract."
                 how="It costs money: a paid web provider, and a few seconds. On a row with only a Scholar search, the matching result also becomes its link; a link the article gave never changes. A press that finds no match stores nothing, and pressing again just spends again."
+                tap={lookReveal.tap}
               />
             }
           >
@@ -822,7 +862,10 @@ function WorkRow({
               type="button"
               className="gloss-btn cite-find"
               aria-disabled={finding !== null}
-              onClick={() => {
+              onPointerDown={lookReveal.onPointerDown}
+              onPointerCancel={lookReveal.onPointerCancel}
+              onClick={(e) => {
+                if (!lookReveal.commit(e)) return;
                 if (finding !== null) return;
                 void find.onFind(work.id);
               }}
@@ -831,6 +874,15 @@ function WorkRow({
               {finding === work.id ? "Looking…" : lookLabel}
             </button>
           </Tooltip>
+        )}
+        {investigate !== null && (
+          <InvestigateButton
+            id={work.id}
+            again={work.investigation !== undefined}
+            running={investigate.running === work.id}
+            busy={investigate.running !== null}
+            onInvestigate={investigate.onInvestigate}
+          />
         )}
         <span className="cite-first">
           {work.citedInBody ? "first cited" : "only in the references"}{" "}
@@ -841,6 +893,19 @@ function WorkRow({
         <p className={`cite-find-note${note.kind === "failed" ? " failed" : ""}`} role="status">
           {note.message}
         </p>
+      )}
+      {investigate !== null && (
+        <InvestigationBlock
+          id={work.id}
+          view={investigationViewOf(work.investigation, {
+            running: investigate.running === work.id,
+            draft: investigate.draft,
+            failed: investigate.failed,
+          })}
+          busy={investigate.running !== null}
+          hasLookup={work.lookup !== undefined}
+          onInvestigate={investigate.onInvestigate}
+        />
       )}
     </li>
   );

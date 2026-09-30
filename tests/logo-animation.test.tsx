@@ -107,7 +107,7 @@ describe("the two rules the stylesheet is written under", () => {
       )?.[1] ?? "";
     expect(rest).not.toMatch(/transition:/);
     expect(seam).toMatch(/transition:\s*transform/);
-    expect(seam).toMatch(/transform:\s*translateX\(3px\)/);
+    expect(seam).toMatch(/transform:\s*translateX\(calc\(var\(--logo-px\) \* 3\)\)/);
   });
 
   it("defines a @keyframes block for every animation it runs", () => {
@@ -164,6 +164,50 @@ describe("the two rules the stylesheet is written under", () => {
        shipping it. */
     const base = RULES.match(/\.spya-anim \.logo-letter\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(base).toMatch(/position:\s*relative/);
+  });
+
+  /**
+   * **Every move a letter makes is measured in the wordmark's own size.**
+   *
+   * The set was tuned against the 0.82rem wordmark, in pixels, so on the
+   * shelf's 30px heading a 2px pluck read as half a gesture — which is why that
+   * heading was left without the letters until Greg asked for them (SPIDERYARN-
+   * READING2-6D). `--logo-px` is one pixel of the 0.82rem word, in `em`, so a
+   * length written `calc(var(--logo-px) * N)` is N pixels there and scales
+   * everywhere else. A plain `px` in any rule that reaches a letter, or in a
+   * keyframe one of those runs, is a length that will not scale. **One
+   * exception, by value**: a `1px` width or border is a hairline, and a
+   * hairline is a hairline at any size.
+   */
+  it("measures the letters' moves in --logo-px, so they scale with the word", () => {
+    const keyframes = new Map(
+      [...RULES.matchAll(/@keyframes\s+([a-z0-9-]+)\s*\{([\s\S]*?)\n\}/g)].map(
+        (m) => [m[1] as string, m[2] as string] as const,
+      ),
+    );
+    const withoutKeyframes = RULES.replace(/@keyframes\s+[a-z0-9-]+\s*\{[\s\S]*?\n\}/g, "");
+    const texts: [string, string][] = [];
+    for (const m of withoutKeyframes.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = (m[1] as string).trim();
+      if (!/\.logo-letter|\.site-wordmark-rest/.test(selector)) continue;
+      const block = m[2] as string;
+      texts.push([selector, block]);
+      for (const a of block.matchAll(/animation:\s*([a-z][a-z0-9-]*)/g)) {
+        texts.push([`@keyframes ${a[1]}`, keyframes.get(a[1] as string) ?? ""]);
+      }
+    }
+    expect(texts.length).toBeGreaterThan(10);
+    const offenders: string[] = [];
+    for (const [where, text] of texts) {
+      for (const d of text.matchAll(/([a-z-]+)\s*:\s*([^;{}]*\dpx[^;{}]*)/g)) {
+        const [prop, value] = [d[1] as string, (d[2] as string).trim()];
+        const hairline = /^(width|border(-[a-z]+)?)$/.test(prop) && /^1px\b/.test(value);
+        if (!hairline) offenders.push(`${where} { ${prop}: ${value} }`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    /* And the unit is what it says: a pixel of the 0.82rem word (13.12px). */
+    expect(RULES).toMatch(/--logo-px:\s*calc\(1em \/ 13\.12\)/);
   });
 
   it("keeps the mark's wrapper positioned, for the same reason", () => {
