@@ -274,6 +274,14 @@ export function PrivacyPage() {
           <Third name="Supabase" href="https://supabase.com/privacy">
             the database and file storage, and sign-in. London (eu-west-2).
           </Third>
+          {/* Carrying auth mail since 2026-09-29 and missing from this list
+              until 2026-09-30, when the server started sending mail of its own
+              (docs/plans/260930i). That mail goes to us, not to the reader, and
+              carries an account id, never the address. */}
+          <Third name="Resend" href="https://resend.com/legal/privacy-policy">
+            email. The sign-up confirmation we send you goes through them, so they see your email
+            address. Ireland (eu-west-1).
+          </Third>
           <Third name="Vercel" href="https://vercel.com/legal/privacy-policy">
             hosting. The code that answers your requests runs in London; their request logs are kept
             about a day.

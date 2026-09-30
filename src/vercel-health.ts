@@ -334,6 +334,18 @@ const EXPECTED = [
       "granted what they paid for, cancellations and renewals land only when the next ingest " +
       "finds the period stale, and invoice.finalization_failed is never logged at all",
   },
+  /**
+   * **The server's own mail** (src/email.ts): the admin's notices of sign-ups
+   * and upgrades. `breaks: null`, because without it nothing a reader does
+   * fails — the notices are skipped with a warning — but an operator wondering
+   * why no sign-up mail has arrived would look here first. Auth email does not
+   * read this variable; Supabase holds its own copy as the SMTP password
+   * (docs/project/email.md). 260930i.
+   */
+  {
+    name: "RESEND_API_KEY",
+    breaks: null,
+  },
   /* **No `STRIPE_PRICE_*` here, and its absence is deliberate.** It was
      reported until 2026-09-02, when tiers and their Stripe price ids moved into
      the `billing_tiers` table so they could be changed without a deploy

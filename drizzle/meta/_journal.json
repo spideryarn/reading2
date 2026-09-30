@@ -722,6 +722,13 @@
       "when": 1790776404153,
       "tag": "20260930135324_article_high_power_since",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790779383987,
+      "tag": "20260930144303_reader_arrivals",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,7 @@
  * thresholds are.
  */
 import { describe, expect, it } from "vitest";
-import { exactly, timeAgo } from "../src/web/relative-time.js";
+import { exactly, relativeAgo, timeAgo } from "../src/web/relative-time.js";
 
 const NOW = Date.parse("2026-08-26T12:00:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -58,6 +58,32 @@ describe("timeAgo", () => {
     const old = timeAgo(ago(200 * DAY), NOW);
     expect(old).not.toMatch(/day|ago/i);
     expect(old).toMatch(/2026/);
+  });
+});
+
+describe("relativeAgo", () => {
+  it("is timeAgo's relative half, and undefined where timeAgo gives a date", () => {
+    /* The changelog wants the relative form but its own UTC date past the
+       threshold (ChangelogPage.tsx § formatVersionStamp), so the threshold is
+       exposed as an absence rather than decided twice. */
+    expect(relativeAgo(ago(5 * HOUR), NOW)).toBe(timeAgo(ago(5 * HOUR), NOW));
+    expect(relativeAgo(ago(29 * DAY), NOW)).toMatch(/day/i);
+    expect(relativeAgo(ago(30 * DAY - 1), NOW)).toMatch(/day/i);
+    expect(relativeAgo(ago(30 * DAY), NOW)).toBeUndefined();
+    expect(timeAgo(ago(30 * DAY), NOW)).toMatch(/2026/);
+    expect(relativeAgo(ago(200 * DAY), NOW)).toBeUndefined();
+    expect(relativeAgo("nope", NOW)).toBeUndefined();
+  });
+
+  it("says Greg's '3d ago' in its narrow style, whatever the runtime's locale", () => {
+    /* Exact English here, unlike everywhere else in this file, because the
+       narrow formatter is pinned to "en": it fills a fixed-width column, and
+       en-GB's own narrow form is "5 days ago" (relative-time.ts § narrow). */
+    expect(relativeAgo(ago(5 * MINUTE), NOW, "narrow")).toBe("5m ago");
+    expect(relativeAgo(ago(5 * HOUR), NOW, "narrow")).toBe("5h ago");
+    expect(relativeAgo(ago(5 * DAY), NOW, "narrow")).toBe("5d ago");
+    expect(relativeAgo(ago(1 * DAY), NOW, "narrow")).toBe("yesterday");
+    expect(relativeAgo(ago(200 * DAY), NOW, "narrow")).toBeUndefined();
   });
 });
 

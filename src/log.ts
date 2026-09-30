@@ -188,6 +188,9 @@ export type Component =
      subject, and a sixteenth component for two lines an instance would be a
      filter nobody would think to build. */
   | "health"
+  /* src/email.ts — mail the server sends itself. Never the body or the
+     recipient: a label naming the kind of mail, and Resend's id or error. */
+  | "email"
   | "model"; // src/explain.ts, src/converse.ts, src/search.ts — a reader waiting
 
 /**
