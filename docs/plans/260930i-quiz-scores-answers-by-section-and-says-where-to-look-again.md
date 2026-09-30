@@ -1,6 +1,6 @@
 # Quiz scores answers by section, and says where to look again
 
-**Status:** built · 2026-09-30 · from [SPIDERYARN-READING2-6R](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6R),
+**Status:** shipped to `dev` · 2026-09-30 · from [SPIDERYARN-READING2-6R](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6R),
 an admin report (Greg's own account, checked with `scripts/feedback-reporter.ts`).
 
 ## After GPT Sol's plan review — read this first
@@ -36,6 +36,15 @@ down the chain). **One of its fixes was moved, not kept as written**: it changed
 `sectionIndexContaining` to return null above the first section, but `?at=` and the return chip
 call that too and want the clamp, so the check lives in `sectionsOfQuestion` instead. Its regression
 test was confirmed to go red without the check.
+
+## Browser check
+
+At 82205075 (this work merged with `dev`), Playwright on the box, a local owner's "Life is Short".
+A confidently wrong answer to question 1 was marked, and "Where to look again" appeared naming one
+section, *Counting in Peanuts*, with no number or verdict word; the name scrolled the prose there;
+on question 2 the back icon appeared and returned to question 1. No console errors from the quiz.
+[After the wrong answer](260930i-shot-2-where-to-look.png) ·
+[on question 2, with the way back](260930i-shot-4-question2-back-icon.png).
 
 ## What Greg asked for
 
