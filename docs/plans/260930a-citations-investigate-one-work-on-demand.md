@@ -1,6 +1,6 @@
 # Citations: an *Investigate* button that looks into one cited work, on demand
 
-Status: **planned 2026-09-30, not built.** Feedback report SPIDERYARN-READING2-5Q (`spya-wtm6qx`),
+Status: **planned 2026-09-30; revised after plan review round 1; not built.** Feedback report SPIDERYARN-READING2-5Q (`spya-wtm6qx`),
 from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from Citations mode on
 `9689-full-spya-m43th2`:
 
@@ -34,142 +34,144 @@ Look it up answers *does the abstract back the claim* cheaply. It cannot answer 
 Greg asked: how else the work bears on this article, anything past one page's extract, or anything
 about this reader.
 
-## What Investigate is
+## What Investigate is (revised after the plan review — see § Review log)
 
 A button on each owner row, **Investigate**, beside *Look it up*. One press = one streamed answer
-about that one work, written with up to several web searches, and kept. Nothing runs for every row.
+about that one work, written with a few web searches, and kept. Nothing runs for every row.
 
-The answer is short plain prose in three parts, each opening with a plain lead so it scans:
+The answer is short plain prose in up to three parts, each opening with a plain lead so it scans:
 
 1. **Does it back the claim?** — against *what the article uses it for* and the citing passages:
-   what the sources show about whether the work says that, with short quotes from them.
+   what the sources say about whether the work says that, **paraphrased and attributed** ("the
+   abstract on arxiv.org says …"), never quoted.
 2. **How else it bears on this article** — what the work actually does, and where it agrees with,
    extends, or sits awkwardly with the article beyond the one claim.
-3. **For you** — only when the reader has written a profile or *why you're reading this one*: one
-   short paragraph on why this work matters (or doesn't) for that. Omitted otherwise.
+3. **For you** — only when the reader has written a profile or *why you're reading this one*.
+
+### No quotes from sources — the rule that makes streaming honest
+
+The first version checked quotes after the stream ended. GPT Sol's P0: the reader has already seen
+an unchecked quote as the paper's words by then, and a warning under it does not undo that. So:
+
+- **The prompt forbids quoting any source.** Paraphrase, and name where it came from.
+- **The quote guard** (code, after the stream ends): every run of six or more words inside straight
+  or curly double quotes must be found (`findQuote`, strict) **in the article itself** — quoting the
+  article being read is fine, and it is in the prompt. Anything else: **the answer is not stored**,
+  no `done`, and the client replaces the streamed text with *"This answer quoted a source directly,
+  which we could not check, so it was not kept."* with *Investigate again*. Exposure is bounded to
+  the one viewing, and it is taken back.
+- **Verbatim evidence stays with 5G's *Look it up***, the one code-verified quote path. When a
+  current lookup is stored for the row, the investigation view shows its verdict and quote beside
+  it, with its own provenance line unchanged; when none is, the view offers *Look it up* (a
+  separate charge, so not run automatically).
 
 ### What was read, said by code, not by the model (5G's rule)
 
-Under the answer, one line that code writes from what the call actually returned:
+Under the answer, always at the same claim level:
 
-- *Read: search extracts of N web pages (arxiv.org, nature.com, …) — not the full text of the work
-  or of any page.* This is always true: the web-search tool returns the search engine's extracts,
-  and nothing in this call fetches a page.
-- Whether **one of those pages matches the work itself**, by 5G's strict identity rule
-  (src/citation-lookup.ts, the rule *Look it up* uses before it judges anything): *one of them is a
-  page matching the work (arxiv.org)*, or *none of them was clearly the work's own page, so what is
-  said about the work comes from other pages about it.*
-- **Quotes checked.** The prompt asks for anything quoted from a source to be in double quotes.
-  After the answer ends, code looks for each quoted run of at least six words in the extracts the
-  call returned (`findQuote`, the strict `"spaced"` pass 5G uses). The line says *N quotes found in
-  what was read*, and names any that were **not**: *"…" — not found in anything we read; treat it
-  as unverified.* The streamed text itself is not rewritten.
-- The sources are listed as links (host + title), filtered by `safeUrl` as the glossary's are.
+> *We did not obtain the paper itself, or the full text of any page. This was written from search
+> extracts of N results (arxiv.org, nature.com, …). It is the AI's reading of those extracts,
+> paraphrased, not quoted.*
 
-The answer is labelled *the AI's reading of those pages*, never as a fact about the work.
+- N counts only results whose extract was non-empty (Sol P-2).
+- **No "one of them matches the work" line** (Sol P-3): applying 5G's identity rule to every
+  evidence page answers a weaker question than 5G asks, and "the paper itself was not obtained" is
+  the claim we can fully back.
+- Sources are listed as `safeUrl`-filtered links, host and title.
+- The search is **pinned to Exa** with a small `max_total_results`, and the per-result size the
+  model and our copy agree on is settled by the probe (step 1 of stage 1).
 
 ### Inputs to the call
 
-- the whole article, as the cached first part (the same prefix `explainStream` builds);
-- the work: title, authors, year, the reference entry as the article gives it, and the article's
-  own link when `linkFrom` is not a search (so the search can aim at it);
-- `why` (*what the article uses it for*) and the citing passages (the first-mention paragraph and up
-  to two more, each capped);
-- the reader's profile and purpose through `resolveProfile(slug)` → `profileSection`, in the second
-  part (never the cached one), as explain does.
+- the whole article, as the cached first part (`articleWithIds`, as explain);
+- the work: title, authors, year, reference entry, and the article's own link when `linkFrom` is
+  not a search (to aim the search);
+- `why` and the citing passages (the first-mention paragraph and up to two more, capped);
+- the reader's profile and purpose (`resolveProfile(slug)` → `profileSection`, with
+  `PROFILE_RULES` in the system prompt), in the second part.
 
-All capped in characters. Text from search results is a stranger's page reaching a model, exactly
-as in explain and the glossary lookup today: same tool, no other tools, and the answer is labelled
-as a reading.
+All capped in characters. Search results are strangers' pages reaching a model, exactly as in
+explain today: the web-search tool and no other tool, and the answer is labelled as a reading.
 
-### Mechanism: `explainStream`, generalised, not a copy
+### Mechanism: a shared stream runner, extracted from `explainStream` (Sol P-5)
 
-`explainStream` is ~400 lines of invariants (the deadline and stall clocks, `classifyEnd`, empty
-answers, search-count provenance). A second copy would drift. So it gains, narrowly:
-
-- a **prompt seam**: the system prompt and the final user part are supplied by the caller (default:
-  explain's own, byte-identical, so comments and the glossary are untouched);
-- a **job name** for the AI gateway, so the spend is attributed to a new job
-  `citation-investigate` (models.ts registry, `AI_JOB_ROUTE` in src/ai-call.ts,
-  ai-gateway.md), same model family as explain;
-- **opt-in evidence**: when asked, it also collects `collectSearchEvidence` (URL, title, extract)
-  and returns it on `done`, so the caller can run the identity and quote checks. Not stored in full.
-
-The web-search tool definition stays byte-identical (`MAX_SEARCHES`, `max_results: 5`). Investigate
-has its own system prompt, so its cached prefix is separate from explain's anyway; one tool shape
-keeps the reasoning in explain.ts's comment true.
-
-The exact seam (a `prompt` object vs a messages builder) is the implementer's call, checked by the
-code review; the constraint is that explain's request is byte-identical for existing callers, and a
-test says so.
+Not a seam on `explainStream`: comments and the glossary depend on its request bytes for their cache.
+Instead a **move-only refactor** pulls out the part both need — the deadline and stall clocks, the
+`openRouterStream` loop, citation/evidence collection, usage and search-count provenance, and
+`classifyEnd` — into a lower-level runner. `explain.ts` keeps its own request, job, logging and
+accepted endings, and **snapshot tests of the fully serialised explain request (ordinary, deep,
+profiled) are written first and must not change.** A new `src/citation-investigate.ts` builds its
+own request under a new AI job `citation-investigate` (models.ts, `AI_JOB_ROUTE`, ai-gateway.md),
+its own tools (Exa pinned), and **accepts only a clean `finished` ending** (Sol P-8): unknown finish
+reasons and tool requests store nothing.
 
 ### The route, the store, the limits
 
-- `POST /api/citations/:slug/:id/investigate`, SSE out, the glossary lookup's shape
-  (`streamTermLookup`): refusals (404 no such work, 409 no list) as JSON before the headers, then
-  `delta`… and one `done` (the stored investigation) or `error`. **`done` only after it is stored.**
-  `gone` is *not* passed to the model — like the glossary lookup, closing the band does not throw
-  away a paid answer; it is there next time.
-- Nothing is read off the body: the work is found server-side by id.
-- **Own allowance bucket** `citation-investigate` on `fetchAllowanceStore` — one at a time, 10 an
-  hour, 30 a day, a global daily fuse — taken after the free refusals. A new bucket on the existing
-  limiter; no existing defence is edited.
-- A new table `citation_investigations`, `glossary_lookups`' shape: `(article_id, entry_id)` key,
-  owner id, `answer`, `sources` (jsonb `Citation[]`, safeUrl-filtered), `pages_read`,
-  `work_page_host` (null when none matched), `quotes_checked`, `quotes_missing` (jsonb string[]),
-  `searches`, `model`, `context_hash`, `at`. One row per work, overwritten by a second press. Private.
-  Additive migration.
-- **Staleness:** `context_hash` over the work's title, authors, year, reference, `why` and citing
-  passages as sent, plus the prompt version. Attached at read time only while it matches (5G's R-4);
-  a remade list with a changed `why` hides it and the button reads *Investigate* again. The profile
-  is not in the hash: a reader editing their box does not make an investigation of the paper wrong.
-- **Never reaches a visitor** (the list's private fields are stripped for the public payload, as
-  `lookup` is), and **in export** — both projections in src/store/export.ts, which enumerates by
-  hand (5G's R-6).
-- The answer is kept only on a clean finish; truncated/filtered/abandoned endings are refused, as
-  the glossary's `refuseUnfinished` does.
+- `POST /api/citations/:slug/:id/investigate`, SSE out, `streamTermLookup`'s shape: refusals as JSON
+  before the headers, then `delta`… and one `done` (the stored investigation) or `error`. **`done`
+  only after it is stored.** `gone` is not passed to the model, as the glossary lookup, so closing
+  the band does not throw away a paid answer. Nothing is read off the body.
+- **Own allowance bucket** `citation-investigate` on `fetchAllowanceStore`, concurrency 1, lease =
+  timeout + margin; the hourly, daily and global numbers **set from the probe's measured cost** and
+  written here with the arithmetic. A new bucket on the existing limiter; no defence is edited.
+- A new table `citation_investigations`, one row per `(article_id, entry_id)`, overwritten by a
+  second press: owner id, `answer`, `sources` (jsonb `Citation[]`, safeUrl-filtered — a variable
+  list, as `glossary_lookups.citations`), `extracts_read` (int, non-empty extracts), `searches`
+  (nullable — null is "not reported", not zero) and `searches_from`, `model`, `context_hash`, `at`.
+  Checks: entry-id format, non-negative counts. Additive migration.
+- **Staleness (Sol P-4, one hash):** `context_hash` over everything sent — the article part, the
+  work's fields including link and link source, `why` and citing passages as capped, the rendered
+  profile, the prompt version and the model. Attached at read time only on a match; otherwise the
+  row reads *Investigate* again. One press regenerates.
+- **Private**: never in the public payload; **in export** — the rollback export in
+  src/store/export.ts, the bundle (src/store/export-bundle.ts) and `ARTICLE_TABLE_COVERAGE` /
+  `readArticleRows` in src/store/article-rows.ts, each tested (Sol P-7).
 
 ### UI
 
 On an owner row: **Investigate** (a `ControlTip`: what it does, that it costs money, that it reads
-search extracts of web pages and not the paper itself, that the answer is kept). While running, the
-answer streams into the row under the provenance line. When done: the answer, the *what was read*
-line, the quote check, the sources, and *Investigated <date> · Investigate again*. A stored
-investigation is collapsed to its first lead line with a toggle, so the list stays a list.
-
-Not on the hover card (5G's reasoning: a billed action on a hover surface is the wrong place).
+search extracts and never the paper, that the answer is kept). While running, the answer streams
+into the row. When done: the answer, the *what was read* line, the sources, *Look it up*'s verdict
+beside it or the offer of it, and *Investigated <date> · Investigate again*. A stored investigation
+is collapsed to its first lead with a toggle, so the list stays a list. Not on the hover card.
 
 ## Stages
 
-1. **Server.** The `explainStream` seam (existing callers byte-identical, tested), the
-   `citation-investigate` job, the prompt, the identity and quote checks, the table + migration, the
-   store, the route, the allowance, attach-at-read with staleness, export, public stripping. Tests
-   red-first: a stale hash hides it; a quote not in the extracts is reported missing; the identity
-   line; `done` only after save; a visitor never sees it; explain's request unchanged. GPT Sol code
-   review.
+1. **Server.** Step 1 is a gate: a real streaming probe (a script, Exa pinned, a small result cap)
+   on a few local citations — cost, searches, extract sizes, latency, quote-guard hits — recorded
+   here, and the allowance numbers set from it. Then the runner extraction (explain snapshots first),
+   the job, the prompt, the guard, the table, the store, the route, the allowance, attach-at-read,
+   export, public stripping. Tests red-first. GPT Sol code review.
 2. **Client.** The button, the streamed view, the stored view, the tip. Browser check in a
    subagent. GPT Sol code review.
-3. **Real runs, docs, note.** A few real investigations on local articles through the real gateway
-   (cost, searches, latency, how often a work page is matched, how many quotes check out), recorded
-   here; citations.md; the feedback note.
+3. **Docs and note.** citations.md, ai-gateway.md's job line, the feedback note.
 
 ## Assumptions (product calls taken the simple way)
 
 - Owner-only and behind the experimental switch, like *Look it up*.
 - Kept, one per work; a second press replaces it. No history.
-- Plain prose with three leads, not a structured JSON form: Greg asked for *extra information*, and
-  prose streams.
-- The quote check reports, it does not rewrite: the reader watched the text arrive.
+- Plain prose with leads, not a structured form: Greg asked for *extra information*, and prose
+  streams. Verbatim quotes belong to *Look it up*.
+- A quoted source refuses the whole answer rather than flagging it.
 
 ## Deferred, named
 
-- **Reading the paper itself** — 5G's proposed later stage (fetch the PDF with the existing
-  `readPaperText`, an identity ladder, passages verified against what was sent). Investigate is
-  built so it could feed on that later: the *what was read* line would gain *the full text from …*.
-  Still a question for Greg, as 5G left it.
-- Investigate from the hover card; *investigate every row*; history of past investigations; marking
-  unverified quotes inline in the prose.
+- **Reading the paper itself** — 5G's proposed later stage (`readPaperText`, an identity ladder,
+  passages verified against what was sent). With it, Investigate could quote the paper, verified,
+  and the *what was read* line would change. Still a question for Greg, as 5G left it.
+- Verified quotes from Investigate's own sources (Sol's option B: buffered, source-bound JSON).
+- Investigate from the hover card; *investigate every row*; history of past investigations.
 
 ## Review log
 
-(to be filled)
+- **Plan review, round 1** —
+  [260930a-citations-investigate-plan-review-sol.md](260930a-citations-investigate-plan-review-sol.md),
+  verdict *rethink* the streaming/verification design, not the feature. All of P-1…P-8 adopted, and
+  the design above is the result. The choice between **A** (stream quote-free prose; verified
+  quotes stay with *Look it up*) and **B** (a buffered, structured answer with source-bound verified
+  quotes, not streamed) was arbitrated by Opus: **A**. B rebuilds 5G's structured check inside a
+  slower, unstreamed call and duplicates *Look it up*; what Greg asked for beyond 5G — how else it
+  relates, and for you — is interpretive, and paraphrase that names its source serves it. With no
+  quotes streamed, the house streaming rule and 5G's rule stop pulling against each other. Opus also
+  ruled: extract a runner rather than add a seam (P-5); one hash over everything, profile included
+  (P-4); fold the probe into stage 1 as its gate (P-6).
