@@ -1,3 +1,7 @@
+---
+reports: spya-m92n7z
+ending: shipped
+---
 # The "?" answer opens plainly, and reaches for an analogy where one helps
 
 **[SPIDERYARN-READING2-1S](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1S)** · suggestion ·

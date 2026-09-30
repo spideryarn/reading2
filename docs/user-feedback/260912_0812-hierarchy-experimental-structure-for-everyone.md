@@ -1,3 +1,7 @@
+---
+reports: spya-ycs3qh
+ending: shipped
+---
 # Hierarchy becomes an experimental feature; Structure is shown to everyone
 
 [SPIDERYARN-READING2-35](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-35) (2026-09-12

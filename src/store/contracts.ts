@@ -1888,7 +1888,21 @@ export type {
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
-import type { EarlierFeedbackPage } from "../types.js";
+import type { EarlierFeedback } from "../types.js";
+
+/** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
+export type MyFeedback = Omit<EarlierFeedback, "shipped">;
+
+export interface MyFeedbackPage {
+  reports: MyFeedback[];
+  more: boolean;
+}
+
+/** Keep only these report ids (`in`), or everything but them (`out`). */
+export interface FeedbackIdFilter {
+  ids: readonly string[];
+  keep: "in" | "out";
+}
 
 /**
  * **What the reader filed** — everything the row is built from, and nothing
@@ -2153,8 +2167,14 @@ export interface FeedbackStore {
    * Owner-scoped like `read`, and the owner is never an argument. Four fields a
    * report and no more: see `EarlierFeedback` in src/types.ts for why the email,
    * the address, the diagnostics and the screenshot are not among them.
+   *
+   * `filter` narrows by report id — kept `in` or left `out` of the list —
+   * **beside** the owner predicate, never instead of it; the Earlier tab's
+   * shipped/unshipped filter. The store knows nothing of what the ids mean.
+   * `shipped` is not the store's to say: the route adds it.
+   * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
    */
-  listMine(limit: number): Promise<EarlierFeedbackPage>;
+  listMine(limit: number, filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.

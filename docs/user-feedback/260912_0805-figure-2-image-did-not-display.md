@@ -1,3 +1,7 @@
+---
+reports: spya-dmkuby
+ending: shipped
+---
 # The image for Figure 2 didn't display
 
 **[SPIDERYARN-READING2-31](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-31)** · reported

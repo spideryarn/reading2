@@ -1,3 +1,7 @@
+---
+reports: spya-z8cqke
+ending: shipped
+---
 # The mobile keyboard should have a Done/Send button
 
 **[SPIDERYARN-READING2-1A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1A)** · reported

@@ -1,3 +1,7 @@
+---
+reports: spya-zbcchv
+ending: shipped
+---
 # Socratic questions in Summary mode
 
 **[SPIDERYARN-READING2-1V](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1V)** · reported

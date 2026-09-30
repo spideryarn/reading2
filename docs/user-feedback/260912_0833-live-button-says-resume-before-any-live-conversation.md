@@ -1,3 +1,7 @@
+---
+reports: spya-qcaffs
+ending: shipped
+---
 # The Live button says "Resume" before any live conversation has happened
 
 [SPIDERYARN-READING2-3G](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3G) (2026-09-12

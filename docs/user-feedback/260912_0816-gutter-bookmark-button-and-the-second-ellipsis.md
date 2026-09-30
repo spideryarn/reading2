@@ -1,3 +1,7 @@
+---
+reports: spya-xcguqc, spya-u24r88
+ending: shipped
+---
 # The gutter: a second "…" inside its own menu, and the bookmark button that never arrived
 
 **SPIDERYARN-READING2-37** (suggestion, 2026-09-12 08:16Z) and **SPIDERYARN-READING2-38** (problem,

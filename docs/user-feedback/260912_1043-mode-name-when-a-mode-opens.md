@@ -1,3 +1,7 @@
+---
+reports: spya-xaaygb
+ending: shipped
+---
 # The mode names itself when a reader opens it
 
 **SPIDERYARN-READING2-3Q** · suggestion · from Greg (an admin, so trusted input) · iPad, reading

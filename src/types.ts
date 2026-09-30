@@ -5268,6 +5268,15 @@ export interface EarlierFeedback {
   createdAt: string;
   kind: FeedbackKind | null;
   body: string;
+  /**
+   * **A change for this report has shipped, and is in the build answering.**
+   * Derived from the report's note in docs/user-feedback/, compiled into the
+   * server (src/feedback-ending.ts) — so on production it turns true only once
+   * the note, and the work before it, has been deployed. Not *declined* or
+   * *waiting*: this list's question is "did anything come of it".
+   * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
+   */
+  shipped: boolean;
 }
 
 /** The whole answer: the newest reports, and whether there were more than the cap. */
@@ -5276,6 +5285,15 @@ export interface EarlierFeedbackPage {
   /** `true` when the reader has filed more than `EARLIER_FEEDBACK_LIMIT`, so the list says so. */
   more: boolean;
 }
+
+/**
+ * **Which of them the Earlier tab asks for** — `GET /api/feedback?show=`, absent
+ * meaning `all`. Filtered on the server, not over the 50 the client holds: the
+ * reader most likely to filter has sent far more than 50, and the older ones
+ * are the likeliest not to have shipped.
+ */
+export const EARLIER_FEEDBACK_SHOWS = ["all", "shipped", "unshipped"] as const;
+export type EarlierFeedbackShow = (typeof EARLIER_FEEDBACK_SHOWS)[number];
 
 /**
  * **How many earlier reports the dialog lists.** No paging: a reader with fifty

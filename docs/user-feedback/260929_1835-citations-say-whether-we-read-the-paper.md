@@ -1,3 +1,7 @@
+---
+reports: spya-emvua7
+ending: shipped
+---
 # Citations say whether we read the cited paper, and quote it when we saw some of it
 
 SPIDERYARN-READING2-5G (`spya-emvua7`), from Greg (admin), dictated through the Feedback dialog. The

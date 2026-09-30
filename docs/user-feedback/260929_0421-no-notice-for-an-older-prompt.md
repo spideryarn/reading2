@@ -1,3 +1,7 @@
+---
+reports: spya-n3t8v5
+ending: shipped
+---
 # No notice when a mode was made by an older prompt
 
 [SPIDERYARN-READING2-55](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-55) (2026-09-29

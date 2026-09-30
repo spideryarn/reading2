@@ -1,3 +1,7 @@
+---
+reports: spya-r9w4mx
+ending: shipped
+---
 # A tap on a link sometimes opened the page instead of the card
 
 **[SPIDERYARN-READING2-3Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3Y)** · reported

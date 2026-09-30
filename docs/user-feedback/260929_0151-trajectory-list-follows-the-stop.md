@@ -1,3 +1,7 @@
+---
+reports: spya-a6xsr2
+ending: shipped
+---
 # Stepping keeps the current stop visible in the band's list
 
 [SPIDERYARN-READING2-54](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-54) (2026-09-29

@@ -1,3 +1,7 @@
+---
+reports: spya-gubw6p
+ending: shipped
+---
 # Back links become icons with tooltips
 
 SPIDERYARN-READING2-50 (2026-09-29 01:42 UTC), from Greg (admin), relayed by the Overseer.

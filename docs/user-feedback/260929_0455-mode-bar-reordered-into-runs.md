@@ -1,3 +1,7 @@
+---
+reports: spya-vyxtrt
+ending: shipped
+---
 # The mode bar reordered, with lines between runs of related modes
 
 SPIDERYARN-READING2-4E, from Greg (admin), in production, build `cba650a3`, on

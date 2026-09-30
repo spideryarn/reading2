@@ -1,3 +1,7 @@
+---
+reports: spya-u0vpys
+ending: shipped
+---
 # Drop the "Use your profile" checkbox, always use the profile
 
 **[SPIDERYARN-READING2-3B](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3B)** · reported

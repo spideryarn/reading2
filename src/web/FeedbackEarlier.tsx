@@ -11,18 +11,29 @@
  * >
  * > — Greg, 2026-09-12 (SPIDERYARN-READING2-3R)
  *
- * So: the date, what they called it, and what they wrote. **Not** what came of
- * each one — the plan names what that would take.
+ * So: the date, what they called it, and what they wrote.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * ## Once per opening
+ * > It would be nice if we could provide a way to filter to things that have or
+ * > have not been achieved and deployed.
+ * >
+ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-63)
  *
- * The list is read the first time the tab is chosen and kept while the reader
+ * And now whether a change for each one has **shipped** — derived on the server
+ * from the report's note, so on production it means "is in the version you are
+ * using" — and a filter by it: All · Shipped · Not shipped.
+ * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
+ *
+ * ## Once per opening, per filter
+ *
+ * Each filter is read the first time it is chosen and kept while the reader
  * flips back and forth. Nothing can be filed and then looked for within one
  * opening — a successful send shuts the dialog and thanks the reader in a
  * toast — so reading again would buy no freshness. Shutting the dialog forgets
- * it, and a generation counter drops an answer that lands after that: the same
- * shape as `shotGeneration` in the dialog.
+ * every filter's answer and goes back to All. An answer is stored under the
+ * filter that asked for it, and only if it is that filter's latest request in
+ * this opening: a generation counter drops anything that lands after the
+ * dialog shut, and a per-filter sequence drops a Try again's older twin.
  */
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -30,8 +41,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FEEDBACK_EARLIER_FAILED } from "../messages.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
+  EARLIER_FEEDBACK_SHOWS,
   FEEDBACK_KINDS,
   type EarlierFeedbackPage,
+  type EarlierFeedbackShow,
   type FeedbackKind,
 } from "../types.js";
 import { apiFetch } from "./lib/api.js";
@@ -41,6 +54,10 @@ export type EarlierState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
   | { kind: "loaded"; page: EarlierFeedbackPage };
+
+type EarlierStates = Record<EarlierFeedbackShow, EarlierState>;
+
+const IDLE: EarlierStates = { all: { kind: "idle" }, shipped: { kind: "idle" }, unshipped: { kind: "idle" } };
 
 /** A 200 is only success when it carries the wire shape the panel can render. */
 function isEarlierFeedbackPage(value: unknown): value is EarlierFeedbackPage {
@@ -55,61 +72,75 @@ function isEarlierFeedbackPage(value: unknown): value is EarlierFeedbackPage {
       typeof report.createdAt === "string" &&
       !Number.isNaN(Date.parse(report.createdAt)) &&
       (report.kind === null || FEEDBACK_KINDS.some((kind) => kind === report.kind)) &&
-      typeof report.body === "string"
+      typeof report.body === "string" &&
+      typeof report.shipped === "boolean"
     );
   });
 }
 
+export interface EarlierFeedback {
+  /** The state of the filter showing. */
+  earlier: EarlierState;
+  show: EarlierFeedbackShow;
+  setShow(show: EarlierFeedbackShow): void;
+  retry(): void;
+}
+
 /**
  * The read, lazily. `wanted` is whether the Earlier tab is showing; `open` is
- * whether the dialog is. The first time both are true in an opening, it reads.
+ * whether the dialog is. The first time both are true for a filter in an
+ * opening, it reads.
  */
-export function useEarlierFeedback(
-  open: boolean,
-  wanted: boolean,
-): { earlier: EarlierState; retry(): void } {
-  const [earlier, setEarlier] = useState<EarlierState>({ kind: "idle" });
+export function useEarlierFeedback(open: boolean, wanted: boolean): EarlierFeedback {
+  const [states, setStates] = useState<EarlierStates>(IDLE);
+  const [show, setShow] = useState<EarlierFeedbackShow>("all");
   const generation = useRef(0);
+  const sequence = useRef<Record<EarlierFeedbackShow, number>>({ all: 0, shipped: 0, unshipped: 0 });
 
-  const load = useCallback(async () => {
-    const mine = ++generation.current;
-    setEarlier({ kind: "loading" });
+  const load = useCallback(async (which: EarlierFeedbackShow) => {
+    const opening = generation.current;
+    const mine = ++sequence.current[which];
+    const current = () => opening === generation.current && mine === sequence.current[which];
+    const settle = (state: EarlierState) => {
+      if (current()) setStates((all) => ({ ...all, [which]: state }));
+    };
+    settle({ kind: "loading" });
     try {
-      const res = await apiFetch("/api/feedback");
+      const res = await apiFetch(which === "all" ? "/api/feedback" : `/api/feedback?show=${which}`);
       if (!res.ok) {
-        if (mine === generation.current) {
-          setEarlier({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });
-        }
+        settle({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });
         return;
       }
       const page: unknown = await res.json();
-      if (mine !== generation.current) return;
-      setEarlier(
+      settle(
         isEarlierFeedbackPage(page)
           ? { kind: "loaded", page }
           : { kind: "failed", message: FEEDBACK_EARLIER_FAILED.message },
       );
     } catch {
-      if (mine === generation.current) {
-        setEarlier({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });
-      }
+      settle({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });
     }
   }, []);
 
-  /* Shut: forget the list, and make any read still in the air land nowhere. */
+  /* Shut: forget every answer, go back to All, and make any read still in the
+     air land nowhere. */
   useEffect(() => {
     if (open) return;
     generation.current += 1;
+    setShow("all");
     /* The same object when there is nothing to forget, so a dialog that was
        never on this tab is not re-rendered for being shut. */
-    setEarlier((current) => (current.kind === "idle" ? current : { kind: "idle" }));
+    setStates((current) =>
+      EARLIER_FEEDBACK_SHOWS.every((which) => current[which].kind === "idle") ? current : IDLE,
+    );
   }, [open]);
 
+  const earlier = states[show];
   useEffect(() => {
-    if (open && wanted && earlier.kind === "idle") void load();
-  }, [open, wanted, earlier.kind, load]);
+    if (open && wanted && earlier.kind === "idle") void load(show);
+  }, [open, wanted, earlier.kind, show, load]);
 
-  return { earlier, retry: () => void load() };
+  return { earlier, show, setShow, retry: () => void load(show) };
 }
 
 /** Shorter than the toggle's "A problem": this is a label on a row, not a choice. */
@@ -117,6 +148,21 @@ const KIND_WORD: Record<FeedbackKind, string> = {
   problem: "Problem",
   suggestion: "Suggestion",
 };
+
+const SHOW_WORD: Record<EarlierFeedbackShow, string> = {
+  all: "All",
+  shipped: "Shipped",
+  unshipped: "Not shipped",
+};
+
+/** Said literally, per filter: "not shipped" includes declined, so never "outstanding". */
+const EMPTY: Record<EarlierFeedbackShow, string> = {
+  all: "You haven't sent us any feedback yet.",
+  shipped: "None of your reports has a shipped change yet.",
+  unshipped: "Every report you've sent has a shipped change.",
+};
+
+const SHIPPED_TITLE = "We shipped a change for this, and it is in the version of Spideryarn you're using.";
 
 function when(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -126,8 +172,46 @@ function when(iso: string): string {
   });
 }
 
+/**
+ * All · Shipped · Not shipped. `aria-pressed` buttons in a fieldset, the same shape as the
+ * Problem / Suggestion toggle; every one `type="button"` so none can submit
+ * the hidden Write form.
+ */
+export function EarlierFilter({
+  show,
+  onShow,
+}: {
+  show: EarlierFeedbackShow;
+  onShow(show: EarlierFeedbackShow): void;
+}) {
+  return (
+    <fieldset className="fb-kind">
+      <legend className="fb-kind-legend">Show</legend>
+      {EARLIER_FEEDBACK_SHOWS.map((which) => (
+        <button
+          key={which}
+          type="button"
+          className="fb-show-button"
+          aria-pressed={show === which}
+          onClick={() => onShow(which)}
+        >
+          {SHOW_WORD[which]}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
 /** What the Earlier panel shows, in each of its four states. */
-export function EarlierList({ earlier, retry }: { earlier: EarlierState; retry(): void }) {
+export function EarlierList({
+  earlier,
+  show,
+  retry,
+}: {
+  earlier: EarlierState;
+  show: EarlierFeedbackShow;
+  retry(): void;
+}) {
   switch (earlier.kind) {
     case "idle":
       return null;
@@ -152,7 +236,7 @@ export function EarlierList({ earlier, retry }: { earlier: EarlierState; retry()
     case "loaded": {
       const { reports, more } = earlier.page;
       if (reports.length === 0) {
-        return <p className="fb-earlier-status">You haven't sent us any feedback yet.</p>;
+        return <p className="fb-earlier-status">{EMPTY[show]}</p>;
       }
       return (
         <>
@@ -162,6 +246,14 @@ export function EarlierList({ earlier, retry }: { earlier: EarlierState; retry()
                 <p className="fb-earlier-meta">
                   <time dateTime={report.createdAt}>{when(report.createdAt)}</time>
                   {report.kind === null ? null : ` · ${KIND_WORD[report.kind]}`}
+                  {report.shipped ? (
+                    <>
+                      {" · "}
+                      <span className="fb-earlier-shipped" title={SHIPPED_TITLE}>
+                        Shipped
+                      </span>
+                    </>
+                  ) : null}
                 </p>
                 {/* Text, never markup, and whole: the reader wrote it, and a
                     clamp would need an expander. `pre-wrap` keeps their lines. */}

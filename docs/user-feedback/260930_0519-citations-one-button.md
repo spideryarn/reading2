@@ -1,3 +1,7 @@
+---
+reports: spya-mbgnwh
+ending: shipped
+---
 # Citations: one button instead of *Look it up* and *Investigate*
 
 SPIDERYARN-READING2-75 (`spya-mbgnwh`), from Greg, relayed by the Overseer. Sent 2026-09-30 05:19

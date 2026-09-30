@@ -1,3 +1,7 @@
+---
+reports: spya-sm0hyk
+ending: shipped
+---
 # Shelf: once a topic is picked, hide the topics that would match nothing
 
 [SPIDERYARN-READING2-4Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4Y) (2026-09-29

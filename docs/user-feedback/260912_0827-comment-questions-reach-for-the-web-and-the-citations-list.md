@@ -1,3 +1,7 @@
+---
+reports: spya-kcdabx, spya-z39d04
+ending: shipped
+---
 # A question about a passage reaches for the web, and can read the citations list
 
 **SPIDERYARN-READING2-3D** (2026-09-12 08:27Z) and **SPIDERYARN-READING2-3F** (08:31Z), Greg, on an

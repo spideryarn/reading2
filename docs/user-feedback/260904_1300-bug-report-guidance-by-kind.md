@@ -1,3 +1,7 @@
+---
+reports: spya-g0sg5g
+ending: shipped
+---
 # Show the bug-report guidance, drop "Not sure what to write?"
 
 **[SPIDERYARN-READING2-16](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-16)** · reported

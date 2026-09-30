@@ -1,3 +1,7 @@
+---
+reports: spya-pukg0x
+ending: shipped
+---
 # The Tweets page writes the thread when it is opened
 
 **[SPIDERYARN-READING2-3J](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3J)** · reported

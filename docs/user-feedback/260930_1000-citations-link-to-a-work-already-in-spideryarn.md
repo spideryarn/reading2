@@ -1,3 +1,7 @@
+---
+reports: spya-mxntdt
+ending: shipped
+---
 # Citations: a link to a cited work that is already an article here
 
 SPIDERYARN-READING2-5R (`spya-mxntdt`), a suggestion from Greg (admin, verified by

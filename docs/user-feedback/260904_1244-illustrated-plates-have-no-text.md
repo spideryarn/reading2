@@ -1,3 +1,7 @@
+---
+reports: spya-wxd4nq
+ending: shipped
+---
 # The illustrated plates have no text in them
 
 **[SPIDERYARN-READING2-12](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-12)** · reported

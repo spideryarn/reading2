@@ -1,3 +1,7 @@
+---
+reports: spya-j0xw7s
+ending: shipped
+---
 # Feedback button on the logged-in homepage
 
 `SPIDERYARN-READING2-2C` · 2026-09-07 17:32 UTC · greg@gregdetre.com (admin, checked with

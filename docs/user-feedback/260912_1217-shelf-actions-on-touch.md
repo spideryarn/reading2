@@ -1,3 +1,7 @@
+---
+reports: spya-sg53hn
+ending: shipped
+---
 # The shelf's actions could not be found on an iPad
 
 **[SPIDERYARN-READING2-40](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-40)** · reported

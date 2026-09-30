@@ -1,3 +1,7 @@
+---
+reports: spya-mgedkp
+ending: shipped
+---
 # Trajectory's deeper passes stop showing the snippets you have just read
 
 [SPIDERYARN-READING2-4P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-4P) (2026-09-29,

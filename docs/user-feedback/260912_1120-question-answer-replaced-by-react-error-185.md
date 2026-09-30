@@ -1,3 +1,7 @@
+---
+reports: spya-ref23e
+ending: shipped
+---
 # A "?" answer that arrived in a burst was replaced by React error #185
 
 **SPIDERYARN-READING2-3X** (2026-09-12 11:20Z), Greg, in production (`build_commit d358f773`), on

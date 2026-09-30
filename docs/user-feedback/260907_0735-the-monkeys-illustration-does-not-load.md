@@ -1,3 +1,7 @@
+---
+reports: spya-bsmmam
+ending: shipped
+---
 # The monkeys illustration doesn't load
 
 **[SPIDERYARN-READING2-2B](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2B)** · reported

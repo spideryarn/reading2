@@ -1,3 +1,7 @@
+---
+reports: none
+ending: shipped
+---
 # The animated wordmark on more pages
 
 From Greg (admin), 2026-09-29, relayed by the Overseer with no Sentry id. The time in the file name is

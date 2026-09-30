@@ -1,3 +1,8 @@
+---
+reports: spya-d3a7bf
+ending: shipped
+parts: 2
+---
 # "Back to X" vanished whenever you looked at where it had taken you
 
 **[SPIDERYARN-READING2-41](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-41)** · reported

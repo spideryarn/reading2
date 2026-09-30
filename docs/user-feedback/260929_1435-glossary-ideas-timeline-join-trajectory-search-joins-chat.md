@@ -1,3 +1,7 @@
+---
+reports: spya-g8a0s8
+ending: shipped
+---
 # Glossary, Ideas and Timeline join Trajectory's group; Search joins Chat's
 
 SPIDERYARN-READING2-57 (report `spya-g8a0s8`), from Greg (admin), relayed by the Overseer. The time in
