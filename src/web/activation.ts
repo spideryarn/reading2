@@ -141,7 +141,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { RememberView } from "./params.js";
+import type { RememberView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { StepName } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
@@ -259,7 +259,13 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
-  summary: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  /* Opens on Gists, which are free. Its Simple chip arms for itself one level
+     down, as Remember's Quiz chip does — so pressing Summary on an address
+     that still says `?summary=simple` spends nothing. */
+  summary: {
+    kind: "none",
+    reason: "opens on Gists, from the tree the pipeline already built; the Simple chip arms itself",
+  },
 
   /* Nothing exists to fill until the reader has typed. */
   search: { kind: "none", reason: "stores nothing until the reader types a query" },
@@ -578,7 +584,7 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  * to spend it. So each arm below reads the table the press itself read — the
  * bar's `MODE_TARGET` for a mode press, `REFEREE_TARGET` for a Referee chip, and
  * the literal `"quiz"` the Remember toggle arms (QuizPanel.tsx §
- * `RememberSubModeToggle`). A Diagram chip arms `activationForDiagram` of the
+ * `RememberSubModeToggle`), and `"simple"` the Summary toggle arms. A Diagram chip arms `activationForDiagram` of the
  * picture it lands on, which is the delegated row's answer too.
  *
  * `sub` is the sub-mode each band is showing, **already parsed** the way the
@@ -587,10 +593,12 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView },
+  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
+  /* The literal the Simple chip arms (SummaryMode.tsx § `SummarySubModeToggle`). */
+  if (mode === "summary") return sub.summary === "simple" ? "simple" : null;
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {
     case "fixed":

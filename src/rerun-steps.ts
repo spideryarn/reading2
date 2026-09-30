@@ -117,6 +117,14 @@ export const METADATA_RERUN_STEPS = [
      a real answer. Not a mode, so no switch hides it.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   "crossrefs",
+  /* **Joined on 2026-09-30 with the step.** The three answers: **one** metered
+     call a press — a single `streamMessage`, no tools
+     (`generateSimpleSummary`); **no prerequisite** beyond the article itself;
+     and **safe to publish over a good one**, draft-then-publish — an answer
+     that fails validation throws and writes nothing (`buildSimpleSummary`).
+     Summary is a core mode, so no switch hides it.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+  "simple",
 ] as const satisfies readonly StepName[];
 
 /** One of the list. */

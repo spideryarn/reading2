@@ -218,7 +218,7 @@ const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotes, useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
-const { useQuiz } = await import("../src/web/useQuiz.js");
+const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useTweets } = await import("../src/web/useTweets.js");
@@ -272,7 +272,8 @@ function TimelineHarness({ slug }: { slug: string }): ReactElement {
 }
 
 function QuizHarness({ slug }: { slug: string }): ReactElement {
-  const all = useQuiz(slug);
+  const read = useQuizRead(slug);
+  const all = useQuiz(slug, read);
   return createElement(
     "aside",
     null,

@@ -658,6 +658,18 @@ interface Props {
    * every render.
    */
   afterBlock?: { blockId: BlockId; node: ReactElement } | null | undefined;
+  /**
+   * **The quiz's questions, each after the block it is about** — in every mode,
+   * not the open mode's, which is why this is a second prop and not a wider
+   * `afterBlock`: that one stays one mode's single slot, and a standing feature
+   * of the article is braided into it by nothing. Drawn on the same path, a
+   * sibling after `.prose`, and **before** `afterBlock`, so in Trajectory the
+   * question sits between the stop's passage and its door.
+   * QuizInProse.tsx; SPIDERYARN-READING2-6V.
+   *
+   * **Memoise it in the caller**, for `afterBlock`'s reason.
+   */
+  quizAfter?: ReadonlyMap<BlockId, ReactElement> | null | undefined;
 }
 
 /**
@@ -722,6 +734,7 @@ function TableViewInner({
   linkBase,
   slug,
   afterBlock,
+  quizAfter,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -1599,6 +1612,8 @@ function TableViewInner({
                     canOpenSource={canOpenSource}
                   />
                 )}
+                {/* The quiz's questions on this block — `Props.quizAfter`. */}
+                {quizAfter?.get(block.id)}
                 {/* The open mode's door, after its block — `Props.afterBlock`. */}
                 {afterBlock?.blockId === block.id && afterBlock.node}
               </td>

@@ -2325,6 +2325,12 @@ export interface PublicArtefacts {
    */
   faq: boolean;
   /**
+   * **Since 2026-09-30** — a stored Simple, Summary's plain-words sub-mode.
+   * Readable by a visitor from the day it was built; only *making* one is the
+   * owner's. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+   */
+  simpleSummary: boolean;
+  /**
    * **The tenth, since 2026-09-29** — a stored Citations list, each work's
    * address re-judged at the boundary and the owner's *Find it* results left
    * behind. SPIDERYARN-READING2-56, plan 260929c stage 3.
@@ -2899,7 +2905,14 @@ export type StepName =
      shares a cached prefix with nothing, because no other `ids` stage thinks at
      `medium`. Not a mode: the links sit in the prose in every mode.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
-  | "crossrefs";
+  | "crossrefs"
+  /* **Simple** — a few short paragraphs in everyday words saying what the piece
+     is about, why it matters and its key ideas, each resting on the passages it
+     came from: a sub-mode of Summary, made on a press.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Ideas' article block
+     at `high` effort (measured against `medium` in stage 1), so an
+     `ArticleStage` in the `ideas` cached prefix group. */
+  | "simple";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -4476,6 +4489,100 @@ export interface FaqResponse {
 
 /** As `QuizFound`: the same type, because there is no `profileChanged` to omit. */
 export type FaqFound = FaqResponse;
+
+/* ----------------------------------------------------------------- simple --
+   A plain-words orientation to the piece — the `simple_summary` column on
+   `article_revisions`, written by the `simple` step.
+   docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+
+   Here rather than in src/simple-summary.ts for the reason `Faq` is: the panel
+   needs the shape, and `src/web/` may import only the pure leaves. */
+
+/**
+ * One plain-words paragraph and the passages it rests on. **Every paragraph is
+ * a door**: `ids` holds one to three body-evidence block ids, deduplicated, in
+ * the model's order — a paragraph with none is dropped at write time
+ * (src/simple-summary.ts § `toParagraphs`).
+ */
+export interface SimpleParagraph {
+  text: string;
+  ids: BlockId[];
+}
+
+/** The stored Simple contract, shared by generation and every read boundary. */
+export const SIMPLE_MIN_PARAGRAPHS = 2;
+export const SIMPLE_MAX_PARAGRAPHS = 4;
+export const SIMPLE_MAX_IDS = 3;
+export const SIMPLE_MAX_WORDS = 320;
+
+/**
+ * Is this a usable stored paragraph list?
+ *
+ * The generator performs the evidence-dependent check that every id belongs
+ * to the exact body it sent. This is the part a reader can check without the
+ * article: the same quantity, text, id and word limits the generator enforces.
+ */
+export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
+  if (
+    !Array.isArray(value) ||
+    value.length < SIMPLE_MIN_PARAGRAPHS ||
+    value.length > SIMPLE_MAX_PARAGRAPHS
+  ) {
+    return false;
+  }
+
+  let words = 0;
+  for (const valueParagraph of value) {
+    if (
+      typeof valueParagraph !== "object" ||
+      valueParagraph === null ||
+      Array.isArray(valueParagraph)
+    ) {
+      return false;
+    }
+    const paragraph = valueParagraph as { text?: unknown; ids?: unknown };
+    if (typeof paragraph.text !== "string" || paragraph.text.trim() === "") return false;
+    words += paragraph.text.trim().split(/\s+/).length;
+
+    if (
+      !Array.isArray(paragraph.ids) ||
+      paragraph.ids.length < 1 ||
+      paragraph.ids.length > SIMPLE_MAX_IDS ||
+      paragraph.ids.some((id) => typeof id !== "string" || id.trim() === "") ||
+      new Set(paragraph.ids).size !== paragraph.ids.length
+    ) {
+      return false;
+    }
+  }
+  return words <= SIMPLE_MAX_WORDS;
+}
+
+/** The artefact. The `simple_summary` column on `article_revisions`. */
+export interface SimpleSummary {
+  version: string;
+  generator: string;
+  slug: string;
+  /** A hash of the body-only article rendering actually sent (src/simple-summary.ts). */
+  sourceHash: string;
+  generatedAt: string;
+  elapsedMs: number;
+  /** Two to four, enforced by code — fewer is a failure and nothing is stored. */
+  paragraphs: SimpleParagraph[];
+}
+
+/**
+ * `GET /api/simple/:slug`. Two staleness facts, as `FaqResponse`: `stale` (the
+ * article moved: the panel says so) and `outdated` (an older prompt: silent).
+ */
+export interface SimpleSummaryResponse {
+  simpleSummary: SimpleSummary;
+  /** The article moved underneath this — its body blocks or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+export type SimpleSummaryFound = SimpleSummaryResponse;
 
 /* -------------------------------------------------------------- crossrefs --
    Links inside one article: a short phrase in one block that refers to what

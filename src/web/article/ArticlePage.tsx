@@ -29,6 +29,7 @@ import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
 import { useQuotesRead } from "../useQuotes.js";
 import { useCitationsRead } from "../useCitations.js";
+import { useQuizRead } from "../useQuiz.js";
 import { useCrossrefs } from "../useCrossrefs.js";
 import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
@@ -469,6 +470,14 @@ function OwnedReader({
    */
   const citations = useCitationsRead(slug);
   /**
+   * **The quiz, for the same reason and by the same split** — since 2026-09-30,
+   * when its questions started being drawn in the prose in every mode
+   * (SPIDERYARN-READING2-6V). `useQuizRead` is the opening GET and nothing
+   * else; `QuizSubBand` layers the job, the activation and the marks on top, for
+   * the two reasons the Quotes comment above gives. Owner-only by being here.
+   */
+  const quiz = useQuizRead(slug);
+  /**
    * **The cross-references**, drawn in the prose in every mode — here, and
    * unconditional, for the citations' reason. Owner-only by being here:
    * `VisitorArticle` has no such call, and there is no public twin of the
@@ -517,6 +526,7 @@ function OwnedReader({
         glossary,
         quotes,
         citations,
+        quiz,
         crossrefs,
         arc,
         readingTime,

@@ -1,0 +1,54 @@
+{
+  "arm": "medium-12",
+  "effort": "medium",
+  "pitch": 12,
+  "slug": "cargocult-spya-rz663q",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T15:00:33.619Z",
+  "bodyWords": 3822,
+  "bodyBlocks": 41,
+  "wallMs": 8373,
+  "costUsd": 0.023044,
+  "tokens": {
+    "input": 8227,
+    "output": 659,
+    "reasoning": 149
+  },
+  "ok": true,
+  "words": 189,
+  "paragraphs": [
+    {
+      "text": "This is a speech given by physicist Richard Feynman to college graduates in 1974. He talks about the difference between real science and \"pseudoscience\" — things that look like science but aren't. He calls this fake kind \"Cargo Cult Science,\" after island people who built fake airports hoping planes would land, copying the look of things without understanding what actually makes them work.",
+      "ids": [
+        "spya-f6b5fs",
+        "spya-wv9g0v",
+        "spya-fd2muf"
+      ]
+    },
+    {
+      "text": "Feynman says this matters because so many people believe in things that never really work, like ESP or certain teaching methods, and this can intimidate people with good common sense into doubting themselves. He argues that real science needs something extra: total honesty with yourself, even when it's inconvenient.",
+      "ids": [
+        "spya-re4634",
+        "spya-g2cwvy",
+        "spya-ed9mzv"
+      ]
+    },
+    {
+      "text": "His key idea is \"scientific integrity\": reporting everything that might prove you wrong, not just the evidence that supports you, and always publishing results no matter how they turn out. He gives examples, like scientists slowly correcting Millikan's electron measurement over years instead of admitting the first number was off right away, and a rat experiment where a researcher named Young had to remove every possible clue (sight, smell, sound) before rats stopped finding food by cheating.",
+      "ids": [
+        "spya-rxj5wa",
+        "spya-s9msxy",
+        "spya-uj9v2h"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

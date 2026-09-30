@@ -346,10 +346,44 @@ a.summ-title:hover { color: var(--highlight-ink); }
 
 .summ-quiet { padding: 1rem 0.2rem; color: var(--ink-faint); }
 
-/* **Summary mode spends nothing, so it has no foot.** `.summ-foot`,
+/* **The Gists spend nothing, so they have no foot.** `.summ-foot`,
    `.summ-hint`, `.summ-error`, `.summ-stale` and `.summ-rung-tag` went on
-   2026-08-31 with the generated length ladder: there is no job to report, no
-   artefact to be stale, and no shorter rung to fall back to
-   (docs/plans/260831s-gist-only-summaries.md). Its run button had gone earlier, on
-   2026-08-26, into the shared src/web/JobProgress.tsx. */
+   2026-08-31 with the generated length ladder (docs/plans/260831s-gist-only-summaries.md).
+   Simple, below, is the half that spends, and it borrows the glossary's empty
+   and stale treatments (`.gloss-empty`, `.gloss-stale`) rather than bringing
+   those five back. */
+
+/* -------------------------------------------------------- § simple ----------
+   Summary's plain-words sub-mode (SimplePanel.tsx,
+   docs/plans/260930i-simple-summaries-eli15-sub-mode.md): a few short
+   paragraphs, each followed by the ids of the passages it rests on. Inside
+   `.summ-scroll`, so the band's gutter is already there — the borrowed blocks
+   drop their own. */
+.simple-scroll .gloss-empty { padding: 0.4rem 0.2rem; }
+.simple-scroll .gloss-stale { margin: 0 0 0.8rem; }
+.simple-read-error { margin: 0 0 0.8rem; }
+.simple-read-error .gloss-error { margin: 0 0 0.5rem; }
+
+.simple-para + .simple-para { margin-top: 0.9rem; }
+/* Prose, so it reads at the band's own size and leading rather than as a
+   caption; `pre-line` is not used — a paragraph is one paragraph. */
+.simple-text { margin: 0; color: var(--ink); line-height: 1.5; }
+/* The doors, in the key the gists' ranges wear. */
+.simple-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+  margin-top: 0.3rem;
+  font-size: 0.81rem;
+}
+/* What it is, said once, quietly, under the last door. */
+.simple-foot {
+  margin: 1.1rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.45;
+}
+.simple-job { margin-top: 0.7rem; }
 

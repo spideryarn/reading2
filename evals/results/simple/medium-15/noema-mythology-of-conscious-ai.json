@@ -1,0 +1,62 @@
+{
+  "arm": "medium-15",
+  "effort": "medium",
+  "pitch": 15,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T14:59:42.308Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "wallMs": 12721,
+  "costUsd": 0.046588,
+  "tokens": {
+    "input": 18944,
+    "output": 870,
+    "reasoning": 177
+  },
+  "ok": true,
+  "words": 261,
+  "paragraphs": [
+    {
+      "text": "This essay by neuroscientist Anil Seth asks a big question: could artificial intelligence (AI) ever actually be conscious, meaning it truly feels or experiences things, not just acts smart? He looks at chatbots and other AI systems and asks whether anyone is really \"home\" inside them.",
+      "ids": [
+        "spya-tgnssb",
+        "spya-gjy45p",
+        "spya-q23td7"
+      ]
+    },
+    {
+      "text": "Seth says this question matters a lot. If AI really were conscious, it could suffer, and we might owe it rights and moral care. But even if AI only seems conscious without really being conscious, treating it as if it has feelings (or coldly treating it as if it doesn't) can warp our ethics and even harm our own minds.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-n0bnf9"
+      ]
+    },
+    {
+      "text": "Seth argues we're tricked into overestimating AI by natural human biases: we assume intelligence and consciousness go together, we favor humans above all else, and we project human qualities onto machines that merely act humanlike, especially when they use language. His main technical argument is against \"computational functionalism\" — the idea that just running the right kind of program is enough to create consciousness. He argues brains aren't really computers: living neurons are messy, biological, and tied to time and metabolism in ways computer programs are not, so simulating a brain isn't the same as building a conscious one.",
+      "ids": [
+        "spya-cvaqgs",
+        "spya-wepmnr",
+        "spya-a8jgf4"
+      ]
+    },
+    {
+      "text": "He separates two dangers: AI that is truly conscious (which he thinks is very unlikely with today's technology) and AI that merely seems conscious (which is already here and causing real confusion). His conclusion: nobody should try to build genuinely conscious machines, and we must think clearly now, or we'll misjudge both the machines and ourselves.",
+      "ids": [
+        "spya-x63ycg",
+        "spya-yverz7",
+        "spya-qwvjwn"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

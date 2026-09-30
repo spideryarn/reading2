@@ -187,6 +187,7 @@ const STEPS = [
   "debate",
   "citations",
   "crossrefs",
+  "simple",
 ] as const;
 
 /** `JobStatus` in src/types.ts, which is a type and so cannot be imported as one. */

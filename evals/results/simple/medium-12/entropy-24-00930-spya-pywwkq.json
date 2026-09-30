@@ -1,0 +1,60 @@
+{
+  "arm": "medium-12",
+  "effort": "medium",
+  "pitch": 12,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "5419ff952361169f9276099ce4ca6b3f179387bea8880d41ff84f2778a54996f",
+  "at": "2026-09-30T15:00:33.548Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 8698,
+  "costUsd": 0.045044,
+  "tokens": {
+    "input": 19812,
+    "output": 542,
+    "reasoning": 0
+  },
+  "ok": true,
+  "words": 205,
+  "paragraphs": [
+    {
+      "text": "This article is about how brain cells work together to process information. Scientists want to know how neurons take in signals and combine them to make decisions, like whether to fire or not.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-h5dz45"
+      ]
+    },
+    {
+      "text": "This matters because just watching one neuron at a time, or two neurons passing signals, doesn't show the full picture. The authors argue that a method called partial information decomposition, or PID, can reveal when neurons are doing real 'computation' by combining inputs in ways that create brand new information, not found in any single input alone.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-wer4cd",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "PID splits the information neurons share into parts: redundant (the same information available from more than one source), unique (only from one source), and synergistic (only visible when you look at sources together). Synergy is the exciting one, since it shows neurons are sensitive to patterns, not just totals.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using real recordings of brain cells, the authors found synergy shows up more in densely connected 'rich club' neurons, grows with more feedback loops between input neurons, and peaks when input signals are moderately, but not too, similar to each other. In monkeys doing tasks, the balance of synergy and redundancy shifted depending on what the brain was doing, like planning a movement versus executing it.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}
