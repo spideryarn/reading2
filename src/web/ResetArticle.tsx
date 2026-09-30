@@ -74,6 +74,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   illustrated: "Illustrated",
   debate: "Debate",
   citations: "Citations",
+  crossrefs: "Cross-references",
 };
 
 /** A step's reader-facing name if it is an extra, and its step name otherwise. */

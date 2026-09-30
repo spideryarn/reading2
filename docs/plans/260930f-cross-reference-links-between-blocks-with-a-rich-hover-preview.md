@@ -192,6 +192,34 @@ tokens and the exact cost here:
 It also records what happens past the one-call context ceiling, which comes from `budgetFor`'s
 refusal rather than a claim.
 
+**Stage 1's real runs**, 2026-09-30, local, Sonnet 5 at `medium`, from the `ai_calls` ledger (the
+provider's own cost). No cache read or write on any of them: each was its own job.
+
+| article | prompt | input | reasoning | output (incl. reasoning) | time | cost | kept | dropped |
+|---|---|---|---|---|---|---|---|---|
+| `entropy-24-00930-spya-pywwkq` (99 blocks) | `/1` | 19,951 | 4,479 | 5,516 | 54 s | $0.0951 | 12 | nearby 7, length 1 |
+| `the-mythology-of-conscious-ai-spya-rn5m0q` (141) | `/1` | 18,813 | 12,234 | 13,474 | 119 s | $0.1724 | 24 | none |
+| `entropy-24-00930-spya-pywwkq` | `/2` | 20,174 | 1,729 | 2,472 | 25 s | $0.0651 | 7 | nearby 6, unquoted 2 |
+| `the-mythology-of-conscious-ai-spya-rn5m0q` | `/2` | 19,036 | 0 | 1,216 | 17 s | $0.0502 | 11 | nearby 6, length 4, unknownIds 1, unquoted 1 |
+
+So **$0.05–0.17 an article**, inside the estimate, and 17–119 s, which is why `STEP_BUDGET_MS` is
+300 s rather than the 150 s first guessed.
+
+**Why `/2`.** `/1` gave, on the paper, mostly explicit references ("see Section 6", "Figure 4C")
+plus three citation lists (`[2–4,20,28]`, `see [9]`) linked to blocks that cite the same works;
+on the essay, ten of 24 were pull-quotes linked to the sentence they repeat. `/2` asks for a claim
+linked to its backing first and names citations, repeats and targets that add nothing as not
+links. On `/2` those failures are gone. The essay's summary paragraph now links each summarised
+claim to where it is argued ("well-understood cognitive biases" → the three biases; "Computational
+functionalism" → where it is challenged; "brain-as-computer metaphor" → "brains are not
+computers"). The paper's links are still mostly explicit figure and section references. It is a
+review, and its abstract states few findings that a results block then reports. A couple on each
+are weak: a link to a section heading, and a conclusion linked to a paragraph that only restates it.
+
+The ceiling: `budgetFor("crossrefs", …)` refuses before the call when the article and the answer
+budget will not fit in one call's context, as it does for `faq`. That refusal was not exercised
+here.
+
 ## Left for Greg: two defence edits
 
 [security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live)

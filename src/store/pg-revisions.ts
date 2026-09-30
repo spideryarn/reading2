@@ -333,6 +333,13 @@ export const REVISION_CARRY_POLICY: Record<
      questions are still worth reading, and minting would empty the band until
      somebody paid for the call again. docs/plans/260916d-faq-mode.md. */
   faq: "carry",
+  /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
+     answers at read time whether the article moved underneath it. A carried
+     list that no longer matches is **not drawn** (Sol F8): a link can still
+     name two surviving ids and a phrase that is there and no longer be true.
+     Carrying keeps it for the day the article moves back, and costs nothing.
+     docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+  crossrefs: "carry",
   /* **Carries, like `quotes`, which it is made of.** It holds quote ids and no
      block ids, and the `quotes` column carries beside it — so a new draft's
      route still names quotes the draft has. Whether those quotes still stand on

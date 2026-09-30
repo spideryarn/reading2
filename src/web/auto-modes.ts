@@ -50,9 +50,23 @@ function autoModes(): { mode: Mode; step: StepName }[] {
   return found.sort((a, b) => STEP_ORDER.indexOf(a.step) - STEP_ORDER.indexOf(b.step));
 }
 
+/**
+ * **Steps the box queues that no mode makes**, added by hand because the list
+ * above is derived from modes and these are not one.
+ *
+ * `crossrefs` — the links from a phrase in one passage to the passage that
+ * backs it. They sit in the prose in every mode, so there is no mode to derive
+ * them from; Greg asked for them as *"a preprocessing step that always
+ * happens"*, and this box is the "always" for a new article. It reads nothing,
+ * so its job is one step and goes in the first, parallel group.
+ * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md § 3.
+ */
+export const AUTO_EXTRA_STEPS: readonly StepName[] = ["crossrefs"];
+
 /** The steps the box queues, in `STEP_ORDER`. */
 export function autoModeSteps(): StepName[] {
-  return autoModes().map(({ step }) => step);
+  const steps = [...autoModes().map(({ step }) => step), ...AUTO_EXTRA_STEPS];
+  return steps.sort((a, b) => STEP_ORDER.indexOf(a) - STEP_ORDER.indexOf(b));
 }
 
 /** What the box says. */
@@ -67,7 +81,7 @@ export function autoModesDetail(): string {
   const names = autoModes().map(({ mode }) => MODE_LABEL[mode]);
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
-  return `${list} are prepared in the background, with Trajectory after Quotes and Ideas. This uses paid model calls.`;
+  return `${list} are prepared in the background, with Trajectory after Quotes and Ideas, and so are the links from one passage of the article to another. This uses paid model calls.`;
 }
 
 /**

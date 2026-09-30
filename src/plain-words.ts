@@ -101,6 +101,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/pdf-authors.ts":
     "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
+  "src/crossrefs.ts":
+    "writes two block ids and a phrase copied from the article, and the code stores the article's characters, not the model's",
   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
   "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
   "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",

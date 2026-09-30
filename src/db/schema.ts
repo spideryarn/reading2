@@ -84,6 +84,7 @@ import type {
   Citation,
   Debate,
   Faq,
+  Crossrefs,
   Trajectory,
   FeedbackDiagnosticsPayload,
   Glossary,
@@ -854,6 +855,18 @@ export const articleRevisions = spideryarn.table(
      * `revision_blocks`, on the argument its neighbours make.
      */
     faq: jsonb("faq").$type<Faq>(),
+
+    /**
+     * Links between the article's own blocks — `Crossrefs`, src/types.ts,
+     * written by the `crossrefs` step.
+     * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+     *
+     * The WHOLE artefact, like its neighbours. `sourceHash` is Ideas'
+     * `articleWithIdsFingerprint` over the blocks, the tree and the cited head.
+     * No `profileHash`, and no foreign key from a link's two block ids to
+     * `revision_blocks`, on the argument its neighbours make.
+     */
+    crossrefs: jsonb("crossrefs").$type<Crossrefs>(),
 
     /**
      * A route through the Quotes, at three depths — `Trajectory`, src/types.ts,
@@ -2530,7 +2543,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs')`,
     ),
     check(
       "revision_step_runs_status",

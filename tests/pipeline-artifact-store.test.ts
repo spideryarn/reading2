@@ -110,6 +110,11 @@ import {
   inputFingerprint as faqFingerprint,
   PROMPT_VERSION as FAQ_VERSION,
 } from "../src/faq.js";
+import {
+  emptyDropped as emptyCrossrefsDropped,
+  inputFingerprint as crossrefsFingerprint,
+  PROMPT_VERSION as CROSSREFS_VERSION,
+} from "../src/crossrefs.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import {
   emptyDrops as emptyTrajectoryDrops,
@@ -246,6 +251,8 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 /* `faq` is `articleWithIdsFingerprint` again, over the body — computed through
    its own module for the same reason. */
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
+/* `crossrefs` is Ideas' fingerprint, through its own module for the same reason. */
+const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);
 /* `tweets` joined these on 2026-09-29: `tweets/5` sends `articleWithIds` so
    each post can name its passages, and its fingerprint moved with the head
    (src/tweets.ts § `inputFingerprint`; plan 260929f). Through its own module,
@@ -619,6 +626,18 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: FAQ_VERSION,
     questions: [],
     dropped: emptyFaqDropped(),
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **An EMPTY list**, which `SHAPE.crossrefs` accepts, as `faq`'s: nothing in
+     the piece worth linking is a real answer. */
+  store.plant(SLUG, "crossrefs", "crossrefs", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: CROSSREFS_SOURCE_HASH,
+    version: CROSSREFS_VERSION,
+    links: [],
+    dropped: emptyCrossrefsDropped(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
