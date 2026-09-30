@@ -111,8 +111,19 @@ function isLineBreak(c: string): boolean {
   return c === "\n" || c === "\r" || c === " " || c === " ";
 }
 
+/** Invisible characters `\s` does not count as space, which can still sit before a `>`. */
+const ZERO_WIDTH = /[​-‍⁠]/u;
+
+/**
+ * **Any character a reader cannot see before a `>`**, not only space and tab.
+ * A narrow check of the paragraph-hold version found ` > fabricated line`
+ * streaming unguarded: the no-break space cleared `atLineStart`, so the `>` was
+ * never seen as a block quote. `\s` covers every Unicode space separator and
+ * U+FEFF; the zero-width ones are added by hand. Line breaks are not blanks —
+ * `isLineBreak` owns those.
+ */
 function isBlank(c: string): boolean {
-  return c === " " || c === "\t";
+  return !isLineBreak(c) && (/\s/u.test(c) || ZERO_WIDTH.test(c));
 }
 
 /**

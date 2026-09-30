@@ -281,6 +281,15 @@ describe("the investigate quote guard: paragraph hold and line breaks", () => {
     expectEverySplit(text, [], { released: "Safe prose\r", failed: { cause: "not-found" } });
   });
 
+  it("guards a blockquote indented by any Unicode space, not only space and tab (re-check 2, G-1)", () => {
+    for (const indent of [" ", " ", "　", "​", "﻿", "  \t"]) {
+      const text = `${indent}> fabricated line`;
+      expectEverySplit(text, [], { released: "", failed: { cause: "not-found" } });
+      const after = `Safe prose\n${indent}> fabricated line`;
+      expectEverySplit(after, [], { released: "Safe prose\n", failed: { cause: "not-found" } });
+    }
+  });
+
   it("guards a blockquote after U+2028, U+2029 and CRLF line endings", () => {
     for (const lb of [" ", " ", "\r\n"]) {
       const text = `Safe prose${lb}> fabricated line`;

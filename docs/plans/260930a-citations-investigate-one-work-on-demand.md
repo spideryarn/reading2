@@ -271,3 +271,18 @@ day** ($18); **per reader 20 a day, 8 an hour, one at a time**.
   prompt now leaves that claim to code; and **one tap on a phone both opened the tip and started the
   paid call** — the same was true of *Look it up*; both now reveal on the first tap and act on the
   second, the shelf's rule (touch.md). The check spent two presses (~$0.24).
+- **Narrow re-checks of the quote guard**, the P0 fix outside every reviewed snapshot:
+  [re-check 1](260930a-citations-investigate-guard-recheck-sol.md) found G-1 (P0: a `>` line after a
+  bare `\r` leaked) and two false refusals. The curly-single state machine had now been patched
+  three times, so it was **replaced** by one conservative rule (b6ec2f10): a paragraph with a `‘`
+  is held to its end, each `‘` checked out to its farthest possible close, then replayed through the
+  other rules. False refusals cost a retry; leaks are what the rule exists to prevent.
+  [Re-check 2](260930a-citations-investigate-guard-recheck-2-sol.md) found the same class once more
+  (P0: a no-break-space indent hid a `>`); `isBlank` now counts every Unicode space and the
+  zero-width characters, red-first. Its G-2 (P3: a punctuation-only quote like `"!"` passes) is
+  accepted: no words can leak through it. Settled with an Opus adversarial check of the last fix,
+  below.
+- **Full suite** (one run, on 423ef1b4): 1,223 files passed; 4 failed. Three are the fleet tests
+  that need `npm run build:fleet` in a fresh worktree (known, not this work). The fourth,
+  `env-reads-are-literal`, pinned "fourteen" model overrides; Investigate's job is the fifteenth.
+  Updated.

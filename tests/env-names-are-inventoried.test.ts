@@ -241,8 +241,8 @@ const ALLOWED: readonly AllowGroup[] = [
     /* `MODEL_ENV_VAR` in src/models.ts, one per task that has an override, and
        they exist for exactly one purpose: running the real feature against a
        different model for an evening to see whether the cheap one is good
-       enough. Fourteen names as a group rather than fourteen identical comments —
-       they are one decision, not thirteen.
+       enough. Fifteen names as a group rather than fifteen identical comments —
+       they are one decision, not fifteen.
 
        **Set on a deployment one of these really would change what a request
        sends**, which the candidate's first wording denied. They are allowlisted
