@@ -208,8 +208,13 @@ export function providerHostOf(input: unknown): string | null {
  * dashboard. Signature verification needs no network at all — the SDK's
  * `generateTestHeaderString` signs a payload offline — so nothing legitimate
  * loses anything by this being refused.
+ *
+ * **Resend, for the same reason** (260930i): the key under a test run is the
+ * production sending key, and a test that reached it would put real mail in a
+ * real inbox. src/email.ts refuses to send outside production anyway; this is
+ * the net under that.
  */
-const ALSO_REFUSED: readonly string[] = ["api.stripe.com"];
+const ALSO_REFUSED: readonly string[] = ["api.stripe.com", "api.resend.com"];
 
 function methodOf(input: unknown, init: unknown): string {
   const fromInit = (init as { method?: unknown } | undefined)?.method;

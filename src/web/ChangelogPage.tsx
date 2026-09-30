@@ -102,7 +102,9 @@ import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { CHANGELOG_LABEL } from "./router.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { relativeAgo, type RelativeStyle } from "./relative-time.js";
 import { SiteFooter } from "./SiteFooter.js";
+import { useNow } from "./useNow.js";
 /* The 210 KB the header above is about. Only ever reached through this
    lazily-loaded module — see LazyPage.tsx and App.tsx § loadChangelog.
 
@@ -169,6 +171,41 @@ export function formatVersionStamp(iso: string): string {
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getUTCDate()} ${(MONTHS[d.getUTCMonth()] ?? "").slice(0, 3)}`;
+}
+
+/**
+ * When a release shipped, said as distance from now — `3 days ago` in its
+ * heading, `3d ago` in the contents list — with the exact UTC stamp on hover.
+ *
+ * Greg, 2026-09-30 (SPIDERYARN-READING2-6P): *"I wonder if we could show them
+ * as human readable, e.g. `3d ago`, `3h ago`"*. No library: `relativeAgo` in
+ * relative-time.ts is the one the shelf and the admin table already use —
+ * docs/plans/260930i-changelog-release-dates-as-relative-time.md.
+ *
+ * **Past a month it is the UTC date it always was**, `fallback` below, rather
+ * than `timeAgo`'s own date: that one is in the viewer's zone, and this page
+ * decided a release's date should not depend on who is reading it.
+ *
+ * `now` comes from one `useNow` in `ChangelogBody`, so the heading and the
+ * contents row for one release cannot straddle a minute and disagree.
+ */
+function ReleaseDate({ iso, now, style, fallback }: {
+  iso: string;
+  now: number;
+  style: RelativeStyle;
+  fallback: (iso: string) => string;
+}) {
+  const exact = `${formatVersionStamp(iso)} UTC`;
+  /* The `title` is for a mouse. A keyboard cannot open it and a screen reader
+     need not read it, so the stamp is also said in `sr-only` — the duplication
+     tooltips.md asks of a trigger nothing can focus (Masthead.tsx does the
+     same). A touch reader still has no way to it: see the plan's § Deferred. */
+  return (
+    <time dateTime={iso} title={exact}>
+      {relativeAgo(iso, now, style) ?? fallback(iso)}
+      <span className="tw:sr-only">, released {exact}</span>
+    </time>
+  );
 }
 
 /**
@@ -313,9 +350,10 @@ export function releaseAnchor(release: number): string {
  * it shut — so the state had absorbed it. Had this been `open={…}` with no
  * `onToggle`, React would have closed it on the reader at the next render.
  */
-function VersionBlock({ version, release, open, onOpenChange }: {
+function VersionBlock({ version, release, now, open, onOpenChange }: {
   version: ChangelogVersion;
   release: number;
+  now: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -340,7 +378,7 @@ function VersionBlock({ version, release, open, onOpenChange }: {
         <h2 className="tw:m-0 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2.5 tw:gap-y-0.5 tw:text-sm tw:font-normal tw:text-foreground">
           <span className="tw:font-medium">Release {release}</span>
           <span className="tw:text-xs tw:text-ink-faint">
-            {formatVersionStamp(version.version)}
+            <ReleaseDate iso={version.version} now={now} style="long" fallback={formatVersionStamp} />
           </span>
         </h2>
         {/* Pushed to the right on a wide window and given a line of its own on a
@@ -529,9 +567,11 @@ function scrollToRelease(release: number): void {
  */
 function ContentsList({
   items,
+  now,
   onJump,
 }: {
   items: DisplayItem[];
+  now: number;
   onJump: (release: number) => void;
 }) {
   const releases = items.filter(
@@ -579,12 +619,15 @@ function ContentsList({
                     ones are `whitespace-nowrap` **and** fixed-width: without the
                     first, "Release 65" and "5 Sep" break across two lines at any
                     width that is not quite enough; without the second, fifty
-                    rows do not line up and the eye has nothing to run down. */}
+                    rows do not line up and the eye has nothing to run down.
+                    The date column is `w-16` since it became relative
+                    (260930i): "6 Sep" fitted 2.75rem, "yesterday" and "just
+                    now" do not. */}
                 <span className="tw:w-[5.5rem] tw:shrink-0 tw:whitespace-nowrap tw:text-foreground">
                   Release {release}
                 </span>
-                <span className="tw:w-11 tw:shrink-0 tw:whitespace-nowrap tw:text-ink-faint">
-                  {formatShortDate(version.version)}
+                <span className="tw:w-16 tw:shrink-0 tw:whitespace-nowrap tw:text-ink-faint">
+                  <ReleaseDate iso={version.version} now={now} style="narrow" fallback={formatShortDate} />
                 </span>
                 <span className="tw:min-w-0 tw:text-muted-foreground">
                   {headlines.length > 0 ? headlines.join(" · ") : describeContents(version)}
@@ -612,6 +655,9 @@ function ContentsList({
  */
 export function ChangelogBody({ versions }: { versions: ChangelogVersion[] }) {
   const items = groupForDisplay(versions);
+  /* Read once and passed down — useNow.ts says why — and ticking, so a tab
+     left open does not keep saying "3m ago" an hour later. */
+  const now = useNow();
 
   /**
    * Which releases are open, by number.
@@ -669,7 +715,7 @@ export function ChangelogBody({ versions }: { versions: ChangelogVersion[] }) {
       {/* `onJump` opens the box and stops there — the click is an ordinary
           fragment navigation now, so the browser does the scrolling and the
           address bar keeps up. `ContentsList` has the four things that cost. */}
-      <ContentsList items={items} onJump={(release) => setReleaseOpen(release, true)} />
+      <ContentsList items={items} now={now} onJump={(release) => setReleaseOpen(release, true)} />
       <div className="tw:mt-8">
         {items.map((item) =>
           item.kind === "version" ? (
@@ -677,6 +723,7 @@ export function ChangelogBody({ versions }: { versions: ChangelogVersion[] }) {
               key={item.version.version}
               version={item.version}
               release={item.release}
+              now={now}
               open={open.has(item.release)}
               onOpenChange={(isOpen) => setReleaseOpen(item.release, isOpen)}
             />

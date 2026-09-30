@@ -324,6 +324,8 @@ import { ownedArticleIdentity } from "./store/pg.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
+import { noteArrival } from "./arrivals.js";
+import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import {
   placingFailed,
   UNEXPECTED_FAILURE,
@@ -6642,21 +6644,23 @@ export function handleApi(
      it already writes — see `logRequest`, which reads `currentSpend()` from
      inside the scope. */
   return runInRequest(
-    async () =>
-      (
-        await collectSpend(() => serveApi(req, res, verify), {
-          /* **No owner here, and that is not an omission.** The gate that fills
-             the owner box runs *inside* `serveApi`, which is inside this
-             collector — so at this instant nobody knows who is asking. The sink
-             resolves it at record time, by which point the gate has long since
-             run. src/ai-spend.ts § `ownerFor`.
+    () =>
+      withAfterResponseTasks(async () =>
+        (
+          await collectSpend(() => serveApi(req, res, verify), {
+            /* **No owner here, and that is not an omission.** The gate that fills
+               the owner box runs *inside* `serveApi`, which is inside this
+               collector — so at this instant nobody knows who is asking. The sink
+               resolves it at record time, by which point the gate has long since
+               run. src/ai-spend.ts § `ownerFor`.
 
-             No article either: a route knows which one, and says so with
-             `withSpendAttribution`. */
-          attribution: { scopeKind: "request" },
-          sink: (row) => costStore.record(row),
-        })
-      ).result,
+               No article either: a route knows which one, and says so with
+               `withSpendAttribution`. */
+            attribution: { scopeKind: "request" },
+            sink: (row) => costStore.record(row),
+          })
+        ).result,
+      ),
   );
 }
 
@@ -9785,6 +9789,14 @@ export async function serveAuthenticatedApi(
      * see there for why that is load-bearing rather than tidy.
      */
     if (await dispatchAuthRoute(AUTH_ROUTES, { user, request })) {
+      /* **Is this account new?** The route has answered, and the thunk does not
+         start until `handleApi`'s whole routed callback has returned. The outer
+         wrapper still awaits it, so Vercel cannot freeze it halfway through,
+         while neither its database insert nor Resend's timeout can delay the
+         response. Here, in the half only a `VerifiedUser` reaches; a request
+         whose route threw does not arrive, and its next one does.
+         src/arrivals.ts, src/after-response.ts, docs/plans/260930i. */
+      await afterResponse("recording an account arrival", () => noteArrival(user.id));
       return;
     }
 

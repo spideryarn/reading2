@@ -1,5 +1,5 @@
 {
-  "id": "4fac9a2b-3e96-4701-93b7-bf22a91a3043",
+  "id": "681f7095-2b3e-4eea-be98-133dc02a1f70",
   "prevId": "59f2ef7a-1a52-47e1-bd69-3b3a54cd1734",
   "version": "7",
   "dialect": "postgresql",
@@ -704,12 +704,6 @@
         },
         "crossrefs": {
           "name": "crossrefs",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "simple_summary": {
-          "name": "simple_summary",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -3756,6 +3750,32 @@
       },
       "isRLSEnabled": false
     },
+    "spideryarn.reader_arrivals": {
+      "name": "reader_arrivals",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "spideryarn.reader_profiles": {
       "name": "reader_profiles",
       "schema": "spideryarn",
@@ -4691,7 +4711,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

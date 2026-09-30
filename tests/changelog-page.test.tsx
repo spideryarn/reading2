@@ -14,7 +14,7 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { commitUrl, parseChangelog, type ChangelogVersion } from "../src/changelog.js";
 import {
@@ -693,5 +693,56 @@ describe("a file whose lines are partly broken", () => {
     expect(versions).toHaveLength(1);
     await draw(versions);
     expect(host.textContent).toContain("A release that parsed fine");
+  });
+});
+
+describe("a release's date", () => {
+  /* The clock and its interval are faked together. Pinning Date keeps these
+     fixtures from drifting out of the 30-day window; advancing the interval in
+     the last test proves the page does not merely read that pinned time once. */
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-06T12:49:03Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** What a sighted reader sees: the `<time>`'s own text, without its `sr-only` half. */
+  const visible = (t: Element | null) => t?.firstChild?.textContent;
+  const spoken = (t: Element | null) => t?.querySelector(".tw\\:sr-only")?.textContent;
+
+  it("says how long ago, with the exact UTC stamp on hover and to a screen reader", async () => {
+    await draw(fixtureVersions());
+    const heading = host.querySelector("details h2 time");
+    expect(heading?.getAttribute("dateTime")).toBe("2026-09-06T09:49:03Z");
+    expect(heading?.getAttribute("title")).toBe("6 September 2026, 09:49 UTC");
+    expect(spoken(heading)).toBe(", released 6 September 2026, 09:49 UTC");
+    // The heading's formatter speaks the runtime's own locale. Deriving the
+    // expected words from that same locale checks the long style without
+    // pinning the test to English.
+    const long = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    expect(visible(heading)).toBe(long.format(-3, "hour"));
+
+    // The contents column's is pinned to English (relative-time.ts § narrow).
+    const contents = host.querySelector('nav[aria-label="Releases"] time');
+    expect(contents?.getAttribute("title")).toBe("6 September 2026, 09:49 UTC");
+    expect(visible(contents)).toBe("3h ago");
+  });
+
+  it("falls back to the UTC date once it is more than a month old", async () => {
+    vi.setSystemTime(new Date("2026-11-20T00:00:00Z"));
+    await draw(fixtureVersions());
+    expect(visible(host.querySelector("details h2 time"))).toBe("6 September 2026, 09:49");
+    expect(visible(host.querySelector('nav[aria-label="Releases"] time'))).toBe("6 Sep");
+  });
+
+  it("updates while the page remains open", async () => {
+    await draw(fixtureVersions());
+    const contents = () => visible(host.querySelector('nav[aria-label="Releases"] time'));
+    expect(contents()).toBe("3h ago");
+
+    await act(async () => vi.advanceTimersByTime(31 * 60_000));
+    expect(contents()).toBe("4h ago");
   });
 });

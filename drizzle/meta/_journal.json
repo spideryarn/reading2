@@ -726,8 +726,15 @@
     {
       "idx": 103,
       "version": "7",
-      "when": 1790781268044,
-      "tag": "20260930151428_simple_summary",
+      "when": 1790779383987,
+      "tag": "20260930144303_reader_arrivals",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1790786220989,
+      "tag": "20260930163700_simple_summary",
       "breakpoints": true
     }
   ]
