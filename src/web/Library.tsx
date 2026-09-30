@@ -62,7 +62,7 @@ import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js
 import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
-import { LogoMark } from "./LogoGlyphs.js";
+import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
 import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
@@ -444,16 +444,14 @@ export function Library({
               top-left of the logged-in Homepage next to the wordmark"*.
 
               **Deliberately not `HomeLogo`**: this is home, so there is
-              nothing to link to (App.tsx says why). **The spider animates,
-              the heading does not** — § ShelfSpider below.
+              nothing to link to (App.tsx says why). **Spider and heading
+              animate as one wordmark** since 2026-09-30 — § ShelfWordmark
+              below.
 
               `items-center` in its own row so the glyph centres on the word
               while the header's outer flex keeps its baseline alignment for the
               links opposite. */}
-          <div className="tw:flex tw:items-center tw:gap-2.5">
-            <ShelfSpider />
-            <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
-          </div>
+          <ShelfWordmark />
           {/* One group, so that once the first card is up its neighbour opens
               instantly as the pointer runs along the row — Tooltip.tsx. The
               delays are the ones the dock and the metadata cards use, because
@@ -1286,39 +1284,55 @@ function Tip({ children }: { children: ReactNode }) {
 }
 
 /**
- * **The spider beside the shelf's heading, which plays the wordmark's
- * animations on a hover and on a tap.**
+ * **The spider and the name at the top of the shelf, which play the whole
+ * wordmark set on a hover and on a tap.**
  *
- * Greg, 2026-09-12: *"they should show up on hover or … [a tap] wherever the
- * logo is present"*. Until then this was a plain `<img>`, left still on the
- * grounds that the set is calibrated in pixels against a 0.82rem word and a
- * 20px spider. That argument is about the letters, and there are none here:
- * `lettersDrawn` finds no `.logo-letter`, so only the six animations that
- * reach the mark are ever drawn (logo-animation.ts § pickLogoAnimation), and
- * they sit on `.logo-mark`, which is a box exactly the spider whatever its
- * size. The heading beside it is an `<h1>` and is left alone.
+ * > We don't seem to get the fun logo animations for the logo in the top left
+ * > of the logged in homepage.
+ * >
+ * > — Greg, 2026-09-30, SPIDERYARN-READING2-6D
  *
- * **Still left alone on 2026-09-29**, when the other wordmarks gained the
- * letters (LogoGlyphs.tsx). The heading is `text-3xl`, and the letter
- * animations move by fixed pixels tuned for a 13px word — a 2px pluck and an
- * 8px abseil read as half a gesture at 30px. GPT Sol's review of
- * docs/plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md,
- * finding 1. Scaling the set to its host is the way to change that, and it is
- * a stylesheet project of its own rather than a reuse.
+ * **One host round both, since then.** From 2026-09-15 the hook sat on the
+ * spider alone and the `<h1>` beside it was plain text, so pointing at the word
+ * did nothing and only the spider's six animations could ever be drawn here —
+ * `lettersDrawn` asks the host for a `.logo-letter` (logo-animation.ts §
+ * pickLogoAnimation). The heading was kept out of the 2026-09-29 spread
+ * (LogoGlyphs.tsx) deliberately: the letter moves were fixed pixels tuned for a
+ * 13px word and read as half a gesture at 30px. They are measured in the word's
+ * own size now (styles/logo-animations.css § `--logo-px`), which was the named
+ * way to change that.
+ * docs/plans/260930a-cmd-k-on-metadata-page-and-full-wordmark-animations-on-the-shelf.md.
+ *
+ * **The heading is still a heading**: `LogoLetters` puts ten spans inside it
+ * with no whitespace between them, so its text, and its accessible name, is
+ * still "Spideryarn". It keeps its own face, size and colour; Dawn's glow turns
+ * it orange for a moment and back, as it does the footer's.
  *
  * **A tap plays one here, where on the reading view it goes home**, because
  * here it does nothing else — `{ tap: true }`, decided on the click.
  *
- * **Decorative, not a `<button>`.** A tab stop whose only effect is a hover
- * flourish is noise to a keyboard or screen-reader reader, so it stays out of
- * the accessibility tree and out of the tab order; `alt=""` for the reason
- * HomeLogo.tsx gives — the name is right beside it.
+ * **Not a `<button>`.** A tab stop whose only effect is a flourish is noise to a
+ * keyboard or screen-reader reader, so the host adds nothing to the
+ * accessibility tree; the spider is `alt=""` and hidden, for the reason
+ * HomeLogo.tsx gives — the name is right beside it. `shelf-wordmark` carries the
+ * long-press lines a `.logo` would (styles/dock.css).
  */
-function ShelfSpider() {
+export function ShelfWordmark() {
   const anim = useLogoAnimation({ tap: true });
   return (
-    <span className={`shelf-spider ${anim.className}`} aria-hidden="true" {...anim.handlers}>
-      <LogoMark size={28} />
-    </span>
+    <div
+      className={`shelf-wordmark tw:flex tw:items-center tw:gap-2.5 ${anim.className}`}
+      {...anim.handlers}
+    >
+      <span className="tw:inline-flex" aria-hidden="true">
+        <LogoMark size={28} />
+      </span>
+      {/* A wrapper round the ten letters and nothing else, because the stagger
+          is `:nth-child` over exactly those (LogoGlyphs.tsx). The `<h1>` is
+          that wrapper. */}
+      <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">
+        <LogoLetters />
+      </h1>
+    </div>
   );
 }
