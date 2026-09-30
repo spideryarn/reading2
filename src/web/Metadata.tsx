@@ -278,7 +278,10 @@ import { useExperimental } from "./useExperimental.js";
 import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
+import { isAdmin } from "../admin.js";
+import { ArticleCostBody } from "./ArticleCost.js";
 import { CARD } from "./card.js";
+import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { PageContents } from "./PageContents.js";
@@ -452,6 +455,11 @@ export function Metadata({
      One shared store behind the hook, so this page and the reading view cannot
      disagree for the length of a toggle. Dock.tsx § experimental. */
   const experimental = useExperimental();
+
+  /* The administrator's cost section below asks the gate's own question. A
+     courtesy only: the data comes from `/api/admin`, which refuses everyone
+     else. ArticleCost.tsx. */
+  const { user } = useSession();
 
   /**
    * Which stages have run, and how many questions have been asked. Not in the
@@ -1098,6 +1106,17 @@ export function Metadata({
           hierarchyGenerator={`${tree.generator} · ${tree.version}`}
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
+
+        {/* ------------------------------- 9¼. what it cost (administrator) --
+            Greg, 2026-09-30 (SPIDERYARN-READING2-68): *"In the metadata mode
+            for admin users, can you include a section that shows cost
+            estimates"*. Beside the technical details it is one of, and above
+            the controls. docs/plans/260930f-article-cost-on-the-metadata-page.md. */}
+        {isAdmin(user?.id) && (
+          <Section label="What it cost">
+            <ArticleCostBody slug={slug} />
+          </Section>
+        )}
 
         {/* ------------------------------------- 9½. re-run AI processing --
             One section for both ways of asking again — a mode at a time, or

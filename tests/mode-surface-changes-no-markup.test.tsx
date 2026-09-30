@@ -598,6 +598,7 @@ async function mountSearch(): Promise<void> {
           loaded: true,
           loadError: null,
           error: null,
+          running: new Set<string>(),
           onAsk: () => {},
           onRetry: () => {},
           onRecolour: () => {},

@@ -166,7 +166,12 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
-  document.querySelectorAll("table").forEach((t) => t.remove());
+  document.querySelectorAll("table").forEach((t) => {
+    t.remove();
+  });
+  document.querySelectorAll(".chat-focus-fixture").forEach((el) => {
+    el.remove();
+  });
 });
 
 describe("closing the chat panel gives the keyboard back", () => {
@@ -193,6 +198,27 @@ describe("closing the chat panel gives the keyboard back", () => {
     await close();
 
     expect(document.activeElement).toBe(more);
+  });
+
+  it("falls back to Comments after an asked row in its drawer has been unmounted", async () => {
+    const dock = document.createElement("div");
+    dock.className = "dock chat-focus-fixture";
+    dock.innerHTML = '<button type="button" aria-label="Comments">Comments</button>';
+    const comments = dock.querySelector<HTMLButtonElement>('button[aria-label="Comments"]');
+    const asked = document.createElement("button");
+    asked.className = "chat-focus-fixture";
+    asked.textContent = "Question";
+    document.body.append(dock, asked);
+    if (!comments) throw new Error("fixture did not build");
+    asked.focus();
+
+    mount(THREAD);
+    /* Closing the drawer removes the row in the same commit that mounts the
+       dialog. Unlike a gutter opener, it has no containing article row. */
+    asked.remove();
+    await close();
+
+    expect(document.activeElement).toBe(comments);
   });
 
   /**

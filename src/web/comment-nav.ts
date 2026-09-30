@@ -26,18 +26,75 @@ import type { BlockId, Comment } from "../types.js";
  * still the reader's question, and it can still be read and deleted.
  */
 export function orderComments(comments: Comment[], blocks: { id: BlockId }[]): Comment[] {
+  return [...comments].sort(byPassage(blocks));
+}
+
+/** As much of an item as reading order needs. */
+interface Passaged {
+  readonly id: string;
+  readonly blockId: BlockId;
+  readonly start?: number | undefined;
+  readonly createdAt: string;
+}
+
+/**
+ * **The one reading-order rule**, for anything anchored to a passage — a
+ * comment, or a question asked from one (`AskedQuestion`), so the two cannot
+ * come to disagree about where a paragraph's items go.
+ */
+function byPassage(blocks: { id: BlockId }[]): (a: Passaged, b: Passaged) => number {
   const index = new Map(blocks.map((b, i) => [b.id, i]));
-  const rank = (c: Comment) => index.get(c.blockId) ?? Number.POSITIVE_INFINITY;
+  const rank = (c: Passaged) => index.get(c.blockId) ?? Number.POSITIVE_INFINITY;
   /* A whole-block bookmark comes first in its block: it is about the paragraph,
      so it precedes anything about part of it. `CommentAnchor`. */
-  const at = (c: Comment) => c.start ?? -1;
-  return [...comments].sort(
-    (a, b) =>
-      rank(a) - rank(b) ||
-      at(a) - at(b) ||
-      a.createdAt.localeCompare(b.createdAt) ||
-      a.id.localeCompare(b.id),
-  );
+  const at = (c: Passaged) => c.start ?? -1;
+  return (a, b) =>
+    rank(a) - rank(b) ||
+    at(a) - at(b) ||
+    a.createdAt.localeCompare(b.createdAt) ||
+    a.id.localeCompare(b.id);
+}
+
+/**
+ * **A conversation the reader started from a passage**, as the Comments drawer
+ * lists it: the gutter's "?" (the whole block) or *Chat about this* on a
+ * selection (a quote). `askedQuestions` in useChatAnchors.ts makes these from
+ * the chat summaries the reading view already holds — there is no second store.
+ * docs/plans/260930f-gutter-questions-listed-in-the-comments-drawer.md.
+ */
+export interface AskedQuestion {
+  readonly id: string;
+  readonly blockId: BlockId;
+  readonly quote?: string | undefined;
+  readonly start?: number | undefined;
+  readonly createdAt: string;
+  /** The first line of the newest answer; absent while it is being written. */
+  readonly lastLine?: string | undefined;
+}
+
+/** One row of the Comments drawer. */
+export type DrawerEntry =
+  | { kind: "comment"; item: Comment }
+  | { kind: "asked"; item: AskedQuestion };
+
+/**
+ * The reader's comments and the questions they asked, as **one list in reading
+ * order** — so a question sits beside the comments on its paragraph rather than
+ * in a second section the reader has to know to look in. Greg,
+ * SPIDERYARN-READING2-6W: *"I expect that to show up in the comments so that I
+ * can find it again or find the answer again."*
+ */
+export function orderDrawer(
+  comments: readonly Comment[],
+  asked: readonly AskedQuestion[],
+  blocks: { id: BlockId }[],
+): DrawerEntry[] {
+  const order = byPassage(blocks);
+  const entries: DrawerEntry[] = [
+    ...comments.map((item) => ({ kind: "comment" as const, item })),
+    ...asked.map((item) => ({ kind: "asked" as const, item })),
+  ];
+  return entries.sort((a, b) => order(a.item, b.item));
 }
 
 /** How much of a paragraph a whole-block bookmark shows before it is cut. */
@@ -53,7 +110,7 @@ const OPENING_CHARS = 120;
  * GPT Sol's plan review of 260912c.
  */
 export function passageOf(
-  c: Comment,
+  c: { readonly quote?: string | undefined },
   paragraph: string | undefined,
 ): { whole: boolean; text: string } {
   if (c.quote !== undefined) return { whole: false, text: c.quote };

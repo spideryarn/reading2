@@ -560,6 +560,29 @@ a sub-list per search — keeps provenance obvious but makes "the strongest matc
 the panel can no longer answer. So provenance moves into the row instead: the dot, the edge, the
 criterion in the hover card, and the criterion in the row's accessible name.
 
+### Asking the next question before the last one answers
+
+> In the search mode, I want to be able to kick off multiple searches in parallel.
+>
+> — Greg, 2026-09-29
+
+**Since 2026-09-30, Find does not wait for a running search.** Each search was already its own
+stream, its own row and its own id at every layer — `search` in `src/routes.ts`, `send` in
+`useSearch.ts`, the append to `?runs=` in `SearchBand` — and the only thing holding a second one back
+was Find being disabled while a ticked search was pending. That is gone; each search still streams
+its own hits into its own row.
+
+**The one refusal kept is the same question twice while this tab is still waiting for it.** The
+draft stays in the box after Find, on purpose — it is what lets a reader edit one question into the
+next — so a second press on an unchanged box would pay for an identical search. `running` in
+`SearchPanel` holds the trimmed criteria this tab started and still has out, ticked or not; Find and
+the retry button are off (with a tooltip saying why) while one of them would send the same question.
+A `pending` row loaded from the server does not count: it may be another process's live work or a
+fresh orphan protected by the server's 90-second sweep grace, and this tab gets no later event when
+either one ends. Treating it as running would wedge that question until reload. Nothing caps how
+many different questions run at once; the reasons, and what was passed over, are in
+[260930f-parallel-searches.md](../plans/260930f-parallel-searches.md).
+
 ### Pressing the row is not the same as pressing the box
 
 > if I click on a row, select that and deselect all the others (since usually we care about just one

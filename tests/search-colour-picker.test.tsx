@@ -55,6 +55,7 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
           loaded: true,
           loadError: null,
           error: null,
+          running: new Set(),
           onAsk: () => {},
           onRetry: () => {},
           onRecolour: (id, colour) => recoloured.push([id, colour]),
