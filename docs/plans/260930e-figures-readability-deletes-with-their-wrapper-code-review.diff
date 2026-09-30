@@ -1,0 +1,801 @@
+diff --git a/docs/project/article-images.md b/docs/project/article-images.md
+index a354913b..d10d611f 100644
+--- a/docs/project/article-images.md
++++ b/docs/project/article-images.md
+@@ -286,6 +286,21 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
+   article became up to 200 requests. `GATE` admits two at a time *across the process* — not two per
+   article, which is the same unbounded number wearing a limit's name.
+ 
++## An image the step never sees
++
++**The manifest can only speak for the images stage 2 kept.** A picture Readability threw away is in
++no `entries` and no failure, so a survey of manifests reads it as an article with fewer images, not
++as a loss. The first production survey (2026-09-30,
++[260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md)) found every
++production image failure in the manifests was either the fixed 415 of
++[260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md) or a PDF
++figure. The one new loss was invisible to them: a Nature article with 8 figures and 0 pictures, a
++Substack post with 23 and 14, because Readability deleted each picture's wrapper for being mostly
++link. The cure lives in stage 2 —
++[content-extraction.md § The one thing this pipeline protects](content-extraction.md#the-one-thing-this-pipeline-protects)
++— and **the check that finds the next one** is comparing the pictures in the live source's figures
++with the ones stage 2 keeps, which is how these were found.
++
+ ## Freshness
+ 
+ `assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image
+diff --git a/docs/project/content-extraction.md b/docs/project/content-extraction.md
+index e5bf74d0..97b364bd 100644
+--- a/docs/project/content-extraction.md
++++ b/docs/project/content-extraction.md
+@@ -341,9 +341,13 @@ Since 2026-09-06 stage 2 deletes some of the publisher's own chrome before Reada
+ page. Other things here remove elements too — the note pass, Readability, the sanitiser — but
+ [`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
+ what the publisher called it**. The class is narrow on purpose — **platform-generated controls beside content, recognised by the
+-platform's own selector, that contain no block-level descendants** — and there are four of them:
++platform's own selector, that contain no block-level descendants** — and there are five of them:
+ MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
+-`ul.reflinks`. `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
++`ul.reflinks`, and Springer Nature's *Full size image* button, `div.c-article-section__figure-link`.
++That last one is the entry that costs a reader something when it stays: it shares a wrapper with the
++figure's picture, a picture has no text, and Readability deletes the wrapper for being all link —
++every figure on a Nature page, until 2026-09-30
++([260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md)). `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
+ about the piece, and a reader may want them.
+ 
+ **That "contains no block-level descendants" clause is a floor and not a proof**, and the module
+@@ -378,7 +382,8 @@ worth knowing from here:
+ Since 2026-09-08, stage 2 also runs a pass in the other direction:
+ [`src/protect.ts`](../../src/protect.ts) adds **class tokens** to a handful of elements before
+ Readability sees the page, and Readability reads the class attribute in order to answer exactly the
+-question the tokens answer. It deletes nothing, moves nothing and rewrites no text. It runs **last**
++question the tokens answer. It deletes nothing and rewrites no text; since 2026-09-30 one rule, C,
++also **moves** — below. It runs **last**
+ in `prepareDocument`, after the note and callout passes, so a token we invent cannot reach a
+ recogniser that reads the publisher's own class names.
+ 
+@@ -390,6 +395,17 @@ diagnosis is
+ [260904e § C3](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md); the rules, the
+ narrowings and what each is answerable for are on `protectAuthoredStructure`.
+ 
++**Rule C is the one that moves, and it is about pictures.** A picture has no text, so a `div`
++holding a figure's picture is judged by whatever text is left in it — on Substack, a caption with a
++*"Source: https://…"* link — and `_cleanConditionally` deletes it on its link density, picture and
++all: nine of twenty-three figures on one post. No token can help (the high-weight bar is 0.5, and two
++of the nine were over it), so rule C unwraps such a `div` before Readability sees it, **only where
++Readability's own two link rules would delete it**, asked with Readability's arithmetic copied and
++pinned. It is under the same fallback as the tokens, and it guarantees nothing about a figure outside
++the article Readability selects. The reasoning, GPT Sol's page that needs the fallback, and the
++production numbers are in
++[260930e](../plans/260930e-figures-readability-deletes-with-their-wrapper.md).
++
+ **Two tokens, one job each, and that is a P0 rather than a style.** `spya-keep-column` is in
+ `okMaybeItsACandidate` and deliberately in neither `positive` nor `negative`, so it defeats a
+ deletion and moves no score; `spya-keep-content` is in `positive`, because weight is the whole of the
+diff --git a/src/furniture.ts b/src/furniture.ts
+index 562be81e..ba3dda4f 100644
+--- a/src/furniture.ts
++++ b/src/furniture.ts
+@@ -110,7 +110,7 @@
+  * in `ENTRIES`.
+  *
+  * **A selector that matched nothing is absent, not zero.** Zero and absent are
+- * the same fact here — nothing was removed — and an object of four zeroes on
++ * the same fact here — nothing was removed — and an object of five zeroes on
+  * every page in the library would make the one page where something *was*
+  * removed harder to see, not easier.
+  */
+@@ -166,7 +166,7 @@ interface Entry {
+ }
+ 
+ /**
+- * The whole class, and there are four of them.
++ * The whole class, and there are five of them.
+  *
+  * Each is a selector a platform writes onto chrome it generated, plus the
+  * narrowing the corpus and the adversary showed was needed. Growing this list is
+@@ -230,6 +230,26 @@ const ENTRIES: readonly Entry[] = [
+    * limit rather than a proof.
+    */
+   { selector: "ul.reflinks", also: isBareLinkList },
++  /**
++   * Springer Nature's *Full size image* button — the link to a figure's own
++   * page that Nature, Scientific Reports, Scientific Data and the rest of the
++   * `c-article` family put under every picture. Eight in the Nature
++   * Neuroscience article of SPIDERYARN-READING2-6A, cut down to two in
++   * tests/fixtures/figure-wrappers/springer-nature.html.
++   *
++   * **This one costs the reader the picture, not just a stray line.** It sits
++   * in the same `div.c-article-section__figure-item` as the `<picture>`, a
++   * picture has no text, so the item's text is the button's alone: link density
++   * 1, weight 25 from `article` in its class, and Readability deletes the item
++   * on *"High weight and mostly links"* — picture and all. Every figure on the
++   * page, 8 of 8. Removing the button is the whole fix: the item then has no
++   * link text to be judged by, and all eight come back. The reading view has
++   * its own ⤢. docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
++   *
++   * `isFigureButton` is the narrowing: inside a figure that holds a picture,
++   * outside its caption, and nothing in it but a link.
++   */
++  { selector: "div.c-article-section__figure-link", also: isFigureButton },
+ ];
+ 
+ /**
+@@ -341,6 +361,36 @@ function isBareLinkList(el: Element): boolean {
+   return everyItemIsOneBareLink && isControlStripBesideContent(el);
+ }
+ 
++/**
++ * **A button beside a figure's picture, and nothing else.**
++ *
++ * - **Inside a `<figure>` that holds a picture, and not in its caption** — a
++ *   control beside content, the phrase this module's licence turns on. A
++ *   caption is the author's, whatever its class.
++ * - **No picture of its own.** The icon inside Nature's link is an `<svg>`, so
++ *   an `<svg>` inside a link is allowed and any other media is not.
++ * - **Every word inside a link.** It reads *whether* a text node sits under an
++ *   `<a>`, never what it says — a credit line like *"Photo: A. Smith"* with a
++ *   linked name has words outside the link and is declined.
++ */
++function isFigureButton(el: Element): boolean {
++  if (el.closest("figcaption") !== null) return false;
++  const figure = el.closest("figure");
++  if (figure === null || figure.querySelector("img, picture, video") === null) return false;
++  if (el.querySelector("img, picture, video, audio, iframe, canvas, object, embed") !== null) return false;
++  for (const svg of Array.from(el.querySelectorAll("svg"))) {
++    if (svg.closest("a") === null || !el.contains(svg.closest("a"))) return false;
++  }
++  if (el.querySelector("a[href]") === null) return false;
++  const walker = el.ownerDocument.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
++  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
++    if ((node.textContent ?? "").trim() === "") continue;
++    const link = node.parentElement?.closest("a") ?? null;
++    if (link === null || !el.contains(link)) return false;
++  }
++  return true;
++}
++
+ /**
+  * **"Beside content" is in the class definition, so it is checked.**
+  *
+diff --git a/src/protect.ts b/src/protect.ts
+index bbbfcef5..50cea00e 100644
+--- a/src/protect.ts
++++ b/src/protect.ts
+@@ -3,11 +3,13 @@
+  * content, in Readability's own vocabulary.**
+  *
+  * It is the mirror image of src/furniture.ts. That module deletes what the
+- * publisher labelled as chrome; this one deletes nothing, moves nothing and
+- * rewrites no text. It adds **class tokens**, and Readability reads the class
+- * attribute in order to answer exactly the question we are answering.
++ * publisher labelled as chrome; this one deletes nothing and rewrites no text.
++ * Rules A and B add **class tokens**, and Readability reads the class attribute
++ * in order to answer exactly the question we are answering. **Rule C moves**:
++ * it unwraps a `<div>`, putting its children where it was, because no token can
++ * do its job (§ *Rule C*, below).
+  *
+- * ## What it is for, and it is two losses rather than one class of loss
++ * ## What rules A and B are for, and it is two losses rather than one class of loss
+  *
+  * Both were diagnosed by a spike before anything was designed, and the
+  * diagnosis is in
+@@ -191,6 +193,42 @@
+  * else on the page. Another publisher's correction notice gets added when
+  * somebody has a fixture for its actual topology, positive and adversarial.
+  *
++ * ## Rule C — a figure deleted with its wrapper, because a picture has no text
++ *
++ * SPIDERYARN-READING2-6A, and the first rule here found on production rather
++ * than in the corpus. A Substack post lost nine of its twenty-three figures:
++ * each sits in `div.captioned-image-container`, and where the caption carries a
++ * link — *"Source: https://…"* — the container's text is the caption alone,
++ * since the picture has none, and its link density runs 0.20 to 0.70 at weight
++ * 0. `_cleanConditionally` deletes it on *"Low weight and a little linky"*, and
++ * the picture goes with it. The six linked captions whose links are too short to
++ * cross 0.2 survive, and so do all the unlinked ones.
++ *
++ * **No token can do this.** Rule B's token takes a wrapper to weight 25, where
++ * the bar is 0.5 — and two of the nine are over it. So rule C takes the wrapper
++ * away instead: before Readability, a `div` between a figure and its picture, or
++ * one wrapped round the figure alone, is unwrapped — **only if Readability's own
++ * two link rules would delete it**, asked by `readabilityWouldTakeItForItsLinks`
++ * with Readability's weight and link-density arithmetic copied and its regexes
++ * pinned. `figure` is not a tag `_cleanConditionally` walks, so once no such
++ * `div` is left, those two rules have nothing to take.
++ *
++ * **That is the whole guarantee.** Candidate selection is another way to lose a
++ * figure — one outside the article Readability picks is never appended — and
++ * rule C does not touch it (GPT Sol, plan review).
++ *
++ * **It is under the fallback like A and B, and it needs to be.** GPT Sol built
++ * the page: four sibling `<article>` sections of the author's prose and a
++ * figure whose long linked caption sits inside its picture's `div`. Unwrapped,
++ * the figure wins candidate selection and all four sections go;
++ * `proseRetention` sees four runs missing and the control ships. That page is in
++ * tests/extract-figure-wrappers.test.ts.
++ *
++ * Springer Nature's figures were the other half of the same report and are
++ * **not** this rule's: the wrapper there died of the *Full size image* button
++ * beside the picture, a control the publisher labels, so it is an entry in
++ * src/furniture.ts. docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
++ *
+  * ## What this is not, and what it does not fix
+  *
+  * **It is not a trick played on the library.** Adding a class token that says
+@@ -271,6 +309,17 @@ export const RULES = {
+    * It never appears beside `correctionNotice`.
+    */
+   correctionNoticeRolledBack: "an-amendment-correction-rolled-back",
++  /**
++   * Rule C — a figure with a wrapper Readability's link rules would have
++   * deleted, picture and all. Counted per figure, not per `div` unwrapped.
++   * **A wrapper, not necessarily a picture saved**: a figure outside the article
++   * Readability selects is dropped either way, which is what the one corpus
++   * fixture this fires on (Quanta's lead video) shows, byte-identical in both
++   * arms. See § *Rule C* above.
++   */
++  figureWrapper: "a-figure-its-wrapper-would-take",
++  /** Rule C, unwrapped and then taken back — the same arrangement as A and B. */
++  figureWrapperRolledBack: "a-figure-its-wrapper-would-take-rolled-back",
+ } as const;
+ 
+ /**
+@@ -289,6 +338,7 @@ const WITHDRAWALS: ReadonlyArray<{
+ }> = [
+   { stamped: RULES.headerNamedTable, withdrawn: RULES.headerNamedTableRolledBack, switchOff: "withoutHeaderNamedTables" },
+   { stamped: RULES.correctionNotice, withdrawn: RULES.correctionNoticeRolledBack, switchOff: "withoutCorrectionNotices" },
++  { stamped: RULES.figureWrapper, withdrawn: RULES.figureWrapperRolledBack, switchOff: "withoutFigureWrappers" },
+ ];
+ 
+ /**
+@@ -348,6 +398,8 @@ export interface ProtectOptions {
+   readonly withoutHeaderNamedTables?: boolean;
+   /** Skip rule B entirely — the same, for the correction notice. */
+   readonly withoutCorrectionNotices?: boolean;
++  /** Skip rule C entirely — the same, for a figure's wrappers. */
++  readonly withoutFigureWrappers?: boolean;
+ }
+ 
+ /**
+@@ -391,6 +443,16 @@ export const OK_MAYBE_ITS_A_CANDIDATE = /and|article|body|column|content|main|sh
+  */
+ export const UNLIKELY_EXCEPT_HEADER = new RegExp(UNLIKELY_CANDIDATES.source.replace("|header|", "|"), "i");
+ 
++/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.positive` — rule C's weight. Pinned like the two above. */
++export const POSITIVE = /article|body|content|entry|hentry|h-entry|main|page|pagination|post|text|blog|story/i;
++
++/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.negative` — rule C's weight. Pinned like the two above. */
++export const NEGATIVE =
++  /-ad-|hidden|^hid$| hid$| hid |^hid |banner|combx|comment|com-|contact|footer|gdpr|masthead|media|meta|outbrain|promo|related|scroll|share|shoutbox|sidebar|skyscraper|sponsor|shopping|tags|widget/i;
++
++/** Copied from `@mozilla/readability` 0.6.0 `REGEXPS.hashUrl` — a fragment link counts 0.3 of its length. */
++export const HASH_URL = /^#.+/;
++
+ /**
+  * **The seam that lets a test run the pipeline with this pass switched off**,
+  * and nothing else uses it.
+@@ -449,10 +511,13 @@ export function protectionIsDisabled(): boolean {
+  * which could in principle be nudged by a class appearing on a container.
+  * Running last is the version of that with no argument required.
+  *
+- * Two rules, applied independently, and **no element can qualify for both**:
+- * rule A selects `<table>` and rule B selects `<div>`. The header of this file
+- * used to say an element might carry both tokens; it cannot, and GPT Sol
+- * checked it rather than took it (2026-09-08).
++ * Three rules, applied independently, and **no element can carry both
++ * tokens**: rule A selects `<table>` and rule B selects `<div>`. The header of
++ * this file used to say an element might carry both; it cannot, and GPT Sol
++ * checked it rather than took it (2026-09-08). Rule C runs last and stamps
++ * nothing; it could unwrap a `div` rule B stamped only if that notice held a
++ * figure's picture, and B's 25 points count in its gate, as they would in
++ * Readability's.
+  */
+ export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {}): KeptStructure {
+   if (protectionDisabled) return {};
+@@ -516,9 +581,141 @@ export function protectAuthoredStructure(doc: Document, opts: ProtectOptions = {
+   }
+   if (stamped.size > 0) kept[RULES.correctionNotice] = stamped.size;
+ 
++  const figures = opts.withoutFigureWrappers === true ? 0 : unwrapFigureWrappers(doc);
++  if (figures > 0) kept[RULES.figureWrapper] = figures;
++
+   return kept;
+ }
+ 
++/**
++ * **Rule C**: unwrap every `div` Readability's link rules would delete a
++ * figure's picture with, and say how many figures had one. A `<div>` here,
++ * never a `<figure>`: `figure` is not one of the tags `_cleanConditionally`
++ * walks, so the figure itself is never at risk — only a `div` between it and
++ * its picture, or one wrapped round it alone.
++ */
++function unwrapFigureWrappers(doc: Document): number {
++  let figures = 0;
++  for (const figure of Array.from(doc.querySelectorAll("figure"))) {
++    if (figure.querySelector(FIGURE_PICTURE) === null) continue;
++    const inside = unwrapInside(figure);
++    const around = unwrapAround(figure);
++    if (inside || around) figures += 1;
++  }
++  return figures;
++}
++
++/**
++ * Inside: every `div` that holds the picture. The order does not matter:
++ * unwrapping one changes no other `div`'s text, links or class, so each is
++ * judged on exactly what Readability would have judged it on.
++ */
++function unwrapInside(figure: Element): boolean {
++  let unwrapped = false;
++  for (const div of Array.from(figure.querySelectorAll("div"))) {
++    if (div.querySelector(FIGURE_PICTURE) === null) continue;
++    if (!readabilityWouldTakeItForItsLinks(div)) continue;
++    unwrap(div);
++    unwrapped = true;
++  }
++  return unwrapped;
++}
++
++/**
++ * Around: a `div` that wraps nothing but this figure, walking up while that
++ * holds. **Each is judged on its own** — GPT Sol, plan review: an outer wrapper
++ * inherits the figure's link text whether or not it was at risk, so the walk
++ * passes over a safe one rather than unwrapping it.
++ */
++function unwrapAround(figure: Element): boolean {
++  let unwrapped = false;
++  let node: Element = figure;
++  for (let parent = node.parentElement; parent?.tagName === "DIV"; parent = node.parentElement) {
++    if (parent.children.length !== 1 || hasOwnText(parent)) break;
++    if (readabilityWouldTakeItForItsLinks(parent)) {
++      /* The figure's new parent is the next one up; `node` stays where it is. */
++      unwrap(parent);
++      unwrapped = true;
++    } else {
++      node = parent;
++    }
++  }
++  return unwrapped;
++}
++
++/**
++ * **A picture, as rule C means it** — what a reader would miss. An `<svg>` is
++ * left out: in the pages measured it is an icon inside a link, and counting it
++ * would put every figure with a download button in scope.
++ */
++const FIGURE_PICTURE = "img, picture, video";
++
++/**
++ * **Would `_cleanConditionally` delete this `div` on one of its two link rules?**
++ * Readability 0.6.0, Readability.js around line 2580, and nothing else of it:
++ *
++ * - it looks only if the text has **fewer than ten commas**;
++ * - *"Low weight and a little linky"*: class weight under 25 and link density
++ *   over 0.2;
++ * - *"High weight and mostly links"*: weight 25 or more and density over 0.5.
++ *
++ * Asked **before** Readability runs, of a document it has not yet cleaned, so it
++ * is an estimate of the later question rather than the question itself — close
++ * because the text and the links are the same, and made safe by the fallback,
++ * which is what decides whether the page ships with rule C. The point of asking
++ * at all is `kept`: a figure is counted only where Readability's own rule would
++ * have taken it, the standard rule A holds itself to. GPT Sol, plan review.
++ *
++ * Readability's `linkDensityModifier` is 0 here because `readingArm` passes no
++ * options, and its other checks — a negative class weight on its own, too many
++ * `<li>`s or inputs, embeds — are not this rule's: none was measured taking a
++ * figure.
++ */
++export function readabilityWouldTakeItForItsLinks(div: Element): boolean {
++  if (readabilityInnerText(div).split(",").length - 1 >= 10) return false;
++  const weight = readabilityClassWeight(div);
++  const density = readabilityLinkDensity(div);
++  return (weight < 25 && density > 0.2) || (weight >= 25 && density > 0.5);
++}
++
++/** Readability's `_getInnerText`: trimmed, runs of whitespace collapsed to one space. */
++function readabilityInnerText(el: Element): string {
++  return (el.textContent ?? "").trim().replace(/\s{2,}/g, " ");
++}
++
++/** Readability's `_getClassWeight`, with `FLAG_WEIGHT_CLASSES` on — as it is on the first pass. */
++function readabilityClassWeight(el: Element): number {
++  let weight = 0;
++  for (const s of [el.getAttribute("class") ?? "", el.id]) {
++    if (s === "") continue;
++    if (NEGATIVE.test(s)) weight -= 25;
++    if (POSITIVE.test(s)) weight += 25;
++  }
++  return weight;
++}
++
++/** Readability's `_getLinkDensity`: link text over all text, a fragment link at 0.3. */
++function readabilityLinkDensity(el: Element): number {
++  const total = readabilityInnerText(el).length;
++  if (total === 0) return 0;
++  let links = 0;
++  for (const a of Array.from(el.getElementsByTagName("a"))) {
++    const href = a.getAttribute("href");
++    links += readabilityInnerText(a).length * (href !== null && HASH_URL.test(href) ? 0.3 : 1);
++  }
++  return links / total;
++}
++
++/** Any text of its own, directly under it — which a wrapper round a figure does not have. */
++function hasOwnText(el: Element): boolean {
++  return Array.from(el.childNodes).some((n) => n.nodeType === n.TEXT_NODE && (n.textContent ?? "").trim() !== "");
++}
++
++/** Put an element's children where it was. Moves; deletes nothing and rewrites no text. */
++function unwrap(el: Element): void {
++  el.replaceWith(...Array.from(el.childNodes));
++}
++
+ /**
+  * **How far up Readability actually looks**, and the number is the library's:
+  * `_hasAncestorTag(node, tagName, maxDepth, filterFn)` opens with
+diff --git a/tests/extract-figure-wrappers.test.ts b/tests/extract-figure-wrappers.test.ts
+new file mode 100644
+index 00000000..7e947385
+--- /dev/null
++++ b/tests/extract-figure-wrappers.test.ts
+@@ -0,0 +1,220 @@
++/**
++ * **Figures Readability deletes with their wrapper**, because a picture has no
++ * text and the wrapper is judged by the link text left beside it.
++ * SPIDERYARN-READING2-6A;
++ * docs/plans/260930e-figures-readability-deletes-with-their-wrapper.md.
++ *
++ * Two fixes, one per shape, and both are here:
++ *
++ * - **Springer Nature**: every figure went on *"High weight and mostly links"*
++ *   because of the *Full size image* button beside the picture. The button is
++ *   the publisher's own control, so it is furniture (src/furniture.ts).
++ * - **Substack**: a figure whose caption carries a link went on *"Low weight
++ *   and a little linky"*, and the one beside it, whose caption does not,
++ *   survived. That is rule C of src/protect.ts.
++ *
++ * The two fixtures are cut from the real pages, their figure markup verbatim
++ * (tests/fixtures/figure-wrappers/).
++ */
++import { readFile } from "node:fs/promises";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import { Readability } from "@mozilla/readability";
++import { JSDOM, VirtualConsole } from "jsdom";
++import { beforeAll, describe, expect, it } from "vitest";
++
++import { readArticle } from "../src/extract.js";
++import { loadMathsRenderer } from "../src/maths-server.js";
++import {
++  HASH_URL,
++  NEGATIVE,
++  POSITIVE,
++  RULES,
++  controlOptionsFor,
++  keptWithdrawn,
++  readabilityWouldTakeItForItsLinks,
++  withProtectionDisabled,
++} from "../src/protect.js";
++
++beforeAll(loadMathsRenderer);
++
++const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures/figure-wrappers");
++const load = (name: string) => readFile(path.join(DIR, name), "utf8");
++const dom = (html: string): Document => new JSDOM(html, { virtualConsole: new VirtualConsole() }).window.document;
++
++const NATURE_URL = "https://www.nature.com/articles/s41593-022-01026-4";
++const SUBSTACK_URL = "https://magazine.sebastianraschka.com/p/gpt-6-astra-looped-transformers-and";
++
++/** What stage 2 kept, as a document, with its audit counts. */
++function extracted(html: string, url: string) {
++  const r = readArticle(html, url);
++  return { doc: dom(r.article?.content ?? ""), kept: r.kept, removed: r.removed };
++}
++
++describe("furniture — Springer Nature's figures, deleted for their Full size image button", () => {
++  it("keeps both pictures, inside their figures, and removes the two buttons", async () => {
++    const { doc, kept, removed } = extracted(await load("springer-nature.html"), NATURE_URL);
++    const figures = [...doc.querySelectorAll("figure")];
++    expect(figures).toHaveLength(2);
++    for (const f of figures) expect(f.querySelector("img"), f.textContent?.slice(0, 60)).not.toBeNull();
++    expect(doc.body.textContent).not.toContain("Full size image");
++    /* The long description under each figure is the author's text and stays. */
++    expect(doc.body.textContent).toContain("GPT-2 generates a contextual embedding");
++    expect(removed["div.c-article-section__figure-link"]).toBe(2);
++    /* The button's removal is the whole fix; rule C has nothing left to do. */
++    expect(kept[RULES.figureWrapper]).toBeUndefined();
++  });
++
++  it("loses both pictures to bare Readability — the counterfactual", async () => {
++    const d = new JSDOM(await load("springer-nature.html"), { url: NATURE_URL, virtualConsole: new VirtualConsole() });
++    const out = dom(new Readability(d.window.document).parse()?.content ?? "");
++    expect(out.querySelectorAll("figure")).toHaveLength(2);
++    expect(out.querySelectorAll("figure img")).toHaveLength(0);
++  });
++
++  const withLinkDiv = (inner: string) =>
++    `<!doctype html><html><body><article>` +
++    `${"<p>Plenty of prose here, long enough to be the article, and then a good deal more of it besides.</p>".repeat(6)}` +
++    `<figure><div class="c-article-section__figure-item"><img src="https://example.org/a.png" alt="">` +
++    `<div class="c-article-section__figure-link">${inner}</div></div>` +
++    `<figcaption>Fig. 1: a caption</figcaption></figure></article></body></html>`;
++
++  it("declines a credit line whose words are not all inside its link", () => {
++    const { removed } = extracted(withLinkDiv(`Photo: <a href="https://example.org/p">A. Smith</a>`), "https://example.org/x");
++    expect(removed["div.c-article-section__figure-link"]).toBeUndefined();
++  });
++
++  it("declines one that holds a picture of its own", () => {
++    const { removed } = extracted(
++      withLinkDiv(`<a href="https://example.org/p"><img src="https://example.org/b.png" alt="">Full size image</a>`),
++      "https://example.org/x",
++    );
++    expect(removed["div.c-article-section__figure-link"]).toBeUndefined();
++  });
++});
++
++describe("rule C — a Substack figure whose caption carries a link", () => {
++  it("keeps the linked-caption figure and its link, and counts only that one", async () => {
++    const { doc, kept } = extracted(await load("substack.html"), SUBSTACK_URL);
++    const figures = [...doc.querySelectorAll("figure")];
++    expect(figures).toHaveLength(2);
++    for (const f of figures) expect(f.querySelector("img"), f.textContent?.slice(0, 60)).not.toBeNull();
++    expect(
++      figures.find((f) => f.querySelector("figcaption a")),
++      "the caption's own link is content and stays",
++    ).toBeDefined();
++    /* The other figure was never in danger — its caption has no link — so it
++       is not counted as a rescue. */
++    expect(kept[RULES.figureWrapper]).toBe(1);
++  });
++
++  it("loses exactly the linked-caption figure with the pass switched off", async () => {
++    const html = await load("substack.html");
++    const off = await withProtectionDisabled(() => extracted(html, SUBSTACK_URL));
++    const figures = [...off.doc.querySelectorAll("figure")];
++    expect(figures).toHaveLength(1);
++    expect(figures[0]?.querySelector("figcaption a")).toBeNull();
++  });
++});
++
++describe("rule C — what it leaves alone", () => {
++  const PROSE = (n: number) =>
++    `<p>PROSE-${n}. The survey team walked the whole length of the valley twice that autumn, and on the ` +
++    `second pass they counted every standing stone again, because the first count had disagreed with the ` +
++    `parish records by eleven, and nobody would sign the report until the two agreed.</p>`;
++  const page = (inner: string) =>
++    `<!doctype html><html><head><title>t</title></head><body><article>${PROSE(1)}${PROSE(2)}${inner}${PROSE(3)}${PROSE(4)}</article></body></html>`;
++
++  it("does not count a wrapped figure that has no link text anywhere", () => {
++    const { kept } = extracted(
++      page(`<div class="image-container"><figure><div class="inset"><img src="https://example.org/a.png" alt=""></div><figcaption>A plain caption with no link at all in it.</figcaption></figure></div>`),
++      "https://example.org/x",
++    );
++    expect(kept[RULES.figureWrapper]).toBeUndefined();
++  });
++
++  it("does not count a linked caption whose link is too short to cross Readability's line", () => {
++    const { kept } = extracted(
++      page(`<div class="image-container"><figure><img src="https://example.org/a.png" alt=""><figcaption>A long plain caption that says what the figure shows, from <a href="https://example.org/s">here</a>.</figcaption></figure></div>`),
++      "https://example.org/x",
++    );
++    expect(kept[RULES.figureWrapper]).toBeUndefined();
++  });
++
++  it("does not count a figure with no picture in it", () => {
++    const { kept } = extracted(
++      page(`<div class="c"><figure><div class="i"><a href="https://example.org/t">Full size table</a></div><figcaption>Table 1</figcaption></figure></div>`),
++      "https://example.org/x",
++    );
++    expect(kept[RULES.figureWrapper]).toBeUndefined();
++  });
++});
++
++describe("rule C — the gate is Readability's own two link rules", () => {
++  /** Readability's table, off the prototype — the oracle the copies are checked against. */
++  const LIVE = (Readability.prototype as unknown as { REGEXPS: Record<string, RegExp | undefined> }).REGEXPS;
++
++  it("copies the weight regexes and the fragment rule character for character", () => {
++    expect(POSITIVE.source).toBe(LIVE.positive?.source);
++    expect(NEGATIVE.source).toBe(LIVE.negative?.source);
++    expect(HASH_URL.source).toBe(LIVE.hashUrl?.source);
++  });
++
++  const div = (html: string) => dom(`<body>${html}</body>`).body.firstElementChild as Element;
++  const figure = (link: string) =>
++    `<figure><img src="https://example.org/a.png" alt=""><figcaption>A caption of about fifty characters, then ${link}</figcaption></figure>`;
++  const LINKY = `<a href="https://example.org/x">a source link that is fairly long</a>`;
++
++  it("takes a weightless wrapper over 0.2 and leaves one under it", () => {
++    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(LINKY)}</div>`))).toBe(true);
++    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(`<a href="https://example.org/x">x</a>`)}</div>`))).toBe(false);
++  });
++
++  it("holds a positive-weight wrapper to 0.5", () => {
++    expect(readabilityWouldTakeItForItsLinks(div(`<div class="content">${figure(LINKY)}</div>`))).toBe(false);
++  });
++
++  it("counts a fragment link at 0.3 of its length", () => {
++    const fragment = `<a href="#ref-1">a source link that is fairly long</a>`;
++    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(fragment)}</div>`))).toBe(false);
++  });
++
++  it("does not look at a wrapper with ten commas, as Readability does not", () => {
++    const commas = `<a href="https://example.org/x">a, b, c, d, e, f, g, h, i, j, k</a>`;
++    expect(readabilityWouldTakeItForItsLinks(div(`<div class="c">${figure(commas)}</div>`))).toBe(false);
++  });
++});
++
++describe("rule C — under the same fallback as rules A and B", () => {
++  it("is switched off by the control arm when it fired, and renamed when withdrawn", () => {
++    const kept = { [RULES.figureWrapper]: 3 };
++    expect(controlOptionsFor(kept)).toEqual({ withoutFigureWrappers: true });
++    expect(keptWithdrawn(kept)).toEqual({ [RULES.figureWrapperRolledBack]: 3 });
++  });
++
++  /**
++   * **GPT Sol's page**, found in the plan review and rebuilt against the built
++   * gate on 2026-09-30 (the first version had 141 commas, which the gate
++   * declines): four sibling `<article>` sections of the author's prose, and a
++   * figure whose four-paragraph caption, half of it linked, sits inside its
++   * picture's `div`. Unwrapped, the figure wins candidate selection and all four
++   * sections go — so the control has to ship, and does, and the picture is the
++   * price.
++   */
++  it("gives the picture up rather than the author's four sections", () => {
++    const sentence =
++      "The valley survey recorded every standing stone twice, then compared observations with the parish archive before publishing the final account. ";
++    const caption =
++      "This linked figure caption describes measurements; instruments; sampling conditions; and all observed results in extensive detail. ";
++    const html =
++      `<html><head><title>T</title></head><body>` +
++      [0, 1, 2, 3].map((n) => `<article><p>AUTHOR-${n} ${sentence}</p></article>`).join("") +
++      `<figure><div class="media"><img src="x.png"><p>${caption}</p><p>${caption}</p>` +
++      `<p><a href="/source">${caption}</a></p><p><a href="/source">${caption}source material</a></p></div></figure>` +
++      `</body></html>`;
++    const r = readArticle(html, "https://example.org/x");
++    const text = dom(r.article?.content ?? "").body.textContent ?? "";
++    for (const n of [0, 1, 2, 3]) expect(text, `section ${n}`).toContain(`AUTHOR-${n}`);
++    expect(r.kept).toEqual({ [RULES.figureWrapperRolledBack]: 1 });
++  });
++});
+diff --git a/tests/extract-protect.test.ts b/tests/extract-protect.test.ts
+index 910387df..9fc40efd 100644
+--- a/tests/extract-protect.test.ts
++++ b/tests/extract-protect.test.ts
+@@ -779,21 +779,46 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
+    * checks that cannot fail. So the control here is a second real extraction
+    * with the pass disabled, and the comparison is of bytes.
+    */
+-  it("stamps exactly three fixtures and leaves the other thirty-two alone", async () => {
++  it("stamps exactly four fixtures and leaves the other thirty-one alone", async () => {
+     const corpus = await CORPUS;
+     expect(corpus.size).toBe(35);
+     const stamped = [...corpus].filter(([, r]) => r.kind === "extracted" && Object.keys(r.on.kept).length > 0);
+-    expect(stamped.map(([n]) => n).sort()).toEqual(["ar5iv-attention", "plos-biology", "wiki-gdp-table"]);
++    expect(stamped.map(([n]) => n).sort()).toEqual([
++      "ar5iv-attention",
++      "plos-biology",
++      "quanta-year-physics",
++      "wiki-gdp-table",
++    ]);
+     /**
+      * **The plan says five, and five is wrong.** It reasons *"30 zero-stamp
+      * fixtures, because five fixtures are stamped, not four"*; the measurement
+-     * is three stamped, two refused and thirty compared. The 30 is right and
+-     * its arithmetic is not.
++     * was three stamped, two refused and thirty compared. The 30 was right and
++     * its arithmetic was not. Rule C added Quanta (below), so it is now four
++     * stamped and twenty-nine compared.
+      */
+-    expect(stamped).toHaveLength(3);
++    expect(stamped).toHaveLength(4);
++  });
++
++  /**
++   * **Rule C fires on Quanta and changes nothing the reader gets**, and this
++   * pins that rather than leaving it out. The lead figure is an embedded video
++   * whose player carries YouTube's consent notice — a *"privacy policy."* link —
++   * so its wrappers really are ones Readability's link rules would take. But
++   * that figure sits outside the article Readability selects, so it is never in
++   * the output either way: candidate selection, the limit rule C's header names
++   * (GPT Sol, plan review). `kept` counts a wrapper that would have been taken,
++   * and here that is all it is.
++   */
++  it("fires rule C on Quanta and leaves its output byte-identical", async () => {
++    const row = (await CORPUS).get("quanta-year-physics");
++    expect(row?.kind).toBe("extracted");
++    const r = row as Extract<Row, { kind: "extracted" }>;
++    expect(r.on.kept).toEqual({ [RULES.figureWrapper]: 1 });
++    expect(r.on.bytes).toBe(r.off.bytes);
++    expect(r.on.digest).toBe(r.off.digest);
+   });
+ 
+-  it("is byte-identical on all thirty zero-stamp fixtures that extract at all", async () => {
++  it("is byte-identical on all twenty-nine zero-stamp fixtures that extract at all", async () => {
+     const corpus = await CORPUS;
+     const compared: string[] = [];
+     const differed: string[] = [];
+@@ -807,7 +832,7 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
+       expect(row.off.kept, name).toEqual({});
+     }
+     expect(differed).toEqual([]);
+-    expect(compared).toHaveLength(30);
++    expect(compared).toHaveLength(29);
+   });
+ 
+   it("refuses the two bot walls with the typed refusal, in both arms", async () => {
+diff --git a/tests/fixtures/figure-wrappers/springer-nature.html b/tests/fixtures/figure-wrappers/springer-nature.html
+new file mode 100644
+index 00000000..a1231f79
+--- /dev/null
++++ b/tests/fixtures/figure-wrappers/springer-nature.html
+@@ -0,0 +1,45 @@
++<!doctype html>
++<html lang="en"><head><meta charset="utf-8"><title>Shared computational principles for language processing in humans and deep language models</title></head>
++<body>
++<article>
++<h1>Shared computational principles for language processing in humans and deep language models</h1>
++<div class="c-article-body"><section data-title="Results"><div class="c-article-section" id="Sec5-section"><h2 class="c-article-section__title">Results</h2><div class="c-article-section__content" id="Sec5-content">
++<p>The outstanding success of autoregressive (predictive) DLMs is striking from theoretical and practical perspectives because they have emerged from a very different scientific paradigm than traditional psycholinguist models<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 1" title="Linzen, T. &amp; Baroni, M. Syntactic structure from deep learning. Annu. Rev. Linguist. 7, 195–212 (2021)." href="/articles/s41593-022-01026-4#ref-CR1" id="ref-link-section-d72798114e831">1</a></sup>. In traditional psycholinguistic approaches, human language is explained with interpretable models that combine symbolic elements (for example, nouns, verbs, adjectives and adverbs) with rule-based operations<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 2" title="Chomsky, N. Syntactic structures. 
++                  https://doi.org/10.1515/9783112316009
++                  
++                 (1957)." href="/articles/s41593-022-01026-4#ref-CR2" id="ref-link-section-d72798114e835">2</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 3" title="Jacobs, R. A. &amp; Rosenbaum, P. S. English Transformational Grammar (Blaisdell, 1968)." href="/articles/s41593-022-01026-4#ref-CR3" id="ref-link-section-d72798114e838">3</a></sup>. In contrast, autoregressive DLMs learn language from real-world textual examples ‘in the wild’, with minimal or no explicit prior knowledge about language structure. Autoregressive DLMs do not parse words into parts of speech or apply explicit syntactic transformations. Rather, they learn to encode a sequence of words into a numerical vector, termed a contextual embedding, from which the model decodes the next word. After learning, the next-word prediction principle allows the generation of well-formed, novel, context-aware texts<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 1" title="Linzen, T. &amp; Baroni, M. Syntactic structure from deep learning. Annu. Rev. Linguist. 7, 195–212 (2021)." href="/articles/s41593-022-01026-4#ref-CR1" id="ref-link-section-d72798114e842">1</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 4" title="Brown, T. B. et al. Language models are few-shot learners. Adv. Neural Inf. Process. Syst. 33, 1877–1901 (2020)." href="/articles/s41593-022-01026-4#ref-CR4" id="ref-link-section-d72798114e845">4</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 5" title="Cho, W. S. et al. Towards coherent and cohesive long-form text generation. in Proceedings of the First Workshop on Narrative Understanding 
++                  https://doi.org/10.18653/v1/w19-2401
++                  
++                 (2019)." href="/articles/s41593-022-01026-4#ref-CR5" id="ref-link-section-d72798114e848">5</a></sup>.</p>
++<p>Autoregressive DLMs have proven to be extremely effective in capturing the structure of language<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Yang, Z. et al. XLNet: generalized autoregressive pretraining for language understanding. in Advances in Neural Information Processing Systems (eds. Wallach, H. et al.) 5753–5763 (Curran Associates, 2019)." href="#ref-CR6" id="ref-link-section-d72798114e855">6</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Radford, A., Narasimhan, K., Salimans, T. &amp; Sutskever, I. Improving language understanding by generative pre-training. OpenAI Blog (2018)." href="#ref-CR7" id="ref-link-section-d72798114e855_1">7</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Radford, A. et al. Language models are unsupervised multitask learners. OpenAI Blog (2019)." href="#ref-CR8" id="ref-link-section-d72798114e855_2">8</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 9" title="Rosset, C. Turing-nlg: A 17-billion-parameter language model by microsoft. Microsoft Blog (2019)." href="/articles/s41593-022-01026-4#ref-CR9" id="ref-link-section-d72798114e858">9</a></sup>. It is unclear, however, if the core computational principles of autoregressive DLMs are related to the way the human brain processes language. Past research has leveraged language models and machine learning to extract semantic representation in the brain<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Pereira, F. et al. Toward a universal decoder of linguistic meaning from brain activation. Nat. Commun. 9, 963 (2018)." href="#ref-CR10" id="ref-link-section-d72798114e862">10</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Makin, J. G., Moses, D. A. &amp; Chang, E. F. Machine translation of cortical activity to text with an encoder–decoder framework. Nat. Neurosci. 23, 575–582 (2020)." href="#ref-CR11" id="ref-link-section-d72798114e862_1">11</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Schwartz, D. et al. Inducing brain-relevant bias in natural language processing models. in Advances in Neural Information Processing Systems (eds. Wallach, H. et al.) 14123–14133 (Curran Associates, 2019)." href="#ref-CR12" id="ref-link-section-d72798114e862_2">12</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Gauthier, J. &amp; Levy, R. Linking artificial and human neural representations of language. in Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing 
++                  https://doi.org/10.18653/v1/d19-1050
++                  
++                 (2019)." href="#ref-CR13" id="ref-link-section-d72798114e862_3">13</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Donhauser, P. W. &amp; Baillet, S. Two distinct neural timescales for predictive speech processing. Neuron 105, 385–393 (2020)." href="#ref-CR14" id="ref-link-section-d72798114e862_4">14</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Jain, S. &amp; Huth, A. G. Incorporating context into language encoding models for fMRI. in Advances in Neural Information Processing Systems 
++                  https://doi.org/10.1101/327601
++                  
++                 (2018)." href="#ref-CR15" id="ref-link-section-d72798114e862_5">15</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Schrimpf, M. et al. Artificial neural networks accurately predict language processing in the Brain. Cold Spring Harbor Laboratory 
++                  https://doi.org/10.1101/2020.06.26.174482
++                  
++                 (2020)." href="#ref-CR16" id="ref-link-section-d72798114e862_6">16</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Caucheteux, C., Gramfort, A. &amp; King, J. -R. GPT-2’s activations predict the degree of semantic comprehension in the human brain. 
++                  https://doi.org/10.1101/2021.04.20.440622
++                  
++                 (2021)." href="#ref-CR17" id="ref-link-section-d72798114e862_7">17</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 18" title="Athanasiou, N., Iosif, E. &amp; Potamianos, A. Neural activation semantic models: computational lexical semantic models of localized neural activations. in Proceedings of the 27th International Conference on Computational Linguistics 2867–2878 (Association for Computational Linguistics, 2018)." href="/articles/s41593-022-01026-4#ref-CR18" id="ref-link-section-d72798114e865">18</a></sup>. But such studies did not view autoregressive DLMs as feasible cognitive models for how the human brain codes language. In contrast, recent theoretical papers argue that there are fundamental connections between DLMs and how the brain processes language<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 1" title="Linzen, T. &amp; Baroni, M. Syntactic structure from deep learning. Annu. Rev. Linguist. 7, 195–212 (2021)." href="/articles/s41593-022-01026-4#ref-CR1" id="ref-link-section-d72798114e869">1</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 19" title="McClelland, J. L., Hill, F., Rudolph, M., Baldridge, J. &amp; Schütze, H. Placing language in an integrated understanding system: next steps toward human-level performance in neural language models. Proc. Natl Acad. Sci. USA 117, 25966–25974 (2020)." href="/articles/s41593-022-01026-4#ref-CR19" id="ref-link-section-d72798114e872">19</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 20" title="Hasson, U., Nastase, S. A. &amp; Goldstein, A. Direct fit to nature: an evolutionary perspective on biological and artificial neural networks. Neuron 105, 416–434 (2020)." href="/articles/s41593-022-01026-4#ref-CR20" id="ref-link-section-d72798114e875">20</a></sup>.</p>
++<div class="c-article-section__figure js-c-reading-companion-figures-item" data-test="figure" data-container-section="figure" id="figure-1" data-title="Shared computational principles between the brain and autoregressive deep language models in processing natural language."><figure><figcaption><b id="Fig1" class="c-article-section__figure-caption" data-test="figure-caption-text">Fig. 1: Shared computational principles between the brain and autoregressive deep language models in processing natural language.</b></figcaption><div class="c-article-section__figure-content"><div class="c-article-section__figure-item"><picture class="c-article-section__figure-picture"><source type="image/webp" srcset="//media.springernature.com/lw685/springer-static/image/art%3A10.1038%2Fs41593-022-01026-4/MediaObjects/41593_2022_1026_Fig1_HTML.png?as=webp"><img aria-describedby="figure-1-desc" src="//media.springernature.com/lw685/springer-static/image/art%3A10.1038%2Fs41593-022-01026-4/MediaObjects/41593_2022_1026_Fig1_HTML.png" alt="Fig. 1: Shared computational principles between the brain and autoregressive deep language models in processing natural language." loading="lazy" width="685" height="581"></picture><div class="c-article-section__figure-link"><a class="c-article__pill-button" data-test="article-link" data-track="click" data-track-label="button" data-track-action="view figure" href="/articles/s41593-022-01026-4/figures/1" data-track-dest="link:Figure1 Full size image" aria-label="Full size image figure 1" rel="nofollow"><span>Full size image</span><svg width="16" height="16" focusable="false" role="img" aria-hidden="true" class="u-icon"><use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#icon-eds-i-chevron-right-small"></use></svg></a></div></div><div class="c-article-section__figure-description" data-test="bottom-caption" id="figure-1-desc"><p>For each sequence of words in the text, GPT-2 generates a contextual embedding (blue), which is used to assign probabilities to the identity of the next word (green box). Next, GPT-2 uses its pre-onset predictions to calculate its surprise level (that is, error signal) when the next word is revealed (purple box). The minimization of the surprise is the mechanism by which GPT-2 is trained to generate well-formed outputs. Each colored box and arrow represents the relationship between a given computational principle of the autoregressive DLM and the neural responses. The green boxes represent that both the brain and autoregressive DLMs are engaged in context-dependent prediction of the upcoming word before word onset. The green arrow indicates that we take the actual predictions from GPT-2 (for example, the top-one prediction ‘ocean’ for the example sentence ‘our story begins deep in the…’) to model the neural responses before word onset (Fig. <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig4">4</a>). The purple boxes represent that both the brain and autoregressive DLMs are engaged in the assessment of their predictions after word onset. The purple arrow indicates that we take the actual perceived next word (‘rainforest’ in our example), as well as GPT-2’s surprise level for the perceived word (cross-entropy) to model the neural responses after word onset (Figs. <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig4">4b</a> and <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig5">5b</a>). The blue boxes represent that both the brain and autoregressive DLMs use contextual embeddings to represent words. The blue arrow indicates that we take the contextual embeddings from GPT-2 to model the neural responses (Figs. <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig6">6</a> and <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig8">8</a>). We argue here that, although the internal word-processing mechanisms are not the same for the brain and DLMs, they do share three core computational principles: (1) continuous context-dependent next-word prediction before word onset; (2) reliance on the pre-onset prediction to calculate post-word-onset surprise; and finally, (3) context-specific representation of meaning.</p></div></div></figure></div>
++<p>In agreement with this theoretical perspective, we provide empirical evidence that the human brain processes incoming speech similarly to an autoregressive DLM (Fig. <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig1">1</a>). In particular, the human brain and autoregressive DLMs share three computational principles: (1) both are engaged in continuous context-dependent next-word prediction before word onset; (2) both match pre-onset predictions to the incoming word to induce post-onset surprise (that is, prediction-error signals); (3) both represent words using contextual embeddings. The main contribution of this study is the provision of direct evidence for the continuous engagement of the brain in next-word prediction before word onset (computational principle 1). In agreement with recent publications<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 14" title="Donhauser, P. W. &amp; Baillet, S. Two distinct neural timescales for predictive speech processing. Neuron 105, 385–393 (2020)." href="/articles/s41593-022-01026-4#ref-CR14" id="ref-link-section-d72798114e885">14</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 16" title="Schrimpf, M. et al. Artificial neural networks accurately predict language processing in the Brain. Cold Spring Harbor Laboratory 
++                  https://doi.org/10.1101/2020.06.26.174482
++                  
++                 (2020)." href="/articles/s41593-022-01026-4#ref-CR16" id="ref-link-section-d72798114e888">16</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Heilbron, M., Armeni, K., Schoffelen, J.-M., Hagoort, P. &amp; de Lange, F. P. A hierarchy of linguistic predictions during natural language comprehension. Preprint at bioRxiv 
++                  https://doi.org/10.1101/2020.12.03.410399
++                  
++                 (2020)." href="#ref-CR21" id="ref-link-section-d72798114e891">21</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Weissbart, H., Kandylaki, K. D. &amp; Reichenbach, T. Cortical tracking of surprisal during continuous speech comprehension. J. Cogn. Neurosci. 32, 155–166 (2020)." href="#ref-CR22" id="ref-link-section-d72798114e891_1">22</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Frank, S. L., Otten, L. J., Galli, G. &amp; Vigliocco, G. The ERP response to the amount of information conveyed by words in sentences. Brain Lang. 140, 1–11 (2015)." href="#ref-CR23" id="ref-link-section-d72798114e891_2">23</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 24" title="Caucheteux, C., Gramfort, A. &amp; King, J.-R. GPT-2’s activations predict the degree of semantic comprehension in the human brain. Preprint at bioRxiv 
++                  https://doi.org/10.1101/2021.04.20.440622
++                  
++                 (2021)." href="/articles/s41593-022-01026-4#ref-CR24" id="ref-link-section-d72798114e894">24</a></sup>, we also provide neural evidence in support of computational principles 2 and 3.</p>
++<div class="c-article-section__figure js-c-reading-companion-figures-item" data-test="figure" data-container-section="figure" id="figure-2" data-title="Behavioral assessment of the human ability to predict forthcoming words in a natural context."><figure><figcaption><b id="Fig2" class="c-article-section__figure-caption" data-test="figure-caption-text">Fig. 2: Behavioral assessment of the human ability to predict forthcoming words in a natural context.</b></figcaption><div class="c-article-section__figure-content"><div class="c-article-section__figure-item"><picture class="c-article-section__figure-picture"><source type="image/webp" srcset="//media.springernature.com/lw685/springer-static/image/art%3A10.1038%2Fs41593-022-01026-4/MediaObjects/41593_2022_1026_Fig2_HTML.png?as=webp"><img aria-describedby="figure-2-desc" src="//media.springernature.com/lw685/springer-static/image/art%3A10.1038%2Fs41593-022-01026-4/MediaObjects/41593_2022_1026_Fig2_HTML.png" alt="Fig. 2: Behavioral assessment of the human ability to predict forthcoming words in a natural context." loading="lazy" width="685" height="593"></picture><div class="c-article-section__figure-link"><a class="c-article__pill-button" data-test="article-link" data-track="click" data-track-label="button" data-track-action="view figure" href="/articles/s41593-022-01026-4/figures/2" data-track-dest="link:Figure2 Full size image" aria-label="Full size image figure 2" rel="nofollow"><span>Full size image</span><svg width="16" height="16" focusable="false" role="img" aria-hidden="true" class="u-icon"><use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#icon-eds-i-chevron-right-small"></use></svg></a></div></div><div class="c-article-section__figure-description" data-test="bottom-caption" id="figure-2-desc"><p><b>a</b>, The stimulus was transcribed for the behavioral experiment. <b>b</b>, A ten-word sliding window was presented in each trial, and participants were asked to type their prediction of the next word. Once entered, the correct word is presented, and the window slides forward by one word. <b>c</b>, For each word, we calculated the proportion of participants that predicted the forthcoming word correctly. <b>d</b>, Human predictability scores across words. <b>e</b>, Human predictability scores versus GPT-2’s predictability scores for each upcoming word in the podcast. <b>f</b>, Match between assigned probability for humans and GPT-2 and the actual accuracy for their top-one predictions. <b>g</b>, Correlation between human predictions and GPT-2 predictions (as reported in <b>d</b>) for different context window lengths ranging from 2 to 1,024 preceding tokens (blue). Correlation between human predictions and 2- to 5-gram model predictions (orange).</p></div></div></figure></div>
++<p>The constant engagement in next-word prediction before word onset is the bedrock objective of autoregressive DLMs<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Yang, Z. et al. XLNet: generalized autoregressive pretraining for language understanding. in Advances in Neural Information Processing Systems (eds. Wallach, H. et al.) 5753–5763 (Curran Associates, 2019)." href="#ref-CR6" id="ref-link-section-d72798114e940">6</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Radford, A., Narasimhan, K., Salimans, T. &amp; Sutskever, I. Improving language understanding by generative pre-training. OpenAI Blog (2018)." href="#ref-CR7" id="ref-link-section-d72798114e940_1">7</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Radford, A. et al. Language models are unsupervised multitask learners. OpenAI Blog (2019)." href="#ref-CR8" id="ref-link-section-d72798114e940_2">8</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 9" title="Rosset, C. Turing-nlg: A 17-billion-parameter language model by microsoft. Microsoft Blog (2019)." href="/articles/s41593-022-01026-4#ref-CR9" id="ref-link-section-d72798114e943">9</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 25" title="Lewis, M. et al. BART: denoising sequence-to-sequence pretraining for natural language generation, translation, and comprehension. Preprint at 
++                  https://arxiv.org/abs/1910.13461
++                  
++                 (2019)." href="/articles/s41593-022-01026-4#ref-CR25" id="ref-link-section-d72798114e946">25</a></sup>. Similarly, the claim that the brain is constantly engaged in predicting the incoming input is fundamental to numerous predictive coding theories<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Huang, Y. &amp; Rao, R. P. N. Predictive coding. Wiley Interdiscip. Rev. Cogn. Sci. 2, 580–593 (2011)." href="#ref-CR26" id="ref-link-section-d72798114e950">26</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Lupyan, G. &amp; Clark, A. Words and the world: predictive coding and the language–perception–cognition interface. Curr. Dir. Psychol. Sci. 24, 279–284 (2015)." href="#ref-CR27" id="ref-link-section-d72798114e950_1">27</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Barron, H. C., Auksztulewicz, R. &amp; Friston, K. Prediction and memory: a predictive coding account. Prog. Neurobiol. 192, 101821 (2020)." href="#ref-CR28" id="ref-link-section-d72798114e950_2">28</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Goldstein, A., Rivlin, I., Goldstein, A., Pertzov, Y. &amp; Hassin, R. R. Predictions from masked motion with and without obstacles. PLoS ONE 15, e0239839 (2020)." href="#ref-CR29" id="ref-link-section-d72798114e950_3">29</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 30" title="Clark, A. Whatever next? Predictive brains, situated agents, and the future of cognitive science. Behav. Brain Sci. 36, 181–204 (2013)." href="/articles/s41593-022-01026-4#ref-CR30" id="ref-link-section-d72798114e953">30</a></sup>. However, even after decades of research, behavioral and neural evidence for the brain’s propensity to predict upcoming words before they are perceived during natural language processing has remained indirect. On the behavioral level, the ability to predict upcoming words has typically been tested with highly controlled sentence stimuli (that is, the cloze procedure<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Taylor, W. L. ‘Cloze Procedure’: a new tool for measuring readability. Journal Q. 30, 415–433 (1953)." href="#ref-CR31" id="ref-link-section-d72798114e957">31</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" title="Kliegl, R., Nuthmann, A. &amp; Engbert, R. Tracking the mind during reading: the influence of past, present, and future words on fixation durations. J. Exp. Psychol. Gen. 135, 12–35 (2006)." href="#ref-CR32" id="ref-link-section-d72798114e957_1">32</a>,<a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 33" title="Laurinavichyute, A. K., Sekerina, I. A., Alexeeva, S., Bagdasaryan, K. &amp; Kliegl, R. Russian sentence corpus: benchmark measures of eye movements in reading in Russian. Behav. Res. Methods 51, 1161–1178 (2019)." href="/articles/s41593-022-01026-4#ref-CR33" id="ref-link-section-d72798114e960">33</a></sup>). Thus, we still do not know how accurate listeners’ predictions are in open-ended natural contexts. The first section of the paper provides new behavioral evidence that humans can predict forthcoming words in a natural context with remarkable accuracy, and that, given a sufficient context window, next-word predictions in humans and an autoregressive DLM (GPT-2)<sup><a data-track="click" data-track-action="reference anchor" data-track-label="link" data-test="citation-ref" aria-label="Reference 8" title="Radford, A. et al. Language models are unsupervised multitask learners. OpenAI Blog (2019)." href="/articles/s41593-022-01026-4#ref-CR8" id="ref-link-section-d72798114e964">8</a></sup> match. On the neuronal level, we provide new evidence that the brain is spontaneously engaged in next-word prediction before word onset during the processing of natural language. These findings provide the missing evidence that the brain, like autoregressive DLMs, is constantly involved in next-word prediction before word onset as it processes natural language (Fig. <a data-track="click" data-track-label="link" data-track-action="figure anchor" href="/articles/s41593-022-01026-4#Fig1">1</a>).</p>
++</div></div></section></div>
++</article>
++</body></html>
+diff --git a/tests/fixtures/figure-wrappers/substack.html b/tests/fixtures/figure-wrappers/substack.html
+new file mode 100644
+index 00000000..1b03f73f
+--- /dev/null
++++ b/tests/fixtures/figure-wrappers/substack.html
+@@ -0,0 +1,15 @@
++<!doctype html>
++<html lang="en"><head><meta charset="utf-8"><title>GPT-6 Astra, Looped Transformers, and Latent Reasoning</title></head>
++<body>
++<article>
++<h1>GPT-6 Astra, Looped Transformers, and Latent Reasoning</h1>
++<div class="available-content"><div class="body markup" dir="auto">
++<p>A lot has happened in the last few weeks. I am sure that OpenAI’s GPT-6 Astra is top of mind for everyone right now. In particular, thoughts on its performance, the looped transformer/recurrent depth aspects, and rumors that Astra is “hiding” its reasoning trace (i.e., chain of thought).</p>
++<div class="captioned-image-container"><figure><a target="_blank" href="https://substackcdn.com/image/fetch/$s_!J4zO!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png" data-component-name="Image2ToDOM" class="image-link image2 is-viewable-img can-restack"><div class="image2-inset"><picture><source type="image/webp" srcset="https://substackcdn.com/image/fetch/$s_!J4zO!,w_424,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 424w, https://substackcdn.com/image/fetch/$s_!J4zO!,w_848,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 848w, https://substackcdn.com/image/fetch/$s_!J4zO!,w_1272,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 1272w, https://substackcdn.com/image/fetch/$s_!J4zO!,w_1456,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 1456w" sizes="100vw"><img src="https://substackcdn.com/image/fetch/$s_!J4zO!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png" width="1456" height="1248" data-attrs="{&quot;src&quot;:&quot;https://substack-post-media.s3.amazonaws.com/public/images/c7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png&quot;,&quot;srcNoWatermark&quot;:null,&quot;fullscreen&quot;:null,&quot;imageSize&quot;:null,&quot;height&quot;:1248,&quot;width&quot;:1456,&quot;resizeWidth&quot;:null,&quot;bytes&quot;:null,&quot;alt&quot;:&quot;benchmarks-1&quot;,&quot;title&quot;:null,&quot;type&quot;:null,&quot;href&quot;:null,&quot;belowTheFold&quot;:true,&quot;topImage&quot;:false,&quot;internalRedirect&quot;:null,&quot;isProcessing&quot;:false,&quot;align&quot;:null,&quot;offset&quot;:false}" alt="benchmarks-1" title="benchmarks-1" srcset="https://substackcdn.com/image/fetch/$s_!J4zO!,w_424,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 424w, https://substackcdn.com/image/fetch/$s_!J4zO!,w_848,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 848w, https://substackcdn.com/image/fetch/$s_!J4zO!,w_1272,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 1272w, https://substackcdn.com/image/fetch/$s_!J4zO!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fc7647174-392d-4637-a1ab-baf3b24a3704_8765x7510.png 1456w" sizes="100vw" loading="lazy" class="sizing-normal"></picture><div class="image-link-expand"><div class="pencraft pc-display-flex pc-gap-8 pc-reset"><button tabindex="0" type="button" class="pencraft pc-reset pencraft icon-container restack-image buttonBase-GK1x3M"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke="var(--color-fg-primary)" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" class="icon-noB79L"><g><path d="M2.53001 7.81595C3.49179 4.73911 6.43281 2.5 9.91173 2.5C13.1684 2.5 15.9537 4.46214 17.0852 7.23684L17.6179 8.67647M17.6179 8.67647L18.5002 4.26471M17.6179 8.67647L13.6473 6.91176M17.4995 12.1841C16.5378 15.2609 13.5967 17.5 10.1178 17.5C6.86118 17.5 4.07589 15.5379 2.94432 12.7632L2.41165 11.3235M2.41165 11.3235L1.5293 15.7353M2.41165 11.3235L6.38224 13.0882"></path></g></svg></button><button tabindex="0" type="button" class="pencraft pc-reset pencraft icon-container view-image buttonBase-GK1x3M"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-maximize2 lucide-maximize-2 icon-noB79L"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" x2="14" y1="3" y2="10"></line><line x1="3" x2="10" y1="21" y2="14"></line></svg></button></div></div></div></a><figcaption class="image-caption"><span>Figure 1: Selection of three popular coding benchmarks and one challenging math benchmark. More benchmarks are shared on the Astra release blog: </span><a href="https://openai.com/index/gpt-6-astra/">https://openai.com/index/gpt-6-astra/</a></figcaption></figure></div>
++<p>So, in this article, I want to start with some brief impressions of Astra and some thoughts on where all this is headed. Then, I will discuss, in detail, what “looped transformers” are, and how (or rather, if) this relates to hiding chains of thought.</p>
++<div class="captioned-image-container"><figure><a target="_blank" href="https://substackcdn.com/image/fetch/$s_!W5FA!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png" data-component-name="Image2ToDOM" class="image-link image2 is-viewable-img can-restack"><div class="image2-inset"><picture><source type="image/webp" srcset="https://substackcdn.com/image/fetch/$s_!W5FA!,w_424,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 424w, https://substackcdn.com/image/fetch/$s_!W5FA!,w_848,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 848w, https://substackcdn.com/image/fetch/$s_!W5FA!,w_1272,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 1272w, https://substackcdn.com/image/fetch/$s_!W5FA!,w_1456,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 1456w" sizes="100vw"><img src="https://substackcdn.com/image/fetch/$s_!W5FA!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png" width="1456" height="925" data-attrs="{&quot;src&quot;:&quot;https://substack-post-media.s3.amazonaws.com/public/images/d02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png&quot;,&quot;srcNoWatermark&quot;:null,&quot;fullscreen&quot;:null,&quot;imageSize&quot;:null,&quot;height&quot;:925,&quot;width&quot;:1456,&quot;resizeWidth&quot;:null,&quot;bytes&quot;:null,&quot;alt&quot;:&quot;artificial-intelligence&quot;,&quot;title&quot;:null,&quot;type&quot;:null,&quot;href&quot;:null,&quot;belowTheFold&quot;:true,&quot;topImage&quot;:false,&quot;internalRedirect&quot;:null,&quot;isProcessing&quot;:false,&quot;align&quot;:null,&quot;offset&quot;:false}" alt="artificial-intelligence" title="artificial-intelligence" srcset="https://substackcdn.com/image/fetch/$s_!W5FA!,w_424,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 424w, https://substackcdn.com/image/fetch/$s_!W5FA!,w_848,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 848w, https://substackcdn.com/image/fetch/$s_!W5FA!,w_1272,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 1272w, https://substackcdn.com/image/fetch/$s_!W5FA!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd02ced21-56da-4b5b-a520-33f0a20567cf_8058x5120.png 1456w" sizes="100vw" loading="lazy" class="sizing-normal"></picture><div class="image-link-expand"><div class="pencraft pc-display-flex pc-gap-8 pc-reset"><button tabindex="0" type="button" class="pencraft pc-reset pencraft icon-container restack-image buttonBase-GK1x3M"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke="var(--color-fg-primary)" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" class="icon-noB79L"><g><path d="M2.53001 7.81595C3.49179 4.73911 6.43281 2.5 9.91173 2.5C13.1684 2.5 15.9537 4.46214 17.0852 7.23684L17.6179 8.67647M17.6179 8.67647L18.5002 4.26471M17.6179 8.67647L13.6473 6.91176M17.4995 12.1841C16.5378 15.2609 13.5967 17.5 10.1178 17.5C6.86118 17.5 4.07589 15.5379 2.94432 12.7632L2.41165 11.3235M2.41165 11.3235L1.5293 15.7353M2.41165 11.3235L6.38224 13.0882"></path></g></svg></button><button tabindex="0" type="button" class="pencraft pc-reset pencraft icon-container view-image buttonBase-GK1x3M"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-maximize2 lucide-maximize-2 icon-noB79L"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" x2="14" y1="3" y2="10"></line><line x1="3" x2="10" y1="21" y2="14"></line></svg></button></div></div></div></a><figcaption class="image-caption">Figure 2: Artificial Analysis Intelligence Index via https://artificialanalysis.ai/#intelligence </figcaption></figure></div>
++<p>Last week, OpenAI’s new GPT-6 Astra was released with a big fanfare. I used it over the past couple of days, and it’s an exceptionally good model, likely the best I’ve used as of this writing. But what, exactly, has it improved, and how?</p>
++<p>Astra is the best model I’ve used so far, and it’s disproportionately good at 3D rendering and animation tasks (relative to other models). With that, I mean that while it leapfrogs its GPT-5.6 predecessor in practically all categories (writing, math, coding, and more), it especially does so when it comes to graphical demos.</p>
++</div></div>
++</article>
++</body></html>

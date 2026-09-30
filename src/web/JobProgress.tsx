@@ -140,6 +140,7 @@ export function JobProgress({
   icon,
   runningLabel,
   about,
+  describedBy,
 }: {
   /** The job the queue says is running for this step, or null. */
   job: Job | null;
@@ -230,6 +231,13 @@ export function JobProgress({
    * `aria-label` at all, so the accessible name is the visible text.
    */
   about?: string;
+  /**
+   * The id of a sentence on the page that says what a press costs, set as
+   * `aria-describedby` on Run and Retry — a sibling `<span>` is not read to a
+   * reader who reaches the button by keyboard or by button list. Metadata's
+   * rerun rows are the one caller, for the Sketch, Debate and Trajectory notes.
+   */
+  describedBy?: string | undefined;
 }) {
   /**
    * A second while a job is on screen, a minute otherwise.
@@ -298,6 +306,7 @@ export function JobProgress({
           title="Run it again, skipping the stages that already worked"
           /* The visible word first, then what it is about — see `about`. */
           aria-label={about ? `Retry — ${about}` : undefined}
+          aria-describedby={describedBy}
           onClick={failed.retry ?? undefined}
         >
           <RotateCw size={13} />
@@ -316,6 +325,7 @@ export function JobProgress({
           variant="outline"
           size="sm"
           aria-label={about ? `${label} — ${about}` : undefined}
+          aria-describedby={describedBy}
           onClick={() => void onRun()}
         >
           {icon}

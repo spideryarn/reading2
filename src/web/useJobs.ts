@@ -166,7 +166,13 @@ export interface UseJobs {
    */
   reset(slug: string, regenerate: boolean): Promise<ResetResponse | null>;
   cancel(id: string): Promise<void>;
-  retry(id: string): Promise<void>;
+  /**
+   * The job the retry made — the route answers with it — or null on failure,
+   * with the server's sentence in `lastFailure()`. Returned so a caller can
+   * hold a *Starting…* over the gap until the new job is polled, as
+   * `useStepJob` does; without it the old failure's Retry stays pressable.
+   */
+  retry(id: string): Promise<Job | null>;
   forget(id: string): Promise<void>;
 }
 
@@ -399,9 +405,7 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
     cancel: async (id) => {
       await act(() => send(`/api/jobs/${id}/cancel`, { method: "POST" }));
     },
-    retry: async (id) => {
-      await act(() => send(`/api/jobs/${id}/retry`, { method: "POST" }));
-    },
+    retry: (id) => act(() => send<Job>(`/api/jobs/${id}/retry`, { method: "POST" })),
     forget: async (id) => {
       await act(() => send(`/api/jobs/${id}`, { method: "DELETE" }));
     },

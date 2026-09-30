@@ -1437,6 +1437,152 @@ const escapeHtml = (s: string) =>
  * the reader can see where the machine could not read the ink rather than
  * having to trust that it could — docs/plans/260826c-pdf-ingestion.md § the scan.
  */
+
+/**
+ * Printed among the prose without being part of it: a running footer, a DOI
+ * strip (`publisher`), and a footnote at the foot of the page. Not rendered, and
+ * a paragraph runs straight past it onto the next page.
+ */
+const PAGE_FURNITURE: ReadonlySet<RecordType> = new Set<RecordType>(["publisher", "footnote"]);
+/** What a layout drops into the middle of a paragraph: a figure, a table and its cells. */
+const FLOATS_AND_FURNITURE: ReadonlySet<RecordType> = new Set<RecordType>([
+  "figure",
+  "table",
+  "tabledata",
+  ...PAGE_FURNITURE,
+]);
+
+/** A sentence's end in any script, allowing closing punctuation and a footnote marker after it (`limits³.`, `problems.4, 5`). */
+const ENDS_A_SENTENCE = /(?:\p{Sentence_Terminal}|…)[\p{Pe}\p{Pf}"']*[\p{N}\s,*∗†‡]*$/u;
+
+/**
+ * May `record` carry on from `last`, with `between` printed in the middle?
+ *
+ * Nothing between: the same page or the next, as it always was — the model's
+ * `continues` is the whole of the evidence. **Something between**, all of it of
+ * an `allowed` type, needs two more things.
+ *
+ * - **The earlier half must visibly stop mid-sentence.** Past a figure or a
+ *   footer the model can be right that the record continues *a* flow and wrong
+ *   about *which*: on Baldassano et al. a boxed Significance Statement sits
+ *   between a sentence ending `(van Kesteren et al., 2010,` and its end on the
+ *   next page, and `2012; Robin and Moscovitch, 2017) …` would have been glued
+ *   onto the box's last paragraph, which ends in a full stop. Declining leaves
+ *   the split as it was before 2026-09-30; joining the wrong paragraph rewrites
+ *   one that was whole. A lower-case start is *not* enough on its own (GPT Sol,
+ *   plan review F2): it says the later half continues something, not that it
+ *   continues this.
+ * - **Page furniture is crossed only at a page turn.** On the same page, a line
+ *   that is not rendered sits between two things the model called one flow
+ *   because it could not tell them apart.
+ *
+ * And never further than the next page. A page wholly given to a figure was
+ * seen once in the survey (Krichmar, pp. 1–3), but "the records between fill
+ * the page" cannot tell a figure page from a page whose prose the model dropped,
+ * so that join is left for when there is page evidence to decide it (GPT Sol,
+ * plan review F4).
+ */
+function reaches(
+  last: PdfRecord,
+  record: PdfRecord,
+  between: readonly PdfRecord[],
+  allowed: ReadonlySet<RecordType>,
+): boolean {
+  if (record.page !== last.page && record.page !== last.page + 1) return false;
+  if (between.length === 0) return true;
+  if (!between.every((r) => allowed.has(r.type))) return false;
+  if (ENDS_A_SENTENCE.test(last.text.trimEnd())) return false;
+  if (record.page === last.page && between.some((r) => PAGE_FURNITURE.has(r.type))) return false;
+  return true;
+}
+
+/**
+ * **Which record each record carries on from** — the index of the record it is
+ * joined onto, or `null` for one that starts a block of its own. The one answer
+ * both `renderHtml` and `mendSeamHyphens` use, computed once by `runPdfExtract`
+ * and handed to both, because the second must only ever mend a boundary the
+ * first is going to join; they used to keep a copy of the cursor each, and one
+ * direction of that agreement was never tested.
+ *
+ * Only a record the model marked `continues` is ever joined, onto the last
+ * piece of what it continues:
+ *
+ * 1. **the rendered record just before it**, of the same type, with nothing in
+ *    between — or only page furniture, at a page turn;
+ * 2. failing that, for a paragraph, **the last paragraph before a figure or
+ *    table**, when only figures, tables and page furniture lie between.
+ *
+ * Both were measured on production on 2026-09-30, and in every case the model
+ * had already said `continues`: 25 paragraphs cut in two by a figure placed
+ * mid-paragraph, in 6 of 7 papers re-read, and 47 cut at a page turn by a
+ * running footer or a footnote. The reader got half a sentence, the figure, and
+ * a paragraph starting in lower case. Only paragraphs reach back past a figure:
+ * that is the evidence, and a list item doing it would split one list into two
+ * around the figure (GPT Sol, plan review F5).
+ * docs/plans/260930e-pdf-transcription-glitches.md.
+ *
+ * `barriers` are the records the front-matter pass set aside. They arrive typed
+ * `publisher` like a running footer, but the model's `continues` on the record
+ * after one was about *that* record — `Available online 26 January 2024` above
+ * the Kuhn paper's first paragraph — so reaching past it would join the
+ * paragraph onto whatever came before, the author's name. They end every flow
+ * (GPT Sol, plan review F1).
+ *
+ * Anything else ends the flow too: a heading, a `reference` or `cover` record,
+ * a change of type, a page gap. An empty record is skipped, as `renderHtml`
+ * skips it.
+ */
+export function continuationTargets(
+  records: readonly PdfRecord[],
+  barriers: ReadonlySet<number> = new Set(),
+): (number | null)[] {
+  const targets: (number | null)[] = records.map(() => null);
+  /* The last piece of the last rendered block, and what has come since. */
+  let previous: number | null = null;
+  let sincePrevious: PdfRecord[] = [];
+  /* The last piece of the last paragraph, and what has come since. */
+  let prose: number | null = null;
+  let sinceProse: PdfRecord[] = [];
+
+  for (const [i, record] of records.entries()) {
+    if (barriers.has(i)) {
+      previous = prose = null;
+      sincePrevious = [];
+      sinceProse = [];
+      continue;
+    }
+    const rendered = RENDERED.has(record.type);
+    if (rendered && !record.text.trim()) continue;
+    if (!rendered) {
+      sincePrevious.push(record);
+      sinceProse.push(record);
+      continue;
+    }
+    if (record.continues) {
+      const last = previous === null ? null : records[previous]!;
+      const paragraph = prose === null ? null : records[prose]!;
+      if (last && last.type === record.type && reaches(last, record, sincePrevious, PAGE_FURNITURE)) {
+        targets[i] = previous;
+      } else if (
+        paragraph &&
+        record.type === "paragraph" &&
+        reaches(paragraph, record, sinceProse, FLOATS_AND_FURNITURE)
+      ) {
+        targets[i] = prose;
+      }
+    }
+    previous = i;
+    sincePrevious = [];
+    if (record.type === "paragraph") {
+      prose = i;
+      sinceProse = [];
+    } else {
+      sinceProse.push(record);
+    }
+  }
+  return targets;
+}
+
 /** A line that breaks a word: a letter, then a hyphen, then the line ends. */
 const BREAKS_A_WORD = /\p{L}[-‐­]$/u;
 /** The first run of letters in a string — a word, ignoring anything around it. */
@@ -1538,25 +1684,23 @@ function opensWith(pass: Pass0, page: number, head: string): boolean {
  * `where` on the next). Repairing first would make a correct transcription look
  * like an invented word on one page and a missing one on the other.
  */
-export function mendSeamHyphens(records: PdfRecord[], pass: Pass0): PdfRecord[] {
+export function mendSeamHyphens(
+  records: PdfRecord[],
+  pass: Pass0,
+  targets: readonly (number | null)[] = continuationTargets(records),
+): PdfRecord[] {
   const out = records.map((r) => ({ ...r }));
-  /* Mirrors renderHtml's own cursor, so this only ever repairs a boundary
-     renderHtml is actually going to join: reset by a record it does not render,
-     and skipping one with no text. All three of renderHtml's join conditions —
-     `continues`, the same type, and nothing unrendered in between — are checked
-     below, each with a test that fires when it is removed. */
-  let previous: PdfRecord | null = null;
+  /* renderHtml's own answer to "what does this record carry on from", so this
+     only ever repairs a boundary renderHtml is actually going to join — past a
+     running footer or a figure included. `runPdfExtract` computes it once, over
+     the records before any text here changes, and hands the same vector to
+     both; a record this loop empties is one the render then skips, and it
+     cannot anchor a later repair either (below). */
 
-  for (const record of out) {
-    if (!RENDERED.has(record.type)) {
-      previous = null;
-      continue;
-    }
-    if (!record.text.trim()) continue;
-    const prev: PdfRecord | null = previous;
-    previous = record;
-    if (!prev) continue;
-    if (!record.continues || record.type !== prev.type) continue;
+  for (const [i, record] of out.entries()) {
+    const target = targets[i];
+    if (target === null || target === undefined) continue;
+    const prev = out[target]!;
     if (record.page !== prev.page + 1) continue;
 
     /* The model is told to mend hyphenation, but it is not always obeyed, and a
@@ -1627,40 +1771,56 @@ export function mendSeamHyphens(records: PdfRecord[], pass: Pass0): PdfRecord[] 
  * oversight; giving those a media block of their own is a separate decision.
  * GPT Sol, I-3.
  */
-export function renderHtml(records: PdfRecord[], title: string, rawSha256: string): string {
+export function renderHtml(
+  records: PdfRecord[],
+  title: string,
+  rawSha256: string,
+  targets: readonly (number | null)[] = continuationTargets(records),
+): string {
+  /* **Whole blocks first, HTML second.** A continuation's text is added to its
+     block before anything is written, so a caption continued onto the next page
+     is inside its `<figcaption>` and the figure's ref is minted from the whole
+     caption — appending to the finished HTML put the second half after
+     `</figcaption>`, where asset collection never reads it, and hashed half a
+     caption (GPT Sol, plan review of 260930e, F3). A block keeps the place of
+     its first piece, so a paragraph a figure interrupted comes out whole, before
+     the figure. */
+  const blocks: { record: PdfRecord; text: string; uncertain: boolean }[] = [];
+  const blockOf = new Map<number, number>();
+  for (const [i, record] of records.entries()) {
+    if (!RENDERED.has(record.type)) continue;
+    const target = targets[i];
+    const into = target === null || target === undefined ? undefined : blockOf.get(target);
+    const text = record.text.trim();
+    if (!text) {
+      /* A seam repair can consume a one-word continuation. Keep its place in
+         the precomputed target chain so the following piece still reaches the
+         block (`or` + `ange` + `sphere …`), exactly as it did when rendering
+         recomputed its cursor after mending. */
+      if (into !== undefined) blockOf.set(i, into);
+      continue;
+    }
+    if (into !== undefined) {
+      /* Join, with a space — the model was told to mend hyphenation itself, so
+         what arrives here is two halves of a sentence, not two halves of a word. */
+      const block = blocks[into]!;
+      block.text = `${block.text} ${text}`;
+      block.uncertain ||= record.uncertain;
+      blockOf.set(i, into);
+      continue;
+    }
+    blockOf.set(i, blocks.length);
+    blocks.push({ record, text, uncertain: record.uncertain });
+  }
+
   const parts: string[] = [];
   let list: "ul" | null = null;
-  let previous: { type: RecordType; index: number; lastPage: number } | null = null;
   /* Per page, and counted over the figures actually **emitted** — a record
      joined onto the one before it by `continues` is not a new figure, and a
      record skipped for having no text never had one. The ordinal is an input to
      the ref, so it has to mean the same thing here and in the manifest. */
   const ordinals = new Map<number, number>();
-
-  for (const record of records) {
-    if (!RENDERED.has(record.type)) {
-      previous = null;
-      continue;
-    }
-    const text = record.text.trim();
-    if (!text) continue;
-
-    if (
-      record.continues &&
-      previous &&
-      previous.type === record.type &&
-      (record.page === previous.lastPage || record.page === previous.lastPage + 1)
-    ) {
-      /* Join, with a space — the model was told to mend hyphenation itself, so
-         what arrives here is two halves of a sentence, not two halves of a word. */
-      parts[previous.index] = parts[previous.index]!.replace(
-        /(<\/[a-z]+>)$/,
-        ` ${escapeHtml(text)}$1`,
-      );
-      previous.lastPage = record.page;
-      continue;
-    }
-
+  for (const { record, text, uncertain } of blocks) {
     if (record.type === "listitem" && !list) {
       parts.push("<ul>");
       list = "ul";
@@ -1670,12 +1830,11 @@ export function renderHtml(records: PdfRecord[], title: string, rawSha256: strin
     }
 
     const tag = ELEMENT[record.type];
-    const cls = record.uncertain ? ' class="pdf-uncertain"' : "";
+    const cls = uncertain ? ' class="pdf-uncertain"' : "";
     const html =
       record.type === "figure" || record.type === "table"
         ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}><figcaption>${escapeHtml(text)}</figcaption></figure>`
         : `<${tag}${cls}>${escapeHtml(text)}</${tag}>`;
-    previous = { type: record.type, index: parts.length, lastPage: record.page };
     parts.push(html);
   }
   if (list) parts.push("</ul>");
@@ -1983,28 +2142,37 @@ async function frontMatterOrNothing(
 /**
  * The authors pass, degrading exactly as the front-matter pass does: any
  * failure but an abort is logged and leaves the byline as the records' text.
- * A refusal by the provenance check is not a failure — it comes back as a note
- * for the Metadata page, like the front-matter pass's own. Plan 260929d § 3.
+ * A refusal by the provenance check is not a failure — it comes back as a stage
+ * note, like the front-matter pass's own. Those notes reach the log and are not
+ * persisted. Plans 260929d § 3 and 260930e § Stage 2.
  */
 async function authorsOrNothing(
   records: PdfRecord[],
   front: FrontMatterDecision | null,
   opts: PdfExtractOptions,
-): Promise<{ authors: Author[] | null; note: string | null; usage: { input: number; output: number } }> {
+): Promise<{
+  authors: Author[] | null;
+  /** The names alone, when every name verified and an affiliation did not (260930e § Stage 2). */
+  names: string[] | null;
+  note: string | null;
+  usage: { input: number; output: number };
+}> {
   const reader = opts.authors;
   if (!reader || !front || front.bylineIds.length === 0) {
-    return { authors: null, note: null, usage: { input: 0, output: 0 } };
+    return { authors: null, names: null, note: null, usage: { input: 0, output: 0 } };
   }
   try {
     const verdict = await readAuthors(frontMatterWindow(records), front.bylineIds, reader, opts.signal);
-    return { authors: verdict.authors, note: verdict.authors ? null : verdict.note, usage: reader.usage() };
+    if (verdict.authors) return { authors: verdict.authors, names: null, note: null, usage: reader.usage() };
+    const names = "names" in verdict ? verdict.names : null;
+    return { authors: null, names, note: verdict.note, usage: reader.usage() };
   } catch (err) {
     if (opts.signal?.aborted) throw err;
     log("pipeline").warn(
       { slug: opts.slug, step: "extract", ...errorFields(err) },
       `extract ${opts.slug}: the authors pass was no help; keeping the byline as printed`,
     );
-    return { authors: null, note: null, usage: reader.usage() };
+    return { authors: null, names: null, note: null, usage: reader.usage() };
   }
 }
 
@@ -2801,12 +2969,17 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   if (front?.notes.length) notes.push(...front.notes);
   /* Over the same records the front-matter pass saw, so its byline ids mean
      the same records here. */
-  const { authors, note: authorsNote, usage: authorsUsage } = await authorsOrNothing(all, front, opts);
+  const { authors, names: authorNames, note: authorsNote, usage: authorsUsage } = await authorsOrNothing(all, front, opts);
   if (authorsNote) notes.push(authorsNote);
   /* After the scoring loop above, and it has to be: the baseline still has the
      word in two halves, so repairing before measuring would read as an invented
      word on one page and a missing one on the next. See mendSeamHyphens. */
-  const mended = mendSeamHyphens(presented, pass);
+  /* Computed once, before mending, and handed to both: the mend must repair
+     exactly the boundaries the render joins, and recomputing after the mend has
+     changed text could answer differently. The records the front-matter pass
+     set aside are barriers — their `publisher` type is ours, not the model's. */
+  const targets = continuationTargets(presented, new Set(front?.setAside ?? []));
+  const mended = mendSeamHyphens(presented, pass, targets);
   /* Rung 4 of the ladder wants **a name**, and the two origins spell one
      differently: an uploaded file has the reader's own filename, and a fetched
      one has the last segment of its URL. Worked out here rather than inside
@@ -2854,11 +3027,15 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
        — and the byline records' text otherwise, as before plan 260929d. The
        names are the page's own characters with the markers trimmed, and the
        check admits no `$` or `\`, so `plainMaths` has nothing to do to them. */
+    /* And **the names alone when only an affiliation failed**: the same
+       page-checked, marker-trimmed names, with no list stored (260930e § Stage 2). */
     ...(authors
       ? { byline: authors.map((a) => a.name).join("; "), authors }
-      : front?.byline
-        ? { byline: plainMaths(front.byline) }
-        : {}),
+      : authorNames
+        ? { byline: authorNames.join("; ") }
+        : front?.byline
+          ? { byline: plainMaths(front.byline) }
+          : {}),
     ...(opts.url ? { url: opts.url } : {}),
     fetchedAt: new Date().toISOString(),
     source: "pdf",
@@ -2878,7 +3055,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
        matching wrongly. It is the same value `meta.rawSha256` above carries and
        the same one `storeRawSource` puts the document under, computed once at
        the top of this function. src/pdf-figures.ts § `pdfFigureRef`. */
-    extractedHtml: renderHtml(mended, title, rawSha256),
+    extractedHtml: renderHtml(mended, title, rawSha256, targets),
     meta,
     pages: pass.pages.length,
     chunks: chunks.length,
