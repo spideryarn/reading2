@@ -418,3 +418,29 @@ Seen in the browser check:
   Sol confirmed that C1 and C2 are right and that server and client agree. Discovery is closed
   after two rounds.
 
+
+## Landed
+
+On `dev` at `7baa1d15`, 2026-09-30. Not deployed; only the Overseer deploys.
+
+- **The migration was rebuilt at the merge.** `origin/dev` had landed
+  `20260930102351_ai_calls_article_index` with a later stamp than this branch's unpublished
+  `20260930100840_crossrefs`. Drizzle skips an entry stamped below its watermark, so that
+  combination would have silently never applied one of the two. The crossrefs migration was
+  regenerated as `20260930122442_crossrefs`, with the same DDL, per
+  [database.md § Repairing a fork](../project/database.md#repairing-a-fork-what-the-losing-migration-is-decides-everything).
+- **The shared local database had the old migration applied**, which raised its watermark above
+  trunk's index. Its ledger row and the `crossrefs` column were removed; both were this session's
+  own. `db:migrate` then applied both migrations in order, and `db:check` reports no drift. The
+  local crossrefs generated during stages 1 and 2 went with the column. **Production has neither
+  migration from this branch applied**; the deploy applies `20260930122442_crossrefs`.
+- **Two merge artefacts were fixed.**
+  - The route-contract canaries: both sides had bumped them, so they now read 78 and 95.
+  - `tests/add-page-purpose.test.tsx`, from trunk, expected `autoModeRequests()` order, which is no
+    longer the posting order. The posting order is now one exported `autoModePosts()`.
+- **The full suite** (build, then `npm test`) had 4 red files, all accounted for:
+  - `add-page-purpose`: fixed, as above.
+  - The three `fleet-*` files: the fresh worktree had no fleet client build. They passed after
+    `npm run build:fleet`.
+- **The feedback note has no `reports:` header.** The feedback row id was not in the brief, and
+  the production read to find it was refused. The next sweep adds it.
