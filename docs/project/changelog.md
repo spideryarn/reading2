@@ -55,8 +55,10 @@ One append-only NDJSON file, **`src/web/changelog-versions.ndjson`**, one line p
 first. NDJSON because the job only ever appends: a run adds lines to the end and never rewrites what
 is above, so two runs cannot lose each other's work and a diff shows exactly what a run decided.
 
-**The watermark is the last line's `sha`.** "Since the last time it was run" needs no separate state
-file: enumerate the production deploys, drop the ones whose sha already has a line, do the rest.
+**The watermark is the last line's `deployment_id`.** "Since the last time it was run" needs no
+separate state file: enumerate the production deploys, find the one the last line names, and do the
+ones after it. It is the deployment id rather than the sha because the same sha can be deployed twice
+(2026-08-27 shipped `903b33e6` twice), and keying on the sha would swallow the second.
 
 ```jsonc
 {
