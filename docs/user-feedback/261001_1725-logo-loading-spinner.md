@@ -16,7 +16,7 @@ event, which had no recorded event id), sent from a reading view at
 >
 > Update loading-spinner.md and signpost to it.
 
-**Ending: Shipped.** On `dev`, not deployed. Resolve 8Y.
+**Ending: Shipped.** On `dev` in `7e8f28739`, `809864cad` and `d6cd145f9` (merged at `d7d5dcf2f`), not deployed. Resolve 8Y.
 
 ## What we did
 
