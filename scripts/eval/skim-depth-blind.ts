@@ -3,9 +3,9 @@
  * ADDS bring detail, subtlety or complexity, rather than a second telling of
  * the pass before?
  *
- *     npx tsx scripts/eval/trajectory-depth-blind.ts <results.json>
+ *     npx tsx scripts/eval/skim-depth-blind.ts <results.json>
  *
- * Reads a results file from scripts/eval/trajectory-coverage-eval.ts and
+ * Reads a results file from scripts/eval/skim-coverage-eval.ts and
  * writes two pairs of files beside it, with nothing in a pairs file that
  * names an arm:
  *
@@ -42,7 +42,7 @@ interface Run {
 }
 
 const file = process.argv[2];
-if (!file) throw new Error("usage: trajectory-depth-blind.ts <results.json>");
+if (!file) throw new Error("usage: skim-depth-blind.ts <results.json>");
 const { results } = JSON.parse(readFileSync(file, "utf8")) as { results: Run[] };
 const base = file.replace(/\.json$/, "");
 

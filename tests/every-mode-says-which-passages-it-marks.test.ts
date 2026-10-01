@@ -68,7 +68,7 @@ const SLOTS: PassageSlots = {
   timeline: { found: [passage("timeline")], openKey: "timeline-open" },
   referee: { found: [passage("referee")], openKey: "referee-open" },
   search: { found: [passage("search")], openKey: "search-open" },
-  trajectory: { found: [passage("trajectory")], openKey: "trajectory-open" },
+  skim: { found: [passage("skim")], openKey: "skim-open" },
 };
 
 /** The mode each slot belongs to. Its keys are the five producer modes. */
@@ -80,7 +80,7 @@ const PRODUCERS = {
   search: "search",
   /* 2026-09-28: the stop the reader is standing on — one quote's passage —
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § Prose. */
-  trajectory: "trajectory",
+  skim: "skim",
 } as const satisfies Record<string, keyof PassageSlots>;
 
 /**

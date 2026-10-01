@@ -1,11 +1,11 @@
 /**
- * **How much of an article Trajectory's route actually touches**, at each of
+ * **How much of an article Skim's route actually touches**, at each of
  * its three depths — Gist, More, Most. Reads only; writes nothing.
  *
- *     npx tsx scripts/trajectory-coverage.ts <slug> [<slug>…] [--json]
+ *     npx tsx scripts/skim-coverage.ts <slug> [<slug>…] [--json]
  *
  * docs/plans/260928a-trajectory-mode-stage6-coverage-baseline.md is the
- * baseline this produced. docs/project/trajectory.md is the vision;
+ * baseline this produced. docs/project/skim.md is the vision;
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md is the
  * build; docs/plans/260928a-trajectory-mode-stage1-real-runs.md is the first,
  * hand-written measurement this script replaces with something re-runnable.
@@ -42,8 +42,8 @@
  * excluded from both the numerator and the denominator of section coverage —
  * there is nothing there a stop could cover.
  *
- * **Quotes-per-top-level-section is the coverage ceiling**, not a Trajectory
- * number: Trajectory's stops are a subset of Quotes (docs/project/trajectory.md
+ * **Quotes-per-top-level-section is the coverage ceiling**, not a Skim
+ * number: Skim's stops are a subset of Quotes (docs/project/skim.md
  * § One set of highlights, not another), so a section with zero quotes can
  * never get a stop at any depth, however deep Most goes.
  *
@@ -51,7 +51,7 @@
  *
  * Through `pgArticleReader` (src/store/pg.ts), the same adapter the reading
  * view itself calls — `loadArticle` for blocks and tree, `loadIdeas`,
- * `loadQuotes`, `loadTrajectory`. Each of the latter three throws (`status:
+ * `loadQuotes`, `loadSkim`. Each of the latter three throws (`status:
  * 404`) when the article has none, and this script lets that propagate rather
  * than printing zeros: a missing artefact is a reason to stop, not a reason to
  * report "0% coverage" for a route that was never built (CLAUDE.md's rule
@@ -66,11 +66,11 @@ const { closeDb } = await import("../src/db/client.js");
 const { pgArticleReader } = await import("../src/store/pg.js");
 const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
 const { blockIndex } = await import("../src/section-path.js");
-const { PROMPT_VERSION: TRAJECTORY_PROMPT_VERSION } = await import("../src/trajectory.js");
+const { PROMPT_VERSION: SKIM_PROMPT_VERSION } = await import("../src/skim.js");
 
-import type { Article, Block, Idea, Quote, Trajectory, TrajectoryDepth, TreeNode } from "../src/types.js";
+import type { Article, Block, Idea, Quote, Skim, SkimDepth, TreeNode } from "../src/types.js";
 
-const DEPTHS: readonly TrajectoryDepth[] = [1, 2, 3];
+const DEPTHS: readonly SkimDepth[] = [1, 2, 3];
 
 function die(message: string): never {
   console.error(`\n${message}\n`);
@@ -114,14 +114,14 @@ function bodyWordsTotal(blocks: readonly Block[]): number {
 
 /** Unique block ids the stops visible at depth `d` sit on, route order preserved. */
 function stopBlocksAtDepth(
-  trajectory: Trajectory,
+  skim: Skim,
   quoteBlockOf: ReadonlyMap<string, string>,
-  depth: TrajectoryDepth,
+  depth: SkimDepth,
 ): { blockIds: string[]; unresolved: number } {
   const blockIds: string[] = [];
   const seen = new Set<string>();
   let unresolved = 0;
-  for (const stop of trajectory.stops) {
+  for (const stop of skim.stops) {
     if (stop.depth > depth) continue;
     const blockId = quoteBlockOf.get(stop.quoteId);
     if (!blockId) {
@@ -174,7 +174,7 @@ function pct(n: number, d: number): string {
 /* -------------------------------------------------------------- reporting -- */
 
 interface DepthRow {
-  depth: TrajectoryDepth;
+  depth: SkimDepth;
   stops: number;
   words: number;
   wordsPct: number;
@@ -194,9 +194,9 @@ interface ArticleReport {
   sectionsWithBodyWords: number;
   ideasCount: number;
   quotesCount: number;
-  trajectoryVersion: string;
-  trajectoryOutdated: boolean;
-  trajectoryStale: boolean;
+  skimVersion: string;
+  skimOutdated: boolean;
+  skimStale: boolean;
   ideasStale: boolean;
   ideasOutdated: boolean;
   rows: DepthRow[];
@@ -208,7 +208,7 @@ async function measure(slug: string): Promise<ArticleReport> {
   const article = await pgArticleReader.loadArticle(slug);
   const ideasFound = await pgArticleReader.loadIdeas(slug);
   const quotesFound = await pgArticleReader.loadQuotes(slug);
-  const trajectoryFound = await pgArticleReader.loadTrajectory(slug);
+  const skimFound = await pgArticleReader.loadSkim(slug);
 
   const idx = blockIndex(article.blocks);
   const sections = topLevelSections(article, idx);
@@ -231,7 +231,7 @@ async function measure(slug: string): Promise<ArticleReport> {
   const sectionsWithNoQuote = quotesPerSection.filter((s) => s.quotes === 0).length;
 
   const rows: DepthRow[] = DEPTHS.map((depth) => {
-    const { blockIds, unresolved } = stopBlocksAtDepth(trajectoryFound.trajectory, quoteBlockOf, depth);
+    const { blockIds, unresolved } = stopBlocksAtDepth(skimFound.skim, quoteBlockOf, depth);
     const stopIdx = blockIds.map((id) => idx.get(id)).filter((n): n is number => n !== undefined);
     const words = blockIds.reduce((sum, id) => sum + (wordsOfBlock.get(id) ?? 0), 0);
     const coverage = ideaCoverage(ideasFound.ideas.ideas, stopIdx, idx);
@@ -260,9 +260,9 @@ async function measure(slug: string): Promise<ArticleReport> {
     sectionsWithBodyWords: sectionsWithWords.length,
     ideasCount: ideasFound.ideas.ideas.length,
     quotesCount: quotesFound.quotes.quotes.length,
-    trajectoryVersion: trajectoryFound.trajectory.version,
-    trajectoryOutdated: trajectoryFound.outdated,
-    trajectoryStale: trajectoryFound.stale,
+    skimVersion: skimFound.skim.version,
+    skimOutdated: skimFound.outdated,
+    skimStale: skimFound.stale,
     ideasStale: ideasFound.stale,
     ideasOutdated: ideasFound.outdated,
     rows,
@@ -280,8 +280,8 @@ function printReport(r: ArticleReport): void {
   console.log(
     `Ideas: ${r.ideasCount}${r.ideasStale ? " (STALE)" : ""}${r.ideasOutdated ? " (outdated)" : ""}   ` +
       `Quotes: ${r.quotesCount}   ` +
-      `Trajectory: ${r.trajectoryVersion} (current ${TRAJECTORY_PROMPT_VERSION})` +
-      `${r.trajectoryOutdated ? " (OUTDATED)" : ""}${r.trajectoryStale ? " (STALE)" : ""}`,
+      `Skim: ${r.skimVersion} (current ${SKIM_PROMPT_VERSION})` +
+      `${r.skimOutdated ? " (OUTDATED)" : ""}${r.skimStale ? " (STALE)" : ""}`,
   );
   console.log(
     "\nDepth | Stops | Words      | %Body  | Ideas in | Ideas in/next | Sections w/stop | of sections w/words",
@@ -317,9 +317,9 @@ const slugs = args.filter((a) => !a.startsWith("--"));
 
 if (slugs.length === 0) {
   die(
-    "Usage: npx tsx scripts/trajectory-coverage.ts <slug> [<slug>…] [--json]\n" +
-      "  Reads Ideas, Quotes and Trajectory off the local database for each article\n" +
-      "  and reports how much of it Trajectory's route covers at each depth. Writes nothing.",
+    "Usage: npx tsx scripts/skim-coverage.ts <slug> [<slug>…] [--json]\n" +
+      "  Reads Ideas, Quotes and Skim off the local database for each article\n" +
+      "  and reports how much of it Skim's route covers at each depth. Writes nothing.",
   );
 }
 
@@ -349,7 +349,7 @@ async function main(): Promise<void> {
   if (hadError) {
     console.error(
       "\nAt least one article could not be measured — see the message(s) above. " +
-        "A missing Ideas or Trajectory artefact is not reported as zero coverage.",
+        "A missing Ideas or Skim artefact is not reported as zero coverage.",
     );
   }
   process.exitCode = hadError ? 1 : 0;

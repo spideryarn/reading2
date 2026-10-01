@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **A read hook reads, and that is all it does** — `useIdeasRead`, `useFaqRead`
- * and `useTimelineRead`, split out of their mode hooks for Trajectory's stop
+ * and `useTimelineRead`, split out of their mode hooks for Skim's stop
  * card (Sol F22, docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Revised after GPT Sol's stage-3 plan review).
  *

@@ -1,10 +1,10 @@
 /**
- * **The route's freshness, read from Postgres** — `loadTrajectory` in
+ * **The route's freshness, read from Postgres** — `loadSkim` in
  * src/store/pg.ts, which since stage 6 of plan 260928a judges a route against
- * `trajectoryInputHash` over the `quotes` and `ideas` columns and the tree
+ * `skimInputHash` over the `quotes` and `ideas` columns and the tree
  * beside it, not against the Quotes alone.
  *
- * The pipeline's stamp is pinned in tests/trajectory.test.ts; this is the read
+ * The pipeline's stamp is pinned in tests/skim.test.ts; this is the read
  * path, which computes the same hash from different reads (the revision's
  * columns and its blocks rows). If the two disagree, the band says a route is
  * stale that the job would skip as current, or the other way round — so this
@@ -19,25 +19,25 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { hashBlocks } from "../src/source-hash.js";
-import { loadTrajectory } from "../src/store/index.js";
+import { loadSkim } from "../src/store/index.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import { PIPELINE_RUN } from "../src/store/artifacts.js";
 import {
   emptyDrops,
   PROMPT_VERSION,
-  trajectoryInput,
-  trajectoryInputHash,
-} from "../src/trajectory.js";
-import type { Block, Ideas, Quotes, Trajectory, Tree } from "../src/types.js";
+  skimInput,
+  skimInputHash,
+} from "../src/skim.js";
+import type { Block, Ideas, Quotes, Skim, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
 /* Its own slug: two suites sharing an article would see each other's revisions. */
-const SLUG = "test-trajectory-freshness";
+const SLUG = "test-skim-freshness";
 
 await pgReady({
-  suite: "tests/trajectory-freshness-pg.test.ts",
+  suite: "tests/skim-freshness-pg.test.ts",
   tables: ["spideryarn.article_revisions"],
 });
 
@@ -73,7 +73,7 @@ const TREE = {
       children: ["n1", "n2"],
       range: [BLOCKS[0]!.id, BLOCKS[2]!.id],
       title: "A fixture article",
-      gist: "A fixture built by tests/trajectory-freshness-pg.test.ts and nothing else.",
+      gist: "A fixture built by tests/skim-freshness-pg.test.ts and nothing else.",
     },
     n1: {
       id: "n1",
@@ -143,13 +143,13 @@ function ideas(statement: string): Ideas {
 }
 
 /** A route stamped exactly as the stage would stamp it over these inputs. */
-function route(withIdeas: Ideas | null, version = PROMPT_VERSION): Trajectory {
+function route(withIdeas: Ideas | null, version = PROMPT_VERSION): Skim {
   return {
     version,
     generator: "fixture",
     slug: SLUG,
-    sourceHash: trajectoryInputHash(
-      trajectoryInput({ quotes: QUOTES, blocks: BLOCKS, tree: TREE, ideas: withIdeas }),
+    sourceHash: skimInputHash(
+      skimInput({ quotes: QUOTES, blocks: BLOCKS, tree: TREE, ideas: withIdeas }),
     ),
     profileHash: null,
     stops: [{ quoteId: "spya-tfq2bc", depth: 1, role: null, cue: "What is the claim?" }],
@@ -163,11 +163,11 @@ function route(withIdeas: Ideas | null, version = PROMPT_VERSION): Trajectory {
 
 let revisionId = "";
 
-async function setColumns(values: { ideas?: Ideas | null; trajectory?: Trajectory; tree?: Tree }): Promise<void> {
+async function setColumns(values: { ideas?: Ideas | null; skim?: Skim; tree?: Tree }): Promise<void> {
   await getDb().update(articleRevisions).set(values).where(eq(articleRevisions.id, revisionId));
 }
 
-describe("loadTrajectory, judged on what the route's prompt rendered", () => {
+describe("loadSkim, judged on what the route's prompt rendered", () => {
   beforeAll(async () => {
     const begun = await beginRevision({ slug: SLUG });
     revisionId = begun.revisionId;
@@ -196,7 +196,7 @@ describe("loadTrajectory, judged on what the route's prompt rendered", () => {
     const first = ideas("A claim, stated plainly.");
     await db
       .update(articleRevisions)
-      .set({ title: "A fixture article", tree: TREE, quotes: QUOTES, ideas: first, trajectory: route(first) })
+      .set({ title: "A fixture article", tree: TREE, quotes: QUOTES, ideas: first, skim: route(first) })
       .where(eq(articleRevisions.id, revisionId));
     await recordStepRun({
       revisionId,
@@ -222,27 +222,27 @@ describe("loadTrajectory, judged on what the route's prompt rendered", () => {
   });
 
   it("calls a route current against the inputs it was stamped with — the control", async () => {
-    const found = await loadTrajectory(SLUG);
+    const found = await loadSkim(SLUG);
     expect(found.stale).toBe(false);
     expect(found.outdated).toBe(false);
   });
 
   it("calls it stale once the Ideas are found again, worded differently", async () => {
     await setColumns({ ideas: ideas("The same claim, found again in other words.") });
-    expect((await loadTrajectory(SLUG)).stale).toBe(true);
+    expect((await loadSkim(SLUG)).stale).toBe(true);
   });
 
   it("calls a route planned without Ideas stale once Ideas exist, and current before", async () => {
-    await setColumns({ ideas: null, trajectory: route(null) });
-    expect((await loadTrajectory(SLUG)).stale).toBe(false);
+    await setColumns({ ideas: null, skim: route(null) });
+    expect((await loadSkim(SLUG)).stale).toBe(false);
     await setColumns({ ideas: ideas("A claim, stated plainly.") });
-    expect((await loadTrajectory(SLUG)).stale).toBe(true);
+    expect((await loadSkim(SLUG)).stale).toBe(true);
   });
 
   it("reports a route from an older prompt as outdated, not as changed Quotes", async () => {
     const now = ideas("A claim, stated plainly.");
-    await setColumns({ ideas: now, trajectory: { ...route(now, "trajectory/6"), sourceHash: "old-quotes-hash" } });
-    const found = await loadTrajectory(SLUG);
+    await setColumns({ ideas: now, skim: { ...route(now, "trajectory/6"), sourceHash: "old-quotes-hash" } });
+    const found = await loadSkim(SLUG);
     expect(found.outdated).toBe(true);
     expect(found.stale).toBe(false);
   });
@@ -250,21 +250,21 @@ describe("loadTrajectory, judged on what the route's prompt rendered", () => {
   it("does not count a quote left out as the abstract's as missing from the route", async () => {
     const now = ideas("A claim, stated plainly.");
     /* The route stops only at the second quote, so the first is not on it. */
-    const secondOnly = (tree: Tree): Trajectory => ({
+    const secondOnly = (tree: Tree): Skim => ({
       ...route(now),
-      sourceHash: trajectoryInputHash(trajectoryInput({ quotes: QUOTES, blocks: BLOCKS, tree, ideas: now })),
+      sourceHash: skimInputHash(skimInput({ quotes: QUOTES, blocks: BLOCKS, tree, ideas: now })),
       stops: [{ quoteId: "spya-tfq3de", depth: 1, role: null, cue: "Where does it stop holding?" }],
     });
     /* The control: with no abstract, the first quote is simply not on the route. */
-    await setColumns({ ideas: now, tree: TREE, trajectory: secondOnly(TREE) });
-    const control = await loadTrajectory(SLUG);
+    await setColumns({ ideas: now, tree: TREE, skim: secondOnly(TREE) });
+    const control = await loadSkim(SLUG);
     expect(control.stale).toBe(false);
     expect(control.notOnRoute).toBe(1);
 
     const nodes = TREE.nodes as Record<string, Tree["nodes"][string]>;
     const withAbstract = { ...TREE, nodes: { ...nodes, n1: { ...nodes.n1!, title: "Abstract" } } } as Tree;
-    await setColumns({ tree: withAbstract, trajectory: secondOnly(withAbstract) });
-    const found = await loadTrajectory(SLUG);
+    await setColumns({ tree: withAbstract, skim: secondOnly(withAbstract) });
+    const found = await loadSkim(SLUG);
     /* Stamped and read over the same input, so current — and nothing missing. */
     expect(found.stale).toBe(false);
     expect(found.notOnRoute).toBe(0);

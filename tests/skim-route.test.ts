@@ -1,5 +1,5 @@
 /**
- * **The arithmetic of walking a Trajectory** — src/web/trajectory-route.ts.
+ * **The arithmetic of walking a Skim** — src/web/skim-route.ts.
  *
  * The rules were first quoted from the plan's § The mode (client)
  * (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md);
@@ -7,7 +7,7 @@
  * walks the reader through a stop a shallower one already did.
  */
 import { describe, expect, it } from "vitest";
-import type { Block, BlockId, TrajectoryStop } from "../src/types.js";
+import type { Block, BlockId, SkimStop } from "../src/types.js";
 import {
   doorAfter,
   effectiveDepth,
@@ -19,7 +19,7 @@ import {
   positionOf,
   positionsOf,
   stepStop,
-} from "../src/web/trajectory-route.js";
+} from "../src/web/skim-route.js";
 
 /**
  * The route used throughout, in route order:
@@ -32,7 +32,7 @@ import {
  * **Each pass is only its own stops** (plan 260929e, SPIDERYARN-READING2-4P):
  * a reader who has walked Gist is not walked through a, d and g again at More.
  */
-const ROUTE: TrajectoryStop[] = [
+const ROUTE: SkimStop[] = [
   { quoteId: "a", depth: 1, role: "The headline result" },
   { quoteId: "b", depth: 3, role: null },
   { quoteId: "c", depth: 2, role: "How they measured it" },
@@ -43,8 +43,8 @@ const ROUTE: TrajectoryStop[] = [
   { quoteId: "h", depth: 3, role: null },
 ];
 
-const ids = (stops: readonly TrajectoryStop[]) => stops.map((s) => s.quoteId);
-const stop = (quoteId: string, depth: 1 | 2 | 3): TrajectoryStop => ({ quoteId, depth, role: null });
+const ids = (stops: readonly SkimStop[]) => stops.map((s) => s.quoteId);
+const stop = (quoteId: string, depth: 1 | 2 | 3): SkimStop => ({ quoteId, depth, role: null });
 
 describe("a pass", () => {
   it("is only the stops with exactly that depth, in route order", () => {

@@ -42,7 +42,7 @@ then passed once the wording was in. It was removed along with the change.
 
 Everything followed [prompting-guide.md § Measuring a prompt change](../project/prompting-guide.md#measuring-a-prompt-change).
 
-- **Script:** [`scripts/eval/trajectory-coverage-eval.ts`](../../scripts/eval/trajectory-coverage-eval.ts),
+- **Script:** [`scripts/eval/trajectory-coverage-eval.ts`](../../scripts/eval/skim-coverage-eval.ts),
   generalised to take two modules of the same shape (Sol's F2 on this plan). OLD was `git show
   HEAD:src/trajectory.ts`, written to `src/trajectory-v7-eval-tmp.ts`, which typechecked unchanged
   and was deleted afterwards (checked with `test -e`, exit 1). NEW was the candidate in
@@ -56,7 +56,7 @@ Everything followed [prompting-guide.md § Measuring a prompt change](../project
   [260928a](260928a-trajectory-mode-stage6-coverage-after.md): the essay `vb-spya-vu3xen`, the
   normal paper `entropy-24-00930-spya-pywwkq` and the long paper `source-spya-furjgs`. The
   snapshot is in the results JSON.
-- **The blind read:** [`scripts/eval/trajectory-depth-blind.ts`](../../scripts/eval/trajectory-depth-blind.ts).
+- **The blind read:** [`scripts/eval/trajectory-depth-blind.ts`](../../scripts/eval/skim-depth-blind.ts).
   Each article gives two pairs, one at More (depth 2) and one at Most (depth 3). Each side of a
   pair shows that arm's own pass before (every stop at a shallower depth), then the stops added at
   this depth, each with its cue, quote and whole paragraph. This follows Sol's F3: the judge must

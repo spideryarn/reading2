@@ -1,10 +1,10 @@
 /**
- * The Trajectory, in the band between the spine and the prose: a route through
+ * The Skim, in the band between the spine and the prose: a route through
  * the article's own Quotes, walked at three depths. The stops are read in the
  * prose, where they sit; this band only says where to stand and in what order.
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
- * § The mode (client) is the design; docs/project/trajectory.md the vision.
+ * § The mode (client) is the design; docs/project/skim.md the vision.
  * Three things to know before changing anything here:
  *
  * ## The cue is shown on the current row only
@@ -13,7 +13,7 @@
  * tree — and not its cue. At Most there can be thirty rows, and thirty
  * generated lines would be a summary a reader could read *instead of* the
  * paper, which is vision.md's anti-goal exactly. The cue names what to look
- * for, never what the passage found (src/trajectory.ts), and one at a time. An
+ * for, never what the passage found (src/skim.ts), and one at a time. An
  * old route has a role instead, and that is drawn in its place.
  *
  * ## The stop card: the scrapbook, by juxtaposition
@@ -54,15 +54,15 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { UseTrajectory } from "./useTrajectory.js";
-import type { PublicTrajectory } from "../public-types.js";
-import type { DoorView, TrajectoryView } from "./modes/trajectory/TrajectoryMode.js";
+import type { UseSkim } from "./useSkim.js";
+import type { PublicSkim } from "../public-types.js";
+import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { PurposeLine } from "./TrajectoryPurpose.js";
+import { PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -71,8 +71,8 @@ import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
 
-/** One row of the list. Built by `useTrajectoryMode`, drawn here. */
-export interface TrajectoryRow {
+/** One row of the list. Built by `useSkimMode`, drawn here. */
+export interface SkimRow {
   quoteId: string;
   /** Its number on this pass, from 1. */
   n: number;
@@ -88,7 +88,7 @@ export interface TrajectoryRow {
   missing: boolean;
   /**
    * How far through the article the stop's block sits, 0 to 1, in words —
-   * `positionOf` (trajectory-route.ts). `null` when it cannot be placed.
+   * `positionOf` (skim-route.ts). `null` when it cannot be placed.
    */
   position: number | null;
   /**
@@ -122,7 +122,7 @@ interface OpenSnippet {
 function OpenIn({ label, icon, onOpen }: { label: string; icon: ReactNode; onOpen(): void }) {
   return (
     <Tooltip content={<p>{label}</p>} placement="top">
-      <button type="button" className="traj-open" aria-label={label} onClick={onOpen}>
+      <button type="button" className="skim-open" aria-label={label} onClick={onOpen}>
         {icon}
       </button>
     </Tooltip>
@@ -145,7 +145,7 @@ export const WORDS_ON_A_ROW = 100;
  * Why a character cut and not CSS `line-clamp`: the clamp cannot say whether
  * it cut, and this decides whether there is a tooltip at all.
  */
-function rowWords(row: TrajectoryRow): { shown: string; whole: string | null } | null {
+function rowWords(row: SkimRow): { shown: string; whole: string | null } | null {
   if (row.words === null) return null;
   const clean = row.words.replace(/\s+/g, " ").trim();
   if (clean === "") return null;
@@ -167,10 +167,10 @@ function StopPosition({ at, current }: { at: number; current: boolean }) {
   const pct = Math.round(Math.min(1, Math.max(0, at)) * 100);
   return (
     <>
-      <span className="traj-pos" aria-hidden="true">
-        <span className={`traj-pos-dot${current ? " on" : ""}`} style={{ top: `${pct}%` }} />
+      <span className="skim-pos" aria-hidden="true">
+        <span className={`skim-pos-dot${current ? " on" : ""}`} style={{ top: `${pct}%` }} />
       </span>
-      <span className="traj-pos-said sr-only">about {pct}% of the way through</span>
+      <span className="skim-pos-said sr-only">about {pct}% of the way through</span>
     </>
   );
 }
@@ -181,7 +181,7 @@ function StopPosition({ at, current }: { at: number; current: boolean }) {
  * mode can prove — the passages are the Quotes' own, checked against the
  * article by that step; the second is what it cannot.
  */
-export function trajectoryPromise(profiled: boolean): string {
+export function skimPromise(profiled: boolean): string {
   return profiled
     ? "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, shaped by your profile."
     : "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, for somebody reading the piece for the first time.";
@@ -215,7 +215,7 @@ export function coverageNote(walked: number, offered: number): string | null {
  * tens of seconds beside a route of a few, so the sentence names what goes
  * first and which part is the long one.
  */
-export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst">): string {
+export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): string {
   const kept = "Written once and kept.";
   if (owner.quotesFirst && owner.ideasFirst) {
     return (
@@ -249,7 +249,7 @@ export function emptyHint(owner: Pick<UseTrajectory, "quotesFirst" | "ideasFirst
  * `outdated` itself is still read — the stop card treats outdated sources as
  * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
  */
-export function bannerReason(owner: Pick<UseTrajectory, "stale" | "profileChanged">): string | null {
+export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): string | null {
   if (owner.stale) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
@@ -270,7 +270,7 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
   return (
     <svg width={width} height={SPARK_H} viewBox={`0 0 ${width} ${SPARK_H}`} aria-hidden="true" focusable="false">
       {runs.map((points) => (
-        <polyline key={points} points={points} className="traj-spark-line" />
+        <polyline key={points} points={points} className="skim-spark-line" />
       ))}
       {dots.map((d) => (
         <circle
@@ -278,7 +278,7 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
           cx={d.x}
           cy={d.y}
           r={d.index === current ? 3.5 : 2.2}
-          className={`traj-spark-dot${d.index === current ? " on" : d.index < current ? " done" : ""}`}
+          className={`skim-spark-dot${d.index === current ? " on" : d.index < current ? " done" : ""}`}
         />
       ))}
     </svg>
@@ -289,14 +289,14 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
  * **The pinned head**: the stepper, and the depth control when there is more
  * than one depth to offer.
  */
-function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
+function RouteHead({ view, total }: { view: SkimView; total: number }) {
   const [sparkOpen, setSparkOpen] = useState(false);
   const here = view.rows[view.position - 1]?.position ?? null;
   const said =
     `Stop ${view.position} of ${total}` +
     (here === null ? " · position unavailable" : ` · about ${Math.round(here * 100)}% through the article`);
   return (
-    <div className="traj-head">
+    <div className="skim-head">
       {/* **Each arrow names its key on its card** — Greg, SPIDERYARN-READING2-74:
           *"Add tooltips for the previous and next buttons … especially showing
           the keyboard shortcuts."* The rule: docs/project/tooltips.md § A
@@ -304,7 +304,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           steps at once, on purpose (plan 260930h, Sol F3). The copy promises no
           scroll — a stale route's stop may have lost its block (Sol F1). */}
       <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
-        <div className="traj-stepper">
+        <div className="skim-stepper">
           {/* Enabled on stop 1 too, where it goes to stop 1's passage again —
               ← does the same (SPIDERYARN-READING2-4K), and the keys may not do
               more than the buttons. */}
@@ -316,7 +316,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           >
             <button
               type="button"
-              className="traj-arrow"
+              className="skim-arrow"
               aria-label={view.position <= 1 ? "Back to stop 1" : "Previous stop"}
               disabled={view.position < 1}
               onClick={() => view.onStep(-1)}
@@ -331,7 +331,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           <Tooltip content={<p>{said}</p>} placement="bottom" open={sparkOpen} onOpenChange={setSparkOpen}>
             <button
               type="button"
-              className="traj-spark"
+              className="skim-spark"
               aria-label={said}
               aria-expanded={sparkOpen}
               onClick={() => setSparkOpen((was) => !was)}
@@ -350,7 +350,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           >
             <button
               type="button"
-              className="traj-arrow"
+              className="skim-arrow"
               aria-label="Next stop"
               disabled={view.position >= total}
               onClick={() => view.onStep(1)}
@@ -364,22 +364,22 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
           (SPIDERYARN-READING2-73), so a head too narrow for one row breaks
           before the depths. It held this head's own (i) too, until that moved
           to the band's corner on 2026-10-01 (spya-ucu35y, plan 261001m).
-          trajectory.css § .traj-head-end. */}
-      <div className="traj-head-end">
+          skim.css § .skim-head-end. */}
+      <div className="skim-head-end">
         {view.depths.length > 1 && (
-          <fieldset className="traj-depths" aria-label="How deep">
+          <fieldset className="skim-depths" aria-label="How deep">
             {view.depths.map((d) => (
               <button
                 key={d.depth}
                 type="button"
-                className={`traj-depth${d.depth === view.depth ? " on" : ""}`}
+                className={`skim-depth${d.depth === view.depth ? " on" : ""}`}
                 aria-pressed={d.depth === view.depth}
                 onClick={() => {
                   if (d.depth !== view.depth) view.onDepth(d.depth);
                 }}
               >
                 <span>{d.label}</span>
-                <span className="traj-depth-n">{d.count}</span>
+                <span className="skim-depth-n">{d.count}</span>
               </button>
             ))}
           </fieldset>
@@ -390,7 +390,7 @@ function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
 }
 
 /**
- * **A step control's card**: what it does, and its key — Trajectory's ‹ › and
+ * **A step control's card**: what it does, and its key — Skim's ‹ › and
  * the door's *Next stop ›* (plan 260930h). "While reading" covers keynav's
  * guards, including the Dock drawer suspending the keys while the buttons stay
  * mounted behind it; docs/project/tooltips.md § A shortcut is named on its card.
@@ -426,43 +426,43 @@ function StepTip({
 
 /**
  * **Who is looking, and what they hold.** The owner's arm is the whole
- * `useTrajectory` read — the job, the freshness, the verbs that spend. The
+ * `useSkim` read — the job, the freshness, the verbs that spend. The
  * visitor's arm is the stored route off the public payload and nothing else:
  * no read state (it arrived with the page), no job, no verb. A union rather
  * than a `readOnly` flag beside `owner`, so a visitor's panel has nothing to
  * press that could plan a route — the shape `TimelinePanel`'s access has, and
  * mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
  */
-export type TrajectoryAccess =
-  | { kind: "owner"; owner: UseTrajectory }
-  | { kind: "visitor"; route: PublicTrajectory };
+export type SkimAccess =
+  | { kind: "owner"; owner: UseSkim }
+  | { kind: "visitor"; route: PublicSkim };
 
 /**
  * **The promise, for somebody the route was not planned for.** It says nothing
  * about a profile — not *"shaped by your profile"*, which would be false, and
  * not whether the owner had one, which `profileHash` staying off the wire
- * exists to keep from a stranger (src/public-types.ts § `PublicTrajectory`).
+ * exists to keep from a stranger (src/public-types.ts § `PublicSkim`).
  */
-export const VISITOR_TRAJECTORY_PROMISE =
+export const VISITOR_SKIM_PROMISE =
   "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, planned for whoever added this article.";
 
 interface Props {
-  access: TrajectoryAccess;
-  view: TrajectoryView;
-  /** Stepped aside and not drawn — `TrajectoryBand`'s `away`. */
+  access: SkimAccess;
+  view: SkimView;
+  /** Stepped aside and not drawn — `SkimBand`'s `away`. */
   away: boolean;
 }
 
-export function TrajectoryPanel({ access, view, away }: Props) {
-  useRenderCount("TrajectoryPanel");
+export function SkimPanel({ access, view, away }: Props) {
+  useRenderCount("SkimPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
-  const route = access.kind === "owner" ? access.owner.trajectory : access.route;
+  const route = access.kind === "owner" ? access.owner.skim : access.route;
   /* A visitor's route arrived with the page, so it is ready by construction. */
   const ready = route !== null && (owner === null || owner.status === "ready");
   const promise = owner
-    ? trajectoryPromise(owner.trajectory?.profileHash != null)
-    : VISITOR_TRAJECTORY_PROMISE;
+    ? skimPromise(owner.skim?.profileHash != null)
+    : VISITOR_SKIM_PROMISE;
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
@@ -533,7 +533,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
       onCancel={owner.cancel}
       label={label}
-      step="trajectory"
+      step="skim"
       icon={<Route size={13} />}
       runningLabel="Planning the route…"
     />
@@ -546,7 +546,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
      only: a visitor's route carries none (src/public-types.ts). */
   const routed = ready && total > 0 && view.depth !== null;
   const coverage = atMost ? coverageNote(route.stops.length, route.offered) : null;
-  const made = owner?.trajectory ?? null;
+  const made = owner?.skim ?? null;
   const about = routed ? (
     <>
       <p>{promise}</p>
@@ -564,9 +564,9 @@ export function TrajectoryPanel({ access, view, away }: Props) {
 
   return (
     <ModeSurface
-      label="Trajectory"
-      feature="gloss trajectory"
-      mode="trajectory"
+      label="Skim"
+      feature="gloss skim"
+      mode="skim"
       about={about}
       /* **A head that stays put**: the stepper and the depth control, pinned
          above the scroller. Present only when there is a route to step — no
@@ -577,7 +577,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
            (SPIDERYARN-READING2-52), and the standing *Plan it again* went —
            Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"remove the "Plan it
            again" button … let's just rely on the Metadata mode for that."*
-           Metadata's *AI processing* has a Trajectory row, and the
+           Metadata's *AI processing* has a Skim row, and the
            stale and profile-changed banners keep their own button, which
            carries the job there — hence the gate on those two. What is left is
            a job's progress, Stop and failure while one is starting, running or
@@ -589,14 +589,14 @@ export function TrajectoryPanel({ access, view, away }: Props) {
         !owner.stale &&
         !owner.profileChanged &&
         (owner.job || owner.starting || owner.failed) ? (
-          <div className="traj-foot">
-            <div className="traj-again">{run("Plan it again", true)}</div>
+          <div className="skim-foot">
+            <div className="skim-again">{run("Plan it again", true)}</div>
           </div>
         ) : null
       }
     >
       {owner?.error && (
-        <div className="traj-read-error">
+        <div className="skim-read-error">
           <p className="gloss-error" role="alert">
             {owner.error}
           </p>
@@ -631,7 +631,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
-              run would race a press). TrajectoryPurpose.tsx. */}
+              run would race a press). SkimPurpose.tsx. */}
           {owner && (
             <PurposeLine
               key={owner.slug}
@@ -645,7 +645,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
           {total > 0 && (
             <div className="tl-scroll" ref={scroller}>
               <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
-                <ol className="traj-list">
+                <ol className="skim-list">
                   {view.rows.map((row, index) => {
                     const repeatedPlace =
                       row.place !== null && row.place === view.rows[index - 1]?.place;
@@ -653,28 +653,28 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                     const go = (
                       <button
                         type="button"
-                        className="traj-go"
+                        className="skim-go"
                         aria-current={row.current ? "step" : undefined}
                         disabled={row.missing}
                         onClick={() => view.onRow(row.quoteId)}
                       >
-                        <span className="traj-n">
+                        <span className="skim-n">
                           {row.n}
                           {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                         </span>
-                        <span className="traj-what">
+                        <span className="skim-what">
                           {/* A repeated section is said, not drawn: a ditto mark
                               beside a quotation reads as another quotation mark,
                               which is the report behind plan 260928e. */}
                           {repeatedPlace ? (
                             <span className="sr-only">{row.place}</span>
                           ) : (
-                            <span className="traj-place">{row.place ?? "—"}</span>
+                            <span className="skim-place">{row.place ?? "—"}</span>
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
-                          {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
-                          {words && <span className="traj-words">“{words.shown}”</span>}
+                          {row.current && row.cue && <span className="skim-cue">{row.cue}</span>}
+                          {words && <span className="skim-words">“{words.shown}”</span>}
                         </span>
                       </button>
                     );
@@ -682,11 +682,11 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                     return (
                       <li
                         key={row.quoteId}
-                        className={`traj-row${row.current ? " current" : ""}`}
+                        className={`skim-row${row.current ? " current" : ""}`}
                         data-stop={row.quoteId}
                         {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
-                        <div className="traj-line">
+                        <div className="skim-line">
                         {/* Always wrapped, enabled only while the row is cut, so the
                             button is never remounted as its row becomes current.
                             Controlled, which makes it mouse-only: a tap's
@@ -698,7 +698,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                           onOpenChange={(open) =>
                             setTipFor((was) => (open ? row.quoteId : was === row.quoteId ? null : was))
                           }
-                          className="traj-words-tip"
+                          className="skim-words-tip"
                         >
                           {go}
                         </Tooltip>
@@ -718,7 +718,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                           >
                             <button
                               type="button"
-                              className="traj-where"
+                              className="skim-where"
                               aria-label={`Where stop ${row.n} is in the article`}
                               aria-expanded={whereFor === row.quoteId}
                               onClick={() => setWhereFor((was) => (was === row.quoteId ? null : row.quoteId))}
@@ -754,7 +754,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
  * what trips a skimmer), then the ideas and the study.
  *
  * **Terms and ideas are chips that open in place** — the sense of a term, the
- * statement of an idea — so the reader can stay in Trajectory (Greg,
+ * statement of an idea — so the reader can stay in Skim (Greg,
  * SPIDERYARN-READING2-59: *"can we make them be expandable as well, like the
  * glossary"*). The way to the full mode is an icon inside what opened.
  */
@@ -775,26 +775,26 @@ function StopCardView({
   const idea = open?.kind === "idea" ? (card.ideas.find((i) => i.id === open.id) ?? null) : null;
   const lead = term ? entryProse(term.entry).lead : "";
   return (
-    <div className="traj-card">
+    <div className="skim-card">
       {card.terms.length > 0 && (
-        <section className="traj-cluster" aria-label="Terms it uses">
-          <p className="traj-cluster-h">Terms it uses</p>
-          <div className="traj-chips">
+        <section className="skim-cluster" aria-label="Terms it uses">
+          <p className="skim-cluster-h">Terms it uses</p>
+          <div className="skim-chips">
             {card.terms.map(({ entry, alsoAt }) => (
               <button
                 key={entry.id}
                 type="button"
-                className={`traj-chip${entry.id === term?.entry.id ? " on" : ""}`}
+                className={`skim-chip${entry.id === term?.entry.id ? " on" : ""}`}
                 aria-expanded={entry.id === term?.entry.id}
                 onClick={() => onToggle("term", entry.id)}
               >
                 {entry.name}
-                {alsoAt !== null && <span className="traj-also">also at stop {alsoAt}</span>}
+                {alsoAt !== null && <span className="skim-also">also at stop {alsoAt}</span>}
               </button>
             ))}
           </div>
           {term && (
-            <div className="traj-sense">
+            <div className="skim-sense">
               {lead && <p>{lead}</p>}
               {canOpen({ kind: "term", id: term.entry.id }) && (
                 <OpenIn
@@ -808,14 +808,14 @@ function StopCardView({
         </section>
       )}
       {card.ideas.length > 0 && (
-        <section className="traj-cluster" aria-label="Ideas it bears on">
-          <p className="traj-cluster-h">Ideas it bears on</p>
-          <div className="traj-chips">
+        <section className="skim-cluster" aria-label="Ideas it bears on">
+          <p className="skim-cluster-h">Ideas it bears on</p>
+          <div className="skim-chips">
             {card.ideas.map((i) => (
               <button
                 key={i.id}
                 type="button"
-                className={`traj-chip${i.id === idea?.id ? " on" : ""}`}
+                className={`skim-chip${i.id === idea?.id ? " on" : ""}`}
                 aria-expanded={i.id === idea?.id}
                 onClick={() => onToggle("idea", i.id)}
               >
@@ -824,7 +824,7 @@ function StopCardView({
             ))}
           </div>
           {idea && (
-            <div className="traj-sense">
+            <div className="skim-sense">
               <p>{idea.statement}</p>
               {canOpen({ kind: "idea", id: idea.id }) && (
                 <OpenIn label="Open in Ideas" icon={<Lightbulb size={16} />} onOpen={() => onOpen({ kind: "idea", id: idea.id })} />
@@ -834,13 +834,13 @@ function StopCardView({
         </section>
       )}
       {card.events.length > 0 && (
-        <section className="traj-cluster" aria-label="Where it sits in the study">
-          <p className="traj-cluster-h">Where it sits in the study</p>
+        <section className="skim-cluster" aria-label="Where it sits in the study">
+          <p className="skim-cluster-h">Where it sits in the study</p>
           <ul>
             {card.events.map((event) => (
               <li key={event.id}>
                 {canOpen({ kind: "event", id: event.id }) ? (
-                  <button type="button" className="traj-link" onClick={() => onOpen({ kind: "event", id: event.id })}>
+                  <button type="button" className="skim-link" onClick={() => onOpen({ kind: "event", id: event.id })}>
                     {event.label}
                   </button>
                 ) : (
@@ -869,7 +869,7 @@ function StopCardView({
  * `PdfFigureNotes` already uses (TableView.tsx § After the prose) — so it
  * shifts no comment anchor.
  */
-export function TrajectoryDoor({
+export function SkimDoor({
   door,
   onNext,
   onDeeper,
@@ -883,10 +883,10 @@ export function TrajectoryDoor({
 }) {
   if (door === null && onRoute === null) return null;
   return (
-    <div className="traj-door">
-      <div className="traj-door-row">
+    <div className="skim-door">
+      <div className="skim-door-row">
         {onRoute && (
-          <button type="button" className="traj-door-btn quiet" onClick={onRoute}>
+          <button type="button" className="skim-door-btn quiet" onClick={onRoute}>
             <Route size={14} />
             All stops
           </button>
@@ -898,7 +898,7 @@ export function TrajectoryDoor({
             keyName="→"
             placement="top"
           >
-            <button type="button" className="traj-door-btn" onClick={onNext}>
+            <button type="button" className="skim-door-btn" onClick={onNext}>
               Next stop ›
             </button>
           </StepTip>
@@ -906,7 +906,7 @@ export function TrajectoryDoor({
         {door?.kind === "end" && door.deeper && (
           <button
             type="button"
-            className="traj-door-btn"
+            className="skim-door-btn"
             title={`Go on to ${door.deeper}: the stops the passes before it left out`}
             onClick={onDeeper}
           >
@@ -916,9 +916,9 @@ export function TrajectoryDoor({
       </div>
       {/* Where the door leads: the next stop's cue, small and muted — or, at
           the end of a pass, which pass has ended. */}
-      {door?.kind === "next" && door.cue && <p className="traj-door-cue">{door.cue}</p>}
+      {door?.kind === "next" && door.cue && <p className="skim-door-cue">{door.cue}</p>}
       {door?.kind === "end" && (
-        <p className="traj-door-cue">
+        <p className="skim-door-cue">
           End of {door.pass} — {door.count} {door.count === 1 ? "stop" : "stops"}.
         </p>
       )}

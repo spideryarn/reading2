@@ -1,12 +1,12 @@
 /**
- * Pipeline stage 5t — the **Trajectory**: a route through the article's Quotes,
- * walked at three depths. docs/project/trajectory.md is the vision (Greg's brief
+ * Pipeline stage 5t — the **Skim**: a route through the article's Quotes,
+ * walked at three depths. docs/project/skim.md is the vision (Greg's brief
  * verbatim); docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The step (server) is the spec every rule below comes from.
  *
  * **There is no command line here.** Re-running it against one article is a job:
  *
- *   POST /api/jobs { slug, steps: ["trajectory"], force: ["trajectory"] }
+ *   POST /api/jobs { slug, steps: ["skim"], force: ["skim"] }
  *
  * ## What it reads, and what it does not
  *
@@ -16,7 +16,7 @@
  * and the reader's profile. **It never reads the article's prose** — the prompt
  * holds the quotes, which are already the article's own words, the Ideas' names
  * and statements, and the outline, so the call is small and in no cached
- * prefix. It refuses without Quotes (src/pipeline.ts § the `trajectory` step);
+ * prefix. It refuses without Quotes (src/pipeline.ts § the `skim` step);
  * the client asks for Quotes and Ideas first, in the same job. Without Ideas
  * (a forced run on an article that has none) it plans on the quotes alone.
  *
@@ -24,7 +24,7 @@
  * F60): block ids encode no position, so the model could not tell. A quote
  * *carries* an Idea when it shares a block with one of the Idea's passages, and
  * sits *beside* it when the nearest body paragraph either side does, within the
- * same top-level section (`trajectoryInput`).
+ * same top-level section (`skimInput`).
  *
  * ## What the model decides, and what it is not trusted with
  *
@@ -39,7 +39,7 @@
  *
  * ## Freshness
  *
- * The stamp is `trajectoryInputHash` — one fingerprint over exactly what the
+ * The stamp is `skimInputHash` — one fingerprint over exactly what the
  * prompt renders: the offered quotes (identity, section path, priority, words,
  * the Ideas they carry), the Ideas (name, statement, or an explicit `null` when
  * there are none), and the top-level outline (titles, gists or their absence)
@@ -68,19 +68,19 @@ import {
   MAX_QUOTES_TOTAL,
   type Quote,
   type Quotes,
-  type Trajectory,
-  type TrajectoryDepth,
-  type TrajectoryDrops,
-  type TrajectoryStop,
+  type Skim,
+  type SkimDepth,
+  type SkimDrops,
+  type SkimStop,
   type Tree,
   type TreeNode,
 } from "./types.js";
 
 export type {
-  Trajectory,
-  TrajectoryDepth,
-  TrajectoryDrops,
-  TrajectoryStop,
+  Skim,
+  SkimDepth,
+  SkimDrops,
+  SkimStop,
 } from "./types.js";
 
 /**
@@ -106,6 +106,14 @@ export type {
  * beyond run-to-run noise, because Most is every offered quote, so a route
  * prompt can only reshuffle them between More and Most —
  * docs/plans/260929b-trajectory-stage2-deeper-passes-eval.md.
+ *
+ * **The value keeps the mode's old name on purpose.** The mode was called
+ * Trajectory until 2026-10-01 (plan 261001r). This tag names an unchanged
+ * prompt, and it is persisted twice — in the stored route's `version` and in
+ * `revision_step_runs.prompt_version` — where `stampForStep` throws
+ * `StampDisagrees` if the two differ. Respelling it alone would stale every
+ * stored route for no change in the prompt. The next real prompt change bumps
+ * it to `skim/8`.
  */
 export const PROMPT_VERSION = "trajectory/7";
 
@@ -149,14 +157,14 @@ const EFFORT: Effort = "low";
  * characters a token — for every quote the list can hold, because the prompt
  * says depth 3 should include nearly all of them and a model may list past the
  * cap. Undersizing does not degrade: it throws `truncationFailure`.
- * tests/trajectory.test.ts builds the largest permitted answer and checks it
+ * tests/skim.test.ts builds the largest permitted answer and checks it
  * fits.
  */
 export const ANSWER_TOKENS = 300 + MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 60) / 3);
 
 /* ------------------------------------------------------------ pure helpers -- */
 
-export function emptyDrops(): TrajectoryDrops {
+export function emptyDrops(): SkimDrops {
   return {
     collapsed: 0,
     unknownQuote: 0,
@@ -229,7 +237,7 @@ export interface SectionRecord {
  * **Everything the route is planned from, in one value** — what the prompt
  * renders and what the stamp hashes, so the two cannot drift (Sol F68).
  */
-export interface TrajectoryInput {
+export interface SkimInput {
   /** One per offered quote, in the stored (article) order. */
   records: QuoteRecord[];
   /** The offered quotes themselves — for labels back to ids, and validation. */
@@ -292,12 +300,12 @@ function topLevelSections(
  * not carry that Idea already. Positions are array indices, never id strings
  * (docs/project/block-ids.md).
  */
-export function trajectoryInput(opts: {
+export function skimInput(opts: {
   quotes: Quotes | null;
   blocks: readonly Block[];
   tree: Tree;
   ideas: Ideas | null;
-}): TrajectoryInput {
+}): SkimInput {
   const { blocks, tree } = opts;
   const index = blockIndex(blocks);
   const abstractQuoteIds: string[] = [];
@@ -390,7 +398,7 @@ export function trajectoryInput(opts: {
 /**
  * **The one fingerprint of a route's input** — the pipeline's `stamp`, the
  * stage's written `sourceHash`, and the store's freshness read all call this,
- * over `trajectoryInput`, so write and read agree by construction (Sol F68).
+ * over `skimInput`, so write and read agree by construction (Sol F68).
  *
  * Over exactly what the prompt renders, plus the quote id each Q-label resolves
  * to: each offered quote's label mapping, section path, rendered priority,
@@ -410,7 +418,7 @@ export function trajectoryInput(opts: {
  * quote is offered, so it is here. The JSON form is unambiguous even when the
  * article's text contains tabs or newlines.
  */
-export function trajectoryInputHash(input: TrajectoryInput): string {
+export function skimInputHash(input: SkimInput): string {
   const canonical = JSON.stringify({
     quotes: input.records.map((r) => [
       r.quote.id,
@@ -424,6 +432,9 @@ export function trajectoryInputHash(input: TrajectoryInput): string {
     outline: input.outline.map((s) => [s.title, s.gist, s.quotes]),
     outlineOmitted: input.outlineOmitted,
   });
+  /* `trajectory-input` keeps the mode's name from before 2026-10-01, when it
+     became Skim (plan 261001r): the namespace is part of every stored route's
+     input hash, so respelling it would mark every one of them stale. */
   return createHash("sha256")
     .update(`trajectory-input\n${canonical}`, "utf8")
     .digest("hex")
@@ -576,7 +587,7 @@ interface RawStop {
   cue?: unknown;
 }
 
-function isDepth(value: unknown): value is TrajectoryDepth {
+function isDepth(value: unknown): value is SkimDepth {
   return value === 1 || value === 2 || value === 3;
 }
 
@@ -606,11 +617,11 @@ function cueOf(value: unknown): string | null {
 export function validateRoute(
   raw: readonly unknown[],
   quotes: readonly Quote[],
-  dropped: TrajectoryDrops,
-): TrajectoryStop[] {
+  dropped: SkimDrops,
+): SkimStop[] {
   const byId = new Map(quotes.map((q) => [q.id, q]));
   interface Candidate {
-    stop: TrajectoryStop;
+    stop: SkimStop;
     blockId: string;
     index: number;
   }
@@ -659,7 +670,7 @@ export function validateRoute(
 
   /* 6 — cumulative caps, in route order. */
   const visible = [0, 0, 0];
-  const kept: TrajectoryStop[] = [];
+  const kept: SkimStop[] = [];
   for (const { stop } of placed) {
     const fits = [0, 1, 2].every((d) => d + 1 < stop.depth || visible[d]! < DEPTH_CAPS[d]!);
     if (!fits) {
@@ -673,7 +684,7 @@ export function validateRoute(
 }
 
 /** How many stops are visible at depth ≤ 1, ≤ 2 and ≤ 3. */
-export function visibleCounts(stops: readonly TrajectoryStop[]): [number, number, number] {
+export function visibleCounts(stops: readonly SkimStop[]): [number, number, number] {
   const at = (d: number) => stops.filter((s) => s.depth <= d).length;
   return [at(1), at(2), at(3)];
 }
@@ -712,7 +723,7 @@ export function growthFailure(
  * failed answer, and nothing is written. So is a route that does not grow.
  * There is no automatic retry in v1; the reader can press re-run.
  */
-export function buildTrajectory(
+export function buildSkim(
   parsed: { stops?: unknown },
   opts: {
     slug: string;
@@ -723,9 +734,9 @@ export function buildTrajectory(
     power: ModelPower;
     profileHash: string | null;
     elapsedMs: number;
-    dropped: TrajectoryDrops;
+    dropped: SkimDrops;
   },
-): Trajectory {
+): Skim {
   if (!Array.isArray(parsed.stops)) {
     throw new Error(
       "The model's answer has no `stops` array in it, so there is no route to write. " +
@@ -777,7 +788,7 @@ export function buildTrajectory(
 
 /* ---------------------------------------------------------------- prompt -- */
 
-export const TRAJECTORY_SYSTEM = `You are planning a route through an article for somebody who wants to skim it
+export const SKIM_SYSTEM = `You are planning a route through an article for somebody who wants to skim it
 well — to get what they need from it quickly without replacing the reading.
 
 WHAT YOU ARE GIVEN
@@ -891,14 +902,14 @@ ${PROFILE_RULES}`;
  * quotes with their section paths and the Ideas they carry, and the reader.
  * Everything that varies is here, after the constant system prompt. Each part
  * is built from `input` and nothing else, so what is sent is what
- * `trajectoryInputHash` covers.
+ * `skimInputHash` covers.
  *
  * Returned in parts as well as whole so the step can log each part's size
  * (`promptChars`) — the prompt is bounded by the quote cap, the idea count and
  * `MAX_OUTLINE_SECTIONS`, and the log says which of them grew.
  */
 export function renderPromptParts(opts: {
-  input: TrajectoryInput;
+  input: SkimInput;
   profile: string | null;
 }): { ideas: string; outline: string; quotes: string; prompt: string } {
   const { input } = opts;
@@ -958,7 +969,7 @@ ${quotes}`;
 }
 
 /** The whole user message — `renderPromptParts(...).prompt`. */
-export function renderPrompt(opts: { input: TrajectoryInput; profile: string | null }): string {
+export function renderPrompt(opts: { input: SkimInput; profile: string | null }): string {
   return renderPromptParts(opts).prompt;
 }
 
@@ -1009,10 +1020,10 @@ function parseJson(raw: string): { stops?: unknown } {
   return parseJsonAnswer<{ stops?: unknown }>(raw, "the model's answer");
 }
 
-export interface TrajectoryRun {
-  trajectory: Trajectory;
+export interface SkimRun {
+  skim: Skim;
   offered: number;
-  dropped: TrajectoryDrops;
+  dropped: SkimDrops;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -1029,35 +1040,35 @@ export interface TrajectoryRun {
  * through the store. The caller has already refused when there is no quote to
  * offer (`input.offered` empty).
  */
-export async function generateTrajectory(opts: {
+export async function generateSkim(opts: {
   slug: string;
-  /** `trajectoryInput` — the offered quotes, the Ideas and the outline. The prose is never sent. */
-  input: TrajectoryInput;
+  /** `skimInput` — the offered quotes, the Ideas and the outline. The prose is never sent. */
+  input: SkimInput;
   /** Who is reading, already rendered — `renderProfile` in src/profile.ts. */
   profile: string | null;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
-}): Promise<TrajectoryRun> {
+}): Promise<SkimRun> {
   const { input } = opts;
-  const sourceHash = trajectoryInputHash(input);
+  const sourceHash = skimInputHash(input);
   const profileHash = opts.profile ? hashProfile(opts.profile) : null;
   const parts = renderPromptParts({ input, profile: opts.profile });
   const started = Date.now();
-  const maxTokens = budgetFor("trajectory", ANSWER_TOKENS);
+  const maxTokens = budgetFor("skim", ANSWER_TOKENS);
   const effort = (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? EFFORT;
   const count = input.offered.length;
 
   let message: Anthropic.Message;
   try {
     const call = streamMessage(
-      "trajectory",
+      "skim",
       {
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort },
-        system: [{ type: "text" as const, text: TRAJECTORY_SYSTEM }],
+        system: [{ type: "text" as const, text: SKIM_SYSTEM }],
         messages: [
           {
             role: "user",
@@ -1093,7 +1104,7 @@ export async function generateTrajectory(opts: {
     });
   }
   if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("trajectory", maxTokens, ANSWER_TOKENS, {
+    throw truncationFailure("skim", maxTokens, ANSWER_TOKENS, {
       outputTokens: message.usage.output_tokens,
       answerChars: message.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -1110,9 +1121,9 @@ export async function generateTrajectory(opts: {
   dropped.collapsed = input.collapsed;
   const parsed = parseJson(raw);
   /* Labels back to ids before anything believes them. A non-array `stops` is
-     left for `buildTrajectory` to refuse. */
+     left for `buildSkim` to refuse. */
   if (Array.isArray(parsed.stops)) parsed.stops = fromLabels(parsed.stops, input.offered);
-  const trajectory = buildTrajectory(parsed, {
+  const skim = buildSkim(parsed, {
     power: opts.power,
     slug: opts.slug,
     quotes: input.offered,
@@ -1123,7 +1134,7 @@ export async function generateTrajectory(opts: {
   });
 
   return {
-    trajectory,
+    skim,
     offered: count,
     dropped,
     model: generatorFor(opts.power),

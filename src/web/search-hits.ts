@@ -767,10 +767,10 @@ export function quoteMarkKey(id: string, blockId: BlockId): string {
 }
 
 /**
- * **The Trajectory's current stop, as a passage** — the resolver
+ * **The Skim's current stop, as a passage** — the resolver
  * docs/project/mode.md asks a passage-marking mode for, and the plan's F9.
  *
- * A stop *is* a quote (src/types.ts § `TrajectoryStop`), so this is not a fourth
+ * A stop *is* a quote (src/types.ts § `SkimStop`), so this is not a fourth
  * way of turning words into spans: it is **the quote's own `Found`**, taken out
  * of the marks `useQuoteMarks` already built for the prose, so that `proseFound`
  * can see it is one passage and not draw it twice. Only when the quote is not
@@ -782,7 +782,7 @@ export function quoteMarkKey(id: string, blockId: BlockId): string {
  * gone is a row in the band and a ring on nothing, rather than a ring on the
  * wrong paragraph.
  */
-export function resolveTrajectoryStop(
+export function resolveSkimStop(
   blocks: Block[],
   /** The quotes already marked in the prose — `useQuoteMarks`' `found`. */
   marked: readonly Found[],

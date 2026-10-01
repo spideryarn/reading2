@@ -681,7 +681,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      times the slowest, because three articles are evidence rather than a
      distribution and being under kills a call the reader has already bought.
      docs/plans/260928a-trajectory-mode-stage1-real-runs.md. */
-  trajectory: 120_000,
+  skim: 120_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read

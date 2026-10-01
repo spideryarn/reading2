@@ -1,12 +1,12 @@
 /**
- * The Trajectory, as the reading view sees it: the route through the Quotes,
+ * The Skim, as the reading view sees it: the route through the Quotes,
  * whether it still fits them and the reader, and the things you can ask for.
  *
  * `useFaq`'s shape, with two differences that are this mode's own:
  *
  * - **Three staleness facts, not two**, and the third is stricter than every
  *   other artefact's: a route written with no profile is outdated the moment
- *   the reader writes one (`routeProfileIsStale`, src/trajectory.ts; Sol F7).
+ *   the reader writes one (`routeProfileIsStale`, src/skim.ts; Sol F7).
  *   `notOnRoute` says how many current quotes are absent from every pass. It
  *   does not prove they arrived after this route was planned.
  * - **Prerequisites in the same job.** The step refuses without Quotes, and
@@ -17,15 +17,15 @@
  *   The band passes in both reads, and the job's end refreshes both, so Ideas
  *   the route's job found reach the stop card without a reload (Sol F61).
  *
- * Mounted by `TrajectoryBand` alone, never hoisted, for `useFaq`'s reason:
+ * Mounted by `SkimBand` alone, never hoisted, for `useFaq`'s reason:
  * `useAutoRun`'s owner must die with the band so a press cannot be spent after
  * the reader has left it.
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
- * docs/project/trajectory.md.
+ * docs/project/skim.md.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Job, Trajectory, TrajectoryResponse } from "../types.js";
+import type { Job, Skim, SkimResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -34,11 +34,11 @@ import type { QuotesRead } from "./useQuotes.js";
 import type { IdeasRead } from "./useIdeas.js";
 import type { StepBefore } from "../step-order.js";
 
-type TrajectoryStatus = "loading" | "none" | "ready" | "error";
+type SkimStatus = "loading" | "none" | "ready" | "error";
 
-export interface UseTrajectory {
-  status: TrajectoryStatus;
-  trajectory: Trajectory | null;
+export interface UseSkim {
+  status: SkimStatus;
+  skim: Skim | null;
   /** The Quotes, Ideas, or outline changed under the route. */
   stale: boolean;
   /** The route was written by an older prompt or model. */
@@ -76,7 +76,7 @@ export interface UseTrajectory {
   ensure(): Promise<void>;
   /**
    * The forced run — *Plan it again* in the stale/profile-changed banner, or
-   * the Trajectory row in Metadata. It replaces the route, choosing the Quotes
+   * the Skim row in Metadata. It replaces the route, choosing the Quotes
    * and finding the Ideas first (unforced) when `ensure` would — never merely
    * because their prompt is older.
    */
@@ -84,9 +84,9 @@ export interface UseTrajectory {
   cancel(id: string): void;
 }
 
-export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead): UseTrajectory {
-  const [status, setStatus] = useState<TrajectoryStatus>("loading");
-  const [trajectory, setTrajectory] = useState<Trajectory | null>(null);
+export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): UseSkim {
+  const [status, setStatus] = useState<SkimStatus>("loading");
+  const [skim, setSkim] = useState<Skim | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
@@ -101,11 +101,11 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
   const load = useCallback(
     async (current: () => boolean) => {
       try {
-        const res = await apiFetch(`/api/trajectory/${encodeURIComponent(slug)}`);
+        const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`);
         if (!current()) return;
         if (res.status === 404) {
           /* The ordinary case: nobody has asked for a route yet. */
-          setTrajectory(null);
+          setSkim(null);
           setStale(false);
           setOutdated(false);
           setProfileChanged(false);
@@ -114,9 +114,9 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
           setStatus("none");
           return;
         }
-        const loaded = await readJson<TrajectoryResponse>(res);
+        const loaded = await readJson<SkimResponse>(res);
         if (!current()) return;
-        setTrajectory(loaded.trajectory);
+        setSkim(loaded.skim);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setProfileChanged(loaded.profileChanged);
@@ -137,9 +137,9 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
 
   const retryRead = useCallback(async () => {
     setError(null);
-    if (trajectory === null) setStatus("loading");
+    if (skim === null) setStatus("loading");
     await reload();
-  }, [trajectory, reload]);
+  }, [skim, reload]);
 
   useEffect(() => {
     void reload();
@@ -167,7 +167,7 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
     void refreshQuotes();
     void refreshIdeas();
   }, [refresh, refreshQuotes, refreshIdeas]);
-  const queue = useStepJob(slug, "trajectory", onFinished, "watches-queue");
+  const queue = useStepJob(slug, "skim", onFinished, "watches-queue");
 
   /* **The Quotes go first when there are none, or when they are stale** — the
      article changed under them, so a route planned on them could stop at a
@@ -190,7 +190,7 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
      a press that asked for a route. Stage 6 of plan 260928a. */
   const ideasFirst =
     ideas.status === "none" || ideas.status === "error" || (ideas.status === "ready" && ideas.stale);
-  const precededBy = useMemo<StepBefore<"trajectory">[]>(
+  const precededBy = useMemo<StepBefore<"skim">[]>(
     () => [...(quotesFirst ? (["quotes"] as const) : []), ...(ideasFirst ? (["ideas"] as const) : [])],
     [quotesFirst, ideasFirst],
   );
@@ -213,7 +213,7 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
   }, [prerequisitesLoading, startReady]);
   /* `useStepJob` names only this hook's own step in `force`, so Quotes and
      Ideas stay unforced. `FORCE_ONLY_WHEN_NAMED` protects the other direction:
-     forcing either elsewhere must not sweep Trajectory into that job. */
+     forcing either elsewhere must not sweep Skim into that job. */
   const regenerate = useCallback(async () => {
     if (prerequisitesLoading) {
       setWaitingRun("regenerate");
@@ -239,15 +239,15 @@ export function useTrajectory(slug: string, quotes: QuotesRead, ideas: IdeasRead
    * route alone, otherwise whichever is missing goes first. So a `none` here
    * waits until both have answered.
    */
-  const gate: TrajectoryStatus =
+  const gate: SkimStatus =
     status === "none" && (quotes.status === "loading" || ideas.status === "loading")
       ? "loading"
       : status;
-  const auto = useAutoRun(slug, "trajectory", gate, ensure, reload);
+  const auto = useAutoRun(slug, "skim", gate, ensure, reload);
 
   return {
     status,
-    trajectory,
+    skim,
     stale,
     outdated,
     profileChanged,

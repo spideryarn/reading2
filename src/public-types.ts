@@ -83,7 +83,7 @@ import type {
   QuoteDrops,
   SearchHit,
   TimelineEvent,
-  TrajectoryStop,
+  SkimStop,
   Tree,
   Tweet,
 } from "./types.js";
@@ -331,7 +331,7 @@ export interface PublicArtefactSet {
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
   timeline?: PublicTimeline;
-  trajectory?: PublicTrajectory;
+  skim?: PublicSkim;
   faq?: PublicFaq;
   simpleSummary?: PublicSimpleSummary;
   citations?: PublicCitations;
@@ -450,7 +450,7 @@ export interface PublicTimeline {
 }
 
 /**
- * **The Trajectory route, as a visitor gets it** — since 2026-09-29, when a
+ * **The Skim route, as a visitor gets it** — since 2026-09-29, when a
  * signed-out reader of a public article with a stored route was shown the
  * owners-only boundary instead (SPIDERYARN-READING2-56). Reading a route costs
  * nothing; only planning one spends, and nothing in a visitor's client can.
@@ -477,8 +477,8 @@ export interface PublicTimeline {
  * `PROFILE_RULES` (src/profile.ts) forbids a sentence about the reader, and
  * /features/public-readable-sharing tells the author so.
  */
-export interface PublicTrajectory {
-  stops: TrajectoryStop[];
+export interface PublicSkim {
+  stops: SkimStop[];
   offered: number;
 }
 

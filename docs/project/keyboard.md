@@ -1,7 +1,7 @@
-# Keyboard: ↑ / ↓ take the step; ← / → step Trajectory and Quiz
+# Keyboard: ↑ / ↓ take the step; ← / → step Skim and Quiz
 
 > **Status, 2026-09-29.** The stride belonged to the gist columns of Hierarchy mode, which was removed
-> that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Trajectory stops
+> that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Skim stops
 > and, since 2026-09-30, Quiz's questions (both further down), and are the browser's everywhere else.** ↑ / ↓ still take the step in
 > the article. Everything here about columns, the pointer's level, the aim and the `L1 / L2` buttons is
 > history.
@@ -169,26 +169,26 @@ A zone declares itself with a `data-nav-depth` attribute and nothing else — `k
 with `closest()` from whatever is under the pointer. That is why the spine can join in from outside
 the table by adding one attribute, and why a new panel would too.
 
-## ← / → in Trajectory
+## ← / → in Skim
 
-**While Trajectory is the mode, ← / → step its stops instead of moving the stride** — the stops
+**While Skim is the mode, ← / → step its stops instead of moving the stride** — the stops
 of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
 through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
-they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Trajectory
+they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Skim
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:
 
 > It would maybe I can also use left and right to trigger the forward and backward buttons to jump
 > to the next sections.
 >
-> — Greg, 2026-09-28 ([trajectory.md](trajectory.md))
+> — Greg, 2026-09-28 ([skim.md](skim.md))
 
 The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/web/keynav.ts): a
-horizontal handler that `Reader` passes only while Trajectory is open, and that is the band's own
+horizontal handler that `Reader` passes only while Skim is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
-([`trajectory-route.ts`](../../src/web/trajectory-route.ts)), and each of them flashes the stop it
+([`skim-route.ts`](../../src/web/skim-route.ts)), and each of them flashes the stop it
 lands on and, on a narrow window, steps the band aside (since 2026-09-28,
-[trajectory.md](trajectory.md) § What shipped). It runs **after every guard** on this
+[skim.md](skim.md) § What shipped). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop
@@ -212,7 +212,7 @@ The band's ‹ › and the door's *Next stop ›* name their key on their cards 
 > — Greg, 2026-09-30, SPIDERYARN-READING2-71
 
 **While Remember's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
-same seam as Trajectory's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
+same seam as Skim's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
 `null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Remember — so
 it runs after every guard above, and Recall, or any other mode, leaves ← / → with the browser.
 
@@ -226,7 +226,7 @@ question. The box already keeps its own key presses
 pressed →; a click on a labelled button is a deliberate act and still moves. In each refused case
 the handler answers "took nothing", so the key goes back to the browser.
 
-**Neither Trajectory nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
+**Neither Skim nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
 `[role="dialog"]`, found from the key's own target. A comment's dialog focuses its Close button and
 has ‹ › of its own, so without this a press there stepped the band behind it. Scoped to the target
 rather than to "a dialog is open", because the comment dialog is modeless and a reader who clicks

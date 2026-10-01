@@ -1,6 +1,6 @@
 /**
  * **What the route was planned for, and the question when nobody has said** —
- * the one line Trajectory's band carries about the article's purpose, owner
+ * the one line Skim's band carries about the article's purpose, owner
  * only. docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md
  * § Stage 2; the purpose itself is docs/project/reader-profile.md.
  *
@@ -25,10 +25,10 @@ import { Link } from "./Link.js";
 import { savePurpose, usePurpose } from "./purpose.js";
 import { carriedSearch, readHref } from "./router.js";
 import { Tooltip } from "./Tooltip.js";
-import type { UseTrajectory } from "./useTrajectory.js";
+import type { UseSkim } from "./useSkim.js";
 
 interface Props {
-  owner: UseTrajectory;
+  owner: UseSkim;
   /** A stale or profile-changed banner is up: it already offers the re-plan, so do not ask again. */
   bannerUp: boolean;
 }
@@ -58,17 +58,17 @@ export function PurposeLine({ owner, bannerUp }: Props) {
 
   if (purpose !== null && purpose !== "") {
     return (
-      <div className="traj-purpose">
-        <Tooltip content={<p>{purpose}</p>} placement="bottom" className="traj-purpose-tip">
+      <div className="skim-purpose">
+        <Tooltip content={<p>{purpose}</p>} placement="bottom" className="skim-purpose-tip">
           {/* Focusable so a keyboard reaches the whole sentence too. */}
           {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip's trigger */}
-          <span className="traj-purpose-said" tabIndex={0}>
-            <span className="traj-purpose-label">Reading for:</span>{" "}
-            <span className="traj-purpose-text">{purpose}</span>
+          <span className="skim-purpose-said" tabIndex={0}>
+            <span className="skim-purpose-label">Reading for:</span>{" "}
+            <span className="skim-purpose-text">{purpose}</span>
           </span>
         </Tooltip>
         <Link
-          className="traj-purpose-edit"
+          className="skim-purpose-edit"
           href={readHref(owner.slug, carriedSearch(location.search), "metadata")}
         >
           Edit
@@ -104,25 +104,25 @@ export function PurposeLine({ owner, bannerUp }: Props) {
   };
 
   return (
-    <div className="traj-purpose traj-purpose-ask">
-      <label className="traj-purpose-q" htmlFor="traj-purpose-input">
+    <div className="skim-purpose skim-purpose-ask">
+      <label className="skim-purpose-q" htmlFor="skim-purpose-input">
         What do you want from this piece?
       </label>
       <textarea
-        id="traj-purpose-input"
-        className="traj-purpose-input"
+        id="skim-purpose-input"
+        className="skim-purpose-input"
         rows={2}
         maxLength={MAX_PURPOSE_CHARS}
         placeholder="e.g. how they handled missing data"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
       />
-      <div className="traj-purpose-foot">
+      <div className="skim-purpose-foot">
         <Button type="button" variant="outline" size="sm" disabled={busy || text === ""} onClick={() => void plan()}>
           <Route size={13} />
           Plan the route for this
         </Button>
-        <span className="traj-purpose-note">A paid model call.</span>
+        <span className="skim-purpose-note">A paid model call.</span>
       </div>
       {error !== null && (
         <p className="gloss-error" role="alert">

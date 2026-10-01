@@ -1,16 +1,16 @@
 /**
- * **How often does a Trajectory walk show the reader something again?** — plan
+ * **How often does a Skim walk show the reader something again?** — plan
  * 260929e, from Greg's SPIDERYARN-READING2-4P: *"it's a bit annoying for the
  * more detailed levels of granularity to reuse the same snippets as the coarser
  * levels if I've just read the coarser level … The main thing is to ensure that
  * there's diversity within levels, and perhaps ideally between them."*
  *
- *     npx tsx scripts/eval/trajectory-diversity.ts [slug …]
+ *     npx tsx scripts/eval/skim-diversity.ts [slug …]
  *
  * Reads the stored route, Quotes, Ideas and article of each slug (the six
  * local articles that had a route on 2026-09-29 when none is named). **No model call, nothing written
  * to the database**; the report goes to stdout and
- * `evals/results/trajectory-diversity-<ts>.json`.
+ * `evals/results/skim-diversity-<ts>.json`.
  *
  * ## Two ways of walking the same stored route
  *
@@ -40,9 +40,9 @@ const { closeDb } = await import("../../src/db/client.js");
 const { pgArticleReader } = await import("../../src/store/pg.js");
 const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
 const { blockIndex, sectionPathOf } = await import("../../src/section-path.js");
-const { trajectoryInput } = await import("../../src/trajectory.js");
+const { skimInput } = await import("../../src/skim.js");
 
-import type { Quote, TrajectoryDepth, TrajectoryStop } from "../../src/types.js";
+import type { Quote, SkimDepth, SkimStop } from "../../src/types.js";
 
 /** Content-word Jaccard at or over this is listed as a possible restatement. */
 const NEAR = 0.2;
@@ -73,7 +73,7 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 }
 
 type Policy = "nested" | "added";
-const walkOf = (stops: readonly TrajectoryStop[], d: TrajectoryDepth, p: Policy) =>
+const walkOf = (stops: readonly SkimStop[], d: SkimDepth, p: Policy) =>
   stops.filter((s) => (p === "nested" ? s.depth <= d : s.depth === d));
 
 interface StopInfo {
@@ -88,7 +88,7 @@ interface StopInfo {
 
 interface PassRow {
   policy: Policy;
-  depth: TrajectoryDepth;
+  depth: SkimDepth;
   walk: number;
   seenAgain: number;
   restates: { stop: string; of: string; j: number }[];
@@ -121,9 +121,9 @@ try {
     const totals = new Map<string, { walk: number; seenAgain: number; restates: number; ideaAgain: number; sameIdeaPairs: number; nearPairs: number; closeConsecutive: number; sameSectionConsecutive: number }>();
 
     for (const slug of slugs) {
-      let found: Awaited<ReturnType<typeof pgArticleReader.loadTrajectory>>;
+      let found: Awaited<ReturnType<typeof pgArticleReader.loadSkim>>;
       try {
-        found = await pgArticleReader.loadTrajectory(slug);
+        found = await pgArticleReader.loadSkim(slug);
       } catch (err) {
         console.log(`${slug}: no route (${err instanceof Error ? err.message : String(err)})`);
         continue;
@@ -136,12 +136,12 @@ try {
       } catch {
         ideas = null;
       }
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      const input = skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
       const carriesById = new Map(input.records.map((r) => [r.quote.id, r.carries]));
       const besideById = new Map(input.records.map((r) => [r.quote.id, r.beside]));
       const idx = blockIndex(article.blocks);
       const byId = new Map(quotes.quotes.map((q) => [q.id, q]));
-      const stops = found.trajectory.stops.filter((s) => byId.has(s.quoteId));
+      const stops = found.skim.stops.filter((s) => byId.has(s.quoteId));
       const info = new Map<string, StopInfo>();
       stops.forEach((s, i) => {
         const q = byId.get(s.quoteId)!;
@@ -156,7 +156,7 @@ try {
         });
       });
 
-      console.log(`\n=== ${slug} · ${found.trajectory.version} · ${stops.length} stops · visible ${found.trajectory.visible.join("/")}${found.stale ? " · STALE" : ""}`);
+      console.log(`\n=== ${slug} · ${found.skim.version} · ${stops.length} stops · visible ${found.skim.visible.join("/")}${found.stale ? " · STALE" : ""}`);
       const rows: PassRow[] = [];
       for (const policy of ["nested", "added"] as const) {
         const seen = new Set<string>();
@@ -250,7 +250,7 @@ try {
         };
       });
       const ideaNames = ideas ? ideas.ideas.map((d, k) => `I${k + 1} · ${d.name}`) : null;
-      report.push({ slug, version: found.trajectory.version, stale: found.stale, visible: found.trajectory.visible, ideas: ideaNames, stops: snapshot, rows });
+      report.push({ slug, version: found.skim.version, stale: found.stale, visible: found.skim.visible, ideas: ideaNames, stops: snapshot, rows });
     }
 
     console.log("\n=== totals over all routes");
@@ -262,7 +262,7 @@ try {
       );
     }
     mkdirSync("evals/results", { recursive: true });
-    const out = `evals/results/trajectory-diversity-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    const out = `evals/results/skim-diversity-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
     writeFileSync(out, JSON.stringify({ near: NEAR, report, totals: Object.fromEntries(totals) }, null, 2));
     console.log(`wrote ${out}`);
   });

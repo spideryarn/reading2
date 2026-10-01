@@ -606,7 +606,7 @@ interface Props {
  *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
  *  - `guides` — ways through the piece, each drawn from it along one line: a
  *    route through its quotes, the quotes, questions it answers, its terms,
- *    its ideas, its dates (Trajectory, Quotes, FAQ, Glossary, Ideas,
+ *    its ideas, its dates (Skim, Quotes, FAQ, Glossary, Ideas,
  *    Timeline). Not "contents": several of these are a model's reading of the
  *    piece rather than things literally in it (GPT Sol, 2026-09-29).
  *  - `critical` — reading it critically and against other work (Referee,
@@ -616,7 +616,7 @@ interface Props {
  *    same category docs/project/mode.md already names.
  *
  * Six runs became five later the same day, when Greg moved Glossary, Ideas
- * and Timeline in with Trajectory and Search in with Chat
+ * and Timeline in with Skim and Search in with Chat
  * (SPIDERYARN-READING2-57,
  * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md).
  * The two runs that changed were renamed for what they now hold.
@@ -780,7 +780,8 @@ const MODES_UI = [
     icon: Network,
   },
   /* **First of the guides run, just before Quotes, since 2026-09-29** —
-     Greg: *"Move Trajectory one further left, before Quotes"*
+     Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
+     Trajectory until 2026-10-01, plan 261001r)
      (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
      so it sits beside them; on 2026-09-28 it went straight after them (the
      sentence quoted on the Quotes row below), and before that after FAQ, where
@@ -790,12 +791,12 @@ const MODES_UI = [
      Not `ListOrdered`, which is the Tweets mode's numbered thread.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
   {
-    mode: "trajectory",
+    mode: "skim",
     group: "guides",
     icon: Route,
   },
-  /* **After Trajectory, since 2026-09-29**; straight after Summary, with
-     Trajectory after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
+  /* **After Skim, since 2026-09-29**; straight after Summary, with
+     Skim after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
      the left (after Summary)"*. It stood after Ideas before that, on the
      argument that the bar runs outwards from the article's own words and this
      is the mode *closest* to them — every row is a sentence out of the piece

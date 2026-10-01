@@ -39,7 +39,7 @@
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
  *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
  *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
- *   GET    /api/trajectory/:slug a route through the quotes at three depths, whether it still matches them, and the profile
+ *   GET    /api/skim/:slug a route through the quotes at three depths, whether it still matches them, and the profile
  *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
  *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
  *   POST   /api/citations/:slug/:id/investigate   look one cited work up, then look into it on the web, and keep both → SSE
@@ -158,7 +158,7 @@ import {
   loadFaq,
   loadCrossrefs,
   loadSimpleSummary,
-  loadTrajectory,
+  loadSkim,
   loadDebate,
   loadCitations,
   citedCandidates,
@@ -402,7 +402,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
-import { routeProfileIsStale } from "./trajectory.js";
+import { routeProfileIsStale } from "./skim.js";
 import {
   type ArticleStage,
   articlePower,
@@ -440,7 +440,7 @@ import type {
   IdeasResponse,
   QuizFound,
   QuotesResponse,
-  TrajectoryResponse,
+  SkimResponse,
   IllustratedResponse,
   SketchResponse,
   LibraryResponse,
@@ -8342,24 +8342,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   /* The route through the Quotes —
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. GET
      only, and no DELETE: the step replaces, so asking again is
-     POST /api/jobs { slug, steps: ["trajectory"] }. This route never spends. */
+     POST /api/jobs { slug, steps: ["skim"] }. This route never spends. */
   {
     kind: "pattern",
     method: "GET",
-    pattern: /^\/api\/trajectory\/([\w.%-]+)$/,
+    pattern: /^\/api\/skim\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
       /* **Not `withProfileChanged`**, whose rule calls an artefact written
          without a profile never stale. A route is exactly what a profile should
          change, so none → some counts here — `routeProfileIsStale`, the same
-         comparison `sameStamp` makes on the stamp (src/trajectory.ts). Both
+         comparison `sameStamp` makes on the stamp (src/skim.ts). Both
          reads start before either is awaited. */
-      const [found, now] = await Promise.all([loadTrajectory(at), resolveProfile(at)]);
-      const body: TrajectoryResponse = {
+      const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);
+      const body: SkimResponse = {
         ...found,
         profileChanged: routeProfileIsStale(
-          found.trajectory.profileHash,
+          found.skim.profileHash,
           now ? hashProfile(now) : null,
         ),
       };

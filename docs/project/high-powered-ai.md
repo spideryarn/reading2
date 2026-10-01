@@ -52,7 +52,7 @@ the charge would have to ride the job.
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
   (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
-  trajectory, debate, citations) and the calls made while you read it (chat, explain, search, quiz
+  skim, debate, citations) and the calls made while you read it (chat, explain, search, quiz
   marking, referee, citation lookup and investigation, glossary look-ups, live conversation's search tool).
   A developer's explicit per-task environment override still wins, so a deliberate model comparison
   stays pinned. [`TASK_TIER` and `resolveModel` in `src/models.ts`](../../src/models.ts) are the

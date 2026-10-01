@@ -346,9 +346,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   glossary: BookA,
   ideas: Lightbulb,
   quotes: Quote,
-  /* A route: the stops are the quotes one row up, in an order. The Trajectory
+  /* A route: the stops are the quotes one row up, in an order. The Skim
      band is stage 2 of docs/plans/260928a and may choose its own glyph. */
-  trajectory: Route,
+  skim: Route,
   /* The same clock the Dock puts on the Timeline button, so the stage row and
      the mode button a reader has already met say the same thing. */
   timeline: Clock,
@@ -1524,7 +1524,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   quiz: "Quiz",
   faq: "FAQ",
   sketch: "Sketch",
-  trajectory: "Trajectory",
+  skim: "Skim",
   debate: "Debate",
   citations: "Citations",
   /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
@@ -1562,7 +1562,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * run cost $0.3527, and per-pass cost varied 2.4× with how much the model
  * chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
  * § Stage 3½ § 1; the ~$0.27 in comments across `src/` is the superseded
- * ceiling. Trajectory refuses before any model call when there are
+ * ceiling. Skim refuses before any model call when there are
  * no Quotes (src/pipeline.ts), which is worth knowing before pressing rather
  * than learning from the failure.
  *
@@ -1603,7 +1603,7 @@ const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
     "Adds more terms to an up-to-date list; otherwise writes a new one",
   sketch: `One model call, ${SKETCH_WAIT}`,
   debate: "Up to two model calls, each of which searches the web",
-  trajectory: "Needs Quotes first; without them it stops before any model call",
+  skim: "Needs Quotes first; without them it stops before any model call",
 };
 
 /**

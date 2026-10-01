@@ -266,7 +266,7 @@ git show 9e5cb2ccac385a0615fecbaea22f28b8472d6cdf^:src/web/SummaryPanel.tsx
 ```
 
 The follow-the-reader scroll itself lives on in [`follow.ts`](../../src/web/follow.ts), which
-Trajectory now uses ([trajectory.md](trajectory.md)); its header holds the reasoning (move only when
+Skim now uses ([skim.md](skim.md)); its header holds the reasoning (move only when
 the target changes, never fight the reader's own scroll, why the slide is ours and not the
 browser's).
 

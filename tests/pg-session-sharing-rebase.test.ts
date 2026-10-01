@@ -20,7 +20,7 @@
  *    run rows carry a non-null `attempt_id` that the drafts' carried rows do
  *    not — the ordinary case a literal run-row comparison would refuse (GPT Sol
  *    F2).
- * 2. **Trajectory waits** while the Quotes it routes through are being made,
+ * 2. **Skim waits** while the Quotes it routes through are being made,
  *    and runs after.
  * 3. **The refusals**, each a publication by something other than a queue job
  *    landing under a live claim, because the queue rule makes them unreachable
@@ -193,7 +193,7 @@ function arcSaying(slug: string, blocks: Block[], text: string): Arc {
    tests read back. */
 const quotesSaying = (who: string) => ({ quotes: [{ id: "q1", text: who }] });
 const ideasSaying = (who: string) => ({ ideas: [{ id: "i1", name: who }] });
-const trajectorySaying = (who: string) => ({ stops: [{ quoteId: "q1", note: who }] });
+const skimSaying = (who: string) => ({ stops: [{ quoteId: "q1", note: who }] });
 
 const stepRun = (revisionId: string, name: StepName, inputHash = NO_INPUT_HASH) =>
   recordStepRun({
@@ -489,25 +489,25 @@ describe("mode jobs sharing an article", () => {
 
   /* ------------------------------------------------------------------ 2 -- */
 
-  mine("keeps Trajectory waiting while its Quotes are being made, then runs it", async () => {
-    const slug = `${SLUG_PREFIX}trajectory`;
+  mine("keeps Skim waiting while its Quotes are being made, then runs it", async () => {
+    const slug = `${SLUG_PREFIX}skim`;
     await articleFromARealJob(slug);
 
     const quotesId = await queueJob(slug, ["quotes"]);
-    const trajectoryId = await queueJob(slug, ["trajectory"]);
+    const skimId = await queueJob(slug, ["skim"]);
     const quotes = await claimNow(slug, quotesId);
 
-    const waiting = await pgJobStore.claim(trajectoryId, OWNER, mintAttempt(), LEASE_MS, CAP);
+    const waiting = await pgJobStore.claim(skimId, OWNER, mintAttempt(), LEASE_MS, CAP);
     expect(waiting.kind).toBe("busy");
     expect(waiting.kind === "busy" && waiting.why).toMatch(/ahead of it/);
 
     await finish(quotes, "quotes", { quotes: quotesSaying("the quotes job") });
-    const trajectory = await claimNow(slug, trajectoryId);
-    expect((await finish(trajectory, "trajectory", { trajectory: trajectorySaying("the route") })).kind).toBe("ended");
+    const skim = await claimNow(slug, skimId);
+    expect((await finish(skim, "skim", { skim: skimSaying("the route") })).kind).toBe("ended");
 
     const row = await revision((await currentRevisionOf(slug)) as string);
     expect(row?.quotes).toEqual(quotesSaying("the quotes job"));
-    expect(row?.trajectory).toEqual(trajectorySaying("the route"));
+    expect(row?.skim).toEqual(skimSaying("the route"));
   });
 
   /* ------------------------------------------------------------------ 3 -- */
@@ -533,7 +533,7 @@ describe("mode jobs sharing an article", () => {
   mine("refuses when a column the job reads moved underneath it", async () => {
     const slug = `${SLUG_PREFIX}read-column`;
     await articleFromARealJob(slug);
-    const trajectory = await claimWithSession(slug, ["trajectory"]);
+    const skim = await claimWithSession(slug, ["skim"]);
 
     const outside = await publishFromOutside(slug, async (id) => {
       await db().update(articleRevisions).set({ ideas: ideasSaying("new ideas") as never }).where(
@@ -541,7 +541,7 @@ describe("mode jobs sharing an article", () => {
       );
     });
 
-    await expect(finish(trajectory, "trajectory", { trajectory: trajectorySaying("the route") })).rejects.toMatchObject(
+    await expect(finish(skim, "skim", { skim: skimSaying("the route") })).rejects.toMatchObject(
       REFUSED_AS_MOVED,
     );
     expect(await currentRevisionOf(slug)).toBe(outside);

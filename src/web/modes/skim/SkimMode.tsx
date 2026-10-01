@@ -1,5 +1,5 @@
 /**
- * **Trajectory mode's controller.** The owner's band, and the hook underneath
+ * **Skim mode's controller.** The owner's band, and the hook underneath
  * it: `?depth=`, `?stop=`, the stop's passage pushed up to the prose, and the
  * handle `Reader` uses for ← / → and for the door after the stop's block.
  *
@@ -8,28 +8,28 @@
  * has — a **controller published upward**, because two things outside the band
  * step the route: the keys, which `useArrowNav` owns, and the door, which lives
  * in the prose `TableView` draws. Both ask this hook, so all three ways of
- * stepping are one rule (src/web/trajectory-route.ts).
+ * stepping are one rule (src/web/skim-route.ts).
  *
- * **And a visitor twin since 2026-09-29**, `VisitorTrajectoryBand`: the stored
- * route off the public payload, through the same `useTrajectoryMode`, with no
- * `useTrajectory` under it — so it can neither read the owner's route nor plan
+ * **And a visitor twin since 2026-09-29**, `VisitorSkimBand`: the stored
+ * route off the public payload, through the same `useSkimMode`, with no
+ * `useSkim` under it — so it can neither read the owner's route nor plan
  * one. It was `owners-only` until a signed-out reader of a public article with
  * a built route was told the route would cost a model call
  * (SPIDERYARN-READING2-56,
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
- * § The mode (client), docs/project/trajectory.md.
+ * § The mode (client), docs/project/skim.md.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQueryStates } from "nuqs";
-import type { Block, BlockId, Quote, Tree, TrajectoryDepth, TrajectoryStop } from "../../../types.js";
+import type { Block, BlockId, Quote, Tree, SkimDepth, SkimStop } from "../../../types.js";
 import type {
   PublicGlossary,
   PublicIdeas,
   PublicTimeline,
-  PublicTrajectory,
+  PublicSkim,
 } from "../../../public-types.js";
 import { blockIndex, sectionPathOf } from "../../../section-path.js";
 import { depthParam, stopParam } from "../../params.js";
@@ -38,7 +38,7 @@ import { useRenderCount } from "../../perf.js";
 import { quoteStroke } from "../../QuotesPanel.js";
 import { dropPendingFlash, flashBlock } from "../../flash.js";
 import { scrollToBlock } from "../../scroll.js";
-import { type Found, quoteMarkKey, resolveTrajectoryStop } from "../../search-hits.js";
+import { type Found, quoteMarkKey, resolveSkimStop } from "../../search-hits.js";
 import {
   DEPTH_LABEL,
   doorAfter,
@@ -48,11 +48,11 @@ import {
   passCount,
   positionsOf,
   stepStop,
-} from "../../trajectory-route.js";
+} from "../../skim-route.js";
 import type { QuotesRead } from "../../useQuotes.js";
 import { type WhereRow, whereForBlock } from "../../where.js";
-import { useTrajectory } from "../../useTrajectory.js";
-import { TrajectoryPanel, type TrajectoryRow } from "../../TrajectoryPanel.js";
+import { useSkim } from "../../useSkim.js";
+import { SkimPanel, type SkimRow } from "../../SkimPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
 import type { GlossaryRead } from "../../useGlossary.js";
 import { useIdeasRead } from "../../useIdeas.js";
@@ -69,7 +69,7 @@ import { useTimelineRead } from "../../useTimeline.js";
  * do. A fresh closure per render would republish every render, and `Reader`
  * re-rendering the band that republished is a loop.
  */
-export interface TrajectoryControl {
+export interface SkimControl {
   /** The current stop's block — where the door hangs. `null` if its quote has gone. */
   blockId: BlockId | null;
   /** What the door after it offers — `DoorView`. */
@@ -86,7 +86,7 @@ export interface TrajectoryControl {
 }
 
 /**
- * **The door, as the prose draws it** (TrajectoryPanel.tsx § TrajectoryDoor).
+ * **The door, as the prose draws it** (SkimPanel.tsx § SkimDoor).
  * Mid-pass, *Next stop ›* with the cue of the stop it leads to. At the end of a
  * pass, *More detail ›* when there is a deeper pass, and a line saying which
  * pass just ended — at the deepest, the line alone. *Go round again* went in
@@ -102,12 +102,12 @@ export type DoorView =
  * mount. Mode switches remount bands while leaving `?stop=` in the address, so
  * the mutable token has to live above that boundary.
  */
-export interface TrajectoryArrival {
+export interface SkimArrival {
   stop: string | null;
   /**
    * **Jump to the current stop when the band first has one** — armed by
-   * `Reader` when the reader switches into Trajectory by pressing something, or
-   * lands on a Trajectory address naming no `?stop=` and no `?at=`; never by
+   * `Reader` when the reader switches into Skim by pressing something, or
+   * lands on a Skim address naming no `?stop=` and no `?at=`; never by
    * Back or Forward, which restore an entry rather than make one (plan 260929a
    * § 1, GPT Sol F4). Greg, SPIDERYARN-READING2-4K: *"activating Trajectory
    * mode should automatically jump to the first step … then show one of the
@@ -118,10 +118,10 @@ export interface TrajectoryArrival {
 
 /* A mode-only pop keeps `Reader` mounted, but Back from another page can mount
    it afresh. Remember that navigation above the component boundary too, or a
-   fresh `firstTrajectoryArrival` would mistake traversal for an opening and
+   fresh `firstSkimArrival` would mistake traversal for an opening and
    push over Forward. The navigation-entry check covers a document restored by
    browser history before this module's listener existed. */
-let poppedTrajectoryAddress: string | null = null;
+let poppedSkimAddress: string | null = null;
 let documentTraversalAddress: string | null =
   typeof window !== "undefined" &&
   (performance.getEntriesByType?.("navigation")[0] as PerformanceNavigationTiming | undefined)?.type ===
@@ -130,26 +130,26 @@ let documentTraversalAddress: string | null =
     : null;
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
-    poppedTrajectoryAddress = location.href;
+    poppedSkimAddress = location.href;
   });
 }
 
-function takeTrajectoryTraversal(): boolean {
-  const traversed = poppedTrajectoryAddress === location.href || documentTraversalAddress === location.href;
-  poppedTrajectoryAddress = null;
+function takeSkimTraversal(): boolean {
+  const traversed = poppedSkimAddress === location.href || documentTraversalAddress === location.href;
+  poppedSkimAddress = null;
   documentTraversalAddress = null;
   return traversed;
 }
 
 /**
  * **The token for the page's first load.** A `?stop=` is a deep link. With no
- * `?stop=` and no `?at=`, a Trajectory address is an opening — a link to the
+ * `?stop=` and no `?at=`, a Skim address is an opening — a link to the
  * mode, say — and jumps to stop 1. With `?at=` and no stop it is a reading
  * position (a reload before the first step), which is restored, not overruled.
  */
-export function firstTrajectoryArrival(mode: string | null, search: string = location.search): TrajectoryArrival {
-  const traversed = takeTrajectoryTraversal();
-  if (mode !== "trajectory") return { stop: null, open: false };
+export function firstSkimArrival(mode: string | null, search: string = location.search): SkimArrival {
+  const traversed = takeSkimTraversal();
+  if (mode !== "skim") return { stop: null, open: false };
   const q = new URLSearchParams(search);
   /* Back and Forward restore the entry through `?at=` and the browser history;
      neither a surviving `?stop=` nor an otherwise bare address is a new
@@ -160,25 +160,25 @@ export function firstTrajectoryArrival(mode: string | null, search: string = loc
 }
 
 /** Arm the opening jump at the press, before nuqs writes the new address. */
-export function armTrajectoryOpening(
-  arrival: TrajectoryArrival,
+export function armSkimOpening(
+  arrival: SkimArrival,
   from: string | null,
   to: string | null,
 ): void {
   /* A direct press is stronger evidence than a remembered traversal to the
      same href, and it owns its own opening token below. */
-  poppedTrajectoryAddress = null;
+  poppedSkimAddress = null;
   documentTraversalAddress = null;
-  if (from !== "trajectory" && to === "trajectory") arrival.open = true;
+  if (from !== "skim" && to === "skim") arrival.open = true;
 }
 
 /** A module constant, for `NO_FOUND`'s reason (reader/passages.ts). */
-const NO_STOPS: TrajectoryStop[] = [];
+const NO_STOPS: SkimStop[] = [];
 const NO_WHERE: WhereRow[] = [];
 const NO_QUOTES: Quote[] = [];
 const NONE_FOUND: Found[] = [];
 
-export function TrajectoryBand({
+export function SkimBand({
   slug,
   blocks,
   tree,
@@ -209,7 +209,7 @@ export function TrajectoryBand({
   /** Whether that target mode's control is available to this reader. */
   canOpen(target: CardTarget): boolean;
   /** The reading view's one-shot initial `?stop=` token. */
-  arrival: TrajectoryArrival;
+  arrival: SkimArrival;
   /** The quotes already marked in the prose — `useQuoteMarks`' `found`. */
   quoteMarks: readonly Found[];
   /** The band is lying over the prose (a narrow window) — `fit.modeW === 0`. */
@@ -227,15 +227,15 @@ export function TrajectoryBand({
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
-  onControl(control: TrajectoryControl | null): void;
+  onControl(control: SkimControl | null): void;
 }) {
-  useRenderCount("TrajectoryBand");
+  useRenderCount("SkimBand");
   /* **The Ideas read comes first, and the route's hook is handed it** (Sol
      F61): since stage 6 the route's own job finds the Ideas when there are
      none, so its completion has to refresh this read — the one the stop card
      draws from — or a fresh article's card shows no Ideas until a reload. */
   const ideas = useIdeasRead(slug);
-  const owner = useTrajectory(slug, quotes, ideas);
+  const owner = useSkim(slug, quotes, ideas);
   /* **The scrapbook's other sources, read and never written.** The read-only
      hooks carry no job machinery at all, so the card cannot be the reason any
      of these is generated (Sol F22). The glossary is `Reader`'s own read. The
@@ -259,11 +259,11 @@ export function TrajectoryBand({
       timeline.stale,
     ],
   );
-  const view = useTrajectoryMode({
+  const view = useSkimMode({
     sources,
     onOpen,
     canOpen,
-    stops: owner.trajectory?.stops ?? NO_STOPS,
+    stops: owner.skim?.stops ?? NO_STOPS,
     quotes: quotes.quotes?.quotes ?? NO_QUOTES,
     blocks,
     tree,
@@ -277,12 +277,12 @@ export function TrajectoryBand({
     onControl,
     arrival,
   });
-  return <TrajectoryPanel access={{ kind: "owner", owner }} view={view} away={away} />;
+  return <SkimPanel access={{ kind: "owner", owner }} view={view} away={away} />;
 }
 
 /** The props both bands take from `Reader` for the walk itself. */
 type WalkProps = Pick<
-  Parameters<typeof TrajectoryBand>[0],
+  Parameters<typeof SkimBand>[0],
   | "blocks"
   | "tree"
   | "quoteMarks"
@@ -303,8 +303,8 @@ type WalkProps = Pick<
  * **The same walk, for somebody who does not own the article.**
  *
  * Everything came in the page's own payload: the route, the quotes it stops
- * at, and the stop card's sources. No `useTrajectory`, so no read of
- * `/api/trajectory/:slug` and no `useAutoRun` — nothing here can plan a route,
+ * at, and the stop card's sources. No `useSkim`, so no read of
+ * `/api/skim/:slug` and no `useAutoRun` — nothing here can plan a route,
  * which is the whole of why this is a second band rather than a flag on the
  * first (src/web/reader-capability.ts; `VisitorTimelineBand` is the sibling).
  * The card's sources are the payload's copies, never `useIdeasRead` or
@@ -312,7 +312,7 @@ type WalkProps = Pick<
  * carries no freshness (src/public-types.ts § `PublicArtefactSet`), so each is
  * handed over as not stale.
  */
-export function VisitorTrajectoryBand({
+export function VisitorSkimBand({
   route,
   quotes,
   glossary,
@@ -320,13 +320,13 @@ export function VisitorTrajectoryBand({
   timeline,
   ...walk
 }: WalkProps & {
-  route: PublicTrajectory;
+  route: PublicSkim;
   quotes: Quote[];
   glossary: PublicGlossary | undefined;
   ideas: PublicIdeas | undefined;
   timeline: PublicTimeline | undefined;
 }) {
-  useRenderCount("VisitorTrajectoryBand");
+  useRenderCount("VisitorSkimBand");
   const sources = useMemo<CardSources>(
     () => ({
       glossary: { value: glossary ?? null, stale: false },
@@ -336,22 +336,22 @@ export function VisitorTrajectoryBand({
     [glossary, ideas, timeline],
   );
   const { away, ...rest } = walk;
-  const view = useTrajectoryMode({ ...rest, sources, stops: route.stops, quotes });
-  return <TrajectoryPanel access={{ kind: "visitor", route }} view={view} away={away} />;
+  const view = useSkimMode({ ...rest, sources, stops: route.stops, quotes });
+  return <SkimPanel access={{ kind: "visitor", route }} view={view} away={away} />;
 }
 
-/** What the panel draws — see `TrajectoryPanel`. */
-export interface TrajectoryView {
+/** What the panel draws — see `SkimPanel`. */
+export interface SkimView {
   /** The depth drawn, or `null` for a route with no stops. */
-  depth: TrajectoryDepth | null;
+  depth: SkimDepth | null;
   /** Each offered depth, its label and how many stops it shows. */
-  depths: { depth: TrajectoryDepth; label: string; count: number }[];
-  rows: TrajectoryRow[];
+  depths: { depth: SkimDepth; label: string; count: number }[];
+  rows: SkimRow[];
   /** 1-based position of the current stop on this pass, or 0 for none. */
   position: number;
   /** What sits under the current stop — src/web/stop-card.ts. `null` without a current stop. */
   card: StopCard | null;
-  onDepth(depth: TrajectoryDepth): void;
+  onDepth(depth: SkimDepth): void;
   onRow(quoteId: string): void;
   onStep(dir: -1 | 1): void;
   /** A card link into another mode. */
@@ -360,7 +360,7 @@ export interface TrajectoryView {
   canOpen(target: CardTarget): boolean;
 }
 
-function useTrajectoryMode({
+function useSkimMode({
   sources,
   onOpen,
   canOpen,
@@ -381,7 +381,7 @@ function useTrajectoryMode({
   sources: CardSources;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
-  stops: TrajectoryStop[];
+  stops: SkimStop[];
   quotes: Quote[];
   blocks: Block[];
   tree: Tree;
@@ -392,9 +392,9 @@ function useTrajectoryMode({
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
-  onControl(control: TrajectoryControl | null): void;
-  arrival: TrajectoryArrival;
-}): TrajectoryView {
+  onControl(control: SkimControl | null): void;
+  arrival: SkimArrival;
+}): SkimView {
   /* **One `useQueryStates`, so a depth change and the stop it lands on are one
      URL update** — the plan's § URL, F9. The per-call history option decides:
      a depth change pushes, a step replaces. */
@@ -414,12 +414,12 @@ function useTrajectoryMode({
   const index = useMemo(() => blockIndex(blocks), [blocks]);
   const quote = current ? (byId.get(current.quoteId) ?? null) : null;
 
-  /* **The stop's passage — one `Found`, the quote's own.** `resolveTrajectoryStop`
+  /* **The stop's passage — one `Found`, the quote's own.** `resolveSkimStop`
      hands back the object `useQuoteMarks` already built when there is one, which
      is what lets `proseFound` draw it once (reader/passages.ts). */
   const found = useMemo(() => {
     if (!quote) return NONE_FOUND;
-    const one = resolveTrajectoryStop(blocks, quoteMarks, { ...quote, stroke: quoteStroke(quote) });
+    const one = resolveSkimStop(blocks, quoteMarks, { ...quote, stroke: quoteStroke(quote) });
     return one ? [one] : NONE_FOUND;
   }, [quote, blocks, quoteMarks]);
 
@@ -494,7 +494,7 @@ function useTrajectoryMode({
 
   const changeDepth = useCallback(
     /** @param land where to stand instead of where a depth change keeps you — *More detail ›*. */
-    (to: TrajectoryDepth, land?: string) => {
+    (to: SkimDepth, land?: string) => {
       if (depth === null) return;
       /* Stop 1 of the new pass: passes share no stop to stay on (260929e). */
       const next = land ?? firstStopOf(stops, to);
@@ -552,7 +552,7 @@ function useTrajectoryMode({
 
   /* ------------------------------------------------ published upward --
      The verbs through a ref, so the published object is stable and changes
-     only with the stop's block and the door's words. See `TrajectoryControl`. */
+     only with the stop's block and the door's words. See `SkimControl`. */
   const latest = useRef({ step, advance, deeper });
   latest.current = { step, advance, deeper };
   const stableStep = useCallback((dir: -1 | 1) => latest.current.step(dir), []);
@@ -566,7 +566,7 @@ function useTrajectoryMode({
      with the band: Back cannot inherit the old press and turn traversal into a
      fresh push. A ref survives StrictMode's synthetic effect replay, so the
      first setup may claim it without the second losing it (code review F2). */
-  const claimedArrival = useRef<TrajectoryArrival>({ stop: null, open: false });
+  const claimedArrival = useRef<SkimArrival>({ stop: null, open: false });
   useLayoutEffect(() => {
     /* StrictMode runs this setup twice around a synthetic cleanup. The second
        sees an empty mailbox and must leave the first setup's local claim alone. */
@@ -610,7 +610,7 @@ function useTrajectoryMode({
     onJump(stopBlock, quoteMarkKey(current.quoteId, stopBlock));
   }, [current, stopBlock, onJump]);
 
-  const control = useMemo<TrajectoryControl | null>(
+  const control = useMemo<SkimControl | null>(
     () =>
       current === null
         ? null
@@ -637,7 +637,7 @@ function useTrajectoryMode({
     [stops],
   );
   const positions = useMemo(() => positionsOf(blocks), [blocks]);
-  const rows = useMemo<TrajectoryRow[]>(
+  const rows = useMemo<SkimRow[]>(
     () =>
       route.map((stop, i) => {
         const block = blockOf(stop.quoteId);
@@ -711,7 +711,7 @@ function useTrajectoryMode({
  * **Arriving at a stop** — by stepping (`moveTo`, above) or by a deep link:
  * the stop's quote centred in view, and flashed once the glide settles, the
  * rule `beginJump` (keynav.ts) follows so a flash never finishes mid-glide.
- * Stepping elsewhere does not flash; a Trajectory step does, because the route
+ * Stepping elsewhere does not flash; a Skim step does, because the route
  * is out of paper order and each step lands anywhere in the article — flash.ts
  * names the exception. The plan's stage 5a.
  *
@@ -751,6 +751,6 @@ function arrive(block: BlockId, quoteId: string): void {
 }
 
 /** A stop's cue, or — on a route written before cues — its role. */
-function cueOf(stop: TrajectoryStop): string | null {
+function cueOf(stop: SkimStop): string | null {
   return stop.cue ?? stop.role;
 }

@@ -86,7 +86,7 @@ import type {
   Faq,
   Crossrefs,
   SimpleSummary,
-  Trajectory,
+  Skim,
   FeedbackDiagnosticsPayload,
   Glossary,
   Ideas,
@@ -898,16 +898,19 @@ export const articleRevisions = spideryarn.table(
     simpleSummary: jsonb("simple_summary").$type<SimpleSummary>(),
 
     /**
-     * A route through the Quotes, at three depths — `Trajectory`, src/types.ts,
-     * written by the `trajectory` step.
+     * A route through the Quotes, at three depths — `Skim`, src/types.ts,
+     * written by the `skim` step.
      * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      *
      * The WHOLE artefact, like its neighbours. **It holds quote ids and no
      * block ids**: a stop reaches its passage through the quote in the `quotes`
      * column beside it. `sourceHash` is the quotes hash, and `profileHash` is in
      * the stamp.
+     *
+     * The column was `trajectory` until 2026-10-01, when the mode became Skim
+     * (drizzle/20261001211832_skim.sql renames it in place).
      */
-    trajectory: jsonb("trajectory").$type<Trajectory>(),
+    skim: jsonb("skim").$type<Skim>(),
 
     /**
      * The picture a model drew of the argument — `Sketch`,
@@ -2572,7 +2575,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",

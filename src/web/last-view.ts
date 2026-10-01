@@ -93,8 +93,8 @@ export const REMEMBERED = [
   "idea", // selected idea
   "quote", // selected quote
   "event", // selected timeline event
-  "depth", // which pass of a Trajectory — Gist, More or Most
-  "stop", // which quote-sized Trajectory stop you were reading
+  "depth", // which pass of a Skim — Gist, More or Most
+  "stop", // which quote-sized Skim stop you were reading
 ] as const;
 
 /**

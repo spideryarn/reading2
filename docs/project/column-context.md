@@ -430,6 +430,6 @@ read. If none does, the answer is the spine's tooltips, which already exist.
 - [tooltips.md](tooltips.md) — the landmark cards are the spine's tooltip, with a shorter delay
 - [browser-testing.md](browser-testing.md) — a hidden tab runs no rAF, so the live half cannot be
   checked there; the sampler was verified by shimming `requestAnimationFrame` and dispatching `scroll`
-- [`follow.ts`](../../src/web/follow.ts) (written for Summary's outline, removed 2026-10-01; Trajectory
+- [`follow.ts`](../../src/web/follow.ts) (written for Summary's outline, removed 2026-10-01; Skim
   uses it now) — the same problem in a panel the reader *can* scroll, which is why that one nudges rather than
   centres, and why it needs no scroll listener to tell its own scrolling from theirs

@@ -231,7 +231,7 @@ describe("a band lying over the prose", () => {
 });
 
 /**
- * **A passage, not the block** — the optional target Trajectory passes
+ * **A passage, not the block** — the optional target Skim passes
  * (plan 260928a § 7b; Greg, 2026-09-28: "I was hoping it would flash the
  * specific Quote"). The quote is drawn as `mark.hit` fragments whose
  * `data-hit` lists the Found keys covering them (annotate.ts), possibly split
@@ -357,7 +357,7 @@ describe("flashBlock with a cited work", () => {
 
   /* SPIDERYARN-READING2-7X: "a little bit too subtle and quick, so I often
      don't quite spot the flash". Longer and stronger on a cited work's words
-     only — a few words are a small patch; a paragraph and Trajectory's every
+     only — a few words are a small patch; a paragraph and Skim's every
      step keep the old wash (Sol, plan 261001m review). */
   it("holds a cited work's flash for longer than a paragraph's", async () => {
     const { citePassageKey } = await import("../src/web/rows.js");

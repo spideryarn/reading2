@@ -1,5 +1,5 @@
 /**
- * **What sits under a Trajectory stop** — the scrapbook's card, gathered from
+ * **What sits under a Skim stop** — the scrapbook's card, gathered from
  * what the other modes have *already* written for this article: the glossary
  * terms the passage uses, the ideas it bears on, and where it sits in the
  * study's timeline. The FAQ question it answers used to sit above the stop;
@@ -48,7 +48,7 @@ export interface Fresh<T> {
 /**
  * `Pick`s of the artefacts, not the artefacts, because a visitor's band hands
  * the card the public payload's copies — the same lists, without the
- * provenance a visitor is never sent (`VisitorTrajectoryBand`, since
+ * provenance a visitor is never sent (`VisitorSkimBand`, since
  * 2026-09-29).
  */
 export interface CardSources {

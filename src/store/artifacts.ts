@@ -49,7 +49,7 @@ import type {
   SimpleSummary,
   Debate,
   Faq,
-  Trajectory,
+  Skim,
   Glossary,
   Ideas,
   Meta,
@@ -99,7 +99,7 @@ export type ArtifactKind =
   | "timeline"
   | "quiz"
   | "faq"
-  | "trajectory"
+  | "skim"
   | "sketch"
   | "illustrated"
   | "debate"
@@ -174,11 +174,11 @@ export interface ArtifactMap {
    */
   faq: Faq;
   /**
-   * A route through the Quotes, at three depths — `Trajectory`, src/types.ts,
-   * written by the `trajectory` step.
+   * A route through the Quotes, at three depths — `Skim`, src/types.ts,
+   * written by the `skim` step.
    * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
    */
-  trajectory: Trajectory;
+  skim: Skim;
   sketch: Sketch;
   /**
    * The same argument painted — `Illustrated`, src/illustrated-plate.ts,
@@ -370,10 +370,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   faq: { field: "questions", ok: isArray },
   /* A `stops` array, and **an empty one is NOT usable** — the opposite call
      from `faq` directly above. There is always a route through a non-empty set
-     of quotes, so `buildTrajectory` (src/trajectory.ts) throws on every empty
+     of quotes, so `buildSkim` (src/skim.ts) throws on every empty
      outcome, and this refuses one at the store boundary too.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  trajectory: { field: "stops", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
+  skim: { field: "stops", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
   /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
      two rows up. An article with no images legitimately has an empty list; a
      picture with no scenes is not a picture, and `accept` in
@@ -948,7 +948,7 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   /* **And deliberately NO `BASELINE` row**: the route holds only quote ids and
      has no ids of its own to inherit, so a re-run simply replaces it. Its
      `sourceHash` is the quotes hash, not an article fingerprint. */
-  trajectory: "trajectory",
+  skim: "skim",
   sketch: "sketch",
   illustrated: "illustrated",
   /* **And deliberately NO `BASELINE` row**, like `quiz` above and for the same

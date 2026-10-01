@@ -467,8 +467,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
-  /* The Trajectory's two refusals: no usable Quotes, or only abstract Quotes.
-     See `TRAJECTORY_NO_QUOTES` and `TRAJECTORY_ONLY_ABSTRACT_QUOTES`. */
+  /* The Skim's two refusals: no usable Quotes, or only abstract Quotes.
+     See `SKIM_NO_QUOTES` and `SKIM_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
   "jb-only-abstract-quotes": "blocked",
   /* Reading a PDF. The split of prefix is the rule in docs/project/copy.md read
@@ -1393,7 +1393,7 @@ export function articleHadNoText(origin: DocumentOrigin): ReaderFacingFailure {
 }
 
 /**
- * **The Trajectory refuses without Quotes**, the way painting refuses without
+ * **The Skim refuses without Quotes**, the way painting refuses without
  * a Sketch: its stops *are* the quotes, so there is nothing to put in order.
  * `blocked` because a retry would find the same empty list. The client asks for
  * `quotes` first in the same job when it knows there are none
@@ -1401,19 +1401,19 @@ export function articleHadNoText(origin: DocumentOrigin): ReaderFacingFailure {
  * a reader meets this only when Quotes ran and kept nothing, or when the quotes
  * all sit on paragraphs the article no longer has.
  */
-export const TRAJECTORY_NO_QUOTES: ReaderFacingFailure = {
+export const SKIM_NO_QUOTES: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "There are no quotes for this article yet, and the trajectory is a route through its quotes. " +
+    "There are no quotes for this article yet, and Skim is a route through its quotes. " +
     "Open Quotes and choose them first, then open this again. Until there are some, this will " +
     "come back the same way. [jb-no-quotes]",
 };
 
 /** Quotes exist, but the route deliberately cannot use the abstract's. */
-export const TRAJECTORY_ONLY_ABSTRACT_QUOTES: ReaderFacingFailure = {
+export const SKIM_ONLY_ABSTRACT_QUOTES: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "The only quotes Trajectory can use are in this article's abstract. Trajectory leaves the " +
+    "The only quotes Skim can use are in this article's abstract. Skim leaves the " +
     "abstract out, so it has no stops to plan. Planning it again now will come back the same way. " +
     "Open Quotes and use Find more; once it finds a line from the body, plan the route again. " +
     "[jb-only-abstract-quotes]",
@@ -3710,7 +3710,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  */
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, every zoom level, and the reading " +
-  "aids written for it — including the summaries, glossary, ideas, quotes, timeline, trajectory, " +
+  "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
   "FAQ, citations and Debate. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
   "part of it.";
@@ -3888,7 +3888,7 @@ export const OWNED_ARTEFACT = {
   illustrated: "your illustrated diagram",
   /* Owner-only, and listed all the same, for `illustrated`'s reason: its
      `profileHash` is the reader's own, and `ProfileCarrying` asks. */
-  trajectory: "your route through the quotes",
+  skim: "your route through the quotes",
   simple: "your plain-words summary",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
@@ -4301,8 +4301,8 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   faq:
     "The questions the model thought a careful reader would ask this piece, each with the passages where it responds.",
   /* The stops are the article's own quotes; the order, the depth and the role
-     line are the model's reading (src/trajectory.ts). */
-  trajectory:
+     line are the model's reading (src/skim.ts). */
+  skim:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
   /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
      mode and the sweep over `MODES` started listing it. */

@@ -4,7 +4,7 @@
  * horizontal handler (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Keys, Sol F5).
  *
- * While Trajectory is the mode, ← / → step its stops; while Remember's Quiz
+ * While Skim is the mode, ← / → step its stops; while Remember's Quiz
  * half is showing, they step its questions; everywhere else they are the
  * browser's (they moved the stride across Hierarchy's gist columns until
  * 2026-09-29). The existing guards hold for both: no modifiers, not while
@@ -104,7 +104,7 @@ function press(
   return event;
 }
 
-describe("with a horizontal handler (Trajectory or Quiz)", () => {
+describe("with a horizontal handler (Skim or Quiz)", () => {
   beforeEach(async () => {
     await mount(true);
   });

@@ -217,15 +217,15 @@ agrees with it.
 > for navigation, I'm suggesting that where we can, we use icons + tooltips rather than text labels.
 > And add this as a note to our design document going forwards.
 >
-> — Greg, 2026-09-29 (SPIDERYARN-READING2-5C), on Trajectory's *In the glossary ›*
+> — Greg, 2026-09-29 (SPIDERYARN-READING2-5C), on Skim's (then Trajectory's) *In the glossary ›*
 
 Going forwards, then:
 
 - **A control that takes you somewhere** — into another mode, to a whole list — is an icon button,
   and its words live in its tooltip and its `aria-label`. For a mode, use **that mode's own icon**
   from the bar (`MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx)), so the button looks like where
-  it goes: Trajectory's stop card opens Glossary with `BookA` and Ideas with `Lightbulb` (`OpenIn`
-  in [`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx)).
+  it goes: Skim's stop card opens Glossary with `BookA` and Ideas with `Lightbulb` (`OpenIn`
+  in [`SkimPanel.tsx`](../../src/web/SkimPanel.tsx)).
 - **Every icon has a tooltip.** No bare icon, anywhere. If the control has a keyboard shortcut, the
   tooltip names it — [tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
 - **Not for content.** A link whose words *are* the thing — an idea's name, an event's label, a

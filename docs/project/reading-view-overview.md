@@ -33,7 +33,7 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 - **Never substitute generated text for the prose,** and render model output as text, not HTML.
 - **One payload, no network on zoom** — meta, blocks and tree arrive together.
 - **Pressing a mode with nothing in it runs it; arriving at one does not.** The artefact-backed
-  surfaces are Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory, and the Sketch
+  surfaces are Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim, and the Sketch
   or Illustrated picture inside Diagram —
   and since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
   Back step and a link in from the metadata page all show the empty state and its button, and spend
@@ -135,7 +135,7 @@ readers never are.
   answered by passages of the piece itself and never by a written answer. Open it for where the
   promise stops: the words are checked, which passage answers which question is not. Behind the
   switch; a visitor to a public article sees the stored FAQ, while making it remains the owner's.
-- **[trajectory.md](trajectory.md)** — skim a paper at increasing depth: one route through its
+- **[skim.md](skim.md)** — skim a paper at increasing depth: one route through its
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
   it for Greg's dictated brief, verbatim, and the questions still waiting for him.
 - **[tweets.md](tweets.md)** — the article as a numbered thread, in a wide band beside the prose,
@@ -196,8 +196,8 @@ right instead, beside a band or without one.
   gist column stepped, before the columns were removed). Open it for why not `scroll-snap`.
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why
   position is a *section* rather than an offset. Also the home of the **↩ Back to …** chip: every
-  jump in every mode — a block link, a glossary term, a citation, a Trajectory row, opening
-  Trajectory — pushes one entry stamped with where you were, and the chip at the foot of the prose
+  jump in every mode — a block link, a glossary term, a citation, a Skim row, opening
+  Skim — pushes one entry stamped with where you were, and the chip at the foot of the prose
   takes you back there, even on a home-screen app with no Back button. Read
   [§ The pushed entry says where you came from](url-state.md#the-pushed-entry-says-where-you-came-from)
   and the two sections after it before adding a new way to move the reader.

@@ -468,7 +468,7 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 it can also start the main modes.** While the import runs, the page shows a tick
 box that is on by default. When the import finishes, the page opens the article and queues one job
-per main mode: Tweets, Glossary, Quotes, Ideas, then Trajectory, which carries Quotes and Ideas in
+per main mode: Tweets, Glossary, Quotes, Ideas, then Skim, which carries Quotes and Ideas in
 front of it. These are ordinary mode jobs on this queue, posted from the page, so a tab closed before
 the import finishes queues none. Which modes, what it costs, and the deferred ideal (opening the
 paper before `hierarchy`):
@@ -854,7 +854,7 @@ and keeps the two-sided note only when the server cannot say
 a prediction from the state the page read, and the page reads again after a run and after the
 purpose box saves; the
 sketch's price and wait, debate's **up to two separately metered calls** at $0.20–0.40 on a short
-article, and Trajectory's *needs Quotes first* are the same kind of note under those rows' names.
+article, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
 Each note is also its button's accessible description. A Retry is one press too, and holds
 *Starting…* across its round trip so a double click sends one. The whole-article reset, the first
 row of the same card, keeps its confirm — it removes the extras and can move comments, which is the
@@ -1141,7 +1141,7 @@ is making, and the tree and blocks every mode reads changing under a mode — wh
 other makes or reads.** A sharing job is one whose steps are all *sharing steps* — the modes after
 `assets` in `STEP_ORDER`, each writing one `article_revisions` column of its own — and which carries
 no `reset` and reserves no name. Each step's column and the other sharing steps it reads (`illustrated`
-reads `sketch`; `trajectory` reads `quotes` and `ideas`) are one exhaustive policy in
+reads `sketch`; `skim` reads `quotes` and `ideas`) are one exhaustive policy in
 [`src/sharing-steps.ts`](../../src/sharing-steps.ts), and `mayOverlap` there is the rule. Everything
 else — ingest, re-extraction, `hierarchy`, `labels`, `assets`, a reset — runs alone exactly as
 before, and FIFO holds for every pair that may not overlap, so a mode job never jumps an older

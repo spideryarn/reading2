@@ -35,7 +35,7 @@
  * ## Who uses it
  *
  * **Fifteen call sites.** Fourteen are step-specific surfaces: Arc, Glossary,
- * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Trajectory,
+ * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Skim,
  * Citations and the Thread page. The fifteenth is `RerunRow` in Metadata,
  * generic over its offered step. This line has repeatedly lagged the real list;
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.

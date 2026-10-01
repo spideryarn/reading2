@@ -1,4 +1,4 @@
-# Trajectory — skim a paper at increasing depth
+# Skim — a paper at increasing depth
 
 A mode for going round a piece more than once, a little deeper each time: a handful of stops the
 first time round, about a dozen the second, a larger share of the piece the third. The stops need
@@ -8,18 +8,44 @@ not come in the paper's order — the results first, say, and then a quick tour 
 [260928a](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md). This doc is the
 vision; the plan is the build.
 
+**Called Trajectory until 2026-10-01**, when Greg renamed it Skim (report spya-skxhcz) so that code,
+UI, database and docs share one name — *"so that it's easy to grep, and there's less confusion for
+an agent reading the code about what's what"*; the rename is
+[261001r](../plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md). Greg's own words
+below say Trajectory, and stay as he said them. Old `?mode=trajectory` links still open Skim, and
+typing *Trajectory* in the command bar still finds it.
+
+### What keeps the old name
+
+A grep for `trajector` outside the historical folders should find only these, each on purpose:
+
+- **The Commands keyword** — `"trajectory"` in `MODE_CATALOG.skim.aliases`
+  ([`src/modes.ts`](../../src/modes.ts)), at Greg's request.
+- **`RETIRED_MODES`: `trajectory → skim`**, beside `outline`/`hierarchy → structure`, so a bookmarked,
+  shared or remembered `?mode=trajectory` opens Skim. Feedback from a tab loaded before the rename
+  is normalised the same way (and its `job.step`, by a step alias), rather than refused.
+- **The prompt version tag `trajectory/7`**, until the prompt next changes (then `skim/8`). It is
+  persisted in every stored route and in `revision_step_runs.prompt_version`, and the two must agree,
+  so respelling it alone would mark every route out of date for no change in the prompt.
+- **The input-hash namespace `"trajectory-input\n"`** in `skimInputHash`. Changing it changes every
+  hash, so every stored route would read stale.
+- **The cost ledger.** `ai_calls` is append-only, so its historical rows keep `purpose` /
+  `step_name` `'trajectory'`; a legacy alias in [`src/cost-categories.ts`](../../src/cost-categories.ts)
+  counts them with `skim`.
+- History: plan, postmortem and feedback file names, and the applied migrations.
+
 ## What shipped
 
 v1, for the article's owner only, and behind the experimental switch until later on 2026-09-28
 ([experimental-features.md](experimental-features.md)):
 
-- **The step**, `trajectory` ([`src/trajectory.ts`](../../src/trajectory.ts)): one small model call
+- **The step**, `skim` ([`src/skim.ts`](../../src/skim.ts)): one small model call
   over the stored Quotes — their words, section paths and priorities, never the rest of the prose —
   that orders them into a route and gives each a depth and a short role line (a cue since v2,
   below). It refuses without
   Quotes; the band asks for both in one job when there are none.
-- **The band** ([`TrajectoryPanel.tsx`](../../src/web/TrajectoryPanel.tsx),
-  [`modes/trajectory/TrajectoryMode.tsx`](../../src/web/modes/trajectory/TrajectoryMode.tsx)): a
+- **The band** ([`SkimPanel.tsx`](../../src/web/SkimPanel.tsx),
+  [`modes/skim/SkimMode.tsx`](../../src/web/modes/skim/SkimMode.tsx)): a
   pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
   then the stops with their section paths and (since 260928e) their words, the role shown on the current row only. Until
   2026-09-29 a deeper pass also listed the shallower passes' stops, dimmed; since then each pass
@@ -29,9 +55,9 @@ v1, for the article's owner only, and behind the experimental switch until later
   at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside once a stop is
   chosen, and the door carries the walk.
 - **Keys and address**: ← / → step the stops while the mode is open
-  ([keyboard.md](keyboard.md) § ← / → in Trajectory); `?depth=` pushes and `?stop=`
+  ([keyboard.md](keyboard.md) § ← / → in Skim); `?depth=` pushes and `?stop=`
   replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
-  one pure module, [`trajectory-route.ts`](../../src/web/trajectory-route.ts).
+  one pure module, [`skim-route.ts`](../../src/web/skim-route.ts).
 
 v2, the scrapbook, is built on top of that:
 
@@ -74,13 +100,13 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   flash": the route is out of paper order, so each step is a jump across the article.
 - **Where each stop sits**: a thin muted track with a dot on every row (vertical, under the number, since 2026-09-29 — below), the same on each, so
   the dots zig-zag down the list as the route jumps about. The dot is at the stop's position in
-  words (`positionOf` in [`trajectory-route.ts`](../../src/web/trajectory-route.ts)); the current
+  words (`positionOf` in [`skim-route.ts`](../../src/web/skim-route.ts)); the current
   row's dot is in the accent. A screen reader hears "about 70% of the way through".
-- **Further left in the bar**: Quotes, then Trajectory, straight after Summary (`MODES_UI` in
+- **Further left in the bar**: Quotes, then Skim, straight after Summary (`MODES_UI` in
   [`Dock.tsx`](../../src/web/Dock.tsx)).
-- **Plan it again** rebuilds the route only (`trajectory` is forced by name). **Since 2026-09-29 it
+- **Plan it again** rebuilds the route only (`skim` is forced by name). **Since 2026-09-29 it
   is offered only in the stale and profile-changed banners**; the standing button in the foot went,
-  and a current route is re-planned from Metadata's *AI processing*, which has a Trajectory
+  and a current route is re-planned from Metadata's *AI processing*, which has a Skim
   row ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). A route planned by an
   older prompt over the same article (*outdated*) is not announced at all — Greg, 2026-09-29
   (SPIDERYARN-READING2-55): *"There are probably lots of cases where the prompt will get out of
@@ -95,7 +121,7 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 
   **Stale Quotes are chosen again first**, on the automatic run and on the banner's button, as missing
   ones always were — unforced, so current Quotes cost nothing — and the empty state says when they
-  will be. The Metadata row names only `trajectory`, so it never buys Quotes or Ideas, and refuses
+  will be. The Metadata row names only `skim`, so it never buys Quotes or Ideas, and refuses
   in the row when there are no Quotes.
 
 Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
@@ -109,14 +135,14 @@ Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-incr
 - **It waits for the Ideas.** The automatic run and *Plan it again* find the Ideas first, in the
   same job, when they are missing or stale; the empty state says so before the press, and that
   finding them is the long part. The job's end refreshes the stop card's Ideas.
-- **One input hash** (`trajectoryInputHash`) over exactly what the prompt renders is both the stamp
+- **One input hash** (`skimInputHash`) over exactly what the prompt renders is both the stamp
   and the read's freshness check, so regenerated Ideas, or Ideas arriving after a route planned
   without them, mark the route stale.
 - **The abstract is left out.** Greg, 2026-09-28: *"Slight tweak to Trajectory mode - prefer not to
   include the Abstract as part of a trajectory, since that's kinda obviously already a good place to
   get the gist, and it's dense."* A quote under a section titled *Abstract* (at any level of its
   path, numbering and case ignored), or an opening *Executive Summary*, is never offered
-  (`inAbstract` in `src/trajectory.ts`), and the prompt says why briefly. Plain *Summary*
+  (`inAbstract` in `src/skim.ts`), and the prompt says why briefly. Plain *Summary*
   needs stronger evidence: either it is under *Front Matter*, or it is the opening top-level section
   immediately before *Introduction*. That keeps an essay's introductory *Summary* on the route. An
   untitled or non-English abstract is not detected. Excluded quotes count in neither `notOnRoute`
@@ -135,13 +161,13 @@ screen reader only. A model-written summary per stop is deferred, with the reaso
 ([plan 260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md),
 his words quoted there):
 
-- **Opening the mode goes to its stop** (SPIDERYARN-READING2-4K). Switching into Trajectory by
-  pressing something, or opening a Trajectory link that names no stop and no position, jumps to the
+- **Opening the mode goes to its stop** (SPIDERYARN-READING2-4K). Switching into Skim by
+  pressing something, or opening a Skim link that names no stop and no position, jumps to the
   band's current stop — stop 1 on a fresh opening, or where you had got to if you left the mode and
   came back. It is a real jump, so the **↩ Back to …** chip offers the way home if that was not what
   you wanted ([url-state.md](url-state.md#the-pushed-entry-says-where-you-came-from)). That makes
   two history entries, the mode and then the jump: the first Back returns you to where you were and
-  keeps Trajectory open, the second leaves it. Back or Forward *into* Trajectory never jumps — that
+  keeps Skim open, the second leaves it. Back or Forward *into* Skim never jumps — that
   restores an entry. A `?stop=` link arrives at its stop without a push, as before, and one whose
   stop has gone arrives at stop 1. **← on stop 1** goes to stop 1 again ([keyboard.md](keyboard.md)).
 - **Two doors at the end of a pass** (SPIDERYARN-READING2-4N): **Go round again**, to stop 1 of the
@@ -152,7 +178,7 @@ his words quoted there):
   (SPIDERYARN-READING2-51, below).
 - **Every arrival is centred** (SPIDERYARN-READING2-4M) — the stop's quote in the middle of the
   window, so you see what is round it; a quote too tall to centre goes to the top. This is every
-  block link in the app, not only Trajectory: [url-state.md § A jump lands centred](url-state.md).
+  block link in the app, not only Skim: [url-state.md § A jump lands centred](url-state.md).
 - **The position mark is a short vertical line under the row's number** (SPIDERYARN-READING2-4D) —
   top the start of the article, bottom its end, as the spine draws it — instead of a horizontal
   track with a column of its own, which took about 53px of a band that can be 280px wide.
@@ -200,7 +226,7 @@ Most. So:
 - **A link's `?stop=` wins over its `?depth=`**: the stop's own pass is drawn, so a link from before
   this change still arrives at its stop.
 - **The route and its prompt are unchanged.** The model still plans the passes as nesting — depth 2
-  covering Gist and More — which is the allocation wanted either way; `Trajectory.visible` still
+  covering Gist and More — which is the allocation wanted either way; `visibleCounts` (src/skim.ts) still
   counts that way. The prompt's description was left alone because 260929b measured the "the reader
   has read the earlier pass" framing with no gain. Longer snippets at deeper passes, Summary or
   Glossary stops at the coarser ones, and variety within Most are deferred in the plan.
@@ -258,7 +284,7 @@ saves the purpose and only then re-plans the route (unforced — the stamp's pro
 re-plans it). **Not in the empty state**: the automatic run plans one there, and a second request
 with a different profile would not de-duplicate. Nothing for a visitor, nothing while the purpose
 cannot be read, and no second ask under the stale or profile-changed banner.
-[`TrajectoryPurpose.tsx`](../../src/web/TrajectoryPurpose.tsx).
+[`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
 **Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
 SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are now
@@ -271,7 +297,7 @@ the route. Both, and the pass's questions at the end of a pass, are deferred in
 
 **The FAQ question at a stop is gone** — Greg, 2026-10-01, SPIDERYARN-READING2-8Z (report
 spya-bjbcxp): *"Remove the FAQ snippets (they don't add much)"*. The question above the current
-row, and the passages it opened, were removed, and Trajectory no longer reads the FAQ at all. The
+row, and the passages it opened, were removed, and Skim no longer reads the FAQ at all. The
 terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
 thing: the question to read the passage with.
 
@@ -363,8 +389,8 @@ first.
 **One set of highlights, not another.** Greg does not want a fourth near-identical annotation of the
 piece beside Quotes, Ideas and the summaries — *"maybe it's a trajectory through quotes"*. So it is
 one: **the stops are the article's Quotes**, the lines Quotes mode already chose, checked and marked in
-the prose. What Trajectory adds is only an **order** and a **depth** for each quote, and a short role
-line. If a piece has no Quotes yet, opening Trajectory makes them first. The design that was
+the prose. What Skim adds is only an **order** and a **depth** for each quote, and a short role
+line. If a piece has no Quotes yet, opening Skim makes them first. The design that was
 considered and dropped — a fresh selection of passages from the whole article — and why, are in the
 plan's *The versions not built*.
 
@@ -374,7 +400,7 @@ better for every mode that reads it.
 
 ## Version one
 
-- A **Trajectory** button in every owner's mode bar (behind the experimental switch only on the
+- A **Skim** button in every owner's mode bar (behind the experimental switch only on the
   day it first shipped, 2026-09-28).
 - Opening it for the first time makes one small model call that puts the article's Quotes in a route
   and gives each a depth, written once and stored. If there are no Quotes yet, they are made first.
@@ -385,7 +411,7 @@ better for every mode that reads it.
 - The current stop's passage is marked in the prose and scrolled to near the top, with a **Next
   stop ›** door after it — on an iPad your thumb is in the prose, not the band. At the end of a pass
   the door offers to go round again, one depth deeper.
-- **← and →** step to the previous and next stop while Trajectory is open (↑ and ↓ stay the
+- **← and →** step to the previous and next stop while Skim is open (↑ and ↓ stay the
   article's, [keyboard.md](keyboard.md)).
 - The reader's profile and the article's *why you're reading this* shape the route when they exist.
 
@@ -447,7 +473,7 @@ first is to reuse the lines Quotes mode already picks — its "lines worth keepi
 against the article and already marked in the prose. The second is a new model pass over the whole
 article that picks its own passages for the route.
 
-- **Quotes (built).** One set of highlights shared by both modes, as you asked. Trajectory only adds
+- **Quotes (built).** One set of highlights shared by both modes, as you asked. Skim only adds
   an order, a depth and a short role line, so its model call is small and cheap. The cost is
   coverage: the route can only stop where Quotes stopped, and a plain methods paragraph with nothing
   quotable in it cannot be a stop. A piece with no Quotes gets them made first, which is Quotes'
@@ -502,7 +528,7 @@ possible later if the wait turns out to matter.
 
 Elsewhere in the app, an artefact made before you had a profile is left alone when you add one. A
 route is the thing a profile most obviously should change, and it is cheap to rebuild (about two
-cents), so Trajectory marks a route as out of date when the profile changes in either direction —
+cents), so Skim marks a route as out of date when the profile changes in either direction —
 including "none → a profile" — and the band offers a rebuild. It does not rebuild by itself. Say if
 either half surprises you.
 
@@ -516,11 +542,11 @@ paragraph rarely is one.
 
 **Options.**
 
-- **Leave Quotes alone** (default taken). Trajectory v1 goes where Quotes go, and Most is a partial
+- **Leave Quotes alone** (default taken). Skim v1 goes where Quotes go, and Most is a partial
   tour.
 - **Ask Quotes to cover every major section** — one sentence in its prompt. Both modes change: the
   Quotes list gets longer and more even, and some quotes will be less striking.
-- **Let Trajectory add its own stops** where Quotes left a gap — back towards a second set of
+- **Let Skim add its own stops** where Quotes left a gap — back towards a second set of
   highlights, which is what you asked us to avoid.
 
 **How to choose.** Try Most on a paper you know. If it skips the part you would have wanted, the
@@ -546,10 +572,10 @@ measured on the three test articles before anything was kept
   stop, and the gist line was the thing the scrapbook spike dropped for giving the finding away. If
   real reading keeps meeting a skipped section, a plain link to its opening passage is the next step.
 
-### 7. Should opening Trajectory also make the Glossary and Timeline?
+### 7. Should opening Skim also make the Glossary and Timeline?
 
 **What you asked.** *"If there are other modes that should also run first as part of generating
-Trajectory, queue them first too."* (2026-09-28). The Overseer read that as: when Trajectory is
+Trajectory, queue them first too."* (2026-09-28). The Overseer read that as: when Skim is
 first opened, also start Glossary, Ideas, FAQ and Timeline for the article if they have not been
 made, so the card under each stop has something in it. **Only part of that was built, so this is
 yours to decide.** FAQ has dropped out of it: the card stopped showing the FAQ's question on
@@ -564,7 +590,7 @@ yours to decide.** FAQ has dropped out of it: the card stopped showing the FAQ's
   (Ideas), where it sits in the study (Timeline). Today the card shows whatever of these already
   exists, and simply leaves out what does not. It never starts a run.
 
-The question is whether opening Trajectory should also **make Glossary and Timeline** when they are
+The question is whether opening Skim should also **make Glossary and Timeline** when they are
 missing, purely so the card fills in.
 
 **Why it was not built.** Nothing was broken. It was left out because:

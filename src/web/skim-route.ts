@@ -1,10 +1,10 @@
 /**
- * **The arithmetic of walking a Trajectory** — which stops a depth shows, where
+ * **The arithmetic of walking a Skim** — which stops a depth shows, where
  * a step goes, where a change of depth lands, and what the door in the prose
- * offers. Pure, and pinned in tests/trajectory-route.test.ts, so the band and the
+ * offers. Pure, and pinned in tests/skim-route.test.ts, so the band and the
  * keys and the door all ask one module the same question.
  *
- * The stored route is one list (src/types.ts § `Trajectory`): **the array order
+ * The stored route is one list (src/types.ts § `Skim`): **the array order
  * is the route, and each stop has the depth of the pass it belongs to.** The
  * model plans the passes as nesting — depth *d* covering every stop with
  * `depth ≤ d` — but **the reader walks each pass as only its own stops**: Gist
@@ -18,13 +18,13 @@
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client) is where the other rules below were first specified.
  */
-import type { Block, BlockId, TrajectoryDepth, TrajectoryStop } from "../types.js";
+import type { Block, BlockId, SkimDepth, SkimStop } from "../types.js";
 
 /** The three depths, shallowest first. */
-export const DEPTHS: readonly TrajectoryDepth[] = [1, 2, 3];
+export const DEPTHS: readonly SkimDepth[] = [1, 2, 3];
 
 /** What the depth control calls each pass — the Opus arbiter's labels. */
-export const DEPTH_LABEL: Record<TrajectoryDepth, string> = {
+export const DEPTH_LABEL: Record<SkimDepth, string> = {
   1: "Gist",
   2: "More",
   3: "Most",
@@ -32,14 +32,14 @@ export const DEPTH_LABEL: Record<TrajectoryDepth, string> = {
 
 /** The stops a pass walks — exactly that depth's, in route order. */
 export function passRoute(
-  stops: readonly TrajectoryStop[],
-  depth: TrajectoryDepth,
-): TrajectoryStop[] {
+  stops: readonly SkimStop[],
+  depth: SkimDepth,
+): SkimStop[] {
   return stops.filter((s) => s.depth === depth);
 }
 
 /** How many stops a pass walks. */
-export function passCount(stops: readonly TrajectoryStop[], depth: TrajectoryDepth): number {
+export function passCount(stops: readonly SkimStop[], depth: SkimDepth): number {
   return stops.reduce((n, s) => (s.depth === depth ? n + 1 : n), 0);
 }
 
@@ -52,7 +52,7 @@ export function passCount(stops: readonly TrajectoryStop[], depth: TrajectoryDep
  * it is still a pass of stops the reader has not stood at (Sol, plan review
  * F1: a real route's passes are 2 / 2 / 4).
  */
-export function offeredDepths(stops: readonly TrajectoryStop[]): TrajectoryDepth[] {
+export function offeredDepths(stops: readonly SkimStop[]): SkimDepth[] {
   return DEPTHS.filter((d) => stops.some((s) => s.depth === d));
 }
 
@@ -65,9 +65,9 @@ export function offeredDepths(stops: readonly TrajectoryStop[]): TrajectoryDepth
  * route with no third pass was asking to go as deep as the route goes.
  */
 export function effectiveDepth(
-  stops: readonly TrajectoryStop[],
-  asked: TrajectoryDepth | null,
-): TrajectoryDepth | null {
+  stops: readonly SkimStop[],
+  asked: SkimDepth | null,
+): SkimDepth | null {
   const offered = offeredDepths(stops);
   if (offered.length === 0) return null;
   if (asked === null) return offered[0]!;
@@ -78,9 +78,9 @@ export function effectiveDepth(
 
 /** Where the reader is: the pass drawn, its stops, and the one stood at. */
 export interface Location {
-  depth: TrajectoryDepth | null;
-  route: TrajectoryStop[];
-  current: TrajectoryStop | null;
+  depth: SkimDepth | null;
+  route: SkimStop[];
+  current: SkimStop | null;
 }
 
 /**
@@ -95,8 +95,8 @@ export interface Location {
  *    or a link from before a rebuild.
  */
 export function locate(
-  stops: readonly TrajectoryStop[],
-  askedDepth: TrajectoryDepth | null,
+  stops: readonly SkimStop[],
+  askedDepth: SkimDepth | null,
   askedStop: string | null,
 ): Location {
   const named = askedStop === null ? undefined : stops.find((s) => s.quoteId === askedStop);
@@ -112,7 +112,7 @@ export function locate(
  * A current stop that is not on this pass steps to the first.
  */
 export function stepStop(
-  route: readonly TrajectoryStop[],
+  route: readonly SkimStop[],
   from: string | null,
   dir: -1 | 1,
 ): string | null {
@@ -130,7 +130,7 @@ export function stepStop(
  * where you were in each pass is deferred (the plan's § Deferred). `null` for a
  * pass with no stops.
  */
-export function firstStopOf(stops: readonly TrajectoryStop[], depth: TrajectoryDepth): string | null {
+export function firstStopOf(stops: readonly SkimStop[], depth: SkimDepth): string | null {
   return stops.find((s) => s.depth === depth)?.quoteId ?? null;
 }
 
@@ -149,11 +149,11 @@ export function firstStopOf(stops: readonly TrajectoryStop[], depth: TrajectoryD
  */
 export type Door =
   | { kind: "next"; quoteId: string }
-  | { kind: "end"; deeper: { depth: TrajectoryDepth; first: string } | null };
+  | { kind: "end"; deeper: { depth: SkimDepth; first: string } | null };
 
 export function doorAfter(
-  stops: readonly TrajectoryStop[],
-  depth: TrajectoryDepth,
+  stops: readonly SkimStop[],
+  depth: SkimDepth,
   current: string | null,
 ): Door | null {
   const route = passRoute(stops, depth);
@@ -188,7 +188,7 @@ export function positionOf(blockId: BlockId, blocks: readonly Block[]): number |
 }
 
 /**
- * Every block midpoint in one pass after the total is known. The Trajectory
+ * Every block midpoint in one pass after the total is known. The Skim
  * panel asks for up to 36 positions at once, so building this map once keeps a
  * render O(blocks + stops), rather than making `positionOf` rescan the article
  * for every row.

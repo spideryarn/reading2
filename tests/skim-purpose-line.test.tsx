@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * **Trajectory says what it was planned for, and asks when nobody has said** —
- * the purpose line in src/web/TrajectoryPanel.tsx (`PurposeLine`).
+ * **Skim says what it was planned for, and asks when nobody has said** —
+ * the purpose line in src/web/SkimPanel.tsx (`PurposeLine`).
  *
  * The owner sees *Reading for: …* with an Edit link to Metadata when the
  * article has a purpose; when it has none and a route is on screen, a box and
@@ -15,13 +15,13 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Job, Trajectory } from "../src/types.js";
-import type { UseTrajectory } from "../src/web/useTrajectory.js";
-import type { TrajectoryView } from "../src/web/modes/trajectory/TrajectoryMode.js";
+import type { Job, Skim } from "../src/types.js";
+import type { UseSkim } from "../src/web/useSkim.js";
+import type { SkimView } from "../src/web/modes/skim/SkimMode.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/* jsdom has no `CSS.escape`, which `useFollow` uses; trajectory-panel.test.tsx does the same. */
+/* jsdom has no `CSS.escape`, which `useFollow` uses; skim-panel.test.tsx does the same. */
 globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
 
 /* ------------------------------------------------------------ the network -- */
@@ -55,11 +55,11 @@ vi.mock("../src/web/lib/api.js", async () => {
   return { ...real, apiFetch, fetchOk: apiFetch };
 });
 
-const { TrajectoryPanel } = await import("../src/web/TrajectoryPanel.js");
+const { SkimPanel } = await import("../src/web/SkimPanel.js");
 
 /* ------------------------------------------------------------- the harness -- */
 
-const ROUTE: Trajectory = {
+const ROUTE: Skim = {
   version: "test",
   generator: "test",
   slug: "a-route",
@@ -74,10 +74,10 @@ const ROUTE: Trajectory = {
 };
 
 let ensured = 0;
-function owner(over: Partial<UseTrajectory> = {}): UseTrajectory {
+function owner(over: Partial<UseSkim> = {}): UseSkim {
   return {
     status: "ready",
-    trajectory: ROUTE,
+    skim: ROUTE,
     stale: false,
     outdated: false,
     profileChanged: false,
@@ -101,7 +101,7 @@ function owner(over: Partial<UseTrajectory> = {}): UseTrajectory {
   };
 }
 
-const VIEW: TrajectoryView = {
+const VIEW: SkimView = {
   depth: 1,
   depths: [{ depth: 1, label: "Gist", count: 1 }],
   rows: [
@@ -127,13 +127,13 @@ const VIEW: TrajectoryView = {
 };
 
 const RUNNING: Job = {
-  id: "job-trajectory",
+  id: "job-skim",
   ownerId: "owner" as Job["ownerId"],
   slug: "a-route",
   status: "running",
   createdAt: "2026-09-30T00:00:00.000Z",
   startedAt: "2026-09-30T00:00:01.000Z",
-  steps: [{ name: "trajectory", label: "Planning the route", status: "running", startedAt: "2026-09-30T00:00:01.000Z" }],
+  steps: [{ name: "skim", label: "Planning the route", status: "running", startedAt: "2026-09-30T00:00:01.000Z" }],
 };
 
 let host: HTMLDivElement;
@@ -144,7 +144,7 @@ beforeEach(() => {
   patchReply = null;
   requested.length = 0;
   ensured = 0;
-  history.replaceState(null, "", "/read/a-route?mode=trajectory");
+  history.replaceState(null, "", "/read/a-route?mode=skim");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -155,9 +155,9 @@ afterEach(async () => {
   host.remove();
 });
 
-async function drawOwner(o: UseTrajectory) {
+async function drawOwner(o: UseSkim) {
   await act(async () =>
-    root.render(createElement(TrajectoryPanel, { access: { kind: "owner", owner: o }, view: VIEW, away: false })),
+    root.render(createElement(SkimPanel, { access: { kind: "owner", owner: o }, view: VIEW, away: false })),
   );
   /* The purpose read answers on a later tick. */
   await act(async () => {
@@ -165,10 +165,10 @@ async function drawOwner(o: UseTrajectory) {
   });
 }
 
-const line = () => host.querySelector(".traj-purpose");
-const box = () => host.querySelector<HTMLTextAreaElement>(".traj-purpose textarea");
+const line = () => host.querySelector(".skim-purpose");
+const box = () => host.querySelector<HTMLTextAreaElement>(".skim-purpose textarea");
 const planButton = () =>
-  [...host.querySelectorAll<HTMLButtonElement>(".traj-purpose button")].find((b) =>
+  [...host.querySelectorAll<HTMLButtonElement>(".skim-purpose button")].find((b) =>
     /Plan the route for this/.test(b.textContent ?? ""),
   ) ?? null;
 
@@ -191,7 +191,7 @@ const patches = () => requested.filter((r) => r.method === "PATCH");
 
 /* ================================================================= tests == */
 
-describe("the purpose line in Trajectory", () => {
+describe("the purpose line in Skim", () => {
   it("says what the route was planned for, whole in a tooltip, with an Edit link to Metadata", async () => {
     readerBody = { purpose: "How they handled missing data in the second cohort" };
     await drawOwner(owner());
@@ -199,9 +199,9 @@ describe("the purpose line in Trajectory", () => {
     expect(line()?.textContent).toContain("How they handled missing data in the second cohort");
     const edit = [...line()!.querySelectorAll("a")].find((a) => a.textContent === "Edit");
     /* The view state travels, as the dock's and the masthead's Metadata links carry it. */
-    expect(edit?.getAttribute("href")).toBe("/read/a-route/metadata?mode=trajectory");
+    expect(edit?.getAttribute("href")).toBe("/read/a-route/metadata?mode=skim");
     /* The whole sentence is in a tooltip, on a trigger a keyboard reaches. */
-    expect(line()!.querySelector(".traj-purpose-said")?.getAttribute("tabindex")).toBe("0");
+    expect(line()!.querySelector(".skim-purpose-said")?.getAttribute("tabindex")).toBe("0");
     expect(box()).toBeNull();
   });
 
@@ -215,7 +215,7 @@ describe("the purpose line in Trajectory", () => {
   });
 
   it("does not ask in the empty state, where the automatic run plans a route (Sol F6)", async () => {
-    await drawOwner(owner({ status: "none", trajectory: null }));
+    await drawOwner(owner({ status: "none", skim: null }));
     expect(line()).toBeNull();
   });
 
@@ -303,7 +303,7 @@ describe("the purpose line in Trajectory", () => {
     expect(ensured).toBe(0);
   });
 
-  it("is disabled while a Trajectory job is starting or running", async () => {
+  it("is disabled while a Skim job is starting or running", async () => {
     await drawOwner(owner({ job: RUNNING }));
     await type("the method");
     expect(planButton()!.disabled).toBe(true);
@@ -326,7 +326,7 @@ describe("the purpose line in Trajectory", () => {
   it("draws nothing, and reads nothing, for a visitor", async () => {
     await act(async () =>
       root.render(
-        createElement(TrajectoryPanel, {
+        createElement(SkimPanel, {
           access: { kind: "visitor", route: { stops: ROUTE.stops, offered: 1 } },
           view: VIEW,
           away: false,

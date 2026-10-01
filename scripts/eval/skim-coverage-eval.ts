@@ -5,7 +5,7 @@
  * An offline eval — plan 260928a § "Stage 6 as it will be built", item 3, and
  * Sol's F65.
  *
- *     npx tsx scripts/eval/trajectory-coverage-eval.ts [--runs=2] [--old=<module>] \
+ *     npx tsx scripts/eval/skim-coverage-eval.ts [--runs=2] [--old=<module>] \
  *       [--old-version=trajectory/6] [--new-version=trajectory/7] [--new-only] [slug …]
  *
  * Results: docs/plans/260928a-trajectory-mode-stage6-coverage-after.md (6 vs
@@ -13,49 +13,53 @@
  * candidate 8, not kept).
  *
  * **Also used for `trajectory/7` vs a candidate `trajectory/8`** (plan 260929b
- * § Stage 2): write the /7 module to `src/trajectory-v7-eval-tmp.ts` the same
- * way as below, put the candidate in src/trajectory.ts, and pass
- * `--old=src/trajectory-v7-eval-tmp.ts --old-version=trajectory/7
+ * § Stage 2): write the /7 module to `src/skim-v7-eval-tmp.ts` the same
+ * way as below, put the candidate in src/skim.ts, and pass
+ * `--old=src/skim-v7-eval-tmp.ts --old-version=trajectory/7
  * --new-version=trajectory/8`. An OLD module at 7 or later has NEW's
- * signature, so it is called exactly as NEW is — its own `trajectoryInput` and
- * `generateTrajectory`. Each stop's
+ * signature, so it is called exactly as NEW is — its own `skimInput` and
+ * `generateSkim`. Each stop's
  * full quote and paragraph are recorded (`quoteFull`, `paragraph`) so the
- * stops a deeper pass adds can be read blind (scripts/eval/trajectory-depth-blind.ts).
+ * stops a deeper pass adds can be read blind (scripts/eval/skim-depth-blind.ts).
  *
  * ## The two arms
  *
- * - **NEW** — production's `generateTrajectory` (src/trajectory.ts), given
- *   `trajectoryInput` over the stored Quotes, blocks, tree and Ideas, exactly as
- *   src/pipeline.ts's `trajectory` step builds it.
- * - **OLD** — `generateTrajectory` from the `trajectory/6` module as of commit
+ * - **NEW** — production's `generateSkim` (src/skim.ts), given
+ *   `skimInput` over the stored Quotes, blocks, tree and Ideas, exactly as
+ *   src/pipeline.ts's `skim` step builds it.
+ * - **OLD** — `generateSkim` from the `trajectory/6` module as of commit
  *   faa44576, which the operator writes to a throwaway file first:
  *
- *       git show faa44576:src/trajectory.ts > src/trajectory-v6-eval-tmp.ts
+ *       git show faa44576:src/trajectory.ts > src/skim-v6-eval-tmp.ts
  *
  *   (inside src/ so its relative imports resolve) and deletes afterwards.
+ *   A module from before 2026-10-01, when Trajectory became Skim (plan
+ *   261001r), spells its exports `generateTrajectory` / `trajectoryInput` and
+ *   returns `{ trajectory }`; this script now expects the Skim names, so an
+ *   old module needs those respelled in the throwaway copy first.
  *   Called the way faa44576's pipeline called it: `usableQuotes`, the whole
  *   list for the hash, the blocks and tree for section paths.
  *
- * Each arm's own `generateTrajectory` renders its own prompt, makes its own
+ * Each arm's own `generateSkim` renders its own prompt, makes its own
  * call through `streamMessage` (the AI gateway, same model and effort),
- * parses, maps labels back and validates with its own `buildTrajectory`. Both
+ * parses, maps labels back and validates with its own `buildSkim`. Both
  * get `profile: null`, so the profile is not a variable.
  *
  * ## What it writes
  *
  * **Nothing to the database.** Reads through `pgArticleReader`; the spend
  * collector has no sink, so no `ai_calls` row. Files only:
- * `evals/results/trajectory-coverage-<ts>.json`.
+ * `evals/results/skim-coverage-<ts>.json`.
  *
  * ## The metrics, per depth (Gist ≤1, More ≤2, Most ≤3)
  *
- * Those of scripts/trajectory-coverage.ts, with one change to adjacency:
+ * Those of scripts/skim-coverage.ts, with one change to adjacency:
  *
  * - **Ideas "in"** (primary) — a stop on the same block as one of the Idea's
  *   occurrences.
  * - **Ideas "in or beside"** — also a stop whose nearest body, non-heading
  *   block either side, never leaving its top-level section, holds one (F65;
- *   the same walk as `trajectoryInput`'s `neighbour`). The coverage script's
+ *   the same walk as `skimInput`'s `neighbour`). The coverage script's
  *   "in or next to" is ±1 in the blocks array, across headings and section
  *   boundaries; it is recorded too (`ideasInOrNextPm1`) but not headlined.
  * - **Content sections with a stop** — top-level sections with body words.
@@ -72,7 +76,7 @@ const args = process.argv.slice(2);
 const runsArg = args.find((a) => a.startsWith("--runs="));
 const RUNS = runsArg ? Number(runsArg.slice("--runs=".length)) : 2;
 const oldArg = args.find((a) => a.startsWith("--old="));
-const OLD_MODULE = oldArg ? oldArg.slice("--old=".length) : "src/trajectory-v6-eval-tmp.ts";
+const OLD_MODULE = oldArg ? oldArg.slice("--old=".length) : "src/skim-v6-eval-tmp.ts";
 const oldVersionArg = args.find((a) => a.startsWith("--old-version="));
 const OLD_VERSION = oldVersionArg ? oldVersionArg.slice("--old-version=".length) : "trajectory/6";
 const newVersionArg = args.find((a) => a.startsWith("--new-version="));
@@ -90,15 +94,15 @@ const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
 const { blockIndex } = await import("../../src/section-path.js");
 const { isBody } = await import("../../src/block-policy.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
-const NEW = await import("../../src/trajectory.js");
+const NEW = await import("../../src/skim.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
-type RunOut = Promise<{ trajectory: Trajectory; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
+type RunOut = Promise<{ skim: Skim; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
 /** `trajectory/6`'s signature: quotes only. */
 type OldModuleV6 = {
   PROMPT_VERSION: string;
   usableQuotes: (q: Quotes | null, b: readonly Block[]) => Quote[];
-  generateTrajectory: (opts: {
+  generateSkim: (opts: {
     slug: string;
     quotes: readonly Quote[];
     blocks: readonly Block[];
@@ -108,7 +112,7 @@ type OldModuleV6 = {
   }) => RunOut;
 };
 /** `trajectory/7` and later: the same signature as NEW. */
-type OldModuleV7 = Pick<typeof NEW, "PROMPT_VERSION" | "trajectoryInput" | "generateTrajectory">;
+type OldModuleV7 = Pick<typeof NEW, "PROMPT_VERSION" | "skimInput" | "generateSkim">;
 type OldModule = OldModuleV6 | OldModuleV7;
 const isV6 = (m: OldModule): m is OldModuleV6 => m.PROMPT_VERSION === "trajectory/6";
 const OLD: OldModule | null = NEW_ONLY
@@ -117,7 +121,7 @@ const OLD: OldModule | null = NEW_ONLY
 if (OLD && OLD.PROMPT_VERSION !== OLD_VERSION) throw new Error(`old module is ${OLD.PROMPT_VERSION}, expected ${OLD_VERSION}`);
 if (NEW.PROMPT_VERSION !== NEW_VERSION) throw new Error(`new module is ${NEW.PROMPT_VERSION}, expected ${NEW_VERSION}`);
 
-import type { Article, Block, Idea, Ideas, Quote, Quotes, Trajectory, TrajectoryDepth } from "../../src/types.js";
+import type { Article, Block, Idea, Ideas, Quote, Quotes, Skim, SkimDepth } from "../../src/types.js";
 
 /* ---------------------------------------------------------------- metrics -- */
 
@@ -150,7 +154,7 @@ function sectionsOf(article: Article, idx: ReadonlyMap<string, number>): Section
 }
 
 interface DepthRow {
-  depth: TrajectoryDepth;
+  depth: SkimDepth;
   stops: number;
   words: number;
   wordsPct: number;
@@ -163,7 +167,7 @@ interface DepthRow {
   contentSections: number;
 }
 
-function measure(article: Article, stopBlocks: { blockId: string; depth: TrajectoryDepth }[], ideas: readonly Idea[]): DepthRow[] {
+function measure(article: Article, stopBlocks: { blockId: string; depth: SkimDepth }[], ideas: readonly Idea[]): DepthRow[] {
   const blocks = article.blocks;
   const idx = blockIndex(blocks);
   const sections = sectionsOf(article, idx);
@@ -242,7 +246,7 @@ interface RunResult {
   inputTokens: number;
   outputTokens: number;
   stops: {
-    depth: TrajectoryDepth;
+    depth: SkimDepth;
     quote: string;
     /** The whole quote, and the whole paragraph it sits in — for the blind read. */
     quoteFull: string;
@@ -262,15 +266,15 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   const { result, report } = await collectSpend(
     async () => {
       if (arm === "new") {
-        const input = NEW.trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-        return NEW.generateTrajectory({ power: "standard", slug, input, profile: null });
+        const input = NEW.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+        return NEW.generateSkim({ power: "standard", slug, input, profile: null });
       }
       if (!OLD) throw new Error("the old arm needs the old module (drop --new-only)");
       if (!isV6(OLD)) {
-        const input = OLD.trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
-        return OLD.generateTrajectory({ power: "standard", slug, input, profile: null });
+        const input = OLD.skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+        return OLD.generateSkim({ power: "standard", slug, input, profile: null });
       }
-      return OLD.generateTrajectory({
+      return OLD.generateSkim({
         slug,
         quotes: OLD.usableQuotes(quotes, article.blocks),
         blocks: article.blocks,
@@ -281,12 +285,12 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     },
     { attribution: { scopeKind: "eval", articleSlug: slug } },
   );
-  const traj = result.trajectory;
+  const skim = result.skim;
   const byId = new Map(quotes.quotes.map((q) => [q.id, q]));
   const idx = blockIndex(article.blocks);
   const sections = sectionsOf(article, idx);
   const occBlocks = ideas.ideas.map((i) => new Set(i.occurrences.map((o) => o.blockId)));
-  const stopBlocks = traj.stops.map((s) => {
+  const stopBlocks = skim.stops.map((s) => {
     const q = byId.get(s.quoteId);
     if (!q) throw new Error(`${slug} ${arm}: stop names unknown quote ${s.quoteId}`);
     return { blockId: q.blockId, depth: s.depth, quote: q, cue: s.cue ?? null };
@@ -302,7 +306,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     slug,
     arm,
     run,
-    version: traj.version,
+    version: skim.version,
     offered: result.offered,
     rows: measure(article, stopBlocks, ideas.ideas),
     costNanos: spent.nanos,
@@ -328,7 +332,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
 async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   mkdirSync("evals/results", { recursive: true });
-  const out = `evals/results/trajectory-coverage-${stamp}.json`;
+  const out = `evals/results/skim-coverage-${stamp}.json`;
   const results: RunResult[] = [];
   const snapshot: Record<string, unknown> = {};
 

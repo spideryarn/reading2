@@ -19,7 +19,7 @@
  * columns. The columns went with the Hierarchy mode
  * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md), and so did
  * that. ← / → are now the browser's, except in a mode that claims them —
- * Trajectory, whose stops they step (`horizontal` below).
+ * Skim, whose stops they step (`horizontal` below).
  *
  * The table is deliberately not the source of the pointer's aim. Every zone
  * that means a granularity level tags itself with `data-nav-depth`, and this
@@ -297,7 +297,7 @@ export function measureOrigin(blocks: Block[]): JumpOrigin {
  * directly and stays quiet (flash.ts).
  *
  * `passage` narrows that flash for the one history-pushing jump whose
- * destination is finer than a block: a Trajectory row is a quote. Omitted by
+ * destination is finer than a block: a Skim row is a quote. Omitted by
  * every other caller, so their block wash is unchanged (plan 260928a § 7b).
  */
 export function beginJump(
@@ -384,8 +384,8 @@ export function useArrowNav(
    */
   enabled = true,
   /**
-   * **← / → for a mode that has a sideways of its own** — Trajectory's stops
-   * or Quiz's questions (docs/project/keyboard.md § ← / → in Trajectory and
+   * **← / → for a mode that has a sideways of its own** — Skim's stops
+   * or Quiz's questions (docs/project/keyboard.md § ← / → in Skim and
    * § ← / → in Quiz). While it is given, ← / → go to it, after every
    * guard below has passed; it answers whether it took the key, and `false` —
    * the end of the route, which does not wrap — hands the key back to the

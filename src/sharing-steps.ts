@@ -27,7 +27,7 @@
  * metadata — none of which a sharing step writes) plus the other sharing steps
  * it declares in `reads`. Everything after `assets` in `STEP_ORDER`. The two
  * declared reads were found by reading each step's `run` in src/pipeline.ts:
- * `illustrated` paints the `sketch`, and `trajectory` routes through the
+ * `illustrated` paints the `sketch`, and `skim` routes through the
  * `quotes` and the `ideas`. Five steps read their *own* previous column
  * (`glossary` and `quotes` append on *Find more*; `ideas`, `timeline` and
  * `citations` lend their ids forward) — that is covered by never letting one
@@ -88,7 +88,7 @@ export const STEP_SHARING = {
      one under a fingerprint of the new. */
   illustrated: { column: "illustrated", reads: ["sketch"] },
   /* A route through the quotes' ids, and since 260928a stage 6 the ideas too. */
-  trajectory: { column: "trajectory", reads: ["quotes", "ideas"] },
+  skim: { column: "skim", reads: ["quotes", "ideas"] },
   debate: { column: "debate", reads: [] },
   citations: { column: "citations", reads: [] },
   crossrefs: { column: "crossrefs", reads: [] },

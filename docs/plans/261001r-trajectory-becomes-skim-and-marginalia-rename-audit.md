@@ -66,7 +66,7 @@ history, the Commands keyword, and the back-compat translations below.
 | Export bundle file | `trajectory.json` | `skim.json` |
 | CSS class prefix | `traj-` and `--traj-*` | `skim-` and `--skim-*` |
 | DB column | `article_revisions.trajectory` | `article_revisions.skim` |
-| Prompt version tag | `trajectory/7` | `skim/7` — same prompt, new spelling; stored routes are rewritten by the migration so none turns *outdated* |
+| Prompt version tag | `trajectory/7` | **kept** — see § After the plan review, F1 |
 | Doc | `docs/project/trajectory.md` | `docs/project/skim.md`, and every signpost to it (`CLAUDE.md`, `reading-view-overview.md`, …) |
 
 **What keeps the old name, deliberately**:
@@ -100,9 +100,9 @@ The persisted spellings of the name, found by the sweep:
 No localStorage key, Sentry tag or Storage path carries the name (sweep, 2026-10-01).
 
 **Proposed: one migration that renames in place**, in one transaction: `RENAME COLUMN trajectory TO
-skim`; rewrite `skim->'version'` from `trajectory/N` to `skim/N`; drop the CHECK, `UPDATE
+skim`; drop the CHECK, `UPDATE
 revision_step_runs SET step_name='skim'`, re-add the CHECK with `skim`; rewrite the job step names in
-`jobs.steps` (and `reset`); and relabel `ai_calls.purpose` / `step_name`. Generated with drizzle so
+`jobs.steps` (and `reset`). (Superseded in part by § After the plan review: the version tag and `ai_calls` stay.) Generated with drizzle so
 its snapshot exists (the rename prompt needs a TTY — `database.md` § That rename question; the
 answer we want is *rename*, not *create*), the data statements appended by hand.
 
@@ -115,8 +115,7 @@ Why it is acceptable, and what it costs:
 - **The shared local database**: every other worktree still on old code breaks on these reads the
   moment this applies, until it merges `dev`. That is the real cost — `database.md` § What no lock
   can cover. Apply it locally only at push time, and say so to the Overseer.
-- **The ledger relabel** rewrites history in `ai_calls`, but only a label; cost reports otherwise
-  carry two names for one job forever.
+- ~~The ledger relabel~~ — dropped after review (F6): `ai_calls` is append-only.
 
 **The alternative passed over: expand now, contract later.** Add `skim`, copy, widen the CHECK to
 take both names and teach its test a retired-name allowance, and leave `DROP COLUMN trajectory` and
@@ -153,6 +152,47 @@ One collision worth knowing, not changed: the Comments row in `CommandBar.tsx` a
 GPT Sol on this plan (`--sandbox review`), and on the code after stage 2 (`--sandbox
 workspace-write`).
 
+## After the plan review (GPT Sol, `261001r-plan-review-sol.md`)
+
+Sol agreed with rename-in-place over expand/contract: a safe expand needs old writes bridged across
+two deploys, and add-and-copy lets the two columns diverge silently, which is worse than a loud few
+minutes. What changed:
+
+- **F1 (P1), accepted: the prompt version tag stays `trajectory/7`.** It is also persisted in
+  `revision_step_runs.prompt_version`, and `stampForStep` throws `StampDisagrees` when the two
+  differ. It names an unchanged prompt, not the mode; the next real prompt change bumps it to
+  `skim/8`. A comment at `PROMPT_VERSION` says so.
+- **F2 (P1), accepted: the input-hash namespace `"trajectory-input\n"` stays.** Changing it changes
+  every recomputed hash, so every stored route would read stale. Comment at the literal.
+- **F3 (P2), overruled: the IndexedDB offline copy of `/api/trajectory/<slug>`.** It is a cache of a
+  stored read, not paid work: online, the route is fetched again from `/api/skim/` at no model cost.
+  The only loss is a reader who is offline at the moment of their first open after the deploy. Not
+  worth a translation layer in the offline store.
+- **F4 (P2), accepted:** feedback from a stale tab normalises both `article.mode: "trajectory"` and
+  `job.step: "trajectory"` (a step alias, not `RETIRED_MODES`). Stored feedback rows are evidence and
+  are not rewritten.
+- **F5 (P2), accepted as a stated window:** the migration rewrites the step names in `jobs.steps` and
+  `jobs.reset` for all rows, and leaves `work_key` (an immutable hash) as it is: for a terminal job
+  it is history, and an active Trajectory job across the deploy minutes is rare; at worst one
+  duplicate run. Old code writing `step_name='trajectory'` after the CHECK narrows fails loudly in
+  that window.
+- **F6 (P2), accepted: `ai_calls` is not rewritten.** The ledger is append-only by contract
+  (`src/cost-categories.ts`). A tested legacy alias classifies `trajectory` with `skim`.
+- **F7 (P2), accepted:** the test suite runs on a private database built from the tree's own
+  migrations (`testing.md`), so nothing needs the shared local database until push. Applied to it
+  only immediately before the push, and the Overseer told in the same breath.
+- **F8 (P3):** the Dock reads through `modeInSearch`, which already uses `modeFromParam`.
+
 ## Progress
 
-- 2026-10-01: sweep done (Sonnet). Stage 1 delegated (Opus).
+- 2026-10-01: sweep done (Sonnet). Stage 1 landed in the worktree as 7e43dac60. Plan reviewed by Sol.
+- Stage 2 built (two Opus agents, code and docs). Migration `drizzle/20261001211832_skim.sql`,
+  generated by drizzle with the rename answer, plus the hand-written step-name and job rewrites and a
+  postcondition that refuses if a job still names `trajectory`. Kept spellings: the alias,
+  `RETIRED_MODES`, `RETIRED_STEPS` in feedback, `RENAMED` in cost categories, `trajectory/7`, the
+  hash namespace. Plan files' *links* to `trajectory.md` and the renamed scripts were repointed,
+  path only, so `tests/doc-links.test.ts` stays green; their prose is untouched.
+- Stage 3: one real miss from the Marginalia rename — a test about the notes' error boundary opened
+  them through the legacy `?mode=annotations` rather than `?margin=1`; now canonical (the legacy
+  word keeps its own test). `interface-vision.md`'s step "Rename Annotations to Marginalia" marked
+  done. The `annotations` Commands alias was already there.
