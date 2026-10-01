@@ -24,4 +24,5 @@ Plan: [260930f](../plans/260930f-parallel-searches.md).
 **Follow-up, 2026-10-01:** the two bugs that plan deferred are fixed. Thirty newer searches can no
 longer delete one that is still running. And the "same question twice" refusal now holds when the
 server answers a retry under a new id. Before, that search also dropped out of the ticked set.
-Plan: [261001i](../plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md).
+On `dev` in `e630f17a` and `1714d1aa`, not deployed. Plan:
+[261001i](../plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md).
