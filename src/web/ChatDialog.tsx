@@ -182,8 +182,21 @@ export function ChatDialog({
 
   /* The composer's draft, owned here because `Composer` is remounted whenever
      the panel swaps between its two shapes and would otherwise lose what was
-     typed. Same reason `ChatPanel` keeps a map of them. */
-  const [draft, setDraft] = useState(target.kind === "draft" ? (target.question ?? "") : "");
+     typed. Same reason `ChatPanel` keeps a map of them.
+
+     The target key travels with the text so a different thread (or draft block)
+     gets its own initial value in the render that mounts its Composer. An effect
+     is too late: Composer seeds local state from `draft` once, so it would keep
+     the previous thread's half-typed question even after the parent cleared its
+     copy. */
+  const draftTarget = target.kind === "draft" ? `draft:${target.anchor.blockId}` : `thread:${target.threadId}`;
+  const initialDraft = target.kind === "draft" ? (target.question ?? "") : "";
+  const [draftState, setDraftState] = useState(() => ({ target: draftTarget, text: initialDraft }));
+  const draft = draftState.target === draftTarget ? draftState.text : initialDraft;
+  const setDraft = useCallback(
+    (text: string) => setDraftState({ target: draftTarget, text }),
+    [draftTarget],
+  );
   const focused = useRef(0);
 
   /* Mounted means on screen here, as it does for `.cmt-dialog`. */
@@ -294,14 +307,6 @@ export function ChatDialog({
    */
   const stalled = missing && target.kind === "thread" && timedOut === target.threadId;
   const starting = missing && !stalled;
-
-  /* One box per target. Carrying a half-typed question from one passage to the
-     next is the bug `CommentDialog` already fixed once: the reader asks about a
-     passage they are no longer looking at. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the target is the trigger
-  useEffect(() => {
-    setDraft(target.kind === "draft" ? (target.question ?? "") : "");
-  }, [target.kind === "draft" ? target.anchor.blockId : target.threadId]);
 
   useEscapeToClose(onClose);
 
@@ -750,6 +755,11 @@ export function ChatDialog({
           </div>
         ) : thread ? (
           <Conversation
+            /* Unlike the full Chat panel, this modeless dialog can stay mounted
+               while `?thread=` changes underneath it. A conversation owns its
+               scroll position, follow-the-latest ref, Latest pill and open
+               editor, so none of those may cross from one id to the next. */
+            key={thread.id}
             slug={slug}
             thread={thread}
             onJump={onJump}

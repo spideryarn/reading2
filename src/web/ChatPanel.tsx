@@ -1116,7 +1116,14 @@ export function Conversation({
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    if (stick.current) el.scrollTop = el.scrollHeight;
+    /* **An empty conversation reads from the top.** There is no latest turn to
+       follow, and what is in the scroller is the opening hint and the
+       suggestions, read top down. Following "the bottom" here scrolled a
+       landscape phone's short band (207px of scroller, 308px of suggestions)
+       past the hint and the first question on mount, so they looked clipped off
+       the top of the band. Plan 261001n. */
+    if (thread.messages.length === 0) el.scrollTop = 0;
+    else if (stick.current) el.scrollTop = el.scrollHeight;
     /* And this half **only ever clears**, which is the whole discipline.
        Content growing must never decide the reader has scrolled away — that was
        the bug the note above describes. But content *shrinking* can strand a
@@ -1161,7 +1168,12 @@ export function Conversation({
            and a ref cannot end up disagreeing about where the reader is. */
         onScroll={(e) => {
           const el = e.currentTarget;
-          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+          /* An empty conversation counts as following, wherever the reader
+             has scrolled the suggestions to: there is no latest turn to be
+             away from, so no "Latest" pill, and the first question sent from
+             halfway down them must still be followed by its answer. */
+          const atBottom =
+            thread.messages.length === 0 || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
           stick.current = atBottom;
           setAway(!atBottom);
         }}
