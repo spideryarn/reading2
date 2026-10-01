@@ -363,12 +363,20 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin: 0 0.45rem;
   opacity: 0.6;
 }
-/* Each measurement stays on one line — "9 / parts" split across a wrap once
-   the author list made this line long enough to wrap (plan 260929d). The
-   first item, the byline or the author list, is free to wrap: it is the long
-   one. */
+/* Each fact stays whole — "9 / parts" split across a wrap once the author list
+   made this line long enough to wrap (plan 260929d). The first item, the byline
+   or the author list, is free to wrap: it is the long one.
+
+   **`inline-block`, not `white-space: nowrap`.** The spans arrive with no
+   whitespace between them and the dot is inside each one, so nowrap on every
+   span left no break anywhere from the byline's last word to the end of the
+   line: `antikythera-mechanism` pushed a 390px page 180px sideways (plan
+   261001e). An inline-block is an atomic inline, which the line may break
+   before and after; it goes to the next line whole when it does not fit; and
+   one wider than the whole column — a long site name — wraps inside itself
+   rather than overflowing. tests/masthead-facts-wrap-in-chrome.test.tsx. */
 .facts > span + span {
-  white-space: nowrap;
+  display: inline-block;
 }
 
 /* One author in the masthead or on the Metadata page: a name first, a link
