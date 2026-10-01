@@ -79,7 +79,7 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   [`Dock.tsx`](../../src/web/Dock.tsx)).
 - **Plan it again** rebuilds the route only (`trajectory` is forced by name). **Since 2026-09-29 it
   is offered only in the stale and profile-changed banners**; the standing button in the foot went,
-  and a current route is re-planned from Metadata's *Re-run AI processing*, which has a Trajectory
+  and a current route is re-planned from Metadata's *AI processing*, which has a Trajectory
   row ([260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). A route planned by an
   older prompt over the same article (*outdated*) is not announced at all — Greg, 2026-09-29
   (SPIDERYARN-READING2-55): *"There are probably lots of cases where the prompt will get out of

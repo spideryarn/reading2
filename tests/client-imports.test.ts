@@ -97,7 +97,7 @@ const SHARED = new Set([
      This is the outcome the long comment below argues for, reached one more
      time. See src/step-order.ts. */
   "step-order.js",
-  /* Which steps the Metadata page offers a *Re-run AI processing* row for.
+  /* Which steps the Metadata page offers an *AI processing* row for.
      On the list for the reason the header of this file gives rather than for
      convenience: it imports `StepName` from `types.js` and nothing else, and it
      was written as a leaf **because of this rule** — the alternative was the

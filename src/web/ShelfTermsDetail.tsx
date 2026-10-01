@@ -3,6 +3,14 @@
  * on one line — its colour, its chip, its live count as a small bar, and the
  * three articles that use it most, as links.
  *
+ * Greg, 2026-09-29 (`spya-f28vqj`), on this view: *"there are these coloured
+ * bars … It took me a while to figure out that they're probably a
+ * count/proportion of matches. … anything like that that's hard for the user
+ * to guess/intuit should always have a tooltip … if we have the bar we can
+ * remove the "N of M on the shelf". … make the bars a little narrower"*. So
+ * the bar has a card, the row no longer prints *N of M*, and the bar's column
+ * is 3rem, down from 4 — docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 2.
+ *
  * Greg, 2026-09-28: *"there should be a different way to show 'More detail' or
  * similar, that turns them into per-row-with-extra-detail rather than
  * pills-on-the-same-row … right now it's ugly (just shows them directly
@@ -32,7 +40,7 @@ import { readHref } from "./router.js";
 import type { ShelfTerm } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope, TopicDot, topArticles } from "./ShelfTermChip.js";
 import { topicColourStyle } from "./topic-colour.js";
-import { TooltipGroup } from "./Tooltip.js";
+import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 /** How many articles a row names. */
 const ROW_ARTICLES = 3;
@@ -68,7 +76,7 @@ export function ShelfTermsDetail({
           return (
             <li
               key={t.key}
-              className="tw:grid tw:grid-cols-[0.625rem_minmax(0,1fr)_4rem] tw:items-center tw:gap-x-3 tw:gap-y-1 tw:border-b tw:border-border/50 tw:py-1.5 tw:text-xs tw:sm:grid-cols-[0.625rem_12rem_4rem_minmax(0,1fr)]"
+              className="tw:grid tw:grid-cols-[0.625rem_minmax(0,1fr)_3rem] tw:items-center tw:gap-x-3 tw:gap-y-1 tw:border-b tw:border-border/50 tw:py-1.5 tw:text-xs tw:sm:grid-cols-[0.625rem_12rem_3rem_minmax(0,1fr)]"
             >
               <TopicDot slot={slot} className="tw:size-2.5" />
               <span className="tw:min-w-0">
@@ -82,7 +90,7 @@ export function ShelfTermsDetail({
                   className="tw:max-w-full"
                 />
               </span>
-              <CountBar n={n} most={most} slot={slot} />
+              <CountBar n={n} most={most} slot={slot} scopeWord={scope.scopeWord} />
               <span className="tw:col-span-full tw:min-w-0 tw:pl-[1.375rem] tw:sm:col-span-1 tw:sm:pl-0">
                 <Titles term={t} scope={scope} />
               </span>
@@ -95,40 +103,60 @@ export function ShelfTermsDetail({
 }
 
 /**
- * The live count as a bar, in the topic's colour. Decorative: the number is on
- * the chip beside it, so the bar is `aria-hidden` rather than a second reading
- * of it. `data-count-bar` carries the fraction for a test.
+ * The live count as a bar, in the topic's colour, with a card saying so.
+ *
+ * **Still `aria-hidden`**: the number is on the chip beside it, so to a screen
+ * reader the bar would only be a second reading of it. The card is for the
+ * eye, which is who was left guessing what the bar meant — so the trigger is a
+ * taller strip around the 6px bar, which is otherwise too thin to point at.
+ * `data-count-bar` carries the fraction for a test.
  */
-function CountBar({ n, most, slot }: { n: number; most: number; slot: number }) {
+function CountBar({
+  n,
+  most,
+  slot,
+  scopeWord,
+}: {
+  n: number;
+  most: number;
+  slot: number;
+  scopeWord: string;
+}) {
   const pct = Math.round((n / most) * 100);
   return (
-    <span
-      aria-hidden="true"
-      data-count-bar={pct}
-      className="tw:block tw:h-1.5 tw:w-full tw:overflow-hidden tw:rounded-full tw:bg-border/60"
+    <Tooltip
+      placement="top"
+      content={
+        <TipNote>
+          {n} {n === 1 ? "article" : "articles"} in this view use this topic. The longest bar is the
+          topic with the most ({most}), so the bars compare topics with each other, not with
+          everything {scopeWord}.
+        </TipNote>
+      }
     >
-      <span
-        style={{ ...topicColourStyle(slot), width: `${pct}%` }}
-        className="tw:block tw:h-full tw:rounded-full tw:bg-[var(--topic)]"
-      />
-    </span>
+      <span aria-hidden="true" data-count-bar={pct} className="tw:block tw:cursor-help tw:py-2">
+        <span className="tw:block tw:h-1.5 tw:w-full tw:overflow-hidden tw:rounded-full tw:bg-border/60">
+          <span
+            style={{ ...topicColourStyle(slot), width: `${pct}%` }}
+            className="tw:block tw:h-full tw:rounded-full tw:bg-[var(--topic)]"
+          />
+        </span>
+      </span>
+    </Tooltip>
   );
 }
 
 /**
- * How many articles in scope use the topic — the tooltip's *"7 of 38 on the
- * shelf"*, which unlike the chip's live count does not move as the view
- * narrows — then the ones that use it most, one per title, as links.
+ * The articles that use the topic most, one per title, as links.
+ *
+ * **No *"7 of 38 on the shelf"* in front, since 2026-10-01** — the bar says
+ * the proportion, and the chip's own card still gives both denominators
+ * (ShelfTermChip.tsx § `TermTip`). Greg's `spya-f28vqj`.
  */
 function Titles({ term, scope }: { term: ShelfTerm; scope: TermTipScope }) {
-  const members = term.articles.filter((a) => scope.inScope.has(a.slug)).length;
   const top = topArticles(term, scope.inScope, ROW_ARTICLES, scope.titleOf);
   return (
     <span className="tw:text-muted-foreground">
-      <span className="tw:tabular-nums tw:text-ink-faint">
-        {members} of {scope.inScope.size} {scope.scopeWord}
-      </span>
-      {top.length > 0 && <span aria-hidden="true"> — </span>}
       {top.map((a, i) => (
         <span key={a.slug}>
           {i > 0 && <span aria-hidden="true"> · </span>}

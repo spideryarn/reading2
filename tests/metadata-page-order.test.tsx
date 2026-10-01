@@ -26,9 +26,10 @@
  * it back. A page that had simply stopped rendering them would pass the first
  * half of this file and fail the second.
  *
- * The one thing that must NOT be put away is the metadata error, which lives in
- * that same section: `docs/reusable/silent-success.md`, and the cross-model
- * review of 2026-08-27 that caught the first version hiding it.
+ * The one thing that must NOT be put away is the metadata error. It moved with
+ * the stage rows into *AI processing* on 2026-10-01, and still forces its
+ * section open: `docs/reusable/silent-success.md`, and the cross-model review
+ * of 2026-08-27 that caught the first version hiding it.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -207,6 +208,9 @@ describe("what the page puts first", () => {
    * default-collapsed … And maybe position it above "Archive this article"."*
    * docs/plans/260929b-one-place-to-re-run-ai-processing.md. Neither old name
    * may come back beside it.
+   *
+   * **Called *AI processing* since 2026-10-01**, when *What we did to it* joined
+   * it — Greg, `spya-qgh5ta`. docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 5.
    */
   it("offers the re-runs in one shut section, just above Archive", async () => {
     await mount();
@@ -214,15 +218,16 @@ describe("what the page puts first", () => {
 
     expect(order).not.toContain("Generate it again");
     expect(order).not.toContain("Start this article again");
-    expect(order.indexOf("Re-run AI processing")).toBe(order.indexOf("Archive this article") - 1);
-    expect(sectionHeading("Re-run AI processing")?.getAttribute("aria-expanded")).toBe("false");
+    expect(order).not.toContain("Re-run AI processing");
+    expect(order.indexOf("AI processing")).toBe(order.indexOf("Archive this article") - 1);
+    expect(sectionHeading("AI processing")?.getAttribute("aria-expanded")).toBe("false");
     /* Shut, and still mounted: the rows' job subscriptions must outlive a
        shut section (Section § keepMounted), so the rows are in the document
        but inside a hidden wrapper. */
     const firstRow = host.querySelector<HTMLElement>("[data-rerun-step]");
     expect(firstRow, "the rows were unmounted").toBeTruthy();
     expect(firstRow?.closest("[hidden]"), "the rows are showing while shut").toBeTruthy();
-    await act(async () => sectionHeading("Re-run AI processing")?.click());
+    await act(async () => sectionHeading("AI processing")?.click());
     expect(firstRow?.closest("[hidden]"), "opening did not show the rows").toBeNull();
   });
 
@@ -257,7 +262,7 @@ describe("what the page puts first", () => {
       "Export",
       /* Since 2026-09-29: asking again sits between the machinery and the
          endings — see the test above. */
-      "Re-run AI processing",
+      "AI processing",
       "Archive this article",
       "Delete this article",
     ]);
@@ -339,34 +344,46 @@ describe("the two identifiers the owner did not recognise", () => {
     }
   });
 
-  it("keeps the pipeline stages in there too, shut", async () => {
+  it("keeps the pipeline stages with the re-runs, shut", async () => {
     await mount();
     /* **Asserted on the output path, not the stage label.** The first version
        of this test used "Fetching the page", which is `fetch`'s label — and
        StageRow draws a stage's label only when it has NOT run, so on a stage
        that has, that string is absent whether the section is open or shut. The
-       assertion could not have failed. docs/reusable/silent-success.md. */
-    expect(host.textContent).not.toContain("raw/a.html");
+       assertion could not have failed. docs/reusable/silent-success.md.
 
-    const heading = sectionHeading("Technical details");
-    expect(heading).toBeTruthy();
-    await act(async () => heading?.click());
+       **Since 2026-10-01 they are in *AI processing*, not *Technical details***
+       (Greg, `spya-qgh5ta`), and that section is `keepMounted`: shut, the rows
+       are in the document inside a hidden wrapper, so "not in the text" would
+       now be false whether shut or open. Asked of the wrapper instead. */
+    const section = host.querySelector("#sec-ai-processing");
+    expect(section?.textContent).toContain("What we did to it");
+    expect(section?.textContent).toContain("raw/a.html");
+    expect(host.querySelector("#sec-technical-details")?.textContent ?? "").not.toContain("What we did to it");
+    const path = [...(section?.querySelectorAll<HTMLElement>("*") ?? [])].find(
+      (el) => el.children.length === 0 && el.textContent?.includes("raw/a.html"),
+    );
+    expect(path?.closest("[hidden]"), "the stage rows are showing while shut").toBeTruthy();
 
-    expect(host.textContent).toContain("raw/a.html");
+    await act(async () => sectionHeading("AI processing")?.click());
+
+    expect(path?.closest("[hidden]"), "opening did not show the stage rows").toBeNull();
     /* And the other branch of the row, so this covers both shapes of stage. */
-    expect(host.textContent).toContain("Reading the text out");
+    expect(section?.textContent).toContain("Reading the text out");
   });
 });
 
 describe("the one thing a shut section may not swallow", () => {
-  it("opens Technical details when the metadata request failed, error and all", async () => {
+  it("opens AI processing when the metadata request failed, error and all", async () => {
     answer(500);
     await mount();
 
     /* The rule found by the cross-model review of 2026-08-27 and inherited from
        "What we did to it": the error lives in this section, so this section
        stops being collapsible while there is one. A shut heading is exactly
-       where a failure goes to not be seen. */
+       where a failure goes to not be seen. It was *Technical details* until
+       2026-10-01, when the stage rows and their error moved to *AI
+       processing* (`spya-qgh5ta`). */
     /* **The section has to be there for its absence to mean anything.** The
        first draft of this test asserted only "no disclosure button", which was
        green before the section existed at all — a check that has never been
@@ -378,14 +395,17 @@ describe("the one thing a shut section may not swallow", () => {
        profile just now" and the comments row "Couldn't be counted", off the
        same failed request. The assertion has to read the section itself or it
        is testing two other components. GPT Sol, 2026-09-03. */
-    const section = host.querySelector("#sec-technical-details");
+    const section = host.querySelector("#sec-ai-processing");
     expect(section).toBeTruthy();
     const text = section?.textContent ?? "";
 
     /* Open, not merely present: no disclosure button, because there is nothing
-       to disclose — it is already showing, error and identifier rows both. */
-    expect(sectionHeading("Technical details")).toBeUndefined();
-    expect(text).toContain("Address");
+       to disclose — it is already showing, error and re-run rows both. And
+       since the section is `keepMounted`, "showing" is asked of the hidden
+       wrapper rather than of the text, which is there either way. */
+    expect(sectionHeading("AI processing")).toBeUndefined();
+    expect(section?.querySelector("[hidden]")).toBeNull();
+    expect(text).toContain("What we did to it");
     /* The fetch's own message, which is the thing that must not be sealed in.
        `readJson` throws with the status in it on a non-2xx. */
     expect(text).toMatch(/500|could not|couldn't|failed/i);

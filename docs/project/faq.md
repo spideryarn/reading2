@@ -113,7 +113,7 @@ answered by a model now. FAQ never marks the reader and never writes an answer.
 
 ## Making it again
 
-From the Metadata page: *Re-run AI processing* has an FAQ row, since 2026-09-29, and it is the only
+From the Metadata page: *AI processing* has an FAQ row, since 2026-09-29, and it is the only
 redo — the panel says nothing when its list was made by an older prompt
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
 model call; the list is replaced only if the run succeeds. The row is drawn with the experimental

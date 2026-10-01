@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The *Re-run AI processing* section on the Metadata page** — Metadata.tsx
+ * **The *AI processing* section (*Re-run AI processing* until 2026-10-01) on the Metadata page** — Metadata.tsx
  * § `RerunSection`, stage 2 of
  * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
  *
@@ -325,7 +325,7 @@ async function press(b: HTMLButtonElement | undefined): Promise<void> {
   await settle();
 }
 
-describe("the Re-run AI processing section", () => {
+describe("the AI processing section", () => {
   it("offers a control for each step on the list and for no other step", async () => {
     await open();
     for (const step of METADATA_RERUN_STEPS) {
@@ -616,7 +616,7 @@ describe("the Re-run AI processing section", () => {
   });
 
   /**
-   * The pill in *Technical details* says `ran` / `not run` off the same `done`.
+   * The stage pill lower in *AI processing* says `ran` / `not run` off the same `done`.
    * A button offering to run something *again* over a row that says it never ran
    * is the page contradicting itself.
    */

@@ -58,7 +58,10 @@ written down; this is that idea with the direction reversed, the reader supplyin
 
 ## The four stances
 
-The reader picks one per turn, from a `<select>` under the box.
+The reader picks one per turn, from a `<select>` under the box. Its card lists the four in a line
+each, from the reader's side, and the one rule nothing else on screen says — a direct question or
+*"just tell me"* gets a plain answer whatever is picked (`StanceTip` in
+[`ChatPanel.tsx`](../../src/web/ChatPanel.tsx); Greg, `spya-xunuum`, 2026-09-29).
 
 | Stance | What the reply is |
 |---|---|
