@@ -68,4 +68,4 @@ the Dock's Annotations button is an on/off toggle at the right-hand end, and pre
 the band but keeps the notes. From 900px up you get band, prose and notes; below that the band
 wins, with a line under the prose saying the notes need a wider window or the panel closed, and on
 a phone the band covers everything as before. Old `?mode=annotations` links open the notes. On
-`dev` at COMMIT.
+`dev` at `eb76050d`, with GPT Sol's review fixes at `70650d76`.
