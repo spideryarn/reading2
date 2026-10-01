@@ -159,12 +159,18 @@ vi.mock("../src/web/lib/api.js", () => {
  * the one the band's freshness depends on — was not exercised at all. GPT Sol's
  * fifth finding on the built code. `finishJob()` below is what a completed
  * glossary run looks like arriving.
+ *
+ * **Every subscriber, not the last one.** The real engine announces a finished
+ * job to every mounted `useJobs`, and since plan 261001m the band mounts two —
+ * the glossary's job and the for-you marks' — so a fake that kept only the
+ * last callback handed the glossary's finish to the marks' hook, which rightly
+ * ignores it.
  */
-let onFinished: ((job: { slug: string; status: string; steps: { name: string }[] }) => void) | null =
-  null;
+type Finished = (job: { slug: string; status: string; steps: { name: string }[] }) => void;
+const onFinished = new Set<Finished>();
 vi.mock("../src/web/useJobs.js", () => ({
   useJobs: (_cadence: unknown, cb?: (job: never) => void) => {
-    onFinished = (cb ?? null) as typeof onFinished;
+    if (cb) onFinished.add(cb as Finished);
     return {
       jobs: [],
       loaded: true,
@@ -231,7 +237,7 @@ function glossaryAsks(): number {
 
 /** A glossary job for this article, landing in the band's poll as finished. */
 function finishJob(slug = "constitution"): void {
-  onFinished?.({ slug, status: "done", steps: [{ name: "glossary" }] });
+  for (const cb of onFinished) cb({ slug, status: "done", steps: [{ name: "glossary" }] });
 }
 
 beforeEach(() => {
@@ -239,7 +245,7 @@ beforeEach(() => {
   held.length = 0;
   read = null;
   band = null;
-  onFinished = null;
+  onFinished.clear();
   fails = false;
   staleLookupEntry = null;
   entries.length = 0;

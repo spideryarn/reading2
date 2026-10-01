@@ -76,6 +76,7 @@ import { mergeLabels, type PendingLabelsFile } from "../src/labels.js";
 import { runAsOwner } from "../src/owner.js";
 import { DEFAULT_INGEST_STEPS, STEPS, type PipelineStep } from "../src/pipeline.js";
 import { RESET_ROLE, extraColumns, extraSteps } from "../src/reset.js";
+import { extrasToRegenerate } from "../src/reset-role.js";
 import { hashBlocks, structureHash } from "../src/source-hash.js";
 import { STEP_ORDER } from "../src/step-order.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
@@ -442,8 +443,19 @@ describe("RESET_ROLE", () => {
       STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels"),
     );
     /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f); fifteen since
-       `simple` the same day (plan 260930i). */
-    expect(extraSteps()).toHaveLength(15);
+       `simple` the same day (plan 260930i); sixteen since `glossaryForYou`,
+       2026-10-01 (plan 261001m). */
+    expect(extraSteps()).toHaveLength(16);
+  });
+
+  /* **A reset with no profile does not queue the for-you marks** — plan
+     261001m, GPT Sol's finding 6. They would only refuse; every other extra
+     the article had is still made again. The control is the same list with a
+     profile, where they are kept. */
+  it("drops the profile-only extras from a reset that carries no profile", () => {
+    const present = extraSteps();
+    expect(extrasToRegenerate(present, false)).toEqual(present.filter((s) => s !== "glossaryForYou"));
+    expect(extrasToRegenerate(present, true)).toEqual(present);
   });
 
   it("finds every extra's column in STORAGE, one whole column each", () => {

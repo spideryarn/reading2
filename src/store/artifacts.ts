@@ -51,6 +51,7 @@ import type {
   Faq,
   Trajectory,
   Glossary,
+  GlossaryForYou,
   Ideas,
   Meta,
   Quotes,
@@ -105,7 +106,8 @@ export type ArtifactKind =
   | "debate"
   | "citations"
   | "crossrefs"
-  | "simple";
+  | "simple"
+  | "glossaryForYou";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -221,6 +223,13 @@ export interface ArtifactMap {
    * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
    */
   simple: SimpleSummary;
+  /**
+   * The owner's "for you" marks on the glossary — `GlossaryForYou`,
+   * src/types.ts, written by the `glossaryForYou` step. Owner-only: no public
+   * projection names its column.
+   * docs/plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md.
+   */
+  glossaryForYou: GlossaryForYou;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -422,6 +431,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      because a `simple/1` row with a hand-added `levels` field is still v1, and
      must not make the step report done. */
   simple: { field: "levels", ok: isUsableSimpleSummary, whole: true },
+  /* A `marks` array, and **an EMPTY one is usable**: nothing in the list worth
+     marking for this reader is a real answer. `toMarks` returns `null` for an
+     answer with no list, and the step throws on it, so that never reaches here. */
+  glossaryForYou: { field: "marks", ok: isArray },
 };
 
 /**
@@ -959,6 +972,13 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   crossrefs: "crossrefs",
   /* No `BASELINE` row: nothing addresses a paragraph, so a re-run replaces. */
   simple: "simple",
+  /* **Its freshness is `isDone`, not a `stamp`** (src/pipeline.ts §
+     glossaryForYou): what it was made from is `glossaryHash` and
+     `profileHash`, and the artefact carries no `sourceHash` for `stampOf` to
+     read. The row still names the artefact, so `stampFor` reads its version,
+     generator and profile rather than answering `null` for a step that does
+     record what made it. No `BASELINE` row: a re-run replaces the marks. */
+  glossaryForYou: "glossaryForYou",
 };
 
 /**

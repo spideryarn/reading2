@@ -1162,8 +1162,8 @@ wrong.
 
 **Since 2026-10-01 the glossary is written for a general reader**, never the reader's profile,
 because it is public with its article — [reader-profile.md § Only the personal steps get it](reader-profile.md#only-the-personal-steps-get-it). *Find more* on a legacy profiled list appends
-and keeps the list's old stamp (`existingFor`, `buildGlossary`); a per-reader *for you* layer on
-top is [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md) stage 2.
+and keeps the list's old stamp (`existingFor`, `buildGlossary`); the per-reader layer on top is
+[§ Marked for you](#marked-for-you).
 
 **Metadata says which, before the press.** Its Glossary row and the panel's *Find more* send the same
 unprofiled run, so they append or rewrite alike. `glossaryRunKind`, built on `existingFor`, gives the page that verdict through
@@ -1176,6 +1176,49 @@ current one came from one compatible append pass. It was not built. The pass kee
 usually adds terms; deduplication can also refine an existing entry while keeping its id. The
 threshold hides noise, Stop is on screen while it runs, and nobody has asked. The design is there
 if a reader does.
+
+## Marked for you
+
+> maybe I might generate a glossary, and I always do that the same way, but then the post-processing
+> personalization would flag some of those as being particularly relevant, or add a postscript that
+> provides extra context that will be useful for me.
+>
+> — Greg, 2026-10-01 (spya-j5f7yv)
+
+**What.** The owner sees a small *for you* mark on a few entries — at most eight — and one line under
+each entry's gloss that adds context for them: a bridge from what they know, or a warning that the
+article's sense is not the one they will reach for. The glossary itself is unchanged and is written
+for everyone. At the glossary's head, `<MarkedForYou>`
+([`src/web/MarkedForYou.tsx`](../../src/web/MarkedForYou.tsx)) says *Marked for you* and opens the
+profile panel; when the marks were made for a profile the reader has since changed it says *Marked
+for an older profile* and offers **Mark again**, which queues the marks alone. Arriving spends
+nothing.
+
+**Why.** A glossary is public with its article, so since 2026-10-01 it is written for nobody in
+particular ([reader-profile.md § Only the personal steps get it](reader-profile.md#only-the-personal-steps-get-it)).
+What the profile was really for here is pointing: which of these terms will trip *this* reader. That
+is a pointer and a line, layered on the shared list rather than baked into it.
+
+**How.** One quick-tier call, step `glossaryForYou`
+([`src/glossary-for-you.ts`](../../src/glossary-for-you.ts)): the term list — id, name, the gloss a
+closed row shows, in order — and the reader's profile, never the article. A mark naming a term not
+in the list is dropped. The marks remember which list they annotate (`glossaryHash`, the hash of
+exactly the term list the prompt carried) and whose profile (`profileHash`), and the step is current
+while those two and the prompt version still match — so *Find more* re-marks, and a changed profile
+re-marks without rewriting the glossary. The jobs route adds the step to a glossary request when the
+owner has a profile; without one it is never queued, and a run that gets there anyway refuses in
+words. A failed call is recorded rather than thrown, because the step usually shares a job with the
+glossary it marks and a failed job publishes nothing — the marks may cost a reader a retry, never the
+glossary.
+
+**Where, and why not public.** Its own nullable column, `article_revisions.glossary_for_you`, carried
+into a new draft like the glossary. It is written from the owner's description of themselves, so no
+public projection selects it ([`src/store/public-reader.ts`](../../src/store/public-reader.ts);
+`tests/public-reads.test.ts`), the make-public dialog does not list it among what is shared
+(`NeverShared`, [`src/store/pg.ts`](../../src/store/pg.ts)), and the owner's
+`GET /api/glossary/:slug` returns the marks only when they annotate the list on screen and the
+reader still has a profile. The owner's export includes it. Design and review:
+[261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md).
 
 ## Staleness, and the force cascade
 

@@ -242,6 +242,7 @@ import {
   TriangleAlert,
   Undo2,
   Upload,
+  UserRound,
   Waypoints,
   Quote,
 } from "lucide-react";
@@ -384,6 +385,10 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* Summary's own glyph (Dock.tsx): Simple is a sub-mode of Summary.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simple: Layers,
+  /* The person glyph the glossary's "Marked for you" label wears
+     (MarkedForYou.tsx), and the profile badge before it: what this row made is
+     written for the reader. Plan 261001m. */
+  glossaryForYou: UserRound,
 };
 
 /*

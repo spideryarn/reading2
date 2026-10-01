@@ -468,6 +468,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      See `TRAJECTORY_NO_QUOTES` and `TRAJECTORY_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
   "jb-only-abstract-quotes": "blocked",
+  /* The glossary's "for you" marks: no profile to mark for, or no glossary to
+     mark. See `FOR_YOU_NO_PROFILE` and `FOR_YOU_NO_GLOSSARY`. */
+  "jb-for-you-no-profile": "blocked",
+  "jb-for-you-no-glossary": "blocked",
   /* Reading a PDF. The split of prefix is the rule in docs/project/copy.md read
      both ways: `pdf-` for the two refusals that are arithmetic over bytes we
      already hold, `ai-pdf-` for the two that are an answer the service came
@@ -1404,6 +1408,29 @@ export const TRAJECTORY_NO_QUOTES: ReaderFacingFailure = {
     "There are no quotes for this article yet, and the trajectory is a route through its quotes. " +
     "Open Quotes and choose them first, then open this again. Until there are some, this will " +
     "come back the same way. [jb-no-quotes]",
+};
+
+/**
+ * **The glossary's "for you" marks were asked for with no profile to mark
+ * for** — plan 261001m. The jobs route adds the step only when the owner has
+ * one and a reset drops it without one, so this is reached by a *Mark again*
+ * pressed after the profile was cleared, or a job asked for by hand.
+ */
+export const FOR_YOU_NO_PROFILE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is nothing to mark the glossary for yet: you have not said who you are or why you are " +
+    "reading this. Add a line about yourself on your profile page, then ask again. Until then, " +
+    "this will come back the same way. [jb-for-you-no-profile]",
+};
+
+/** …or with no glossary to mark. */
+export const FOR_YOU_NO_GLOSSARY: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no glossary for this article yet, so there is nothing to mark for you. Open Glossary " +
+    "and find the terms first; the marks are made after them. Until there is one, this will come " +
+    "back the same way. [jb-for-you-no-glossary]",
 };
 
 /** Quotes exist, but the route deliberately cannot use the abstract's. */

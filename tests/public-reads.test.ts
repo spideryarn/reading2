@@ -197,6 +197,75 @@ describe("the public revision read", () => {
     expect(articleQuery.params).toEqual(["a-slug", "public", 1]);
   });
 
+  /**
+   * **The owner's "for you" marks are on no public read** — plan 261001m,
+   * rule 2: what is written for the owner is stored beside the shared
+   * artefact and never read by the public path. The column is written from
+   * the owner's description of themselves, so a projection that picked it up
+   * would publish that, one note per marked term.
+   *
+   * Every public projection, by name, and the DTO too: `publicArticle` builds
+   * its payload field by field, so this holds the day somebody spreads a row
+   * into it instead. The `glossary` assertion above is the control — the
+   * column beside it is selected, so absence here is a fact about this one.
+   */
+  it("never asks for the owner's for-you marks, in any public read or DTO", async () => {
+    for (const [name, sql] of [
+      ["article", article],
+      ["head", headSql],
+      ["asset", assetQuery.sql],
+    ] as const) {
+      expect({ name, taken: sql.includes('"glossary_for_you"') }).toEqual({ name, taken: false });
+    }
+    expect(article).toContain('"glossary"');
+
+    const { publicArticle } = await import("../src/public/dto.js");
+    const NOTE = "PRIVATE-FOR-YOU-NOTE";
+    const row = {
+      slug: "a-slug",
+      title: "A title",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [],
+      tree: {
+        version: "1",
+        generator: "test",
+        slug: "a-slug",
+        rootId: "n0",
+        nodes: {
+          n0: { id: "n0", depth: 0, parent: null, children: [], range: ["spya-aaaaaa", "spya-aaaaaa"], title: "A title" },
+        },
+      },
+      arc: null,
+      assets: null,
+      glossary: null,
+      ideas: null,
+      quotes: null,
+      tweets: null,
+      timeline: null,
+      trajectory: null,
+      faq: null,
+      simpleSummary: null,
+      citations: null,
+      debate: null,
+      crossrefs: null,
+      crossrefsFresh: false,
+      comments: [],
+      searches: [],
+      sketch: null,
+      navLabelStatus: "ready",
+      /* Over-full on purpose: a DTO that copied its argument would carry it. */
+      glossaryForYou: { marks: [{ termId: "spya-aaaaaa", note: NOTE }], profileHash: "p" },
+    } as unknown as Parameters<typeof publicArticle>[0];
+    const json = JSON.stringify(publicArticle(row));
+    expect(json).not.toContain(NOTE);
+    expect(json).not.toContain("glossaryForYou");
+  });
+
 });
 
 /**

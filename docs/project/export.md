@@ -44,6 +44,11 @@ grow.
 `articleBundle(slug)` is owner-scoped through `readArticleRows` and throws `ArticleNotFound` for a
 slug that is not this reader's, which a route turns into a 404 rather than a 500.
 
+**It includes what was written for the owner alone.** The glossary's *for you* marks
+(`glossary_for_you`, [glossary.md § Marked for you](glossary.md#marked-for-you)) carry the owner's
+`profileHash` and are never public, but an export is the owner's own copy, so they ride in
+`content/revision.json` with the other columns that have no file of their own.
+
 ## `index.html` is an index, not a reader
 
 Greg asked for "perhaps also with a human-readable index .html", and the review drew the line:

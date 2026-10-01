@@ -363,6 +363,7 @@ const TASKS: readonly InteractionTask[] = [
             glossary: fabricatedGlossary(slug, entry),
             stale: false,
             outdated: false,
+            forYou: null,
           }),
         },
         /* **A sink, not the real store.** The lookup is reader state on somebody

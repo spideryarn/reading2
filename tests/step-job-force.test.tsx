@@ -96,6 +96,7 @@ const READ: GlossaryRead = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  forYou: null,
   error: null,
   reload: async () => {},
   refresh: async () => {},

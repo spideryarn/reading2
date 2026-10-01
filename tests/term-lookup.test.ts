@@ -85,7 +85,7 @@ import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { lookUpTerm } from "../src/store/index.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
-import type { Block, GlossaryEntry, GlossaryLookup, GlossaryResponse } from "../src/types.js";
+import type { Block, GlossaryEntry, GlossaryLookup, GlossaryFound } from "../src/types.js";
 import type { ExplainEnding } from "../src/explain.js";
 import type { LookupsByTerm } from "../src/glossary-lookups.js";
 import type { Article } from "../src/types.js";
@@ -275,7 +275,7 @@ function harness(opts: {
           glossary: { entries: [{ ...opts.entry, kind: "term", background: "" }] },
           stale: false,
           outdated: false,
-        }) as unknown as GlossaryResponse,
+        }) as unknown as GlossaryFound,
     },
     lookups: {
       load: async (): Promise<LookupsByTerm> => ({}),

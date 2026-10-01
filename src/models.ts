@@ -616,6 +616,12 @@ export type Task =
      second tier inside it. Quick tier, as measured in plan 261001h; it never
      sees the whole article. */
   | "simple-check"
+  /* **"For you" marks on the glossary** (src/glossary-for-you.ts, plan
+     261001m): the glossary's term list and the reader's profile, never the
+     article, and a few one-line notes back. Born on the quick tier by judgment:
+     a short pick over material that is all in front of it. Its own job so the
+     ledger can count the personal layer apart from the shared glossary. */
+  | "glossary-for-you"
   | "search"
   /* The model reading a referee's own notes rather than the paper —
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
@@ -951,6 +957,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   "quiz-mark": "capable",
   "quiz-verdict": "quick",
   "simple-check": "quick",
+  /* Born here, like the three above: a pick of a few terms from a list and a
+     line each, over a term list and a profile — no article. Plan 261001m. */
+  "glossary-for-you": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
@@ -1187,6 +1196,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   /* Inside the `simple` step, but on the chat wire: the request plan 261001h
      measured, through the quick tier's only wire. */
   "simple-check": "chat",
+  /* The quick tier's only wire. */
+  "glossary-for-you": "chat",
   search: "chat",
   "referee-mirror": "chat",
   "referee-criteria": "chat",
@@ -1323,6 +1334,8 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      measured on the quick tier's model, and a different one is a new
      measurement. */
   "simple-check": "SPIDERYARN_SIMPLE_CHECK_MODEL",
+  /* For a comparison run: every chat-wire task has one (tests/models.test.ts). */
+  "glossary-for-you": "SPIDERYARN_GLOSSARY_FOR_YOU_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm

@@ -12,7 +12,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as messages from "../src/messages.js";
 import { OWNED_ARTEFACT, sharingPersonalisedList } from "../src/messages.js";
-import type { ProfileCarrying } from "../src/store/pg.js";
+import type { NeverShared, ProfileCarrying, ProfileStamped } from "../src/store/pg.js";
 import {
   canRetry,
   CODE_KINDS,
@@ -439,6 +439,25 @@ describe("naming what was written for your reader profile", () => {
    */
   const _ownedNamesEveryProfiledArtefact: Record<ProfileCarrying, string> = OWNED_ARTEFACT;
   void _ownedNamesEveryProfiledArtefact;
+
+  /**
+   * **And the exclusion stays an exclusion** — plan 261001m, GPT Sol's
+   * finding 4. `NeverShared` takes owner-only artefacts out of the dialog's
+   * list; these two lines go red at `npm run typecheck` if it names something
+   * that is not stamped with a profile (an exclusion that excludes nothing), or
+   * if one of its members ever reaches `ProfileCarrying` (and so the dialog's
+   * *"shared exactly as written"*).
+   */
+  const _neverSharedIsStamped: NeverShared extends ProfileStamped ? true : false = true;
+  const _neverSharedIsNotListed: [Extract<NeverShared, ProfileCarrying>] extends [never] ? true : false = true;
+  void _neverSharedIsStamped;
+  void _neverSharedIsNotListed;
+
+  it("does not name an owner-only artefact in the dialog's table", () => {
+    /* The runtime half of the same fact: `OWNED_ARTEFACT` is the dialog's
+       vocabulary, and the for-you marks have no sentence in it. */
+    expect(Object.keys(OWNED_ARTEFACT)).not.toContain("glossaryForYou");
+  });
 
   it("names the sketch as a thing, not as a step id", () => {
     /* The one that was missing. `startsWith` rather than `toContain`, because

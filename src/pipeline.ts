@@ -148,7 +148,7 @@ import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pageLines, pass0, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import { type NumberedReferenceList, referenceListFrom } from "./citation-reference-list.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
-import { log } from "./log.js";
+import { errorFields, log } from "./log.js";
 import {
   ARTICLE_RENDERER,
   type ArticleStage,
@@ -174,7 +174,16 @@ import {
   SOURCE_DOCUMENT_GONE,
   TRAJECTORY_NO_QUOTES,
   TRAJECTORY_ONLY_ABSTRACT_QUOTES,
+  FOR_YOU_NO_GLOSSARY,
+  FOR_YOU_NO_PROFILE,
 } from "./messages.js";
+import {
+  failedForYou,
+  forYouGlossaryHash,
+  forYouIsCurrent,
+  generateGlossaryForYou,
+} from "./glossary-for-you.js";
+import { PROMPT_VERSION as FOR_YOU_PROMPT_VERSION } from "./glossary-for-you.js";
 import {
   canonicalKey,
   type RejectReason,
@@ -554,6 +563,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      in the pipeline reads what it writes, and it replaces rather than appends.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   "simple",
+  /* A forced glossary (*Find more*, a rewrite) would otherwise cascade a force
+     onto the marks behind it. It needs none: its `isDone` compares the stored
+     `glossaryHash` with the list now, so a list that moved re-marks unforced,
+     and one that did not costs nothing. Plan 261001m. */
+  "glossaryForYou",
 ]);
 
 export interface StepContext {
@@ -3432,6 +3446,115 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
      **The first step whose stamp has four values rather than three**, and both
      additions close holes the others still have — see the notes below. */
+  /* **"For you" marks on the glossary** — the personal layer on a shared
+     artefact (plan 261001m). It reads the stored glossary and `ctx.profile`,
+     which it is handed because it is in `PERSONAL_STEPS` (src/profile.ts), and
+     never the article. Off `DEFAULT_INGEST_STEPS` and in
+     `FORCE_ONLY_WHEN_NAMED`: the jobs route adds it to a glossary request when
+     the owner has a profile, and *Mark again* asks for it alone.
+
+     **Freshness is `isDone`, not `stamp`**: what it was made from is
+     `(glossaryHash, profileHash, version)`, none of which is an article
+     fingerprint, and `forYouIsCurrent` is the one function the runner and the
+     metadata page both ask. So it skips when current, and runs alone when only
+     the profile changed. */
+  glossaryForYou: {
+    name: "glossaryForYou",
+    label: "Marking the glossary for you",
+    produces: ["glossaryForYou"],
+    isDone: async (ctx, store) => {
+      const [stored, glossary] = await Promise.all([
+        store.read(ctx.slug, "glossaryForYou", "glossaryForYou"),
+        store.read(ctx.slug, "glossary", "glossary"),
+      ]);
+      return forYouIsCurrent(stored, glossary, ctx.profile ?? null);
+    },
+    async run(ctx, store) {
+      /* **Refused, never silent.** With no profile there is nothing to mark
+         for, and an empty list stored here would read as "nothing in this
+         glossary is for you" — a claim, and a false one. The route and the
+         reset keep this from being queued without one; this is what a job
+         that got here anyway says. */
+      if (!ctx.profile) throw stageFailure(FOR_YOU_NO_PROFILE);
+      const glossary = await store.read(ctx.slug, "glossary", "glossary");
+      if (!glossary || !Array.isArray(glossary.entries)) throw stageFailure(FOR_YOU_NO_GLOSSARY);
+
+      /* **A glossary that found nothing has nothing to mark**, and that is a
+         real answer rather than a refusal: the job that wrote the empty list
+         must not end red for it. No call. */
+      if (glossary.entries.length === 0) {
+        return {
+          parts: {
+            glossaryForYou: {
+              version: FOR_YOU_PROMPT_VERSION,
+              generator: "none",
+              slug: ctx.slug,
+              glossaryHash: forYouGlossaryHash(glossary),
+              profileHash: hashProfile(ctx.profile),
+              marks: [],
+              generatedAt: new Date().toISOString(),
+              elapsedMs: 0,
+            },
+          },
+          detail: "no terms to mark",
+        };
+      }
+
+      /* **A failed call is recorded, not thrown** — `GlossaryForYou.failed`.
+         This step usually runs in the job that just wrote the glossary, and a
+         job that fails publishes nothing: throwing here would take the paid
+         glossary down with the marks. A stop is still a stop. */
+      const started = Date.now();
+      let run: Awaited<ReturnType<typeof generateGlossaryForYou>>;
+      try {
+        run = await generateGlossaryForYou({
+          slug: ctx.slug,
+          glossary,
+          profile: ctx.profile,
+          signal: ctx.signal,
+        });
+      } catch (err) {
+        if (ctx.signal?.aborted) throw err;
+        plog.warn(
+          { slug: ctx.slug, step: "glossaryForYou", terms: glossary.entries.length, ...errorFields(err) },
+          `glossaryForYou ${ctx.slug}: the call failed — the glossary is kept, unmarked`,
+        );
+        return {
+          parts: {
+            glossaryForYou: failedForYou({
+              slug: ctx.slug,
+              glossary,
+              profile: ctx.profile,
+              elapsedMs: Date.now() - started,
+            }),
+          },
+          detail: "could not mark the terms this time",
+        };
+      }
+      const marked = run.forYou.marks.length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "glossaryForYou",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          ms: run.forYou.elapsedMs,
+          terms: run.terms,
+          marks: marked,
+          /* Counts only — never a note, never the profile. `unknownId` is the
+             one to watch: the model inventing a term. */
+          ...run.dropped,
+          profileChars: ctx.profile.length,
+        },
+        `glossaryForYou ${ctx.slug}: ${marked} of ${run.terms} terms marked`,
+      );
+      return {
+        parts: { glossaryForYou: run.forYou },
+        detail: `${marked} ${marked === 1 ? "term" : "terms"} marked for you`,
+      };
+    },
+  },
   ideas: {
     name: "ideas",
     label: "Finding the ideas",

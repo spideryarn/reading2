@@ -128,6 +128,8 @@ describe("the policy", () => {
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
         "sketch", "illustrated", "trajectory", "debate", "citations", "crossrefs", "simple",
+        /* The glossary's for-you marks, 2026-10-01 — plan 261001m. */
+        "glossaryForYou",
       ].sort(),
     );
   });
@@ -137,11 +139,14 @@ describe("the policy", () => {
     expect(Object.keys(STEP_SHARING).sort()).toEqual([...STEP_ORDER].sort());
   });
 
-  it("declares the two known reads", () => {
+  it("declares the three known reads", () => {
     expect([...readsOf(job(["illustrated"]))]).toEqual(["sketch"]);
     expect([...readsOf(job(["trajectory"]))].sort()).toEqual(["ideas", "quotes"]);
+    /* The marks annotate the glossary's term list, and hash it — plan
+       261001m, GPT Sol's finding 6. */
+    expect([...readsOf(job(["glossaryForYou"]))]).toEqual(["glossary"]);
     for (const step of SHARING_STEPS) {
-      if (step === "illustrated" || step === "trajectory") continue;
+      if (step === "illustrated" || step === "trajectory" || step === "glossaryForYou") continue;
       expect([...readsOf(job([step]))], step).toEqual([]);
     }
   });

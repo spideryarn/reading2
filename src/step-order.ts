@@ -83,6 +83,17 @@ export const STEP_ORDER = [
      until 2026-09-03, when `quotes` started sending a breakpoint of its own:
      see `cacheArticleForStep` (src/pipeline.ts). docs/project/quotes.md. */
   "quotes",
+  /* **After `glossary`, whose list it reads, and after `quotes`, not between
+     them** — the two send byte-identical article bytes and a job naming both
+     pays for the article once, which a step between them would break
+     (tests/article-cache-group.test.ts). This one sends no article at all — the
+     term list and the reader's profile — so it is in no cache group and its
+     place breaks none. Before `ideas`, which starts the next group.
+
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: the jobs route
+     adds it to a glossary request when the owner has a profile, and *Mark
+     again* asks for it alone. Plan 261001m. */
+  "glossaryForYou",
   "ideas",
   /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
      the two send byte-identical article bytes at the same effort and the same

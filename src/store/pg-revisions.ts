@@ -345,6 +345,13 @@ export const REVISION_CARRY_POLICY: Record<
      shows a stale one with a notice. Minting would empty the band until
      somebody paid again. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: "carry",
+  /* **Carries, like the `glossary` it annotates** (GPT Sol's finding 8 on plan
+     261001m). The glossary carries into a new draft, so its marks do too; and
+     whether they still annotate *this* list is answered at read time by
+     `glossaryHash`, which the owner's GET compares before it shows a mark —
+     marks on a list that has since moved are simply not drawn. Minting would
+     throw away a paid call on every re-ingest that leaves the list alone. */
+  glossaryForYou: "carry",
   /* **Carries, like `quotes`, which it is made of.** It holds quote ids and no
      block ids, and the `quotes` column carries beside it — so a new draft's
      route still names quotes the draft has. Whether those quotes still stand on

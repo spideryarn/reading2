@@ -110,7 +110,7 @@ import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { WrittenForYou } from "./WrittenForYou.js";
+import { ForYouMark, ForYouNote, MarkedForYou } from "./MarkedForYou.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 
@@ -251,17 +251,25 @@ export function GlossaryPanel({
   const order = effectiveSort(all, sort);
   const shown = glossary ? sortEntries(all, order, gate) : [];
   const orphanedLookup = keptWithoutEntry(owner, all);
-  /* A label rather than a control: it is provenance, not a warning. The
-     glossary already made this exact choice once — "a label instead of a
-     warning triangle" — and the reason holds. src/web/WrittenForYou.tsx.
-     Provenance about the owner's own run, so a visitor sees none of it:
-     `profileHash` never leaves the server (src/public-types.ts). `null` rather
-     than a component that renders nothing, so the sort row's trailing slot
-     is empty when there is nothing to put in it. */
+  /* **The owner's "for you" marks, said at the head** — plan 261001m. The
+     whole-list *written for you* badge that stood here went with it: a new
+     glossary is written for nobody in particular (src/profile.ts §
+     PERSONAL_STEPS), and what is written for the owner is the marks, which
+     `<MarkedForYou>` labels and can make again. Owner only — the marks never
+     reach a visitor's payload. `null` rather than a component that renders
+     nothing, so the sort row's trailing slot is empty when there is nothing
+     to put in it. */
   const badge =
-    glossary && owner?.profiled ? (
-      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+    glossary && owner?.forYou ? (
+      <MarkedForYou
+        view={owner.forYou}
+        slug={owner.slug}
+        marking={owner.marking}
+        onMarkAgain={() => void owner.markAgain()}
+      />
     ) : null;
+  /* Which entries are marked, and the line for each. Empty for a visitor. */
+  const notes = new Map((owner?.forYou?.marks ?? []).map((mark) => [mark.termId, mark.note]));
   const sorts = glossary && glossary.entries.length > 1 ? sortOptions(all) : [];
   const count = glossary && (
     <span className="gloss-count">
@@ -461,6 +469,7 @@ export function GlossaryPanel({
                 <Term
                   key={entry.id}
                   entry={entry}
+                  forYou={notes.get(entry.id) ?? null}
                   selected={entry.id === termId}
                   /* Whichever scores the list is ordered by are shown on
                      every row. An order the reader chose but cannot see the
@@ -1152,6 +1161,7 @@ function GateSlider({
  */
 function Term({
   entry,
+  forYou,
   selected,
   showScore,
   unscored,
@@ -1165,6 +1175,12 @@ function Term({
   onJump,
 }: {
   entry: GlossaryEntry;
+  /**
+   * The owner's "for you" note on this term, or `null` — a small mark beside
+   * the name and the note as one line under the gloss. Always `null` for a
+   * visitor. docs/project/glossary.md § Marked for you.
+   */
+  forYou: string | null;
   selected: boolean;
   showScore: TermSort | null;
   /**
@@ -1261,6 +1277,7 @@ function Term({
       >
         <span className="gloss-term-head">
           <span className="gloss-name">{entry.name}</span>
+          {forYou !== null && <ForYouMark />}
           {/* An icon, and only for the kinds that say "not vocabulary" — a
               person, a place, a book. GlossaryKindIcon.tsx says why `concept`
               lost its chip on 2026-09-29. */}
@@ -1293,10 +1310,14 @@ function Term({
             structure open — no sentence appears twice, and the label does the
             provenance work rather than a badge underneath it. */}
         {!selected && <span className="gloss-gloss">{prose.lead}</span>}
+        {/* The owner's note, one line under the gloss, closed or open: it is
+            about this reader, so it is not one of the labelled sections. */}
+        {!selected && forYou !== null && <ForYouNote note={forYou} />}
       </button>
 
       {selected && (
         <div className="gloss-open">
+          {forYou !== null && <ForYouNote note={forYou} />}
           {/* Labelled sections, and the label is the whole provenance story:
               everything under "in this piece" is from the article, everything
               under "background" is the model's own knowledge. That is the

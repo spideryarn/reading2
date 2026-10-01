@@ -430,8 +430,10 @@ destination stands to the piece being read
 ([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05,
 `quiz-verdict` — whether the reader got a question right, judged from the finished mark and shown to
 nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07,
-and `simple-check` — Simple's fidelity guard, measured against Sonnet before it was built
-([summaries.md](summaries.md#simple-a-plain-words-orientation)) — on 2026-10-01.
+`simple-check` — Simple's fidelity guard, measured against Sonnet before it was built
+([summaries.md](summaries.md#simple-a-plain-words-orientation)) — on 2026-10-01, and
+`glossary-for-you` — the few glossary terms marked for one reader, from the term list and their
+profile ([glossary.md](glossary.md#marked-for-you)) — the same day, by judgment and unmeasured.
 That distinction is the whole of the policy: a new job may be born on the quick tier by judgment, and
 **moving an existing one still means running an eval under [`evals/`](../../evals/README.md) first
 and writing down what it cost**. Greg, 2026-08-26 — *"use your judgment about which tasks to use for
@@ -506,6 +508,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Investigate*: one streamed answer about one cited work, written with a few web searches over the whole article (explain's tier) |
 | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
+| `SPIDERYARN_GLOSSARY_FOR_YOU_MODEL` | the glossary's *for you* marks: which few terms to point one reader at, from the term list and their profile ([glossary.md](glossary.md#marked-for-you)). Born on the quick tier by judgment, unmeasured |
 | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
 | `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
 | `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once |

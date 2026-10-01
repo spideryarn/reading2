@@ -95,6 +95,9 @@ export function autoModesDetail(): string {
 export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
   illustrated: ["sketch"],
   trajectory: ["quotes", "ideas"],
+  /* Never an auto mode itself — the jobs route adds it to a glossary request
+     (plan 261001m) — and here so the copy stays the server's. */
+  glossaryForYou: ["glossary"],
 };
 
 /**

@@ -735,6 +735,69 @@ export interface GlossaryResponse {
    * src/profile.ts is the one place those two rules live.
    */
   profileChanged: boolean;
+  /**
+   * **The reader's own "for you" marks** on this glossary, or `null` for none
+   * to show — owner-only, and never on the public path (the column is not in
+   * `PUBLIC_PROJECTIONS`). `null` when none were made, when they annotate a
+   * different version of the list, or when the reader has no profile now.
+   * docs/project/glossary.md § Marked for you.
+   */
+  forYou: GlossaryForYouView | null;
+}
+
+/** One "for you" mark: a term in the glossary, and one line about it for this reader. */
+export interface GlossaryForYouMark {
+  /** A `GlossaryEntry.id` in the glossary it annotates — validated, never invented. */
+  termId: string;
+  /** One plain line, at most `FOR_YOU_NOTE_MAX` characters (src/glossary-for-you.ts). */
+  note: string;
+}
+
+/**
+ * **The personal addendum to a shared glossary** — the `glossaryForYou` step's
+ * artefact, stored in its own owner-only column beside the glossary and never
+ * inside it (plan 261001m, rule 2).
+ *
+ * No `sourceHash`: what it was made from is `glossaryHash` and `profileHash`,
+ * and `STEPS.glossaryForYou.isDone` (src/pipeline.ts) compares those with the
+ * version — freshness is `(glossaryHash, profileHash, version)`.
+ */
+export interface GlossaryForYou {
+  version: string;
+  generator: string;
+  slug: string;
+  /**
+   * Which glossary these marks annotate: the hash of the exact term list the
+   * prompt was given — id, name, gloss, in order — from the one serializer that
+   * builds the prompt (`forYouTermList`, src/glossary-for-you.ts; GPT Sol's
+   * finding 5). A *Find more* or a rewrite moves it.
+   */
+  glossaryHash: string;
+  /** Whose profile — never `null`: with no profile there is no addendum. */
+  profileHash: string;
+  /** At most `FOR_YOU_MAX_MARKS`, in the glossary's order. Empty is a real answer. */
+  marks: GlossaryForYouMark[];
+  /**
+   * **The call failed, and the glossary was kept anyway** — absent when it
+   * answered. The step runs in the same job as the glossary it marks, and a job
+   * that fails publishes nothing, so a marks call that threw would throw away a
+   * glossary the reader had just paid for. So a failed call is recorded here
+   * (`marks` empty) rather than thrown: `simple-check`'s rule, *the guard can
+   * cost a reader a few seconds, never a summary*. A failed record is never
+   * current, so the next run tries again, and the panel offers *Mark again*.
+   */
+  failed?: "call";
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** What the owner's glossary GET says about the marks — `GlossaryResponse.forYou`. */
+export interface GlossaryForYouView {
+  marks: GlossaryForYouMark[];
+  /** The marks were written for a profile the reader has since changed. */
+  marksProfileChanged: boolean;
+  /** The last attempt to mark this list failed; there are no marks to show. */
+  failed: boolean;
 }
 
 /**
@@ -750,7 +813,16 @@ export interface GlossaryResponse {
  */
 export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
 /** As `ThreadFound`, for the glossary. */
-export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
+export type GlossaryFound = Omit<GlossaryResponse, "profileChanged" | "forYou"> & {
+  /**
+   * The stored marks **only when they annotate the glossary on screen** —
+   * their `glossaryHash` is the current list's (`forYouGlossaryHash`,
+   * src/glossary-for-you.ts) — else `null`. The store can answer that; whether
+   * they were written for the profile the reader has *now* is the route's half,
+   * as `profileChanged` is (`withForYou`, src/routes.ts).
+   */
+  forYou: GlossaryForYou | null;
+};
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
 export type SketchFound = Omit<SketchResponse, "profileChanged">;
@@ -2926,7 +2998,14 @@ export type StepName =
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Ideas' article block
      at `high` effort (measured against `medium` in stage 1), so an
      `ArticleStage` in the `ideas` cached prefix group. */
-  | "simple";
+  | "simple"
+  /* **"For you" marks on the glossary** — the few terms worth this reader's
+     attention, each with one line of context for them. The first personal
+     addendum on a shared artefact: it reads the stored glossary's term list and
+     the reader's profile, never the article, and its output is owner-only.
+     A quick-tier call on the chat wire, so not an `ArticleStage`.
+     docs/plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md. */
+  | "glossaryForYou";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";

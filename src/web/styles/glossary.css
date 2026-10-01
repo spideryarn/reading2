@@ -342,6 +342,43 @@
   line-height: 1.45;
 }
 
+/* **"For you"** — the owner's marks on the glossary, plan 261001m
+   (src/web/MarkedForYou.tsx). The highlight's ink, the colour the profile
+   badge's *changed* state already uses for "this is about you", so the mark
+   reads as the same family of thing; small, because it is a pointer onto an
+   entry that stays the shared glossary's. Never drawn for a visitor. */
+.for-you-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+/* The note: one line under the gloss, in the mark's colour so the eye can
+   tell which line is the article's and which is about the reader. It wraps
+   rather than truncates — a note cut off mid-clause would say less than
+   nothing. */
+.for-you-note {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--highlight-ink);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.gloss-open > .for-you-note { margin: 0 0 0.4rem; }
+/* The head label and its *Mark again*: one piece that wraps as a unit in the
+   sort row's trailing slot, and inside itself at 390px. */
+.for-you-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 /* The two labelled sections of an open entry, added 2026-08-26. The label is
    the provenance — "in this piece" is from the article, "background" is the
    model's own knowledge — so it has to read as a label rather than as a

@@ -1659,6 +1659,57 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
+   * **The owner's "for you" marks are neither listed nor shared** — plan
+   * 261001m, GPT Sol's finding 4.
+   *
+   * The marks carry a `profileHash`, so `ProfileCarrying` — derived from every
+   * artefact type with one — would sweep them into the make-public dialog's
+   * *"written for your reader profile, and shared exactly as written"* list.
+   * They are not shared at all, so naming them there is false. A glossary with
+   * `profileHash: null` beside them is the control: the list is empty because
+   * nothing shared was personalised, not because the store said nothing.
+   *
+   * And the public article must not carry them: the note is a canary planted
+   * in the column, looked for in the whole public response.
+   */
+  it("neither lists the glossary's for-you marks in the dialog nor shares them", async () => {
+    const db = getDb();
+    const NOTE = "PRIVATE-FOR-YOU-NOTE: not Tononi's sense.";
+    await db
+      .update(articleRevisions)
+      .set({
+        glossary: { ...ARTEFACTS.glossary, profileHash: null },
+        ideas: null,
+        tweets: null,
+        trajectory: null,
+        glossaryForYou: {
+          version: "glossary-for-you/1",
+          generator: "test",
+          slug: SLUG,
+          glossaryHash: "0123456789abcdef",
+          profileHash: PRIVATE_PROFILE_HASH,
+          marks: [{ termId: "spya-wpvvqc", note: NOTE }],
+          generatedAt: "2026-10-01T00:00:00.000Z",
+          elapsedMs: 1,
+        },
+      })
+      .where(eq(articleRevisions.id, REVISION_ID));
+    try {
+      const owned = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
+      expect((owned.body.sharing as { personalised: string[] }).personalised).toEqual([]);
+      const shared = await call("GET", `/api/public/article/${SLUG}`);
+      expect(shared.status).toBe(200);
+      expect(shared.text).not.toContain(NOTE);
+      expect(shared.text).not.toContain("glossaryForYou");
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ ...ARTEFACTS, glossaryForYou: null })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    }
+  });
+
+  /**
    * **And a stranger cannot ask the same question**, which is what makes the
    * field safe to put on this response at all.
    *

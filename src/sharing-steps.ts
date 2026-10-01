@@ -93,6 +93,10 @@ export const STEP_SHARING = {
   citations: { column: "citations", reads: [] },
   crossrefs: { column: "crossrefs", reads: [] },
   simple: { column: "simpleSummary", reads: [] },
+  /* The glossary's term list is its input, and `glossaryHash` stamps it — so a
+     glossary rewritten mid-run would leave marks on the old list under a hash
+     of the new. Plan 261001m, GPT Sol's finding 6. */
+  glossaryForYou: { column: "glossaryForYou", reads: ["glossary"] },
 } as const satisfies Record<StepName, "exclusive" | SharingPolicy>;
 
 /** The steps whose entry above is a policy rather than `"exclusive"`. */

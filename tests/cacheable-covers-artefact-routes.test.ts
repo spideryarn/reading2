@@ -182,6 +182,9 @@ const ROUTELESS_KINDS = [
   "assets",
   "blocks",
   "extractedHtml",
+  /* No route of its own, genuinely: the owner's for-you marks ride on
+     `GET /api/glossary/:slug`, which `CACHEABLE` already covers. Plan 261001m. */
+  "glossaryForYou",
   "labels",
   "meta",
   "raw",

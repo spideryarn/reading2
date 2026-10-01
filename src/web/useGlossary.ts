@@ -33,6 +33,7 @@ import type {
   Citation,
   Glossary,
   GlossaryEntry,
+  GlossaryForYouView,
   GlossaryLookup,
   GlossaryResponse,
   Job,
@@ -197,6 +198,11 @@ export interface GlossaryRead {
   outdated: boolean;
   profiled: boolean;
   profileChanged: boolean;
+  /**
+   * The owner's "for you" marks on this list, or `null` for none to show —
+   * `GlossaryResponse.forYou`. docs/project/glossary.md § Marked for you.
+   */
+  forYou: GlossaryForYouView | null;
   error: string | null;
   /**
    * Fetch again **only if nothing is already fetching** — the band's mount.
@@ -254,6 +260,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [outdated, setOutdated] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
+  const [forYou, setForYou] = useState<GlossaryForYouView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -278,6 +285,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           setOutdated(false);
           setProfiled(false);
           setProfileChanged(false);
+          setForYou(null);
           setError(null);
           setStatus("none");
           return;
@@ -293,6 +301,8 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            empty string. */
         setProfiled(loaded.glossary.profileHash != null);
         setProfileChanged(loaded.profileChanged);
+        /* `?? null`: a server from before plan 261001m sends no field. */
+        setForYou(loaded.forYou ?? null);
         setError(null);
         setStatus("ready");
       } catch (err) {
@@ -394,6 +404,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     outdated,
     profiled,
     profileChanged,
+    forYou,
     error,
     reload,
     refresh,
@@ -420,6 +431,16 @@ export interface UseGlossary {
    */
   profiled: boolean;
   profileChanged: boolean;
+  /** The owner's "for you" marks, or `null` — `GlossaryRead.forYou`. */
+  forYou: GlossaryForYouView | null;
+  /**
+   * Make the marks again, alone — `glossaryForYou` and not the glossary. The
+   * *Mark again* on `<MarkedForYou>`, offered only for marks made for an older
+   * profile or a failed attempt. Never automatic: arriving spends nothing.
+   */
+  markAgain(): Promise<void>;
+  /** A `glossaryForYou` run is queued, starting or going. */
+  marking: boolean;
   /**
    * The article this band is about. The profile panel shows the *per-article*
    * half ("why you're reading this one") and links to the page that edits it,
@@ -524,7 +545,7 @@ export interface UseGlossary {
  * the fetch moved up there and what the band still has to do on mount.
  */
 export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
-  const { status, glossary, stale, outdated, profiled, profileChanged, error } = read;
+  const { status, glossary, stale, outdated, profiled, profileChanged, forYou, error } = read;
   const [looking, setLooking] = useState<string | null>(null);
   const [lookFailed, setLookFailed] = useState<LookFailure | null>(null);
   const [asking, setAsking] = useState(false);
@@ -564,6 +585,14 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const queue = useStepJob(slug, "glossary", refresh, "watches-queue");
 
   const run = useCallback((force: boolean) => queue.start({ force }), [queue]);
+
+  /* **The marks' own job**, watched beside the glossary's: *Mark again* posts
+     `steps: ["glossaryForYou"]`, which the glossary's `useStepJob` does not
+     see, and its finish has to read the list again for the new marks. Unforced:
+     the step's own freshness check knows the marks are for another profile. */
+  const marks = useStepJob(slug, "glossaryForYou", refresh, "watches-queue");
+  const markAgain = useCallback(() => marks.start(), [marks]);
+  const marking = marks.starting || marks.job !== null;
 
   /**
    * `find` is already the unforced verb, so it is already `ensure`.
@@ -888,6 +917,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     outdated,
     profiled,
     profileChanged,
+    forYou,
+    markAgain,
+    marking,
     slug,
     error,
     job: queue.job,

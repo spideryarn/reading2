@@ -79,6 +79,11 @@ export const RESET_ROLE = {
   /* Made on a press of Summary's Simple chip, off DEFAULT_INGEST_STEPS, a whole
      column: the modes' shape. */
   simple: "extra",
+  /* The owner's "for you" marks on the glossary, a whole column: dropped by a
+     reset like the glossary it annotates. **Made again only when the reset
+     carries a profile** — `PROFILE_ONLY_EXTRAS` below — because with none
+     there is nothing to mark for. Plan 261001m. */
+  glossaryForYou: "extra",
 } as const satisfies Record<StepName, ResetRole>;
 
 /** The steps a reset drops — a type, so a map over them is exhaustive. */
@@ -94,4 +99,20 @@ export function isExtra(step: StepName): step is ExtraStep {
 /** The extra steps, in `STEP_ORDER` order — the order they are queued again in. */
 export function extraSteps(): ExtraStep[] {
   return STEP_ORDER.filter(isExtra);
+}
+
+/**
+ * **Extras that are nothing without the reader's profile** — a personal layer
+ * on a shared artefact (plan 261001m). A reset drops them like any extra, and
+ * makes them again only when it carries a profile: queued without one, the
+ * step could only refuse, and a regeneration the reader did not ask to fail
+ * would be a red job card for nothing.
+ */
+export const PROFILE_ONLY_EXTRAS = ["glossaryForYou"] as const satisfies readonly ExtraStep[];
+
+const PROFILE_ONLY: ReadonlySet<StepName> = new Set(PROFILE_ONLY_EXTRAS);
+
+/** Which of the extras an article has a reset makes again — all of them, less the profile-only ones when there is no profile. */
+export function extrasToRegenerate(present: readonly ExtraStep[], hasProfile: boolean): ExtraStep[] {
+  return hasProfile ? [...present] : present.filter((step) => !PROFILE_ONLY.has(step));
 }

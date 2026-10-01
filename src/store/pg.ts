@@ -77,6 +77,7 @@ import {
   isStale as crossrefsIsStale,
   PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
 } from "../crossrefs.js";
+import { forYouIsCurrent, marksForGlossary } from "../glossary-for-you.js";
 import {
   inputFingerprint as simpleFingerprint,
   isStale as simpleIsStale,
@@ -174,6 +175,7 @@ import type {
   TrajectoryFound,
   Glossary,
   GlossaryFound,
+  GlossaryForYou,
   Quiz,
   QuizFound,
   PublicArtefacts,
@@ -916,6 +918,12 @@ const REVISION_READ_POLICY: Record<
      visitor by default (docs/project/mode.md § The artefact).
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: { metadata: "value", simpleSummary: "value" },
+  /* **The owner's glossary read, and the metadata page — and nothing public.**
+     The marks ride on `GET /api/glossary/:slug`, so the `glossary` read takes
+     the column; `isCurrent` needs it for its arm. No public projection names
+     it (src/store/public-reader.ts), which tests/public-reads.test.ts holds:
+     it is written from the owner's profile. Plan 261001m. */
+  glossaryForYou: { metadata: "value", glossary: "value" },
 
   /* **Read by nobody through here.** The two HTML columns are the whole article
      again, and they are pipeline artefacts reached through
@@ -1210,6 +1218,10 @@ export const REVISION_PROJECTIONS = {
     /* For `isCurrent`'s arm, and a seventh artefact that can carry a
        `profileHash` — `personalisedSteps` must be exhaustive. */
     trajectory: articleRevisions.trajectory,
+    /* For `isCurrent`'s arm alone. It carries a `profileHash`, and is still
+       not one of `personalisedSteps`' artefacts: it is never shared, so the
+       make-public dialog has nothing to say about it (`ProfileCarrying`). */
+    glossaryForYou: articleRevisions.glossaryForYou,
   },
   publish: {
     id: articleRevisions.id,
@@ -1238,7 +1250,15 @@ export const REVISION_PROJECTIONS = {
   /* `CITED_FINGERPRINT_COLUMNS` since `tweets/5` (2026-09-29): the thread now
      sends `articleWithIds`, whose head prints the URL. */
   tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets, ...CITED_FINGERPRINT_COLUMNS },
-  glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary, ...FINGERPRINT_COLUMNS },
+  /* `glossaryForYou` beside it since plan 261001m: the owner's marks ride on
+     the owner's glossary read, and are shown only when they annotate this
+     list (`loadGlossary`). */
+  glossary: {
+    id: articleRevisions.id,
+    glossary: articleRevisions.glossary,
+    glossaryForYou: articleRevisions.glossaryForYou,
+    ...FINGERPRINT_COLUMNS,
+  },
   /* `FINGERPRINT_COLUMNS` and not the cited set: `quotes` sends `articleText`,
      whose head prints no `URL:` line — src/models.ts § ARTICLE_RENDERER. */
   quotes: { id: articleRevisions.id, quotes: articleRevisions.quotes, ...FINGERPRINT_COLUMNS },
@@ -1818,6 +1838,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   trajectory: ["article_revisions.trajectory"],
   crossrefs: ["article_revisions.crossrefs"],
   simple: ["article_revisions.simple_summary"],
+  glossaryForYou: ["article_revisions.glossary_for_you"],
 };
 
 /**
@@ -2427,10 +2448,32 @@ export function scalarInputsQuery(
  * false, and `Tree extends { profileHash?: string | null; version?: string }`
  * is **true**. A rule held up by the absence of a shared field is not a rule.
  */
-export type ProfileCarrying = {
+export type ProfileCarrying = Exclude<ProfileStamped, NeverShared>;
+
+/**
+ * Every artefact whose type can carry a `profileHash`, shared or not — the
+ * derivation above, before the exclusion. Exported so tests/messages.test.ts
+ * can hold `NeverShared` to it: an exclusion naming something that is not
+ * stamped would be a list falling behind in the other direction.
+ */
+export type ProfileStamped = {
   [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
 }[keyof ArtifactMap] &
   StepName;
+
+/**
+ * **Stamped with the owner's profile, and never shared** — so not for the
+ * make-public dialog, whose sentence is *"written for your reader profile,
+ * and shared exactly as written"* (src/messages.ts § `sharingPersonalisedList`).
+ * Saying that of an artefact a visitor never receives is false.
+ *
+ * Named, not filtered by a rule, so leaving an artefact out of the dialog is
+ * a decision somebody wrote down: the personal layer of plan 261001m, stored
+ * in an owner-only column that no public projection names (GPT Sol's
+ * finding 4). Anything added here must be equally absent from
+ * `PUBLIC_PROJECTIONS`, which tests/public-reads.test.ts holds for this one.
+ */
+export type NeverShared = "glossaryForYou";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
@@ -2467,6 +2510,10 @@ function personalisedSteps(revision: {
       revision.simpleSummary && isUsableSimpleSummary(revision.simpleSummary)
         ? revision.simpleSummary
         : null,
+    /* No `glossaryForYou`: it carries a `profileHash` and is never shared —
+       `NeverShared` above. Adding it here is what the compiler would ask for
+       without that exclusion, and it would name an owner-only artefact as
+       "shared exactly as written". */
   };
   /* `Object.entries` rather than indexing `carriers` by `StepName`, because
      the record is now exactly the artefacts that can be personalised and a
@@ -2861,10 +2908,24 @@ const rawPgArticleReader: ArticleReader = {
        is "we cannot tell", which answers not-current for all of them. */
     const articleHash =
       tree && blocks.length ? articleFingerprint(blocks, tree, metaFingerprint) : null;
+    /* The reader's profile, global half, read here rather than at the return
+       below so the `glossaryForYou` arm can ask about the profile the marks
+       would be written for now — `renderProfile` over the same two boxes
+       `resolveProfile` joins in src/routes.ts. */
+    const profile = await pgReaderStore.readProfile();
+    const renderedProfile = renderProfile({ profile, purpose: shelfFrom(found.article).purpose ?? null });
 
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
+        /* **`(glossaryHash, profileHash, version)`** — the step's own `isDone`
+           (src/pipeline.ts), through the one function both ask. Plan 261001m. */
+        case "glossaryForYou":
+          return forYouIsCurrent(
+            revision.glossaryForYou as GlossaryForYou | null,
+            revision.glossary as Glossary | null,
+            renderedProfile,
+          );
         case "hierarchy": {
           /* No tree and no blocks are this function's own preconditions, not
              `hierarchyCurrency`'s: it answers "is this run the one that
@@ -3253,8 +3314,8 @@ const rawPgArticleReader: ArticleReader = {
     /* `profile` and `purpose` for the same reason `comments` above is read
        here rather than from a second endpoint. `profile` is global
        (`reader_profiles`) and `purpose` is this article's own (`articles.
-       purpose`, via `shelfFrom`) — docs/plans/260826t-reader-profile.md. */
-    const profile = await pgReaderStore.readProfile();
+       purpose`, via `shelfFrom`) — docs/plans/260826t-reader-profile.md.
+       Read above, before the stage rows: `glossaryForYou`'s arm needs it. */
 
     return {
       slug,
@@ -3408,6 +3469,12 @@ const rawPgArticleReader: ArticleReader = {
          these terms; this means the article is the same and we would write them
          differently now. */
       outdated: glossary.version !== PROMPT_VERSION,
+      /* **The owner's marks, only when they annotate this list** — plan
+         261001m. Hashed from the stored list, not `entries` above: a lookup is
+         not in the term list the marks were made from. Whether they were made
+         for the profile the reader has now is the route's half
+         (`withForYou`, src/routes.ts). */
+      forYou: marksForGlossary(found.revision.glossaryForYou as GlossaryForYou | null, glossary),
     };
   },
 

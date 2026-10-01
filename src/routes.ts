@@ -380,8 +380,17 @@ import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
-import { hashProfile, isPersonalStep, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import {
+  hashProfile,
+  isPersonalStep,
+  mayHavePersonalAddenda,
+  normaliseProfileText,
+  profileIsStale,
+  renderProfile,
+  withPersonalAddenda,
+} from "./profile.js";
 import { routeProfileIsStale } from "./trajectory.js";
+import { forYouView } from "./glossary-for-you.js";
 import {
   type ArticleStage,
   articlePower,
@@ -5647,6 +5656,30 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
 }
 
 /**
+ * **The owner's glossary, with their "for you" marks** — plan 261001m.
+ *
+ * `withProfileChanged`'s shape and its ordering — the store and the profile
+ * started together, the profile awaited only once the artefact is in hand —
+ * and one more answer from the same profile: the marks, shown only when the
+ * store found them annotating this list (`marksForGlossary`) and the reader
+ * still has a profile, and flagged when it is not the one they were made for
+ * (`forYouView`, src/glossary-for-you.ts). Owner-authenticated like every
+ * route here; the public article read never selects the column.
+ */
+async function glossaryWithForYou(slug: string): Promise<GlossaryResponse> {
+  const artefact = loadGlossary(slug);
+  const profile = resolveProfile(slug);
+  void profile.catch(() => {});
+  const { forYou, ...found } = await artefact;
+  const now = await profile;
+  return {
+    ...found,
+    profileChanged: profileIsStale(found.glossary.profileHash, now ? hashProfile(now) : null),
+    forYou: forYouView(forYou, now),
+  };
+}
+
+/**
  * A job as the client may see it — **without the reader's profile**.
  *
  * The frozen profile has to live on the job: that is what makes it survive a
@@ -7918,7 +7951,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
+        send(res, 200, await glossaryWithForYou(at));
       }
     },
   },
@@ -9369,14 +9402,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          dedup on a glossary job it cannot change — and the row would carry
          private text for nothing. Absent `steps` is `DEFAULT_INGEST_STEPS`,
          as `enqueue` reads it. Plan 261001m, GPT Sol's finding 7. */
-      const personal = (request.steps ?? DEFAULT_INGEST_STEPS).some(isPersonalStep);
-      const profile =
-        request.url !== undefined || request.useProfile === false || !personal
-          ? null
-          : await resolveProfile(request.slug);
+      /* **And a glossary request grows the owner's for-you marks** when they
+         have a profile — plan 261001m, GPT Sol's finding 6. Expanded here,
+         before `enqueue`, so the job row, its work key and its `STEP_ORDER`
+         sort all see the step; and the profile is then attached because the
+         expanded job has a personal step in it. No profile, no step: the
+         marks have nobody to be for. */
+      const asked = request.steps ?? DEFAULT_INGEST_STEPS;
+      const mayProfile = request.url === undefined && request.useProfile !== false;
+      const resolved =
+        mayProfile && (asked.some(isPersonalStep) || mayHavePersonalAddenda(asked))
+          ? await resolveProfile(request.slug)
+          : null;
+      const steps = withPersonalAddenda(asked, resolved);
+      const profile = steps.some(isPersonalStep) ? resolved : null;
       const { useProfile: _asked, ...work } = request;
       const queue = (slot: IngestSlot) =>
-        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+        enqueue({
+          ...work,
+          /* Only when it grew: an absent `steps` means `DEFAULT_INGEST_STEPS`
+             to `enqueue`, and stays absent. */
+          ...(steps.length !== asked.length ? { steps } : {}),
+          ...(profile ? { profile } : {}),
+          ...slot,
+        });
       /**
        * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
        * is free.** The two shapes arrive at the same endpoint and are told apart

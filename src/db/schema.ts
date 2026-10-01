@@ -89,6 +89,7 @@ import type {
   Trajectory,
   FeedbackDiagnosticsPayload,
   Glossary,
+  GlossaryForYou,
   Ideas,
   JobReset,
   JobStep,
@@ -896,6 +897,20 @@ export const articleRevisions = spideryarn.table(
      * argument its neighbours make.
      */
     simpleSummary: jsonb("simple_summary").$type<SimpleSummary>(),
+
+    /**
+     * **The owner's "for you" marks on the glossary** — `GlossaryForYou`,
+     * src/types.ts, written by the `glossaryForYou` step: a few term ids and a
+     * line each, for the reader whose `profileHash` it carries.
+     * docs/plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md.
+     *
+     * **Owner-only, and that is why it is a column of its own** rather than a
+     * field on `glossary`: the glossary is shared with every visitor to a
+     * public article, and this is written from the owner's description of
+     * themselves. No public projection names it (src/store/public-reader.ts;
+     * tests/public-reads.test.ts holds that). The owner's export includes it.
+     */
+    glossaryForYou: jsonb("glossary_for_you").$type<GlossaryForYou>(),
 
     /**
      * A route through the Quotes, at three depths — `Trajectory`, src/types.ts,
@@ -2572,7 +2587,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple','glossaryForYou')`,
     ),
     check(
       "revision_step_runs_status",

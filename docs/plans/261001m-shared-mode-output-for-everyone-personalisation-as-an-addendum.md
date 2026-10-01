@@ -136,6 +136,22 @@ warning). The client's `profiled` flag on Find more becomes dead and is removed.
 3. **Browser check** (Playwright, desktop + 390px), Sol code review, note in
    `docs/user-feedback/`.
 
+### Stage 2, as built — where it differs from the text above
+
+- **A failed marks call is recorded, not thrown** (`GlossaryForYou.failed`). The step shares a job
+  with the glossary it marks, and a failed job publishes nothing
+  ([ingest-queue.md](../project/ingest-queue.md)), so a Luna hiccup would have thrown away a
+  glossary the reader had just paid for. The record is never current, the GET says
+  `failed: true`, and the label reads *Not marked for you* with *Mark again*. A missing profile or
+  glossary still refuses in words (`[jb-for-you-no-profile]`, `[jb-for-you-no-glossary]`).
+- **Freshness is the step's `isDone`, not a `stamp`**: the artefact has no `sourceHash` for
+  `stampOf` to read, and `forYouIsCurrent` is the one function the runner and the metadata page ask.
+- **The reset's profile-only filter** is `PROFILE_ONLY_EXTRAS` / `extrasToRegenerate` in
+  `src/reset-role.ts`; the route's expansion is `withPersonalAddenda` in `src/profile.ts`.
+- **Two real calls** (Luna, local articles, 2026-10-01): 7–10 s, $0.0009 and $0.0013; one invented
+  term id dropped by validation. Several notes restate the gloss rather than bridge from the reader —
+  a prompt question for the review, not a code one.
+
 ## Simpler options passed over
 
 - **Hide personalised artefacts from visitors** (make-public shows only unprofiled ones). Less code,

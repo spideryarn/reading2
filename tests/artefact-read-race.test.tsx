@@ -196,12 +196,19 @@ vi.mock("../src/web/lib/api.js", () => ({
   failure: async (res: Response) => new Error(String(res.status)),
 }));
 
-/** The job poller, posed by the test. `finishJob` is the seam under test. */
-let announce: ((job: { slug: string; status: string; steps: { name: string }[] }) => void) | null =
-  null;
+/**
+ * The job poller, posed by the test. `finishJob` is the seam under test.
+ *
+ * **Every subscriber, not the last one**: the real engine announces a finished
+ * job to each mounted `useJobs`, and the glossary band mounts two since plan
+ * 261001m (its own job and the for-you marks'). Keeping only the last callback
+ * handed the glossary's finish to the marks' hook, which rightly ignores it.
+ */
+type Announce = (job: { slug: string; status: string; steps: { name: string }[] }) => void;
+const announce = new Set<Announce>();
 vi.mock("../src/web/useJobs.js", () => ({
   useJobs: (_cadence: unknown, cb?: (job: never) => void) => {
-    announce = (cb ?? null) as typeof announce;
+    if (cb) announce.add(cb as Announce);
     return {
       jobs: [],
       loaded: true,
@@ -225,7 +232,7 @@ const { useTweets } = await import("../src/web/useTweets.js");
 
 /** A job for this article, arriving in the poll as finished. */
 function finishJob(step: string): void {
-  announce?.({ slug: SLUG, status: "done", steps: [{ name: step }] });
+  for (const cb of announce) cb({ slug: SLUG, status: "done", steps: [{ name: step }] });
 }
 
 /**
@@ -333,7 +340,7 @@ let root: Root;
 beforeEach(() => {
   asked.length = 0;
   held.length = 0;
-  announce = null;
+  announce.clear();
   value = OLD;
   host = document.createElement("div");
   document.body.appendChild(host);

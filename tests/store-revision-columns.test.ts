@@ -335,7 +335,10 @@ describe("every projection obeys the policy", () => {
        so the tree beside it is the small half of a cost this read was always
        paying. */
     const taken = Object.keys(REVISION_PROJECTIONS.glossary);
-    expect(taken.sort()).toEqual(["byline", "glossary", "id", "siteName", "title", "tree"]);
+    /* **And the owner's for-you marks since 2026-10-01** — the one other
+       document, and it is the glossary's own: the marks ride on this read and
+       are shown only against the list beside them (plan 261001m). */
+    expect(taken.sort()).toEqual(["byline", "glossary", "glossaryForYou", "id", "siteName", "title", "tree"]);
   });
 });
 

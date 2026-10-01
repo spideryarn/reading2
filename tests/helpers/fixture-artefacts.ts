@@ -189,6 +189,7 @@ const LAYOUT: {
   citations: { citations: (at) => path.join(at.dir, "citations.json") },
   crossrefs: { crossrefs: (at) => path.join(at.dir, "crossrefs.json") },
   simple: { simple: (at) => path.join(at.dir, "simple-summary.json") },
+  glossaryForYou: { glossaryForYou: (at) => path.join(at.dir, "glossary-for-you.json") },
 };
 
 /** The two kinds that are text on disk rather than JSON. */

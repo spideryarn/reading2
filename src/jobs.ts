@@ -66,6 +66,7 @@ import { pgJobStore } from "./store/pg-jobs.js";
    500. See `walkClaim`. */
 import { PublishRefused } from "./store/pg-revisions.js";
 import { extrasPresent } from "./reset.js";
+import { extrasToRegenerate } from "./reset-role.js";
 import {
   DraftGoneError,
   mintAttempt,
@@ -734,6 +735,10 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      roughly ten times the slowest: nine articles are evidence, not a
      distribution, and the longest on the shelf is twenty times these. */
   simple: 150_000,
+  /* **Not measured yet** — one quick-tier call over a term list, whose own
+     deadline is 60 s (src/glossary-for-you.ts § CALL_TIMEOUT_MS). Twice that,
+     so the call's own timeout is what a slow answer meets. Plan 261001m. */
+  glossaryForYou: 120_000,
   /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
      seconds, one model call each, the longest being the constitution at 194.4s
      with the shape-claims section added to the prompt. Rounded up hard, because
@@ -3162,7 +3167,11 @@ export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> 
   if (!(await articleExists(request.slug))) {
     throw Object.assign(new Error("No such article."), { status: 404 });
   }
-  const regenerate = request.regenerate ? await extrasPresent(request.slug) : [];
+  /* Less the profile-only extras when the press carried no profile — they
+     could only refuse (src/reset-role.ts § PROFILE_ONLY_EXTRAS). */
+  const regenerate = request.regenerate
+    ? extrasToRegenerate(await extrasPresent(request.slug), Boolean(request.profile))
+    : [];
   const reset: JobReset = {
     regenerate,
     ...(request.profile ? { profile: request.profile } : {}),

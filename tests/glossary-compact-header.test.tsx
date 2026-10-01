@@ -6,7 +6,11 @@
  *
  * - no head row while the sort row is drawn, and the profile badge at the end
  *   of the sort row instead; the head row back, with its count, when there is
- *   no sort row to carry the badge;
+ *   no sort row to carry the badge. **The badge is `<MarkedForYou>` since plan
+ *   261001m** — the owner's "for you" marks — where it was the whole-list
+ *   *written for you* badge; the fixture below gives an owner marks wherever
+ *   their list used to carry a profile, so every row of the matrix keeps its
+ *   meaning;
  * - no "order" word, and no hint line under the Look up box — its "not added
  *   to the list" is in the button's tooltip;
  * - the kind of a term as an icon with a label, and none for `concept`.
@@ -16,7 +20,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryAccess, GlossaryOwner } from "../src/web/GlossaryPanel.js";
 import type { TermSort } from "../src/web/params.js";
-import type { BlockId, Glossary, GlossaryEntry, Job } from "../src/types.js";
+import type { BlockId, Glossary, GlossaryEntry, GlossaryForYouView, Job } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,6 +81,13 @@ const SCORED = [
   entry("spya-term34", "entropy", "term", { difficulty: 0.9, centrality: 0.8 }),
 ];
 
+/** One mark, on the term every fixture list starts with when it has one. */
+const MARKED: GlossaryForYouView = {
+  marks: [{ termId: "spya-term31", note: "Not the dialogue you know: here it names the state the essay proposes." }],
+  marksProfileChanged: false,
+  failed: false,
+};
+
 function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
   return {
     status: "ready",
@@ -85,6 +96,9 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     outdated: false,
     profiled: list.profileHash != null,
     profileChanged: false,
+    forYou: list.profileHash != null ? MARKED : null,
+    markAgain: async () => {},
+    marking: false,
     slug: "constitution",
     error: null,
     job: null,
@@ -309,20 +323,33 @@ describe("the head row", () => {
     expect(host.querySelector('[role="group"] .gloss-count')).toBeNull();
   });
 
-  it("draws the badge as an icon, and its panel says in words what it means", async () => {
-    await mount(owner(glossary("a-profile", SCORED), { profileChanged: true }));
+  it("says 'Marked for you' and opens the profile panel, with no action", async () => {
+    await mount(owner(glossary("a-profile", SCORED), {}));
     const badge = host.querySelector<HTMLButtonElement>("button.prof-badge");
-    expect(badge?.classList.contains("icon-only")).toBe(true);
-    expect(badge?.textContent).toBe("");
-    expect(badge?.getAttribute("aria-label")).toMatch(/profile you have changed/);
-    expect(badge?.querySelector(".lucide-user-round-pen")).not.toBeNull();
+    expect(badge?.textContent).toBe("Marked for you");
+    expect(host.querySelector(".for-you-label")?.textContent).not.toMatch(/Mark again/);
     await act(async () => badge?.click());
-    expect(document.querySelector(".prof-panel-note")?.textContent).toMatch(
-      /before you last changed it/,
-    );
+    expect(document.querySelector(".prof-panel-note")?.textContent).toMatch(/Nobody else sees them/);
   });
 
-  it("leaves the sort row's end empty in prioritised for a list written without a profile", async () => {
+  it("says when the marks are for an older profile, and Mark again asks for them alone", async () => {
+    const markAgain = vi.fn(async () => {});
+    await mount(
+      owner(glossary("a-profile", SCORED), {
+        forYou: { ...MARKED, marksProfileChanged: true },
+        markAgain,
+      }),
+    );
+    const label = host.querySelector(".for-you-label");
+    expect(label?.querySelector("button.prof-badge")?.textContent).toBe("Marked for an older profile");
+    expect(label?.querySelector(".lucide-user-round-pen")).not.toBeNull();
+    const again = [...(label?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Mark again");
+    expect(again).toBeDefined();
+    await act(async () => again?.click());
+    expect(markAgain).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the sort row's end empty in prioritised when there are no marks", async () => {
     await mount(owner(glossary(null, SCORED), {}));
     expect(host.querySelector(".gloss-sort")).not.toBeNull();
     expect(host.querySelector(".gloss-sort-trail")).toBeNull();
@@ -342,6 +369,27 @@ describe("the head row", () => {
     const group = host.querySelector('.gloss-sort [role="group"]');
     expect(group?.getAttribute("aria-label")).toBe("Order the terms by");
     expect(group?.textContent).not.toMatch(/^order/);
+  });
+});
+
+/* **A marked entry, for its owner** — plan 261001m: a small *for you* mark
+   beside the name, and the note as one line under the gloss. Only the marked
+   entry, and never for a visitor, whose payload has no marks to draw. */
+describe("an entry marked for you", () => {
+  it("carries the mark and its one line, and its neighbours carry neither", async () => {
+    await mount(owner(glossary("a-profile", SCORED), {}), "document");
+    const marked = host.querySelector('[data-term-id="spya-term31"]');
+    expect(marked?.querySelector(".for-you-mark")?.textContent).toBe("for you");
+    expect(marked?.querySelector(".for-you-note")?.textContent).toContain(MARKED.marks[0]!.note);
+    /* Under the gloss, not in place of it. */
+    expect(marked?.querySelector(".gloss-gloss")?.textContent).toBe("What The Republic means here.");
+    const other = host.querySelector('[data-term-id="spya-term32"]');
+    expect(other?.querySelector(".for-you-mark, .for-you-note")).toBeNull();
+  });
+
+  it("draws nothing of it for a visitor", async () => {
+    await mountAccess({ kind: "visitor", glossary: glossary("a-profile", SCORED) }, "document");
+    expect(host.querySelector(".for-you-mark, .for-you-note, .for-you-label")).toBeNull();
   });
 });
 

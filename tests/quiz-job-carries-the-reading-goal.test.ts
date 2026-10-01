@@ -131,9 +131,33 @@ describe("POST /api/jobs for a quiz", () => {
    the row would hold private text for nothing. The quiz cases above are the
    control: the same article, the same purpose, and there it does arrive. */
 describe("POST /api/jobs for a shared step", () => {
-  it("attaches no profile to a glossary-only job", async () => {
+  it("attaches no profile to a shared job with no personal step in it", async () => {
+    const reply = await post("/api/jobs", { slug: SLUG, steps: ["quotes"], force: ["quotes"] });
+    expect(reply.status).toBe(202);
+    expect(await profileOfJob(String(reply.body.id))).toBeNull();
+  });
+
+  /* **A glossary request grows the owner's for-you marks** — plan 261001m,
+     GPT Sol's finding 6: expanded before enqueue, so the job row, its work
+     key and its order all have the step, and the profile rides with it. This
+     article has a purpose, so the owner has a profile. */
+  it("adds the glossary's for-you marks, and the profile, when the owner has one", async () => {
     const reply = await post("/api/jobs", { slug: SLUG, steps: ["glossary"], force: ["glossary"] });
     expect(reply.status).toBe(202);
+    const steps = (reply.body.steps as { name: string }[]).map((s) => s.name);
+    expect(steps).toEqual(["glossary", "glossaryForYou"]);
+    expect(await profileOfJob(String(reply.body.id))).toContain(PURPOSE);
+  });
+
+  it("adds nothing when the client declines the profile — the control", async () => {
+    const reply = await post("/api/jobs", {
+      slug: SLUG,
+      steps: ["glossary"],
+      force: ["glossary"],
+      useProfile: false,
+    });
+    expect(reply.status).toBe(202);
+    expect((reply.body.steps as { name: string }[]).map((s) => s.name)).toEqual(["glossary"]);
     expect(await profileOfJob(String(reply.body.id))).toBeNull();
   });
 

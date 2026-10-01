@@ -345,6 +345,7 @@ const SETTLED_EMPTY_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  forYou: null,
   error: null,
   reload: async () => {},
   refresh: async () => {},

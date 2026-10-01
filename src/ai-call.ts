@@ -594,6 +594,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **"For you" marks on the glossary** (src/glossary-for-you.ts) —
+     `simple-check`'s row and both of its reasons: no `order` on a quick-tier
+     OpenAI model, and `require_parameters` so an upstream cannot quietly drop
+     the token ceiling or the low effort. */
+  "glossary-for-you": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
      policy and its reason: the request sends `openrouter:web_search`, and a
      fallback that silently dropped the tool leaves a model answering from
@@ -877,6 +886,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   /* The effort plan 261001h measured at, through `link-summary`'s row: a
      verdict per paragraph, not a piece of writing. */
   "simple-check": { effort: "low" },
+  /* `simple-check`'s choice and its reason: a short pick over a list in front
+     of it, not a piece of writing. Not measured. src/glossary-for-you.ts. */
+  "glossary-for-you": { effort: "low" },
   "citations-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },

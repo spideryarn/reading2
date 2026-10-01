@@ -123,8 +123,9 @@ So the pipeline hands the profile only to the steps in `PERSONAL_STEPS`
 until Greg decides whether they become shared; and `illustrated`, for its *wrong-profile* check alone.
 Tweets, glossary, quotes, ideas, sketch and every other step get no profile, write `profileHash:
 null`, and send no `WHO IS READING` section. The per-reader layer goes **on top** of the shared
-artefact instead, starting with the glossary —
-[261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md), stage 2.
+artefact instead, starting with the glossary: a few terms marked *for you*, stored owner-only beside
+the glossary and made by a step of their own, `glossaryForYou` —
+[glossary.md § Marked for you](glossary.md#marked-for-you).
 
 Two places enforce it: the job runner builds `StepContext` with `profile` only for a personal step
 (`stepContextFor` in [`src/jobs.ts`](../../src/jobs.ts)), and the jobs route resolves a profile only
@@ -212,9 +213,8 @@ is **wrong**, not merely old.
 
 **And it is why the glossary went first when that stopped** (261001m). A glossary is public with its
 article, so since 2026-10-01 it is written for a general reader, and the per-reader part — a few
-terms marked *for you*, with a line each on why — is coming as a separate, owner-only layer on top
-of it: [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md),
-stage 2.
+terms marked *for you*, with a line each for this reader — is a separate, owner-only layer on top
+of it: [glossary.md § Marked for you](glossary.md#marked-for-you).
 
 ## Provenance: what was this written with, and is it still true
 
@@ -346,9 +346,12 @@ extra you ask for, so absent means no; the profile is the default this app now w
 that** (the shared steps never do — § [Only the personal steps get it](#only-the-personal-steps-get-it)). The one
 thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
 ([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
-below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
-to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
-keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+below. **Glossary has no such label any more** (261001m): its list is written for nobody in
+particular, and what is the owner's is the *for you* marks on top, labelled by `<MarkedForYou>` at the
+end of the sort row — which, unlike this label, can offer *Mark again*, because what it rewrites is
+the marks and never the shared text ([glossary.md § Marked for you](glossary.md#marked-for-you)). It
+was an icon without words there from 2026-09-29
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
 the per-article half, on the metadata page. The way to not be profiled is to empty both boxes; that
 is a real loss of control, and it is the one Greg asked for.
 

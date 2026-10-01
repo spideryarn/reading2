@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 
 import { stepContextFor } from "../src/jobs.js";
-import { isPersonalStep, PERSONAL_STEPS } from "../src/profile.js";
+import { isPersonalStep, PERSONAL_STEPS, withPersonalAddenda } from "../src/profile.js";
 import { STEP_ORDER } from "../src/step-order.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
@@ -53,5 +53,42 @@ describe("stepContextFor and the reader profile", () => {
 
   it("hands a personal step nothing when the job carries nothing — the control", () => {
     expect(contextFor("quiz", undefined).profile).toBeUndefined();
+  });
+});
+
+/* **A glossary request grows its personal addendum, and only with a profile**
+   — plan 261001m, GPT Sol's finding 6. The jobs route expands the asked-for
+   steps before enqueue, the work key and the ordering see them, so this pure
+   function is the whole of the decision; the route test beside
+   tests/quiz-job-carries-the-reading-goal.test.ts holds the wiring. */
+describe("withPersonalAddenda", () => {
+  it("adds the glossary's for-you marks when the owner has a profile", () => {
+    expect(withPersonalAddenda(["glossary"], PROFILE)).toEqual(["glossary", "glossaryForYou"]);
+    expect(withPersonalAddenda(["glossary", "quotes"], PROFILE)).toEqual([
+      "glossary",
+      "quotes",
+      "glossaryForYou",
+    ]);
+  });
+
+  it("adds nothing without a profile — the control", () => {
+    expect(withPersonalAddenda(["glossary"], null)).toEqual(["glossary"]);
+  });
+
+  it("adds nothing to a job with no glossary, and never twice", () => {
+    expect(withPersonalAddenda(["quotes", "ideas"], PROFILE)).toEqual(["quotes", "ideas"]);
+    expect(withPersonalAddenda(["glossary", "glossaryForYou"], PROFILE)).toEqual([
+      "glossary",
+      "glossaryForYou",
+    ]);
+  });
+
+  it("only ever adds a personal step", () => {
+    for (const added of withPersonalAddenda(STEP_ORDER, PROFILE)) {
+      if (!STEP_ORDER.includes(added)) throw new Error(`added ${added}`);
+    }
+    expect(withPersonalAddenda(["glossary"], PROFILE).filter((s) => s !== "glossary").every(isPersonalStep)).toBe(
+      true,
+    );
   });
 });

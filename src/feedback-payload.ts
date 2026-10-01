@@ -188,6 +188,7 @@ const STEPS = [
   "citations",
   "crossrefs",
   "simple",
+  "glossaryForYou",
 ] as const;
 
 /** `JobStatus` in src/types.ts, which is a type and so cannot be imported as one. */

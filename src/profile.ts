@@ -300,6 +300,8 @@ export function profileIsStale(
  *   for the `wrong-profile` refusal against a legacy profiled Sketch
  *   (src/pipeline.ts § illustrated). Without it, `profileIsStale(hash, null)`
  *   is false and an old profiled Sketch would be painted.
+ * - `glossaryForYou` — the personal layer on the shared glossary: owner-only,
+ *   and nothing without a profile (`PROFILE_ONLY_STEPS` below).
  *
  * Typed against `StepName`, so a misspelt member fails the compiler.
  */
@@ -308,6 +310,7 @@ export const PERSONAL_STEPS = [
   "simple",
   "trajectory",
   "illustrated",
+  "glossaryForYou",
 ] as const satisfies readonly StepName[];
 
 const PERSONAL: ReadonlySet<StepName> = new Set(PERSONAL_STEPS);
@@ -315,4 +318,35 @@ const PERSONAL: ReadonlySet<StepName> = new Set(PERSONAL_STEPS);
 /** Is this step allowed the reader's profile? `PERSONAL_STEPS`. */
 export function isPersonalStep(name: StepName): boolean {
   return PERSONAL.has(name);
+}
+
+/**
+ * **The personal addendum each shared step gets** — the layer written for the
+ * owner on top of an artefact written for everybody (plan 261001m). Only the
+ * glossary has one in v1. Each value is in `PERSONAL_STEPS`.
+ */
+export const PERSONAL_ADDENDUM = {
+  glossary: "glossaryForYou",
+} as const satisfies Partial<Record<StepName, (typeof PERSONAL_STEPS)[number]>>;
+
+/**
+ * **A job's steps, with the personal addenda the owner's profile buys** — the
+ * jobs route's expansion (src/routes.ts § POST /api/jobs), done before the job
+ * is queued so its row, its work key and its order all carry the step (GPT
+ * Sol's finding 6). With no profile, nothing is added: there is nothing to
+ * write the addendum for. Order is left to `enqueue`, which sorts by
+ * `STEP_ORDER`; an addendum already asked for is not added twice.
+ */
+export function withPersonalAddenda(steps: readonly StepName[], profile: string | null): StepName[] {
+  const out = [...steps];
+  if (!profile) return out;
+  for (const [shared, addendum] of Object.entries(PERSONAL_ADDENDUM) as [StepName, StepName][]) {
+    if (out.includes(shared) && !out.includes(addendum)) out.push(addendum);
+  }
+  return out;
+}
+
+/** Would this job grow an addendum if the owner had a profile? So the route knows to ask. */
+export function mayHavePersonalAddenda(steps: readonly StepName[]): boolean {
+  return steps.some((step) => step in PERSONAL_ADDENDUM);
 }

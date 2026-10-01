@@ -116,6 +116,11 @@ import {
   PROMPT_VERSION as CROSSREFS_VERSION,
 } from "../src/crossrefs.js";
 import {
+  forYouGlossaryHash,
+  PROMPT_VERSION as FOR_YOU_VERSION,
+} from "../src/glossary-for-you.js";
+import { hashProfile } from "../src/profile.js";
+import {
   inputFingerprint as simpleFingerprint,
   SIMPLE_VERSION,
 } from "../src/simple-summary.js";
@@ -298,6 +303,17 @@ function ctxOf(slug: string = SLUG): StepContext {
     signal: new AbortController().signal,
     cacheArticle: false,
   };
+}
+
+/**
+ * **The one step that is never done without a profile** — the glossary's
+ * for-you marks (plan 261001m) are made *for* somebody, so a context with no
+ * profile has nothing they could be current for. Every other step keeps the
+ * profile-less context above, whose stamps the fixture was written against.
+ */
+const FOR_YOU_PROFILE = "About the reader: A fixture who reads glossaries.";
+function ctxFor(name: StepName, slug: string = SLUG): StepContext {
+  return name === "glossaryForYou" ? { ...ctxOf(slug), profile: FOR_YOU_PROFILE } : ctxOf(slug);
 }
 
 /**
@@ -633,6 +649,19 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: FAQ_VERSION,
     questions: [],
     dropped: emptyFaqDropped(),
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* Marks on the (empty) glossary planted above, for `FOR_YOU_PROFILE`:
+     current by `(glossaryHash, profileHash, version)`, and an empty list is a
+     real answer. */
+  store.plant(SLUG, "glossaryForYou", "glossaryForYou", {
+    version: FOR_YOU_VERSION,
+    generator: "none",
+    slug: SLUG,
+    glossaryHash: forYouGlossaryHash({ entries: [] }),
+    profileHash: hashProfile(FOR_YOU_PROFILE),
+    marks: [],
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
@@ -1250,11 +1279,11 @@ describe("a step that started and did not finish must not report itself done", (
   it("says so for every step, artefacts or no artefacts", async () => {
     writeWholeArticle(store);
     for (const name of STEP_ORDER) {
-      expect(await stepIsDone(STEPS[name], ctxOf(), store), `${name} before`).toBe(true);
+      expect(await stepIsDone(STEPS[name], ctxFor(name), store), `${name} before`).toBe(true);
       const attempt = await store.beginStep(SLUG, name);
-      expect(await stepIsDone(STEPS[name], ctxOf(), store), `${name} during`).toBe(false);
+      expect(await stepIsDone(STEPS[name], ctxFor(name), store), `${name} during`).toBe(false);
       await store.finishStep(SLUG, name, attempt);
-      expect(await stepIsDone(STEPS[name], ctxOf(), store), `${name} after`).toBe(true);
+      expect(await stepIsDone(STEPS[name], ctxFor(name), store), `${name} after`).toBe(true);
     }
   });
 

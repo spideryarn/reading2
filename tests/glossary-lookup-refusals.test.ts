@@ -53,7 +53,7 @@ import { describe, expect, it } from "vitest";
 import { articleFingerprint } from "../src/source-hash.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
 import type { LookupsByTerm } from "../src/glossary-lookups.js";
-import type { Article, Block, GlossaryResponse, Tree } from "../src/types.js";
+import type { Article, Block, GlossaryFound, Tree } from "../src/types.js";
 
 /** One paragraph, with an id a test can name. */
 function para(id: string, text: string): Block {
@@ -107,7 +107,7 @@ function harness(opts: {
              objects it holds fails every stale case in this file. */
           stale: !opts.stale,
           outdated: false,
-        }) as unknown as GlossaryResponse,
+        }) as unknown as GlossaryFound,
     },
     lookups: {
       load: async (): Promise<LookupsByTerm> => ({}),

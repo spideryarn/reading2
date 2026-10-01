@@ -1152,6 +1152,7 @@ const GLOSSARY_READ: GlossaryRead = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  forYou: null,
   error: null,
   reload: async () => {},
   refresh: async () => {},

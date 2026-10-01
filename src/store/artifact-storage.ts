@@ -37,7 +37,8 @@ export type WholeColumn =
   | "debate"
   | "citations"
   | "crossrefs"
-  | "simpleSummary";
+  | "simpleSummary"
+  | "glossaryForYou";
 
 /**
  * Where one `(step, kind)` lives in Postgres.
@@ -137,6 +138,9 @@ export const STORAGE: {
      URL segment (`/api/simple/`), which tests/cacheable-covers-artefact-routes.test.ts
      derives from the kind. The column is named for what it holds. */
   simple: { simple: { at: "column", column: "simpleSummary" } },
+  /* Owner-only, and it has no route of its own: the marks ride on the owner's
+     glossary GET (src/routes.ts § GLOSSARY_PATTERN). Plan 261001m. */
+  glossaryForYou: { glossaryForYou: { at: "column", column: "glossaryForYou" } },
 };
 
 /** The site for one `(step, kind)`, or a clear error rather than `undefined`. */
