@@ -16,10 +16,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { commitUrl, parseChangelog, type ChangelogVersion } from "../src/changelog.js";
+import { commitUrl, parseChangelog, parsePending, type ChangelogVersion } from "../src/changelog.js";
 import {
   ChangelogBody,
   groupForDisplay,
+  withPending,
   releaseAnchor,
   releaseFromAnchor,
 } from "../src/web/ChangelogPage.js";
@@ -134,6 +135,32 @@ function fixtureVersions(): ChangelogVersion[] {
 async function draw(versions: ChangelogVersion[]): Promise<void> {
   await act(async () => root.render(<ChangelogBody versions={versions} />));
 }
+
+/**
+ * **The release this build is shipping is drawn on top**, numbered as the line
+ * it will become — docs/plans/261001q. Off a build there is no stamp, so it
+ * keeps its planning time and its described sha.
+ */
+describe("the pending release", () => {
+  it("is the newest release, with the next number", () => {
+    const history = fixtureVersions();
+    const last = history.at(-1);
+    const { pending, problems } = parsePending(
+      JSON.stringify({ ...JSON.parse(FIXTURE_LINES.at(-1) ?? "{}"), version: "2026-12-01T00:00:00Z", deployment_id: null, sha: SHA_E, previous_sha: last?.sha }),
+      history,
+    );
+    expect(problems).toEqual([]);
+    const items = groupForDisplay(withPending(history, pending));
+    const first = items[0];
+    expect(first?.kind === "version" && first.release).toBe(history.length + 1);
+    expect(first?.kind === "version" && first.version.sha).toBe(SHA_E);
+  });
+
+  it("adds nothing when nothing is pending", () => {
+    const history = fixtureVersions();
+    expect(withPending(history, null)).toBe(history);
+  });
+});
 
 describe("grouping releases for display", () => {
   it("puts the newest release first", () => {

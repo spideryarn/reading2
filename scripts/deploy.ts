@@ -46,6 +46,7 @@ import { Pool } from "pg";
 
 import { sslDecisionFor } from "../src/db/ssl.js";
 import { readEnvProd } from "../src/env.js";
+import { notesAt } from "./changelog/release-paths.js";
 import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
 import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
@@ -67,6 +68,7 @@ import {
   migratorUrlFrom,
   migrationState,
   postApplyProblems,
+  RELEASE_LOCK_FILE,
   missingGateFixtures,
   readLogQuery,
   rollbackAdvice,
@@ -322,7 +324,7 @@ function takeLock(): () => void {
      workaround: the lock exists to stop two deploys overlapping *anywhere*, and
      one lock per worktree would have let a worktree and the primary deploy at
      the same time — the exact race the comment above describes. */
-  const file = path.join(gitCommonDir(), "spideryarn-deploy.lock");
+  const file = path.join(gitCommonDir(), RELEASE_LOCK_FILE);
 
   /* **The claim is atomic** — see scripts/lockfile.ts. This used to be
      `if (!existsSync(file)) return claim()` followed by an `openSync(file, "w")`
@@ -406,6 +408,21 @@ async function preflight(): Promise<string> {
     }
     const problem = trunkGap({ branch, sha, trunkSha });
     gate(`level with origin/${TRUNK_BRANCH}`, problem === null, () => problem ?? "");
+  }
+
+  /* **The release notes ship in the deploy they describe** — `changelogGap`,
+     and docs/plans/261001q. Read from the candidate commit, because that is
+     what Vercel builds; a pending file written but not committed ships nothing. */
+  {
+    const notes = notesAt(sha, ROOT);
+    gate("changelog", notes.gap === null, () => notes.gap ?? "");
+    if (notes.gap === null) {
+      info(
+        notes.pending
+          ? `release notes: release ${notes.pending.release}, ${notes.pending.entries.length} entries, up to ${notes.described.slice(0, 8)}`
+          : "release notes: nothing pending, and nothing a reader would see since the last release",
+      );
+    }
   }
 
   /* Information, not a gate. A push ships commits, so somebody else's edits are

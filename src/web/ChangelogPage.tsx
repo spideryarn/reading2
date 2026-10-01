@@ -91,10 +91,12 @@ import {
   SECTIONS,
   commitUrl,
   parseChangelog,
+  parsePending,
   shaFromCommitUrl,
   type ChangelogEntry,
   type ChangelogLink,
   type ChangelogVersion,
+  type PendingRelease,
   type Section,
 } from "../changelog.js";
 import { GitHubMark } from "./GitHubMark.js";
@@ -114,6 +116,17 @@ import { useNow } from "./useNow.js";
    Vercel alone —
    docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md. */
 import versionsText from "./changelog-versions.ndjson?raw";
+/* The release this build is shipping, written before the deploy so its notes
+   go out in it — `null` when there is nothing pending. docs/plans/261001q. */
+import pendingText from "./changelog-pending.json?raw";
+import { buildCommit, buildTime } from "./build-stamp.js";
+
+/**
+ * A release the page draws: a line of the history, or the pending one this
+ * build carries. The page reads nothing that tells them apart but the number
+ * and the date, so one type with the deployment id left out of it.
+ */
+export type Release = ChangelogVersion | PendingRelease;
 
 /** What each section is called on the page, in the order `changelog.md` sets. */
 const SECTION_LABEL: Record<Section, string> = {
@@ -214,7 +227,7 @@ function ReleaseDate({ iso, now, style, fallback }: {
  * Sections in `SECTIONS` order, and a section with nothing in it is left out
  * rather than drawn as a zero.
  */
-function describeContents(version: ChangelogVersion): string {
+function describeContents(version: Release): string {
   return SECTIONS.map((section) => {
     const n = version.entries.filter((e) => e.section === section).length;
     if (n === 0) return null;
@@ -351,7 +364,7 @@ export function releaseAnchor(release: number): string {
  * `onToggle`, React would have closed it on the reader at the next render.
  */
 function VersionBlock({ version, release, now, open, onOpenChange }: {
-  version: ChangelogVersion;
+  version: Release;
   release: number;
   now: number;
   open: boolean;
@@ -439,7 +452,7 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
 
 /** One entry in the display list: a real release, or a run of quiet ones. */
 type DisplayItem =
-  | { kind: "version"; version: ChangelogVersion; release: number }
+  | { kind: "version"; version: Release; release: number }
   /**
    * `after` is the sha of the release drawn immediately above this line, or
    * `"top"` when the list opens on one. It exists to be a React key: an index
@@ -467,7 +480,7 @@ type DisplayItem =
  * Exported for `tests/changelog-page.test.tsx`, which drives it with synthetic
  * versions rather than the real 210 KB file.
  */
-export function groupForDisplay(versions: ChangelogVersion[]): DisplayItem[] {
+export function groupForDisplay(versions: Release[]): DisplayItem[] {
   const items: DisplayItem[] = [];
   let quietRun = 0;
   let above = "top";
@@ -653,7 +666,7 @@ function ContentsList({
  * than not a quiet one, and a page that opened nothing because of that would be
  * the letter of the instruction and none of the point of it.
  */
-export function ChangelogBody({ versions }: { versions: ChangelogVersion[] }) {
+export function ChangelogBody({ versions }: { versions: Release[] }) {
   const items = groupForDisplay(versions);
   /* Read once and passed down — useNow.ts says why — and ticking, so a tab
      left open does not keep saying "3m ago" an hour later. */
@@ -752,6 +765,33 @@ export function ChangelogBody({ versions }: { versions: ChangelogVersion[] }) {
  */
 const PARSED = parseChangelog(versionsText);
 
+/**
+ * **The pending release, dated and linked by the build that is carrying it.**
+ *
+ * It has no deploy time of its own — it was written before the deploy — but the
+ * bundle the reader is running was compiled from the commit that holds it, so
+ * that bundle's own stamp (build-stamp.ts) is when it shipped and what it was
+ * built from, true by construction. An old tab shows its own bundle's pending
+ * release and its own bundle's time, which agree. Off a build (dev, tests) there
+ * is no stamp and the planning time stands in.
+ */
+export function withPending(history: ChangelogVersion[], pending: PendingRelease | null): Release[] {
+  if (pending === null) return history;
+  const time = buildTime();
+  const stamp = time !== null && !Number.isNaN(Date.parse(time)) ? new Date(time).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
+  const commit = buildCommit();
+  return [
+    ...history,
+    {
+      ...pending,
+      version: stamp ?? pending.version,
+      sha: commit !== null && /^[0-9a-f]{40}$/.test(commit) ? commit : pending.sha,
+    },
+  ];
+}
+
+const RELEASES = withPending(PARSED.versions, parsePending(pendingText, PARSED.versions).pending);
+
 export function ChangelogPage() {
   useDocumentTitle(pageTitle({ kind: "changelog" }));
 
@@ -773,15 +813,14 @@ export function ChangelogPage() {
       </h1>
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
         Every update to Spideryarn since it launched, newest first — each numbered release below is
-        one update to the live site. Open one to see what changed. This list is written up a little
-        after the fact, so the very latest change may not have made it on here yet.
+        one update to the live site. Open one to see what changed.
       </p>
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
         Spideryarn is <Link href="/opensource" className="tw:text-highlight tw:no-underline tw:hover:underline">open source</Link>, so every
         release links to the code behind it.
       </p>
 
-      <ChangelogBody versions={PARSED.versions} />
+      <ChangelogBody versions={RELEASES} />
 
       {/* The spacer that puts the footer on the floor of a `min-h-dvh` flex
           column. It grows to nothing on a page this long and is here so the

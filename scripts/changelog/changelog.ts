@@ -64,20 +64,20 @@ import {
   MAX_HEADLINES,
   SECTIONS,
   parseChangelog,
+  parsePending,
+  type ChangelogVersion,
   type ParseResult,
   type Section,
 } from "../../src/changelog.js";
 import { isMain } from "../../src/is-main.js";
+import {
+  CHANGELOG_FILE,
+  PENDING_FILE,
+  RELEASE_PATHSPEC,
+  releaseCommits,
+  touchesRelease,
+} from "./release-paths.js";
 import { plainWords } from "../../src/plain-words.js";
-
-/**
- * The file the whole process exists to append to. Relative to the repo root.
- *
- * It sits beside its reader rather than in `docs/`, where this process would
- * naturally have filed it, because `src/web/ChangelogPage.tsx` imports it and
- * `.vercelignore` drops `docs` from the upload — docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md.
- */
-const CHANGELOG_FILE = "src/web/changelog-versions.ndjson";
 
 /** Gitignored at `/logs/`, so a run leaves nothing for a commit to pick up. */
 const DEFAULT_WORK = "logs/changelog";
@@ -101,29 +101,9 @@ const STAGE_DIRS = ["batches", "items", "review", "verified", "copy-in", "copy-o
  */
 const BATCH_SIZE = 12;
 
-/**
- * **A commit touching none of these cannot change what a reader sees**, so it
- * is classified without a model call, with its path list as the evidence —
- * changelog.md § Enumerate. The list is deliberately generous: `styles/` and
- * `public/` are in, because a stylesheet and a favicon are both things a reader
- * meets. Taken from the table in
- * docs/plans/260906d-retrospective-changelog-for-every-version-since-the-beginning.md
- * § What we are working with, which is the version the 995/1,071 split was
- * measured against.
- */
-const CODE_PATHS = [
-  "src/",
-  "drizzle/",
-  "styles/",
-  "public/",
-  "api/",
-  "index.html",
-  "vercel.json",
-  "vite.config.ts",
-  "vite.api.config.ts",
-  "package.json",
-  "components.json",
-];
+/* Which commits count as a change — `CODE_PATHS` and the changelog's own two
+   files excluded from it — is scripts/changelog/release-paths.ts, shared with
+   the deploy gate. */
 
 /**
  * The app addresses the copy stage may link to, and no others — the closed list
@@ -288,7 +268,8 @@ interface Deploy {
 /** One version, with the commits its range covers. `plan` writes these. */
 interface SpineVersion {
   version: string;
-  deployment_id: string;
+  /** Null for the release `plan --upcoming` plans, which has not been deployed. */
+  deployment_id: string | null;
   sha: string;
   previous_sha: string | null;
   /**
@@ -425,10 +406,6 @@ function pathsInRange(range: string, cwd: string): Map<string, string[]> {
   return byShas;
 }
 
-function touchesCode(paths: string[]): boolean {
-  return paths.some((p) => CODE_PATHS.some((c) => (c.endsWith("/") ? p.startsWith(c) : p === c)));
-}
-
 /**
  * **The code/non-code split, taken twice.**
  *
@@ -452,7 +429,7 @@ function splitCode(
   cwd: string,
 ): { code: Set<string>; disagreements: string[] } {
   const filtered = new Set(
-    git(["log", "--full-history", "--no-merges", "--format=%H", range, "--", ...CODE_PATHS], cwd)
+    git(["log", "--full-history", "--no-merges", "--format=%H", range, "--", ...RELEASE_PATHSPEC], cwd)
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l !== ""),
@@ -461,7 +438,7 @@ function splitCode(
   const code = new Set<string>();
   const disagreements: string[] = [];
   for (const { sha } of commits) {
-    const byName = touchesCode(paths.get(sha) ?? []);
+    const byName = touchesRelease(paths.get(sha) ?? []);
     const byFilter = filtered.has(sha);
     if (byName !== byFilter) {
       disagreements.push(
@@ -591,6 +568,105 @@ function cmdPlan(
     );
   }
 
+  writeSpine(
+    root,
+    work,
+    shown,
+    existing,
+    pending.map((d) => ({ version: stampOf(d.created), deployment_id: d.id, sha: d.sha })),
+    `${deploys.length} READY production, ${noSha.length} with no sha`,
+  );
+}
+
+/**
+ * **`plan --upcoming <sha>` — the release about to ship, before it ships.**
+ *
+ * One version, from the history's last line to `<sha>` (the `dev` tip the
+ * notes will describe), with no deployment id because there is none yet and
+ * the planning time as its stamp. What `write --pending` later makes of it goes
+ * into the pending file, not the history: the history is appended only by
+ * `promote`, once production is serving it. docs/plans/261001q.
+ *
+ * **Nothing to describe is an answer, not an error.** When no commit in the
+ * range changes a release path (release-paths.ts), it plans nothing and says so
+ * in `upcoming.json`, which is what `release-notes.ts prepare` reads to decide
+ * whether to start the model stages at all.
+ */
+function cmdPlanUpcoming(
+  root: string,
+  work: string,
+  ref: string,
+  target: string,
+  fresh: boolean,
+): void {
+  refuseStaleStages(root, work, fresh);
+  const shown = path.relative(root, target);
+  const existing = parseChangelog(existsSync(target) ? readFileSync(target, "utf8") : "");
+  if (existing.problems.length > 0) {
+    for (const p of existing.problems) console.error(`  ✗ ${p}`);
+    die(`${shown} has ${existing.problems.length} problems — fix it before planning on it`);
+  }
+  const last = existing.versions.at(-1);
+  if (last === undefined) die(`${shown} is empty — the first version is planned with --deploys`);
+
+  let sha: string;
+  try {
+    sha = git(["rev-parse", "--verify", `${ref}^{commit}`], root).trim();
+  } catch {
+    die(`--upcoming ${ref} is not a commit here`);
+  }
+  if (!gitOk(["merge-base", "--is-ancestor", last.sha, sha], root)) {
+    die(
+      `${last.sha.slice(0, 8)}, the last line's sha, is not an ancestor of ${sha.slice(0, 8)} — ` +
+        "the range would not be the work this release ships",
+    );
+  }
+
+  const releasing = last.sha === sha ? [] : releaseCommits(`${last.sha}..${sha}`, root);
+  ensureDir(work);
+  writeJson(path.join(work, "upcoming.json"), {
+    previous_sha: last.sha,
+    sha,
+    release_commits: releasing.length,
+  });
+  if (releasing.length === 0) {
+    writeJson(path.join(work, "spine.json"), []);
+    console.log(
+      `Nothing to describe: no commit in ${last.sha.slice(0, 8)}..${sha.slice(0, 8)} changes what a ` +
+        "reader sees. The pending release should be null.",
+    );
+    return;
+  }
+
+  const version = nowStamp();
+  if (version <= last.version) {
+    die(`the clock says ${version}, not after the last line's ${last.version} — refusing to plan backwards`);
+  }
+  writeSpine(
+    root,
+    work,
+    shown,
+    existing,
+    [{ version, deployment_id: null, sha }],
+    `upcoming, ${releasing.length} release commits`,
+  );
+}
+
+/**
+ * The ranges, the code/non-code split and the batches, for whatever versions
+ * the caller planned — Vercel's deploys (`plan --deploys`) or the one release
+ * about to ship (`plan --upcoming`). Each range starts at the line before it,
+ * and the first at the file's last line.
+ */
+function writeSpine(
+  root: string,
+  work: string,
+  shown: string,
+  existing: ParseResult,
+  rows: { version: string; deployment_id: string | null; sha: string }[],
+  source: string,
+): void {
+  const last = existing.versions.at(-1);
   const spine: SpineVersion[] = [];
   const excluded: ExcludedCommit[] = [];
   const batchesByDay = new Map<string, string[]>();
@@ -598,7 +674,7 @@ function cmdPlan(
   const disagreements: string[] = [];
 
   let previous = last?.sha ?? null;
-  for (const deploy of pending) {
+  for (const deploy of rows) {
     let ancestor = "n/a (first)";
     if (previous !== null) {
       /* Checked per pair rather than assumed: a rollback or a `vercel deploy`
@@ -608,7 +684,7 @@ function cmdPlan(
       ancestor = ok ? "yes" : "NO";
       if (!ok) {
         ancestryFailures.push(
-          `${stampOf(deploy.created)} ${deploy.sha.slice(0, 8)}: ` +
+          `${deploy.version} ${deploy.sha.slice(0, 8)}: ` +
             `${previous.slice(0, 8)} is not its ancestor`,
         );
       }
@@ -636,8 +712,8 @@ function cmdPlan(
     }
 
     spine.push({
-      version: stampOf(deploy.created),
-      deployment_id: deploy.id,
+      version: deploy.version,
+      deployment_id: deploy.deployment_id,
       sha: deploy.sha,
       previous_sha: previous,
       commit_count: commits.length,
@@ -667,7 +743,7 @@ function cmdPlan(
 
   const codeTotal = spine.reduce((n, v) => n + v.code_commits.length, 0);
   const commitTotal = spine.reduce((n, v) => n + v.commit_count, 0);
-  console.log(`deploys           : ${deploys.length} READY production, ${noSha.length} with no sha`);
+  console.log(`deploys           : ${source}`);
   console.log(`already written   : ${existing.versions.length} lines in ${shown}`);
   console.log(`versions to do    : ${spine.length}`);
   console.log(`commits in range  : ${commitTotal}  code-touching ${codeTotal}  excluded ${excluded.length}`);
@@ -1714,12 +1790,48 @@ export function installAppend(
   }
 }
 
+function readFileOr(file: string, fallback: string): string {
+  return existsSync(file) ? readFileSync(file, "utf8") : fallback;
+}
+
+/**
+ * **Replace the pending file whole, or leave it exactly as it was** — the same
+ * stage, read back, compare and rename as `installAppend`, for the file that is
+ * overwritten rather than appended to. `release` is not written: it is a
+ * property of where the line will sit, and the parser works it out.
+ */
+export function installPending(
+  target: string,
+  before: string,
+  release: Record<string, unknown> | null,
+  history: ChangelogVersion[],
+): void {
+  const text = `${JSON.stringify(release)}\n`;
+  const check = parsePending(text, history);
+  if (check.problems.length > 0) {
+    for (const p of check.problems) console.error(`  ✗ ${p}`);
+    die(`the pending release does not fit after the history's last line — ${target} is untouched`);
+  }
+  mkdirSync(path.dirname(target), { recursive: true });
+  const staged = `${target}.writing-${process.pid}`;
+  writeFileSync(staged, text);
+  try {
+    if (readFileOr(target, "null\n") !== before) {
+      die(`${target} changed while this command ran — re-run against the file as it now is`);
+    }
+    renameSync(staged, target);
+  } finally {
+    rmSync(staged, { force: true });
+  }
+}
+
 function cmdWrite(
   root: string,
   work: string,
   force: boolean,
   target: string,
   trawlModel: string,
+  pendingTarget: string | null,
 ): void {
   const versions = JSON.parse(
     readFileSync(path.join(work, "assigned.json"), "utf8"),
@@ -1802,6 +1914,20 @@ function cmdWrite(
     );
   }
 
+  if (pendingTarget !== null) {
+    const [line, ...extra] = report.lines;
+    if (line === undefined || extra.length > 0 || line.deployment_id !== null) {
+      die(
+        `--pending writes one release with no deployment id, and this run assembled ` +
+          `${report.lines.length} — it was not planned with plan --upcoming`,
+      );
+    }
+    installPending(pendingTarget, readFileOr(pendingTarget, "null\n"), line, existing.versions);
+    console.log(`\nwrote the pending release to ${path.relative(root, pendingTarget)} (${arr(line, "entries").length} entries)`);
+    console.log("Read it before committing it: these are public claims, written by a model.");
+    return;
+  }
+
   const check = installAppend(target, before, report.lines);
 
   console.log(
@@ -1809,6 +1935,207 @@ function cmdWrite(
       `(${check.versions.length} versions, ${check.versions.reduce((n, v) => n + v.entries.length, 0)} entries)`,
   );
   console.log("Read the new lines before committing them: they are public claims, written by a model.");
+}
+
+// ---------------------------------------------------------------------------
+// 5b. promote — the release production is serving, into the history
+
+/** What production's `/build.json` says it is serving. scripts/build-stamp.ts. */
+export interface Serving {
+  commit: string;
+  deploymentId: string;
+  builtAt: string;
+}
+
+/** `/build.json`, checked field by field: a stamp that is not one refuses. */
+export function servingFrom(raw: unknown): Serving {
+  if (!isRecord(raw)) die("the build stamp is not an object");
+  const { commit, deploymentId, builtAt } = raw;
+  if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit)) {
+    die(`the build stamp's commit ${JSON.stringify(commit)} is not a sha`);
+  }
+  if (typeof deploymentId !== "string" || !deploymentId.startsWith("dpl_")) {
+    die(`the build stamp's deploymentId ${JSON.stringify(deploymentId)} is not a Vercel deployment`);
+  }
+  if (typeof builtAt !== "string" || Number.isNaN(Date.parse(builtAt))) {
+    die(`the build stamp's builtAt ${JSON.stringify(builtAt)} is not a time`);
+  }
+  return { commit, deploymentId, builtAt };
+}
+
+export type Promotion =
+  | { kind: "recorded"; why: string }
+  | { kind: "append"; line: Record<string, unknown>; clearPending: boolean; notes: string[] };
+
+/**
+ * **What appending the serving release to the history would mean** — decided
+ * here from git and the two files, and done by `cmdPromote`.
+ *
+ * Every production deploy gets exactly one line, keyed on its deployment id:
+ * that is the history's one invariant, and the fleet dashboard reads it as the
+ * deploy record. So:
+ *
+ *  - **Already recorded** (the id is in the history): nothing to do. This is
+ *    also today's transition — the 18:39 deploy of 2026-10-01 has no pending
+ *    file in its tree, and its line is already there.
+ *  - **Serving notes** (the build's own pending release chains onto the
+ *    history's last line): appended with the real id and build time.
+ *  - **No notes**: a pending of `null`, or a redeploy of a release already
+ *    promoted, gets a line with no entries — a deploy nobody described is still
+ *    a deploy.
+ *
+ * **Its `sha` is the deployed commit, unless the deploy shipped release commits
+ * its notes do not cover.** The deploy gate makes the second case need
+ * `--force-gate=changelog`. Then the line stops at the described tip, so the
+ * next `prepare`'s range starts there and describes what the forced deploy
+ * shipped; recording the deployed commit would put that work behind the
+ * watermark, described by nobody.
+ *
+ * A serving build with no pending file in its tree, and no line, predates this
+ * process: refused, with the recovery named, rather than written as quiet.
+ */
+export function planPromotion(a: {
+  root: string;
+  history: ChangelogVersion[];
+  serving: Serving;
+  /** The pending file as the serving commit has it; `null` when the commit has no such file. */
+  servingPendingText: string | null;
+  /** The pending file in this checkout now. */
+  localPendingText: string;
+}): Promotion {
+  const { root, history, serving } = a;
+  const recorded = history.find((v) => v.deployment_id === serving.deploymentId);
+  if (recorded) return { kind: "recorded", why: `${serving.deploymentId} is already line ${recorded.release}` };
+
+  const last = history.at(-1);
+  if (last === undefined) die("the history is empty — there is nothing to promote onto");
+  if (!gitOk(["cat-file", "-e", `${serving.commit}^{commit}`], root)) {
+    die(`production is serving ${serving.commit.slice(0, 8)}, which this checkout does not have — fetch origin main`);
+  }
+  if (a.servingPendingText === null) {
+    die(
+      `production is serving ${serving.commit.slice(0, 8)} (${serving.deploymentId}), which has no ` +
+        `${PENDING_FILE} and no line in the history — it predates notes-before-deploy; record it with ` +
+        "plan --deploys (docs/project/changelog.md § Running it)",
+    );
+  }
+
+  let rawPending: unknown;
+  try {
+    rawPending = JSON.parse(a.servingPendingText);
+  } catch {
+    die(`${PENDING_FILE} at ${serving.commit.slice(0, 8)} does not parse`);
+  }
+  const notes: string[] = [];
+  let release: Record<string, unknown> | null = null;
+  if (rawPending !== null) {
+    const parsed = parsePending(a.servingPendingText, history);
+    const pending = parsed.pending;
+    const alreadyPromoted =
+      pending !== null &&
+      pending.previous_sha === last.previous_sha &&
+      pending.generated_at === last.generated_at;
+    if (parsed.problems.length === 0 && isRecord(rawPending)) {
+      release = rawPending;
+    } else if (alreadyPromoted) {
+      notes.push(`a redeploy of release ${last.release}, whose notes are already in the history`);
+    } else {
+      for (const p of parsed.problems) console.error(`  ✗ ${p}`);
+      die(
+        `the release production is serving does not chain onto the history's last line ` +
+          `(${last.sha.slice(0, 8)}) — a rollback, or a deploy that skipped a promote. Nothing appended.`,
+      );
+    }
+  }
+
+  const described = release !== null ? String(release.sha) : last.sha;
+  if (!gitOk(["merge-base", "--is-ancestor", described, serving.commit], root)) {
+    die(`the notes describe ${described.slice(0, 8)}, which is not in the serving build ${serving.commit.slice(0, 8)}`);
+  }
+  const uncovered = described === serving.commit ? [] : releaseCommits(`${described}..${serving.commit}`, root);
+  const sha = uncovered.length === 0 ? serving.commit : described;
+  if (uncovered.length > 0) {
+    notes.push(
+      `${uncovered.length} release commits shipped without notes (a forced deploy?) — the line stops at ` +
+        `${described.slice(0, 8)}, so the next prepare describes them`,
+    );
+  }
+
+  const version = new Date(serving.builtAt).toISOString().replace(/\.\d{3}Z$/, "Z");
+  if (version <= last.version) {
+    die(`the serving build's time ${version} is not after the last line's ${last.version}`);
+  }
+  const commitCount =
+    sha === last.sha ? 0 : Number(git(["rev-list", "--no-merges", "--count", `${last.sha}..${sha}`], root).trim());
+  const entries = release !== null ? arr(release, "entries") : [];
+  const line: Record<string, unknown> = {
+    version,
+    deployment_id: serving.deploymentId,
+    sha,
+    previous_sha: last.sha,
+    commit_count: commitCount,
+    invisible: entries.length === 0,
+    generated_at: release !== null ? release.generated_at : nowStamp(),
+    generated_by:
+      release !== null ? release.generated_by : { trawl: "none", review: "none", copy: "promote" },
+    entries,
+  };
+  if (release === null) notes.push("no notes in the serving build — recorded with no entries");
+
+  /* Cleared only if the checkout still holds the release that was served. A
+     newer one — a prepare that ran after this deploy — is somebody's work. */
+  let clearPending = false;
+  if (release !== null) {
+    try {
+      clearPending = JSON.stringify(JSON.parse(a.localPendingText)) === JSON.stringify(release);
+    } catch {
+      clearPending = false;
+    }
+  }
+  return { kind: "append", line, clearPending, notes };
+}
+
+function cmdPromote(
+  root: string,
+  servingFile: string,
+  target: string,
+  pendingTarget: string,
+  dryRun: boolean,
+): void {
+  const serving = servingFrom(readJson(servingFile));
+  const before = readFileOr(target, "");
+  const existing = parseChangelog(before);
+  if (existing.problems.length > 0) {
+    for (const p of existing.problems) console.error(`  ✗ ${p}`);
+    die(`${path.relative(root, target)} has ${existing.problems.length} problems — nothing promoted`);
+  }
+  let servingPendingText: string | null = null;
+  if (gitOk(["cat-file", "-e", `${serving.commit}:${PENDING_FILE}`], root)) {
+    servingPendingText = git(["show", `${serving.commit}:${PENDING_FILE}`], root);
+  }
+  const pendingBefore = readFileOr(pendingTarget, "null\n");
+  const plan = planPromotion({
+    root,
+    history: existing.versions,
+    serving,
+    servingPendingText,
+    localPendingText: pendingBefore,
+  });
+  if (plan.kind === "recorded") {
+    console.log(`Nothing to promote: ${plan.why}.`);
+    return;
+  }
+  for (const n of plan.notes) console.log(`  · ${n}`);
+  const l = plan.line;
+  console.log(
+    `${dryRun ? "would append" : "appending"} ${String(l.version)} ${String(l.deployment_id)} ` +
+      `${String(l.sha).slice(0, 8)} (${arr(l, "entries").length} entries, ${String(l.commit_count)} commits)` +
+      `${plan.clearPending ? ", and clear the pending release" : ""}`,
+  );
+  if (dryRun) return;
+  const check = installAppend(target, before, [l]);
+  if (plan.clearPending) installPending(pendingTarget, pendingBefore, null, check.versions);
+  console.log(`promoted: ${path.relative(root, target)} now has ${check.versions.length} lines`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1832,8 +2159,14 @@ function cmdCheck(root: string, target: string): void {
 
 const USAGE = `changelog.ts — the deterministic stages of docs/project/changelog.md
 
-  plan --deploys <file.json>   the version spine, the pre-filter and the trawl batches.
-                               Refuses to start on top of an earlier run's stage
+  plan --upcoming <sha>        the release about to ship: one version from the
+                               history's last line to <sha>, with no deployment id.
+                               Writes upcoming.json; plans nothing when no commit
+                               in the range changes what a reader sees
+  plan --deploys <file.json>   the versions Vercel says shipped — recovery only, since
+                               notes are written before the deploy. Refuses while a
+                               release is pending.
+                               Both refuse to start on top of an earlier run's stage
                                directories; --fresh deletes them first
   review-prompt [--day <d>]    one GPT Sol review prompt per day of history
   verify [--reassign]          fold in the rulings, assign items to versions.
@@ -1846,10 +2179,16 @@ const USAGE = `changelog.ts — the deterministic stages of docs/project/changel
   write --trawl-model <name>   validate the copy and append to ${CHANGELOG_FILE}.
                                <name> is the model the trawl subagents ran on
                                (sonnet, opus), recorded as generated_by.trawl
+        --pending              ...or write it, whole, to ${PENDING_FILE}
+  promote --serving <file>     append the release production is serving (its
+                               /build.json, saved to <file>) to the history, and
+                               clear the pending file if it still holds it.
+                               --dry-run says what it would do
   check [--file <path>]        parse the committed file and say what is wrong with it
 
   --file <path>                read/append somewhere other than ${CHANGELOG_FILE},
                                which is how a run is rehearsed against a copy
+  --pending-file <path>        the same, for ${PENDING_FILE}
 
   --work <dir>                 where the intermediates live (default ${DEFAULT_WORK})
   --allow-unreviewed           verify without the review stage. For a rehearsal.
@@ -1864,6 +2203,11 @@ export function main(argv: string[]): void {
     options: {
       work: { type: "string" },
       deploys: { type: "string" },
+      upcoming: { type: "string" },
+      pending: { type: "boolean" },
+      "pending-file": { type: "string" },
+      serving: { type: "string" },
+      "dry-run": { type: "boolean" },
       day: { type: "string" },
       file: { type: "string" },
       force: { type: "boolean" },
@@ -1880,10 +2224,23 @@ export function main(argv: string[]): void {
   const trawlModel = command === "write" ? requiredTrawlModel(values["trawl-model"]) : "";
   const root = repoRoot();
   const work = path.resolve(root, values.work ?? DEFAULT_WORK);
+  const pendingPath =
+    values["pending-file"] === undefined ? path.join(root, PENDING_FILE) : path.resolve(values["pending-file"]);
 
   switch (command) {
     case "plan":
-      if (values.deploys === undefined) die("plan needs --deploys <file.json>");
+      if (values.upcoming !== undefined) {
+        if (values.deploys !== undefined) die("plan takes --upcoming or --deploys, not both");
+        cmdPlanUpcoming(root, work, values.upcoming, changelogPath(root, values.file), values.fresh === true);
+        break;
+      }
+      if (values.deploys === undefined) die("plan needs --upcoming <sha> or --deploys <file.json>");
+      /* Vercel's list cannot be planned on top of a pending release: its range
+         starts at the history's last line too, so the two would describe the
+         same commits, and promote would then refuse the pending one. */
+      if (readFileOr(pendingPath, "null\n").trim() !== "null") {
+        die(`${PENDING_FILE} holds a release — promote it, or write it as null, before plan --deploys`);
+      }
       cmdPlan(
         root,
         work,
@@ -1902,7 +2259,24 @@ export function main(argv: string[]): void {
       cmdCopyInputs(work);
       break;
     case "write":
-      cmdWrite(root, work, values.force === true, changelogPath(root, values.file), trawlModel);
+      cmdWrite(
+        root,
+        work,
+        values.force === true,
+        changelogPath(root, values.file),
+        trawlModel,
+        values.pending === true ? pendingPath : null,
+      );
+      break;
+    case "promote":
+      if (values.serving === undefined) die("promote needs --serving <build.json>");
+      cmdPromote(
+        root,
+        path.resolve(values.serving),
+        changelogPath(root, values.file),
+        pendingPath,
+        values["dry-run"] === true,
+      );
       break;
     case "check":
       cmdCheck(root, changelogPath(root, values.file));
