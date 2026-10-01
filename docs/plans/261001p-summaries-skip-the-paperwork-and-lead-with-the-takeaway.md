@@ -223,31 +223,69 @@ these places, all taken from the review:
 
 ## Ledger
 
-**2026-10-01, measurement paused: the development OpenRouter key ran out of credit.**
+### The result
 
-- `before` and `before-2` ran in full on all four articles (on this commit's parent, by writing the
-  parent's files back for the run). $1.05 + $0.87 + $0.41 + $0.44.
-- `after` and `after-2` (two draws of the new prompts) ran at the same time and most of their
-  calls came back `402 … [ai-no-credit]` — *"This request would exceed your available credits"*.
-  Only `analog-cognition` came back whole, once. The partial runs are kept, renamed
-  `evals/results/paperwork/after-partial-402/` and `after-2-partial-402/`, so nothing reads them
-  as a result. The key is the box's **development** key; production's key (in `.env.prod`) is a
-  different key, compared by hash only.
-- Two `after` structure answers for `scaling-hypothesis` failed the eval's parse. The eval
-  borrowed `evals/plain-words`' strict parse rather than production's `parseJsonAnswer`, which
-  extracts a wrapped document and mends a trailing comma, so these may be failures production
-  would not see — or a real regression. Nothing was kept to tell. The harness now uses
-  production's parse and saves the raw answer when it fails. **This has to be settled before the
-  structure change is trusted.**
+Four articles, two draws of each prompt (`before`, `before-2` on the parent commit; `after`,
+`after-2` on this one), every call through production's own functions, about $9 in all.
+Results under `evals/results/paperwork/`. Three blind judges (Opus subagents, each reading only
+one `pairs.md`, never its `key.json`), unblinded afterwards:
 
-What the one whole article showed (a screen, not the evidence):
-
-| `analog-cognition` | before | before-2 | after |
+| blind read | clearer takeaway (new : old : tie) | less paperwork (new : old : tie) | fidelity faults |
 |---|---|---|---|
-| Brief | 154 words, 3 paragraphs | 146, 3 | **86, 2** |
-| Structure paperwork gists | detail: grant agencies named | detail | **labels**: "The funding sources and institutional support for this work." |
-| Tweet 1 | "Miller, Brincat, and Roy (MIT) propose…" | "…at MIT's Picower Institute… The authors report no conflicts of interest." | "Miller, Brincat, and Roy argue…" (no affiliation; still three names) |
-| Last post | what it leaves open | — | **"They conclude: …"** |
+| `before` vs `after` | **12 : 0 : 8** | 5 : 0 : 15 | old side ≈13 rows, new ≈5; all three "most serious" were old-prompt outputs |
+| `before-2` vs `after-2` | **12 : 0 : 7** | 3 : 2 : 14 | old 8, new 4 |
+| control: `before` vs `before-2` (old against itself) | 7 : 5 : 8 (split by side, no prompt difference) | 4 : 1 : 15 | 6 : 7 |
 
-Across the before arms, Brief was 121–154 words and always three paragraphs: the 186 words on
-the reported article is the high end of a consistent overshoot of the 100-word ask.
+The takeaway result is far outside the control's spread. Paperwork is mostly a tie because on these
+papers the old summaries already left it out most of the time; where the difference shows is
+**Structure**, where the old gists named the grant agencies and the institutions and the new ones are
+labels (*"Funding sources and institutional support for the research."*, *"The authors and their
+institutional affiliations and contact details."*), and the thread, where the old prompt opened
+*"…at MIT's Picower Institute… The authors report no conflicts of interest."* One of the judges'
+worst old-prompt faults is the one this change was aimed at: a last post adding *"The authors leave
+open exactly how…"*, a caveat the piece does not state, because the old last-post rule asked for
+what is left open.
+
+**The boundary held.** On `scaling-hypothesis`, OpenAI restructuring itself to fund its bet is
+argument, not paperwork, and the new prompt kept it in the gists and the thread.
+
+**Brief** (8 runs each):
+
+| | words | paragraphs |
+|---|---|---|
+| old prompt | 121–154, mean 139 | 3 every time |
+| new prompt | 99–170, mean 124 | 2 in seven of eight |
+
+Slightly shorter, which is what was asked, and two paragraphs rather than three is the visible
+change. One run still came out at 170, so the 80-word ask does not hold the length on its own;
+a generation cap stays deferred (above) rather than taken.
+
+### A structure answer that writes JavaScript — not this change, but found by it
+
+Some structure answers are not JSON: the model corrects a block id it is copying by writing
+`"spya-c5z6sr".replace("spya-c5z6sr","spya-c5z6sr")` inside the document. `parseJsonAnswer` rejects
+it, the stage fails, and the reader gets a Retry button. It is the same habit
+[260928a](260928a-trajectory-mode-stage1-real-runs.md) found in Trajectory, where the fix was to
+stop showing the model ids at all.
+
+Measured with `evals/paperwork/structure-parse.ts` (production's parse, the raw answer kept):
+**`toc/9` 1 in 20 answers** (plus 0 in 8 in the eval arms), **`toc/10` 2 in 12** (plus 1 in 8):
+1 in 28 against 3 in 20, every failure the `.replace(` shape, three of the four on
+`analog-cognition` and one on the ball-lightning review. At these counts that difference is not distinguishable
+from chance (Fisher's exact, two-sided, p ≈ 0.3), and the old prompt does it too, so it is a
+**pre-existing failure class**, not a regression this change introduces. It is not fixed here: the
+mend belongs in the shared parser or in how the hierarchy shows ids, which is every stage's
+contract, and it wants its own plan and postmortem. **It should not be lost**: it costs a reader
+a failed ingest at a few per cent of articles. Raised with Greg in the feedback note and the
+hand-off.
+
+### What happened along the way
+
+- `before` and `before-2` ran first, on the parent's prompt files written back for the run.
+- The first `after` and `after-2` runs hit `402 … [ai-no-credit]` on the box's **development**
+  OpenRouter key (production's key is a different one, compared by hash only). The partial runs
+  are kept as `after-partial-402/` and `after-2-partial-402/`. The credit came back within the hour
+  and both arms were run again in full.
+- The first harness borrowed `evals/plain-words`' strict parse; it now uses production's
+  `parseJsonAnswer` and keeps any raw answer it cannot parse, which is how the `.replace(` shape
+  above was found.

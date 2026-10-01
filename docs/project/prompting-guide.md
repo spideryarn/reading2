@@ -97,6 +97,13 @@ ${PROFILE_RULES}`;
   their numbered lines, so `toc/10` passed it by (`src/article-prompt.ts` says why).
   Why it is not in the core above:
   [260928c](../plans/260928c-block-refs-shown-to-readers.md).
+- **Summarising the whole piece? Leave its paperwork out.** `paperwork(kind)` in
+  [`src/paperwork.ts`](../../src/paperwork.ts) is a second shared section, beside `plainWords`: the
+  authors' list, affiliations, acknowledgements, funding and disclosures are paperwork when they
+  only record how the piece was produced, and content when the piece uses them. `"summary"` leaves
+  it out; `"structure"` keeps the node a table of contents must have and labels it. Summary, Tweets
+  and both hierarchy prompts carry it; the evidence is
+  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
   told to prefer common words is a transcriber invited to tidy.
