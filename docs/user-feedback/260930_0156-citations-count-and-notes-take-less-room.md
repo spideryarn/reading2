@@ -22,3 +22,8 @@ was) are behind an (i) at the same end, the component FAQ already used, now shar
 The foot is left for a running or failed job only. On a landscape iPhone that is about 100px more
 list.
 [261001l](../plans/261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md).
+
+**Follow-up, 2026-10-01:** on a touch screen Citations' order row is now one line that scrolls
+sideways rather than two — 54px instead of 98 on a landscape phone (`7ce23c5d1`, `fd6bf2ca7`, on
+`dev`; [261001o](../plans/261001o-order-buttons-one-sideways-scrolling-line-on-touch-screens.md),
+under `spya-gcdwps`).
