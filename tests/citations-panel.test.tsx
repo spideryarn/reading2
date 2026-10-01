@@ -29,6 +29,7 @@ const {
   citingWordsOf,
   quotedCitingWords,
   byLineOf,
+  byLineRepeatsTitle,
   shortAuthors,
   canPrioritise,
   citeReadAssessed,
@@ -255,6 +256,7 @@ function row(id: string): HTMLElement {
 
 interface Card {
   head: string;
+  headHidden: boolean;
   body: string;
   what: string;
   how: string;
@@ -296,7 +298,8 @@ async function cardFor(el: Element): Promise<Card> {
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
   const card = cards[0];
-  const head = card?.querySelector(".tip-soon-head")?.textContent ?? "";
+  const headElement = card?.querySelector(".tip-soon-head") ?? null;
+  const head = headElement?.textContent ?? "";
   const body = (card?.textContent ?? "").slice(head.length);
   /* The two paragraphs separately, not one blob: `ControlTip`'s rule is about
      the relationship between them, and a check that reads them concatenated
@@ -315,7 +318,13 @@ async function cardFor(el: Element): Promise<Card> {
     document.querySelectorAll('[role="tooltip"]'),
     "the card did not close, so the next one read here would be this one",
   ).toHaveLength(0);
-  return { head, body, what: paras[0] ?? "", how: paras[1] ?? "" };
+  return {
+    head,
+    headHidden: headElement?.getAttribute("aria-hidden") === "true",
+    body,
+    what: paras[0] ?? "",
+    how: paras[1] ?? "",
+  };
 }
 
 /* The stoplist and the two thresholds are tests/referee-tooltips.test.tsx's,
@@ -628,6 +637,174 @@ describe("CitationsPanel", () => {
     expect(link?.textContent).toBe("k3m9qt");
     await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
     expect(jumps).toEqual([[FIRST, undefined]]);
+  });
+});
+
+/* SPIDERYARN-READING2-7W: "If they're the same, don't show the bottom line" —
+   an author–year label as the title, and the by-line saying it again.
+   docs/plans/261001m-citations-duplicate-by-line-and-a-flash-you-can-see.md. */
+describe("a by-line that repeats the title", () => {
+  it("is the same words, whatever the punctuation", () => {
+    expect(byLineRepeatsTitle("Bartlett (1932)", "Bartlett · 1932")).toBe(true);
+    expect(byLineRepeatsTitle("Santoro et al 2016", "Santoro et al. · 2016")).toBe(true);
+    expect(byLineRepeatsTitle("Smith & Jones (2001)", "Smith and Jones · 2001")).toBe(true);
+    expect(byLineRepeatsTitle("Gödel (1931)", "Godel · 1931")).toBe(true);
+  });
+
+  it("is different when any word differs, and never matches an empty line", () => {
+    expect(byLineRepeatsTitle("Bartlett (1932)", "Bartlett · 1933")).toBe(false);
+    expect(byLineRepeatsTitle("Remembering (1932)", "Bartlett · 1932")).toBe(false);
+    expect(byLineRepeatsTitle("Bartlett (1932) Remembering", "Bartlett · 1932")).toBe(false);
+    /* One author is not two: hyphens, apostrophes and name commas stay (Sol). */
+    expect(byLineRepeatsTitle("Smith-Jones (2001)", "Smith, Jones · 2001")).toBe(false);
+    expect(byLineRepeatsTitle("O’Neil (2001)", "O, Neil · 2001")).toBe(false);
+    expect(byLineRepeatsTitle("Bartlett, 1932", "Bartlett · 1932")).toBe(true);
+    expect(byLineRepeatsTitle("Bartlett (1932)", "")).toBe(false);
+    expect(byLineRepeatsTitle("", "")).toBe(false);
+  });
+
+  it("is not drawn under a label title, and its card opens from the title instead", async () => {
+    const entry = "Bartlett, F. C. (1932). Remembering: A study in experimental and social psychology. CUP.";
+    const label = work({ id: "spya-b2a3r4", title: "Bartlett (1932)", authors: "Bartlett", year: "1932", entry, relevance: 0.9, influence: 0.9 });
+    const titled = work({ id: "spya-t2i3t4", title: "Remembering", authors: "Bartlett", year: "1932", relevance: 0.9, influence: 0.9 });
+    await draw(owner({ citations: artefact([label, titled]) }));
+    expect(row(label.id).querySelector(".cite-by")).toBeNull();
+    expect(row(titled.id).querySelector(".cite-by")?.textContent).toBe("Bartlett · 1932");
+    /* The entry is where an author–year work's real title lives: kept. */
+    const title = row(label.id).querySelector(".cite-title") as Element;
+    const link = title.querySelector("a") as HTMLAnchorElement;
+    expect(link.getAttribute("title")).toBeNull();
+    const card = await cardFor(link);
+    expect(card.what).toBe(entry);
+    expect(card.body).toContain("opens doi.org in a new tab");
+    expect(card.headHidden, "the visual author–year repeat is not spoken too").toBe(true);
+    /* Opening by hover or focus makes Tooltip attach its description. The
+       title/by-line must not then be spoken twice, and neither may the entry
+       come from a second hidden copy beside the link. `textContent` alone
+       cannot check that because the visually drawn duplicate stays in the DOM. */
+    link.dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    const accessibleText = (el: Element): string => {
+      const copy = el.cloneNode(true) as Element;
+      for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+      return copy.textContent ?? "";
+    };
+    const descriptions = (link.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null)
+      .map(accessibleText)
+      .join(" ");
+    expect(descriptions.match(new RegExp(entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(1);
+    expect(descriptions).not.toContain("Bartlett · 1932");
+    expect(descriptions).toContain("opens doi.org in a new tab");
+    link.dispatchEvent(new MouseEvent("mouseleave"));
+    link.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    for (const _ of [0, 1]) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 300));
+      });
+    }
+    /* A titled row's link keeps its native title and has no card. */
+    expect(row(titled.id).querySelector(".cite-title a")?.getAttribute("title")).toContain("opens doi.org");
+  });
+
+  it("folds cleanly with no card, but keeps a registry-filled line visible", async () => {
+    const plain = work({
+      id: "spya-p2l3a4",
+      title: "Bartlett (1932)",
+      authors: "Bartlett",
+      year: "1932",
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    const filled = work({
+      id: "spya-f2l3d4",
+      title: "Bartlett (1932)",
+      registry: {
+        kind: "found",
+        source: "crossref",
+        title: "Remembering",
+        authors: [{ family: "Bartlett" }],
+        year: 1932,
+      },
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    const shortened = work({
+      id: "spya-s2h3r4",
+      title: "Porter et al. (2019)",
+      authors: "Porter, Vollrath, Shao",
+      year: "2019",
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    await draw(owner({ citations: artefact([plain, filled, shortened]) }));
+    expect(row(plain.id).querySelector(".cite-by")).toBeNull();
+    expect(row(plain.id).querySelector(".cite-title a")?.getAttribute("title")).toContain("opens doi.org");
+    expect(row(filled.id).querySelector(".cite-by")?.textContent).toContain("from Crossref");
+    expect(row(shortened.id).querySelector(".cite-by")).toBeNull();
+    const shortenedCard = await cardFor(row(shortened.id).querySelector(".cite-title a") as Element);
+    expect(shortenedCard.head).toBe("Porter, Vollrath, Shao · 2019");
+    expect(shortenedCard.headHidden, "the full author list remains available to a screen reader").toBe(false);
+  });
+
+  it("on a finger, the first tap on the title shows the card and the second follows the link", async () => {
+    const entry = "Bartlett, F. C. (1932). Remembering. CUP.";
+    const label = work({ id: "spya-b2a3r5", title: "Bartlett (1932)", authors: "Bartlett", year: "1932", entry, relevance: 0.9, influence: 0.9 });
+    await draw(owner({ citations: artefact([label]) }));
+    const link = row(label.id).querySelector(".cite-title a") as HTMLAnchorElement;
+    const tap = async () => {
+      await act(async () => {
+        fire(link, "pointerdown", "touch");
+        fire(link, "pointerup", "touch");
+      });
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+      /* iOS 18.2+ reports a finger's click as `mouse`; the pointerdown is the
+         trustworthy half (touch.md, WebKit 282988). */
+      Object.defineProperty(click, "pointerType", { value: "mouse" });
+      await act(async () => {
+        link.dispatchEvent(click);
+      });
+      return click.defaultPrevented;
+    };
+    expect(await tap(), "the first tap opens the card, not the link").toBe(true);
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("Tap again to open the link.");
+    expect(await tap(), "the second tap follows the link").toBe(false);
+  });
+
+  it("does not swallow keyboard, ctrl-click, or middle-click activation", async () => {
+    const label = work({
+      id: "spya-a2c3t4",
+      title: "Bartlett (1932)",
+      authors: "Bartlett",
+      year: "1932",
+      entry: "Bartlett, F. C. (1932). Remembering. CUP.",
+      relevance: 0.9,
+      influence: 0.9,
+    });
+    await draw(owner({ citations: artefact([label]) }));
+    const link = row(label.id).querySelector(".cite-title a") as HTMLAnchorElement;
+
+    const keyboard = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 });
+    await act(async () => link.dispatchEvent(keyboard));
+    expect(keyboard.defaultPrevented, "Enter follows the link on its first activation").toBe(false);
+
+    await act(async () => fire(link, "pointerdown", "mouse"));
+    const modified = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      detail: 1,
+      ctrlKey: true,
+    });
+    await act(async () => link.dispatchEvent(modified));
+    expect(modified.defaultPrevented, "ctrl-click keeps the browser's new-tab behaviour").toBe(false);
+
+    const middle = new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1, detail: 1 });
+    await act(async () => link.dispatchEvent(middle));
+    expect(middle.defaultPrevented, "middle-click keeps the browser's new-tab behaviour").toBe(false);
   });
 });
 

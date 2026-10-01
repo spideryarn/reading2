@@ -47,6 +47,14 @@
      it stays right however someone else chooses to write --page.
      Diagnosed by spideryarn2-c1, 2026-08-25. */
   --highlight-wash: color-mix(in oklab, var(--spideryarn-orange) 20%, var(--page));
+  /* **The flash on arrival** (src/web/flash.ts, prose.css § the flash): its
+     lengths, which flash.ts's timers equal (tests/block-flash.test.ts reads
+     both), and the stronger wash a cited work's few words get — a paragraph's
+     20% is visible because of its area, and on three words it was not
+     (SPIDERYARN-READING2-7X, plan 261001m). */
+  --flash-ms: 1200ms;
+  --cite-flash-ms: 2400ms;
+  --flash-wash-strong: color-mix(in oklab, var(--spideryarn-orange) 45%, var(--page));
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 85%, white);
 
   /* **A conversation's mark, and it is a different HUE from a comment's rather

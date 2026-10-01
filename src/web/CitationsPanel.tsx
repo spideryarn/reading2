@@ -32,6 +32,8 @@
  * model's judgment. The foot line says what `influence` is: the model's memory,
  * not a citation count.
  */
+import type { ReactNode } from "react";
+import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
@@ -236,6 +238,36 @@ export function workByLine(work: Pick<ShownWork, "authors" | "year" | "registry"
 export function byLineOf(work: Pick<ShownWork, "authors" | "year" | "registry">): string {
   const line = workByLine(work);
   return [line.authors ? shortAuthors(line.authors) : undefined, line.year].filter(Boolean).join(" · ");
+}
+
+/**
+ * **Does the by-line only say the title again?** When the article gives a work
+ * only as an author–year label (`Bartlett (1932)`, gwern's `Santoro et al
+ * 2016`), that label is the row's title, and `authors · year` under it is the
+ * same words with other punctuation — SPIDERYARN-READING2-7W, plan 261001m.
+ * Folded only of the differences a label and a by-line are known to have: case
+ * and accents, brackets round the year, the middle dot, a comma before the
+ * year, `&` for `and`, and the stop in `et al.`. Hyphens, apostrophes and the
+ * commas between names stay, so `Smith-Jones (2001)` is not `Smith, Jones ·
+ * 2001` (Sol, plan review). Anything else is "different" and both lines show —
+ * the safe side, since a hidden line that said something new is a loss and a
+ * repeated one is only clutter.
+ */
+export function byLineRepeatsTitle(title: string, by: string): boolean {
+  const words = (s: string) =>
+    s
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[()·]/g, " ")
+      .replace(/&/g, " and ")
+      .replace(/\bet al\./g, "et al")
+      .replace(/,(?=\s*\d{4}[a-z]?\s*$)/, "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(" ");
+  const said = words(by);
+  return said !== "" && said === words(title);
 }
 
 /** What a by-line the registry filled in says about it: *Authors and year from Crossref …* */
@@ -960,25 +992,9 @@ function WorkRow({
       data-citation-id={work.id}
       {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
     >
-      <p className="cite-title">
-        {source?.kind === "address" ? (
-          /* Every link that leaves the app opens a new tab — docs/project/links.md
-             — and `noreferrer noopener`, as everything outbound here is. */
-          <a
-            href={source.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={`${source.how}${foundAs} — opens ${source.host} in a new tab`}
-          >
-            {work.title}
-            <ExternalLink size={11} aria-hidden="true" className="cite-out" />
-          </a>
-        ) : (
-          work.title
-        )}
-      </p>
+      <CiteTitle work={work} source={source} foundAs={foundAs} by={by} />
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
-      {by && <ByLine work={work} by={by} />}
+      {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       <p className="cite-why">
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
@@ -1078,35 +1094,166 @@ function WorkRow({
  * Masthead.tsx's idiom for a tooltip on a line of text.
  */
 function ByLine({ work, by }: { work: ShownWork; by: string }) {
-  const entry = work.entry;
-  const line = workByLine(work);
-  const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
-  const filled = line.filled;
-  if (!entry && !shortened && !filled) return <p className="cite-by">{by}</p>;
+  const card = byLineCard(work);
+  if (card === null) return <p className="cite-by">{by}</p>;
+  const filled = workByLine(work).filled;
   return (
-    <Tooltip
-      placement="bottom"
-      keepSide
-      className="tip-soon"
-      content={
-        <>
-          <div className="tip-soon-head">{[line.authors, line.year].filter(Boolean).join(" · ")}</div>
-          {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
-          {entry && <p className="cite-entry">{entry}</p>}
-          {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
-        </>
-      }
-    >
+    <Tooltip placement="bottom" keepSide className="tip-soon" content={card.content}>
       <p className="cite-by cite-by-more">
         {by}
         {/* The registry's words are never drawn as the article's: a visible
             mark, and the whole sentence in the tooltip (plan 261001a stage 5). */}
         {filled && <span className="cite-by-from"> · {registryFilledMark(filled)}</span>}
+        {card.spoken}
+      </p>
+    </Tooltip>
+  );
+}
+
+/**
+ * **What the by-line's hover card says, and its words for a screen reader** —
+ * or null when it has nothing beyond the line itself. One source for the two
+ * places it can open from: the by-line, and the title when the by-line only
+ * repeats it (`byLineFolds`), so the two cannot drift.
+ */
+function byLineCard(
+  work: ShownWork,
+  link?: ReactNode,
+  titleTrigger = false,
+): { content: ReactNode; spoken: ReactNode } | null {
+  const entry = work.entry;
+  const line = workByLine(work);
+  const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
+  const filled = line.filled;
+  if (!entry && !shortened && !filled) return null;
+  return {
+    content: (
+      <>
+        {/* A folded title already says this short line. Hide that repetition
+            from assistive technology while keeping it in the visual card; a
+            shortened by-line is the exception because the head then supplies
+            the full author list the visible title omits. */}
+        <div className="tip-soon-head" aria-hidden={titleTrigger && !shortened ? true : undefined}>
+          {[line.authors, line.year].filter(Boolean).join(" · ")}
+        </div>
+        {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
+        {entry && <p className="cite-entry">{entry}</p>}
+        {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
+        {link}
+      </>
+    ),
+    spoken: (
+      <>
         {shortened && <span className="sr-only"> — authors: {line.authors}</span>}
         {filled && <span className="sr-only"> — {registryFilledNote(filled)}</span>}
         {entry && <span className="sr-only"> — {entry}</span>}
+      </>
+    ),
+  };
+}
+
+/**
+ * **The by-line is left off when it only repeats the title** (7W) — but never
+ * when the registry filled a field, since then it carries the visible *from
+ * Crossref* mark, which must stay (plan 261001a stage 5).
+ */
+function byLineFolds(work: ShownWork, by: string): boolean {
+  return workByLine(work).filled === null && byLineRepeatsTitle(work.title, by);
+}
+
+/**
+ * **The row's title**, a link out when the article gave an address. When the
+ * by-line has folded into it, the by-line's hover card opens from here instead
+ * — for an author–year work the reference-list entry in that card is often the
+ * only place its real title is.
+ *
+ * A linked title is then the card's trigger itself, so the link is what
+ * `aria-describedby` names, and its native `title` goes (two popups on one
+ * hover) with its words, `foundAs` included, as the card's last line. A finger
+ * gets reveal-then-commit (useTapReveal.ts, docs/project/touch.md): the first
+ * tap opens the card, the second follows the link — otherwise the entry would
+ * be out of a phone's reach. Sol, plan 261001m review.
+ */
+function CiteTitle({
+  work,
+  source,
+  foundAs,
+  by,
+}: {
+  work: ShownWork;
+  source: ReturnType<typeof sourceOf> | null;
+  foundAs: string;
+  by: string;
+}) {
+  const reveal = useTapReveal(true);
+  const linkSays = source?.kind === "address" ? `${source.how}${foundAs} — opens ${source.host} in a new tab` : null;
+  const card =
+    by && byLineFolds(work, by)
+      ? byLineCard(
+          work,
+          <>
+            {linkSays && <p className="tip-soon-how">{linkSays}</p>}
+            {reveal.tap && <p className="tip-soon-tap">Tap again to open the link.</p>}
+          </>,
+          true,
+        )
+      : null;
+  if (source?.kind !== "address") {
+    if (card === null) return <p className="cite-title">{work.title}</p>;
+    return (
+      <Tooltip placement="bottom" keepSide className="tip-soon" content={card.content}>
+        <p className="cite-title">
+          {work.title}
+          {card.spoken}
+        </p>
+      </Tooltip>
+    );
+  }
+  /* Every link that leaves the app opens a new tab — docs/project/links.md
+     — and `noreferrer noopener`, as everything outbound here is. */
+  const inner = (
+    <>
+      {work.title}
+      <ExternalLink size={11} aria-hidden="true" className="cite-out" />
+    </>
+  );
+  if (card === null) {
+    return (
+      <p className="cite-title">
+        <a href={source.url} target="_blank" rel="noreferrer noopener" title={linkSays ?? undefined}>
+          {inner}
+        </a>
       </p>
-    </Tooltip>
+    );
+  }
+  return (
+    <p className="cite-title">
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={card.content}
+        open={reveal.open}
+        onOpenChange={reveal.onOpenChange}
+      >
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          onPointerDown={reveal.onPointerDown}
+          onPointerCancel={reveal.onPointerCancel}
+          onClick={(e) => {
+            if (!reveal.commit(e)) e.preventDefault();
+          }}
+        >
+          {inner}
+        </a>
+      </Tooltip>
+      {/* In the reading flow for a screen reader browsing the row, as the
+          by-line's own was. Not the link's `aria-describedby`: focus opens the
+          card, which already describes it, and naming both read it twice. */}
+      {card.spoken}
+    </p>
   );
 }
 
