@@ -3,19 +3,34 @@
 Report `spya-vp4mdn`, from Greg (admin, trusted input), 2026-10-01. Up:
 [billing.md](../project/billing.md), [admin.md](../project/admin.md).
 
-> I'd like to be able to give somebody a gift voucher (e.g. 20 free articles). … add a new page in
-> `/admin` where I can enter their email address (and if they log in or are already logged in with
-> that email address, it automatically & permanently increases their allotment of articles that
-> they can process while still on the Free pricing plan, and indicates to them during login that
-> this has been applied.) That /admin/vouchers page should show existing vouchers that have been
-> created, which have been claimed and how used, allow me to edit/invalidate them, etc.
+> I'd like to be able to give somebody a gift voucher (e.g. 20 free articles).
+>
+> Perhaps it's a voucher code that I provide them that they type in somewhere? Actually better still
+> add a new page in `/admin` where I can enter their email address (and if they log in or are
+> already logged in with that email address, it automatically & permanently increases their
+> allotment of articles that they can process while still on the Free pricing plan, and indicates to
+> them during login that this has been applied.) That /admin/vouchers page should show existing
+> vouchers that have been created, which have been claimed and how used, allow me to edit/invalidate
+> them, etc.
 >
 > If we don't already, we should indicate somewhere on the logged-in Homepage for free users how
-> many free articles used & remaining, plus default-collapsed section: … explanation … Pricing …
-> how to upgrade … if they have a voucher, show it and its status … a little icon next to the
-> "Remaining" count … If they don't have a voucher, don't mention vouchers at all
+> many free articles used & remaining, plus default-collapsed section:
+> - Brief explanation of how free articles & pricing works, with link to page with more information
+> - Linking to Pricing page
+> - Linking/explaining how to upgrade
+> - if they have a voucher, show it and its status. Perhaps indicate this prominently with a little
+>   icon next to the "Remaining" count so it's easy to see at a glance that a voucher has been
+>   applied.
+> - If they don't have a voucher, don't mention vouchers at all
+> - (plus anything else you can think of)
+> - etc
 >
-> — Greg, 2026-10-01 (full text in the note, `docs/user-feedback/`)
+> — Greg, 2026-10-01
+
+And from the brief that dispatched this run: *"a voucher may only be created by an admin,
+server-side, and must never let a reader raise their own allowance … an email with no account yet is
+held until sign-up. Any schema change is additive. Keep the v1 small; the free-articles summary box
+on the homepage is part of it."*
 
 ## What we are building (v1)
 
@@ -36,7 +51,8 @@ Report `spya-vp4mdn`, from Greg (admin, trusted input), 2026-10-01. Up:
    (waiting / claimed by whom, when / revoked) and, for a claimed one, the claimant's current free
    usage; edit the article count and note; change the address only while unclaimed; revoke and
    restore.
-5. **The homepage box**, for free readers only: *N of M free articles used · K remaining*, with a
+5. **The homepage box**, for free (and lapsed) readers only: what is used and what remains, said the
+   way `isRatio` allows (see F3 in the log — never a false *N of M*, never `limit − used`), with a
    small gift icon beside *remaining* when a voucher is in it, and a collapsed *How free articles
    work* section: the lifetime allowance, public-counts-half, link to `/pricing`, how to upgrade,
    and — only when they have one — the voucher(s) and their status. For a few days after a claim the
@@ -131,3 +147,24 @@ house pattern in database.md (app role only; no anon/authenticated access).
 
 - 2026-10-01: plan written; prior-work check found nothing (no voucher code, plan or note; the live
   session `fb-gift-vouchers` is this one).
+- 2026-10-01: GPT Sol plan review ([answer](261001m-plan-review-sol.md)): *build with these changes*.
+  All taken:
+  - **F1 (P0)** `sum()` arrives from Postgres as a **string**; `3 + "20"` is `"320"`. Cast in SQL
+    (`::int`) **and** `.mapWith(Number)`, assert a non-negative safe integer before `articles()`, and
+    one `freeEntitlement(row)` helper for every Free return in `entitlementFromRow`. A test asserts
+    the exact limit (23), not just that a fourth ingest passes.
+  - **F2 (P1)** Revoke/downsize must serialise with admission: every voucher mutation that touches a
+    claimed voucher locks the claimant's `billing_accounts` row first (house lock order), and
+    admission reads the bonus in a **separate statement after** taking the lock, so READ COMMITTED
+    sees a post-lock snapshot. A two-connection race test.
+  - **F3 (P1)** The box must obey `isRatio`: no *N of M* when not a ratio, and *remaining* is the
+    server's `privateHeadroom` ("further private articles"), never `limit − used`. Reuse
+    `describePlan` where it fits.
+  - **F4 (P1)** Gifts go on the summary for both `free` and `lapsed` (both are Free); the box shows
+    for both, with `lapsed` still carrying no `used`.
+  - **F5 (P2)** Claim stays in the GET as a documented idempotent exception; `Cache-Control:
+    private, no-store`; the notice is driven by persisted `claimedAt`, never by "this request
+    claimed"; the wire carries an opaque `noticeKey` (the voucher id is fine to send — it grants
+    nothing) for dismissal.
+  - **F6 (P2)** `claimed_by` references `billing_accounts(owner_id)`; the anchor is inserted first.
+  - **F7 (P2)** Greg's full text is now above rather than elided.
