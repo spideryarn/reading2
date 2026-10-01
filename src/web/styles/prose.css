@@ -124,7 +124,8 @@ tr.row-active td.text { background: var(--panel); }
 /* ---------------------------------------------------- § the flash on arrival --
    The prose of the block a jump just landed on washes warm and fades, so the
    reader can see which paragraph it was (src/web/flash.ts, which also takes the
-   class off after FLASH_MS; keep the two lengths the same).
+   class off after FLASH_MS; the lengths are tokens.css § --flash-ms, which
+   tests/block-flash.test.ts holds equal to the timers).
 
    **An inset `box-shadow`, not a background.** It paints over whatever
    background the cell already has — `--page`, the active row's `--panel`, the
@@ -139,7 +140,7 @@ tr.row-active td.text { background: var(--panel); }
   0%, 35% { box-shadow: inset 0 0 0 100vmax var(--highlight-wash); }
   100% { box-shadow: inset 0 0 0 100vmax transparent; }
 }
-td.text.block-flash { animation: block-flash 1.2s ease-out; }
+td.text.block-flash { animation: block-flash var(--flash-ms) ease-out; }
 td.text.block-flash-still { box-shadow: inset 0 0 0 100vmax var(--highlight-wash); }
 
 /* Literal search paints its find-at-speed rail with this same property
@@ -185,13 +186,27 @@ td.text.has-hit[data-hues].block-flash-still {
 @keyframes passage-flash {
   0%, 35% { background-color: var(--highlight-wash); }
 }
-td.text mark.hit.passage-flash { animation: passage-flash 1.2s ease-out; }
+td.text mark.hit.passage-flash { animation: passage-flash var(--flash-ms) ease-out; }
 td.text mark.hit.passage-flash-still { background-color: var(--highlight-wash); }
 /* And on a citation's words, Citations' *first cited* jump (rows.ts §
    `citePassageKey`, plan 260930i). A cite mark has no background of its own —
-   its channel is the underline — so the wash simply fades to nothing. */
-td.text mark.cite.passage-flash { animation: passage-flash 1.2s ease-out; }
-td.text mark.cite.passage-flash-still { background-color: var(--highlight-wash); }
+   its channel is the underline — so the wash simply fades to nothing.
+
+   **Longer, stronger, and it pulses** — "a little bit too subtle and quick, so
+   I often don't quite spot the flash" (Greg, SPIDERYARN-READING2-7X, plan
+   261001m). A few words are a small patch where a paragraph is a large one, so
+   only this one gets `--flash-wash-strong`, twice the length, and a dip and
+   return near the start — motion is what pulls the eye, and the scroll has only
+   just let go of it. Paragraphs and Trajectory's every-step flash keep the
+   wash above. */
+@keyframes cite-flash {
+  0%, 10% { background-color: var(--flash-wash-strong); }
+  20% { background-color: var(--highlight-wash); }
+  30%, 60% { background-color: var(--flash-wash-strong); }
+  100% { background-color: transparent; }
+}
+td.text mark.cite.passage-flash { animation: cite-flash var(--cite-flash-ms) ease-out; }
+td.text mark.cite.passage-flash-still { background-color: var(--flash-wash-strong); }
 
 /* `.block-id` was here, positioning six characters of Courier in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so

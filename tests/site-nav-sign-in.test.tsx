@@ -132,12 +132,15 @@ function deadFragments(page: HTMLElement): string[] {
 }
 
 describe("/pricing", () => {
-  it("offers a stranger a sign-in link that lands on this page's own panel", async () => {
+  it("offers a stranger the sign-in page, which comes back here", async () => {
     const page = await show(<PricingPage readerId={null} />);
     /* The positive control. Without it the signed-in assertion below is green
-       on a page that never draws the link at all, for any reader — which would
-       break the buy path and look like a pass. */
-    expect(signIn(page)?.getAttribute("href")).toBe("#sign-in");
+       on a page that never draws the link at all, for any reader.
+
+       **The sign-in page since 2026-10-01** (docs/plans/261001m): there is no
+       panel on this page any more, so the link names a page rather than a
+       fragment, and `next` brings the reader back to the plans. */
+    expect(signIn(page)?.getAttribute("href")).toBe("/login?next=%2Fpricing");
     expect(deadFragments(page)).toEqual([]);
   });
 
@@ -152,11 +155,11 @@ describe("/pricing", () => {
 });
 
 describe("/features", () => {
-  it("sends a stranger to the landing page's panel, path and all", async () => {
+  it("sends a stranger to the sign-in page", async () => {
     const page = await show(<FeaturesPage signedIn={false} />);
-    /* `/#sign-in`, not a bare `#sign-in`: the panel is on `/`, and this page has
-       none of its own. SiteBits.tsx says why it is a plain `<a>`. */
-    expect(signIn(page)?.getAttribute("href")).toBe("/#sign-in");
+    /* Bare: from a page about the product, the shelf is where a new sign-in
+       should land, which is where `/login` goes anyway. */
+    expect(signIn(page)?.getAttribute("href")).toBe("/login");
   });
 
   it("draws no sign-in link for a reader who is already signed in", async () => {
@@ -182,9 +185,9 @@ describe("/features", () => {
  * that *have* one. Watched failing on the first case here, 2026-09-04.
  */
 describe("/read/public", () => {
-  it("sends a stranger to the landing page's panel, path and all", async () => {
+  it("sends a stranger to the sign-in page", async () => {
     const page = await show(<PublicLibraryPage signedIn={false} />);
-    expect(signIn(page)?.getAttribute("href")).toBe("/#sign-in");
+    expect(signIn(page)?.getAttribute("href")).toBe("/login");
     expect(deadFragments(page)).toEqual([]);
   });
 

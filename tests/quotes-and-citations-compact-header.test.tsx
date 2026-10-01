@@ -56,6 +56,16 @@ afterEach(() => {
 const head = () => host.querySelector(".band-head");
 const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
 
+/** Open the band's (i), read its card, and close it again. */
+async function quotesAbout(): Promise<string> {
+  const button = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
+  if (!button) throw new Error("the band has no (i)");
+  await act(async () => button.click());
+  const text = tip() ?? "";
+  await act(async () => button.click());
+  return text;
+}
+
 /* ----------------------------------------------------------------- Quotes -- */
 
 function quote(i: number, importance: number, striking: number): Quote {
@@ -125,9 +135,12 @@ describe("the Quotes band's top", () => {
     expect(host.querySelector(".quotes-rank")?.textContent).not.toMatch(/^order/);
   });
 
-  it("carries the count at the end of the rank row, outside prioritised only", async () => {
+  /* The count went to the band's (i) on 2026-10-01 — Greg (spya-ucu35y):
+     *"how many X (of y)"* in the (i); plan 261001m. */
+  it("says the count in the band's (i), not on the rank row; prioritised keeps its n of m", async () => {
     await mountQuotes(quotesOwner(quotes(THREE)), "document");
-    expect(host.querySelector(".quotes-rank")?.textContent).toContain("3 quotes");
+    expect(host.querySelector(".quotes-rank")?.textContent).not.toContain("3 quotes");
+    expect(await quotesAbout()).toContain("3 quotes.");
 
     /* In prioritised the bar row already says "n of 3". */
     await mountQuotes(quotesOwner(quotes(THREE)), "prioritised");
@@ -143,10 +156,24 @@ describe("the Quotes band's top", () => {
     expect(badge?.textContent?.trim()).toBe("");
   });
 
-  it("keeps the head row when there is no rank row to carry the count", async () => {
+  it("keeps the head row when there is no rank row, with the count in the (i)", async () => {
     await mountQuotes(quotesOwner(quotes([quote(1, 0.9, 0.2)])), "document");
     expect(host.querySelector(".quotes-rank")).toBeNull();
-    expect(head()?.textContent).toContain("1 quote");
+    expect(head()).not.toBeNull();
+    expect(head()?.textContent).not.toContain("1 quote");
+    expect(await quotesAbout()).toContain("One quote.");
+  });
+
+  it("puts the discarded sentence and who chose them in the (i), not above the list", async () => {
+    const q: Quotes = {
+      ...quotes(THREE),
+      discarded: { unfound: 2, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 },
+    };
+    await mountQuotes(quotesOwner(q), "document");
+    expect(host.textContent).not.toContain("dropped");
+    const card = await quotesAbout();
+    expect(card).toContain("2 suggestions were dropped because the words are not in the article.");
+    expect(card).toMatch(/Written by /);
   });
 });
 
@@ -228,10 +255,20 @@ async function mountCitations(o: UseCitations, order: CiteOrder): Promise<void> 
   );
 }
 
-const ABOUT = '[aria-label="About this list"]';
+/* The band's (i), in its corner since 261001m; it was at the order row's end. */
+const ABOUT = ".mode-band > .band-about";
+/** What the band's (i) says, opened and closed again. */
+async function citeCard(): Promise<string> {
+  const about = host.querySelector<HTMLButtonElement>(ABOUT);
+  expect(about, "no (i) in the band's corner").not.toBeNull();
+  await act(async () => about?.click());
+  const text = tip() ?? "";
+  await act(async () => about?.click());
+  return text;
+}
 
 describe("the Citations band's top and foot", () => {
-  it("has no head row while the order row is drawn, and the count only outside prioritised", async () => {
+  it("has no head row while the order row is drawn, and the count in the (i) rather than on the band", async () => {
     await mountCitations(citeOwner(citations(WORKS)), "prioritised");
     expect(host.querySelector(".gloss-sort"), "no order row to fold into").not.toBeNull();
     expect(head()).toBeNull();
@@ -239,16 +276,17 @@ describe("the Citations band's top and foot", () => {
 
     await mountCitations(citeOwner(citations(WORKS)), "document");
     expect(head()).toBeNull();
-    expect(host.querySelector(".gloss-sort .gloss-sort-trail")?.textContent).toContain("3 works");
+    expect(host.textContent).not.toContain("3 works");
+    expect(await citeCard()).toContain("3 works cited.");
   });
 
-  it("puts the two notes behind an (i) at the end of the order row, and draws no foot for them", async () => {
+  it("puts the two notes behind the band's (i), and draws no foot for them", async () => {
     await mountCitations(citeOwner(citations(WORKS, true)), "prioritised");
     expect(host.querySelector(".cite-foot"), "an idle list still has a foot").toBeNull();
     expect(host.textContent).not.toContain(INFLUENCE_NOTE);
 
-    const about = host.querySelector<HTMLButtonElement>(`.gloss-sort-trail ${ABOUT}`);
-    expect(about, "no (i) on the order row").not.toBeNull();
+    const about = host.querySelector<HTMLButtonElement>(ABOUT);
+    expect(about, "no (i) in the band's corner").not.toBeNull();
     await act(async () => about?.click());
     expect(tip()).toContain(INFLUENCE_NOTE);
     expect(tip()).toContain(CAPPED_NOTE);
@@ -264,11 +302,11 @@ describe("the Citations band's top and foot", () => {
     await act(async () => about?.click());
   });
 
-  it("keeps the head row, count and (i), when there is no order row", async () => {
+  it("keeps an empty head row, and the count in the band's (i), when there is no order row", async () => {
     await mountCitations(citeOwner(citations([work("spya-a2b3c4", "Only", 0.8, 0.8)])), "prioritised");
     expect(host.querySelector(".gloss-sort")).toBeNull();
-    expect(head()?.textContent).toContain("1 work");
-    expect(head()?.querySelector(ABOUT)).not.toBeNull();
+    expect(head()).not.toBeNull();
+    expect(await citeCard()).toContain("1 work cited.");
   });
 });
 
@@ -280,11 +318,12 @@ describe("the Citations band's top and foot", () => {
    showed before — and once. */
 
 describe("the states the fold depends on", () => {
-  it("keeps Quotes' head row, with its count, for several unscored quotes that offer one order", async () => {
+  it("keeps Quotes' head row, its count in the (i), for several unscored quotes that offer one order", async () => {
     const legacy = [1, 2, 3].map((i) => ({ id: `spya-q000${i}`, blockId: BLOCK, text: `Line ${i}.` }));
     await mountQuotes(quotesOwner(quotes(legacy)), "document");
     expect(host.querySelector(".quotes-rank")).toBeNull();
-    expect(head()?.textContent).toContain("3 quotes");
+    expect(head()).not.toBeNull();
+    expect(await quotesAbout()).toContain("3 quotes.");
   });
 
   it("keeps an empty head row while Quotes and Citations load", async () => {
@@ -294,12 +333,12 @@ describe("the states the fold depends on", () => {
     expect(head()).not.toBeNull();
   });
 
-  it("keeps Citations' head row, count and (i), for several unscored works that offer one order", async () => {
+  it("keeps Citations' head row, and the count in the band's (i), for several unscored works that offer one order", async () => {
     const legacy = WORKS.map(({ relevance: _r, influence: _i, ...w }) => w);
     await mountCitations(citeOwner(citations(legacy)), "document");
     expect(host.querySelector(".gloss-sort")).toBeNull();
-    expect(head()?.textContent).toContain("3 works");
-    expect(head()?.querySelector(ABOUT)).not.toBeNull();
+    expect(head()).not.toBeNull();
+    expect(await citeCard()).toContain("3 works cited.");
   });
 
   it("gives a visitor the folded rows: Quotes' count with no badge, Citations' (i)", async () => {
@@ -318,7 +357,9 @@ describe("the states the fold depends on", () => {
       ),
     );
     expect(head()).toBeNull();
-    expect(host.querySelector(".quotes-rank")?.textContent).toContain("3 quotes");
+    const visitorCard = await quotesAbout();
+    expect(visitorCard).toContain("3 quotes.");
+    expect(visitorCard).not.toContain("Written by");
     expect(host.querySelector(".prof-badge")).toBeNull();
 
     await act(async () =>
@@ -354,7 +395,7 @@ describe("the states the fold depends on", () => {
       ),
     );
     expect(head()).toBeNull();
-    expect(host.querySelector(`.gloss-sort-trail ${ABOUT}`)).not.toBeNull();
+    expect(host.querySelector(ABOUT)).not.toBeNull();
     expect(host.querySelector(".cite-foot")).toBeNull();
   });
 

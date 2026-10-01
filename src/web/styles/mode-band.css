@@ -117,7 +117,7 @@
    for `text-overflow` to have anything to do.
 
    Each panel still keeps a class of its own for whatever only it needs, sitting
-   in this row as a flex child: `.gloss-count`, `.diag-about`, `.ref-how-btn`.
+   in this row as a flex child: `.ref-how-btn`. (A band's (i) is not one of them: it sits in the band's corner, below.)
    `.chat-icon` below is a different thing — Chat's action *buttons*, not this
    row's decorative icon. */
 .band-head {
@@ -1081,12 +1081,30 @@
   color: var(--ink-faint);
 }
 
-/* **A band's (i)** (`BandAbout.tsx`), at the right-hand end of its order row
-   (`.gloss-sort-trail`), holding the sentences about the whole list that were
-   its foot — FAQ's (SPIDERYARN-READING2-62) and Citations' (plan 261001l).
-   Quiet, like Trajectory's `.traj-about` and Quotes' `.quotes-why`: a footnote, not a control the reader needs. Sized to the
-   order buttons beside it rather than the house control height, so the row
-   does not grow for it. */
+/* **A band's (i)** (`BandAbout.tsx`), in the band's top-right corner, put
+   there by `ModeSurface`'s `about` for every mode alike — what the mode is,
+   its counts and caveats, and who made it and when. Greg, 2026-10-01
+   (spya-ucu35y): *"Move this into a tooltip for a (i) icon in the top-right"*;
+   plan 261001m. Quiet, like Quotes' `.quotes-why`: a footnote, not a control
+   the reader needs, and sized to a band's small icon buttons rather than the
+   house control height.
+
+   **Out of flow on purpose**: `.mode-band` is `position: fixed`, so it is
+   the containing block, and an absolute child takes no flex space — Search's
+   band fits with zero slack (ModeSurface.tsx). What keeps the icon off the
+   controls is `--band-about-room`: `has-about` sets it, and a band's top row
+   adds it to its right padding. `.band-head` does so below; a mode whose top
+   row is its own does so in its own stylesheet. */
+.mode-band.has-about { --band-about-room: 1.9rem; }
+.mode-band > .band-about {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.4rem;
+  /* Above any sticky row inside the band (Ideas' group headings are 1), which
+     come later in the DOM and would otherwise paint over it. */
+  z-index: 3;
+}
+.mode-band.has-about > .band-head { padding-right: calc(0.7rem + var(--band-about-room)); }
 .band-about {
   display: inline-flex;
   align-items: center;
@@ -1103,6 +1121,11 @@
 .band-about:hover { color: var(--ink); background: var(--surface-raised); }
 .band-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
 .band-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.band-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
+/* Wider than a control's card (20rem): the (i) carries the mode's two catalog
+   paragraphs and then its own, and Citations' card ran to 834px at 20rem — off
+   the bottom of an 800px window (browser check, plan 261001m). */
+.band-about-card { max-width: min(28rem, calc(100vw - 1.75rem)); }
 .band-about-card p { margin: 0; }
 .band-about-card p + p { margin-top: 0.4rem; }
+/* Who made it and when: last in the card, and quieter than what the mode is. */
+.band-about-card .band-about-made { color: var(--ink-faint); font-size: 0.92em; }

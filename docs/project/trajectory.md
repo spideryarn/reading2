@@ -165,8 +165,9 @@ his words quoted there):
   detail ›* stays, and the end of the deepest pass has no button, only the line saying which pass
   ended. ← walks back, and ← on stop 1 goes to its passage.
 - **The promise is a tooltip** (SPIDERYARN-READING2-52): the two sentences that were the foot —
-  where the passages come from, and at Most how many of the Quotes it walks — are the tooltip of an
-  info button at the right of the pinned head, opened by hover, focus or a tap. The foot is gone
+  where the passages come from, and at Most how many of the Quotes it walks — moved first to an info
+  button at the right of the pinned head, then on 2026-10-01 to the (i) in the band's top-right
+  corner with the rest of the mode's information. Hover, focus or a tap opens it. The foot is gone
   too, bar a job's progress or failure while one runs — see *Plan it again* above.
 - **The list follows the stop** (SPIDERYARN-READING2-54): whatever moves the current stop, the
   band's own list scrolls just enough to show its row — Summary's `useFollow`
@@ -231,13 +232,12 @@ quotes both whole):
   still hears the count on every step. With the words gone, the depth buttons share its row where
   the band is wide enough, and wrap under it where it is not.
 
-**The (i) shares the controls' row, and ‹ › name their keys** — Greg, 2026-09-30,
+**The old (i) shared the controls' row; ‹ › name their keys** — Greg, 2026-09-30,
 SPIDERYARN-READING2-73 and -74 ([plan 260930h](../plans/260930h-trajectory-info-button-on-the-controls-row-and-shortcut-keys-in-tooltips.md)).
 In the 400px band the (i) had been overflowing the head by about 13px, onto a row of its own. The
-head's gaps are tighter now, and the (i) travels in one group with the depth buttons, so a head too
-narrow for one row breaks before the depths and the (i) is never alone on a row. The arrows, and the
-door's *Next stop ›*, have hover and focus cards that say what they do and name ← or →; a finger's
-tap still steps at once. The rule behind that is
+head's gaps were tightened and the (i) travelled with the depth buttons until the band-wide corner
+(i) replaced it on 2026-10-01. The arrows, and the door's *Next stop ›*, have hover and focus cards
+that say what they do and name ← or →; a finger's tap still steps at once. The rule behind that is
 [tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card).
 - **Where am I.** Each row's position mark is also a button, whose tooltip is a small fisheye of the
   article's outline: the top-level sections, and down the path to this stop's section with its near

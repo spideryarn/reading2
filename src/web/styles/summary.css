@@ -30,6 +30,8 @@
   padding: 0.4rem 0.6rem 0.5rem;
   border-bottom: 1px solid var(--rule);
 }
+/* The band's top row, so it clears the (i) in the corner: mode-band.css § `.mode-band > .band-about`. */
+.mode-band.has-about > .summ-controls { padding-right: calc(0.6rem + var(--band-about-room)); }
 .summ-row {
   /* A `<fieldset>`, so the reset comes first — the UA gives it a groove border,
      side padding and a margin nobody asked for. `display: flex` is doing a

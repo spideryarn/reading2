@@ -39,6 +39,14 @@
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
+/* Clear of the band's (i) in its top-right corner (mode-band.css §
+   `.mode-band > .band-about`, plan 261001m). Every band that draws this row
+   draws it at or near its top; one lower down only loses a little width. */
+.mode-band.has-about .gloss-sort { padding-right: calc(0.7rem + var(--band-about-room)); }
+/* The owner's Look up box is the Glossary band's top row whenever the sort row
+   is drawn (no head then), so it clears the (i) the same way — mode-band.css §
+   `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
+.mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
 /* The buttons, as the named group; the trailing slot sits beside it rather
    than in it (GlossaryPanel.tsx § SortBar). */
 .gloss-sort-group {
@@ -229,6 +237,13 @@
 .gloss-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
 .gloss-empty p { margin: 0 0 0.5rem; }
 .gloss-hint { font-size: 0.91rem; line-height: 1.45; }
+
+/* Tweets has no head until a thread exists; its empty and loading states are
+   consequently the first row under the band's corner (i). */
+.mode-band.tweets.has-about > .gloss-quiet,
+.mode-band.tweets.has-about > .gloss-empty {
+  padding-right: calc(0.9rem + var(--band-about-room));
+}
 
 .gloss-stale {
   margin: 0.5rem 0.7rem 0;
@@ -452,4 +467,3 @@
   color: var(--ink-faint);
 }
 .gloss-link a:hover { color: var(--highlight-ink); }
-

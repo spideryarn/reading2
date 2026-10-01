@@ -355,6 +355,8 @@ export function OutlinePanel({
   return (
     <ModeSurface
       feature="outln"
+      /* Structure's narrow face, so Structure's (i) (ModeSurface.tsx § `mode`). */
+      mode="structure"
       /* The mode's name, which is what a screen reader should hear: since
          2026-09-10 this is Structure's narrow face, and "Outline" names a mode
          that is not on the Dock any more. */

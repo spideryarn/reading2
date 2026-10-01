@@ -191,6 +191,22 @@ polar interpolation drags a mix round to 11.7° and the result is quietly pink i
   because "43 days ago" is worse than the date (that file's header), so an old date shows only the
   timestamp. A coarser `2mo ago` would make the rule hold everywhere; nobody has built it yet.
 
+## The band's (i)
+
+Every mode band has an (i) in its top-right corner (`BandAbout`, put there by `ModeSurface`;
+[mode.md](mode.md) § Every band has an (i) says what goes in its card). Two things about it are
+CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.mode-band > .band-about`:
+
+- **It is out of flow.** `position: absolute` against the band, which is `position: fixed` and
+  so already its containing block; it takes no flex space, which matters because Search's band fits
+  with zero slack. Its `z-index: 3` is local to the band, above a band's own sticky rows.
+- **The top row leaves room for it.** A band with an (i) has `has-about`, which sets
+  `--band-about-room`; the band's top row adds that to its right padding. `.band-head` and
+  `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet, and a
+  measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
+
+Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
+
 ## The stacking order, which is real even though it is not a scale
 
 **Do not read a number off this list and reuse it.** The values are not a scale and were not

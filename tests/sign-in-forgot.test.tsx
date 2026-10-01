@@ -50,9 +50,8 @@ async function openForgot(): Promise<void> {
   document.body.appendChild(host);
   await act(async () => {
     root = createRoot(host);
-    root.render(createElement(SignInControls));
+    root.render(createElement(SignInControls, { returnTo: "/" }));
   });
-  await act(async () => button(/use an email address/i).click());
   await act(async () => button(/forgot/i).click());
 }
 
