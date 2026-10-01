@@ -1681,11 +1681,16 @@ export type { VisibilityState } from "../types.js";
  */
 export interface HighPowerStore {
   /**
-   * Switch it on or off for one of the caller's own articles, and say what it
-   * now is: the ISO moment it was switched on, or `null`. Throws a 404-shaped
-   * error for a slug the caller does not own.
+   * Switch it off for one of the caller's own articles. This is deliberately
+   * off-only: a reader's switch-on must go through the charged transaction.
    */
-  set(slug: string, on: boolean): Promise<{ highPowerSince: string | null }>;
+  switchOff(slug: string): Promise<{ highPowerSince: string | null }>;
+  /**
+   * The administrator's exempt switch-on. The implementation checks the
+   * ambient owner too, so this cannot become an uncharged reader capability by
+   * being called from a new route.
+   */
+  switchOnForAdmin(slug: string): Promise<{ highPowerSince: string }>;
   /**
    * The column for `slug` owned by `ownerId`, or `{ found: false }` when there
    * is no such row — which, for the job runner, is either a fresh ingest (the

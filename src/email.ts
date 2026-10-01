@@ -52,10 +52,17 @@ export interface Email {
   readonly text: string;
 }
 
+/**
+ * Why a send was skipped. A closed set, because a caller decides on it:
+ * `noteArrival` retries a production process with no key and does not retry a
+ * laptop, so a new reason must be a type error there rather than a silent guess.
+ */
+export type SkipReason = "not production" | "no RESEND_API_KEY";
+
 export type SendResult =
   | { readonly kind: "sent"; readonly id: string | null }
   /** Deliberately not sent: not production, or no key. Not an error. */
-  | { readonly kind: "skipped"; readonly reason: string }
+  | { readonly kind: "skipped"; readonly reason: SkipReason }
   | { readonly kind: "failed"; readonly reason: string };
 
 /**
@@ -93,7 +100,7 @@ function realEnv(): EmailEnv {
   };
 }
 
-function whyNotSend(env: EmailEnv): string | null {
+function whyNotSend(env: EmailEnv): SkipReason | null {
   const optedIn = env.SPIDERYARN_EMAIL_SEND === "1" && env.NODE_ENV !== "test";
   if (!optedIn && env.VERCEL_ENV !== "production") return "not production";
   if (!env.RESEND_API_KEY) return "no RESEND_API_KEY";
@@ -148,6 +155,22 @@ export async function sendEmail(email: Email, label: string, deps: EmailDeps = {
     logger.error({ label, ...errorFields(err) }, "sending email failed");
     return { kind: "failed", reason: err instanceof Error ? err.name : "unknown error" };
   }
+}
+
+/**
+ * **Somebody else's text, made safe to put on one line of a plain-text mail.**
+ *
+ * There is no markup for it to become — the mail is `text` only — but a line
+ * break inside it could still draw a line of its own underneath, a fake link
+ * included. So every control character (Unicode category `Cc`, which has CR
+ * and LF in it) and the Unicode line and paragraph separators are replaced by
+ * a space, and the result is capped at `max` code points, the ellipsis
+ * included. 254 is a display bound sized for an address, not a protocol
+ * limit. Keep it out of the subject either way.
+ */
+export function oneLine(text: string, max = 254): string {
+  const flat = [...text.replace(/[\p{Cc}\u2028\u2029]/gu, " ").trim()];
+  return flat.length > max ? `${flat.slice(0, max - 1).join("")}…` : flat.join("");
 }
 
 /** Where admin notifications go. */

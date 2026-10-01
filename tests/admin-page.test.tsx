@@ -109,6 +109,8 @@ const ALICE: AdminUser = {
   planStatus: "active",
   ingests: 4,
   ingestsShared: 0,
+  highPower: 0,
+  highPowerShared: 0,
   ingestLimit: 20,
   ingestWindow: "period",
 };
@@ -137,6 +139,8 @@ const BOB: AdminUser = {
   plan: "free",
   ingests: 0,
   ingestsShared: 0,
+  highPower: 0,
+  highPowerShared: 0,
   ingestLimit: 3,
   ingestWindow: "lifetime",
 };
@@ -269,6 +273,25 @@ describe("the users page", () => {
     const row = (rows(el)[0] ?? []).join("|");
     expect(row).toContain("12 / 6 half");
     expect(row).not.toContain("6 / 3");
+  });
+
+  it("includes public pricing and High-powered AI in a stale account's lifetime usage", async () => {
+    const stale: AdminUser = {
+      ...ALICE,
+      ingests: 3,
+      ingestsShared: 1,
+      highPower: 2,
+      highPowerShared: 1,
+      ingestLimit: 20,
+      ingestWindow: "stale",
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [stale] })));
+    const el = await show();
+
+    const row = (rows(el)[0] ?? []).join("|");
+    expect(row).toContain("8 / 40 half ?");
+    const usage = el.querySelector<HTMLElement>('span[title*="lifetime of the account"]');
+    expect(usage?.title).toContain("2 switched to High-powered AI");
   });
 
   it("draws exactly as many rows as it says there are accounts", async () => {

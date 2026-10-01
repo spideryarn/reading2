@@ -1,21 +1,20 @@
 // @vitest-environment jsdom
 /**
  * **The *High-powered AI* switch on the Metadata page** — HighPowerSwitch.tsx,
- * stage 3 of docs/plans/260930f-high-powered-ai-per-article.md.
+ * stage 3 of docs/plans/260930f-high-powered-ai-per-article.md, opened to
+ * readers by docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
  *
  * Mounted through `Metadata`, like tests/metadata-rerun-section.test.tsx and
  * for its reason: what goes wrong with a control like this is the wiring —
- * which slug reaches the URL, whose session decides it is drawn, and whether
+ * which slug reaches the URL, whose session decides what it says, and whether
  * the page's own read follows the write.
  *
- * Four things, and the last is the one that matters most:
- *
- *  - **Absent for a reader.** The server refuses them anyway (the `/api/admin`
- *    namespace gate); drawing a switch that can only fail would be a lie.
- *  - **Present for the administrator**, reading the column's state.
- *  - **A press sends `PUT /api/admin/article/:slug/high-power` with
- *    `{ on: true }`** and shows the server's answer, `On since …`.
- *  - **A failed write leaves the box as it was** and says so. The checkbox is
+ *  - **Drawn for a reader**, stating the price in articles and never in money,
+ *    and **for the administrator**, saying there is no charge.
+ *  - **A press sends `PUT /api/article/:slug/high-power` with `{ on: true }`**
+ *    and shows the server's answer, `On since …`.
+ *  - **A failed write leaves the box as it was** and says so — a 402 when the
+ *    allowance has no room is the ordinary case of that. The checkbox is
  *    controlled by the last answer the server gave, not by the click, so a
  *    refusal cannot leave it reading "on" over an article that is not.
  */
@@ -242,11 +241,28 @@ async function click(el: HTMLElement | null): Promise<void> {
 }
 
 describe("the High-powered AI switch", () => {
-  it("is not drawn for a reader who is not the administrator", async () => {
+  it("is drawn for a reader, pricing it in articles and never in money", async () => {
     session.user = { id: "5e1d6c0a-7b2f-4e39-9a4d-3c8f2b1e6a70" };
     await open();
-    expect(host.querySelector("[data-high-power]")).toBeNull();
-    expect(host.textContent).not.toContain("High-powered AI");
+    expect(box()).toBeTruthy();
+    expect(words()).toContain("counts as one more article against your allowance");
+    expect(words()).toContain("half of one while the article is shared publicly");
+    expect(words()).toContain("doesn't give it back");
+    expect(words()).not.toContain("Administrator: no charge");
+    /* Greg, 2026-09-30: no regular user is told what AI processing costs. The
+       v1 line compared token prices, which is that. */
+    expect(words()).not.toMatch(/token|price|\$|£|€|cost/i);
+  });
+
+  it("sends a reader's press to the owner route, and shows a refusal beside the unticked box", async () => {
+    session.user = { id: "5e1d6c0a-7b2f-4e39-9a4d-3c8f2b1e6a70" };
+    putAnswer = () => json({ error: "Switching on High-powered AI counts as one more article against your allowance — half of one if the article is shared publicly — and there is not that much left. [pay-high-power]" }, 402);
+    await open();
+    await click(box());
+    expect(puts).toEqual([{ url: `PUT /api/article/${SLUG}/high-power`, body: { on: true } }]);
+    expect(box()?.checked).toBe(false);
+    expect(words()).toContain("Not saved");
+    expect(words()).toContain("there is not that much left");
   });
 
   it("is drawn for the administrator, off, once the metadata has answered", async () => {
@@ -257,6 +273,7 @@ describe("the High-powered AI switch", () => {
     expect(box()?.disabled).toBe(false);
     expect(words()).toContain("High-powered AI");
     expect(words()).toContain("Opus");
+    expect(words()).toContain("Administrator: no charge.");
     expect(words()).toContain("Off.");
     expect(words()).not.toContain("On since");
     expect(box()?.labels?.[0]?.textContent).toContain("High-powered AI");
@@ -271,13 +288,13 @@ describe("the High-powered AI switch", () => {
     expect(words()).toContain("On since");
   });
 
-  it("sends PUT {on:true} to this article's admin route, shows the answer, and re-reads", async () => {
+  it("sends PUT {on:true} to this article's route, shows the answer, and re-reads", async () => {
     session.user = { id: ADMIN_USER_ID_LOCAL };
     await open();
     const readsBefore = metadataReads;
     await click(box());
     expect(puts).toEqual([
-      { url: `PUT /api/admin/article/${SLUG}/high-power`, body: { on: true } },
+      { url: `PUT /api/article/${SLUG}/high-power`, body: { on: true } },
     ]);
     expect(box()?.checked).toBe(true);
     expect(words()).toContain("On since");

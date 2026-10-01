@@ -290,7 +290,7 @@ import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
 import { ResetArticle } from "./ResetArticle.js";
-import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
+import { SKETCH_WAIT } from "./sketch-cost.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 
@@ -1372,10 +1372,10 @@ function RerunSection({
 }) {
   return (
     <Section label="Re-run AI processing" collapsible keepMounted>
-      {/* **High-powered AI**, administrator only — it draws nothing for anybody
-          else. First in the section, above the rows it changes the model for:
-          switching it re-runs nothing, and the rows below are how you ask.
-          docs/plans/260930f-high-powered-ai-per-article.md, decision 8. */}
+      {/* **High-powered AI**, for the owner of the article — switching it on counts
+          as one more article against their allowance (plan 260930k). First in
+          the section, above the rows it changes the model for: switching it
+          re-runs nothing, and the rows below are how you ask. */}
       <HighPowerSwitch slug={slug} since={provenance?.highPowerSince} onChanged={onFinished} />
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
@@ -1469,16 +1469,22 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * (GPT Sol's two code reviews). The old confirm, and the *Find more terms*
  * label, promised the append every time.
  *
- * The Sketch's figures are `SKETCH_PRICE` and `SKETCH_WAIT` from
- * ./sketch-cost.ts, so this page and the Sketch panel cannot name two different
- * prices. Debate is **up to** two separately metered calls — pass B runs only if
- * pass A succeeded (src/debate.ts) — and its price is a **range and not a
- * number**: a completed live run cost $0.3527 against a ceiling measured with
- * no article in the prompt, and per-pass cost varied 2.4× with how much the
- * model chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
- * § Stage 3½ § 1. It reaches a reader here and nowhere else, so it is inline
- * rather than a shared constant; the ~$0.27 in comments across `src/` is the
- * superseded ceiling. Trajectory refuses before any model call when there are
+ * **No dollar figure, since 2026-09-30.** The Sketch's and Debate's notes
+ * named a price until Greg ruled that what AI processing costs us is for the
+ * administrator alone — *"i don't want any regular users to know how much AI
+ * processing of their articles costs"* — and the administrator reads the real
+ * figure in *What it cost* further down this page.
+ * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md § 3;
+ * tests/no-ai-cost-for-readers.test.ts fails on a figure here.
+ *
+ * The Sketch's wait is `SKETCH_WAIT` from ./sketch-cost.ts, so this page and
+ * the Sketch panel cannot name two different waits. Debate is **up to** two
+ * separately metered calls — pass B runs only if pass A succeeded
+ * (src/debate.ts) — each with a web search. For developers: a completed live
+ * run cost $0.3527, and per-pass cost varied 2.4× with how much the model
+ * chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
+ * § Stage 3½ § 1; the ~$0.27 in comments across `src/` is the superseded
+ * ceiling. Trajectory refuses before any model call when there are
  * no Quotes (src/pipeline.ts), which is worth knowing before pressing rather
  * than learning from the failure.
  *
@@ -1493,8 +1499,8 @@ const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
        differs — GPT Sol's second review listed the branches, and a note naming
        all four was too long to be read as a note. */
     "Adds more terms to an up-to-date list; otherwise writes a new one",
-  sketch: `${SKETCH_PRICE}, ${SKETCH_WAIT}`,
-  debate: "Up to two calls: $0.20–0.40 on a short article, more on a long one",
+  sketch: `One model call, ${SKETCH_WAIT}`,
+  debate: "Up to two model calls, each of which searches the web",
   trajectory: "Needs Quotes first; without them it stops before any model call",
 };
 

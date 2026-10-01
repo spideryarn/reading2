@@ -999,7 +999,7 @@ export const confParam = createParser<number>({
  * button *starts*, because this parser is what decides which picture that press
  * lands on (src/web/activation.ts § MODE_TARGET). An owner who arrives without
  * pressing — a pasted link, a Back step — still meets the invitation carrying
- * the price and the wait (SketchView.tsx § the empty state), and spends nothing
+ * what it does and the wait (SketchView.tsx § the empty state), and spends nothing
  * until they press. The old default, `force`, was chosen for the
  * opposite property — it was the only one that drew something real *before* its
  * model call landed — which was the right rule while it was the picture

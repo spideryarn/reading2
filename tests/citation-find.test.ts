@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
-import { CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
+import { HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
 import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 
 import { ProviderRefused, type AiRequestBody, type JsonCall } from "../src/ai-call.js";
@@ -622,10 +622,10 @@ describe("High-powered AI — the /find route and findWorkPage follow the articl
     expect(sent[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
   });
 
-  it("sends Sonnet when the owner is not an administrator, column or no column", async () => {
+  it("sends Opus for a reader's article too — the column is the charge paid (plan 260930k)", async () => {
     const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }), [work()], undefined, HIGH);
     await runAsOwner(DEV_OWNER_ID, () => findCitation("a-piece", WORK_ID));
-    expect(sent[0]?.model).toBe(CAPABLE_MODEL_OPENROUTER);
+    expect(sent[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
   });
 
   it("findWorkPage resolves the model from `power` when no model is given", async () => {

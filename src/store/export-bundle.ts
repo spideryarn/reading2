@@ -677,8 +677,8 @@ Each block also carries its \`ordinal\`, so you can sort the order back if you l
 - **Earlier versions of the article.** Only the current extraction is exported. Spideryarn does
   keep earlier ones, so this is a decision about what belongs in an export rather than something
   it could not do.
-- **What it cost.** Spideryarn's record of model spend isn't reliably attributable to a single
-  article, so a per-article figure would be wrong rather than merely absent.
+- **What the AI processing cost.** That is Spideryarn's own record of what it spent serving the
+  article, not something of yours, so it is kept out of exports.
 - **Pipeline machinery** — caches, queue state, and which step is up to date. None of it is
   anything you wrote, and none of it means anything outside Spideryarn.
 - **Anything about you that isn't about this article** — your reader profile and settings are not

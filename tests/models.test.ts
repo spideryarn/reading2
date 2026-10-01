@@ -26,6 +26,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { EMBEDDING_MODEL } from "../src/embeddings.js";
+import { IMAGE_MODEL } from "../src/illustrated.js";
 import {
   CAPABLE_MODEL,
   CAPABLE_MODEL_OPENROUTER,
@@ -152,6 +153,11 @@ describe("what a person is shown", () => {
       ...ALL_TASKS.map((task) => modelFor(task, "standard")),
       ...ALL_TASKS.map((task) => modelFor(task, "high")),
       ...NON_TASK_MODELS.map((m) => m.id),
+      /* The Illustrated painter, which is on no tier and lives in its own module
+         (importing it into models.ts would be a cycle). It was missing from this
+         list and from DISPLAY_NAME, so /privacy never had to name it — GPT Sol,
+         plan 260930k review finding 5. */
+      IMAGE_MODEL,
     ];
     for (const id of sendable) expect(DISPLAY_NAME[id], `no display name for ${id}`).toBeTruthy();
   });

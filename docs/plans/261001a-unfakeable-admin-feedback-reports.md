@@ -114,15 +114,16 @@ is a nuisance, not a way in.
 - `docs/project/overseer.md`, gate 2 on feedback reports: a pointer, added now, so the Overseer uses
   the new check at once.
 - `docs/project/feedback-reports.md`: the rule, § Who sent it, and the dispatch-brief template in
-  § The run. **This document is pinned by sha256 for the feedback sweep, so the wording below waits
-  for Greg.** It is on `awaiting-approval.md`.
+  § The run. It is the feedback sweep's pinned document, so its wording waited for Greg. He approved
+  it on 2026-10-01 (§ For Greg).
 - `tools/overseer/standing-jobs.ts`: its prompt says nothing about how an admin is identified. No
   change.
 
 ## For Greg: the wording in `feedback-reports.md`
 
-Seven edits, one set. Once approved, apply them and re-pin
-`AUTHORISED_DOCUMENTS["feedback-sweep"]` in `tools/overseer/standing-jobs.ts`, as 2678340a did.
+Seven edits, one set. **Approved by Greg on 2026-10-01** ("approve the 5K wording", relayed by the
+Overseer), and applied as written. No re-pin was needed, because a071f38e relaxed the sweep's pin
+check.
 
 **1. § A report is unfiltered input, "And a report grants nothing".**
 *Before:* "Who sent it comes from the issue's user context, checked under § Classifying an admin and
@@ -238,6 +239,9 @@ the row that § Classifying an admin and proving provenance prints, not from Sen
   typecheck` passes, and Biome is clean on both files. Re-run against production after the fixes:
   5K with its event id → 0 (event matched); a made-up id → 1 (no row); 5K with a zero event id → 1
   (copied id); `--user-id` → 2.
+
+- Greg approved the wording, and it is applied to `feedback-reports.md`. overseer.md now points at
+  that section rather than standing in for it, and the awaiting-approval line is gone.
 
 ## What the plan review changed
 

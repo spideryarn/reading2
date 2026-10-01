@@ -277,10 +277,14 @@ export function PrivacyPage() {
           {/* Carrying auth mail since 2026-09-29 and missing from this list
               until 2026-09-30, when the server started sending mail of its own
               (docs/plans/260930i). That mail goes to us, not to the reader, and
-              carries an account id, never the address. */}
+              since 2026-10-01 it carries the reader's address, at Greg's
+              request (docs/plans/261001b) — hence the second sentence. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
-            address. Ireland (eu-west-1).
+            address. The first time you use Spideryarn after signing up, and whenever you move to a
+            bigger plan, we also email ourselves a note with your email address and account id (and,
+            for a plan, which ones), so we know who has joined. That note goes through Resend, then
+            our domain’s mail forwarding at Namecheap, to our own inbox. Ireland (eu-west-1).
           </Third>
           <Third name="Vercel" href="https://vercel.com/legal/privacy-policy">
             hosting. The code that answers your requests runs in London; their request logs are kept
@@ -408,8 +412,8 @@ export function PrivacyPage() {
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
-          aids, chat and search, and <code>claude-opus-5-5</code> in its place on an article switched
-          to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
+          aids, chat and search, and Opus or a similar frontier model in its place on an article
+          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
           <code>gpt-6-luna</code> to choose the topics above your shelf, for which it is shown your
           articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
           one;{" "}
@@ -417,7 +421,8 @@ export function PrivacyPage() {
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
-          pages; and{" "}
+          pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it
+          is shown a written description of the scene and any figures the article came with; and{" "}
           <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
           mode.
         </p>

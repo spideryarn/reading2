@@ -96,7 +96,6 @@ import {
   tookTooLong,
 } from "./messages.js";
 import { articlePower, type ModelPower, modelFor } from "./models.js";
-import { currentOwnerId } from "./owner.js";
 import {
   collectSearchEvidence,
   type SearchUsagePath,
@@ -758,7 +757,7 @@ export function makeFindCitation(
         article,
         /* The reader seam is owner-scoped, so the ambient owner is this
            article's (plan 260930f). */
-        articlePower(article.highPowerSince, currentOwnerId()),
+        articlePower(article.highPowerSince),
       );
     } catch (err) {
       /* `callOnce` brands undici's two otherwise-indistinguishable TypeErrors

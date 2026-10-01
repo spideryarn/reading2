@@ -364,12 +364,6 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/feedback/w1/w2"],
   },
-  /* High-powered AI's switch, plan 260930f — in the admin namespace for its gate. */
-  {
-    match: { kind: "regex", source: "^\\/api\\/admin\\/article\\/([\\w.%-]+)\\/high-power$", flags: "" },
-    methods: ["PUT"],
-    witnesses: ["/api/admin/article/w1/high-power"],
-  },
   {
     match: {
       kind: "regex",
@@ -461,6 +455,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/visibility$", flags: "" },
     methods: ["PUT"],
     witnesses: ["/api/article/w1/visibility"],
+  },
+  /* High-powered AI's switch, plan 260930k — out of the admin namespace once
+     readers could switch it on (and be charged for it); beside visibility. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/high-power$", flags: "" },
+    methods: ["PUT"],
+    witnesses: ["/api/article/w1/high-power"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/reset$", flags: "" },
@@ -1969,8 +1970,6 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/users",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
-        // High-powered AI's switch, 260930f — added between the two feedback reads
-        "PUT regex /^\\/api\\/admin\\/article\\/([\\w.%-]+)\\/high-power$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
@@ -1992,6 +1991,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/link-preview",
         "GET literal /api/link-summary",
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+        // High-powered AI's switch, 260930k — moved here from the admin namespace, beside visibility
+        "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/high-power$/",
         // reset and regenerate, 260928a — beside visibility, the other article sub-resource
         "POST regex /^\\/api\\/article\\/([\\w.%-]+)\\/reset$/",
         "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
