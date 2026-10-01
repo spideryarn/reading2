@@ -1,5 +1,5 @@
 ---
-reports: spya-gnq9fb
+reports: spya-gnq9fb, spya-nhddz6
 ending: shipped
 ---
 # The send button has no icon, and should be the prominent control in its row
@@ -38,3 +38,14 @@ user agent and touch, at 834×1194 and 1194×834, the icon is drawn in chat's co
 (orange outline, grey arrow) and with text (orange fill, dark arrow): 36px button, 18px svg,
 opacity 1. The comment composer is the same component and was not shot separately. Not a real iPad,
 so if his still shows no icon he reopens it.
+
+## An earlier report of the same thing
+
+`spya-nhddz6` (2026-09-05 07:50Z, from Greg, read from its row in production on 2026-10-01). It
+never got a note, so the Earlier tab showed it as not shipped. It is the same request, made a week
+before this one, and the work above answers it:
+
+> In the Comment box, when I comment on a block, uh next to the input text message box that says
+> something like ask about this article, there's a a main button to the right that sends it. That
+> button seems to be missing its icon and it should be bigger as well perhaps or more prominent
+> somehow.
