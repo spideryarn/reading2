@@ -1,0 +1,147 @@
+{
+ "arm": "one-call",
+ "slug": "entropy-24-00930-spya-pywwkq",
+ "run": 3,
+ "at": "2026-10-01T10:29:43.335Z",
+ "wallMs": 133312,
+ "costUsd": 0.1764558,
+ "calls": [
+  {
+   "levels": [
+    "fuller",
+    "simple",
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 124032,
+   "doneMs": 133286,
+   "input": 5374,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 16201
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 99,
+   "paragraphs": 3,
+   "readyMs": 133286,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 274,
+   "paragraphs": 5,
+   "readyMs": 128151,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 182,
+   "paragraphs": 4,
+   "readyMs": 131336,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 14621,
+ "text": {
+  "brief": [
+   {
+    "text": "This review is about how brain cells work together to process information. Scientists want to know how brains turn incoming signals into behavior, but this is poorly understood.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-rxcze4"
+    ]
+   },
+   {
+    "text": "The authors describe a method called partial information decomposition, or PID. It shows whether neurons share the same information, add their own, or create information only when combined. This last kind, called synergy, is seen as true brain computation.",
+    "ids": [
+     "spya-wer4cd",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "In mouse brain recordings, this synergy was much higher in densely connected 'rich club' neurons. In monkeys doing tasks, synergy was high overall, but shifted toward redundancy during movement, perhaps for reliability.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-t8fayf"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This review explains a method called partial information decomposition, or PID. It measures how groups of neurons share information when they all connect to one target neuron.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "The authors say this matters because scientists still don't understand how brains turn sensory signals into behavior. New recording tools can capture hundreds of neurons at once, but until recently there weren't good ways to make sense of all that data.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-s9kmxa"
+    ]
+   },
+   {
+    "text": "PID splits information into redundant, unique, and synergistic kinds. Redundant information is what any one neuron could give alone, and unique information comes from just one neuron. Synergistic information only appears when neurons are considered together. It is treated as a sign of real computation, since it shows a neuron reacting to patterns, not just adding up its inputs.",
+    "ids": [
+     "spya-wer4cd",
+     "spya-h5jzvm",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "In mouse brain-cell cultures, this kind of joint information was much higher in densely connected 'rich club' neurons. It also rose when the input neurons were strongly connected to each other. In monkeys doing a task, synergy was high overall, but more repeated, redundant information appeared during movement, perhaps to make motor commands more reliable.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-t8fayf"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This review explains partial information decomposition (PID), a method for measuring how groups of neurons combine information, not just pass it along. It shows how PID can reveal the dynamics of neural information processing: how brain circuits transform incoming signals into decisions.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "Brains take in signals from the world and turn them into adaptive behavior, but how that transformation happens is poorly understood. Progress has been limited by a lack of data and by a lack of fine-grained analytical tools. New recording technology and PID together address both gaps.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-s9kmxa"
+    ]
+   },
+   {
+    "text": "The central idea, called partial information decomposition (PID), splits the information a target neuron carries about its inputs into redundant, unique, and synergistic information. Redundant information is available from any single source alone; unique information comes from only one particular source; synergistic information appears only when the sources are combined. Synergy is treated as the signature of real computation, since it shows the target neuron responds to patterns across inputs, not just their sum.",
+    "ids": [
+     "spya-wer4cd",
+     "spya-h5jzvm",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "In recordings from hundreds of neurons in mouse brain-slice cultures, synergy was 2.7 times higher in densely connected \"rich-club\" neurons than elsewhere. It also rose with more recurrent connections between the source neurons. Synergy increased with how similar two input neurons' firing patterns were, but only up to a point—about 7% of the maximum possible shared information—after which it fell.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-ybmve2"
+    ]
+   },
+   {
+    "text": "In behaving monkeys, synergy again clustered in highly connected neurons. During movement execution, the balance shifted toward redundancy—duplicated information thought to make motor commands more reliable. The review concludes that neurons respond to patterns of input, not just totals, and that linking synergy to biology and behavior is a promising direction.",
+    "ids": [
+     "spya-t8fayf",
+     "spya-sp50v3"
+    ]
+   }
+  ]
+ }
+}

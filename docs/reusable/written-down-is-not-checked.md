@@ -67,6 +67,27 @@ when**, so the next reader re-runs it rather than believes it. The evidence, and
 came out of it, are in
 [260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md).
 
+## A sentence is not a fix
+
+A close cousin, and the commonest of all in a busy codebase. The prose is *true*, but it has been
+written in place of the change. Examples are a comment saying "this can overflow", a deferral
+saying "follow-up: handle the empty case", or a review finding recorded as "known, accepted". In
+each case the default that causes the harm is left exactly as it was.
+
+It feels like progress because the defect is now known. It is not a mitigation. **A defect that is
+written down but has the same default is still a defect. It just has a paper trail**, and the paper
+trail makes it look handled to the next reader, who stops looking.
+
+When you notice yourself writing one, choose one of these instead:
+
+- **Change the default.** Make the harmful path refuse, fail loudly, or do the safe thing. Then the
+  sentence describes a fix rather than replacing one.
+- **Make it a check.** A failing test, an assertion, or a guard that turns red when the case
+  arrives.
+- **If it really must wait**, give it a date, an owner and a place someone will look, such as the
+  plan's open list or the tracker, not only a comment beside the code. Say plainly that the defect
+  is live.
+
 ## The one about your own work, which is the hardest to see
 
 A baseline recorded *after* your own agents have been working is not a baseline.

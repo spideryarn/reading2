@@ -5532,8 +5532,7 @@ ${bold("WHAT push-env WILL AND WILL NOT SEND")}
   tool's location, never the cwd — so a proposal for hellozenno shows up in
   ${dim("npm run cost")} here, under the ${dim("env-proposal")} job.
   ${bold("TWO GUARDS YOU CANNOT TICK PAST")}, on either path. ${dim("HETZNER_CLOUD_API_TOKEN")} (can
-  delete this box) and ${dim("SUPABASE_ACCESS_TOKEN")} (can delete the production Supabase
-  project) are shown greyed out and can never be selected. And any value that is a
+  delete this box) is shown greyed out and can never be selected. And any value that is a
   database URL not pointing at 127.0.0.1 is refused ${bold("whatever it is called")} — by
   its value, so a production database under a name nothing here has heard of is
   caught too. Both are re-applied after you choose, not merely drawn that way.
@@ -5703,7 +5702,7 @@ ${bold("EXAMPLES")}
       ${dim("  + OPENROUTER_API_KEY  added")}
       ${dim("  ~ DATABASE_URL  changed")}
       ${dim("  = 10 unchanged")}
-      ${dim("  skipped 2 keys not on the allowlist: HETZNER_CLOUD_API_TOKEN, SUPABASE_ACCESS_TOKEN")}
+      ${dim("  skipped 1 key not on the allowlist: HETZNER_CLOUD_API_TOKEN")}
       ${dim("✓ 12 keys, 0600 greg, read back and verified")}
 
 ${bold("ENVIRONMENT")}
