@@ -1961,7 +1961,6 @@ export function Reader({
             blocks={blockText}
             onJump={bandJump}
             kind="chat"
-            onMode={setMode}
             handoff={chatHandoff}
             onHandoffTaken={handoffTaken}
           />
@@ -1981,7 +1980,6 @@ export function Reader({
             readSoFar={readSoFar}
             sections={quizSections}
             onJump={bandJump}
-            onMode={setMode}
             onQuizKeys={onQuizKeys}
           />
         ) : null;

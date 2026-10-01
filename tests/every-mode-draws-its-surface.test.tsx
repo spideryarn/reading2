@@ -1406,8 +1406,11 @@ const DRAWS: Record<Mode, Draws> = {
      `remember` as well as `chat`, and without `:not()` a Remember panel drawn
      in Chat's place would satisfy this row. */
   chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE },
-  /* Recall, which is the half Remember opens on. */
-  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_TITLE },
+  /* Recall, which is the half Remember opens on — and since plan 261001m it
+     opens the reader's one Remember conversation rather than a list, under a
+     header that says "Remember", so the thing to find is the answer in it
+     rather than the thread's title. */
+  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_ANSWER },
 };
 
 describe("phase B — what each mode's real controller drew", () => {

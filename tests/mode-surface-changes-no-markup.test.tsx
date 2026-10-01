@@ -434,12 +434,11 @@ const REMEMBER: BandShape = {
   label: "Remember what you took from this article",
   head: true,
   children: ["div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
-  /* The title, `ArmedDelete` in its unarmed state, and the "All conversations"
-     close. `subMode` renders nothing for this fixture. The header is the one
-     part of the band the migration restructured — it went from inline JSX to a
-     fragment passed as `head` — so it is the one part where "the DOM did not
-     change" is a claim rather than a restatement of the diff. */
-  headChildren: ["h2", "button.chat-icon.danger[title,type]", "button.chat-icon[title,type]"],
+  /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
+     since plan 261001m (2026-10-01), no "All conversations" close: Remember is
+     one conversation and has no list to close back to. `subMode` renders
+     nothing for this fixture. */
+  headChildren: ["h2", "button.chat-icon.danger[title,type]"],
 };
 
 /**

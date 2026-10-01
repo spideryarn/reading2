@@ -34,7 +34,7 @@
  * **There are no refs left holding state.** The one that remains holds the
  * controller itself.
  */
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type {
   ChatAnchor,
   ChatMessage,
@@ -310,7 +310,24 @@ export interface ChatApi {
    */
   discard(threadId: string): void;
   rename(threadId: string, title: string): void;
-  remove(threadId: string): void;
+  /**
+   * Delete a conversation. `restoreOnFailure` puts it back if the server
+   * refuses — Remember's Start over, which must not leave its one conversation
+   * hidden while it still exists. See `DeleteOperation.restoreOnFailure`.
+   */
+  remove(threadId: string, opts?: { restoreOnFailure?: boolean }): void;
+  /**
+   * **Is a delete still waiting on the server?** True from the press until the
+   * DELETE is answered either way — including a held one, which has not left
+   * yet because the conversation's first turn has not been named.
+   *
+   * Derived from the operations, like `recovering`. One reader: Remember's
+   * Start over, which must not begin the fresh conversation (and so offer a
+   * composer) until the old one is gone from the server, or the first question
+   * would be folded into the thread the DELETE is about to remove. Plan
+   * 261001m, GPT Sol's F1.
+   */
+  deleting: boolean;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
 }
@@ -338,10 +355,8 @@ const chatEffects: ChatEffects = {
  * What a thread is called before the reader has said anything in it.
  *
  * A `Record<ThreadKind, string>` rather than a ternary, so a fourth kind is a
- * compile error here instead of a thread quietly called "New chat". The
- * placeholder matters because the list is shared: "New chat" sitting in a list
- * the reader reached by pressing Remember is a small lie, and it is the row they
- * are about to type into. The real title arrives with the first thing they say.
+ * compile error here instead of a thread quietly called "New chat". The real
+ * title arrives with the first thing the reader says.
  *
  * `kind` at the call site is the **persisted** thread kind — src/types.ts §
  * ThreadKind.
@@ -891,13 +906,23 @@ export function useChat(slug: string): ChatApi {
    * failing cannot lift it either, and it is deliberately never rolled back.
    */
   const remove = useCallback(
-    (threadId: string) => {
+    (threadId: string, opts: { restoreOnFailure?: boolean } = {}) => {
       controller.dispatch({
         type: "delete.started",
-        op: { id: asOpId(mintId()), kind: "delete", threadId },
+        op: {
+          id: asOpId(mintId()),
+          kind: "delete",
+          threadId,
+          ...(opts.restoreOnFailure ? { restoreOnFailure: true } : {}),
+        },
       });
     },
     [controller],
+  );
+
+  const deleting = useMemo(
+    () => [...state.operations.values()].some((op) => op.kind === "delete"),
+    [state.operations],
   );
 
   return {
@@ -921,6 +946,7 @@ export function useChat(slug: string): ChatApi {
     discard,
     rename,
     remove,
+    deleting,
     error: state.error,
   };
 }

@@ -435,6 +435,18 @@ export interface RenameOperation extends Registered, Held {
 export interface DeleteOperation extends Registered, Held {
   kind: "delete";
   threadId: string;
+  /**
+   * **Put the conversation back if the server refuses.** Remember's Start over
+   * asks for this, and chat's delete does not.
+   *
+   * Chat's delete leaves a refused conversation off screen with the error
+   * above it (see `delete.failed` in reduce.ts). Start over cannot: the band
+   * begins a fresh Remember conversation only once the delete has been
+   * answered, and a refused delete means the old one is still the article's
+   * Remember conversation on the server — so a fresh one beside it would have
+   * its first turn folded into a thread this tab is hiding. Plan 261001m, F1.
+   */
+  restoreOnFailure?: boolean;
 }
 
 /**
@@ -999,7 +1011,7 @@ export function withServerIds(
   begun: Begun,
   namesThread: boolean,
 ): ChatThread[] {
-  return threads.map((t) =>
+  const swapped = threads.map((t) =>
     t.id !== current
       ? t
       : {
@@ -1018,6 +1030,49 @@ export function withServerIds(
           }),
         },
   );
+  return coalesced(swapped, threads, current, begun.threadId);
+}
+
+/**
+ * **The server named a conversation this tab already holds, so the two are one.**
+ *
+ * An article has one Remember conversation (plan 261001m), and a typed turn
+ * into a second — a stale tab, a bookmark, two tabs racing — is appended by the
+ * server to the one it has, whose id the `begin` frame then carries. Renamed in
+ * place, the provisional thread would sit in the list under the same id as the
+ * real one, and the panel would show whichever came first. So its messages, ids
+ * already swapped, go onto the end of the existing thread and the provisional
+ * entry goes. Position-independent: the existing thread may be before or after
+ * it in the array. GPT Sol's plan review, F3.
+ *
+ * The existing thread keeps its own title and kind — it was named first, and
+ * `begun.title` is the server's name for it anyway. A message it already has
+ * (a refetch that landed first) is not added twice.
+ */
+function coalesced(
+  swapped: ChatThread[],
+  before: readonly ChatThread[],
+  provisionalId: string,
+  serverId: string,
+): ChatThread[] {
+  if (provisionalId === serverId) return swapped;
+  const at = before.findIndex((t) => t.id === provisionalId);
+  const moved = swapped[at];
+  if (at < 0 || !moved) return swapped;
+  const into = swapped.findIndex((t, i) => i !== at && t.id === serverId);
+  if (into < 0) return swapped;
+  return swapped.flatMap((t, i) => {
+    if (i === at) return [];
+    if (i !== into) return [t];
+    const have = new Set(t.messages.map((m) => m.id));
+    return [
+      {
+        ...t,
+        updatedAt: t.updatedAt > moved.updatedAt ? t.updatedAt : moved.updatedAt,
+        messages: [...t.messages, ...moved.messages.filter((m) => !have.has(m.id))],
+      },
+    ];
+  });
 }
 
 /**

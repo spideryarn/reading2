@@ -1072,15 +1072,6 @@
   color: var(--ink-faint);
 }
 
-/* The tag on a Remember row in the shared thread list. Quiet on purpose: it
-   distinguishes a minority of rows and must not read as a badge worth having. */
-.chat-thread-kind {
-  white-space: nowrap;
-  font-variant: small-caps;
-  letter-spacing: 0.02em;
-  color: var(--ink-faint);
-}
-
 /* **A band's (i)** (`BandAbout.tsx`), at the right-hand end of its order row
    (`.gloss-sort-trail`), holding the sentences about the whole list that were
    its foot — FAQ's (SPIDERYARN-READING2-62) and Citations' (plan 261001l).

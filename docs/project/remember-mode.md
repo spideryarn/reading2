@@ -166,6 +166,29 @@ tools, same stop / retry / edit / recovery. Untouched: `converse`'s loop, the to
 `openRouterStream`, the frame protocol, `useChat`'s optimistic rows and stream recovery,
 `citations.ts`, `Turn`, `Answer`, `ToolStrip`, the sweep, `inTurnOrder`.
 
+**But on screen it is its own thing, and there is one per article** — Greg, 2026-10-01, report
+`spya-peszam`:
+
+> The Remember mode should be its own single, special conversation thread (not visible from Chat,
+> nor should other Chat threads be visible in Remember mode). It's a special kind of conversation
+> thread just for helping the user to remember from the article, with its own special UI (e.g. for
+> more Socratic responses, etc).
+
+He chose, of two designs, to keep the shared machinery and separate only the screen; rebuilding
+Remember on its own storage was the option passed over. So the reuse above stands, and three things
+make it one thread:
+
+- **The database says so**: a partial unique index, `chat_threads_one_remember`, on `article_id`
+  where `kind = 'remember'`. An article has one owner, so this is one per article per reader.
+- **A second one cannot be started by accident.** The client mints thread ids, so a stale tab can
+  ask to begin a new Remember thread. `withTurn` appends that typed turn to the existing one instead,
+  and the `begin` frame names it; `withSpokenTurn` treats it as the existing one too, so the live
+  tail guard refuses it rather than appending under turns it never saw.
+- **Older articles' Remember threads were folded into one** by the migration that added the index:
+  messages moved whole, conversation by conversation, into the earliest thread.
+
+[261001m](../plans/261001m-remember-is-its-own-single-thread.md) has the reasoning and the review.
+
 Two fields were added, and both are the kind that goes wrong quietly.
 
 ### `kind` belongs to the thread
@@ -266,12 +289,19 @@ The mode band, the eighth value in `MODES`, last in the dock — the order runs 
 article's own words to the conversation about it, and Remember is one step further out again as the
 only mode whose content comes from the reader.
 
-**The list of conversations is shared.** Greg's call, 2026-08-27: both modes show every thread for
-this article, and a Remember thread carries a small `remember` tag. Opening a thread of the other
-kind moves `?mode=` and `?thread=` together, in one navigation, or the Back stack gets an entry
-pairing chat mode with a Remember thread. Auto-start ("if there are none, start one") counts threads
-**of this kind**, or a reader with three chats and no Remember threads would press Remember and be
-shown three chats.
+**Remember has no list; it opens its one conversation.** Until 2026-10-01 the list was shared — both
+modes showed every thread, a Remember row carried a `remember` tag, and opening one from chat moved
+`?mode=` with `?thread=`. Since `spya-peszam` (above) each mode lists only its own kind: chat shows
+chats, and Remember shows its single thread directly, with no list, no `+`, no rename and the header
+reading *Remember*. The thread is **derived during render** — the stored one if there is one, else
+one begun locally — and `?thread=` is only synced to it afterwards, so neither a stale `?thread=`
+nor the first frame of a load ever shows a list. Delete stays, as **Start over**, and the fresh
+thread is not begun until the server has confirmed the delete: begun sooner, a quick first
+question would be appended to the old thread a moment before the delete cascaded it away.
+
+**The box is smaller on a short screen.** Six rows at rest on a desktop; on a viewport under 500px
+tall — a landscape phone, where the band is about 338px — it is two rows at rest and grows with
+what is said, up to about half the band, so the transcript stays in view.
 
 The floating `ChatDialog` opens only for a thread whose summary says it **is** a chat — a positive
 test. `!== "remember"` was the first version and had its default backwards: an unknown thread (a
@@ -317,7 +347,10 @@ third claimant — is a keyboard problem nobody needs.
 - **No "retry as a different stance".** Retry preserves the stored stance, which is the right
   default; an explicit control can arrive later.
 - **No model-written title.** A thread is named from the reader's first 60 characters, which for
-  speech will regularly be *"Um, so I suppose what I took from this was…"*. Rename works.
+  speech will regularly be *"Um, so I suppose what I took from this was…"*. Since 2026-10-01 that
+  title is shown nowhere — Remember's header just says *Remember* — so there is nothing to rename.
+- **No list of Remember conversations**, and no second one (§ A Remember conversation IS a chat
+  thread). Remember's own controls are still to come; Greg's report names more Socratic ones.
 
 ## See also
 
