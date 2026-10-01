@@ -47,13 +47,13 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) | the browser client. One of them, module scope, `flowType: "pkce"` |
 | [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for all 31 call sites — and `leavingFetch` for `pagehide` |
 | [`src/web/useSession.ts`](../../src/web/useSession.ts) | who is signed in, as state |
-| [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, four screenshots of it working, and the buttons |
-| [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Google button and the email form, and every line of auth logic in them. Two pages render it |
-| [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | the compact screen at `/login`, for a password-reset landing |
+| [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, the screenshots, and links to `/login` carrying where you were |
+| [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Sign in / Create account switch, the Google button and the email form, and every line of auth logic in them. One page renders it |
+| [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | **the sign-in page**, at `/login`: reads `?next=` (through `loginNext`) and `?new` |
 | [`src/web/AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where Google returns to, and why it reads the URL itself |
 | [`src/web/SetNewPassword.tsx`](../../src/web/SetNewPassword.tsx) | choose a new password, shown by AuthCallback after a recovery link — [261001i](../plans/261001i-password-reset.md) |
 | [`src/web/lib/url-session-kind.ts`](../../src/web/lib/url-session-kind.ts) | how AuthCallback tells a recovery from a sign-in: the SDK's late `PASSWORD_RECOVERY` event, caught at module scope |
-| [`src/web/auth-return.ts`](../../src/web/auth-return.ts) | where the reader was going, in `sessionStorage`, with three rules |
+| [`src/web/auth-return.ts`](../../src/web/auth-return.ts) | where the reader was going, in `sessionStorage`, with three rules — and `loginNext`, which turns `/login?next=` into a candidate for it |
 | [`src/web/AccountSection.tsx`](../../src/web/AccountSection.tsx) | signed in as / sign out, on `/profile` |
 | [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the PDF link, because a navigation carries no header |
 | [`scripts/check-remote-auth.sh`](../../scripts/check-remote-auth.sh) | which providers the **remote** project has on. Two controls in every run |
@@ -95,22 +95,45 @@ step agreeing with every other one.
 ## The signed-out page is the landing page
 
 Since 2026-08-27, no session shows you [`LandingPage.tsx`](../../src/web/LandingPage.tsx) rather
-than a bare form: what the thing is, four screenshots of it working, and the sign-in buttons
-themselves. Greg asked for it and made both of the calls that shape it.
+than a bare form: what the thing is, screenshots of it working, and the way in. Greg asked for it and
+made both of the calls that shape it.
 
-**The buttons are on the page.** Not a Sign in link to `/login` — a landing page whose only control
-sends you somewhere else has put a click between a person and the thing they came for. So the form
-moved into [`SignInControls.tsx`](../../src/web/SignInControls.tsx) and two pages render it. One
-implementation rather than two, and the reason is not tidiness: a second copy of `signInWithOAuth`
-is a second place for `redirectTo` to be wrong, and the way *that* goes wrong is our one-time
-authorisation code folded into somebody else's URL (see point 4 above).
+**The form is on a page of its own, since 2026-10-01.** From 2026-08-27 the buttons were *on* the
+landing page — Greg's call then, on the reasoning that a landing page whose only control sends you
+somewhere else has put a click between a person and the thing they came for. He reversed it himself:
+
+> For the non-logged-in users, let's create a separate sign-in page and signpost to it at the top
+> and bottom, and follow any best practices in making that nice and usable. We're currently
+> emphasising Gmail, but we also allow email and password, and that should be apparent. And we
+> need to somehow make it easy for people to both log in and register.
+>
+> — Greg, 2026-09-29 (report spya-p6s5a4)
+
+So `/login` ([`SignInPage.tsx`](../../src/web/SignInPage.tsx)) is the sign-in page, in the
+marketing pages' shell, and the landing page's top bar, hero and foot panel link to it; so does
+`/pricing`, whose *Get Reader* stores its tier in `buy-intent.ts` and goes to
+`/login?new&next=/pricing`. [`SignInControls.tsx`](../../src/web/SignInControls.tsx) shows Google
+and the email form together, with *Sign in* and *Create account* as the two halves of a switch, both
+submitting one form. One implementation still, and the reason was never tidiness: a second copy of
+`signInWithOAuth` is a second place for `redirectTo` to be wrong, and the way *that* goes wrong is
+our one-time authorisation code folded into somebody else's URL (see point 4 above).
+[261001m](../plans/261001m-a-sign-in-page-of-its-own-signposted-from-the-signed-out-pages.md).
+
+**`?next=` is a candidate, never an instruction.** [`auth-return.ts`](../../src/web/auth-return.ts)
+§ `loginNext` validates it (our origin, not the callback, not `/login`), and the controls write it
+through the same ten-minute, read-once `rememberReturn` store only when the reader actually signs
+in — and `forgetReturn` it if the start fails. A password sign-in finishes on `/login`, where
+`App.tsx`'s signed-in branch *takes* the remembered value, so a signed-in visit to an old or shared
+`/login?next=…` goes to the shelf. `redirectTo` stays the bare callback. **Same tab only**: a
+confirmation link opened in a new tab lands on the shelf, because `sessionStorage` does not cross
+tabs — the simple version, chosen over a server-side return token (GPT Sol, plan review F2).
 
 **A deep link gets the same page.** `/read/some-article` while signed out is the full landing page,
-not a shorter prompt. One signed-out page rather than two, and nothing is lost by it: the address
-bar still holds the article, so `auth-return.ts` lands you on it after Google returns.
+not a shorter prompt. One signed-out page rather than two, and nothing is lost by it: every link from
+it to `/login` carries that address as `next`, so signing in lands you on the article.
 
 `/login` is the one exception, because it is a page somebody was *sent* rather than a statement
-about who they are. It keeps the compact screen.
+about who they are.
 
 **The Beta badge beside the wordmark is what is left of a louder sign.** While access was closed
 it was a badge *and* a strip under it, because the page has screenshots on it and the thing a

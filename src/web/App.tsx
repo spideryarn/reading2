@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -17,7 +18,16 @@ import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
-import { adminOnly, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
+import {
+  adminOnly,
+  CALLBACK_HREF,
+  LIBRARY_HREF,
+  navigate,
+  parseRoute,
+  type Route,
+  useRoute,
+} from "./router.js";
+import { takeReturn } from "./auth-return.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
@@ -337,6 +347,21 @@ export function App() {
  * that had `useJobs` driving imports only on the pages that happened to mount
  * it (see `useJobSession` above). One wrapper, one button, one rule.
  */
+/**
+ * Signed in at `/login`: go where the sign-in page remembered, or the shelf.
+ *
+ * **The pathname check is for StrictMode**, which runs this effect twice: the
+ * first run takes the destination and navigates, and the second must not then
+ * send the reader on to the shelf over the top of it.
+ */
+function LeaveLogin() {
+  useEffect(() => {
+    if (parseRoute(location.pathname).kind !== "login") return;
+    navigate(takeReturn(CALLBACK_HREF) ?? LIBRARY_HREF, { replace: true });
+  }, []);
+  return null;
+}
+
 function SignedIn({
   route,
   user,
@@ -561,13 +586,21 @@ function SignedIn({
   }
   /* Signed in, and asking for the sign-in page. There is nothing to show — the
      gate above already returned `SignInPage` for everyone who needs it — so
-     this is somebody following a stale link, and the shelf is where they meant
-     to end up. `replace`, because a Back button that returns you to a page that
-     immediately bounces you again is a trap. */
-  if (route.kind === "login") {
-    navigate(LIBRARY_HREF, { replace: true });
-    return null;
-  }
+     this is either somebody who has just signed in *on* it with a password, or
+     somebody following a stale link. `replace`, because a Back button that
+     returns you to a page that immediately bounces you again is a trap.
+
+     **Where to: whatever the sign-in page remembered, taken once.** Since
+     2026-10-01 the landing page and `/pricing` send a stranger here with
+     `?next=` (docs/plans/261001m), and SignInControls writes that through
+     `rememberReturn` when the reader submits. `takeReturn` reads it and forgets
+     it, with its ten-minute expiry — so the URL's `next` is never obeyed on its
+     own, and a signed-in visit to an old `/login?next=…` goes to the shelf
+     (GPT Sol, plan review F1).
+
+     In an effect, `LeaveLogin` below, since a navigation during render updates
+     every route subscriber mid-render, which React warns about. */
+  if (route.kind === "login") return <LeaveLogin />;
 
   /* No `HomeLogo` here any more, and that is not a tidy-up. `ArticlePage` can
      now end at `LandingPage` — a stranger following a link to a document that

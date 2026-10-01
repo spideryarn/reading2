@@ -5,14 +5,16 @@
  * Include some of the vision/distinctiveness."* Two decisions he made then
  * still shape this file:
  *
- *  - **The sign-in buttons are on the page**, not behind a link to `/login`.
- *    SignInControls.tsx is rendered here, and `/login` keeps its compact screen
- *    for password-reset landings. Since the 2026-09-03 redesign there is one
- *    panel rather than two, at the foot, with a `Sign in` link in the top bar
- *    jumping to it — so the rule holds and the fold is free for the product.
+ *  - ~~**The sign-in buttons are on the page**, not behind a link to `/login`.~~
+ *    Reversed by Greg himself on 2026-09-29, report spya-p6s5a4: *"for the
+ *    non-logged-in homepage, instead of having that sign-in button at the
+ *    bottom, we'd have a sign-in button that takes you to the sign-in page."*
+ *    So the form lives on `/login` (SignInPage.tsx), and the top bar, the hero
+ *    and the panel at the foot all link there. docs/plans/261001m.
  *  - **A deep link gets this same page.** `/read/some-article` while signed out
- *    is the landing page, and the address stays put so signing in puts you back
- *    where you were heading (auth-return.ts).
+ *    is the landing page, and every link to the sign-in page carries that
+ *    address as `next` (`signIn` below), so signing in puts you back where you
+ *    were heading (auth-return.ts).
  *
  * ## Where the words come from — rewritten 2026-09-03
  *
@@ -52,8 +54,8 @@
  *
  * **Stripe went live on 2026-09-03 and sign-up is open to anyone**, so Greg had
  * both deleted: `BetaLine` here and `OpensShortly` under the plans (PlanCards.tsx)
- * are gone, and the primary button now goes to the sign-in panel at the foot of
- * this page. The copy above it did not have to change, which was the point of
+ * are gone, and the primary button now goes to the sign-in page, on its Create
+ * account tab. The copy above it did not have to change, which was the point of
  * writing it as if we were already here.
  *
  * ## The lead shot changed
@@ -71,10 +73,9 @@ import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { WebsitePlans } from "./PlanCards.js";
 import { PublicShowcase } from "./PublicShowcase.js";
-import { FEATURES_HREF, PRICING_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF, loginHref } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
-import { SignInControls } from "./SignInControls.js";
 import {
   Feature,
   Frame,
@@ -89,14 +90,21 @@ import {
 
 export function LandingPage() {
   useDocumentTitle(pageTitle({ kind: "landing" }));
+  /* **The address this page is standing on**, which is not always `/`: App.tsx
+     draws it for an unshared `/read/<slug>`, `/add/…`, `/profile` and the rest,
+     and that is where the reader should land after signing in. `loginHref`
+     drops it when it is `/`. */
+  const here = location.pathname + location.search;
+  const signIn = loginHref({ next: here });
+  const createAccount = loginHref({ create: true, next: here });
 
   return (
     <div className="site tw:font-sans tw:text-muted-foreground">
       {/* **`signedIn={false}` is a fact about this page, not a guess.** App.tsx
           reaches for `LandingPage` only in its signed-out branch — a signed-in
           reader at `/` gets the shelf — so there is no reader here who has an
-          account open, and the sign-in panel this page carries is the whole
-          point of it. SiteBits.tsx § `signedIn`. */}
+          account open, and the way to the sign-in page is the whole point of
+          it. SiteBits.tsx § `signedIn`. */}
       <SiteNav here="home" signedIn={false} />
 
       {/* ------------------------------------------------------- the hero --
@@ -120,10 +128,9 @@ export function LandingPage() {
           </p>
 
           <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-            {/* [tissue] Sign-up is open, so the primary action is the panel at
-                the foot of this page — a plain `<a>` to a fragment on the page
-                it is already on, which is why it does not need `Link`. */}
-            <PrimaryCta href="#sign-in">Start reading</PrimaryCta>
+            {/* [tissue] Sign-up is open, so the primary action is the sign-in
+                page on its Create account tab. */}
+            <PrimaryCta href={createAccount}>Start reading</PrimaryCta>
             <GhostCta href={PRICING_HREF}>Plans and pricing</GhostCta>
           </div>
 
@@ -330,20 +337,24 @@ export function LandingPage() {
         </div>
 
         {/* ---------------------------------------------------------- sign in --
-            One panel, at the foot. The `Sign in` link in the top bar jumps here,
-            so the buttons are still on the page — the 2026-08-27 rule — without
-            standing between a stranger and the product. */}
-        <section
-          id="sign-in"
-          className="site-panel tw:mt-24 tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
-        >
+            The panel at the foot, without the form in it since 2026-10-01:
+            Greg, report spya-p6s5a4, *"instead of having that sign-in button at
+            the bottom, we'd have a sign-in button that takes you to the sign-in
+            page."* Both halves are offered here, because *"we need to somehow
+            make it easy for people to both log in and register."*
+            docs/plans/261001m. */}
+        <section className="site-panel tw:mt-24 tw:p-6 tw:sm:p-8">
           <p className="tw:mb-5 tw:text-sm">
-            {/* [tissue] Both halves, since sign-up opened on 2026-09-03: the
-                same controls create an account and return to one. */}
+            {/* [tissue] Both halves, since sign-up opened on 2026-09-03. */}
             Start with three articles free. Already have an account? Sign in — your shelf is where
             you left it.
           </p>
-          <SignInControls />
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+            <Link href={createAccount} className="site-cta site-cta-primary">
+              Create an account
+            </Link>
+            <GhostCta href={signIn}>Sign in</GhostCta>
+          </div>
         </section>
 
         {/* **One footer for the whole site**, since the merge of 2026-09-03:

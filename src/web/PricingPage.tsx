@@ -53,19 +53,19 @@
  * The plan is docs/plans/260904b-pricing-page-and-public-showcase.md and the
  * reasoning is a GPT Sol review of it.
  *
- * - **The page carries its own sign-in panel**, the way the landing page does.
- *   That is the whole continuation mechanism: `SignInControls` calls
- *   `rememberReturn(location.pathname + location.search)` immediately before
- *   OAuth, so a reader who signs in *here* is sent back *here*, with no second
- *   OAuth path and nothing duplicated. The first draft carried the destination
- *   itself and would have been overwritten by whatever page the sign-in happened
- *   on.
+ * - **A press goes to the sign-in page, told to come back here.** The page
+ *   carried its own sign-in panel until 2026-10-01, when Greg asked for one
+ *   sign-in page (report spya-p6s5a4); now *Get Reader* stores the marker below
+ *   and navigates to `/login?new&next=/pricing`, and the sign-in page remembers
+ *   `/pricing` on the way out to Google, or *takes* it after a password sign-in
+ *   (auth-return.ts § `loginNext`). Still no second OAuth path.
+ *   docs/plans/261001m, GPT Sol's plan review F6.
  * - **The tier they pressed rides in its own `sessionStorage` marker**, never in
  *   the address (buy-intent.ts says why a query parameter is not consent). That
  *   storage is tab-scoped, so a sign-up finished in a *new* tab — which is what
  *   an emailed confirmation link usually opens — arrives with neither the marker
- *   nor the destination, and the panel's own sentence says so rather than
- *   promising something it cannot do.
+ *   nor the destination. The sentence that said so lived in the panel and went
+ *   with it; the reader lands on their shelf, and the plans are one click away.
  * - **The marker is consumed before the POST, not after it succeeds.** That one
  *   line is what makes a `<StrictMode>` double mount, a real remount and Back
  *   from Stripe all safe, and `tests/pricing-buy-intent.test.tsx` drives the
@@ -117,17 +117,15 @@ import type { BillingSummary } from "../billing-plan.js";
 import { Link } from "./Link.js";
 import { RECOMMENDED_TIER, WebsitePlans } from "./PlanCards.js";
 import type { PlanCard, PlanCardAction } from "./PlanCards.js";
-import { SignInControls } from "./SignInControls.js";
 import { H2, SHELL, SiteNav } from "./SiteBits.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { buyIntentIsFresh, rememberBuyIntent, takeBuyIntent } from "./buy-intent.js";
 import type { BuyIntent } from "./buy-intent.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { useBilling } from "./useBilling.js";
+import { PRICING_HREF, loginHref, navigate } from "./router.js";
 import type { UseBilling } from "./useBilling.js";
 
-/** Where a *Get Reader* press sends a stranger, and where the panel itself is. */
-const SIGN_IN_ID = "sign-in";
 
 export function PricingPage({ readerId }: { readerId: string | null }) {
   useDocumentTitle(pageTitle({ kind: "pricing" }));
@@ -442,10 +440,9 @@ function Answer({ q, children, wide }: { q: string; children: ReactNode; wide?: 
 /**
  * The plans, for somebody who is not signed in — with buttons that work.
  *
- * **A press stores the tier and moves the reader down to the sign-in panel**,
- * and that is the whole of the buy path for a stranger: sign in here, come back
- * here (`rememberReturn` captured `/pricing` on the way out), and
- * `PlansForAReader` finds the marker and opens Stripe.
+ * **A press stores the tier and goes to the sign-in page**, and that is the
+ * whole of the buy path for a stranger: sign in there, come back here (`next`),
+ * and `PlansForAReader` finds the marker and opens Stripe.
  *
  * There is no request on this path, which is not an accident and is asserted:
  * `tests/pricing-page-current-plan.test.tsx` records **every** URL the
@@ -454,16 +451,10 @@ function Answer({ q, children, wide }: { q: string; children: ReactNode; wide?: 
  * front of the first thing a stranger came here to read.
  */
 function PlansForAStranger() {
-  /* Both kinds of press end in the same place, so the jump is written once.
-     Both calls are optional: jsdom has no `scrollIntoView`, and a page that
-     threw on a button press would be a worse failure than a page that jumped
-     without animating. The anchor is a real element either way, so a reader who
-     has scripting trouble still has the panel below them. */
-  const toSignIn = () =>
-    document.getElementById(SIGN_IN_ID)?.scrollIntoView?.({
-      behavior: "smooth",
-      block: "center",
-    });
+  /* Both kinds of press end on the sign-in page's Create account tab: every
+     reader on this half has no account open. Only a paid tier comes back here,
+     because only a paid tier has anything left to do on this page. */
+  const toSignIn = (next?: string) => navigate(loginHref(next === undefined ? { create: true } : { create: true, next }));
 
   const wantPlan = (plan: PlanCard): PlanCardAction | null => {
     /* Pulled out of the property so the closure below closes over a `const`
@@ -474,20 +465,20 @@ function PlansForAStranger() {
        nothing to press on the one plan a stranger is most likely to start on
        was the gap the cards made obvious: the other two say *Get Reader* and
        Free said nothing at all. It stores no buy intent — there is no tier to
-       buy — and lands them at the same panel, where three articles free is what
+       buy — and lands them on the same sign-in page, where three articles free is what
        signing up gets them. */
     if (tierId === null) {
-      return { label: "Start reading", disabled: false, onPress: toSignIn };
+      return { label: "Start reading", disabled: false, onPress: () => toSignIn() };
     }
     return {
       /* "Get Reader", not "Sign in to get Reader": the sign-in is a step on the
-         way and not the thing they want, and the panel it scrolls to says
+         way and not the thing they want, and the sign-in page it goes to says
          plainly what it is. */
       label: `Get ${plan.name}`,
       disabled: false,
       onPress: () => {
         rememberBuyIntent(tierId);
-        toSignIn();
+        toSignIn(PRICING_HREF);
       },
     };
   };
@@ -497,45 +488,6 @@ function PlansForAStranger() {
       {/* Everybody who reaches this half is choosing: they have no account yet,
           so every plan on the row is one they could take. */}
       <WebsitePlans action={wantPlan} recommend />
-
-      {/* The landing page's panel, at the foot of this page's plans rather than
-          the foot of the page: this is the only thing a stranger who pressed a
-          button is now looking for. LandingPage.tsx § sign in.
-
-          **`site-panel` since 2026-09-04**, and it was ordinary utilities for
-          exactly one day before that: the `--site-*` tokens are declared on
-          `.site`, which this page did not carry while it was a bare `<main>`
-          with a Back link, so `site-panel` would have drawn a transparent
-          border over no fill. Stage 2 moved the whole page onto the site shell,
-          which is what makes this the same panel the landing page has rather
-          than a lookalike. */}
-      <section
-        id={SIGN_IN_ID}
-        className="site-panel tw:mt-8 tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
-      >
-        <p className="tw:mb-5 tw:text-sm">
-          {/* [tissue] Both halves, as on the landing page: the same controls
-              create an account and return to one. The third sentence is what
-              makes the button above make sense — it says where the press went.
-
-              **And it promises the tab rather than the account**, which is a
-              correction rather than a hedge. It read *"whichever plan you chose
-              above, we will pick it up again once you are in"*, and that is
-              false for the one sign-up route that does not finish where it
-              started: an email confirmation link commonly opens a **new tab**,
-              and both `auth-return` and `buy-intent` are `sessionStorage`, which
-              is tab-scoped and does not travel. GPT Sol, stage 1 review, finding
-              5. The remedy is a press of a button that is already on the screen
-              they land on, so the honest sentence costs the reader nothing —
-              whereas cross-tab storage would put a purchase intent somewhere it
-              outlives the tab that consented to it, which is exactly what
-              buy-intent.ts refused to do with the URL. */}
-          Start with three articles free. Already have an account? Sign in — your shelf is where you
-          left it. The plan you chose above is picked up when you come back to this tab; if a
-          confirmation link opens a new one, just press it again there.
-        </p>
-        <SignInControls />
-      </section>
     </>
   );
 }

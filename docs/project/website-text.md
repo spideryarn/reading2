@@ -183,7 +183,9 @@ the visual language are [marketing-pages.md](marketing-pages.md)'s subject, and 
 [260903g](../plans/260903g-redesign-the-signed-out-marketing-pages.md). Two things about it belong
 here because they are about the *text*: the sign-in panel moved to the foot of the page, with a
 `Sign in` link in the top bar jumping to it, so the 2026-08-27 rule that the buttons are on the page
-survives; and the copy was **reordered and cut, never rewritten** — the dog-eared-book sentence came
+survived — until Greg reversed it on 2026-09-29 (report spya-p6s5a4): the form is on `/login` now,
+and the foot panel keeps its sentence and links there
+([auth.md § The signed-out page is the landing page](auth.md#the-signed-out-page-is-the-landing-page)); and the copy was **reordered and cut, never rewritten** — the dog-eared-book sentence came
 up to sit under the hero, "And deliberately not" came out from between the principles and the
 prices, and two sentences that appeared twice each now appear once.
 
@@ -200,7 +202,7 @@ payments"*). Until 2026-09-03 that ran ahead of the product, so the page carried
 `mailto:` to the contact address, and the primary button was that mailto.
 
 **Stripe went live on 2026-09-03 and sign-up opened to anyone**, so Greg had both deleted. The
-primary button is now `Start reading`, jumping to the sign-in panel at the foot of the page; the
+primary button is now `Start reading`, going to the sign-in page on its Create account tab; the
 ghost button beside it goes to `/pricing`, and `Pricing` joined the top bar on both marketing pages
 (`SiteNav` in [`SiteBits.tsx`](../../src/web/SiteBits.tsx)) at his asking, so a price is one click
 from anywhere on the site. None of the pitch copy had to change, which was the point of writing it
@@ -251,9 +253,9 @@ over no fill.
 So it now carries the same shell — `.site`, `SiteNav here="pricing"`, a hero with the glow and a real
 `h1` (it had none, and its outline began at level two), a `sr-only` *Plans* `h2` so the outline does
 not jump from the `h1` to the cards' `h3`s, and a `SiteFooter`. **The nav's
-*Sign in* link stays on this page** rather than jumping to `/#sign-in` the way it does from
-`/features`, and that is load-bearing rather than tidy: the buy path for a stranger is *press here,
-sign in here, come back here*, because `SignInControls` remembers the address it was standing on.
+*Sign in* link comes back here**: since 2026-10-01 it goes to `/login?next=/pricing`, where from
+`/features` it is a bare `/login`, because the buy path for a stranger is *press here, sign in, come
+back here*.
 
 **And it is drawn only for a stranger**, since the stage 2 code review. `/features` and `/pricing`
 are both mounted signed in as well, and there neither spelling of that link goes anywhere: on
@@ -320,9 +322,10 @@ the /profile page, which is a bit buried and confusing."* So the Upgrade buttons
 and there is still one implementation of checkout in `useBilling.ts`. Three things make that work
 for a stranger, and none of them is the obvious one:
 
-- **The page carries its own sign-in panel**, the same `SignInControls` the landing page has. That
-  *is* the continuation mechanism: `SignInControls` remembers the current address immediately before
-  OAuth, so a reader who signs in here is sent back here, with no second OAuth path.
+- **A press goes to the sign-in page, told to come back here** — `/login?new&next=/pricing`. Until
+  2026-10-01 the page carried its own sign-in panel for this; now the one sign-in page remembers
+  `/pricing` before OAuth, or takes it after a password sign-in, with no second OAuth path
+  ([261001m](../plans/261001m-a-sign-in-page-of-its-own-signposted-from-the-signed-out-pages.md)).
 - **The tier they pressed rides in its own expiring `sessionStorage` marker**
   ([`src/web/buy-intent.ts`](../../src/web/buy-intent.ts)), never in the URL. `/pricing?buy=reader`
   would have been an address that makes an authenticated browser open a Stripe Checkout Session and

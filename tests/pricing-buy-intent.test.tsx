@@ -215,9 +215,10 @@ describe("a stranger pressing a plan", () => {
 
     expect(JSON.parse(sessionStorage.getItem(KEY) ?? "null")).toMatchObject({ tierId: "reader" });
     expect(asked).toEqual([]);
-    /* And the panel the press scrolls to is really on the page, since the press
-       is worth nothing without somewhere to sign in. */
-    expect(host.querySelector("#sign-in")).toBeTruthy();
+    /* And the press goes somewhere to sign in, since it is worth nothing
+       without one: the sign-in page, on its Create account tab, told to come
+       back here — where `PlansForAReader` finds the marker. docs/plans/261001m. */
+    expect(location.pathname + location.search).toBe("/login?new&next=%2Fpricing");
   });
 });
 

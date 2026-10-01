@@ -921,3 +921,28 @@ describe("the auth callback", () => {
     expect(rewritten, "the guard must have work to do, or it proves nothing").not.toBeNull();
     expect(rewritten).toContain("code=SECRET");
   });});
+
+/**
+ * The address of the sign-in page with where to go afterwards — docs/plans/261001m.
+ * `next=/` is left off because the shelf is where a sign-in goes anyway.
+ */
+describe("loginHref", () => {
+  it("is the bare page with nothing to carry", async () => {
+    const { loginHref } = await import("../src/web/router.js");
+    expect(loginHref()).toBe("/login");
+    expect(loginHref({ next: "/" })).toBe("/login");
+  });
+
+  it("carries the destination, encoded, and the create-account tab", async () => {
+    const { loginHref, parseRoute } = await import("../src/web/router.js");
+    expect(loginHref({ next: "/read/x?at=spya-k3m9qt" })).toBe(
+      "/login?next=%2Fread%2Fx%3Fat%3Dspya-k3m9qt",
+    );
+    expect(loginHref({ create: true })).toBe("/login?new");
+    expect(loginHref({ create: true, next: "/pricing" })).toBe("/login?new&next=%2Fpricing");
+    /* And it is still the login route, so the link is not a 404. */
+    expect(parseRoute(loginHref({ create: true, next: "/pricing" }).split("?")[0] ?? "")).toEqual({
+      kind: "login",
+    });
+  });
+});
