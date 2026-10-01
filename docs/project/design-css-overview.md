@@ -178,6 +178,19 @@ One trap worth repeating here because it is invisible: **mix colours in `oklab`,
 polar interpolation drags a mix round to 11.7° and the result is quietly pink instead of warm.
 `--highlight-wash` escapes only by using `in oklab`.
 
+## Dates
+
+- **Every date a reader sees carries both forms**: the exact timestamp and how long ago it was
+  (`3d ago`), one of them in a tooltip if space is short. Greg, 2026-09-30 (spya-d9xdhs):
+
+  > make a note in a relevant doc that whenever we show a date we should include that kind of
+  > human-readable `... ago` version, as well as a timestamp, even if only in a tooltip.
+
+  [`src/web/relative-time.ts`](../../src/web/relative-time.ts) has both (`exactly`, and
+  `relativeAgo`/`timeAgo`). **One exception, for now:** past 30 days it gives no relative form,
+  because "43 days ago" is worse than the date (that file's header), so an old date shows only the
+  timestamp. A coarser `2mo ago` would make the rule hold everywhere; nobody has built it yet.
+
 ## The stacking order, which is real even though it is not a scale
 
 **Do not read a number off this list and reuse it.** The values are not a scale and were not

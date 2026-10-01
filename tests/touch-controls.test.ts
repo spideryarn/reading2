@@ -10,8 +10,8 @@
  * and these are them:
  *
  * - **A control a finger has to hit was 23px tall.** `@media (pointer: coarse)`
- *   in narrow-window.css gives the dock a 40px floor per button, because Greg
- *   asked for exactly that on 2026-08-28. In the fortnight after, the query
+ *   in narrow-window.css gave the dock a 40px floor per button, because Greg
+ *   asked for exactly that on 2026-08-28 (raised to 44px on 2026-10-01). In the fortnight after, the query
  *   reached one further control — the footnote's *back to your place* link — and
  *   **no control inside a mode band at all**. 64% of the order row's own box was
  *   not on a button.
@@ -167,7 +167,15 @@ describe("a control a finger has to hit", () => {
      declarations, character for character. Whatever floor they get, they get
      together, or the next report is about the other one. */
   const BARS = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
-  const FLOOR_REM = 2.5; // 40px — the dock's floor, and its comment says why.
+  const FLOOR_REM = 2.5; // 40px — these two rows' retained floor.
+
+  it("keeps the dock's raised 44px coarse-pointer width floor", () => {
+    const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
+      selectors(candidate.selector).includes(".dock-btn"),
+    );
+    expect(rule, "the dock has no coarse-pointer size rule").toBeDefined();
+    expect(rule?.decls ?? "").toMatch(/min-width:\s*2\.75rem/);
+  });
 
   for (const cls of BARS) {
     it(`${cls} has at least a ${FLOOR_REM}rem hit height on a coarse pointer`, () => {

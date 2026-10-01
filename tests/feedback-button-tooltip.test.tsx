@@ -52,6 +52,7 @@ import {
   FeedbackTrigger,
   type FeedbackVariant,
 } from "../src/web/FeedbackButton.js";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 /* The dialog is mounted for the life of the page whether or not it is open
    (FeedbackDialog.tsx), and it reaches for a Supabase session and a microphone
@@ -234,11 +235,39 @@ describe("the Feedback button, in the bar", () => {
 
   it("puts its word under the fit ladder rather than under the 731px query", () => {
     mount("dock");
-    const word = theButton().querySelector("span");
+    /* The button's last child, since the first is the glyph's ring. */
+    const word = theButton().lastElementChild;
     expect(word?.textContent).toBe("Feedback");
     /* `.dock-btn-label` is what every rung's selector is written against;
        `.fb-button-text` is what the narrow-window query hides. GPT Sol, G7. */
     expect(word?.className).toBe("dock-btn-label");
+  });
+
+  /* spya-xgqv50, Greg 2026-09-30: "wrap it in its own circle". Round the glyph
+     rather than the button, so the word and a grown button leave it a circle;
+     dock.css § the Feedback circle draws it. */
+  it("draws its glyph inside a ring of its own, and the word outside it", () => {
+    mount("dock");
+    const ring = theButton().querySelector(".dock-feedback-ring");
+    expect(ring?.querySelector("svg"), "no glyph in the ring").not.toBeNull();
+    expect(ring?.textContent).toBe("");
+    expect(ring?.parentElement).toBe(theButton());
+  });
+
+  it("keeps that ring circular and moves the inherited hover wash onto it", () => {
+    const css = readerCssNoComments();
+    const ring = /\.dock-feedback-ring\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(ring).toMatch(/width:\s*1\.75rem/);
+    expect(ring).toMatch(/height:\s*1\.75rem/);
+    expect(ring).toMatch(/border-radius:\s*50%/);
+    expect(css).toMatch(/\.dock-feedback\s*\{[^}]*margin-inline-start:\s*auto/);
+    expect(css).toMatch(/\.dock-feedback:hover\s*\{[^}]*background:\s*transparent/);
+    expect(css).toMatch(
+      /\.dock-feedback:hover\s+\.dock-feedback-ring\s*\{[^}]*background:\s*var\(--panel\)/,
+    );
+    /* Same specificity as `.dock-btn:hover`, so source order is the cascade.
+       A transparent rule above the inherited wash exists and does nothing. */
+    expect(css.indexOf(".dock-feedback:hover {")).toBeGreaterThan(css.indexOf(".dock-btn:hover {"));
   });
 
   /**
@@ -339,7 +368,7 @@ describe("the Feedback button, in the shelf masthead", () => {
     expect(btn.classList.contains("dock-btn")).toBe(false);
   });
 
-  it("keeps its word at every width, unlike both other shapes", () => {
+  it("keeps its word at every width, unlike the corner, dock and nav shapes", () => {
     mount("masthead");
     const word = theButton().querySelector("span");
     expect(word?.textContent).toBe("Feedback");
@@ -360,7 +389,7 @@ describe("the Feedback button, in the shelf masthead", () => {
     expect(FEEDBACK_SHAPE.masthead.keepSide).toBe(true);
   });
 
-  it("carries the same name and no title, exactly as the other two do", () => {
+  it("carries the same name and no title, exactly as the other shapes do", () => {
     mount("masthead");
     expect(theButton().getAttribute("aria-label")).toBe("Feedback");
     expect(theButton().getAttribute("title")).toBeNull();
@@ -369,11 +398,47 @@ describe("the Feedback button, in the shelf masthead", () => {
   it("matches its neighbours' glyph size rather than the chrome shapes'", () => {
     /* `Profile` and `Admin` draw at 13; the corner and the bar at 15. Same
        argument as the classes: this glyph belongs to the row, not to the
-       feature. The other two are here so this is a difference rather than a
+       feature. The two chrome shapes are here so this is a difference rather than a
        number somebody once typed. */
     expect(FEEDBACK_SHAPE.masthead.icon).toBe(13);
     expect(FEEDBACK_SHAPE.corner.icon).toBe(15);
     expect(FEEDBACK_SHAPE.dock.icon).toBe(15);
+  });
+});
+
+/**
+ * **The site nav's** — the fourth shape, 2026-10-01 (spya-xgn06m,
+ * docs/plans/261001j-…). It replaces the corner button on the four signed-in
+ * pages that wear `SiteNav`, where the corner sat over the nav's last link.
+ */
+describe("the Feedback button, in the site nav", () => {
+  it("wears the nav links' classes and none of the corner's", () => {
+    mount("nav");
+    const btn = theButton();
+    /* SiteBits.tsx's `link`, the class string every nav entry wears. */
+    for (const cls of ["tw:text-sm", "tw:text-muted-foreground", "tw:hover:text-foreground"])
+      expect(btn.classList.contains(cls), `missing ${cls}`).toBe(true);
+    /* The masthead's two reasons, unchanged: the UA's button padding, and a
+       finger's floor once it is gone. */
+    expect(btn.classList.contains("tw:p-0")).toBe(true);
+    expect(btn.classList.contains("tw:pointer-coarse:min-h-10")).toBe(true);
+    expect(btn.classList.contains("fb-button")).toBe(false);
+    expect(host.querySelector(".fb-button")).toBeNull();
+  });
+
+  it("gives up its word below sm, and keeps its name", () => {
+    mount("nav");
+    const word = theButton().lastElementChild;
+    expect(word?.textContent).toBe("Feedback");
+    /* The nav was measured to fit at 320px with one link and *Sign in*; the
+       icon alone is narrower than *Sign in*, and the word is not. GPT Sol. */
+    expect(word?.className).toBe("tw:hidden tw:sm:inline");
+    expect(theButton().getAttribute("aria-label")).toBe("Feedback");
+  });
+
+  it("is declared to open downwards, and not to flip", () => {
+    expect(FEEDBACK_SHAPE.nav.placement).toBe("bottom");
+    expect(FEEDBACK_SHAPE.nav.keepSide).toBe(true);
   });
 });
 

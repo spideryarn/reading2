@@ -186,8 +186,8 @@ that the incident was never reproduced, and that a floor is not a diagnosis).
 
 Two rules now live there beside the dock's, and both are floors rather than fixes:
 
-- **40px minimum on the two order rows**, the same number the dock's buttons answer to — Apple's
-  44pt less the hairline a neighbour shares.
+- **40px minimum on the two order rows**, the dock's old floor and still these rows' own. The dock
+  moved to 44px on 2026-10-01; these independent controls did not.
 - **16px minimum on every text field**, in its own section (§ a field iOS zooms into) and under
   **`any-pointer: coarse`** rather than `pointer: coarse`. iOS Safari zooms the whole page in when a
   field under 16px takes focus and does not zoom back out, and every piece of this app's chrome is

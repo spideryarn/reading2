@@ -73,6 +73,32 @@ function drawsShelf(route: Exclude<Route, { kind: "callback" }>, user: User): bo
 }
 
 /**
+ * **The signed-in pages that wear `SiteNav`**, which carries its own Feedback
+ * trigger for a signed-in reader (SiteBits.tsx, `FEEDBACK_SHAPE.nav`) — so the
+ * corner one must not be drawn over it. Until 2026-10-01 it was, on top of the
+ * nav's right-hand link (spya-xgn06m, docs/plans/261001j-…).
+ *
+ * A list of route kinds, and it has to be the same list as the branches below
+ * that mount one of these four pages; tests/dock-corner-controls.test.tsx walks
+ * them and counts.
+ */
+function drawsSiteNav(route: Route): boolean {
+  return (
+    route.kind === "features" ||
+    route.kind === "public-sharing" ||
+    route.kind === "pricing" ||
+    route.kind === "public-library"
+  );
+}
+
+/** Every page except those with a chrome row of their own to put Feedback in:
+ *  the bottom bar, the shelf's masthead, the site nav. Argued where it is
+ *  used, in `App`. */
+function drawsCornerFeedback(route: Exclude<Route, { kind: "callback" }>, user: User): boolean {
+  return route.kind !== "read" && !drawsShelf(route, user) && !drawsSiteNav(route);
+}
+
+/**
  * Which page you are on, and nothing else.
  *
  * The path says which article (`/read/<slug>`) and which of its views
@@ -281,8 +307,8 @@ export function App() {
      short version is that this condition has to ask what *page* is on screen,
      and that depends on who is reading.
 
-     **Both exclusions are written here rather than in the pages that replace
-     them**, so that "which page draws the corner one" is a single expression
+     **All three exclusions are written here rather than in the pages that
+     replace them**, so that "which page draws the corner one" is a single expression
      somebody can read, instead of a rule you can only reconstruct by opening
      four files. What stops the two halves drifting into none-at-all or two-at-
      once is tests/dock-corner-controls.test.tsx, which walks the routes and
@@ -291,7 +317,7 @@ export function App() {
   return (
     <FeedbackHost>
       <SignedIn route={route} user={user} />
-      {route.kind !== "read" && !drawsShelf(route, user) && <FeedbackTrigger variant="corner" />}
+      {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
   );
 }

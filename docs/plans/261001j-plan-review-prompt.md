@@ -1,0 +1,5 @@
+Review this plan before it is built: docs/plans/261001j-bottom-bar-spacing-feedback-circle-nav-feedback-earlier-timestamps.md, in the repo at the current directory. Read-only.
+
+Read the code it touches: src/web/styles/dock.css, src/web/styles/dock-fit.css, src/web/dock-fit.ts, src/web/Dock.tsx (DockFeedback, the row order around line 1990-2250), src/web/FeedbackButton.tsx (FEEDBACK_SHAPE), src/web/App.tsx (the corner trigger line ~294 and the route branches for features/pricing/public-library/public-sharing), src/web/SiteBits.tsx (SiteNav), src/web/FeedbackEarlier.tsx, src/web/relative-time.ts, src/web/FeedbackDialog.tsx (fb-intro), tests/dock-corner-controls.test.tsx.
+
+Tell me: (1) anything in the plan that is wrong about the current code; (2) for each stage, the simplest correct implementation and any trap (fit-ladder measurement, the margin-left:auto in an overflowing scroll row, the circle on the label-showing rung, focus rings, the "exactly one trigger" route walk, the 320px nav budget, SSR/hydration of a `now`-dependent string if relevant); (3) anything missing from verification. Prioritise P0/P1/P2. Be concise.

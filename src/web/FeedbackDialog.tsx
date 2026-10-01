@@ -1033,11 +1033,11 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
             with two minutes here.
           </p>
 
-          {/* **One sentence, and it does not name an address.** It said "It is
-              sent as <your address>, so we can reply" until 2026-09-05 — see
-              `Props` above for Greg's report and for where a reader is still
-              told the address goes. */}
-          <p className="fb-intro">A rough note is worth far more than nothing.</p>
+          {/* **No second sentence under the thanks.** It said "It is sent as
+              <your address>, so we can reply" until 2026-09-05 (`Props` above
+              says where a reader is still told the address goes), and then "A
+              rough note is worth far more than nothing" until Greg asked for
+              it to go, 2026-09-30 (spya-yvwpek, docs/plans/261001j-…). */}
 
           {/* **Two buttons rather than radios**, so that pressing the pressed one
               puts it back to unset — Greg asked for the toggle to start on

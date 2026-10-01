@@ -56,6 +56,7 @@ import {
   type FeedbackKind,
 } from "../types.js";
 import { apiFetch } from "./lib/api.js";
+import { exactly, relativeAgo } from "./relative-time.js";
 
 export type EarlierState =
   | { kind: "idle" }
@@ -176,12 +177,18 @@ const SHIPPED_TITLE = "We shipped a change for this, and it is in the version of
  *  declined, waiting, on its way, or — with a missing note — already here. */
 const UNSHIPPED_TITLE = "This isn't marked as shipped in the version of Spideryarn you're using.";
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+/**
+ * `12 Sept 2026, 10:45 · 3d ago` — the exact time and how long ago, both.
+ * Greg, 2026-09-30 (spya-d9xdhs): *"can we include the exact timestamp and
+ * maybe a human-readable `3d ago` or `3h ago`?"* The narrow form is his;
+ * past relative-time.ts's 30-day threshold it is left off and the exact time
+ * stands alone. `createdAt` is checked parseable on the way in (above), so the
+ * `?? iso` is unreachable rather than a fallback anyone sees.
+ */
+function when(iso: string, now: number): string {
+  const exact = exactly(iso) ?? iso;
+  const ago = relativeAgo(iso, now, "narrow");
+  return ago === undefined ? exact : `${exact} · ${ago}`;
 }
 
 /**
@@ -247,6 +254,8 @@ export function EarlierList({
       );
     case "loaded": {
       const { reports, more } = earlier.page;
+      /* Once per render, so every row is measured from the same moment. */
+      const now = Date.now();
       if (reports.length === 0) {
         return <p className="fb-earlier-status">{EMPTY[show]}</p>;
       }
@@ -256,7 +265,7 @@ export function EarlierList({
             {reports.map((report) => (
               <li key={report.id} className="fb-earlier-item">
                 <p className="fb-earlier-meta">
-                  <time dateTime={report.createdAt}>{when(report.createdAt)}</time>
+                  <time dateTime={report.createdAt}>{when(report.createdAt, now)}</time>
                   {report.kind === null ? null : ` · ${KIND_WORD[report.kind]}`}
                   {report.shipped ? (
                     <>
