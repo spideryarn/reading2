@@ -36,11 +36,20 @@ import {
   type InvestigateEvent,
 } from "../src/citation-investigate.js";
 import { PASSAGES_TIMEOUT_MS } from "../src/citation-paper-passages.js";
+import {
+  DIG_ANSWER_TOKENS,
+  DIG_DEEPER_MODEL,
+  DIG_SEARCH_TIMEOUT_MS,
+  type DigFindings,
+  type DigLibrarySearch,
+  type DigRequest,
+  findingsPart,
+} from "../src/dig-deeper.js";
 import { PAPER_READ_MS, type PaperEvidence, type PaperEvidenceInput } from "../src/paper-evidence.js";
 import { chunkOf, jsonAnswer, PAPER_FINDING, PAPER_OPENING, paperRead } from "./helpers/paper-read-fixture.js";
 import { CITATION_INVESTIGATE_VERSION, investigateContext } from "../src/citation-investigate-context.js";
 import { type AiRequestBody, type JsonCall, ProviderRefused, type StreamOutcome } from "../src/ai-call.js";
-import { CITATION_LOOKUP_NO_MATCH } from "../src/messages.js";
+import { CITATION_LOOKUP_NO_MATCH, DIG_DEEPER_NO_SEARCH } from "../src/messages.js";
 import type { StreamRun, StreamRunEvent } from "../src/stream-run.js";
 import type { AllowanceTaken, RatePolicy } from "../src/store/contracts.js";
 import type {
@@ -196,7 +205,19 @@ interface Harness {
   passagesReply?: unknown | Error;
   /** A fault in our paper-reading code, distinct from a remote unreadable outcome. */
   paperError?: Error;
+  /** What *Dig deeper*'s forced search finds, or throws (plan 261001p stage 2). Default `NO_PAGES`. */
+  search?: DigFindings | Error;
 }
+
+/**
+ * **The harness's forced search: one search, no pages.** No sources, so every
+ * count the older cases pin is still the answer's own; a case about the
+ * findings passes its own.
+ */
+const NO_PAGES: DigFindings = { sources: [], searches: 1, libraryQuery: null, library: [] };
+
+/** The library seam, by identity: a case checks this very function reached the search. */
+const LIBRARY: DigLibrarySearch = async () => ({ hits: [] });
 
 function citationsOf(rows: CitedWork[]): Citations {
   return {
@@ -222,6 +243,9 @@ function harness(h: Harness) {
   const removedFindAts: string[] = [];
   const paperInputs: PaperEvidenceInput[] = [];
   const passagesCalls: AiRequestBody[] = [];
+  const searches: DigRequest[] = [];
+  /** Which paid step ran, in order: `search`, `lookup`, `passages`, `answer`. */
+  const order: string[] = [];
   let reads = 0;
   const listed = h.rows ?? [work(h.lookup ? { lookup: h.lookup } : {})];
   const deps: InvestigateCitationDeps = {
@@ -245,8 +269,16 @@ function harness(h: Harness) {
         savedFinds.push(find);
       },
     },
+    library: LIBRARY,
+    searchFirst: async (req) => {
+      searches.push(req);
+      order.push("search");
+      if (h.search instanceof Error) throw h.search;
+      return h.search ?? NO_PAGES;
+    },
     lookupCall: async (body): Promise<JsonCall> => {
       lookupCalls.push(body);
+      order.push("lookup");
       const reply = h.lookupReply === undefined ? NO_MATCH_ANSWER : h.lookupReply;
       if (reply instanceof Error) throw reply;
       return { json: reply, answeredBy: "anthropic/claude-sonnet-5", generationId: null };
@@ -258,6 +290,7 @@ function harness(h: Harness) {
     },
     passagesCall: async (body): Promise<JsonCall> => {
       passagesCalls.push(body);
+      order.push("passages");
       const reply = h.passagesReply === undefined ? jsonAnswer('{"passages": []}') : h.passagesReply;
       if (reply instanceof Error) throw reply;
       return { json: reply, answeredBy: "anthropic/claude-sonnet-5", generationId: null };
@@ -280,6 +313,7 @@ function harness(h: Harness) {
     },
     run: async function* (args: StreamRun) {
       runs.push(args);
+      order.push("answer");
       let text = "";
       for (const d of h.deltas) {
         text += d;
@@ -307,6 +341,8 @@ function harness(h: Harness) {
     removedFindAts,
     paperInputs,
     passagesCalls,
+    searches,
+    order,
     taken: () => buckets.length,
   };
 }
@@ -334,7 +370,10 @@ describe("the request", () => {
        then quoted its own phrases, the paper's terms and result titles too. */
     expect(system).toContain("NO QUOTATION MARKS AT ALL");
     expect(system).not.toContain("Use quotation marks only for");
-    expect(body.max_tokens).toBeGreaterThanOrEqual(3000);
+    /* Opus reasons inside this ceiling. Citations' dug answer gets the same
+       measured headroom as the other Dig deeper answers, rather than keeping
+       the old Sonnet-sized ceiling. */
+    expect(body.max_tokens).toBe(DIG_ANSWER_TOKENS);
   });
 
   it("is its own job, pins Exa with the probe's caps and max_characters, and caches the article", async () => {
@@ -409,7 +448,7 @@ describe("the request", () => {
       expect(second, "the second part invites the claim again").not.toMatch(/Describe a result as this work/);
     }
     expect(CITATION_INVESTIGATE_VERSION, "the prompt changed, so stored answers must detach").toBe(
-      "citation-investigate/6",
+      "citation-investigate/7",
     );
   });
 
@@ -481,10 +520,11 @@ describe("what is kept", () => {
       extractsRead: 2,
       longestExtractWords: 13,
       matchedHost: null,
-      searches: 1,
+      /* The forced search's one and the answer's own one (plan 261001p). */
+      searches: 2,
       searchesFrom: "server_tool_use_details",
       at: "2026-09-30T12:00:00.000Z",
-      promptVersion: "citation-investigate/6",
+      promptVersion: "citation-investigate/7",
     });
     expect(h.finished).toEqual(["lease-1"]);
   });
@@ -502,10 +542,10 @@ describe("what is kept", () => {
       for await (const e of it) seen.push(e.type);
     })();
     await new Promise((r) => setTimeout(r, 20));
-    expect(seen).toEqual(["stage", "lookup", "stage", "stage", "delta"]);
+    expect(seen).toEqual(["stage", "stage", "lookup", "stage", "stage", "delta"]);
     release();
     await pump;
-    expect(seen).toEqual(["stage", "lookup", "stage", "stage", "delta", "done"]);
+    expect(seen).toEqual(["stage", "stage", "lookup", "stage", "stage", "delta", "done"]);
   });
 
   for (const outcome of [
@@ -571,7 +611,7 @@ describe("the quote guard, inside the stream", () => {
     const { events, error, text } = await drain(stream());
     expect((error as Error).message).toBe(
       "This answer tried to quote a source directly, which we can't check, so it was stopped and not kept. " +
-        "Investigating again usually gets one that says it in its own words. [cite-quoted]",
+        "Digging deeper again usually gets one that says it in its own words. [cite-quoted]",
     );
     expect(text).toBe("Does it back the claim?\nThe abstract on arxiv.org says ");
     expect(events.some((e) => e.type === "done")).toBe(false);
@@ -626,23 +666,31 @@ describe("refusals before anything is spent", () => {
     expect(h.runs).toHaveLength(0);
   });
 
-  it("sets the allowance: one at a time, 8 an hour, 20 a day, 50 for everyone (plan 261001a stage 3)", () => {
+  it("sets the allowance: one at a time, 8 an hour, 20 a day, 25 for everyone (plan 261001p stage 2)", () => {
     expect(INVESTIGATE_RATE_POLICY).toMatchObject({
       concurrency: 1,
       fills: 8,
       windowMs: 60 * 60 * 1000,
-      daily: { fills: 20, globalFills: 50, windowMs: 24 * 60 * 60 * 1000 },
+      daily: { fills: 20, globalFills: 25, windowMs: 24 * 60 * 60 * 1000 },
     });
   });
 
-  it("keeps every reader together under $20 a day at a press's worst case, the paper included", () => {
-    expect(INVESTIGATE_PRESS_BUDGET_USD).toBeGreaterThanOrEqual(0.345 + 0.04);
-    expect((INVESTIGATE_RATE_POLICY.daily?.globalFills ?? Number.POSITIVE_INFINITY) * INVESTIGATE_PRESS_BUDGET_USD).toBeLessThan(20);
+  it("keeps every reader together within $20 a day, at twice a measured cold press on Opus", () => {
+    /* One measured cold press on a ~42k-token article, ≈ $0.42 from its token
+       counts; the budget is about twice that. */
+    expect(INVESTIGATE_PRESS_BUDGET_USD).toBeGreaterThanOrEqual(2 * 0.4);
+    expect((INVESTIGATE_RATE_POLICY.daily?.globalFills ?? Number.POSITIVE_INFINITY) * INVESTIGATE_PRESS_BUDGET_USD).toBeLessThanOrEqual(20);
   });
 
-  it("leases the slot for every deadline in a press — the lookup, the paper, its passages, the reading — plus the margin (Sol P-5)", () => {
+  it("leases the slot for every deadline in a press — the search, the lookup, the paper, its passages, the reading — plus the margin (Sol P-5, F8)", () => {
     expect(INVESTIGATE_RATE_POLICY.leaseMs).toBe(
-      FIND_TIMEOUT_MS + PAPER_REGISTRY_MS + PAPER_READ_MS + PASSAGES_TIMEOUT_MS + INVESTIGATE_TIMEOUT_MS + 30_000,
+      DIG_SEARCH_TIMEOUT_MS +
+        FIND_TIMEOUT_MS +
+        PAPER_REGISTRY_MS +
+        PAPER_READ_MS +
+        PASSAGES_TIMEOUT_MS +
+        INVESTIGATE_TIMEOUT_MS +
+        30_000,
     );
     /* The longer press, in numbers: the old lease no longer covers it. */
     expect(INVESTIGATE_RATE_POLICY.leaseMs).toBeGreaterThan(FIND_TIMEOUT_MS + INVESTIGATE_TIMEOUT_MS + 30_000 + PAPER_READ_MS);
@@ -671,7 +719,7 @@ describe("step 1, the lookup — when it runs (P-2)", () => {
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect(error).toBeNull();
     expect(h.lookupCalls).toHaveLength(0);
-    expect(types(events)).toEqual(["stage:reading-paper", "stage:reading", "delta", "done"]);
+    expect(types(events)).toEqual(["stage:searching", "stage:reading-paper", "stage:reading", "delta", "done"]);
   });
 
   it.each(["no-extract", "not-identified", "unreadable"] as const)(
@@ -682,7 +730,7 @@ describe("step 1, the lookup — when it runs (P-2)", () => {
       const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
       expect(error).toBeNull();
       expect(h.lookupCalls).toHaveLength(1);
-      expect(types(events)).toEqual(["stage:finding", "lookup", "stage:reading-paper", "stage:reading", "delta", "done"]);
+      expect(types(events)).toEqual(["stage:searching", "stage:finding", "lookup", "stage:reading-paper", "stage:reading", "delta", "done"]);
     },
   );
 
@@ -862,7 +910,7 @@ describe("step 1, the lookup — when it fails (P-5)", () => {
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect((error as Error).message).toMatch(/\[cite-lookup-failed\]$/);
     expect(h.runs, "the second, dearer call was made").toHaveLength(0);
-    expect(types(events)).toEqual(["stage:finding"]);
+    expect(types(events)).toEqual(["stage:searching", "stage:finding"]);
     expect(h.saved).toHaveLength(0);
     expect(h.finished).toEqual(["lease-1"]);
   });
@@ -941,7 +989,7 @@ describe("between the steps: the list is read again (P-3)", () => {
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect(error).toBeNull();
     expect(h.lookupCalls).toHaveLength(1);
-    expect(types(events)).toEqual(["stage:finding", "lookup", "stage:reading-paper", "stage:reading", "delta", "done"]);
+    expect(types(events)).toEqual(["stage:searching", "stage:finding", "lookup", "stage:reading-paper", "stage:reading", "delta", "done"]);
     expect(secondPart(h.runs)).toContain("A first check matched one search result to this work:");
   });
 
@@ -974,7 +1022,7 @@ describe("between the steps: the list is read again (P-3)", () => {
     const h = harness({ deltas: ["An answer."], rowsAfter: [] });
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect((error as Error).message).toMatch(/\[cite-gone\]$/);
-    expect(types(events)).toEqual(["stage:finding", "lookup"]);
+    expect(types(events)).toEqual(["stage:searching", "stage:finding", "lookup"]);
     expect(h.runs).toHaveLength(0);
     expect(h.saved).toHaveLength(0);
     expect(h.finished).toEqual(["lease-1"]);
@@ -983,7 +1031,7 @@ describe("between the steps: the list is read again (P-3)", () => {
 
 /* ------------------------------------------------ High-powered AI (260930f) -- */
 
-describe("High-powered AI — both of the press's calls follow the article (Sol F4)", () => {
+describe("High-powered AI — a high-powered article still gets Opus (Dig deeper sends it for every article since plan 261001p)", () => {
   const HIGH = { ...ARTICLE, highPowerSince: "2026-09-30T00:00:00.000Z" } as unknown as Article;
 
   it("sends Opus for the reading and for the nested find-first lookup, on an administrator's article", async () => {
@@ -1001,7 +1049,122 @@ describe("High-powered AI — both of the press's calls follow the article (Sol 
       await drain((await h.investigate(SLUG, ID, null)).stream());
     });
     expect(h.lookupCalls[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
-    expect((h.runs[0]?.request as unknown as { model: string }).model).toBe(HIGH_POWER_MODEL_OPENROUTER);
+    expect((h.runs[0]?.request as unknown as { model: string } | undefined)?.model).toBe(
+      HIGH_POWER_MODEL_OPENROUTER,
+    );
+  });
+});
+
+/* ------------------------------------- plan 261001p stage 2: Dig deeper -- */
+
+describe("Dig deeper — the forced search first, and the bigger model throughout (plan 261001p stage 2)", () => {
+  const FOUND: DigFindings = {
+    sources: [
+      {
+        url: "https://example.org/kaplan-review",
+        title: "A review of the scaling laws",
+        excerpt: "Kaplan and colleagues fit a power law to loss against parameters, data and compute.",
+      },
+    ],
+    searches: 1,
+    libraryQuery: '"scaling laws" OR Kaplan',
+    library: [{ slug: "another", title: "Another saved piece", blockId: "spya-dddddd", text: "Scaling laws again." }],
+  };
+
+  it("searches once, before anything else that costs, for the work, aimed by the sentence that cites it", async () => {
+    const h = harness({ deltas: ["An answer."], paper: paperRead() });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.searches).toHaveLength(1);
+    expect(h.order).toEqual(["search", "lookup", "passages", "answer"]);
+    expect(types(events)[0]).toBe("stage:searching");
+    const req = h.searches[0];
+    expect(req?.slug).toBe(SLUG);
+    expect(req?.subject).toContain(TITLE);
+    expect(req?.subject).toContain("Kaplan, J.");
+    expect(req?.subject).toContain("2020");
+    expect(req?.context).toBe(BLOCKS[0]?.text);
+    expect(req?.article.title).toBe("The scaling essay");
+    expect(req?.library).toBe(LIBRARY);
+    expect(h.buckets, "one allowance, the existing one — no second charge").toEqual(["citation-investigate"]);
+  });
+
+  it("puts the findings in the last part, after the breakpoint, and leaves the cached part byte-identical", async () => {
+    const h = harness({ deltas: ["An answer."], search: FOUND });
+    await drain((await h.investigate(SLUG, ID, null)).stream());
+    const parts =
+      (h.runs[0]?.request.messages as { content: { text: string; cache_control?: unknown }[] }[] | undefined)?.[1]?.content ?? [];
+    expect(parts).toHaveLength(2);
+    const plain = investigateRequest({
+      meta: ARTICLE.meta,
+      blocks: BLOCKS,
+      context: investigateContext(work(), (id) => BLOCKS.find((b) => b.id === id)?.text),
+      profile: null,
+      matched: null,
+      model: "m",
+    });
+    const plainFirst = (plain.messages as { content: { text: string }[] }[])[1]?.content[0]?.text;
+    expect(parts[0]?.text).toBe(plainFirst);
+    expect(parts[0]?.cache_control).toEqual({ type: "ephemeral" });
+    const last = parts[1]?.text ?? "";
+    expect(parts[1]?.cache_control).toBeUndefined();
+    const at = last.indexOf(findingsPart(FOUND));
+    expect(at, "the findings, fenced, in the last part").toBeGreaterThan(last.indexOf("Where the article cites it:"));
+    expect(last.trimEnd().endsWith("Look into this work.")).toBe(true);
+  });
+
+  it("stops at a failed search: no lookup, no paper, no answer, and the slot is freed", async () => {
+    const failed = Object.assign(new Error(DIG_DEEPER_NO_SEARCH.message), { status: 502 });
+    const h = harness({ deltas: ["An answer."], search: failed, paper: paperRead() });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect((error as Error).message).toBe(DIG_DEEPER_NO_SEARCH.message);
+    expect(types(events)).toEqual(["stage:searching"]);
+    expect(h.order).toEqual(["search"]);
+    expect(h.lookupCalls).toHaveLength(0);
+    expect(h.paperInputs).toHaveLength(0);
+    expect(h.runs).toHaveLength(0);
+    expect(h.saved).toHaveLength(0);
+    expect(h.finished).toEqual(["lease-1"]);
+  });
+
+  it("sends every call the reader reads to DIG_DEEPER_MODEL on a standard article, whatever the overrides say", async () => {
+    const names = ["SPIDERYARN_CITATION_INVESTIGATE_MODEL", "SPIDERYARN_CITATIONS_FIND_MODEL"] as const;
+    const previous = names.map((n) => process.env[n]);
+    for (const n of names) process.env[n] = "test/some-other-model";
+    try {
+      expect(modelFor("citation-investigate", "standard")).toBe("test/some-other-model");
+      const h = harness({ deltas: ["An answer."], paper: paperRead() });
+      await drain((await h.investigate(SLUG, ID, null)).stream());
+      expect(h.lookupCalls[0]?.model, "Look it up's verdict").toBe(DIG_DEEPER_MODEL);
+      expect(h.passagesCalls[0]?.model, "the paper's passages").toBe(DIG_DEEPER_MODEL);
+      expect((h.runs[0]?.request as unknown as { model: string } | undefined)?.model, "the answer").toBe(DIG_DEEPER_MODEL);
+    } finally {
+      names.forEach((n, i) => {
+        const was = previous[i];
+        if (was === undefined) delete process.env[n];
+        else process.env[n] = was;
+      });
+    }
+  });
+
+  it("reports the forced search with the answer's own, and counts its pages as read", async () => {
+    const h = harness({ deltas: ["An answer."], search: { ...FOUND, searches: 1 } });
+    await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(h.saved[0]?.searches).toBe(2);
+    expect(h.saved[0]?.sources.map((s) => s.url)).toEqual([
+      "https://example.org/kaplan-review",
+      "https://arxiv.org/abs/2001.08361",
+      "https://www.semanticscholar.org/paper/x",
+    ]);
+    expect(h.saved[0]?.extractsRead).toBe(3);
+  });
+
+  it("keeps an answer whose own call searched nothing, because the forced search's pages are what it read", async () => {
+    const h = harness({ deltas: ["An answer."], search: FOUND, evidence: [] });
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.saved[0]?.extractsRead).toBe(1);
+    expect(h.saved[0]?.longestExtractWords).toBe(14);
   });
 });
 
@@ -1025,7 +1188,7 @@ describe("the paper itself (plan 261001a stage 3)", () => {
     const h = harness({ deltas: ["An answer."], lookup: LOOKUP, find: MATCHED_FIND });
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect(error).toBeNull();
-    expect(types(events)).toEqual(["stage:reading-paper", "stage:reading", "delta", "done"]);
+    expect(types(events)).toEqual(["stage:searching", "stage:reading-paper", "stage:reading", "delta", "done"]);
     expect(h.paperInputs).toHaveLength(1);
     expect(h.paperInputs[0]?.matchedPageUrl).toBe(MATCHED_FIND.url);
     expect(h.paperInputs[0]?.work).toMatchObject({ title: TITLE, url: work().url, why: work().why });
@@ -1130,7 +1293,7 @@ describe("the paper itself (plan 261001a stage 3)", () => {
     }
   });
 
-  it("asks for the passages on the quick check's configured model, with no tools, the chunks fenced and a reminder after", async () => {
+  it("asks for the passages on Dig deeper's model whatever the quick check's override says, with no tools, the chunks fenced and a reminder after", async () => {
     const paper = paperRead();
     const previous = process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
     process.env.SPIDERYARN_CITATIONS_FIND_MODEL = "test/quick-check-model";
@@ -1140,8 +1303,10 @@ describe("the paper itself (plan 261001a stage 3)", () => {
       expect(h.passagesCalls).toHaveLength(1);
       const body = h.passagesCalls[0] as AiRequestBody & { tools?: unknown };
       expect(body.tools).toBeUndefined();
-      expect(body.model).toBe(modelFor("citations-find", "standard"));
-      expect(body.model).toBe("test/quick-check-model");
+      /* Plan 261001p stage 2 (Sol F3): the passages' bearing is shown to the
+         reader, so it is written by the bigger model like the rest. */
+      expect(modelFor("citations-find", "standard")).toBe("test/quick-check-model");
+      expect(body.model).toBe(DIG_DEEPER_MODEL);
       const user = (body.messages as { role: string; content: string }[])[1]?.content ?? "";
       const open = user.indexOf("<<<UNTRUSTED PAPER TEXT");
       const close = user.indexOf("<<<END UNTRUSTED PAPER TEXT>>>");
@@ -1196,7 +1361,7 @@ describe("the paper itself (plan 261001a stage 3)", () => {
     const h = harness({ deltas: ["An answer."], paperError: bug });
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect(error).toBe(bug);
-    expect(types(events)).toEqual(["stage:finding", "lookup", "stage:reading-paper"]);
+    expect(types(events)).toEqual(["stage:searching", "stage:finding", "lookup", "stage:reading-paper"]);
     expect(h.passagesCalls).toHaveLength(0);
     expect(h.runs).toHaveLength(0);
     expect(h.saved).toHaveLength(0);

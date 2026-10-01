@@ -30,6 +30,7 @@ import {
   cachedText,
   estimateTokens,
   readerPositionLine,
+  visibleBlocksLine,
   underCacheFloor,
 } from "../src/article-prompt.js";
 import type { TextPart } from "../src/article-prompt.js";
@@ -216,6 +217,50 @@ describe("readerPositionLine", () => {
     // So callers can concatenate it without producing a stray blank line that
     // would itself change the suffix bytes.
     expect(readerPositionLine(undefined)).toBe("");
+  });
+});
+
+describe("visibleBlocksLine", () => {
+  it("names every block on screen, in the order given", () => {
+    expect(visibleBlocksLine(["spya-aaaaaa", "spya-bbbbbb"])).toContain("spya-aaaaaa, spya-bbbbbb");
+  });
+
+  it("carries its caveat, because the point is not to lean on it (spya-ybnas5)", () => {
+    const line = visibleBlocksLine(["spya-aaaaaa"]);
+    expect(line).toMatch(/^For context only/);
+    expect(line).toContain("otherwise ignore them");
+  });
+
+  it("is empty for an empty screen, like readerPositionLine", () => {
+    expect(visibleBlocksLine([])).toBe("");
+  });
+
+  it("replaces only the position line and leaves the cached prefix and suffix order untouched", () => {
+    const shared = {
+      meta,
+      blocks,
+      history: [],
+      question: "what does this mean?",
+      at: "spya-aaaaaa",
+      profile: "About the reader: familiar with biology.",
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      help: true,
+    };
+    const at = buildConverseMessages(shared);
+    const visible = buildConverseMessages({
+      ...shared,
+      visible: ["spya-bbbbbb", "spya-cccccc"],
+    });
+    const atTail = at.at(-1)!.content as string;
+    const visibleTail = visible.at(-1)!.content as string;
+
+    expect(visibleTail).toBe(
+      atTail.replace(
+        readerPositionLine(shared.at),
+        visibleBlocksLine(["spya-bbbbbb", "spya-cccccc"]),
+      ),
+    );
+    expect(cachedText(visible)).toBe(cachedText(at));
   });
 });
 

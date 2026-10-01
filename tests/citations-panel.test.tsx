@@ -1199,7 +1199,7 @@ describe("what a row says after Look it up", () => {
   it("the Investigate card says it reads an extract, not the work, and that a given link stays", async () => {
     await draw(owner({ citations: artefact([CENTRAL]) }));
     const card = await cardFor(investigateButton(CENTRAL.id));
-    expect(card.head).toBe("Investigate");
+    expect(card.head).toBe("Dig deeper");
     const copy = `${card.head} ${card.body}`;
     expect(copy).toMatch(/extract/i);
     expect(copy).toMatch(/quoting only passages code found/i);
@@ -1231,6 +1231,7 @@ const {
   INVESTIGATE_LOOKUP_KEPT,
   INVESTIGATE_PREVIOUS_KEPT,
   INVESTIGATE_READING_PAPER,
+  INVESTIGATE_SEARCHING,
   INVESTIGATE_WAIT,
   INVESTIGATION_LABEL,
   INVESTIGATION_LABEL_WITH_PAPER,
@@ -1271,7 +1272,7 @@ describe("Investigate", () => {
     );
     for (const id of [CENTRAL.id, FAMOUS.id]) {
       const b = investigateButton(id);
-      expect(b.textContent).toBe("Investigate");
+      expect(b.textContent).toBe("Dig deeper");
       expect(b.closest(".cite-meta")?.querySelector(".cite-find")).toBeNull();
       expect(b.hasAttribute("title"), "the button fell back to a title attribute").toBe(false);
     }
@@ -1317,14 +1318,15 @@ describe("Investigate", () => {
   it("its card says what it does, costs and keeps, and distinguishes extracts from pages it fetched", async () => {
     await draw(owner({ citations: artefact([CENTRAL]) }));
     const card = await cardFor(investigateButton(CENTRAL.id));
-    expect(card.head).toBe("Investigate");
+    expect(card.head).toBe("Dig deeper");
     expect(earnsItsHover(card), "the Investigate card does not earn its hover").toBeNull();
     const copy = `${card.head} ${card.body}`;
     expect(copy).toMatch(/searches the web/i);
     expect(copy).toMatch(/profile/i);
     /* Plan 260930d: both steps, in order. */
-    expect(card.what).toMatch(/^First it searches the web for this work's own page/);
-    expect(card.what).toMatch(/Then it writes a longer reading/);
+    expect(card.what).toMatch(/^It searches the web for this work and asks a stronger model about it\./);
+    expect(card.what).toMatch(/First it looks for the work's own page/);
+    expect(card.what).toMatch(/Then the stronger model writes a longer reading/);
     expect(card.what).toMatch(/unless it already has a current checked reading/);
     expect(card.what).not.toMatch(/unless it has already/);
     expect(card.how).toMatch(/costs money/i);
@@ -1342,6 +1344,12 @@ describe("Investigate", () => {
   });
 
   it("says it is finding the work while the first step runs, then what the wait is", async () => {
+    /* Plan 261001p stage 2: Dig deeper's forced search runs before anything else. */
+    await draw(
+      owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id, investigateStage: "searching" }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_SEARCHING);
+    expect(INVESTIGATE_SEARCHING).toBe("Searching the web…");
     await draw(
       owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id, investigateStage: "finding" }),
     );
@@ -1362,7 +1370,7 @@ describe("Investigate", () => {
   it("streams into the pressed row only, says what the wait is first, and holds every other row", async () => {
     await draw(owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id }));
     expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_WAIT);
-    expect(investigateButton(CENTRAL.id).textContent).toBe("Investigating…");
+    expect(investigateButton(CENTRAL.id).textContent).toBe("Digging deeper…");
     expect(investigateButton(FAMOUS.id).getAttribute("aria-disabled")).toBe("true");
 
     let pressed = 0;
@@ -1405,7 +1413,7 @@ describe("Investigate", () => {
     expect(r.querySelector(".cite-inv-error")?.textContent).toContain("This answer tried to quote a source directly.");
     expect(r.querySelector(".cite-inv-previous")).toBeNull();
     const again = r.querySelector<HTMLButtonElement>(".cite-inv-again");
-    expect(again?.textContent).toBe("Investigate again");
+    expect(again?.textContent).toBe("Dig deeper again");
     await act(async () => again?.click());
     expect(pressed).toBe(1);
   });
@@ -1528,7 +1536,7 @@ describe("Investigate", () => {
   it("folds a kept answer to its first part, and opens to every part, what was read, the sources and the date", async () => {
     await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: INVESTIGATION }]) }));
     const r = row(CENTRAL.id);
-    expect(investigateButton(CENTRAL.id).textContent).toBe("Investigate again");
+    expect(investigateButton(CENTRAL.id).textContent).toBe("Dig deeper again");
     expect([...r.querySelectorAll(".cite-inv-lead")].map((n) => n.textContent)).toEqual(["Does it back the claim?"]);
     expect(r.querySelector(".cite-inv-prov")).toBeNull();
     const toggle = r.querySelector<HTMLButtonElement>(".cite-inv-toggle");
@@ -1548,7 +1556,7 @@ describe("Investigate", () => {
       expect(a.getAttribute("rel")).toContain("noopener");
     }
     expect(r.querySelector(".cite-inv-sources")?.textContent).toContain("The paper's page");
-    expect(r.querySelector(".cite-inv-foot")?.textContent).toMatch(/^Investigated .+ · Investigate again$/);
+    expect(r.querySelector(".cite-inv-foot")?.textContent).toMatch(/^Researched .+ · Dig deeper again$/);
     /* Plan 260930d: the offer of Look it up went with its button. */
     expect(r.querySelector(".cite-inv-offer")).toBeNull();
     expect(r.querySelectorAll(".cite-find")).toHaveLength(0);

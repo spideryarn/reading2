@@ -12,11 +12,11 @@
  *
  * ## It guesses, and `mic-devices.ts` refuses to — that is not a contradiction
  *
- * That file says, at length, that it **does not guess**: no preferring
- * `'default'`, no skipping a device because its label looks like a conferencing
- * loopback. The reason is that it decides *which microphone to open*, and
- * overriding what somebody chose in their own system settings is not ours to
- * do.
+ * That file says, at length, that it **does not guess**: no skipping a device
+ * because its label looks like a conferencing loopback. The reason is that it
+ * decides *which microphone to open*, and overriding what somebody chose in
+ * their own system settings is not ours to do — which is also why, with no
+ * pick, it asks for the system's own default input by name (spya-g8byyd).
  *
  * This decides how to *filter what that microphone produces*. Nobody chose it,
  * there is no setting to override, and the alternative to a guess is not

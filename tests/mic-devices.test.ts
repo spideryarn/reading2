@@ -52,8 +52,18 @@ afterEach(() => {
 });
 
 describe("the constraint", () => {
-  it("asks for anything at all when nothing is remembered", () => {
+  it("asks plainly when nothing is remembered and the browser lists no default", () => {
     expect(audioConstraint(null)).toEqual({ audio: true });
+  });
+
+  /* `{ audio: true }` opens Chromium's own choice, which need not be the
+     operating system's input (spya-g8byyd); only `exact` beats it. */
+  it("names Chromium's system-default input exactly when it is listed", () => {
+    expect(audioConstraint(null, true)).toEqual({ audio: { deviceId: { exact: "default" } } });
+  });
+
+  it("lets a remembered pick win over the system default", () => {
+    expect(audioConstraint("abc123", true)).toEqual({ audio: { deviceId: { exact: "abc123" } } });
   });
 
   /* `exact`, never `ideal`. An `ideal` constraint quietly gives you a different

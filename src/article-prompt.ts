@@ -214,6 +214,25 @@ export function readerPositionLine(blockId: string | undefined): string {
 }
 
 /**
+ * **What was on the reader's screen when they sent this**, as a line for the
+ * suffix, hedged — and it replaces `readerPositionLine` when it has anything to
+ * say, because one hedged line about position beside one plain one would undo
+ * the hedge.
+ *
+ * > But let's not overemphasize it. So maybe the prompt would include the
+ * > information along with a bit of a caveat, e.g. "by the way, here's what's
+ * > visible on the page, but it may or may not relate to the user's messages...".
+ * >
+ * > — Greg, 2026-10-01 (spya-ybnas5)
+ *
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export function visibleBlocksLine(blockIds: readonly string[]): string {
+  if (blockIds.length === 0) return "";
+  return `For context only: when they sent this, the reader's screen showed blocks ${blockIds.join(", ")}. If their message refers to what is on screen, these may help; otherwise ignore them.`;
+}
+
+/**
  * A rough token count, for deciding whether a block is worth marking at all.
  *
  * Four characters per token is the usual English estimate and it is what the

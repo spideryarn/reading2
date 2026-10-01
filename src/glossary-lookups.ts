@@ -54,7 +54,7 @@
  * their entries at read time. The wire shape the panel sees is unchanged:
  * `entry.lookup`.
  *
- * See docs/project/glossary.md § Checking a term on the web.
+ * See docs/project/glossary.md § Digging deeper into a term.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
