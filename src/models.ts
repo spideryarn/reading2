@@ -245,12 +245,13 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 
 /**
- * **The high-power model — the capable tier's replacement on one article, when
- * its owner has switched High-powered AI on.** Two literals, like the capable
- * tier's: the stored name (what a `generator` stamp says) and the OpenRouter
- * address (what goes on the wire). Not derived from each other, for the reason
- * § Do not derive one spelling from the other gives — and this pair is the proof
- * of it: dashes in the name, a dot in the slug.
+ * **The high-power model — the capable tier's stronger model.** Most tasks use
+ * it when an article's owner has switched High-powered AI on; `powerFor` also
+ * selects it for the few tasks deliberately run high on every article. Two
+ * literals, like the capable tier's: the stored name (what a `generator` stamp
+ * says) and the OpenRouter address (what goes on the wire). Not derived from
+ * each other, for the reason § Do not derive one spelling from the other gives
+ * — and this pair is the proof of it: dashes in the name, a dot in the slug.
  *
  * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's $2 / $10 —
  * exactly twice, which is what Greg asked for ("broadly double"). Checked for
@@ -267,9 +268,9 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 export { HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, isHighPowerModel };
 
 /**
- * **Which of the two capable models an article's calls go to.** `"high"` only
- * for an article whose `high_power_since` is set. The caller decides that;
- * this file only answers what each value means.
+ * **A choice between the two capable models.** `articlePower` returns `"high"`
+ * only for an article whose `high_power_since` is set; `powerFor` may then
+ * replace that article setting for a task with an explicit policy exception.
  *
  * **A required argument everywhere it is taken, never ambient state**
  * (decision 5): a call site that has not decided does not compile, where an
@@ -335,8 +336,9 @@ export function sameGenerator(a: string, b: string): boolean {
 }
 
 /**
- * **The power an article's calls run at**: high exactly when its
- * `high_power_since` is set.
+ * **The power selected by an article's own switch**: high exactly when its
+ * `high_power_since` is set. A task's effective power may differ; `powerFor`
+ * applies those explicit exceptions.
  *
  * Until 2026-09-30 this also required the owner to be an administrator, because
  * only an administrator could set the column and nothing charged a reader for
@@ -1036,6 +1038,32 @@ export const TASK_TIER: Record<Task, Tier> = {
    */
   "link-summary": "quick",
 };
+
+/**
+ * **The tasks written on the high-power model for every article**, whatever
+ * its High-powered AI setting. `powerFor` is the one place that applies it:
+ * the pipeline step that runs the task and `GET /api/models`, which reports
+ * it, both ask it, so the page cannot name one model while the call sends
+ * another.
+ *
+ * `simple` (plan 261001p): measured on the PID paper with its fidelity guard
+ * off, Sonnet named the paper's recurrent connections "feedback loops", the
+ * paper's word for the kind with the opposite effect, in 5 levels of 18; Opus
+ * in none of 36, and a blind read found 3 major faults in 27 Sonnet levels
+ * against none in 27 Opus ones. About $0.05 a press more and ~2.5 s. The guard
+ * stays: Opus still made a fault only it caught.
+ * docs/plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md.
+ *
+ * Removing a task puts it back on the article's setting. A stored artefact
+ * stays fresh either way, because `generationKey` treats the two models as one
+ * generation.
+ */
+export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple"]);
+
+/** The power `task` runs at on an article whose own setting is `articlePower`. */
+export function powerFor(task: Task, articlePower: ModelPower): ModelPower {
+  return ALWAYS_HIGH_POWER.has(task) ? "high" : articlePower;
+}
 
 /**
  * **The OpenRouter model id for a tier.** Private, and it is private on purpose.

@@ -5,9 +5,10 @@ it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, f
 and [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md) (readers, and what
 it costs them).
 
-**One switch per article, on `/metadata`, that moves that article's capable-tier calls from Claude
-Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argument that takes several
+**One switch per article, on `/metadata`, that moves most of that article's capable-tier calls from
+Claude Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argument that takes several
 readings — the stronger model writes the structure, gists, quotes, FAQ answers and chat replies.
+Simple's plain-words summaries are the exception: they use Opus for every article.
 Opus 5.5's input and output token prices are twice Sonnet 5's; the dated prices and measurement live
 in [the plan](../plans/260930f-high-powered-ai-per-article.md#what-this-is-in-one-paragraph). Greg,
 2026-09-30:
@@ -42,19 +43,24 @@ and `/features`
 ([cost-tracking.md § Only the administrator ever sees a figure](cost-tracking.md#only-the-administrator-ever-sees-a-figure)).
 
 **Switching on happens only on `/metadata`, after the article is on the shelf**, not at import. The
-first pass is always Sonnet, and a reader who wants Opus throughout presses *Run it again* (free,
-as every re-run is). An import-time flag is the named next step; it needs its own plan, because
+ingest-time capable-tier work uses Sonnet, and a reader who wants Opus throughout presses *Run it
+again* (free, as every re-run is). Simple is not part of the default ingest and already uses Opus
+whenever it is requested. An import-time flag is the named next step; it needs its own plan, because
 the charge would have to ride the job.
 
 ## What it changes, and what it does not
 
-- **Every task on the capable tier moves**, for that article only: the pipeline stages (structure,
-  headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated, trajectory,
-  debate, citations) and the calls made while you read it (chat, explain, search, quiz marking,
-  referee, citation lookup and investigation, glossary look-ups, live conversation's search tool).
+- **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
+  (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
+  trajectory, debate, citations) and the calls made while you read it (chat, explain, search, quiz
+  marking, referee, citation lookup and investigation, glossary look-ups, live conversation's search tool).
   A developer's explicit per-task environment override still wins, so a deliberate model comparison
   stays pinned. [`TASK_TIER` and `resolveModel` in `src/models.ts`](../../src/models.ts) are the
   exhaustive list and that exception.
+- **Simple (Summary's plain-words levels) is already on Opus for every article**, so the switch
+  does not change it. Sonnet borrowed a paper's name for one thing to name another where Opus did
+  not, at about $0.05 a press more: `ALWAYS_HIGH_POWER` in `src/models.ts`,
+  [261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
 - **The quick tier and fixed-model calls do not move.** That includes link summaries, quiz-verdict
   classification, PDF reading and figure location, embeddings, dictation, shelf topics, the live
   voice session itself, and Illustrated's separate image-generation call. In Illustrated, only the
@@ -73,8 +79,8 @@ the charge would have to ride the job.
 | | |
 |---|---|
 | The setting | `articles.high_power_since timestamptz null` — null is off. Written by `PUT /api/article/:slug/high-power` (`{ on: boolean }`), scoped to the caller's **own** article. A reader's switch-on goes through `chargeAndSwitchOnHighPower` ([`src/billing/admission.ts`](../../src/billing/admission.ts)): the charge row and the column commit in one transaction. The administrator's switch goes through the admin-checked, uncharged `highPowerStore.switchOnForAdmin`; every switch-off goes through the off-only `highPowerStore.switchOff` |
-| Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts): the column is set. Until 2026-09-30 it also required an administrator owner, because nothing charged a reader. Now the only writer that sets the column for a reader charges in the same transaction |
-| Which model | The model's two spellings, the stored name and the wire address, are `HIGH_POWER_MODEL` and `HIGH_POWER_MODEL_OPENROUTER` in [`src/high-power-model.ts`](../../src/high-power-model.ts), a leaf so `src/ai-call.ts` can use `isHighPowerModel` without an import cycle; `src/models.ts` re-exports and explains them. `modelFor(task, power)` / `resolveModel(task, power)` — `power` is a **required** argument all the way down (`StepContext.power`, `streamMessage`'s options, every request-path stream), so a call that forgets to decide does not compile. Chosen over an `AsyncLocalStorage` scope because its failure is silent and it loses context across a streamed response |
+| Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts) reads whether the column is set; `powerFor` then applies the one task exception, Simple. Until 2026-09-30 the column also required an administrator owner, because nothing charged a reader. Now the only writer that sets it for a reader charges in the same transaction |
+| Which model | The model's two spellings, the stored name and the wire address, are `HIGH_POWER_MODEL` and `HIGH_POWER_MODEL_OPENROUTER` in [`src/high-power-model.ts`](../../src/high-power-model.ts), a leaf so `src/ai-call.ts` can use `isHighPowerModel` without an import cycle; `src/models.ts` re-exports and explains them. `powerFor(task, articlePower)` selects the effective power where a task has a policy exception; `modelFor(task, power)` / `resolveModel(task, power)` resolve that selection. `power` is a **required** argument all the way down (`StepContext.power`, `streamMessage`'s options, every request-path stream), so a call that forgets to decide does not compile. Chosen over an `AsyncLocalStorage` scope because its failure is silent and it loses context across a streamed response |
 | Freshness | `generationKey` / `sameGenerator`: the stamp comparison and the two citation fingerprints treat Sonnet and Opus as one generation. Checkpoint keys (labels batches, hierarchy structure, deepening) stay exact, because there the question is *which model paid for this answer* |
 
 ## Three things that move with the model

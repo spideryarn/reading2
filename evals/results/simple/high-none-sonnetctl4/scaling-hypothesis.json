@@ -1,0 +1,119 @@
+{
+  "arm": "high-none-sonnetctl4",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:34:44.321Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 19474,
+  "costUsd": 0.067186,
+  "tokens": {
+    "input": 5517,
+    "output": 4003,
+    "reasoning": 2275
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 209,
+  "fullerWords": 335,
+  "briefWords": 138,
+  "paragraphs": [
+    {
+      "text": "This piece is an essay about GPT-3, a huge AI language model released in 2020, and what its success means for how artificial intelligence might be built. It argues for the \"scaling hypothesis\": the idea that intelligence can emerge just by making neural networks (computer systems built from simple learning units) much bigger, feeding them huge amounts of data, and giving them far more computing power.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 was trained the same simple way as smaller, earlier models, yet it gained a skill nobody specifically trained it for: following instructions and learning new tasks from just a few examples, without any extra retraining. This \"meta-learning\" (learning how to learn) surprised researchers, including the author, and shows that growing a model's size kept paying off instead of hitting a wall, as many had expected.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "The author calls this pattern the \"blessings of scale\": unlike most research, where small problems are easy and big ones are nearly impossible, these models become more stable, more general, and more human-like simply by being made larger. The piece also argues that AI experts who long dismissed this idea never predicted GPT-3's abilities and have not changed their views, raising the question of how fast, and how far, this scaling could still go.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-b93jbz",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is an essay by Gwern about GPT-3, a huge text-prediction AI system released by OpenAI in 2020, and what it reveals about how progress in artificial intelligence happens. It argues for the \"scaling hypothesis\": the idea that simply building much bigger neural networks, fed much more data and computing power, is the real path toward highly capable, human-like AI, rather than clever new designs.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3 was not just a bigger version of its predecessor GPT-2: it unexpectedly learned to follow instructions and pick up new tasks from just a few examples, a skill called meta-learning, which it was never specifically trained to do. The author argues this shows large unsupervised models (trained on raw, unlabeled text) could become essential building blocks for future AI, and that most AI researchers' public confidence that such progress is limited is not backed by any real predictive model, since their forecasts keep being proven wrong.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ewxv9q",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "A central idea is the \"blessings of scale\": problems that are hard to solve with small neural networks become steadily easier as the network, its training data, and computing power all grow, with abilities like generalizing and meta-learning emerging on their own. The piece suggests this happens because a large model acts like a crowd of many smaller internal models; simple ones that just memorize data win early on, but as data grows too vast to memorize, models that learn genuine underlying patterns and rules start winning instead.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "The essay also explains why just training a model to predict the next piece of text (called pretraining) can work so well: early on it learns easy patterns like letter frequency and spelling, but as those are exhausted, the only way to keep improving its predictions is to learn deeper things like logic, causality, and understanding people's intentions. It closes by criticizing a confident, dismissive \"voice of authority\" among experts who insist such advances cannot happen, arguing their track record of being wrong, repeatedly, should count against them.",
+      "ids": [
+        "spya-ce0ts7",
+        "spya-nhgv5g",
+        "spya-zyncdd"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program that predicts text, and an idea called the scaling hypothesis. That idea says AI gets smarter mainly by making it bigger: more data, more computing power, using the same basic design.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-m3gtj6"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 surprised almost everyone. It could do new tasks, like arithmetic or translating, just from being shown a few examples in the text, even though it was never specially trained for them. This skill, called meta-learning (learning how to learn), showed up just from making the model much bigger.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The article calls this pattern the \"blessings of scale\": problems that stump small AI models get easier, not harder, as models grow huge. Most AI researchers doubted bigger would keep working, but it did, and the author expects the 2020s to bring even bigger, stranger surprises.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-emqjaa",
+        "spya-rbx2kz"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

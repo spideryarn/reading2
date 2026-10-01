@@ -1,0 +1,156 @@
+{"arm":"high-none-opus1","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4365,"usd":0.00054085,"kind":"passed"}
+{"arm":"high-none-opus1","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4024,"usd":0.0008048,"kind":"passed"}
+{"arm":"high-none-opus1","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":8681,"usd":0.00140735,"kind":"flagged","flags":[{"paragraph":3,"why":"The passage says synergy peaked when mutual information was only about 7% of its maximum, not when the inputs were moderately similar."}]}
+{"arm":"high-none-opus10","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3864,"usd":0.00055175,"kind":"passed"}
+{"arm":"high-none-opus10","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3803,"usd":0.0008375,"kind":"passed"}
+{"arm":"high-none-opus10","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4071,"usd":0.00108125,"kind":"passed"}
+{"arm":"high-none-opus11","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":2814,"usd":0.00056635,"kind":"passed"}
+{"arm":"high-none-opus11","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3593,"usd":0.00082365,"kind":"passed"}
+{"arm":"high-none-opus11","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4276,"usd":0.00096665,"kind":"passed"}
+{"arm":"high-none-opus12","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4422,"usd":0.00057515,"kind":"passed"}
+{"arm":"high-none-opus12","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4422,"usd":0.0009213,"kind":"flagged","flags":[{"paragraph":3,"why":"The passages say synergy peaked when mutual information reached about 7% of its maximum, not when the senders' activity overlapped by 7%."}]}
+{"arm":"high-none-opus12","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4198,"usd":0.00103025,"kind":"passed"}
+{"arm":"high-none-opus2","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4074,"usd":0.0006014,"kind":"passed"}
+{"arm":"high-none-opus2","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3591,"usd":0.00082865,"kind":"passed"}
+{"arm":"high-none-opus2","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":5661,"usd":0.00111875,"kind":"passed"}
+{"arm":"high-none-opus3","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3361,"usd":0.0005924,"kind":"passed"}
+{"arm":"high-none-opus3","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3357,"usd":0.0007753,"kind":"passed"}
+{"arm":"high-none-opus3","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4015,"usd":0.0009855,"kind":"passed"}
+{"arm":"high-none-opus4","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4044,"usd":0.00067115,"kind":"passed"}
+{"arm":"high-none-opus4","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":8380,"usd":0.0008827,"kind":"passed"}
+{"arm":"high-none-opus4","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4698,"usd":0.00095665,"kind":"passed"}
+{"arm":"high-none-opus5","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3236,"usd":0.00062055,"kind":"passed"}
+{"arm":"high-none-opus5","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4294,"usd":0.0008573,"kind":"passed"}
+{"arm":"high-none-opus5","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4647,"usd":0.00103865,"kind":"passed"}
+{"arm":"high-none-opus6","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":2485,"usd":0.0005532,"kind":"passed"}
+{"arm":"high-none-opus6","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3311,"usd":0.000815,"kind":"passed"}
+{"arm":"high-none-opus6","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4385,"usd":0.00107305,"kind":"passed"}
+{"arm":"high-none-opus7","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3285,"usd":0.0007011,"kind":"passed"}
+{"arm":"high-none-opus7","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4618,"usd":0.0007558,"kind":"passed"}
+{"arm":"high-none-opus7","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4052,"usd":0.0010045,"kind":"passed"}
+{"arm":"high-none-opus8","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":2465,"usd":0.0005434,"kind":"passed"}
+{"arm":"high-none-opus8","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3282,"usd":0.00077805,"kind":"passed"}
+{"arm":"high-none-opus8","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":3466,"usd":0.0009638,"kind":"passed"}
+{"arm":"high-none-opus9","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":2872,"usd":0.00058085,"kind":"passed"}
+{"arm":"high-none-opus9","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3336,"usd":0.00080475,"kind":"passed"}
+{"arm":"high-none-opus9","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":3602,"usd":0.00097295,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4921,"usd":0.00083205,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4258,"usd":0.0008882,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":5913,"usd":0.0011006,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2871,"usd":0.00046205,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3378,"usd":0.00048115,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3455,"usd":0.00061715,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"scaling-hypothesis","level":"brief","ms":2464,"usd":0.00076985,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"scaling-hypothesis","level":"simple","ms":3917,"usd":0.0015563,"kind":"passed"}
+{"arm":"high-none-pidpre1","slug":"scaling-hypothesis","level":"fuller","ms":5410,"usd":0.00134785,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3947,"usd":0.00068165,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4669,"usd":0.00083495,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4162,"usd":0.0008221,"kind":"flagged","flags":[{"paragraph":3,"why":"The passages say synergy increases with greater similarity between source signals, whereas the paragraph says it peaks at moderate similarity, and they associate greater synergy with recurrent rather than feedback connections."}]}
+{"arm":"high-none-pidpre2","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":3753,"usd":0.0004445,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3765,"usd":0.00060585,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3585,"usd":0.00069665,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"scaling-hypothesis","level":"brief","ms":3476,"usd":0.00088585,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"scaling-hypothesis","level":"simple","ms":4872,"usd":0.001146,"kind":"passed"}
+{"arm":"high-none-pidpre2","slug":"scaling-hypothesis","level":"fuller","ms":3826,"usd":0.00148125,"kind":"passed"}
+{"arm":"high-none-pidpre3","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3905,"usd":0.00068575,"kind":"flagged","flags":[{"paragraph":2,"why":"The passages say recurrent connections are associated with greater synergy, while feedback connections tend to reduce it or are not significantly related."}]}
+{"arm":"high-none-pidpre3","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3205,"usd":0.00095865,"kind":"passed"}
+{"arm":"high-none-pidpre3","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4019,"usd":0.0011674,"kind":"passed"}
+{"arm":"high-none-pidpre4","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":6246,"usd":0.00085435,"kind":"flagged","flags":[{"paragraph":2,"why":"The passages report greater synergy for triads inside rich clubs, not for rich club neurons themselves."}]}
+{"arm":"high-none-pidpre4","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3921,"usd":0.0010268,"kind":"flagged","flags":[{"paragraph":2,"why":"The passages say recurrent connections increased synergy, while feedback connections tended to reduce it, not that more feedback loops raised synergy."}]}
+{"arm":"high-none-pidpre4","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4162,"usd":0.0009483,"kind":"passed"}
+{"arm":"high-none-pidpre5","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3292,"usd":0.0007456,"kind":"passed"}
+{"arm":"high-none-pidpre5","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3183,"usd":0.00088955,"kind":"passed"}
+{"arm":"high-none-pidpre5","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4326,"usd":0.0010637,"kind":"flagged","flags":[{"paragraph":3,"why":"The passages associate greater synergy with recurrent connections, while feedback connections were less predictive or reduced synergy, so calling the effect more feedback loops reverses the reported distinction."}]}
+{"arm":"high-none-pidpre6","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4088,"usd":0.0007662,"kind":"flagged","flags":[{"paragraph":2,"why":"The passage says recurrent connections are associated with greater synergy, while feedback connections tend to reduce it or are not significantly related, contrary to saying synergy appears after feedback loops."}]}
+{"arm":"high-none-pidpre6","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3819,"usd":0.0008328,"kind":"passed"}
+{"arm":"high-none-pidpre6","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":2977,"usd":0.00089175,"kind":"passed"}
+{"arm":"high-none-sonnetnow1","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":2960,"usd":0.00076305,"kind":"passed"}
+{"arm":"high-none-sonnetnow1","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3535,"usd":0.0007613,"kind":"passed"}
+{"arm":"high-none-sonnetnow1","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":3612,"usd":0.0009092,"kind":"passed"}
+{"arm":"high-none-sonnetnow2","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":2795,"usd":0.00068295,"kind":"passed"}
+{"arm":"high-none-sonnetnow2","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3577,"usd":0.0008185,"kind":"flagged","flags":[{"paragraph":2,"why":"The passages associate greater synergy with recurrent connections, while feedback connections tend to reduce synergy or are not significantly related to it."}]}
+{"arm":"high-none-sonnetnow2","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4078,"usd":0.00101035,"kind":"passed"}
+{"arm":"high-none-sonnetnow3","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3848,"usd":0.0006463,"kind":"passed"}
+{"arm":"high-none-sonnetnow3","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4268,"usd":0.00079325,"kind":"passed"}
+{"arm":"high-none-sonnetnow3","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":5241,"usd":0.0010325,"kind":"flagged","flags":[{"paragraph":2,"why":"The passage says feedback connections tended to reduce synergy, whereas the paragraph says synergy rose with more feedback loops."}]}
+{"arm":"high-none-sonnetnow4","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3644,"usd":0.00057005,"kind":"passed"}
+{"arm":"high-none-sonnetnow4","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":3774,"usd":0.00077795,"kind":"flagged","flags":[{"paragraph":2,"why":"The passages report greater synergy with recurrent connections but reduced or nonsignificant synergy with feedback connections, contrary to the claim that synergy rises with more feedback-loop connections."}]}
+{"arm":"high-none-sonnetnow4","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":6133,"usd":0.0010769,"kind":"flagged","flags":[{"paragraph":0,"why":"It says the review covers experiments in behaving monkeys, while the passage presents work on behaving animals as a future direction."}]}
+{"arm":"high-none-sonnetnow5","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":4134,"usd":0.00063355,"kind":"passed"}
+{"arm":"high-none-sonnetnow5","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":7215,"usd":0.00123095,"kind":"flagged","flags":[{"paragraph":3,"why":"The passages report greater synergy for rich-club triads, not specifically for rich-club neurons."}]}
+{"arm":"high-none-sonnetnow5","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":3620,"usd":0.0009968,"kind":"passed"}
+{"arm":"high-none-sonnetnow6","slug":"entropy-24-00930-spya-pywwkq","level":"brief","ms":3593,"usd":0.00071725,"kind":"passed"}
+{"arm":"high-none-sonnetnow6","slug":"entropy-24-00930-spya-pywwkq","level":"simple","ms":4983,"usd":0.00101465,"kind":"passed"}
+{"arm":"high-none-sonnetnow6","slug":"entropy-24-00930-spya-pywwkq","level":"fuller","ms":4053,"usd":0.00092175,"kind":"flagged","flags":[{"paragraph":3,"why":"The passages associate greater synergy with recurrent connections, while feedback connections were less predictive or related to reduced synergy."}]}
+{"arm":"high-none-opusctl1","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":1451,"usd":0.0002458,"kind":"passed"}
+{"arm":"high-none-opusctl1","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3293,"usd":0.00057675,"kind":"passed"}
+{"arm":"high-none-opusctl1","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":4944,"usd":0.00069075,"kind":"passed"}
+{"arm":"high-none-opusctl1","slug":"scaling-hypothesis","level":"brief","ms":2776,"usd":0.00116645,"kind":"passed"}
+{"arm":"high-none-opusctl1","slug":"scaling-hypothesis","level":"simple","ms":3910,"usd":0.00131915,"kind":"passed"}
+{"arm":"high-none-opusctl1","slug":"scaling-hypothesis","level":"fuller","ms":7283,"usd":0.00162175,"kind":"flagged","flags":[{"paragraph":4,"why":"The passage discusses agency arising without selection or optimization, not in models trained without human data."}]}
+{"arm":"high-none-opusctl2","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2577,"usd":0.00044975,"kind":"passed"}
+{"arm":"high-none-opusctl2","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3873,"usd":0.0006735,"kind":"passed"}
+{"arm":"high-none-opusctl2","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":4401,"usd":0.0007402,"kind":"passed"}
+{"arm":"high-none-opusctl2","slug":"scaling-hypothesis","level":"brief","ms":3387,"usd":0.00135025,"kind":"passed"}
+{"arm":"high-none-opusctl2","slug":"scaling-hypothesis","level":"simple","ms":3262,"usd":0.0012344,"kind":"passed"}
+{"arm":"high-none-opusctl2","slug":"scaling-hypothesis","level":"fuller","ms":5577,"usd":0.00182455,"kind":"passed"}
+{"arm":"high-none-opusctl3","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2859,"usd":0.0004766,"kind":"passed"}
+{"arm":"high-none-opusctl3","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":6244,"usd":0.0007155,"kind":"passed"}
+{"arm":"high-none-opusctl3","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3056,"usd":0.00066295,"kind":"passed"}
+{"arm":"high-none-opusctl3","slug":"scaling-hypothesis","level":"brief","ms":4617,"usd":0.0009296,"kind":"passed"}
+{"arm":"high-none-opusctl3","slug":"scaling-hypothesis","level":"simple","ms":5968,"usd":0.0014534,"kind":"passed"}
+{"arm":"high-none-opusctl3","slug":"scaling-hypothesis","level":"fuller","ms":6084,"usd":0.00163095,"kind":"passed"}
+{"arm":"high-none-opusctl4","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":3719,"usd":0.000416,"kind":"passed"}
+{"arm":"high-none-opusctl4","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":2434,"usd":0.0005485,"kind":"passed"}
+{"arm":"high-none-opusctl4","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3059,"usd":0.00063805,"kind":"passed"}
+{"arm":"high-none-opusctl4","slug":"scaling-hypothesis","level":"brief","ms":3711,"usd":0.0012585,"kind":"passed"}
+{"arm":"high-none-opusctl4","slug":"scaling-hypothesis","level":"simple","ms":4746,"usd":0.0015564,"kind":"passed"}
+{"arm":"high-none-opusctl4","slug":"scaling-hypothesis","level":"fuller","ms":5600,"usd":0.0018731,"kind":"passed"}
+{"arm":"high-none-opusctl5","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":3039,"usd":0.00051515,"kind":"passed"}
+{"arm":"high-none-opusctl5","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":2693,"usd":0.0005696,"kind":"passed"}
+{"arm":"high-none-opusctl5","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":2423,"usd":0.00060905,"kind":"passed"}
+{"arm":"high-none-opusctl5","slug":"scaling-hypothesis","level":"brief","ms":3979,"usd":0.0011399,"kind":"passed"}
+{"arm":"high-none-opusctl5","slug":"scaling-hypothesis","level":"simple","ms":4272,"usd":0.00132615,"kind":"passed"}
+{"arm":"high-none-opusctl5","slug":"scaling-hypothesis","level":"fuller","ms":5178,"usd":0.0017694,"kind":"passed"}
+{"arm":"high-none-opusctl6","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2764,"usd":0.000417,"kind":"passed"}
+{"arm":"high-none-opusctl6","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":2858,"usd":0.00058135,"kind":"passed"}
+{"arm":"high-none-opusctl6","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3172,"usd":0.00056205,"kind":"passed"}
+{"arm":"high-none-opusctl6","slug":"scaling-hypothesis","level":"brief","ms":4399,"usd":0.0011595,"kind":"passed"}
+{"arm":"high-none-opusctl6","slug":"scaling-hypothesis","level":"simple","ms":4267,"usd":0.00134125,"kind":"passed"}
+{"arm":"high-none-opusctl6","slug":"scaling-hypothesis","level":"fuller","ms":3795,"usd":0.00153455,"kind":"passed"}
+{"arm":"high-none-sonnetctl1","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":4683,"usd":0.0005599,"kind":"passed"}
+{"arm":"high-none-sonnetctl1","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":2745,"usd":0.0005109,"kind":"passed"}
+{"arm":"high-none-sonnetctl1","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":6308,"usd":0.00087185,"kind":"flagged","flags":[{"paragraph":3,"why":"The passage says objects between features generally cannot be represented, not that blending between two items is impossible."}]}
+{"arm":"high-none-sonnetctl1","slug":"scaling-hypothesis","level":"brief","ms":2953,"usd":0.0010909,"kind":"passed"}
+{"arm":"high-none-sonnetctl1","slug":"scaling-hypothesis","level":"simple","ms":3051,"usd":0.0008861,"kind":"passed"}
+{"arm":"high-none-sonnetctl1","slug":"scaling-hypothesis","level":"fuller","ms":3714,"usd":0.0012128,"kind":"passed"}
+{"arm":"high-none-sonnetctl2","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2497,"usd":0.0004532,"kind":"passed"}
+{"arm":"high-none-sonnetctl2","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":2757,"usd":0.0004985,"kind":"passed"}
+{"arm":"high-none-sonnetctl2","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":6026,"usd":0.00088705,"kind":"passed"}
+{"arm":"high-none-sonnetctl2","slug":"scaling-hypothesis","level":"brief","ms":2835,"usd":0.0011659,"kind":"passed"}
+{"arm":"high-none-sonnetctl2","slug":"scaling-hypothesis","level":"simple","ms":1394,"usd":0.00074645,"kind":"passed"}
+{"arm":"high-none-sonnetctl2","slug":"scaling-hypothesis","level":"fuller","ms":4167,"usd":0.0013814,"kind":"passed"}
+{"arm":"high-none-sonnetctl3","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2596,"usd":0.00047965,"kind":"passed"}
+{"arm":"high-none-sonnetctl3","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3685,"usd":0.00058025,"kind":"passed"}
+{"arm":"high-none-sonnetctl3","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3571,"usd":0.00063725,"kind":"passed"}
+{"arm":"high-none-sonnetctl3","slug":"scaling-hypothesis","level":"brief","ms":3794,"usd":0.00086415,"kind":"passed"}
+{"arm":"high-none-sonnetctl3","slug":"scaling-hypothesis","level":"simple","ms":2648,"usd":0.0012871,"kind":"passed"}
+{"arm":"high-none-sonnetctl3","slug":"scaling-hypothesis","level":"fuller","ms":4521,"usd":0.0014553,"kind":"passed"}
+{"arm":"high-none-sonnetctl4","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":3073,"usd":0.0004104,"kind":"passed"}
+{"arm":"high-none-sonnetctl4","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":5186,"usd":0.0006865,"kind":"passed"}
+{"arm":"high-none-sonnetctl4","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":4248,"usd":0.00072545,"kind":"passed"}
+{"arm":"high-none-sonnetctl4","slug":"scaling-hypothesis","level":"brief","ms":3445,"usd":0.00116315,"kind":"passed"}
+{"arm":"high-none-sonnetctl4","slug":"scaling-hypothesis","level":"simple","ms":5753,"usd":0.00107005,"kind":"passed"}
+{"arm":"high-none-sonnetctl4","slug":"scaling-hypothesis","level":"fuller","ms":3818,"usd":0.00152875,"kind":"passed"}
+{"arm":"high-none-sonnetctl5","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":3489,"usd":0.0005026,"kind":"passed"}
+{"arm":"high-none-sonnetctl5","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3007,"usd":0.0005733,"kind":"passed"}
+{"arm":"high-none-sonnetctl5","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":3440,"usd":0.00063185,"kind":"passed"}
+{"arm":"high-none-sonnetctl5","slug":"scaling-hypothesis","level":"brief","ms":2943,"usd":0.00104505,"kind":"passed"}
+{"arm":"high-none-sonnetctl5","slug":"scaling-hypothesis","level":"simple","ms":2806,"usd":0.00110905,"kind":"passed"}
+{"arm":"high-none-sonnetctl5","slug":"scaling-hypothesis","level":"fuller","ms":3824,"usd":0.00107945,"kind":"passed"}
+{"arm":"high-none-sonnetctl6","slug":"olah-a4-spya-ujr7p0","level":"brief","ms":2879,"usd":0.00050035,"kind":"passed"}
+{"arm":"high-none-sonnetctl6","slug":"olah-a4-spya-ujr7p0","level":"simple","ms":3155,"usd":0.000556,"kind":"passed"}
+{"arm":"high-none-sonnetctl6","slug":"olah-a4-spya-ujr7p0","level":"fuller","ms":4182,"usd":0.0006866,"kind":"passed"}
+{"arm":"high-none-sonnetctl6","slug":"scaling-hypothesis","level":"brief","ms":2950,"usd":0.00129135,"kind":"passed"}
+{"arm":"high-none-sonnetctl6","slug":"scaling-hypothesis","level":"simple","ms":6061,"usd":0.0016557,"kind":"passed"}
+{"arm":"high-none-sonnetctl6","slug":"scaling-hypothesis","level":"fuller","ms":6660,"usd":0.00162365,"kind":"passed"}
