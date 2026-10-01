@@ -17,12 +17,14 @@ import type { FetchLike } from "../src/fetch.js";
 import {
   canonicalPaper,
   chunkPaper,
+  authorYearLabel,
   isReferencesHeading,
   type LookupWork,
   type PaperEvidence,
   type PaperRead,
   paperAddress,
   readPaperEvidence,
+  registryIdentifiesCitation,
   SENT_WORDS_BUDGET,
   selectChunks,
   verifyPassage,
@@ -216,6 +218,167 @@ describe("readPaperEvidence — is it the work?", () => {
     expect(calls).toEqual([]);
   });
 
+  describe("a citation titled only by an author–year label, and a citation's shortened title", () => {
+    const SANTORO_TITLE = "One-shot Learning with Memory-Augmented Neural Networks";
+    const SANTORO_ARXIV = "https://arxiv.org/pdf/1605.06065";
+    const SANTORO_WORK = {
+      ...WORK,
+      title: "Santoro et al 2016",
+      authors: "Santoro et al",
+      year: "2016",
+      reference: `Santoro et al. ${SANTORO_TITLE}. 2016.`,
+      url: "https://arxiv.org/abs/1605.06065",
+    };
+    const santoro = (record: Partial<{ title: string; authors: { family: string }[]; year: number }> = {}) =>
+      registry({
+        "arxiv:1605.06065": {
+          kind: "found",
+          record: { title: SANTORO_TITLE, authors: [{ family: "Santoro" }], year: 2016, ...record },
+        },
+      });
+
+    it("reads the paper when the article's reference entry also carries the registry title", async () => {
+      /* The first author and year alone are deliberately not enough; the
+         article-owned entry supplies the independent title evidence. */
+      const { impl } = scripted({
+        [SANTORO_ARXIV]: pdfReply(await thePaper({ title: SANTORO_TITLE, byline: "Adam Santoro and Sergey Bartunov" })),
+      });
+      const got = mustRead(await readPaperEvidence({ work: SANTORO_WORK }, { lookup: santoro().lookup, fetch: seams(impl) }));
+      expect(got).toMatchObject({ matchedBy: "arxiv", registry: "agrees" });
+    });
+
+    it("is an identity conflict when the label's first author disagrees with the registry's", async () => {
+      const { impl, calls } = scripted({});
+      const got = await readPaperEvidence(
+        { work: SANTORO_WORK },
+        { lookup: santoro({ authors: [{ family: "Graves" }] }).lookup, fetch: seams(impl) },
+      );
+      expect(got).toMatchObject({ state: "identity-conflict", registryTitle: SANTORO_TITLE });
+      expect(calls).toEqual([]);
+    });
+
+    it("is an identity conflict when the label's year disagrees with the registry's", async () => {
+      const { impl } = scripted({});
+      const { year: _rowYear, ...noRowYear } = SANTORO_WORK;
+      const got = await readPaperEvidence({ work: noRowYear }, { lookup: santoro({ year: 2019 }).lookup, fetch: seams(impl) });
+      expect(got).toMatchObject({ state: "identity-conflict" });
+    });
+
+    it("does not let a common surname and year make a mistyped arXiv id confirm itself", async () => {
+      const wrongTitle = "A Different Smith Paper from the Same Year";
+      const wrongUrl = "https://arxiv.org/pdf/2001.00002";
+      const { impl } = scripted({
+        [wrongUrl]: pdfReply(await thePaper({ title: wrongTitle, byline: "Alex Smith and Robin Jones" })),
+      });
+      const wrong = registry({
+        "arxiv:2001.00002": {
+          kind: "found",
+          record: { title: wrongTitle, authors: [{ family: "Smith" }], year: 2020 },
+        },
+      });
+      const got = await readPaperEvidence(
+        {
+          work: {
+            ...WORK,
+            title: "Smith et al 2020",
+            authors: "Smith et al",
+            year: "2020",
+            url: "https://arxiv.org/abs/2001.00002",
+          },
+        },
+        { lookup: wrong.lookup, fetch: seams(impl) },
+      );
+      expect(got).toMatchObject({ state: "not-confirmed", why: "title-not-found" });
+    });
+
+    it("accepts the registry's title on page 1 when the citation shortened it — the free probe's EfficientNet row", async () => {
+      /* SEEN RED 2026-10-01: `not-confirmed`, `title-not-found` — the page-1
+         check looked only for the citation's "…for CNNs". */
+      const full = "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks";
+      const { impl } = scripted({
+        "https://arxiv.org/pdf/1905.11946": pdfReply(await thePaper({ title: full, byline: "Mingxing Tan and Quoc V. Le" })),
+      });
+      const reg = registry({
+        "arxiv:1905.11946": { kind: "found", record: { title: full, authors: [{ family: "Tan" }], year: 2019 } },
+      });
+      const got = mustRead(
+        await readPaperEvidence(
+          {
+            work: {
+              ...WORK,
+              title: "EfficientNet: Rethinking Model Scaling for CNNs",
+              authors: "Tan & Le",
+              url: "https://arxiv.org/abs/1905.11946",
+            },
+          },
+          { lookup: reg.lookup, fetch: seams(impl) },
+        ),
+      );
+      expect(got).toMatchObject({ matchedBy: "arxiv", registry: "agrees" });
+    });
+
+    it("finds a page-1 title that the template repeats as a running header on every later page", async () => {
+      /* SEEN RED 2026-10-01: `title-not-found` — pass0 called the title
+         furniture and stripped it from page 1 too (the probe's three arXiv
+         rows, ICML-style templates). */
+      const header = "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks";
+      const bytes = await buildPdf([
+        [header, "Mingxing Tan and Quoc V. Le", "Abstract", ...filler(21, 300)],
+        [header, ...filler(22, 300)],
+        [header, TARGET, ...filler(23, 300)],
+        [header, ...filler(24, 300)],
+      ]);
+      const { impl } = scripted({ "https://arxiv.org/pdf/1905.11946": pdfReply(bytes) });
+      const reg = registry({
+        "arxiv:1905.11946": { kind: "found", record: { title: header, authors: [{ family: "Tan" }], year: 2019 } },
+      });
+      const got = mustRead(
+        await readPaperEvidence(
+          { work: { ...WORK, title: header, authors: "Tan & Le", url: "https://arxiv.org/abs/1905.11946" } },
+          { lookup: reg.lookup, fetch: seams(impl) },
+        ),
+      );
+      expect(got).toMatchObject({ matchedBy: "arxiv" });
+      /* Only the identity check keeps furniture: what is chunked and sent still strips the header everywhere. */
+      expect(got.sentText.split(header).length - 1).toBe(0);
+    });
+
+    it("does not accept another work's title when it appears only as repeated issue furniture", async () => {
+      const bytes = await buildPdf([
+        [
+          TITLE,
+          "Thermal Conductivity of Layered Graphite Composites",
+          "Lin Chen and Priya Shah",
+          ...filler(31, 72),
+          "Earlier work by Lovelace is discussed in the introduction.",
+          ...filler(34, 220),
+        ],
+        [TITLE, ...filler(32, 300)],
+        [TITLE, ...filler(33, 300)],
+      ]);
+      const wrongUrl = "https://arxiv.org/pdf/2001.00002";
+      const { impl } = scripted({ [wrongUrl]: pdfReply(bytes) });
+      const got = await readPaperEvidence(
+        { work: { ...WORK, url: "https://arxiv.org/abs/2001.00002" } },
+        { lookup: async () => ({ kind: "unavailable", why: "registry down" }), fetch: seams(impl) },
+      );
+      expect(got).toMatchObject({ state: "not-confirmed", why: "title-not-found" });
+    });
+
+    it("does not let the registry's title stand in when the registry was not asked to agree", async () => {
+      /* Without a registry, the shortened citation title is all there is. */
+      const full = "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks";
+      const { impl } = scripted({
+        "https://arxiv.org/pdf/1905.11946": pdfReply(await thePaper({ title: full, byline: "Mingxing Tan and Quoc V. Le" })),
+      });
+      const got = await readPaperEvidence(
+        { work: { ...WORK, title: "EfficientNet: Rethinking Model Scaling for CNNs", url: "https://arxiv.org/abs/1905.11946" } },
+        { lookup: async () => ({ kind: "not-found" }), fetch: seams(impl) },
+      );
+      expect(got).toMatchObject({ state: "not-confirmed", why: "title-not-found" });
+    });
+  });
+
   it("does not confirm a mistyped DOI merely because the wrong paper cites the target near its start", async () => {
     /* SEEN RED 2026-10-01: the DOI agreed with the wrong document and the
        target's title appeared inside the first 2,000 characters, so the old
@@ -369,6 +532,9 @@ describe("readPaperEvidence — is it the work?", () => {
       state: "no-address",
     });
     expect(paperAddress("https://doi.org/10.1234/ABC.5")?.url).toBe("https://doi.org/10.1234/abc.5");
+    /* A publisher's suffix on the row's link is not part of the DOI, and doi.org 404s on it (the real run, 261001a). */
+    expect(paperAddress("https://doi.org/10.1101/2020.06.26.174482.full")?.url).toBe("https://doi.org/10.1101/2020.06.26.174482");
+    expect(paperAddress("https://doi.org/10.1636/JoA-S-17-093.1.full")?.url).toBe("https://doi.org/10.1636/joa-s-17-093.1");
     expect(paperAddress("https://arxiv.org/abs/2401.01234v2")?.url).toBe("https://arxiv.org/pdf/2401.01234v2");
   });
 });
@@ -572,4 +738,45 @@ describe("the read is bounded", () => {
     const got = await readPaperText("https://pub.example/huge.pdf", { fetch: seams(impl), pdfOnly: true });
     expect(got).toMatchObject({ kind: "unreadable", why: "too-large", detail: `over ${PAPER_MAX_CHARS} characters` });
   }, 30_000);
+});
+
+// ---------------------------------------------------------- author–year labels
+
+describe("authorYearLabel", () => {
+  it("reads the shapes an article uses for a work it names only by author and year", () => {
+    expect(authorYearLabel("Santoro et al 2016")).toEqual({ surname: "santoro", year: 2016 });
+    expect(authorYearLabel("Thompson et al. (2020)")).toEqual({ surname: "thompson", year: 2020 });
+    expect(authorYearLabel("Kaplan & McCandlish 2020a")).toEqual({ surname: "kaplan", year: 2020 });
+    expect(authorYearLabel("Hutter and Legg 2007")).toEqual({ surname: "hutter", year: 2007 });
+    expect(authorYearLabel("Schmidhuber 1992")).toEqual({ surname: "schmidhuber", year: 1992 });
+    expect(authorYearLabel("van der Maaten et al 2008")).toEqual({ surname: "van der maaten", year: 2008 });
+    expect(authorYearLabel("Gödel 1931")).toEqual({ surname: "godel", year: 1931 });
+  });
+
+  it("does not treat a real title that merely contains a year as a label", () => {
+    for (const title of [
+      "Deep Learning in 2016",
+      "The State of AI 2020",
+      "Vision 2020: A Roadmap for Research",
+      "AlphaGo Zero 2017 Results and Analysis",
+      "Attention Is All You Need",
+      "Language Models are Few-Shot Learners",
+    ]) {
+      expect(authorYearLabel(title), title).toBeNull();
+    }
+  });
+
+  it("uses an author–year label only when the article's own entry also carries the registry title", () => {
+    const rec = { title: "One-shot Learning with Memory-Augmented Neural Networks", authors: [{ family: "Santoro" }], year: 2016 };
+    const reference = `Santoro et al. ${rec.title}. 2016.`;
+    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2016", reference })).toBe("label");
+    expect(registryIdentifiesCitation({ ...rec, authors: [{ family: "SANTORÓ" }] }, { title: "Santoro et al 2016", reference })).toBe("label");
+    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2016" })).toBe("label-unconfirmed");
+    expect(registryIdentifiesCitation(rec, { title: "Graves et al 2016" })).toBeNull();
+    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2017" })).toBeNull();
+    /* Contradictory article metadata is not permission to choose the convenient year. */
+    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2017", year: "2016", reference })).toBeNull();
+    expect(registryIdentifiesCitation({ title: rec.title, authors: rec.authors }, { title: "Santoro et al 2016" })).toBeNull();
+    expect(registryIdentifiesCitation(rec, { title: "One-shot learning with memory-augmented neural networks" })).toBe("title");
+  });
 });

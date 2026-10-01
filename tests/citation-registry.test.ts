@@ -130,6 +130,106 @@ describe("what an answer puts on the row", () => {
     expect(out.counts.conflict).toBe(1);
   });
 
+  describe("a title that is only an author–year label (gwern's 'Santoro et al 2016')", () => {
+    const SANTORO = work({
+      id: "santoro",
+      title: "Santoro et al 2016",
+      authors: "Santoro et al",
+      year: "2016",
+      entry: "Santoro et al. One-shot Learning with Memory-Augmented Neural Networks. 2016.",
+      url: "https://arxiv.org/abs/1605.06065",
+      linkFrom: "arxiv",
+    });
+    const santoroRecord = (over: Partial<WorkRecord> = {}) =>
+      record("arxiv:1605.06065", "One-shot Learning with Memory-Augmented Neural Networks", {
+        source: "datacite",
+        authors: [{ family: "Santoro", given: "Adam" }, { family: "Bartunov", given: "Sergey" }],
+        year: 2016,
+        doi: "10.48550/arxiv.1605.06065",
+        ...over,
+      });
+
+    it("is found when the label matches and the article's entry independently carries the registry title", async () => {
+      const THOMPSON = work({
+        id: "thompson",
+        title: "Thompson et al 2020",
+        authors: "Thompson et al",
+        year: "2020",
+        entry: "Thompson et al. The Computational Limits of Deep Learning. 2020.",
+        url: "https://arxiv.org/abs/2007.05558",
+        linkFrom: "arxiv",
+      });
+      const reg = fake({
+        "arxiv:1605.06065": { kind: "found", record: santoroRecord() },
+        "arxiv:2007.05558": {
+          kind: "found",
+          record: record("arxiv:2007.05558", "The Computational Limits of Deep Learning", {
+            authors: [{ family: "Thompson", given: "Neil C." }, { family: "Greenewald", given: "Kristjan" }],
+            year: 2020,
+            doi: "10.48550/arxiv.2007.05558",
+          }),
+        },
+      });
+      const out = await attachCitationRegistry(list([SANTORO, THOMPSON]), reg);
+      expect(out.citations.citations.map((r) => r.registry?.kind)).toEqual(["found", "found"]);
+      expect(out.citations.citations[0]?.registry).toMatchObject({
+        title: "One-shot Learning with Memory-Augmented Neural Networks",
+      });
+    });
+
+    it("is still a conflict when the label's author disagrees", async () => {
+      const reg = fake({ "arxiv:1605.06065": { kind: "found", record: santoroRecord({ authors: [{ family: "Graves" }] }) } });
+      const out = await attachCitationRegistry(list([SANTORO]), reg);
+      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+    });
+
+    it("is still a conflict when the label's year disagrees", async () => {
+      const reg = fake({ "arxiv:1605.06065": { kind: "found", record: santoroRecord({ year: 2019 }) } });
+      const { year: _rowYear, ...noRowYear } = SANTORO;
+      const out = await attachCitationRegistry(list([noRowYear]), reg);
+      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+    });
+
+    it("is a conflict for a mistyped DOI whose real title disagrees, whatever the authors", async () => {
+      const row = work({
+        id: "real",
+        title: "Slow Reading Improves Long Term Recall",
+        authors: "Santoro et al",
+        year: "2016",
+        url: "https://doi.org/10.5555/slow",
+        linkFrom: "doi",
+      });
+      const reg = fake({ "doi:10.5555/slow": { kind: "found", record: santoroRecord({ id: "doi:10.5555/slow" as WorkId, doi: "10.5555/slow" }) } });
+      const out = await attachCitationRegistry(list([row]), reg);
+      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+    });
+
+    it("does not attach a same-surname same-year record when the article gives only a label", async () => {
+      const row = work({
+        id: "smith",
+        title: "Smith et al 2020",
+        authors: "Smith et al",
+        year: "2020",
+        url: "https://arxiv.org/abs/2001.00002",
+        linkFrom: "arxiv",
+      });
+      const reg = fake({
+        "arxiv:2001.00002": {
+          kind: "found",
+          record: record("arxiv:2001.00002", "A Different Smith Paper from the Same Year", {
+            source: "datacite",
+            authors: [{ family: "Smith" }],
+            year: 2020,
+            doi: "10.48550/arxiv.2001.00002",
+          }),
+        },
+      });
+      const out = await attachCitationRegistry(list([row]), reg);
+      expect(out.citations.citations[0]?.registry).toBeUndefined();
+      expect(out.counts).toMatchObject({ found: 0, conflict: 0, unconfirmed: 1 });
+    });
+  });
+
   it("does not treat a generic exact title as enough identity evidence", async () => {
     const row = work({ id: "editorial", title: "Editorial", url: "https://doi.org/10.1000/editorial", linkFrom: "doi" });
     const reg = fake({

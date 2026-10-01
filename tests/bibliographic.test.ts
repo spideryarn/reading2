@@ -77,6 +77,33 @@ describe("parseWorkId", () => {
     expect(parseWorkId("https://arxiv.org/abs/math.GT/0309136")).toBe("arxiv:math.gt/0309136");
   });
 
+  it("drops a landing-page suffix a publisher address left on the DOI", () => {
+    /* The free probe's real rows (261001a): Crossref and DataCite both 404'd
+       these, because `.full` is bioRxiv's / the publisher's page, not the DOI. */
+    expect(parseWorkId("https://doi.org/10.1101/2020.06.26.174482.full")).toBe("doi:10.1101/2020.06.26.174482");
+    expect(parseWorkId("https://doi.org/10.1636/JoA-S-17-093.1.full")).toBe("doi:10.1636/joa-s-17-093.1");
+    for (const input of [
+      "10.1101/2020.06.26.174482v2.full.pdf",
+      "10.1101/2020.06.26.174482v1",
+      "https://doi.org/10.1101/2020.06.26.174482.full-text",
+      "doi:10.1101/2020.06.26.174482.abstract",
+      "10.1101/2020.06.26.174482.short",
+      "10.1101/2020.06.26.174482.pdf",
+    ]) {
+      expect(parseWorkId(input), input).toBe("doi:10.1101/2020.06.26.174482");
+    }
+    /* Conservative: only those whole suffixes, and the version only on bioRxiv's prefix. */
+    expect(parseWorkId("10.1000/report.fuller")).toBe("doi:10.1000/report.fuller");
+    /* DOI suffixes are opaque. These may be the registered DOI itself unless a
+       known publisher path shape proves otherwise. */
+    expect(parseWorkId("10.1000/report.pdf")).toBe("doi:10.1000/report.pdf");
+    expect(parseWorkId("10.1000/report.full")).toBe("doi:10.1000/report.full");
+    expect(parseWorkId("10.1000/report.abstract")).toBe("doi:10.1000/report.abstract");
+    expect(parseWorkId("10.1000/abc-v2")).toBe("doi:10.1000/abc-v2");
+    expect(parseWorkId("10.1000/x.v2")).toBe("doi:10.1000/x.v2");
+    expect(parseWorkId("10.1000/.full")).toBe("doi:10.1000/.full");
+  });
+
   it("refuses what is not an identifier", () => {
     for (const input of [
       "",

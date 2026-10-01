@@ -303,9 +303,9 @@ with ">".
 
 WHAT IT MUST NOT DO
 
-- Never say or suggest that you read the whole paper. You read search results
-  about it (an extract, an abstract, a page describing it) and, only when the
-  section headed THE PAPER ITSELF gives them, some parts of the paper's own
+- Never say or suggest that you read the whole paper. Use any search results
+  provided below (an extract, an abstract, a page describing it) and, only when
+  the section headed THE PAPER ITSELF gives them, some parts of the paper's own
   text: its opening and a few passages. Say which each point came from.
 - When that section says you were not shown the paper's text, never say what
   the paper itself shows, says or finds: say what the search results say about
@@ -1014,7 +1014,14 @@ export function makeInvestigateCitation(
       }
 
       const provenance = provenanceOf(end.evidence ?? [], matched?.url ?? null);
-      if (provenance.extractsRead === 0) {
+      /* **No extract is a refusal only when the paper was not read.** With the
+         paper read, the model may answer from it alone and search nothing — in
+         3 of 3 paid presses on 2026-10-01 it did — and that answer has
+         something to stand on: the paper's own text, which code confirmed and
+         the row names. Kept with `extractsRead: 0`; the view says the search
+         returned nothing. The DB check `citation_investigations_counts` allows
+         exactly this case. */
+      if (provenance.extractsRead === 0 && paper.stored.state !== "read") {
         line.warn({ model: end.model, ms: since(started), searches: end.searches, searchesFrom: end.searchesFrom }, "investigation had no extract to read");
         throw new Error(CITATION_INVESTIGATE_NOTHING_READ.message);
       }
