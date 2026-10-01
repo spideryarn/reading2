@@ -116,6 +116,7 @@ beforeEach(() => {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
+const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -1768,6 +1769,32 @@ describe("the Earlier tab", () => {
  */
 describe("a prefill", () => {
   const REPORT = { id: "req-1", kind: "problem" as const, body: "This import failed.\n\nJob: spya-jobaaa" };
+
+  it("travels through the host opener into the one mounted dialog", () => {
+    function ReportThis() {
+      const openFeedback = useFeedbackOpen();
+      return createElement(
+        "button",
+        { type: "button", onClick: () => openFeedback?.(REPORT) },
+        "Report this",
+      );
+    }
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => {
+      root.render(createElement(FeedbackHost, null, createElement(ReportThis)));
+    });
+    const trigger = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Report this",
+    );
+    act(() => trigger?.click());
+    expect(host.querySelector("dialog")?.open).toBe(true);
+    expect(firstBox().value).toBe(REPORT.body);
+    expect(host.querySelector('.fb-kind-button[aria-pressed="true"]')?.textContent).toContain(
+      "A problem",
+    );
+  });
 
   function showWith(prefill: { id: string; kind: "problem" | "suggestion"; body: string } | null, open = true) {
     act(() => {

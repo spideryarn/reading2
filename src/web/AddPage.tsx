@@ -963,6 +963,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         <PurposeBox
           value={draft}
           status={purposeStatus}
+          /* The save carries the snapshot taken at the press. Leaving the box
+             editable would let it say Saving… over newer words that are not in
+             that request, then navigate and throw those words away. */
+          disabled={phase.kind === "saving"}
           onChange={(value) => {
             /* In the gesture as well as at render, for the reason the tick box
                writes its ref: a completion can land before the re-render. */
@@ -1037,12 +1041,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 function PurposeBox({
   value,
   status,
+  disabled,
   onChange,
   onFocusChange,
   onShortcut,
 }: {
   value: string;
   status: PurposeStatus;
+  disabled: boolean;
   onChange: (value: string) => void;
   onFocusChange: (focused: boolean) => void;
   onShortcut: () => void;
@@ -1061,6 +1067,7 @@ function PurposeBox({
         maxLength={MAX_PURPOSE_CHARS}
         placeholder="e.g. I want to know how they handled missing data"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => onFocusChange(true)}
         onBlur={() => onFocusChange(false)}

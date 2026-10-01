@@ -92,18 +92,24 @@ function Ask({ slug }: { slug: string }) {
   }, [read, slug, seed]);
 
   /* **Done, latched.** Set by the press; this closes once the save it started
-     has landed, and lets go on a refusal so the reader can see why. */
+     has landed, and lets go on a refusal so the reader can see why.
+
+     `inFlight` is a separate fact from the words under the box. If an older
+     autosave is writing A and the reader changes the draft back to the value
+     that was loaded, the state is correctly `clean` about the draft but the
+     server may still become A. Done queues the correction; it must not close
+     until that second write has landed too. */
   const [closing, setClosing] = useState(false);
   const state = purpose.state.kind;
   useEffect(() => {
     if (!closing) return;
-    if (state === "clean" || state === "saved") {
+    if (!purpose.inFlight && (state === "clean" || state === "saved")) {
       setClosing(false);
       setOpen(false);
     } else if (state === "error") {
       setClosing(false);
     }
-  }, [closing, state]);
+  }, [closing, purpose.inFlight, state]);
   const done = () => {
     purpose.commit();
     setClosing(true);

@@ -2535,6 +2535,26 @@ describe("a signed-in reader who does not own it", () => {
   /** Every request, as a comparable line. Method included: a POST is not a GET. */
   const lines = () => trace.map((r) => `${r.method} ${r.url}`);
 
+  it("does not mount the owner's first-open purpose prompt, even if this tab has its mark", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    const key = "spideryarn.ask-purpose";
+    window.sessionStorage.setItem(key, SLUG);
+    try {
+      await open();
+      expect(
+        trace.filter((r) => r.url === `/api/reader?slug=${SLUG}`),
+        "the visitor mounted the owner-only purpose reader",
+      ).toEqual([]);
+      expect(
+        window.sessionStorage.getItem(key),
+        "the visitor consumed an owner's first-open mark",
+      ).toBe(SLUG);
+    } finally {
+      window.sessionStorage.removeItem(key);
+    }
+  });
+
   /**
    * Open a view and **use it**, then report what was asked for.
    *

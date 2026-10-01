@@ -395,6 +395,7 @@ describe("while the save is in flight", () => {
     expect(navigations).toEqual([]);
     expect(button("Saving…")?.disabled, "Save was not disabled while saving").toBe(true);
     expect(button("Open without it")?.disabled).toBe(true);
+    expect(box().disabled, "the box could accept words that were not in the save").toBe(true);
     act(() => button("Open without it")?.click());
     await settle();
     expect(runs(), "Open without it raced the save").toEqual([]);
@@ -519,6 +520,16 @@ describe("Retry after a failed import (F3)", () => {
     await retryToDone();
     expect(navigations, "the page kept watching the failed job").toEqual([`/read/${SLUG}`]);
     expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(mark(), "an untouched retry completion lost the first-open question").toBe(SLUG);
+  });
+
+  it("does not mark a retry completion after the empty box was focused and blurred", async () => {
+    await failThenRetry();
+    focus();
+    blur();
+    await retryToDone();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(mark(), "Retry forgot that the reader had already seen the box").toBeNull();
   });
 
   it("keeps a typed purpose across the retry", async () => {
@@ -607,7 +618,10 @@ describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name",
 
   it("is not written on Open without it", async () => {
     await producer.start();
-    type("the evidence");
+    /* Keep the draft empty: the action, not the presence of words, is what says
+       the reader saw the question and declined it. Keeping focus through the
+       completion is how an empty draft reaches the decision buttons. */
+    focus();
     await producer.finish();
     press("Open without it");
     await settle();
@@ -617,7 +631,9 @@ describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name",
 
   it("is not written on Save and open", async () => {
     await producer.start();
-    type("the evidence");
+    /* An empty Save and open sends no PATCH, but it is still an explicit choice
+       and must not be mistaken for the silent auto-open path. */
+    focus();
     await producer.finish();
     press("Save and open");
     await settle();

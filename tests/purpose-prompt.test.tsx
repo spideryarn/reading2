@@ -241,6 +241,47 @@ describe("PurposePrompt", () => {
     expect(host.querySelector(".prof-save")?.textContent).toContain("The shelf is unavailable.");
   });
 
+  it("Done waits for a corrective save when an older autosave is still in flight", async () => {
+    const answers: Array<(r: Response) => void> = [];
+    patchAnswer = () =>
+      new Promise((resolve) => {
+        answers.push(resolve);
+      });
+    session.set(MARK, SLUG);
+    render();
+    await settle();
+
+    type("the first thought");
+    act(() => {
+      box().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+      );
+    });
+    await settle();
+    expect(patches().map((p) => p.body)).toEqual([{ purpose: "the first thought" }]);
+
+    /* The draft now matches the value originally loaded, but the request that
+       will replace that value is still in flight. Done must wait for both that
+       request and the queued correction, or a refusal of the correction is
+       hidden behind a closed dialog. */
+    type("");
+    press("Done");
+    await settle();
+    expect(isOpen(), "closed while the older save could still change the stored value").toBe(true);
+
+    answers[0]?.(new Response(JSON.stringify({ purpose: "the first thought" }), { status: 200 }));
+    await settle();
+    expect(patches().map((p) => p.body)).toEqual([
+      { purpose: "the first thought" },
+      { purpose: null },
+    ]);
+    expect(isOpen(), "closed before the corrective save had landed").toBe(true);
+
+    answers[1]?.(new Response(JSON.stringify({ purpose: null }), { status: 200 }));
+    await settle();
+    expect(isOpen()).toBe(false);
+  });
+
   it("Done with nothing typed closes without a PATCH", async () => {
     session.set(MARK, SLUG);
     render();
@@ -259,6 +300,43 @@ describe("PurposePrompt", () => {
     await settle();
     expect(isOpen()).toBe(false);
     expect(patches()).toEqual([]);
+  });
+
+  it("Not now leaves an in-flight save mounted and sends the queued latest draft", async () => {
+    const answers: Array<(r: Response) => void> = [];
+    patchAnswer = () =>
+      new Promise((resolve) => {
+        answers.push(resolve);
+      });
+    session.set(MARK, SLUG);
+    render();
+    await settle();
+
+    type("the first thought");
+    act(() => {
+      box().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+      );
+    });
+    await settle();
+    type("the fuller thought");
+    /* Clicking another control blurs a real textarea before its click runs.
+       jsdom's `.click()` does not move focus, so pose that ordering explicitly:
+       the blur queues the newer words behind the request already on the wire. */
+    act(() => box().dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    press("Not now");
+    await settle();
+    expect(isOpen()).toBe(false);
+
+    answers[0]?.(new Response(JSON.stringify({ purpose: "the first thought" }), { status: 200 }));
+    await settle();
+    expect(patches().map((p) => p.body)).toEqual([
+      { purpose: "the first thought" },
+      { purpose: "the fuller thought" },
+    ]);
+    answers[1]?.(new Response(JSON.stringify({ purpose: "the fuller thought" }), { status: 200 }));
+    await settle();
+    expect(isOpen(), "the background save reopened the dismissed question").toBe(false);
   });
 
   it("Escape (the dialog's own close) closes it and it stays closed", async () => {
