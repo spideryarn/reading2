@@ -23,7 +23,7 @@ picked them up.
 > text that cites - great. But it's a little bit too subtle and quick, so I often don't quite spot
 > the flash.
 
-**Ending: Shipped**, both, in the commits listed in
+**Ending: Shipped**, both, in `a0bb4dc5`, `c3a5fd7f` and `f48d2843` on `dev`; the plan is
 [261001m](../plans/261001m-citations-duplicate-by-line-and-a-flash-you-can-see.md). Not deployed:
 the Overseer deploys.
 
