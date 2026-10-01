@@ -1,5 +1,5 @@
 /**
- * **Which steps the Metadata page offers a "Re-run AI processing" row for.**
+ * **Which steps the Metadata page offers a re-run row for, in its *AI processing* section.**
  *
  * An explicit list, and the explicitness is the design rather than a
  * shortcut: a control that spends our money on a press needs three answers the

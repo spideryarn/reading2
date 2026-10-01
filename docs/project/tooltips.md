@@ -14,6 +14,18 @@ a word. The design accepted that cost knowingly. The tooltip is where the cost g
 
 So this is not "a label, but on hover". It is the one surface in the rail that can hold a sentence.
 
+## When something needs one
+
+> Firstly, anything like that that's hard for the user to guess/intuit should always have a tooltip
+> (make a note in `design.md` or similar).
+>
+> — Greg, 2026-09-29 (`spya-f28vqj`), about the unlabelled count bars in the shelf's topic detail view
+
+So the test is not whether a thing is a control. A bar, a label, a coloured mark or a word whose
+meaning a reader has to work out deserves a card as much as a button does; the bar that prompted this
+is decorative and `aria-hidden`, and has one anyway
+([261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 2).
+
 ## What we chose
 
 **[Floating UI](https://floating-ui.com) — `@floating-ui/react`**, v0.27.20, added 2026-08-25.

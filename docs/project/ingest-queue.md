@@ -795,9 +795,11 @@ pipeline already knows.
 
 ### A reader can ask for them again, from the Metadata page
 
-`/read/<slug>/metadata` has a **Re-run AI processing** section (called *Generate it again* until
+`/read/<slug>/metadata` has an **AI processing** section (called *Generate it again* until
 2026-09-29, when it absorbed *Start this article again*, went shut by default and moved above Archive —
-[260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). Since the same day it is the only
+[260929b](../plans/260929b-one-place-to-re-run-ai-processing.md); then *Re-run AI processing* until
+2026-10-01, when the record of which stages have run joined it —
+[261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 5). Since the same day it is the only
 place a mode's standing redo lives; a mode keeps only the button inside its out-of-date banner. One
 row per offered step (`METADATA_RERUN_STEPS`, [src/rerun-steps.ts](../../src/rerun-steps.ts)), and pressing
 it posts `{ slug, steps: [step], force: [step] }` — this queue, this route, nothing new. Greg asked

@@ -625,7 +625,10 @@ Three decisions inside it:
   answer from the recalled one has lost the thing the labels above exist to give them.
 - **`searches: 0` is drawn, not hidden.** The model decides per call, so "it judged it already knew"
   is a real outcome and the globe has an off state saying so. Without that, an answer that was never
-  checked looks identical to one that was.
+  checked looks identical to one that was. The label says it in plain words — *from a web search*, or
+  *no web search — from the model's own knowledge* — since 2026-10-01; it said *checked* and *asked,
+  not checked*, and Greg could not tell what the second meant (`spya-puyb6d`,
+  [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 4).
 
 Sources render as **host names with the page title in a hover tooltip** — Greg's own suggestion, and
 the shape an 18rem band can take: the title is the useful thing to read and the wrong thing to lay
