@@ -182,3 +182,33 @@ in v2.
   neighbouring voice. The CSS contract test pins these
   representative inheritance-breaking and mixed-provenance cases, checks every top-level selector
   branch is gated, and parses className literals so a class mentioned only in a comment cannot pass.
+- 2026-10-01 — **final browser pass** (Sonnet, Playwright, at `7769dc0c`, seeded account,
+  `fowler-phrenology`): article `h1`–`h3` and paragraphs Source Serif 4; `.summ-text` and chat
+  replies Courier Prime; `.summ-title` Geist; the reader's chat message Arial. The real switch, pressed
+  in the bar: `data-voices` true → false (prose back to Geist) → true. Signed out, the same
+  public-readable article has no `data-voices`. Visible but not this work's: the Persistent URL line
+  clips at 390px (an unbreakable string; the serif is narrower than Geist, so it was no better
+  before), and the chat's "Latest" pill sits over the thread's last line.
+- 2026-10-01 — **suite:** `npm test` red in 9 files on the first run. Re-run alone: the two voice
+  tests green (one had been red mid-run while Sol was editing it); two need a build this fresh
+  worktree lacks (`has a build to inspect`, fleet `dist/`); the rest are peers' work on `dev`
+  (`InvestigateCitationDeps` with no Postgres adapter, a sixteenth model override, a prompt missing
+  plain-words) and none touches a file this work changed.
+
+## Screenshots
+
+Laptop, 1440×900, switch on and off:
+
+![Summary, on](261001d-shot-laptop-summary-on.png)
+![Summary, off](261001d-shot-laptop-summary-off.png)
+![Glossary, on](261001d-shot-laptop-glossary-on.png)
+![Chat, on](261001d-shot-laptop-chat-on.png)
+
+Phone, 390×844, on:
+
+![Article, phone](261001d-shot-phone-article-on.png)
+![Summary, phone](261001d-shot-phone-summary-on.png)
+
+`/design`, the Faces table:
+
+![Faces](261001d-shot-design-faces.png)
