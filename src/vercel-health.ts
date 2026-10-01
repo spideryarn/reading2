@@ -23,10 +23,10 @@
  *    since 2026-09-06, so what is left is the second half of that failure: an
  *    empty shelf still looks exactly like a healthy new deployment, and
  *    `cachedStoreCheck` below is what warns about it.
- * 2. **Whether TLS verifies the server.** `sslDecisionFor` degrades to
- *    `encrypted-unverified` when the CA certificate is not found. The
- *    connection still works and is still encrypted; it just stops checking who
- *    it is talking to.
+ * 2. **Whether TLS verifies the server.** Until 2026-10-01 `sslDecisionFor`
+ *    degraded to `encrypted-unverified` when the CA certificate was not found:
+ *    still working, still encrypted, no longer checking who it was talking to.
+ *    It now throws instead, and this page reports the reason as `ssl.error`.
  * 3. **Whether `req.url` survived Vercel's routing.** Every route in
  *    src/routes.ts is matched against it, and several against the query string
  *    too. If the platform ever rewrites the path, they all 404 at once and the
@@ -1090,8 +1090,6 @@ async function migrationReport(warnings: string[]): Promise<MigrationReport> {
   return { expected, applied: check.applied, missing: missing.map((m) => m.tag), ahead };
 }
 
-const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
-
 /**
  * `POST /api/health` — did the body get here?
  *
@@ -1216,9 +1214,9 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
 
   const url = process.env.DATABASE_URL;
 
-  /* Three answers, not two, and the middle one — encrypted but unverified — is
-     the one worth seeing. `why` carries the path it looked for, which is the
-     whole diagnosis when the certificate did not make it into the bundle. */
+  /* Local is disabled; the remote is verified or throws. `why` names the CA
+     path on success, and the caught error is the diagnosis when the certificate
+     did not make it into the bundle or the URL tried to override TLS. */
   let ssl: { mode: string; why: string } | { error: string };
   if (!url) {
     ssl = { error: "DATABASE_URL is not set" };
@@ -1230,22 +1228,13 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
         warnings.push(`TLS mode is ${decision.mode}, not verified: ${decision.why}`);
       }
     } catch (err) {
+      /* Since 2026-10-01 this is where a missing certificate, or a TLS key in
+         DATABASE_URL that pg would let override the CA, arrives: a refusal,
+         and the database is unreachable until it is fixed. This page used to
+         check the URL's keys itself; `sslDecisionFor` does it now, with the
+         full list, so the two cannot disagree. */
       ssl = { error: (err as Error).message };
-    }
-
-    /* Checked here rather than trusted, because this is the case where every
-       other signal on this page says "verified" and the socket disagrees. */
-    let query: URLSearchParams | undefined;
-    try {
-      query = new URL(url).searchParams;
-    } catch {
-      warnings.push("DATABASE_URL does not parse as a URL");
-    }
-    const overrides = SSL_URL_KEYS.filter((k) => query?.has(k));
-    if (overrides.length) {
-      warnings.push(
-        `DATABASE_URL carries ${overrides.join(", ")} — pg will discard the CA loaded above`,
-      );
+      warnings.push(`TLS refused: ${(err as Error).message}`);
     }
   }
 

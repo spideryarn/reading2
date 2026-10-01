@@ -125,14 +125,11 @@ if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
  * server. That is the useful shape for this kind of check: an error from the
  * layer *above* the one you are testing is proof the layer under it worked.
  *
- * A CLI warns and carries on; a server should be louder. That choice is the
- * caller's, which is why `sslDecisionFor` returns a decision rather than
- * applying one.
+ * Against the remote, `sslDecisionFor` verifies or throws — there is no
+ * unverified answer for this script to warn about and carry on past
+ * (docs/plans/261001j-refuse-unverified-tls-to-the-remote-database.md).
  */
 const ssl = sslDecisionFor(url);
-if (ssl.mode === "encrypted-unverified") {
-  console.warn(`\u26a0 ${ssl.why}`);
-}
 
 /**
  * Two connections, on purpose.

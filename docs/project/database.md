@@ -556,9 +556,11 @@ certificate and must *not* use SSL; remote must.
 **The certificate is committed**, at [`certs/supabase-ca.crt`](../../certs/supabase-ca.crt), and
 found by path — so verified connections are the default rather than something to configure.
 [certs/README.md](../../certs/README.md) explains why committing a certificate is right here (it is
-Supabase's public root CA, carrying no project identifier) and what silently degrades without it:
-the connection keeps working and stays encrypted, but stops checking *who it is talking to*, which
-looks identical from the outside. [tests/db-tls.test.ts](../../tests/db-tls.test.ts) is the guard.
+Supabase's public root CA, carrying no project identifier). Without it, a remote connection is
+**refused** — it used to carry on encrypted but unverified, which looks identical from the outside
+— and so is a remote `DATABASE_URL` carrying `sslmode` or any other TLS key `pg` would let override
+the CA: [security.md § verified or refused](security.md#database-tls).
+[tests/db-tls.test.ts](../../tests/db-tls.test.ts) guards the file.
 
 **Three credentials, and none of them is the superuser.** A runtime role with DML on `spideryarn`
 and nothing else; a migration role with DDL; and the browser's publishable key, which reaches Auth

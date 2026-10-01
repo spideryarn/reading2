@@ -119,7 +119,6 @@ async function main(): Promise<void> {
   console.log(write ? "Mode: --write (rows below are rewritten)" : "Mode: dry run (nothing is changed; --write to apply)");
 
   const ssl = sslDecisionFor(url);
-  if (ssl.mode === "encrypted-unverified") console.warn(`⚠ ${ssl.why}`);
   const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl, application_name: "spideryarn backfill-plain-titles" });
 
   let total = 0;

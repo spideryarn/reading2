@@ -172,15 +172,13 @@ export function getDb(): Db {
   if (database) return database;
 
   const url = databaseUrl();
+  /* Throws against the remote unless the server will be verified. It used to
+     warn and connect unverified instead, on the reasoning that serving requests
+     beat refusing them; Greg reversed that on 2026-10-01, because a warning in a
+     log nobody reads is the same as no warning, and production has the
+     certificate (/api/health says so). Nothing is cached on a throw, so the
+     next request asks again. docs/plans/261001j-refuse-unverified-tls-to-the-remote-database.md. */
   const ssl = sslDecisionFor(url);
-
-  if (ssl.mode === "encrypted-unverified") {
-    // Louder than the migrator's warning, because this one runs in production
-    // and nobody is watching a terminal. It does not throw: refusing to serve
-    // requests over an encrypted-but-unverified connection would be a worse
-    // outcome than serving them, and the operator needs to be told either way.
-    logger.warn({ mode: ssl.mode }, "database connection is not verifying the server certificate");
-  }
 
   pool = new Pool({
     connectionString: url,
