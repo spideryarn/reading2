@@ -71,11 +71,12 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("ideas", ["arc", "glossary", "quotes"])).toBe(false);
   });
 
-  it("puts timeline in the ids group with ideas and sketch, and in no other", () => {
+  it("puts timeline in the ids group with ideas and quiz, and in no other", () => {
     /* **Measured rather than asserted**, which is what this file is for. The
        claim in src/models.ts is that `timeline` shares one cached article
-       prefix with `ideas` and `sketch` — same `high` effort, same `ids`
-       renderer — and shares nothing with the three `articleText` stages.
+       prefix with `ideas` and `quiz` — same `high` effort, same `ids`
+       renderer — and shares nothing with the three `articleText` stages, nor
+       with `sketch`, which left the group for `low` on 2026-10-01.
 
        It is worth pinning in both directions. Sharing where it should not marks
        the article, pays the 1.25x write premium and collects no read. Not
@@ -84,8 +85,30 @@ describe("the article cache group", () => {
     expect(STAGE_EFFORT.timeline).toBe(STAGE_EFFORT.ideas);
     expect(ARTICLE_RENDERER.timeline).toBe(ARTICLE_RENDERER.ideas);
     expect(sharesArticleCache("ideas", ["timeline"])).toBe(true);
-    expect(sharesArticleCache("timeline", ["sketch"])).toBe(true);
+    expect(sharesArticleCache("timeline", ["quiz"])).toBe(true);
     expect(sharesArticleCache("timeline", ["arc", "glossary", "quotes"])).toBe(false);
+    expect(sharesArticleCache("timeline", ["sketch"])).toBe(false);
+  });
+
+  it("puts sketch in no group at all, since it thinks at `low` alone", () => {
+    /* **Same bytes as `ideas`, different effort, so no share** — the same rule
+       that keeps glossary away from arc. Sketch was in the `ids` + `high` group
+       until 2026-10-01, when the thinking-effort eval found no visible loss at
+       `low` (docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+       Pinned in both directions because the wrong answer either way throws
+       nothing: a sketch marked beside `ideas` pays the 1.25x write premium for
+       a read that cannot happen. If sketch ever goes back to `high`, this is
+       the test that says the group changed, and the comments in src/models.ts
+       and src/step-order.ts need to change with it. */
+    expect(STAGE_EFFORT.sketch).toBe("low");
+    expect(ARTICLE_RENDERER.sketch).toBe(ARTICLE_RENDERER.ideas);
+    const others = (Object.keys(STAGE_EFFORT) as ArticleStage[]).filter((s) => s !== "sketch");
+    expect(others.length).toBeGreaterThan(0);
+    for (const other of others) {
+      expect(sharesArticleCache("sketch", [other]), `sketch with ${other}`).toBe(false);
+      expect(sharesArticleCache(other, ["sketch"]), `${other} with sketch`).toBe(false);
+    }
+    expect(cacheArticleForStep(["ideas", "timeline", "sketch"], 2)).toBe(false);
   });
 
   it("agrees with itself about which renderer every article stage uses", () => {
@@ -154,11 +177,12 @@ describe("the article cache group", () => {
 
   it("marks all three of a three-mode job, not just the two that write", () => {
     /* The shape that made "never worked" the wrong word and "never worked for a
-       pair" the right one: in `[ideas, timeline, sketch]` the middle step is both
-       a reader and a writer, so the old later-only predicate did mark it. Only
-       `sketch`, the last, went out blind. All three read the same `ids`
-       rendering at the same `high` effort. */
-    const job: StepName[] = ["ideas", "timeline", "sketch"];
+       pair" the right one: in a three-step job of one group the middle step is
+       both a reader and a writer, so the old later-only predicate did mark it.
+       Only the last went out blind. It was first written with `sketch` last;
+       `quiz` stands in since sketch left the group for `low` on 2026-10-01. All
+       three read the same `ids` rendering at the same `high` effort. */
+    const job: StepName[] = ["ideas", "timeline", "quiz"];
     for (let i = 0; i < job.length; i++) {
       expect(cacheArticleForStep(job, i), `${job[i]} at ${i}`).toBe(true);
     }

@@ -35,7 +35,7 @@
 
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
-import { budgetFor, privateHeadroom } from "../billing/half-units.js";
+import { budgetFor, ingestHeadroom } from "../billing/points.js";
 import type { Gift } from "../billing-plan.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, billingVouchers } from "../db/schema.js";
@@ -45,11 +45,11 @@ import { accountEmail, confirmedAccountEmail } from "./admin-accounts.js";
 import {
   accountSnapshot,
   entitlementFromRow,
-  halfUnitsUsed,
   hasLapsed,
   ingestsUsed,
   lockBillingAccount,
   usageFor,
+  wallUsed,
 } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -289,7 +289,7 @@ async function claimantUsage(ownerId: string, tiers: Awaited<ReturnType<typeof a
     kind: "free",
     used: ingestsUsed(usage),
     limit: entitlement.limit,
-    remaining: privateHeadroom(halfUnitsUsed(usage), budgetFor(entitlement.limit)),
+    remaining: ingestHeadroom(wallUsed(usage), budgetFor(entitlement.limit)),
     lapsed: hasLapsed(row),
   };
 }

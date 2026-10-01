@@ -49,7 +49,14 @@ import type { ReactNode } from "react";
 import { MODE_LABEL } from "../../title-text.js";
 import { bandTarget } from "../activation.js";
 import { FeatureBoundary } from "../FeatureBoundary.js";
-import { diagramParam, type Mode, refereeParam, rememberParam, summaryParam } from "../params.js";
+import {
+  diagramParam,
+  type Mode,
+  refereeParam,
+  rememberParam,
+  structureParam,
+  summaryParam,
+} from "../params.js";
 
 /**
  * **Whether each mode's band is inside a boundary, decided rather than fallen
@@ -85,7 +92,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   structure: BAND,
   citations: BAND,
   faq: BAND,
-  trajectory: BAND,
+  skim: BAND,
   tweets: BAND,
   /* No band, but a column of its own on the right, and that column is inside
      the same boundary at its own call site in Reader.tsx — so a throw in it
@@ -117,17 +124,22 @@ export function ModeBoundary({
     referee: refereeParam,
     remember: rememberParam,
     summary: summaryParam,
+    structure: structureParam,
   });
   /* Only an owner's band is selected by the first three modes. A Diagram visitor
      is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
      address change there is not a new band and must not retry a broken one.
      **Summary's is the exception**: a visitor gets the plain-words levels
      too, off the payload (SummaryMode.tsx § `VisitorSummaryBand`), so moving
-     the slider is a new level for either reader, and retries a broken one. */
+     the slider is a new level for either reader, and retries a broken one.
+     So is Structure's, whose Fisheye and Expanded are two bands for anyone,
+     off the payload. */
   const subMode =
     mode === "summary"
       ? sub.summary
-      : owner
+      : mode === "structure"
+        ? sub.structure
+        : owner
         ? mode === "diagram"
           ? sub.diagram
           : mode === "referee"

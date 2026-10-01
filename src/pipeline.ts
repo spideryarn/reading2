@@ -116,12 +116,13 @@ import {
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
+import { extractHtmlMetadata, extractPaperMetadata, paperMeta } from "./paper-metadata.js";
 import {
-  generateTrajectory,
-  PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
-  trajectoryInput,
-  trajectoryInputHash,
-} from "./trajectory.js";
+  generateSkim,
+  PROMPT_VERSION as SKIM_PROMPT_VERSION,
+  skimInput,
+  skimInputHash,
+} from "./skim.js";
 import {
   generateIllustrated,
   inputFingerprint as illustratedFingerprint,
@@ -173,8 +174,8 @@ import {
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
-  TRAJECTORY_NO_QUOTES,
-  TRAJECTORY_ONLY_ABSTRACT_QUOTES,
+  SKIM_NO_QUOTES,
+  SKIM_ONLY_ABSTRACT_QUOTES,
 } from "./messages.js";
 import {
   canonicalKey,
@@ -199,7 +200,7 @@ import {
   inputFingerprint as tweetsFingerprint,
   PROMPT_VERSION as TWEETS_PROMPT_VERSION,
 } from "./tweets.js";
-import type { Block, JobUpload, StepName } from "./types.js";
+import type { Block, JobUpload, Meta, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { ownedSlug } from "./store/owned-slug.js";
@@ -488,7 +489,7 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      quote identities, offered words and priorities, so when Find more adds quotes it re-runs without
      being forced. And it replaces rather than appends.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  "trajectory",
+  "skim",
   /* Same two reasons as the three above: it reads `blocks.json` and
      `tree.json`, nothing reads what it writes, so the positional cascade would
      buy a model call for nothing. Unlike the glossary, forcing it does not
@@ -518,13 +519,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      a stored `sourceHash`, so a moved article re-runs without being forced.
      And it replaces rather than appends. docs/plans/260916d-faq-mode.md. */
   "faq",
-  /* The same two reasons, and a third that is about the clock rather than the
-     money. `sketch` is the slowest call here — 194s measured on the
-     constitution — and every step self-aborts at 400s inside an 800s
-     invocation that must also fit a `hierarchy` measured at 320s. A positional
-     cascade that swept this in beside `hierarchy` would not merely waste a call, it
-     would run the invocation out of time, and the way that fails is a platform
-     kill that takes the whole job rather than a recorded failure. */
+  /* The same two reasons: it reads the blocks and tree, and nothing except the
+     separately requested `illustrated` stage reads what it writes, so a
+     positional cascade would buy a model call the reader did not ask for. At
+     `high`, its 194-second measured maximum supplied a third, timeout-specific
+     reason; the move to `low` (42 seconds on average) removes that reason, not
+     the two ordinary ones. */
   "sketch",
   /* All three of `sketch`'s reasons and it is dearer than any of them: $0.27 to
      $0.40 an article measured, of which 86–89% is the brief call, plus one
@@ -1968,6 +1968,36 @@ export async function recoverPdfFigures(
  * Each entry is bound to its own name, which is what lets `run`'s return type
  * depend on whether that name is still on `LEGACY_UNCONVERTED_STEPS`.
  */
+/**
+ * **The two readers the `metadata` step calls**, in an object so a test can
+ * `vi.spyOn` either one and run the real step with no network — the house way
+ * of standing in for a model step (`vi.spyOn(STEPS.extract, "run")`), one level
+ * down so the step's own reading of the bytes and writing of `meta` is still
+ * what runs.
+ */
+export const metadataReaders = {
+  pdf: extractPaperMetadata,
+  html: extractHtmlMetadata,
+};
+
+/**
+ * **`extract`'s `meta`, keeping a minimal paper's abstract and DOI** when it
+ * found none of its own. *Read this* re-reads the paper over a draft copied
+ * from the minimal revision, and `metaColumns` writes every meta column `??
+ * null` — so without this the abstract the reader saw on the shelf would vanish
+ * the moment they asked to read the paper. Only those two fields: everything
+ * else stage 2 says about the piece is its own, and better.
+ */
+async function keptPaperMetadata(ctx: StepContext, store: ArtifactReads, next: Meta): Promise<Meta> {
+  if (next.abstract !== undefined && next.doi !== undefined) return next;
+  const previous = await store.read(ctx.slug, "extract", "meta");
+  return {
+    ...next,
+    ...(next.abstract === undefined && previous?.abstract ? { abstract: previous.abstract } : {}),
+    ...(next.doi === undefined && previous?.doi ? { doi: previous.doi } : {}),
+  };
+}
+
 export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 1. Its own step, and its own artefact, so that a failed or wrong
      extraction can be retried without asking the publisher again — and without
@@ -2029,6 +2059,72 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          failing. See log.ts's note on `url` not being redacted, and why. */
       plog.debug({ slug: ctx.slug, step: "fetch", host, kb }, `fetch ${ctx.slug}: ${kb} KB`);
       return { parts: { raw: manifest }, detail: `${kb} KB` };
+    },
+  },
+
+  /* **A minimal paper's whole AI work**: title, authors, abstract and DOI off
+     the start of the document, in one cheap call — plan 261001m § The metadata
+     step. In product traffic it runs only in the job a minimal upload queues,
+     `["fetch", "metadata"]`; the verified administrator may also run this one
+     stage against a slug, preserving the pipeline's standalone-stage contract
+     without opening a free reader path (src/jobs.ts).
+
+     It reads stage 1's stored bytes exactly as `extract` does, and branches on
+     what stage 1 decided the bytes **are**, never on the file's name: a PDF's
+     first two pages through pdf.js, an HTML page through the same Readability
+     and scholarly-meta reader the app already has (src/paper-text.ts), then the
+     same gateway job either way. A document with no text gets no call and is
+     named after its file. A model failure throws, so the job fails and its
+     reservation is released by the ordinary settlement. */
+  metadata: {
+    name: "metadata",
+    label: "Reading the title and abstract",
+    produces: ["meta"],
+    async run(ctx, store) {
+      const manifest = await store.read(ctx.slug, "fetch", "raw");
+      if (manifest === null) {
+        throw stageFailure("ours", {
+          generic: `No fetched document for "${ctx.slug}" — run the fetch step first.`,
+        });
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = await readRawBytes(manifest, { slug: ctx.slug });
+      } catch (err) {
+        /* `extract`'s two sentences, for `extract`'s reasons — see there. */
+        if (err instanceof RawDocumentUnavailable) {
+          throw stageFailure(
+            err.reason === "corrupt" ? SOURCE_DOCUMENT_DAMAGED : SOURCE_DOCUMENT_GONE,
+            { authored: err.message },
+          );
+        }
+        throw err;
+      }
+      const found =
+        manifest.kind === "pdf"
+          ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
+          : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
+      const meta = paperMeta({
+        slug: ctx.slug,
+        kind: manifest.kind,
+        ...(manifest.filename ? { filename: manifest.filename } : {}),
+        found,
+      });
+      /* Counts and the branch, never a word of the paper (docs/project/logging.md). */
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "metadata",
+          kind: manifest.kind,
+          from: found.from,
+          textChars: found.textChars,
+          authors: found.authors.length,
+          abstract: found.abstract !== null,
+          doi: found.doi !== null,
+        },
+        `metadata ${ctx.slug}: ${found.from}`,
+      );
+      return { parts: { meta }, detail: meta.title };
     },
   },
 
@@ -2185,7 +2281,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             );
           }
           return {
-            parts: { extractedHtml: result.extractedHtml, meta: result.meta },
+            parts: { extractedHtml: result.extractedHtml, meta: await keptPaperMetadata(ctx, store, result.meta) },
             detail: result.meta.title,
           };
         } catch (err) {
@@ -2300,7 +2396,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
       );
       return {
-        parts: { extractedHtml: result.extractedHtml, meta: result.meta },
+        parts: { extractedHtml: result.extractedHtml, meta: await keptPaperMetadata(ctx, store, result.meta) },
         detail: result.meta.title,
       };
     },
@@ -4320,7 +4416,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    *    that has gone is simply not offered (`usableQuotes`). Without Ideas it
    *    plans on the quotes alone (plan 260928a § Stage 6).
    * 2. **Its fingerprint is what the prompt renders, not the article** —
-   *    `trajectoryInputHash` over `trajectoryInput`: the offered quotes, the
+   *    `skimInputHash` over `skimInput`: the offered quotes, the
    *    Ideas they carry, and the top-level outline. `stamp` and `run` build
    *    the same input from the same reads, so *Find more* adding a quote, or
    *    the Ideas being regenerated or arriving, makes the route not-current
@@ -4330,12 +4426,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * unlike `illustrated`, which inherits the Sketch's. The route is exactly the
    * thing a profile should change, and none → some counts: `sameStamp` compares
    * a recorded `null` against an expected hash as a mismatch, which is the
-   * stricter rule the plan asks for (src/trajectory.ts § `routeProfileIsStale`).
+   * stricter rule the plan asks for (src/skim.ts § `routeProfileIsStale`).
    */
-  trajectory: {
-    name: "trajectory",
+  skim: {
+    name: "skim",
     label: "Planning the route",
-    produces: ["trajectory"],
+    produces: ["skim"],
     stamp: async (ctx, store) => {
       const quotes = await store.read(ctx.slug, "quotes", "quotes");
       /* `null` is "we cannot tell", which makes the step run — and running is
@@ -4344,11 +4440,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
       const ideas = await store.read(ctx.slug, "ideas", "ideas");
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      const input = skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
       if (input.offered.length === 0) return null;
       return {
-        inputHash: trajectoryInputHash(input),
-        promptVersion: TRAJECTORY_PROMPT_VERSION,
+        inputHash: skimInputHash(input),
+        promptVersion: SKIM_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
       };
@@ -4360,15 +4456,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          refuses loudly when they are missing. */
       const article = await readArticle(ctx.slug, store);
       const ideas = await store.read(ctx.slug, "ideas", "ideas");
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      const input = skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
       if (!quotes || input.offered.length === 0) {
         if (input.abstractQuoteIds.length > 0) {
-          throw stageFailure(TRAJECTORY_ONLY_ABSTRACT_QUOTES);
+          throw stageFailure(SKIM_ONLY_ABSTRACT_QUOTES);
         }
-        throw stageFailure(TRAJECTORY_NO_QUOTES);
+        throw stageFailure(SKIM_NO_QUOTES);
       }
 
-      const run = await generateTrajectory({
+      const run = await generateSkim({
         slug: ctx.slug,
         input,
         profile: ctx.profile ?? null,
@@ -4376,11 +4472,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         power: ctx.power,
       });
-      const [gist, more, most] = run.trajectory.visible;
+      const [gist, more, most] = run.skim.visible;
       plog.info(
         {
           slug: ctx.slug,
-          step: "trajectory",
+          step: "skim",
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
@@ -4404,10 +4500,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           /* The profile's LENGTH, never the profile. docs/project/logging.md. */
           profileChars: ctx.profile?.length ?? 0,
         },
-        `trajectory ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
+        `skim ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
       );
       return {
-        parts: { trajectory: run.trajectory },
+        parts: { skim: run.skim },
         detail: `${most} ${most === 1 ? "stop" : "stops"} over ${run.offered} quotes`,
       };
     },

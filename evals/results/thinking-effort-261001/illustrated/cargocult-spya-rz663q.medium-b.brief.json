@@ -1,0 +1,288 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map, inked in brown and sepia with hand-lettered captions in blocky antique capitals, because Feynman's talk is itself a journey through named places of failed and careful inquiry — islands, labs, corridors, parties — that a map can show as stops along one road.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Road of Cargo Cult Science",
+      "prompt": "Draw an antique hand-inked map in sepia and brown ink on aged parchment, depicting a single winding road running from the top of the page to the bottom, in four labeled terrain-bands (no words other than the vignette captions below each scene). At the top, in the first band, the road passes an apothecary's stall where a healer holds out a rhinoceros horn to a patient (RHINOCEROS HORN CURE), then a dark sealed tank with a man floating inside it (ISOLATION TANK), then a lively cocktail party where a hostess leans toward two gossiping men (TALKING SHOP AT A PARTY). The road then crosses into a second band, an island shore, where a wooden hut stands with a man inside wearing bamboo-antenna headphones, staring at an empty sky for planes that never come (CARGO CULT CONTROL HUT). Beside the hut, a scientist bends backward over his workbench pointing out flaws in his own papers (LEANING OVER BACKWARDS), and nearby two matching workbenches sit side by side with two scientists repeating the same experiment (OTHERS REPEAT YOUR WORK). The road crosses into a third band, a laboratory quarter: a glass chamber with oil drops falling between charged plates, watched by a scientist with a lens (MILLIKAN'S OIL DROPS), beside an empty lecture hall with a bare blackboard and a shut book (NO COURSE TEACHES THIS). The road enters a fourth band, a long corridor lined with identical doors, a small rat running toward one (THE RAT CORRIDOR), and the road ends at an open gate where a young graduate in cap and gown looks out onto open country (FREE TO KEEP INTEGRITY), with a faint dotted line curving back up the margin of the map to the apothecary's stall at the very top, closing the loop. Render everything in careful pen-and-ink linework with hatched shading, muted browns and faded ochre washes, decorative compass rose in a corner, and small hand-lettered capital titles beneath each scene only — no other words, banners, or inscriptions anywhere on the map.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a piece of rhinoceros horn would increase potency",
+          "depicts": "At the top of the map, a medieval apothecary's stall where a robed healer holds out a curved horn to a doubtful-looking patient.",
+          "title": "RHINOCEROS HORN CURE",
+          "node": "n1"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "I went into isolation tanks (they're dark and quiet and you float in Epsom salts)",
+          "depicts": "A man floating alone inside a dark sealed tank of water, eyes shut, bubbles of salt around him.",
+          "title": "ISOLATION TANK",
+          "node": "n2"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "Why are you fellows talking shop?",
+          "depicts": "A cocktail party scene: a hostess leaning toward two men deep in conversation, glass in hand, eyebrow raised.",
+          "title": "TALKING SHOP AT A PARTY",
+          "node": "n4"
+        },
+        {
+          "block": "spya-az6z7k",
+          "quote": "Other experimenters will repeat your experiment and find out whether you were wrong or right",
+          "depicts": "Two separate workbenches side by side, each with a scientist running the same apparatus, comparing results across a gap.",
+          "title": "OTHERS REPEAT YOUR WORK",
+          "node": "n8"
+        },
+        {
+          "block": "spya-s9msxy",
+          "quote": "Millikan measured the charge on an electron by an experiment with falling oil drops",
+          "depicts": "A glass chamber with oil drops falling between two charged plates, a scientist peering through a lens at them.",
+          "title": "MILLIKAN'S OIL DROPS",
+          "node": "n9"
+        },
+        {
+          "block": "spya-bvx2u8",
+          "quote": "something that we haven't specifically included in any particular course that I know of",
+          "depicts": "An empty lecture hall with a blank blackboard and an unused lectern, a single book shut on the shelf beside it.",
+          "title": "NO COURSE TEACHES THIS",
+          "node": "n10"
+        },
+        {
+          "block": "spya-ndyj3t",
+          "quote": "the good luck to be somewhere where you are free to maintain the kind of integrity I have described",
+          "depicts": "A young graduate in cap and gown standing at an open gate on the road, looking out onto open country under a clear sky.",
+          "title": "FREE TO KEEP INTEGRITY",
+          "node": "n14"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "At the top of the map, a medieval apothecary's stall where a robed healer holds out a curved horn to a doubtful-looking patient.",
+          "title": "RHINOCEROS HORN CURE"
+        },
+        {
+          "where": "A man floating alone inside a dark sealed tank of water, eyes shut, bubbles of salt around him.",
+          "title": "ISOLATION TANK"
+        },
+        {
+          "where": "A cocktail party scene: a hostess leaning toward two men deep in conversation, glass in hand, eyebrow raised.",
+          "title": "TALKING SHOP AT A PARTY"
+        },
+        {
+          "where": "An island control hut built of wood, a man sitting inside wearing crude wooden headphones with bamboo antennas, watching an empty sky.",
+          "title": "CARGO CULT CONTROL HUT"
+        },
+        {
+          "where": "A scientist at a workbench literally bent backward over his papers, pointing out his own mistakes with a quill.",
+          "title": "LEANING OVER BACKWARDS"
+        },
+        {
+          "where": "Two separate workbenches side by side, each with a scientist running the same apparatus, comparing results across a gap.",
+          "title": "OTHERS REPEAT YOUR WORK"
+        },
+        {
+          "where": "A glass chamber with oil drops falling between two charged plates, a scientist peering through a lens at them.",
+          "title": "MILLIKAN'S OIL DROPS"
+        },
+        {
+          "where": "An empty lecture hall with a blank blackboard and an unused lectern, a single book shut on the shelf beside it.",
+          "title": "NO COURSE TEACHES THIS"
+        },
+        {
+          "where": "A long corridor lined with identical doors on both sides, a small rat running toward one of them.",
+          "title": "THE RAT CORRIDOR"
+        },
+        {
+          "where": "A young graduate in cap and gown standing at an open gate on the road, looking out onto open country under a clear sky.",
+          "title": "FREE TO KEEP INTEGRITY"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-pseudoscience",
+      "title": "Surveying the Empty Lands",
+      "prompt": "Draw the same antique sepia-ink map in the same hand, this time a single plate showing a dry, cracked terrain labeled only by the scenes within it — the inside of the 'surveying pseudoscience' stretch of road. At the top, a scientist at a bench weighs two vials on a balance and tips one into a cracked bin (TESTING AN IDEA). Just below, a loose gathering of figures: one pointing at a glowing shape in the sky, another holding a star-chart, another meditating with eyes shut (UFOs AND ASTROLOGY TALK). The road passes a cliffside retreat building with robed figures sitting cross-legged on the grass before the sea (ESALEN RETREAT). Next to it, inside a bathhouse, a man presses his thumb into a woman's bare foot on a table while a bystander in a tub looks skeptical (IS THAT THE PITUITARY?). Further down, a cramped hotel bathroom with a running tap, several figures crowded around a man rubbing a key held by a boy, all staring at it (GELLER RUBS THE KEY). Beside it, a schoolroom with children at desks and a teacher tracing a sagging line on a board (FALLING READING SCORES). Lower still, a crowded party where a stern woman confronts a man and his companion, finger raised (WHY ARE YOU FLIRTING?). At the bottom, a quiet room where a patient reclines on a couch and a seated analyst takes notes behind a drawn curtain (PSYCHOTHERAPY COUCH). Render in fine pen-and-ink with cross-hatching, muted ochre and brown washes, scattered dry-grass and cracked-earth map ornament around the vignettes but not crowding them, each scene large enough to read clearly, hand-lettered capital titles beneath each one, and no other lettering anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a method was discovered for separating the ideas—which was to try one to see if it worked",
+          "depicts": "A scientist at a bench holding up two small vials on a balance scale, discarding one into a bin marked with a crack.",
+          "title": "TESTING AN IDEA",
+          "node": "p1"
+        },
+        {
+          "block": "spya-bcgpc3",
+          "quote": "UFO's, or astrology, or some form of mysticism, expanded consciousness, new types of awareness, ESP",
+          "depicts": "A cluster of figures at a gathering, one pointing up at a glowing shape in the sky, another holding a chart of stars, another closing their eyes in concentration.",
+          "title": "UFOS AND ASTROLOGY TALK",
+          "node": "p2"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "Then I went to Esalen, which is a hotbed of this kind of thought",
+          "depicts": "A cliffside retreat building with figures sitting cross-legged on the grass outside it, facing the sea.",
+          "title": "ESALEN RETREAT",
+          "node": "p3"
+        },
+        {
+          "block": "spya-xm9a87",
+          "quote": "I feel a kind of dent. Is that the pituitary?",
+          "depicts": "A man in a bathhouse pressing his thumb into a woman's bare foot on a table, an onlooker watching skeptically from the tub.",
+          "title": "IS THAT THE PITUITARY?",
+          "node": "p4"
+        },
+        {
+          "block": "spya-mmhbvn",
+          "quote": "my boy held a key and Geller rubbed it, and nothing happened",
+          "depicts": "A cramped hotel bathroom with the tap running, several people crowded around a man rubbing a key held by a boy, all staring at it intently.",
+          "title": "GELLER RUBS THE KEY",
+          "node": "p5"
+        },
+        {
+          "block": "spya-aww976",
+          "quote": "the reading scores keep going down—or hardly going up",
+          "depicts": "A schoolroom with rows of children at desks and a teacher at a board tracing a line that sags downward across the panel.",
+          "title": "FALLING READING SCORES",
+          "node": "p6"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "your wife will come around and say, \"Why are you flirting again?\"",
+          "depicts": "A crowded party scene where a woman approaches a man and another guest with a stern expression, finger raised.",
+          "title": "WHY ARE YOU FLIRTING?",
+          "node": "p7"
+        },
+        {
+          "block": "spya-ankp3d",
+          "quote": "the efficacy of various forms of psychotherapy",
+          "depicts": "A patient reclining on a couch while a seated analyst with notebook listens, a curtain drawn behind them.",
+          "title": "PSYCHOTHERAPY COUCH",
+          "node": "p10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A scientist at a bench holding up two small vials on a balance scale, discarding one into a bin marked with a crack.",
+          "title": "TESTING AN IDEA"
+        },
+        {
+          "where": "A cluster of figures at a gathering, one pointing up at a glowing shape in the sky, another holding a chart of stars, another closing their eyes in concentration.",
+          "title": "UFOS AND ASTROLOGY TALK"
+        },
+        {
+          "where": "A cliffside retreat building with figures sitting cross-legged on the grass outside it, facing the sea.",
+          "title": "ESALEN RETREAT"
+        },
+        {
+          "where": "A man in a bathhouse pressing his thumb into a woman's bare foot on a table, an onlooker watching skeptically from the tub.",
+          "title": "IS THAT THE PITUITARY?"
+        },
+        {
+          "where": "A cramped hotel bathroom with the tap running, several people crowded around a man rubbing a key held by a boy, all staring at it intently.",
+          "title": "GELLER RUBS THE KEY"
+        },
+        {
+          "where": "A schoolroom with rows of children at desks and a teacher at a board tracing a line that sags downward across the panel.",
+          "title": "FALLING READING SCORES"
+        },
+        {
+          "where": "A crowded party scene where a woman approaches a man and another guest with a stern expression, finger raised.",
+          "title": "WHY ARE YOU FLIRTING?"
+        },
+        {
+          "where": "A patient reclining on a couch while a seated analyst with notebook listens, a curtain drawn behind them.",
+          "title": "PSYCHOTHERAPY COUCH"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-case-studies",
+      "title": "The Corridor of Careful Checks",
+      "prompt": "Draw the same antique sepia map in the same hand, a single plate showing the inside of the laboratory stretch of the road, opening with the corridor-of-doors vignette carried over from the overview, now built out in full. At the top, a young researcher sketches a new maze layout at a lab table beside a caged rat (NEW CONDITIONS FOR RATS). Below, Feynman gestures between two side-by-side rat setups marked with different conditions, advising the student (REPEAT THE ORIGINAL FIRST). Next to it, a stern professor blocks a doorway with his arm raised, turning the student away (PROFESSOR SAYS NO). The road continues into a long corridor lined with identical doors, a rat released partway down heading for the third one (THIRD DOOR DOWN), and just past it the same corridor now floored in loose sand, a man smoothing it flat (CORRIDOR OF SAND). Further along, a different, later researcher runs rats through a plain wooden corridor with no sand, a stack of unopened notes on a shelf beside him (IGNORING MR. YOUNG). Below that, three small panels in a row show a faint glowing aura around a seated test subject growing fainter and fainter until the last panel is empty (EFFECTS SHRINK TO NOTHING). At the bottom, an instructor stands at a doorway waving in one eager student while turning away two others with their own notebooks (ONLY STUDENTS WHO 'WIN'). Render in fine pen-and-ink crosshatching with sepia and faded brown washes on aged parchment, laboratory-shelf and corridor-door ornament filling the margins without crowding the scenes, each vignette large and clear, hand-lettered capital titles beneath each one, and no other lettering anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-w9nnq6",
+          "quote": "it had been found by others that under certain circumstances, X, rats did something, A",
+          "depicts": "A young researcher at a lab table sketching a new maze layout, a notebook open beside a small caged rat.",
+          "title": "NEW CONDITIONS FOR RATS",
+          "node": "c1"
+        },
+        {
+          "block": "spya-tf8rj2",
+          "quote": "to repeat in her laboratory the experiment of the other person—to do it under condition X",
+          "depicts": "Feynman gesturing toward two side-by-side rat setups on a bench, one marked X and one marked Y, advising the student between them.",
+          "title": "REPEAT THE ORIGINAL FIRST",
+          "node": "c2"
+        },
+        {
+          "block": "spya-v0xcd7",
+          "quote": "no, you cannot do that, because the experiment has already been done and you would be wasting time",
+          "depicts": "A stern professor standing in a doorway with arm raised, blocking the student from entering the lab with her notebook.",
+          "title": "PROFESSOR SAYS NO",
+          "node": "c3"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "he could only fix that by putting his corridor in sand",
+          "depicts": "The same corridor now with its floor covered in loose sand, the researcher smoothing it flat with a board.",
+          "title": "CORRIDOR OF SAND",
+          "node": "c6"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "they improve the techniques so that the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "depicts": "A row of three small test-room panels showing a glowing aura around a test subject shrinking panel by panel until nothing is left.",
+          "title": "EFFECTS SHRINK TO NOTHING",
+          "node": "c8"
+        },
+        {
+          "block": "spya-g203mu",
+          "quote": "be sure they only train students who have shown their ability to get PSI results to an acceptable extent",
+          "depicts": "An instructor at a doorway waving in one eager student while turning away two others standing outside with their own notebooks.",
+          "title": "ONLY STUDENTS WHO \"WIN\"",
+          "node": "c9"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A young researcher at a lab table sketching a new maze layout, a notebook open beside a small caged rat.",
+          "title": "NEW CONDITIONS FOR RATS"
+        },
+        {
+          "where": "Feynman gesturing toward two side-by-side rat setups on a bench, one marked X and one marked Y, advising the student between them.",
+          "title": "REPEAT THE ORIGINAL FIRST"
+        },
+        {
+          "where": "A stern professor standing in a doorway with arm raised, blocking the student from entering the lab with her notebook.",
+          "title": "PROFESSOR SAYS NO"
+        },
+        {
+          "where": "A long corridor of identical doors with a rat being released partway down, heading toward the third door.",
+          "title": "THIRD DOOR DOWN"
+        },
+        {
+          "where": "The same corridor now with its floor covered in loose sand, the researcher smoothing it flat with a board.",
+          "title": "CORRIDOR OF SAND"
+        },
+        {
+          "where": "A different, later researcher running rats through a plain wooden corridor with no sand on the floor, Young's notes left unopened on a shelf.",
+          "title": "IGNORING MR. YOUNG"
+        },
+        {
+          "where": "A row of three small test-room panels showing a glowing aura around a test subject shrinking panel by panel until nothing is left.",
+          "title": "EFFECTS SHRINK TO NOTHING"
+        },
+        {
+          "where": "An instructor at a doorway waving in one eager student while turning away two others standing outside with their own notebooks.",
+          "title": "ONLY STUDENTS WHO \"WIN\""
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "cargocult-spya-rz663q",
+  "profileHash": null
+}

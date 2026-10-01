@@ -8,11 +8,11 @@
  * > about it.
  *
  * Switching an article on writes **one more charged `ingest_events` row** for
- * it, `kind = 'high_power'`, priced exactly like an ingest of it: 2 half-units
- * while private, 1 while public, recomputed live, frozen on delete. Once per
+ * it, `kind = 'high_power'`, priced exactly like an ingest of it: 200 points
+ * while private, 100 while public, recomputed live, frozen on delete. Once per
  * article for ever — off refunds nothing, on again charges nothing — and it
- * must fit whole (`used + cost <= budget`, not the ingest wall's `used <
- * budget`).
+ * must fit whole (`admitsHighPower`, `used + cost <= budget`, not the ingest
+ * wall's `admitsIngest`).
  *
  * What this file holds, against a real database, this file's owners only, no
  * Stripe and no network (`switchOnHighPower` in src/store/pg-billing.ts, and
@@ -36,9 +36,9 @@
  *
  * ## Watched red (2026-10-01), one mutation at a time, then restored
  *
- * - `halfUnitsUsed(usage) + cost > budget` → `>=` (no exact fit): red on the
+ * - `wallUsed(usage) + cost > budget` → `>=` (no exact fit): red on the
  *   two "fits exactly" cases (private 4→6, public 5→6).
- * - the same line → `halfUnitsUsed(usage) >= budget` (the ingest wall's rule,
+ * - the same line → `wallUsed(usage) >= budget` (the ingest wall's rule,
  *   cost dropped): red on "a private switch-on at five of six is refused".
  * - the `already` lookup forced to empty: red on on/off/on (the unique index
  *   throws on the second on) and on the concurrent case.
@@ -60,14 +60,14 @@ import {
   PUBLIC_INGEST_COST,
   articles as inArticles,
   budgetFor,
-} from "../src/billing/half-units.js";
+} from "../src/billing/points.js";
 import { FREE, FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
 import type { Entitlement, TierRow } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
 import { runAsOwner } from "../src/owner.js";
 import type { OwnerId } from "../src/owner.js";
 import {
-  halfUnitsUsed,
+  wallUsed,
   ingestEligibility,
   ingestsUsed,
   switchOnHighPower,
@@ -98,7 +98,7 @@ const OTHER = "0b1f0a1e-0000-4000-8000-0000000c6c02" as OwnerId;
 /** Every slug this file makes starts with this. */
 const PREFIX = "billing-high-power-";
 
-/** The free budget, in half-units — three articles, so six. */
+/** The free budget, in points — three articles, so 600. */
 const FREE_BUDGET = budgetFor(inArticles(FREE_LIFETIME_INGESTS));
 
 /**
@@ -297,7 +297,7 @@ afterAll(async () => {
 /* ------------------------------------------------------------ the price -- */
 
 describe("what switching on costs", () => {
-  it("charges a private article one more article — two half-units — and counts it apart from ingests", async () => {
+  it("charges a private article one more article — 200 points — and counts it apart from ingests", async () => {
     const id = await givenArticle("private", "private");
     await givenIngest(id);
     const before = await usageFor(OWNER, FREE);
@@ -306,15 +306,15 @@ describe("what switching on costs", () => {
     expect(answer).toMatchObject({ kind: "on", charged: true });
 
     const after = await usageFor(OWNER, FREE);
-    expect(halfUnitsUsed(after) - halfUnitsUsed(before)).toBe(PRIVATE_INGEST_COST);
-    expect(halfUnitsUsed(after)).toBe(4);
+    expect(wallUsed(after) - wallUsed(before)).toBe(PRIVATE_INGEST_COST);
+    expect(wallUsed(after)).toBe(400);
     /* **Not an article added**: /profile's "N articles added" reads this. */
     expect(ingestsUsed(after)).toBe(ingestsUsed(before));
     expect(after).toMatchObject({ chargedFullPrice: 1, highPowerFullPrice: 1, highPowerHalfPrice: 0 });
     expect(await stateOf(id)).toMatchObject({ upgrades: 1, since: expect.any(Date) });
   });
 
-  it("charges a public article half of one — one half-unit", async () => {
+  it("charges a public article half of one — 100 points", async () => {
     const id = await givenArticle("public", "public");
     await givenIngest(id);
 
@@ -323,7 +323,7 @@ describe("what switching on costs", () => {
       charged: true,
     });
     const usage = await usageFor(OWNER, FREE);
-    expect(halfUnitsUsed(usage)).toBe(2 * PUBLIC_INGEST_COST);
+    expect(wallUsed(usage)).toBe(2 * PUBLIC_INGEST_COST);
     expect(usage).toMatchObject({ chargedHalfPrice: 1, highPowerFullPrice: 0, highPowerHalfPrice: 1 });
     expect(ingestsUsed(usage)).toBe(1);
   });
@@ -336,10 +336,10 @@ describe("it must fit whole: used + cost <= budget, with no overdraft", () => {
     const a = await givenArticle("fit-a", "private");
     await givenIngest(a);
     await givenIngest(await givenArticle("fit-b", "private"));
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(4);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(400);
 
     expect(await switchOnHighPower(OWNER, slug("fit-a"), NO_TIERS)).toMatchObject({ kind: "on" });
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
   });
 
   it("refuses at six of six, and writes nothing", async () => {
@@ -352,16 +352,16 @@ describe("it must fit whole: used + cost <= budget, with no overdraft", () => {
     expect(answer).toMatchObject({ kind: "no-room", publicNow: false });
     /* Nothing: no row, and the column still clear. */
     expect(await stateOf(a)).toEqual({ upgrades: 0, since: null });
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
   });
 
   it("fits a public article at five of six, landing at six", async () => {
     for (const n of [1, 2, 3, 4, 5]) await givenIngest(await givenArticle(`pub-${n}`, "public"));
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(5);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(500);
 
     const answer = await switchOnHighPower(OWNER, slug("pub-1"), NO_TIERS);
     expect(answer).toMatchObject({ kind: "on", charged: true });
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
   });
 
   /**
@@ -373,7 +373,7 @@ describe("it must fit whole: used + cost <= budget, with no overdraft", () => {
     for (const n of [1, 2, 3]) await givenIngest(await givenArticle(`five-pub-${n}`, "public"));
     const mine = await givenArticle("five-private", "private");
     await givenIngest(mine);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(5);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(500);
 
     expect(await switchOnHighPower(OWNER, slug("five-private"), NO_TIERS)).toMatchObject({
       kind: "no-room",
@@ -394,16 +394,16 @@ describe("charged once per article, for ever", () => {
       kind: "on",
       charged: true,
     });
-    const charged = halfUnitsUsed(await usageFor(OWNER, FREE));
+    const charged = wallUsed(await usageFor(OWNER, FREE));
 
     await switchOff("once");
     expect(await stateOf(id)).toEqual({ upgrades: 1, since: null });
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(charged);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(charged);
 
     const again = await switchOnHighPower(OWNER, slug("once"), NO_TIERS);
     expect(again).toMatchObject({ kind: "on", charged: false });
     expect(await stateOf(id)).toMatchObject({ upgrades: 1, since: expect.any(Date) });
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(charged);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(charged);
   });
 
   /**
@@ -417,7 +417,7 @@ describe("charged once per article, for ever", () => {
     await switchOnHighPower(OWNER, slug("paid-for"), NO_TIERS);
     await switchOff("paid-for");
     await givenIngest(await givenArticle("then-full", "private"));
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
 
     expect(await switchOnHighPower(OWNER, slug("paid-for"), NO_TIERS)).toMatchObject({
       kind: "on",
@@ -453,7 +453,7 @@ describe("charged once per article, for ever", () => {
     expect(answers.filter((answer) => answer.kind === "on")).toHaveLength(1);
     expect(answers.filter((answer) => answer.kind === "no-room")).toHaveLength(1);
     expect((await stateOf(first)).upgrades + (await stateOf(second)).upgrades).toBe(1);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
   });
 
   it("is backed by the database: a second upgrade row for one article is refused", async () => {
@@ -468,19 +468,19 @@ describe("charged once per article, for ever", () => {
 /* -------------------------------------------- sharing and deleting ----- */
 
 describe("the upgrade follows the article's price, like its ingest", () => {
-  it("is two half-units in all while public, and four once unshared", async () => {
+  it("is 200 points in all while public, and 400 once unshared", async () => {
     const id = await givenArticle("shared", "public");
     await givenIngest(id);
     await switchOnHighPower(OWNER, slug("shared"), NO_TIERS);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(2);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(200);
 
     await setVisibility("shared", "private");
     const unshared = await usageFor(OWNER, FREE);
-    expect(halfUnitsUsed(unshared)).toBe(4);
+    expect(wallUsed(unshared)).toBe(400);
     expect(unshared).toMatchObject({ highPowerFullPrice: 1, highPowerHalfPrice: 0 });
 
     await setVisibility("shared", "public");
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(2);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(200);
   });
 
   it("freezes the upgrade's price when the article is deleted, as the trigger does the ingest's", async () => {
@@ -492,7 +492,7 @@ describe("the upgrade follows the article's price, like its ingest", () => {
     await givenIngest(pub);
     await switchOnHighPower(OWNER, slug("deleted-public"), NO_TIERS);
     const before = await usageFor(OWNER, FREE);
-    expect(halfUnitsUsed(before)).toBe(4 + 2);
+    expect(wallUsed(before)).toBe(400 + 200);
 
     await pool.query("delete from spideryarn.articles where id = any($1::uuid[])", [[priv, pub]]);
 
@@ -516,7 +516,7 @@ describe("a paid period counts the upgrade by when it happened", () => {
     await givenSubscription(PAID_PRICE, PERIOD_START, PERIOD_END);
     const id = await givenArticle("old", "private");
     await givenIngest(id, new Date(PERIOD_START.getTime() - 3 * 24 * 3600 * 1000));
-    expect(halfUnitsUsed(await usageFor(OWNER, PAID))).toBe(0);
+    expect(wallUsed(await usageFor(OWNER, PAID))).toBe(0);
 
     expect(await switchOnHighPower(OWNER, slug("old"), PAID_TIERS)).toMatchObject({
       kind: "on",
@@ -526,7 +526,7 @@ describe("a paid period counts the upgrade by when it happened", () => {
       chargedFullPrice: 0,
       highPowerFullPrice: 1,
     });
-    expect(halfUnitsUsed(await usageFor(OWNER, PAID))).toBe(PRIVATE_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, PAID))).toBe(PRIVATE_INGEST_COST);
   });
 
   it("uses one post-lock instant for entitlement and the charge at a period boundary", async () => {
@@ -755,11 +755,11 @@ describe("chargeAndSwitchOnHighPower", () => {
 
 describe("the share offer counts a high-powered article's two rows", () => {
   /**
-   * Eight half-units against six: a high-powered private article (ingest +
-   * upgrade, 4) and two plain private ones (2 each). Three half-units must be
-   * freed. Sharing the high-powered one frees two, so the fewest is **two
+   * 800 points against 600: a high-powered private article (ingest +
+   * upgrade, 400) and two plain private ones (200 each). 300 points must be
+   * freed. Sharing the high-powered one frees 200, so the fewest is **two
    * articles** — it and one other. Counting ingests alone, every article frees
-   * one and the offer would name three.
+   * 100 and the offer would name three.
    */
   it("names two articles, the high-powered one first", async () => {
     const big = await givenArticle("offer-a", "private");
@@ -767,7 +767,7 @@ describe("the share offer counts a high-powered article's two rows", () => {
     await givenUpgradeAt(big, new Date());
     await givenIngest(await givenArticle("offer-b", "private"));
     await givenIngest(await givenArticle("offer-c", "private"));
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(8);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(800);
 
     const refused = await ingestEligibility(OWNER, NO_TIERS);
     expect(refused).toMatchObject({

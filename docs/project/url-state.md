@@ -59,8 +59,8 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
 | `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
-| `depth` | how deep the Trajectory walks — `1` Gist, `2` More, `3` Most — absent for Gist. **Always written together with `stop`**, in one `useQueryStates` update, so a depth change and the stop it lands on are one entry. A depth the route does not offer draws the deepest offered below it, and a `stop` on the route wins over it: its own pass is drawn, since each pass walks only its own stops ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) — [trajectory.md](trajectory.md) | push | `?depth=2` |
-| `stop` | which Trajectory stop the reader is on — a quote id, so it validates like `quote`. A step along the route (← / →, the band's ‹ ›, the door in the prose) replaces it; a stop on no pass falls back to the asked pass's first stop. A link that carries one scrolls to that stop and flashes it, once, when the band opens | **replace** | `?stop=spya-k3m9qt` |
+| `depth` | how deep Skim walks — `1` Gist, `2` More, `3` Most — absent for Gist. **Always written together with `stop`**, in one `useQueryStates` update, so a depth change and the stop it lands on are one entry. A depth the route does not offer draws the deepest offered below it, and a `stop` on the route wins over it: its own pass is drawn, since each pass walks only its own stops ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) — [skim.md](skim.md) | push | `?depth=2` |
+| `stop` | which Skim stop the reader is on — a quote id, so it validates like `quote`. A step along the route (← / →, the band's ‹ ›, the door in the prose) replaces it; a stop on no pass falls back to the asked pass's first stop. A link that carries one scrolls to that stop and flashes it, once, when the band opens | **replace** | `?stop=spya-k3m9qt` |
 | `rank` | how the quote list is ordered, absent for `document` — which is the **default**, on Greg's own instruction, unlike the glossary's `sort` below | push | `?rank=prioritised` |
 | `bar` | the bar the quotes' prioritised order hides under — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) | **replace**, debounced | `?bar=0.55` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
@@ -80,6 +80,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `faqby` | how the FAQ is ordered: `prioritised` (the default, and absent), `document` (reading order), `centrality` (most central) or `difficulty` (hardest); one the list has nothing for falls back to `document` — [faq.md](faq.md). Its own key for `citeby`'s reason | push | `?faqby=document` |
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
 | `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
+| `structure` | how Structure is drawn: `fisheye`, opened up around the part you are reading (the default, and absent), or `expanded`, every part and section with its gist in one scrolling list — [structure.md](structure.md). Nothing to generate either way. [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md) | push | `?structure=expanded` |
 | `summary` | which of Summary's three plain-words levels the slider is on: `brief`, `simple` (the default, and absent) or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `simple`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
@@ -533,10 +534,10 @@ it waits until the prose is exposed; with the prose column off there is nothing 
 >
 > — Greg, 2026-09-29 (SPIDERYARN-READING2-4M)
 
-Since 2026-09-29 every `beginJump` — so every block link in every mode — and every Trajectory
+Since 2026-09-29 every `beginJump` — so every block link in every mode — and every Skim
 arrival puts what it was sent to **in the middle of the free area** between the bars and the dock,
 rather than its top just under the bars. What it was sent to is the passage when the jump names one
-and its marks are drawn (a Trajectory stop, a quote), and the block otherwise. Something taller than
+and its marks are drawn (a Skim stop, a quote), and the block otherwise. Something taller than
 the free area goes to the top as before: centring a long paragraph shows its middle and hides its
 start. Stepping (↑ / ↓, swipes, the comment dialog's ‹ ›), restoring `?at=` (a load, Back, the
 chip) and the re-flow re-anchor stay top-aligned — a stride reads down the page, and a restored

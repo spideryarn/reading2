@@ -235,7 +235,7 @@ export function JobProgress({
    * The id of a sentence on the page that says what a press costs, set as
    * `aria-describedby` on Run and Retry — a sibling `<span>` is not read to a
    * reader who reaches the button by keyboard or by button list. Metadata's
-   * rerun rows are the one caller, for the Sketch, Debate and Trajectory notes.
+   * rerun rows are the one caller, for the Sketch, Debate and Skim notes.
    */
   describedBy?: string | undefined;
 }) {

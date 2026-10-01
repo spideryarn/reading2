@@ -686,7 +686,7 @@ export function glideTarget(): number | null {
  * docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  * This used to take the destination as a pixel measured once, at the moment of
  * asking — and the layout above a row is not obliged to hold still for 200ms.
- * Trajectory's "Next stop ›" door leaves the row above its target when React
+ * Skim's "Next stop ›" door leaves the row above its target when React
  * commits the step, *after* the press measured the target; an image can load, a
  * band can open. Each of those moved the row and left the glide landing on the
  * place it used to be, with nothing reporting anything but `settled`. Asking
@@ -814,7 +814,7 @@ export type ScrollOutcome = "settled" | "cancelled" | "missing";
  *   the page, and a restored position is a top-of-section fact.
  * - `centre` — in the middle of the free area, so the reader sees what comes
  *   before and after it. Every **jump**: `beginJump` (every block link, in every
- *   mode) and Trajectory's arrivals. Greg, 2026-09-29 (SPIDERYARN-READING2-4M):
+ *   mode) and Skim's arrivals. Greg, 2026-09-29 (SPIDERYARN-READING2-4M):
  *   *"the linked-to block should be vertically-centred on the page so it's easy
  *   to see its context."* Something taller than the free area is not centred —
  *   its middle would be on screen and its start hidden, the very reason this
@@ -965,7 +965,7 @@ export function scrollToBlock(
  * a passage was named and they are drawn — every fragment, unioned, found by
  * the same token rule the flash uses (rows.ts § `passageMarks`, Sol F3) — and
  * the row otherwise. Until they are found the aim is `provisional`: the marks
- * of a Trajectory stop are published by the render the click starts, after
+ * of a Skim stop are published by the render the click starts, after
  * the click has asked for the scroll, so `glide` must not settle on a first
  * answer measured without them (Sol F2).
  */

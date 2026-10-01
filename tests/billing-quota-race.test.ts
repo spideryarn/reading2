@@ -22,7 +22,7 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { articles } from "../src/billing/half-units.js";
+import { articles } from "../src/billing/points.js";
 import { FREE, FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
 import type { Entitlement, TierRow } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -318,15 +318,18 @@ describe("releasing a slot that never became a job", () => {
  * **Nothing charged, and `n` in flight** — the usage shape, spelled once.
  *
  * `Usage` became three counts rather than a total when a public article started
- * costing half a slot (src/billing/half-units.ts), and none of the cases here has
+ * costing half a slot (src/billing/points.ts), and none of the cases here has
  * ever charged a row: they reserve, release and count. So the two full-price and
  * half-price counts are zero in every one of them, and writing that out four
  * times would be four chances to write the wrong zero.
  */
-const NOTHING_CHARGED = (inFlight: number) => ({
+const NOTHING_CHARGED = (inFlightIngest: number) => ({
   chargedFullPrice: 0,
   chargedHalfPrice: 0,
-  inFlight,
+  inFlightIngest,
+  /* Minimal papers, counted apart since 261001m — none here. */
+  inFlightMinimal: 0,
+  minimalCharged: 0,
   /* High-powered AI upgrades, counted apart since 260930k — none here. */
   highPowerFullPrice: 0,
   highPowerHalfPrice: 0,
@@ -384,7 +387,9 @@ describe("the period is half-open", () => {
     expect(await usageFor(OWNER, PAID)).toEqual({
       chargedFullPrice: 1,
       chargedHalfPrice: 0,
-      inFlight: 0,
+      inFlightIngest: 0,
+      inFlightMinimal: 0,
+      minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
     });
@@ -392,7 +397,9 @@ describe("the period is half-open", () => {
     expect(await usageFor(OWNER, FREE)).toEqual({
       chargedFullPrice: 3,
       chargedHalfPrice: 0,
-      inFlight: 0,
+      inFlightIngest: 0,
+      inFlightMinimal: 0,
+      minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
     });

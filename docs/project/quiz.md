@@ -372,7 +372,7 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-6Q):
 > them again" can pick up the new one; no automatic regeneration needed for v1.
 
 The goal is the article's *Why you're reading this one* ([reader-profile.md](reader-profile.md)),
-asked on the add page and in Trajectory. The quiz job already carried it — `POST /api/jobs` freezes
+asked on the add page and in Skim. The quiz job already carried it — `POST /api/jobs` freezes
 the rendered profile onto every job — and the stage now hands it to the prompt. With a reason, the
 path heads for the takeaways that matter for it and spends most of its steps on the parts that bear
 on it; it is still a path, still anchored, and never says a reason was given. With none, the prompt
@@ -474,7 +474,7 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 - **The questions do not know what you already said in Recall.** Also Greg's, also deferred: *"it
   should ideally/eventually take into account if the user has provided a freeform brain dump of what
   they remember"*. That wants a per-reader batch, which wants the profile in the stamp.
-- **No "written for: …" line** in the band, like Trajectory's *Reading for*. Greg: keep it simple.
+- **No "written for: …" line** in the band, like Skim's *Reading for*. Greg: keep it simple.
 
 ## See also
 

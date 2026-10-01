@@ -3,7 +3,7 @@
 **Status:** building, 2026-09-28. From a reader report,
 [SPIDERYARN-READING2-48](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-48) (overseer
 queue `qi-q6ragxe5`). Builds on [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md);
-the mode's doc is [trajectory.md](../project/trajectory.md).
+the mode's doc is [trajectory.md](../project/skim.md).
 
 > When including Quotes in Trajectory mode, include summarised and/or truncated version (with tooltip
 > for full version) of the quote itself in the left-hand column, not just the double-quotes symbol
@@ -73,7 +73,7 @@ before                               after
   the section path, muted on a *seen* row like the rest of it.
 - Tests: a row test that a long quote is cut and gets a tooltip, a short one is whole with none, the
   current row is whole with none, and a repeated section draws no `〃`.
-- [trajectory.md](../project/trajectory.md) — a line under *What shipped*.
+- [trajectory.md](../project/skim.md) — a line under *What shipped*.
 
 ## What the plan review changed
 

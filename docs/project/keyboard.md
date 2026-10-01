@@ -1,10 +1,13 @@
-# Keyboard: ↑ / ↓ take the step; ← / → step Trajectory and Quiz
+# Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz and Structure
 
-> **Status, 2026-09-29.** The stride belonged to the gist columns of Hierarchy mode, which was removed
-> that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Trajectory stops
-> and, since 2026-09-30, Quiz's questions (both further down), and are the browser's everywhere else.** ↑ / ↓ still take the step in
-> the article. Everything here about columns, the pointer's level, the aim and the `L1 / L2` buttons is
-> history.
+> **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
+> steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
+> stepped a section, and a focused row in Structure's list stepped the list. **← / → step
+> Skim's stops, Quiz's questions, and Structure's lowest-level sections** (all three further
+> down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
+> mode, removed on 2026-09-29
+> ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); everything here about
+> columns, the pointer's level, the aim and the `L1 / L2` buttons is history.
 
 > Ok, let's add keyboard shortcuts. As an experiment, I want to use left and right arrows, and what
 > they do should depend on where my mouse is. If it's in the L2 column, say, left/right should jump
@@ -76,7 +79,7 @@ whichever column you walk it to.
 | The `Text` column (the prose) | one paragraph — the leaf level, which is 1:1 with blocks |
 | The leaf column beside the prose | the same: one paragraph |
 | The spine, anywhere on it | **parts (L1)** |
-| The masthead, the controls bar, anywhere else | sections — the same unit `?at=` stores |
+| The masthead, the controls bar, a mode's band, anywhere else | **one block**, as over the prose — since 2026-10-01; it was sections, the unit `?at=` stores, until Greg asked for ↑ / ↓ to "always do the same thing" (spya-b2wzjf). The section stride is now ← / → in Structure, below. |
 
 The spine is one zone rather than two. It draws parts as bands and marks the one you are in, so L1
 is what it is *about*; its click targets are L2 only because a 1px tick is unhittable, which is a
@@ -169,26 +172,26 @@ A zone declares itself with a `data-nav-depth` attribute and nothing else — `k
 with `closest()` from whatever is under the pointer. That is why the spine can join in from outside
 the table by adding one attribute, and why a new panel would too.
 
-## ← / → in Trajectory
+## ← / → in Skim
 
-**While Trajectory is the mode, ← / → step its stops instead of moving the stride** — the stops
+**While Skim is the mode, ← / → step its stops instead of moving the stride** — the stops
 of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
 through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
-they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Trajectory
+they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Skim
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:
 
 > It would maybe I can also use left and right to trigger the forward and backward buttons to jump
 > to the next sections.
 >
-> — Greg, 2026-09-28 ([trajectory.md](trajectory.md))
+> — Greg, 2026-09-28 ([skim.md](skim.md))
 
 The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/web/keynav.ts): a
-horizontal handler that `Reader` passes only while Trajectory is open, and that is the band's own
+horizontal handler that `Reader` passes only while Skim is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
-([`trajectory-route.ts`](../../src/web/trajectory-route.ts)), and each of them flashes the stop it
+([`skim-route.ts`](../../src/web/skim-route.ts)), and each of them flashes the stop it
 lands on and, on a narrow window, steps the band aside (since 2026-09-28,
-[trajectory.md](trajectory.md) § What shipped). It runs **after every guard** on this
+[skim.md](skim.md) § What shipped). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop
@@ -212,7 +215,7 @@ The band's ‹ › and the door's *Next stop ›* name their key on their cards 
 > — Greg, 2026-09-30, SPIDERYARN-READING2-71
 
 **While Remember's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
-same seam as Trajectory's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
+same seam as Skim's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
 `null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Remember — so
 it runs after every guard above, and Recall, or any other mode, leaves ← / → with the browser.
 
@@ -226,13 +229,47 @@ question. The box already keeps its own key presses
 pressed →; a click on a labelled button is a deliberate act and still moves. In each refused case
 the handler answers "took nothing", so the key goes back to the browser.
 
-**Neither Trajectory nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
+**Neither Skim nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
 `[role="dialog"]`, found from the key's own target. A comment's dialog focuses its Close button and
 has ‹ › of its own, so without this a press there stepped the band behind it. Scoped to the target
 rather than to "a dialog is open", because the comment dialog is modeless and a reader who clicks
 back into the page means the page (`tests/keynav-horizontal.test.ts`).
 `tests/quiz-panel.test.tsx` § "← and → step the path" pins all of it. The plan is
 [260930h](../plans/260930h-quiz-and-remember-controls-as-icons-arrow-keys-step-the-quiz.md).
+
+## ← / → in Structure
+
+> It looks like it's behaving differently when I press up and down when the focus is on structure
+> mode. Instead, what I'd suggest is up and down should always do the same thing, i.e. jump to the
+> next block in the text, as they do if the focus is on the text.
+>
+> Perhaps there's something to be said for using left and right in structure mode. … I'm going to
+> suggest that left and right should basically jump between the smallest sections. So left and right
+> would jump to the previous or next low-level-heading/section.
+>
+> — Greg, 2026-10-01, spya-b2wzjf
+
+**While Structure is the mode, ← / → step the lowest-level sections** — `sectionDepth`, the unit
+`?at=` stores and that ↓ stepped over the band until that day. Not a handler like Skim's and
+Quiz's but a second stride inside `useArrowNav` (`acrossDepth`), so it is ↑ / ↓'s own step: the same
+`stepTarget`, the same chain for rapid presses, every guard above, and the key back to the browser at
+either end. A handler, when a mode hands one in, wins; no mode does both.
+
+**← in the middle of a section goes to that section's start**, as ↑ does and as ← on Skim's
+first stop does: the heading you are under is the previous heading in reading order. A second press
+goes to the one before. That was a choice, GPT Sol argued the other way in the plan review, and a
+strict "previous section" is one line in `useArrowNav`.
+
+**And ↑ / ↓ are no longer the list's.** Structure's narrow face is a `role="tree"` whose ↑ / ↓ used
+to step its rows and jump to each — a part or a section a press, so "focus on Structure" stepped
+differently from "focus on the text". It now leaves all four arrows to `useArrowNav` and only lets go
+of a row held by Home or End, so the mark follows the reader again; Home, End, Enter and Space are
+still the tree's (`OutlinePanel.tsx` § `onKeyDown`). **The spine keeps its part stride**: an aim the
+reader takes on purpose, which this report did not mention.
+
+`tests/keynav-horizontal.test.ts` § "with an across depth (Structure)" and
+`tests/outline-panel.test.tsx` § "leaves ↑ / ↓ to the article" pin it. The plan is
+[261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md).
 
 ## The aim is visible before you press anything
 

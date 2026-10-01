@@ -418,3 +418,31 @@
 .mode-band.struct.has-about .struct-inner > .struct-empty:first-child {
   padding-right: var(--band-about-room);
 }
+
+/* **The Fisheye / Expanded toggle** (StructureMode.tsx § `StructureViewToggle`),
+   in the head row of both faces. Referee's chips (referee.css § `.ref-view-btn`)
+   are the look; the row is the band's own `.band-head`, bled to the edges of
+   this band's padding the way outline-mode.css does for the list's. The grid
+   below takes the height that is left, and its capacities are measured from it,
+   so the row costs the columns' fit nothing to account for.
+   docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
+.mode-band.struct > .band-head { margin: -0.75rem -0.75rem 0.5rem; }
+.struct-views { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.struct-view-btn {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.struct-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+.struct-view-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 600;
+}
+.struct-view-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }

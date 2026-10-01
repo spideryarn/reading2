@@ -44,7 +44,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
-  trajectory: false,
+  skim: false,
   faq: false,
   simpleSummary: false,
   citations: false,

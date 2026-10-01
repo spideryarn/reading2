@@ -52,14 +52,14 @@ import { CitationsBand, VisitorCitationsBand } from "../modes/citations/Citation
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
 import { TweetsBand, VisitorTweetsBand } from "../modes/tweets/TweetsMode.js";
 import {
-  armTrajectoryOpening,
-  firstTrajectoryArrival,
-  TrajectoryBand,
-  VisitorTrajectoryBand,
-  type TrajectoryArrival,
-  type TrajectoryControl,
-} from "../modes/trajectory/TrajectoryMode.js";
-import { TrajectoryDoor } from "../TrajectoryPanel.js";
+  armSkimOpening,
+  firstSkimArrival,
+  SkimBand,
+  VisitorSkimBand,
+  type SkimArrival,
+  type SkimControl,
+} from "../modes/skim/SkimMode.js";
+import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
 import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
@@ -117,6 +117,7 @@ import {
   diagramParam,
   refereeParam,
   summaryParam,
+  structureParam,
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
@@ -162,7 +163,7 @@ import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
 import { proseFound, selectPassages } from "./passages.js";
 
-/** A module constant for `NO_QUOTES`'s reason: the visitor's Trajectory band keys memos on it by identity. */
+/** A module constant for `NO_QUOTES`'s reason: the visitor's Skim band keys memos on it by identity. */
 const NO_PUBLIC_QUOTES: Quote[] = [];
 
 /**
@@ -342,13 +343,13 @@ export function Reader({
     if (isMarginaliaModeWord(new URLSearchParams(location.search).get("mode")))
       void setModeAndMargin({ mode: null, margin: true }, { history: "replace" });
   }, [setModeAndMargin]);
-  /* The pasted Trajectory stop belongs to this article arrival, not to each
+  /* The pasted Skim stop belongs to this article arrival, not to each
      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
      while leaving mode-specific query state in the URL; the first band mount
      claims this mailbox, then owns the token while its data resolves. */
-  const trajectoryArrival = useRef<TrajectoryArrival>(firstTrajectoryArrival(mode));
+  const skimArrival = useRef<SkimArrival>(firstSkimArrival(mode));
   /* A centred arrival belongs to this layout. A mode switch can remove the
-     passage marks and Trajectory's door without scrolling a pixel, so end the
+     passage marks and Skim's door without scrolling a pixel, so end the
      hold before the new band can ask where the reader is. The first setup also
      drops module state left by a reading view that just unmounted. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `mode` is the layout-change trigger; the effect deliberately reads no mode value.
@@ -383,10 +384,10 @@ export function Reader({
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader follows a
    * passage link out of any band (`bandJump` below, since 2026-09-29) or chooses
-   * a Trajectory stop (since 2026-09-28). The band stays mounted, so everything
+   * a Skim stop (since 2026-09-28). The band stays mounted, so everything
    * in it survives; only its paint goes (narrow-window.css § a band that has
-   * stepped aside). `BandBackChip` offers it back, as does Trajectory's door
-   * (TrajectoryPanel.tsx § TrajectoryDoor).
+   * stepped aside). `BandBackChip` offers it back, as does Skim's door
+   * (SkimPanel.tsx § SkimDoor).
    *
    * Component state, not the URL: it is about this window at this moment, and
    * a reload or a shared link should open the band. Cleared whenever the mode
@@ -400,7 +401,7 @@ export function Reader({
   }, [mode]);
   /* **Browser Back does not bring the band back**, deliberately. A `popstate`
      rule was in the plan and GPT Sol took it out: while the band is away the
-     reader can make further pushes of their own (a footnote jump, a Trajectory
+     reader can make further pushes of their own (a footnote jump, a Skim
      depth), and Back should undo *those*, not reopen a band. `BandBackChip` is
      the way back. docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md. */
   /**
@@ -559,7 +560,7 @@ export function Reader({
    * *Steps aside* (`bandAway`) rather than `?mode=plain`: the band stays mounted,
    * so a Chat draft, a Quiz answer half-typed and a Search query survive, and the
    * "back to ⟨mode⟩" pill (`BandBackChip`) puts it back exactly as it was.
-   * Trajectory did this alone from 2026-09-28; this is the same state for every
+   * Skim did this alone from 2026-09-28; this is the same state for every
    * mode. Handed to bands only — the spine, the table, the chat dialog and the
    * hover card keep plain `jumpTo`, since none of them is under a band.
    * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
@@ -578,10 +579,10 @@ export function Reader({
     bandFocus.current =
       focused instanceof HTMLElement && focused.closest(".mode-band") !== null ? focused : null;
   }, []);
-  /* Trajectory cannot use `bandJump` because it also jumps on opening, so its
+  /* Skim cannot use `bandJump` because it also jumps on opening, so its
      deliberate `onAway` path shares the focus handoff separately. */
   const bandStepsAside = useCallback(() => {
-    /* A door can advance Trajectory while the band is already away. Preserve
+    /* A door can advance Skim while the band is already away. Preserve
        the band control that should receive focus when it eventually returns. */
     if (!bandAway) rememberBandFocus();
     setBandAway(true);
@@ -763,6 +764,7 @@ export function Reader({
     diagram: diagramParam,
     referee: refereeParam,
     summary: summaryParam,
+    structure: structureParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
@@ -1038,7 +1040,7 @@ export function Reader({
   );
 
   /**
-   * **A link on Trajectory's stop card** — into Glossary on `?term=`, Ideas on
+   * **A link on Skim's stop card** — into Glossary on `?term=`, Ideas on
    * `?idea=`, or Timeline on `?event=` when that experimental control is
    * available. A term goes through `openTermInGlossary` for the gate it may
    * need to lower; the other two are the same two writes, through setters on
@@ -1074,10 +1076,6 @@ export function Reader({
         case "event":
           void setEventId(target.id);
           void setMode("timeline");
-          return;
-        /* No `?faq=` selection exists, so FAQ opens at the top of its list. */
-        case "faq":
-          void setMode("faq");
           return;
         default: {
           const never: never = target;
@@ -1174,17 +1172,17 @@ export function Reader({
      docs/plans/260902f-make-referee-mode-understandable.md. */
   const [refereeFound, setRefereeFound] = useState<Found[]>([]);
   const [openRefereeKey, setOpenRefereeKey] = useState<string | null>(null);
-  /* **A sixth, for Trajectory's current stop**, for the reason the others have
+  /* **A sixth, for Skim's current stop**, for the reason the others have
      their own. It holds one passage — the quote the reader is standing on —
      and `proseFound` sees that it is the quote's own mark and draws it once.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
      § Prose (F9). */
-  const [trajectoryFound, setTrajectoryFound] = useState<Found[]>([]);
-  const [openTrajectoryKey, setOpenTrajectoryKey] = useState<string | null>(null);
+  const [skimFound, setSkimFound] = useState<Found[]>([]);
+  const [openSkimKey, setOpenSkimKey] = useState<string | null>(null);
   /* **And the band's handle**, for the two things outside it that step the
      route: ← / → (`useArrowNav` below) and the door after the stop's block
-     (`TableView`'s `afterBlock`). `TrajectoryControl` says why it is stable. */
-  const [trajectoryControl, setTrajectoryControl] = useState<TrajectoryControl | null>(null);
+     (`TableView`'s `afterBlock`). `SkimControl` says why it is stable. */
+  const [skimControl, setSkimControl] = useState<SkimControl | null>(null);
   /* **The quiz's ← / →**, handed up by `QuizPanel` while it is mounted and
      `null` once it is not — so Recall, or any other mode, leaves ← / → with the
      browser (keyboard.md § ← / → in Quiz). One stable function
@@ -1223,7 +1221,7 @@ export function Reader({
     timeline: { found: timelineFound, openKey: openTimelineKey },
     referee: { found: refereeFound, openKey: openRefereeKey },
     search: { found, openKey: openHit },
-    trajectory: { found: trajectoryFound, openKey: openTrajectoryKey },
+    skim: { found: skimFound, openKey: openSkimKey },
   });
   /**
    * **The marks under the phrases are the open mode's passages PLUS the
@@ -1281,8 +1279,12 @@ export function Reader({
    * ↑ / ↓ step through one level of the tree, and *which* level is whichever
    * zone the pointer is over — the spine steps by part, the prose by paragraph;
    * see keynav.ts. It writes no state of its own: it scrolls, and the listener
-   * above notices, exactly as it would for a wheel. Off any tagged zone the
-   * stride falls back to the section, which is the unit `?at=` already stores.
+   * above notices, exactly as it would for a wheel. **Off any tagged zone the
+   * stride is one block too**, since 2026-10-01 — it was the section, so over a
+   * mode's band ↓ jumped a section while over the prose it stepped a paragraph.
+   * Greg, spya-b2wzjf: "up and down should always do the same thing, i.e. jump
+   * to the next block in the text". The section stride moved to ← / → in
+   * Structure. docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md.
    *
    * Suspended while the drawer is open. A reader looking at their questions is
    * not reading, and the article scrolling away underneath the dim — silently,
@@ -1290,49 +1292,53 @@ export function Reader({
    * afterwards, when you have lost your place.
    */
   const nav = useMemo(() => navPlan(geometry), [geometry]);
-  /* **← / → step Trajectory's stops while it is the mode** — keyboard.md §
-     ← / → in Trajectory. The handler is the band's own `step`, so the keys, the
+  /* **← / → step Skim's stops while it is the mode** — keyboard.md §
+     ← / → in Skim. The handler is the band's own `step`, so the keys, the
      band's arrows and the door are one rule. `null` in every other mode, where
      ← / → are the browser's. */
-  const trajectoryKeys =
-    mode === "trajectory" && trajectoryControl ? trajectoryControl.step : null;
+  const skimKeys =
+    mode === "skim" && skimControl ? skimControl.step : null;
   /* …and the quiz's questions while Remember's Quiz half is showing — `quizKeys`
      is only ever set while `QuizPanel` is mounted. */
   const quizStepKeys = mode === "remember" ? quizKeys : null;
   useArrowNav(
     nav,
     article.blocks,
-    sectionDepth(geometry),
+    geometry.leafDepth,
     !drawerOpen,
-    trajectoryKeys ?? quizStepKeys,
+    skimKeys ?? quizStepKeys,
+    /* …and the lowest-level sections while Structure is the mode — the unit
+       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
+       keyboard.md § ← / → in Structure. */
+    mode === "structure" ? sectionDepth(geometry) : null,
   );
 
-  /* **The door after the current stop's block** — TrajectoryPanel.tsx §
-     TrajectoryDoor. Memoised on the control, which changes only with the stop
+  /* **The door after the current stop's block** — SkimPanel.tsx §
+     SkimDoor. Memoised on the control, which changes only with the stop
      and the door's words, so `memo(TableView)` holds between them. It also
      offers the band back while it has stepped aside on a narrow window. */
   const afterBlock = useMemo(() => {
-    if (mode !== "trajectory" || !trajectoryControl?.blockId) return null;
+    if (mode !== "skim" || !skimControl?.blockId) return null;
     return {
-      blockId: trajectoryControl.blockId,
+      blockId: skimControl.blockId,
       node: (
-        <TrajectoryDoor
-          door={trajectoryControl.door}
-          onNext={trajectoryControl.advance}
-          onDeeper={trajectoryControl.deeper}
+        <SkimDoor
+          door={skimControl.door}
+          onNext={skimControl.advance}
+          onDeeper={skimControl.deeper}
           onRoute={bandBack ? () => setBandAway(false) : null}
         />
       ),
     };
-  }, [mode, trajectoryControl, bandBack]);
+  }, [mode, skimControl, bandBack]);
 
   /**
    * **The quiz's questions, in the prose, in every mode** — Greg, 2026-09-30
    * (SPIDERYARN-READING2-6V): *"if you've generated quiz questions, it should
    * always show them in situ in the text, whether you're in quiz mode or not."*
    * Each after the block holding its last evidence passage (quiz-anchors.ts);
-   * in Trajectory that puts it just above the door, which is the whole of the
-   * Trajectory half. docs/plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md.
+   * in Skim that puts it just above the door, which is the whole of the
+   * Skim half. docs/plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md.
    *
    * **Memoised on the quiz, its staleness, the blocks and a stable handler, and
    * nothing that moves while you scroll** — `memo(TableView)` holds only while
@@ -2192,7 +2198,7 @@ export function Reader({
           ) : null;
         return <DebateBand slug={slug} onJump={bandJump} blockOrder={blockOrder} publishedAt={publishedAt} />;
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
-         until a public article's stored Trajectory was refused to a signed-out
+         until a public article's stored Skim was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The
          visitor's rows arrive with every address re-judged by
          `publicCitationUrl` (src/public/dto.ts § `publicCitedWork`), and the
@@ -2227,7 +2233,7 @@ export function Reader({
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
-         unmounts — for either band, since they share `useTrajectoryMode`.
+         unmounts — for either band, since they share `useSkimMode`.
          docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
 
          The visitor's branch is gated on the route itself, like the timeline's:
@@ -2235,34 +2241,33 @@ export function Reader({
          is in the slot. It was the owner alone until SPIDERYARN-READING2-56,
          when a public article's stored route was refused to a signed-out
          reader. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-      case "trajectory":
+      case "skim":
         if (!owner)
-          return artefacts?.trajectory ? (
-            <VisitorTrajectoryBand
-              route={artefacts.trajectory}
+          return artefacts?.skim ? (
+            <VisitorSkimBand
+              route={artefacts.skim}
               quotes={artefacts.quotes?.quotes ?? NO_PUBLIC_QUOTES}
               glossary={artefacts.glossary}
               ideas={artefacts.ideas}
               timeline={artefacts.timeline}
-              faq={artefacts.faq}
               blocks={article.blocks}
               tree={article.tree}
               quoteMarks={quotes.found}
               covers={fit.modeW === 0}
               away={bandAway && fit.modeW === 0}
               onAway={bandStepsAside}
-              onJump={jumpTo /* not `bandJump`: Trajectory jumps on opening, and steps aside itself (`onAway`) — Sol, 260929g */}
-              onFound={setTrajectoryFound}
-              openKey={openTrajectoryKey}
-              onOpenKey={setOpenTrajectoryKey}
-              onControl={setTrajectoryControl}
+              onJump={jumpTo /* not `bandJump`: Skim jumps on opening, and steps aside itself (`onAway`) — Sol, 260929g */}
+              onFound={setSkimFound}
+              openKey={openSkimKey}
+              onOpenKey={setOpenSkimKey}
+              onControl={setSkimControl}
               onOpen={openFromStopCard}
               canOpen={canOpenFromStopCard}
-              arrival={trajectoryArrival.current}
+              arrival={skimArrival.current}
             />
           ) : null;
         return (
-          <TrajectoryBand
+          <SkimBand
             slug={slug}
             blocks={article.blocks}
             tree={article.tree}
@@ -2272,14 +2277,14 @@ export function Reader({
             away={bandAway && fit.modeW === 0}
             onAway={bandStepsAside}
             onJump={jumpTo /* not `bandJump`: see the visitor arm above */}
-            onFound={setTrajectoryFound}
-            openKey={openTrajectoryKey}
-            onOpenKey={setOpenTrajectoryKey}
-            onControl={setTrajectoryControl}
+            onFound={setSkimFound}
+            openKey={openSkimKey}
+            onOpenKey={setOpenSkimKey}
+            onControl={setSkimControl}
             glossary={owner.glossary}
             onOpen={openFromStopCard}
             canOpen={canOpenFromStopCard}
-            arrival={trajectoryArrival.current}
+            arrival={skimArrival.current}
           />
         );
       /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
@@ -3019,7 +3024,7 @@ export function Reader({
             }
             return;
           }
-          armTrajectoryOpening(trajectoryArrival.current, mode, next);
+          armSkimOpening(skimArrival.current, mode, next);
           /* A sub-mode row has already armed its chip's press (Dock.tsx §
              `useActivateSubMode`); this only moves the band, sub-mode and all. */
           if (sub === undefined) void setMode(next);

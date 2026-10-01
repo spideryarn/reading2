@@ -4,7 +4,7 @@
  * horizontal handler (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Keys, Sol F5).
  *
- * While Trajectory is the mode, ← / → step its stops; while Remember's Quiz
+ * While Skim is the mode, ← / → step its stops; while Remember's Quiz
  * half is showing, they step its questions; everywhere else they are the
  * browser's (they moved the stride across Hierarchy's gist columns until
  * 2026-09-29). The existing guards hold for both: no modifiers, not while
@@ -104,7 +104,7 @@ function press(
   return event;
 }
 
-describe("with a horizontal handler (Trajectory or Quiz)", () => {
+describe("with a horizontal handler (Skim or Quiz)", () => {
   beforeEach(async () => {
     await mount(true);
   });
@@ -182,5 +182,78 @@ describe("without one (every other mode)", () => {
     const e = press("ArrowDown");
     expect(e.defaultPrevented).toBe(true);
     expect(jumps).toEqual(["spya-h3"]);
+  });
+});
+
+/* **← / → as a stride of their own — Structure's sections**, since 2026-10-01
+   (Greg, spya-b2wzjf: "left and right would jump to the previous or next
+   low-level-heading/section"). Reader.tsx passes the section depth while
+   Structure is the mode; here depth 1, the fine one, so its steps cannot be
+   mistaken for ↓'s at the fallback depth 0.
+   docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
+describe("with an across depth (Structure)", () => {
+  function AcrossHarness({ withHandler }: { withHandler: boolean }) {
+    useArrowNav(
+      plan,
+      blocks,
+      0,
+      true,
+      withHandler
+        ? (dir) => {
+            asked.push(dir);
+            return takes;
+          }
+        : null,
+      1,
+    );
+    return null;
+  }
+  async function mountAcross(withHandler: boolean) {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(AcrossHarness, { withHandler }));
+    });
+  }
+
+  it("steps → at that depth, chaining, and ← back", async () => {
+    await mountAcross(false);
+    const e = press("ArrowRight");
+    expect(e.defaultPrevented).toBe(true);
+    press("ArrowRight");
+    press("ArrowLeft");
+    expect(jumps).toEqual(["spya-h1", "spya-h2", "spya-h1"]);
+  });
+
+  it("keeps the guards: not with a modifier, not from inside a dialog", async () => {
+    await mountAcross(false);
+    press("ArrowRight", { metaKey: true });
+    const dialog = document.createElement("dialog");
+    const button = document.createElement("button");
+    dialog.append(button);
+    document.body.append(dialog);
+    press("ArrowRight", {}, button);
+    dialog.remove();
+    expect(jumps).toEqual([]);
+
+    /* Non-vacuity: the same key outside both guards really is owned. Without
+       this control, deleting `acrossDepth` altogether leaves the assertion
+       above green. */
+    press("ArrowRight");
+    expect(jumps).toEqual(["spya-h1"]);
+  });
+
+  it("leaves ↑ / ↓ at their own stride", async () => {
+    await mountAcross(false);
+    press("ArrowDown");
+    expect(jumps).toEqual(["spya-h3"]);
+  });
+
+  it("gives way to a horizontal handler when a mode hands one in", async () => {
+    await mountAcross(true);
+    press("ArrowRight");
+    expect(asked).toEqual([1]);
+    expect(jumps).toEqual([]);
   });
 });

@@ -1,0 +1,333 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map of a voyage, inked in sepia with faded parchment colouring and small labelled scenes along the route — the cargo-cult islands and runways give the whole talk a literal cartography to follow.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Voyage Through Cargo Cult Science",
+      "prompt": "Draw an antique hand-inked map of a long voyage, sepia linework on aged parchment, with no lettering anywhere except the ten small titles printed beneath each scene. The route runs top to bottom down the centre of the page like a pilgrim's road, linking ten labelled vignettes in a single continuous dotted path. At the top: a robed physician holds up a rhinoceros horn beside a small fire burning failed potions (TEST AND BURN THE FAILURES). The path leads to a lamplit garden party where guests talk easily while an unbothered hostess looks on (THE COCKTAIL PARTY TEST). Next the road crosses the sea to a jungle airstrip of raked earth, where a man sits in a wooden hut wearing bamboo headphones, watching an empty sky (CARGO CULT RUNWAY HUT). Below that, a scholar at a desk writes a second column of notes listing flaws in his own results (REPORT YOUR OWN FLAWS). The path continues to a brass instrument through which a scientist watches oil drops fall, with a faint ladder of earlier too-low measurements sketched beside him (OIL-DROP MEASUREMENT). Next, a solitary figure studies his own face in a small hand-mirror (THE EASIEST PERSON TO FOOL). Then a merchant on a roadside stall holds up a cigarette packet and a bright banner claim, a second rolled page of unshown results tucked in shadow beside him (THE LOW-NICOTINE CIGARETTE). The road passes into a long covered corridor lined with identical doors, where a crouched researcher watches rats run straight to one door (YOUNG'S RAT CORRIDOR). Beside it, a row of card-reading tables recedes into the distance, each fainter than the last until the final one is blank (ESP EFFECT FADES AWAY). At the bottom, a young scholar with a satchel stands at an open gate at the map's edge; the dotted road behind him curves back up the page, closing the loop at the rhinoceros-horn stall at the top (THE WISH FOR FREEDOM). Group the first two scenes loosely inside a drawn coastline labelled by no words, the next two within a drawn island, the following three within a drawn laboratory enclosure, and the last three within a drawn second island — four gently bordered regions, each just an inked outline, nothing written on them. Keep the palette muted sepia, iron-gall brown and faded ochre throughout, fine crosshatching, compass-rose flourishes only as decoration, wide uncluttered margins, every vignette large enough to read clearly.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a method was discovered for separating the ideas—which was to try one to see if it worked",
+          "depicts": "A robed physician at a stall holds up a rhinoceros horn in one hand and, beside him, a small fire where failed potions are being burned.",
+          "title": "TEST AND BURN THE FAILURES",
+          "node": "n1"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "you can be sure you are talking about something about which nobody knows anything",
+          "depicts": "Guests at a lamplit party talk easily and loudly while a hostess in the doorway does not frown at them.",
+          "title": "THE COCKTAIL PARTY TEST",
+          "node": "n4"
+        },
+        {
+          "block": "spya-fd2muf",
+          "quote": "make a wooden hut for a man to sit in, with two wooden pieces on his head",
+          "depicts": "On a jungle airstrip of raked earth, a man sits in a small hut wearing bamboo 'headphones', staring up at an empty sky.",
+          "title": "CARGO CULT RUNWAY HUT",
+          "node": "n5"
+        },
+        {
+          "block": "spya-afgs74",
+          "quote": "you should report everything that you think might make it invalid",
+          "depicts": "A scholar at a writing-desk adds a second column of notes beside his results, listing the flaws in his own work.",
+          "title": "REPORT YOUR OWN FLAWS",
+          "node": "n6"
+        },
+        {
+          "block": "spya-s9msxy",
+          "quote": "Millikan measured the charge on an electron by an experiment with falling oil drops",
+          "depicts": "A scientist peers through a brass instrument at oil drops falling between two plates, a ladder of earlier, slightly-too-low measurements sketched beside him.",
+          "title": "OIL-DROP MEASUREMENT",
+          "node": "n9"
+        },
+        {
+          "block": "spya-ed9mzv",
+          "quote": "you must not fool yourself—and you are the easiest person to fool",
+          "depicts": "A figure stands before a small hand-mirror, looking warily at his own reflection.",
+          "title": "THE EASIEST PERSON TO FOOL",
+          "node": "n10"
+        },
+        {
+          "block": "spya-jk7mj4",
+          "quote": "suppose some particular cigarette has some particular property, like low nicotine",
+          "depicts": "A merchant holds up a cigarette packet on a banner-pole, pointing to one bright claim while a shadowed second page of results stays rolled up beside him.",
+          "title": "THE LOW-NICOTINE CIGARETTE",
+          "node": "n12"
+        },
+        {
+          "block": "spya-fvenms",
+          "quote": "He had a long corridor with doors all along one side where the rats came in",
+          "depicts": "A long covered corridor lined with identical doors, a researcher crouched at one end watching rats run straight to the same door each time.",
+          "title": "YOUNG'S RAT CORRIDOR",
+          "node": "n13b"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "depicts": "A line of identical card-reading tables stretches into the distance, each one fainter and more washed-out than the last until the final table is blank.",
+          "title": "ESP EFFECT FADES AWAY",
+          "node": "n13c"
+        },
+        {
+          "block": "spya-ndyj3t",
+          "quote": "the good luck to be somewhere where you are free to maintain the kind of integrity I have described",
+          "depicts": "A young scholar stands at an open gate at the map's edge, satchel in hand, the road behind him curving back toward the rhinoceros-horn stall at the top of the page.",
+          "title": "THE WISH FOR FREEDOM",
+          "node": "n14"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A robed physician at a stall holds up a rhinoceros horn in one hand and, beside him, a small fire where failed potions are being burned.",
+          "title": "TEST AND BURN THE FAILURES"
+        },
+        {
+          "where": "Guests at a lamplit party talk easily and loudly while a hostess in the doorway does not frown at them.",
+          "title": "THE COCKTAIL PARTY TEST"
+        },
+        {
+          "where": "On a jungle airstrip of raked earth, a man sits in a small hut wearing bamboo 'headphones', staring up at an empty sky.",
+          "title": "CARGO CULT RUNWAY HUT"
+        },
+        {
+          "where": "A scholar at a writing-desk adds a second column of notes beside his results, listing the flaws in his own work.",
+          "title": "REPORT YOUR OWN FLAWS"
+        },
+        {
+          "where": "A scientist peers through a brass instrument at oil drops falling between two plates, a ladder of earlier, slightly-too-low measurements sketched beside him.",
+          "title": "OIL-DROP MEASUREMENT"
+        },
+        {
+          "where": "A figure stands before a small hand-mirror, looking warily at his own reflection.",
+          "title": "THE EASIEST PERSON TO FOOL"
+        },
+        {
+          "where": "A merchant holds up a cigarette packet on a banner-pole, pointing to one bright claim while a shadowed second page of results stays rolled up beside him.",
+          "title": "THE LOW-NICOTINE CIGARETTE"
+        },
+        {
+          "where": "A long covered corridor lined with identical doors, a researcher crouched at one end watching rats run straight to the same door each time.",
+          "title": "YOUNG'S RAT CORRIDOR"
+        },
+        {
+          "where": "A line of identical card-reading tables stretches into the distance, each one fainter and more washed-out than the last until the final table is blank.",
+          "title": "ESP EFFECT FADES AWAY"
+        },
+        {
+          "where": "A young scholar stands at an open gate at the map's edge, satchel in hand, the road behind him curving back toward the rhinoceros-horn stall at the top of the page.",
+          "title": "THE WISH FOR FREEDOM"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-pseudoscience",
+      "title": "Surveying the Lands Where Nothing Works",
+      "prompt": "Draw the inside of the first bordered coastal region from the overview map, in the same sepia ink-on-parchment register, no lettering anywhere except the eight small titles beneath each scene. Open, as a frame at the top, with the same robed physician testing a potion over his small fire of discarded failures (TEST AND DISCARD) — this is the entry point carried over from the overview. The path then forks at a crossroads signpost whose painted arms point toward a flying saucer, a star-chart, and a crystal (A CROSSROADS OF BELIEFS). From there the road splits into two side-paths: one leads to a sealed dark tank where a man floats in salt water with eyes closed (FLOATING IN THE TANK); the other leads to a treatment table where a masseur presses a bare toe, puzzling over a small dent (HUNTING THE PITUITARY). The paths rejoin and continue to a bathroom scene where several people crowd around a key held under running tap-water, rubbing it uselessly straight (THE KEY WON'T BEND). Next, a schoolroom chalkboard shows a flat or dipping line of reading scores, with teaching-method books piled beside it, unhelpful (READING SCORES STAY FLAT). The road returns to the same lamplit garden party as before, guests still talking easily (THE COCKTAIL PARTY TEST), and ends at a therapy room where a patient reclines on a couch before a note-taking listener, competing theory-books stacked at their feet (QUESTIONING PSYCHOTHERAPY). Keep all eight scenes within one gently inked coastline border, following the dotted path top to bottom, generously sized so each scene reads clearly, muted sepia and faded ochre palette, fine crosshatching, wide clean margins, no filler ornament crowding the scenes.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a method was discovered for separating the ideas—which was to try one to see if it worked",
+          "depicts": "The same robed physician from the overview, testing a potion and discarding the failed ones into his fire, framing this plate's entry.",
+          "title": "TEST AND DISCARD",
+          "node": "p1"
+        },
+        {
+          "block": "spya-bcgpc3",
+          "quote": "UFO’s, or astrology, or some form of mysticism, expanded consciousness, new types of awareness, ESP, and so forth",
+          "depicts": "A traveller stands at a crossroads signpost with many arms pointing to a flying saucer, a star-chart, a crystal, and other small painted emblems.",
+          "title": "A CROSSROADS OF BELIEFS",
+          "node": "p2"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "I went into isolation tanks (they’re dark and quiet and you float in Epsom salts)",
+          "depicts": "A man floats inside a dark sealed tank of water, eyes closed, bubbles of salt crystals drawn around him.",
+          "title": "FLOATING IN THE TANK",
+          "node": "p3"
+        },
+        {
+          "block": "spya-xm9a87",
+          "quote": "I feel a kind of dent. Is that the pituitary?",
+          "depicts": "A masseur presses a woman's bare toe on a treatment table, puzzling over a small dent, while an onlooker raises an eyebrow nearby.",
+          "title": "HUNTING THE PITUITARY",
+          "node": "p4"
+        },
+        {
+          "block": "spya-mmhbvn",
+          "quote": "Uri Geller, a man who is supposed to be able to bend keys by rubbing them with his finger",
+          "depicts": "A man rubs a key held under running bathroom tap-water while several onlookers crowd around, and the key stays perfectly straight.",
+          "title": "THE KEY WON'T BEND",
+          "node": "p5"
+        },
+        {
+          "block": "spya-aww976",
+          "quote": "the reading scores keep going down—or hardly going up",
+          "depicts": "A schoolroom chalkboard shows a chart of reading scores drawn as a line that stays flat or dips, despite rows of teaching-method books stacked beside it.",
+          "title": "READING SCORES STAY FLAT",
+          "node": "p6"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "you can be sure you are talking about something about which nobody knows anything",
+          "depicts": "Returning to the lamplit garden party, guests talk on comfortably, unbothered, marking the rule this survey has arrived at.",
+          "title": "THE COCKTAIL PARTY TEST",
+          "node": "p9"
+        },
+        {
+          "block": "spya-ankp3d",
+          "quote": "the efficacy of various forms of psychotherapy",
+          "depicts": "A patient reclines on a couch before a seated listener taking notes, a small stack of competing theory-books piled at their feet.",
+          "title": "QUESTIONING PSYCHOTHERAPY",
+          "node": "p10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same robed physician from the overview, testing a potion and discarding the failed ones into his fire, framing this plate's entry.",
+          "title": "TEST AND DISCARD"
+        },
+        {
+          "where": "A traveller stands at a crossroads signpost with many arms pointing to a flying saucer, a star-chart, a crystal, and other small painted emblems.",
+          "title": "A CROSSROADS OF BELIEFS"
+        },
+        {
+          "where": "A man floats inside a dark sealed tank of water, eyes closed, bubbles of salt crystals drawn around him.",
+          "title": "FLOATING IN THE TANK"
+        },
+        {
+          "where": "A masseur presses a woman's bare toe on a treatment table, puzzling over a small dent, while an onlooker raises an eyebrow nearby.",
+          "title": "HUNTING THE PITUITARY"
+        },
+        {
+          "where": "A man rubs a key held under running bathroom tap-water while several onlookers crowd around, and the key stays perfectly straight.",
+          "title": "THE KEY WON'T BEND"
+        },
+        {
+          "where": "A schoolroom chalkboard shows a chart of reading scores drawn as a line that stays flat or dips, despite rows of teaching-method books stacked beside it.",
+          "title": "READING SCORES STAY FLAT"
+        },
+        {
+          "where": "Returning to the lamplit garden party, guests talk on comfortably, unbothered, marking the rule this survey has arrived at.",
+          "title": "THE COCKTAIL PARTY TEST"
+        },
+        {
+          "where": "A patient reclines on a couch before a seated listener taking notes, a small stack of competing theory-books piled at their feet.",
+          "title": "QUESTIONING PSYCHOTHERAPY"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-case-studies",
+      "title": "Four Experiments, One Missing Check",
+      "prompt": "Draw the inside of the laboratory-and-island bordered region from the overview map, same sepia ink-on-parchment register, no lettering anywhere except the eight titles beneath the scenes. Open, as the plate's frame at the top, with the long covered rat corridor lined with identical doors exactly as shown in the overview (YOUNG'S RAT CORRIDOR), marking the entry into this part of the map. Below it, a young researcher at a desk sketches a maze diagram, planning a new trial under changed conditions (RATS UNDER CONDITION X), then sets up a duplicate apparatus beside her new one to repeat the original test first (REPEAT THE ORIGINAL TEST). The path crosses to a great ring-shaped accelerator where a physicist holds a jar of heavy hydrogen while an uncollected jar of light hydrogen sits empty and unused on a shelf (THE MISSING COMPARISON RUN). The road returns to the corridor: a researcher kneels listening to a rat finding its way by the sound of its footsteps on the bare floor (SOUND OF THE FLOOR), then the same corridor reappears with its floor covered in sand, muffling the sound, rats now wandering confused (SAND SILENCES THE CLUE). Nearby, later researchers run rats through a plain bare corridor while the sand-covered version sits forgotten and dusty in the background (YOUNG'S METHOD FORGOTTEN). The path forks onward to a row of card-guessing tables that fade from vivid colour to blank paper down the corridor (ESP EFFECT FADES AWAY), ending at a lectern where an instructor selects only the students whose cards came up right, turning the rest away (TRAIN ONLY THE SUCCESSFUL). Keep all eight scenes within one gently inked enclosure following the dotted path top to bottom, generous scale so each scene is legible, muted sepia and faded ochre palette, fine crosshatching, wide clean margins, no crowding ornament.",
+      "vignettes": [
+        {
+          "block": "spya-fvenms",
+          "quote": "He had a long corridor with doors all along one side where the rats came in",
+          "depicts": "The same long covered corridor from the overview, lined with identical doors, framing this plate's entry.",
+          "title": "YOUNG'S RAT CORRIDOR"
+        },
+        {
+          "block": "spya-w9nnq6",
+          "quote": "under certain circumstances, X, rats did something, A",
+          "depicts": "A young researcher at a desk sketches a maze diagram labelled with a rat running toward a marked door, planning a new trial.",
+          "title": "RATS UNDER CONDITION X",
+          "node": "c1"
+        },
+        {
+          "block": "spya-tf8rj2",
+          "quote": "it was necessary first to repeat in her laboratory the experiment of the other person",
+          "depicts": "The same researcher now sets up an identical rat-run apparatus beside her new one, comparing the two side by side before changing anything.",
+          "title": "REPEAT THE ORIGINAL TEST",
+          "node": "c2"
+        },
+        {
+          "block": "spya-m95kqm",
+          "quote": "an experiment done at the big accelerator at the National Accelerator Laboratory",
+          "depicts": "A physicist stands beside a great ring-shaped machine, holding a jar marked with heavy hydrogen while a second, uncollected jar of light hydrogen sits empty on a shelf.",
+          "title": "THE MISSING COMPARISON RUN",
+          "node": "c4"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "He finally found that they could tell by the way the floor sounded when they ran over it",
+          "depicts": "A researcher kneels at the painted, scent-masked, lightless corridor floor, listening closely as a rat still finds its way by the sound of its own footsteps.",
+          "title": "SOUND OF THE FLOOR",
+          "node": "c5"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "putting his corridor in sand",
+          "depicts": "The same corridor now has its floor covered in sand, muffling every sound, and the rats finally wander confused.",
+          "title": "SAND SILENCES THE CLUE",
+          "node": "c6"
+        },
+        {
+          "block": "spya-wye8g6",
+          "quote": "They never used any of his criteria of putting the corridor on sand, or being very careful",
+          "depicts": "Later researchers run rats through a plain bare-floored corridor, Young's sand-covered version left forgotten and dusty in the background.",
+          "title": "YOUNG'S METHOD FORGOTTEN",
+          "node": "c7"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "depicts": "A row of card-guessing tables fades from vivid to blank down the corridor, each attempt weaker than the last.",
+          "title": "ESP EFFECT FADES AWAY",
+          "node": "c8"
+        },
+        {
+          "block": "spya-g203mu",
+          "quote": "only train students who have shown their ability to get PSI results to an acceptable extent",
+          "depicts": "An instructor at a lectern selects only the students whose test cards came up right, turning away the rest.",
+          "title": "TRAIN ONLY THE SUCCESSFUL",
+          "node": "c9"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same long covered corridor from the overview, lined with identical doors, framing this plate's entry.",
+          "title": "YOUNG'S RAT CORRIDOR"
+        },
+        {
+          "where": "A young researcher at a desk sketches a maze diagram labelled with a rat running toward a marked door, planning a new trial.",
+          "title": "RATS UNDER CONDITION X"
+        },
+        {
+          "where": "The same researcher now sets up an identical rat-run apparatus beside her new one, comparing the two side by side before changing anything.",
+          "title": "REPEAT THE ORIGINAL TEST"
+        },
+        {
+          "where": "A physicist stands beside a great ring-shaped machine, holding a jar marked with heavy hydrogen while a second, uncollected jar of light hydrogen sits empty on a shelf.",
+          "title": "THE MISSING COMPARISON RUN"
+        },
+        {
+          "where": "A researcher kneels at the painted, scent-masked, lightless corridor floor, listening closely as a rat still finds its way by the sound of its own footsteps.",
+          "title": "SOUND OF THE FLOOR"
+        },
+        {
+          "where": "The same corridor now has its floor covered in sand, muffling every sound, and the rats finally wander confused.",
+          "title": "SAND SILENCES THE CLUE"
+        },
+        {
+          "where": "Later researchers run rats through a plain bare-floored corridor, Young's sand-covered version left forgotten and dusty in the background.",
+          "title": "YOUNG'S METHOD FORGOTTEN"
+        },
+        {
+          "where": "A row of card-guessing tables fades from vivid to blank down the corridor, each attempt weaker than the last.",
+          "title": "ESP EFFECT FADES AWAY"
+        },
+        {
+          "where": "An instructor at a lectern selects only the students whose test cards came up right, turning away the rest.",
+          "title": "TRAIN ONLY THE SUCCESSFUL"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "cargocult-spya-rz663q",
+  "profileHash": null
+}

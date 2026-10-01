@@ -77,11 +77,28 @@ export interface ProviderPolicy {
   only?: readonly string[];
 }
 
-/** One model call's worth of choices. */
-export interface CallSpec {
+/**
+ * One model call's worth of choices: **thinking at an effort, or no thinking
+ * at all**, and the type will not let a call be both.
+ *
+ * The second shape arrived with `smart-off` (plan 261001p). It carries no
+ * effort because it sends none — `thinking: {type: "disabled"}` and no
+ * `output_config` — so an effort on it would be a number in the results that
+ * no request ever carried. Messages wire only; the chat wire refuses it
+ * (model-arms.ts § `chatBody`). `thinking` is optional on the first shape so
+ * every existing arm reads as before: absent means adaptive, which is what
+ * production sends.
+ */
+export type CallSpec = CallCommon & ({ thinking?: "adaptive"; effort: Effort } | { thinking: "off" });
+
+/** The effort a call sends, or `null` for a call that sends none. */
+export function effortOf(call: CallSpec): Effort | null {
+  return call.thinking === "off" ? null : call.effort;
+}
+
+interface CallCommon {
   /** OpenRouter spelling — the only wire id this eval sends. */
   model: string;
-  effort: Effort;
   /**
    * Chat wire only. Absent means "OpenRouter's default routing", which is what
    * the two incumbent-shaped arms need and what a candidate arm must not have:
@@ -317,6 +334,36 @@ export const ARMS: readonly ArmSpec[] = [
     kind: "one-call",
     comparison: "isolated", // one variable: effort
     call: { model: CAPABLE_MODEL_OPENROUTER, effort: "medium" },
+    seed: "none",
+  },
+  /**
+   * **No thinking at all, the one rung below production** (plan 261001p).
+   *
+   * Production already runs at `low`, the bottom of the effort ladder, so the
+   * only cheaper setting with the same model is thinking off: `{type:
+   * "disabled"}`, which Sonnet 5 accepts, and **no `output_config`**, so
+   * nothing is sent that the incumbent's thinking would be the only reader of.
+   * The incumbent's model, imported. Isolated in the sense that one setting
+   * moves — thinking — though "off" removes the effort knob with it, and the
+   * write-up says so. It measures the structure call only; the expand calls
+   * (src/hierarchy-expand.ts) are off for readers and are not moved by this.
+   *
+   * Two draws of it, as the incumbent has two, because one draw of a lower arm
+   * against two of production cannot tell its variance from its level
+   * (evals/thinking-effort/reviews/plan-review-sol-r1.md, F1/F2).
+   */
+  {
+    name: "smart-off",
+    kind: "one-call",
+    comparison: "isolated", // one setting: thinking off
+    call: { model: INCUMBENT.model, thinking: "off" },
+    seed: "none",
+  },
+  {
+    name: "smart-off-repeat",
+    kind: "one-call",
+    comparison: "isolated",
+    call: { model: INCUMBENT.model, thinking: "off" },
     seed: "none",
   },
   {

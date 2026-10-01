@@ -31,7 +31,7 @@ export type WholeColumn =
   | "timeline"
   | "quiz"
   | "faq"
-  | "trajectory"
+  | "skim"
   | "sketch"
   | "illustrated"
   | "debate"
@@ -71,6 +71,13 @@ export const STORAGE: {
     /** Six columns and a derived filename — see `readRawManifest`. */
     raw: { at: "assembled", of: "raw" },
   },
+  /**
+   * **`meta`, the same site `extract` writes** — a minimal paper's title,
+   * authors, byline, abstract and DOI, assembled into the revision's meta
+   * columns. Two steps over one site, as `blocks`/`hierarchy` share the block
+   * rows; each step's own run row keeps their doneness apart.
+   */
+  metadata: { meta: { at: "assembled", of: "meta" } },
   extract: {
     /**
      * **Its own column, unlike the filesystem**, where stage 3 overwrites this
@@ -127,7 +134,7 @@ export const STORAGE: {
   timeline: { timeline: { at: "column", column: "timeline" } },
   quiz: { quiz: { at: "column", column: "quiz" } },
   faq: { faq: { at: "column", column: "faq" } },
-  trajectory: { trajectory: { at: "column", column: "trajectory" } },
+  skim: { skim: { at: "column", column: "skim" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
   illustrated: { illustrated: { at: "column", column: "illustrated" } },
   debate: { debate: { at: "column", column: "debate" } },

@@ -307,6 +307,9 @@ describe("cascadeForce", () => {
     // green ticks over it. See docs/reusable/silent-success.md.
     expect([...cascadeForce([...STEP_ORDER], new Set(["fetch"]))]).toEqual([
       "fetch",
+      /* A minimal paper's: only ever in a list beside `fetch`, and a re-fetch
+         is new bytes, so its metadata should be read again. */
+      "metadata",
       "extract",
       "blocks",
       "hierarchy",

@@ -155,7 +155,7 @@ const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
 const { useFaq } = await import("../src/web/useFaq.js");
-const { useTrajectory } = await import("../src/web/useTrajectory.js");
+const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { diagramInSearch } = await import("../src/web/params.js");
@@ -265,25 +265,25 @@ function FaqBand({ slug }: { slug: string }): ReactElement {
 }
 
 /**
- * **Trajectory, a positive control for the one press that buys two steps**
+ * **Skim, a positive control for the one press that buys two steps**
  * (2026-09-28). It stands on the Quotes, which `OwnedReader` reads; the read is
- * posed here as `trajectoryQuotes`, so a test can hold it at "loading" and see
+ * posed here as `skimQuotes`, so a test can hold it at "loading" and see
  * the press wait rather than guess. Remove the `useAutoRun` call in
- * useTrajectory.ts, or its `precededBy`, and only the tests below go red.
+ * useSkim.ts, or its `precededBy`, and only the tests below go red.
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
  */
-let trajectoryQuotes: import("../src/web/useQuotes.js").QuotesRead | null = null;
+let skimQuotes: import("../src/web/useQuotes.js").QuotesRead | null = null;
 /** The Ideas read, posed the same way — since stage 6 the route waits for them too. */
-let trajectoryIdeas: import("../src/web/useIdeas.js").IdeasRead | null = null;
-function TrajectoryBand({ slug }: { slug: string }): ReactElement {
-  const view = useTrajectory(
+let skimIdeas: import("../src/web/useIdeas.js").IdeasRead | null = null;
+function SkimBand({ slug }: { slug: string }): ReactElement {
+  const view = useSkim(
     slug,
-    trajectoryQuotes ?? SETTLED_EMPTY_QUOTES_READ,
-    trajectoryIdeas ?? SETTLED_EMPTY_IDEAS_READ,
+    skimQuotes ?? SETTLED_EMPTY_QUOTES_READ,
+    skimIdeas ?? SETTLED_EMPTY_IDEAS_READ,
   );
   return createElement(
     "div",
-    { "data-band": "trajectory" },
+    { "data-band": "skim" },
     view.automatic ? "auto" : view.starting ? "starting" : view.status,
   );
 }
@@ -425,7 +425,7 @@ function Reading({ slug, start }: { slug: string; start: BandMode }): ReactEleme
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
     mode === "debate" ? createElement(DebateBand, { slug }) : null,
     mode === "faq" ? createElement(FaqBand, { slug }) : null,
-    mode === "trajectory" ? createElement(TrajectoryBand, { slug }) : null,
+    mode === "skim" ? createElement(SkimBand, { slug }) : null,
     /* **The band Diagram opens is whichever picture the address bar names**, and
        that is the whole point of these two arms — the real `DiagramBand` does
        exactly this with `?diagram=`, and a test that always mounted the Sketch
@@ -671,40 +671,40 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["faq"] }]);
   });
 
-  /* The sixth. See TrajectoryBand above: with no Quotes and no Ideas, one
+  /* The sixth. See SkimBand above: with no Quotes and no Ideas, one
      press asks for both first, in the same job (plan 260928a stage 6). */
   it("plans the route, choosing the Quotes and finding the Ideas first when there are none", async () => {
     await open("plain");
-    await press("Trajectory");
+    await press("Skim");
     await settle();
 
-    expect(artefactGets("trajectory").length).toBeGreaterThan(0);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "ideas", "trajectory"] }]);
+    expect(artefactGets("skim").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "ideas", "skim"] }]);
   });
 
   it("finds the Ideas first when only they are missing", async () => {
-    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
     try {
       await open("plain");
-      await press("Trajectory");
+      await press("Skim");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["ideas", "trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["ideas", "skim"] }]);
     } finally {
-      trajectoryQuotes = null;
+      skimQuotes = null;
     }
   });
 
   it("finds stale Ideas again before planning the route", async () => {
-    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
-    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", stale: true };
+    skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", stale: true };
     try {
       await open("plain");
-      await press("Trajectory");
+      await press("Skim");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["ideas", "trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["ideas", "skim"] }]);
     } finally {
-      trajectoryQuotes = null;
-      trajectoryIdeas = null;
+      skimQuotes = null;
+      skimIdeas = null;
     }
   });
 
@@ -713,31 +713,31 @@ describe("a press", () => {
      is planned on passages that may have gone. The preceding step is unforced,
      so current Quotes are skipped by `stepIsDone` and cost nothing. */
   it("chooses stale Quotes again before planning the route", async () => {
-    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready", stale: true };
-    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
+    skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready", stale: true };
+    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
     try {
       await open("plain");
-      await press("Trajectory");
+      await press("Skim");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "skim"] }]);
     } finally {
-      trajectoryQuotes = null;
-      trajectoryIdeas = null;
+      skimQuotes = null;
+      skimIdeas = null;
     }
   });
 
   it("plans the route alone when the Quotes and the Ideas are there and current", async () => {
-    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
     /* Merely outdated Ideas are not named: `stepIsDone` would re-run them. */
-    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", outdated: true };
+    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", outdated: true };
     try {
       await open("plain");
-      await press("Trajectory");
+      await press("Skim");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["skim"] }]);
     } finally {
-      trajectoryQuotes = null;
-      trajectoryIdeas = null;
+      skimQuotes = null;
+      skimIdeas = null;
     }
   });
 
@@ -746,38 +746,38 @@ describe("a press", () => {
        Quotes prerequisite has work to do — so a press made while the Quotes
        are still loading must spend nothing yet, and spend exactly once when
        they answer. */
-    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "loading" };
+    skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "loading" };
     try {
       await open("plain");
-      await press("Trajectory");
+      await press("Skim");
       await settle();
       expect(posts, "spent before the Quotes had answered").toEqual([]);
 
-      trajectoryQuotes = null;
-      await reopen("constitution", "trajectory");
+      skimQuotes = null;
+      await reopen("constitution", "skim");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "ideas", "trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["quotes", "ideas", "skim"] }]);
     } finally {
-      trajectoryQuotes = null;
+      skimQuotes = null;
     }
   });
 
   it("waits for the Ideas' read too before deciding what the route press buys", async () => {
-    trajectoryQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
-    trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "loading" };
+    skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
+    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "loading" };
     try {
       await open("plain");
-      await press("Trajectory");
+      await press("Skim");
       await settle();
       expect(posts, "spent before the Ideas had answered").toEqual([]);
 
-      trajectoryIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
-      await reopen("constitution", "trajectory");
+      skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
+      await reopen("constitution", "skim");
       await settle();
-      expect(posts).toEqual([{ slug: "constitution", steps: ["trajectory"] }]);
+      expect(posts).toEqual([{ slug: "constitution", steps: ["skim"] }]);
     } finally {
-      trajectoryQuotes = null;
-      trajectoryIdeas = null;
+      skimQuotes = null;
+      skimIdeas = null;
     }
   });
 

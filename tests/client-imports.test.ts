@@ -73,9 +73,9 @@ const SHARED = new Set([
   "supplement.js",
   "ingest.js", // slug derivation, so the client can show the same one the server will mint
   "term-match.js", // where a glossary term appears in a block
-  /* A block's section path from the tree — the Trajectory prompt's context on
+  /* A block's section path from the tree — the Skim prompt's context on
      the server and each stop's place in the band. Made one pure module by Sol's
-     F15 on the Trajectory build so the client copy could go; it imports types
+     F15 on the Skim build so the client copy could go; it imports types
      and nothing else. See src/section-path.ts. */
   "section-path.js",
   /* What the glossary's *Look up a term* box will accept — the bound, the

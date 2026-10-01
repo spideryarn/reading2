@@ -40,7 +40,7 @@ const job = (steps: StepName[], over: Partial<JobShape> = {}): JobShape => ({
 describe("isSharingJob", () => {
   it("is true for a mode job", () => {
     expect(isSharingJob(job(["quotes"]))).toBe(true);
-    expect(isSharingJob(job(["quotes", "ideas", "trajectory"]))).toBe(true);
+    expect(isSharingJob(job(["quotes", "ideas", "skim"]))).toBe(true);
   });
 
   it("is false when any step is not a sharing step", () => {
@@ -75,7 +75,7 @@ describe("mayOverlap", () => {
   it("is symmetric", () => {
     const pairs: [StepName[], StepName[]][] = [
       [["quotes"], ["ideas"]],
-      [["trajectory"], ["quotes"]],
+      [["skim"], ["quotes"]],
       [["sketch"], ["illustrated"]],
       [["quotes"], ["quotes"]],
       [["hierarchy"], ["quotes"]],
@@ -90,14 +90,14 @@ describe("mayOverlap", () => {
     expect(mayOverlap(job(["glossary"]), job(["glossary"], {}))).toBe(false);
   });
 
-  it("keeps Trajectory behind a Quotes or Ideas job, whichever side is asked", () => {
-    expect(mayOverlap(job(["trajectory"]), job(["quotes"]))).toBe(false);
-    expect(mayOverlap(job(["ideas"]), job(["trajectory"]))).toBe(false);
+  it("keeps Skim behind a Quotes or Ideas job, whichever side is asked", () => {
+    expect(mayOverlap(job(["skim"]), job(["quotes"]))).toBe(false);
+    expect(mayOverlap(job(["ideas"]), job(["skim"]))).toBe(false);
   });
 
-  it("keeps a Trajectory job that names its inputs (precededBy) behind an Ideas job", () => {
-    expect(mayOverlap(job(["quotes", "ideas", "trajectory"]), job(["ideas"]))).toBe(false);
-    expect(mayOverlap(job(["quotes", "trajectory"]), job(["ideas"]))).toBe(false);
+  it("keeps a Skim job that names its inputs (precededBy) behind an Ideas job", () => {
+    expect(mayOverlap(job(["quotes", "ideas", "skim"]), job(["ideas"]))).toBe(false);
+    expect(mayOverlap(job(["quotes", "skim"]), job(["ideas"]))).toBe(false);
   });
 
   it("keeps Illustrated behind the Sketch it paints", () => {
@@ -127,7 +127,7 @@ describe("the policy", () => {
     expect([...SHARING_STEPS].sort()).toEqual(
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
-        "sketch", "illustrated", "trajectory", "debate", "citations", "crossrefs", "simple",
+        "sketch", "illustrated", "skim", "debate", "citations", "crossrefs", "simple",
       ].sort(),
     );
   });
@@ -139,9 +139,9 @@ describe("the policy", () => {
 
   it("declares the two known reads", () => {
     expect([...readsOf(job(["illustrated"]))]).toEqual(["sketch"]);
-    expect([...readsOf(job(["trajectory"]))].sort()).toEqual(["ideas", "quotes"]);
+    expect([...readsOf(job(["skim"]))].sort()).toEqual(["ideas", "quotes"]);
     for (const step of SHARING_STEPS) {
-      if (step === "illustrated" || step === "trajectory") continue;
+      if (step === "illustrated" || step === "skim") continue;
       expect([...readsOf(job([step]))], step).toEqual([]);
     }
   });

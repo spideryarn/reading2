@@ -50,6 +50,9 @@ export type ResetRole = "import" | "successor" | "extra";
  */
 export const RESET_ROLE = {
   fetch: "import",
+  /* Never in a reset's list — a reset is refused on a minimal article, and a
+     full one's revision only carries this run row from the day it was minimal. */
+  metadata: "import",
   extract: "import",
   blocks: "import",
   hierarchy: "import",
@@ -63,7 +66,7 @@ export const RESET_ROLE = {
      whole column beside `quotes` — and it reads the Quotes, which sort before
      it in STEP_ORDER, so a regenerate queues it after them.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  trajectory: "extra",
+  skim: "extra",
   ideas: "extra",
   timeline: "extra",
   quiz: "extra",

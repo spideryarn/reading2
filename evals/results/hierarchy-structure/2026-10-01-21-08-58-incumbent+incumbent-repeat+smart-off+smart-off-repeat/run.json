@@ -1,0 +1,1130 @@
+{
+  "startedAt": "2026-10-01T21:08:58.445Z",
+  "commit": "59fc48a0491882d78cab14acda66ae4d166872b0",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent-repeat",
+      "kind": "one-call",
+      "comparison": "noise-floor",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off-repeat",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "incumbent",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "spider-silk-spya-ge30uz"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "run": 1,
+      "callOrder": 1,
+      "elapsedMs": 130048,
+      "blocksSha256": {
+        "measured": "d4e56533a451ecfadc9a9f8cb241a3217847acc56833d85bffebaac82e47f6e4",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "blocks": 244,
+        "bodyBlocks": 244,
+        "headingBlocks": 13,
+        "fragmentBlocks": 2,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 166
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            484,
+            637,
+            487,
+            805,
+            1268,
+            1649,
+            1114,
+            1557
+          ],
+          "balanceCv": 0.4351881882886921
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 7.75,
+          "max": 20,
+          "within5to9": 0.3333333333333333
+        },
+        "headings": {
+          "boundaries": 26,
+          "boundariesOnHeadings": 0.46153846153846156,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.4444444444444444,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 46,
+            "words": 1263
+          }
+        },
+        "titles": {
+          "count": 36,
+          "meanWords": 4.777777777777778,
+          "within2to6": 0.8888888888888888,
+          "copiedHeadings": 10,
+          "retention": 0.5935897435897436
+        },
+        "gists": {
+          "count": 36,
+          "coverage": 1,
+          "meanWords": 29.27777777777778,
+          "multiSentence": 0,
+          "templateRepetition": 0.05555555555555555,
+          "retention": 0.4842778006948728
+        }
+      },
+      "calls": [
+        {
+          "ms": 129987,
+          "inputTokens": 22140,
+          "outputTokens": 14972,
+          "reasoningTokens": 10301,
+          "generationId": "gen-1790888938-zPjOAMkpdj2mrDn7jXFx",
+          "costUsd": 0.194,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 2,
+          "endedOffsetMs": 129989,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 5,
+        "blocks": 9,
+        "largest": 3,
+        "where": [
+          "root > child 8 (gap, 2)",
+          "root > child 4 > child 3 (gap, 3)",
+          "root > child 5 > child 3 (gap, 1)",
+          "root > child 5 > child 5 (gap, 1)",
+          "root > child 7 > child 3 (short, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 9,
+        "l1Boundaries": 0.6666666666666666,
+        "allBoundaries": 0.5238095238095238,
+        "boundaryDistance": {
+          "mean": 1.21875,
+          "within1Block": 0.75
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "run": 1,
+      "callOrder": 2,
+      "elapsedMs": 107122,
+      "blocksSha256": {
+        "measured": "d4e56533a451ecfadc9a9f8cb241a3217847acc56833d85bffebaac82e47f6e4",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "blocks": 244,
+        "bodyBlocks": 244,
+        "headingBlocks": 13,
+        "fragmentBlocks": 2,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 164
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            484,
+            637,
+            487,
+            805,
+            1268,
+            2247,
+            2073
+          ],
+          "balanceCv": 0.6038138187979145
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 8.59375,
+          "max": 31,
+          "within5to9": 0.25
+        },
+        "headings": {
+          "boundaries": 23,
+          "boundariesOnHeadings": 0.5217391304347826,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.375,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 46,
+            "words": 1263
+          }
+        },
+        "titles": {
+          "count": 32,
+          "meanWords": 3.96875,
+          "within2to6": 0.9375,
+          "copiedHeadings": 10,
+          "retention": 0.5227272727272727
+        },
+        "gists": {
+          "count": 32,
+          "coverage": 1,
+          "meanWords": 29.875,
+          "multiSentence": 0,
+          "templateRepetition": 0.125,
+          "retention": 0.5155205662146473
+        }
+      },
+      "calls": [
+        {
+          "ms": 107113,
+          "inputTokens": 22140,
+          "outputTokens": 12741,
+          "reasoningTokens": 8107,
+          "generationId": "gen-1790889068-Wzur9SUJbLRBn25X9IUY",
+          "costUsd": 0.17169,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 107114,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 2,
+        "blocks": 3,
+        "largest": 2,
+        "where": [
+          "root > child 7 > child 2 (gap, 2)",
+          "root > child 7 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 7,
+        "partCountB": 9,
+        "l1Boundaries": 0.75,
+        "allBoundaries": 0.4523809523809524,
+        "boundaryDistance": {
+          "mean": 1.9344262295081966,
+          "within1Block": 0.6885245901639344
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "run": 1,
+      "callOrder": 3,
+      "elapsedMs": 55091,
+      "blocksSha256": {
+        "measured": "d4e56533a451ecfadc9a9f8cb241a3217847acc56833d85bffebaac82e47f6e4",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "blocks": 244,
+        "bodyBlocks": 244,
+        "headingBlocks": 13,
+        "fragmentBlocks": 2,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 165
+        },
+        "parts": {
+          "count": 11,
+          "words": [
+            484,
+            637,
+            487,
+            144,
+            661,
+            1268,
+            750,
+            899,
+            598,
+            516,
+            1557
+          ],
+          "balanceCv": 0.5147222356430331
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.9467213114754098
+        },
+        "fanout": {
+          "mean": 6.926829268292683,
+          "max": 26,
+          "within5to9": 0.2682926829268293
+        },
+        "headings": {
+          "boundaries": 29,
+          "boundariesOnHeadings": 0.41379310344827586,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.3170731707317073,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 46,
+            "words": 1263
+          }
+        },
+        "titles": {
+          "count": 41,
+          "meanWords": 4.2439024390243905,
+          "within2to6": 0.9512195121951219,
+          "copiedHeadings": 10,
+          "retention": 0.5849462365591399
+        },
+        "gists": {
+          "count": 41,
+          "coverage": 1,
+          "meanWords": 28.317073170731707,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5050324501812409
+        }
+      },
+      "calls": [
+        {
+          "ms": 55059,
+          "inputTokens": 22140,
+          "outputTokens": 5885,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889175-1WyaRpuS7gIvEzicmuAC",
+          "costUsd": 0.10313,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 55060,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 12,
+        "blocks": 15,
+        "largest": 3,
+        "where": [
+          "root > child 2 (gap, 3)",
+          "root > child 11 (overlap, 1)",
+          "root > child 1 > child 3 (short, 3)",
+          "root > child 3 > child 3 (gap, 1)",
+          "root > child 5 > child 1 (gap, 1)",
+          "root > child 6 > child 1 (gap, 1)",
+          "root > child 9 > child 1 (gap, 1)",
+          "root > child 9 > child 2 (gap, 1)",
+          "root > child 9 > child 3 (gap, 1)",
+          "root > child 10 > child 1 (gap, 1)",
+          "root > child 10 > child 3 (over, 1)",
+          "root > child 11 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1 > child 1",
+          "root > child 1 > child 3",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 6 > child 3",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2",
+          "root > child 9 > child 1",
+          "root > child 9 > child 2",
+          "root > child 9 > child 3",
+          "root > child 10 > child 1",
+          "root > child 10 > child 2",
+          "root > child 10 > child 3",
+          "root > child 11 > child 1",
+          "root > child 11 > child 2",
+          "root > child 11 > child 3",
+          "root > child 11 > child 4"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 11,
+        "partCountB": 9,
+        "l1Boundaries": 0.8,
+        "allBoundaries": 0.4888888888888889,
+        "boundaryDistance": {
+          "mean": 1.507462686567164,
+          "within1Block": 0.7313432835820896
+        }
+      }
+    },
+    {
+      "arm": "smart-off-repeat",
+      "comparison": "isolated",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "run": 1,
+      "callOrder": 4,
+      "elapsedMs": 68921,
+      "blocksSha256": {
+        "measured": "d4e56533a451ecfadc9a9f8cb241a3217847acc56833d85bffebaac82e47f6e4",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "blocks": 244,
+        "bodyBlocks": 244,
+        "headingBlocks": 13,
+        "fragmentBlocks": 2,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 165
+        },
+        "parts": {
+          "count": 12,
+          "words": [
+            205,
+            279,
+            637,
+            487,
+            144,
+            661,
+            1268,
+            750,
+            899,
+            598,
+            516,
+            1557
+          ],
+          "balanceCv": 0.5987409027337548
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.5,
+          "max": 19,
+          "within5to9": 0.25925925925925924
+        },
+        "headings": {
+          "boundaries": 40,
+          "boundariesOnHeadings": 0.25,
+          "headingsCut": 0.8333333333333334,
+          "l1OnHeadings": 0.9090909090909091,
+          "sourceHeadingShare": 0.42592592592592593,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 46,
+            "words": 1263
+          }
+        },
+        "titles": {
+          "count": 54,
+          "meanWords": 4.62962962962963,
+          "within2to6": 0.9629629629629629,
+          "copiedHeadings": 9,
+          "retention": 0.5188888888888891
+        },
+        "gists": {
+          "count": 54,
+          "coverage": 1,
+          "meanWords": 30.59259259259259,
+          "multiSentence": 0,
+          "templateRepetition": 0.037037037037037035,
+          "retention": 0.48303691119931785
+        }
+      },
+      "calls": [
+        {
+          "ms": 68896,
+          "inputTokens": 22140,
+          "outputTokens": 7226,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889231-3uq6JvVjHdqA8NTEsP97",
+          "costUsd": 0.11654,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 68897,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 11,
+        "blocks": 11,
+        "largest": 1,
+        "where": [
+          "root > child 4 (overlap, 1)",
+          "root > child 5 (overlap, 1)",
+          "root > child 12 (overlap, 1)",
+          "root > child 3 > child 3 (over, 1)",
+          "root > child 4 > child 3 (gap, 1)",
+          "root > child 4 > child 4 (over, 1)",
+          "root > child 6 > child 1 (gap, 1)",
+          "root > child 10 > child 2 (gap, 1)",
+          "root > child 11 > child 3 (over, 1)",
+          "root > child 12 > child 2 (overlap, 1)",
+          "root > child 12 > child 3 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1 > child 2"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 12,
+        "partCountB": 9,
+        "l1Boundaries": 0.7272727272727273,
+        "allBoundaries": 0.3448275862068966,
+        "boundaryDistance": {
+          "mean": 1.3717948717948718,
+          "within1Block": 0.6923076923076923
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "spider-silk-spya-ge30uz",
+      "run": 1,
+      "callOrder": 5,
+      "elapsedMs": 98284,
+      "blocksSha256": {
+        "measured": "293c4b4795c24dc4111a8a4a529258fe20686d138dd859e6350f138200e88933",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "spider-silk-spya-ge30uz",
+        "blocks": 263,
+        "bodyBlocks": 131,
+        "headingBlocks": 37,
+        "fragmentBlocks": 19,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 116
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            236,
+            1127,
+            842,
+            886,
+            1061,
+            602,
+            390,
+            129
+          ],
+          "balanceCv": 0.5366889728416915
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.9847328244274809
+        },
+        "fanout": {
+          "mean": 5.517241379310345,
+          "max": 26,
+          "within5to9": 0.2413793103448276
+        },
+        "headings": {
+          "boundaries": 20,
+          "boundariesOnHeadings": 0.8,
+          "headingsCut": 0.4444444444444444,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.4482758620689655,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 746
+          }
+        },
+        "titles": {
+          "count": 29,
+          "meanWords": 2.3793103448275863,
+          "within2to6": 0.6896551724137931,
+          "copiedHeadings": 16,
+          "retention": 0.717948717948718
+        },
+        "gists": {
+          "count": 29,
+          "coverage": 1,
+          "meanWords": 23.96551724137931,
+          "multiSentence": 0,
+          "templateRepetition": 0.3448275862068966,
+          "retention": 0.47809809528635105
+        }
+      },
+      "calls": [
+        {
+          "ms": 98259,
+          "inputTokens": 17500,
+          "outputTokens": 11516,
+          "reasoningTokens": 8082,
+          "generationId": "gen-1790889300-ixdG0A5hz7MVsKeT43XO",
+          "costUsd": 0.15016,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 98260,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 1,
+        "largest": 1,
+        "where": [
+          "root > child 5 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [
+          "root > child 6 > child 1"
+        ],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 9,
+        "l1Boundaries": 0.875,
+        "allBoundaries": 0.6071428571428571,
+        "boundaryDistance": {
+          "mean": 0.35555555555555557,
+          "within1Block": 0.9333333333333333
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "spider-silk-spya-ge30uz",
+      "run": 1,
+      "callOrder": 6,
+      "elapsedMs": 103893,
+      "blocksSha256": {
+        "measured": "293c4b4795c24dc4111a8a4a529258fe20686d138dd859e6350f138200e88933",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "spider-silk-spya-ge30uz",
+        "blocks": 263,
+        "bodyBlocks": 131,
+        "headingBlocks": 37,
+        "fragmentBlocks": 19,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 116
+        },
+        "parts": {
+          "count": 9,
+          "words": [
+            236,
+            1127,
+            432,
+            410,
+            886,
+            1061,
+            602,
+            390,
+            129
+          ],
+          "balanceCv": 0.5782526274061279
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.54054054054054,
+          "max": 26,
+          "within5to9": 0.10810810810810811
+        },
+        "headings": {
+          "boundaries": 26,
+          "boundariesOnHeadings": 0.7307692307692307,
+          "headingsCut": 0.5277777777777778,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.6216216216216216,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 746
+          }
+        },
+        "titles": {
+          "count": 37,
+          "meanWords": 2.27027027027027,
+          "within2to6": 0.7027027027027027,
+          "copiedHeadings": 24,
+          "retention": 0.5897435897435898
+        },
+        "gists": {
+          "count": 37,
+          "coverage": 1,
+          "meanWords": 24.756756756756758,
+          "multiSentence": 0,
+          "templateRepetition": 0.32432432432432434,
+          "retention": 0.5667454417602488
+        }
+      },
+      "calls": [
+        {
+          "ms": 103877,
+          "inputTokens": 17500,
+          "outputTokens": 12784,
+          "reasoningTokens": 8365,
+          "generationId": "gen-1790889398-loLGHS5sPf9b7xztsewm",
+          "costUsd": 0.16284,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 103877,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 9,
+        "partCountB": 9,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.8888888888888888,
+        "boundaryDistance": {
+          "mean": 0.058823529411764705,
+          "within1Block": 1
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "spider-silk-spya-ge30uz",
+      "run": 1,
+      "callOrder": 7,
+      "elapsedMs": 39685,
+      "blocksSha256": {
+        "measured": "293c4b4795c24dc4111a8a4a529258fe20686d138dd859e6350f138200e88933",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "spider-silk-spya-ge30uz",
+        "blocks": 263,
+        "bodyBlocks": 131,
+        "headingBlocks": 37,
+        "fragmentBlocks": 19,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 116
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            236,
+            1127,
+            432,
+            410,
+            886,
+            1061,
+            992,
+            129
+          ],
+          "balanceCv": 0.5667585549169604
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.96969696969697,
+          "max": 21,
+          "within5to9": 0.3333333333333333
+        },
+        "headings": {
+          "boundaries": 23,
+          "boundariesOnHeadings": 0.6956521739130435,
+          "headingsCut": 0.4444444444444444,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.6363636363636364,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 746
+          }
+        },
+        "titles": {
+          "count": 33,
+          "meanWords": 2.4545454545454546,
+          "within2to6": 0.7878787878787878,
+          "copiedHeadings": 6,
+          "retention": 0.654320987654321
+        },
+        "gists": {
+          "count": 33,
+          "coverage": 1,
+          "meanWords": 25.03030303030303,
+          "multiSentence": 0,
+          "templateRepetition": 0.18181818181818182,
+          "retention": 0.5509051605399962
+        }
+      },
+      "calls": [
+        {
+          "ms": 39676,
+          "inputTokens": 17500,
+          "outputTokens": 4495,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889502-n1cLMqeBQTHkGOxn6M62",
+          "costUsd": 0.07995,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 39676,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 6,
+        "largest": 2,
+        "where": [
+          "root > child 5 (gap, 2)",
+          "root > child 2 > child 1 (gap, 1)",
+          "root > child 4 > child 2 (short, 2)",
+          "root > child 6 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 1 > child 2",
+          "root > child 2 > child 2",
+          "root > child 2 > child 4",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 5 > child 1",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 9,
+        "l1Boundaries": 0.875,
+        "allBoundaries": 0.6551724137931034,
+        "boundaryDistance": {
+          "mean": 0.5,
+          "within1Block": 0.8541666666666666
+        }
+      }
+    },
+    {
+      "arm": "smart-off-repeat",
+      "comparison": "isolated",
+      "slug": "spider-silk-spya-ge30uz",
+      "run": 1,
+      "callOrder": 8,
+      "elapsedMs": 45545,
+      "blocksSha256": {
+        "measured": "293c4b4795c24dc4111a8a4a529258fe20686d138dd859e6350f138200e88933",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "spider-silk-spya-ge30uz",
+        "blocks": 263,
+        "bodyBlocks": 131,
+        "headingBlocks": 37,
+        "fragmentBlocks": 19,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 116
+        },
+        "parts": {
+          "count": 9,
+          "words": [
+            236,
+            1127,
+            432,
+            410,
+            886,
+            1061,
+            602,
+            390,
+            129
+          ],
+          "balanceCv": 0.5782526274061279
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.9618320610687023
+        },
+        "fanout": {
+          "mean": 4.96969696969697,
+          "max": 13,
+          "within5to9": 0.3939393939393939
+        },
+        "headings": {
+          "boundaries": 24,
+          "boundariesOnHeadings": 0.8333333333333334,
+          "headingsCut": 0.5555555555555556,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.7272727272727273,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 746
+          }
+        },
+        "titles": {
+          "count": 33,
+          "meanWords": 2.606060606060606,
+          "within2to6": 0.696969696969697,
+          "copiedHeadings": 16,
+          "retention": 0.5490196078431373
+        },
+        "gists": {
+          "count": 33,
+          "coverage": 1,
+          "meanWords": 30.545454545454547,
+          "multiSentence": 0,
+          "templateRepetition": 0.24242424242424243,
+          "retention": 0.5545909405317585
+        }
+      },
+      "calls": [
+        {
+          "ms": 45523,
+          "inputTokens": 17500,
+          "outputTokens": 5104,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889542-6BKt8xvui2FCqZxXxaj8",
+          "costUsd": 0.08604,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 45523,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 5,
+        "blocks": 18,
+        "largest": 12,
+        "where": [
+          "root > child 5 (gap, 12)",
+          "root > child 2 > child 1 (gap, 1)",
+          "root > child 6 > child 1 (gap, 3)",
+          "root > child 8 > child 1 (gap, 1)",
+          "root > child 9 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 5 > child 2"
+        ],
+        "collapsedRungs": [
+          "root > child 3 > child 1",
+          "root > child 7 > child 1"
+        ],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 9,
+        "partCountB": 9,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.5806451612903226,
+        "boundaryDistance": {
+          "mean": 0.8571428571428571,
+          "within1Block": 0.8163265306122449
+        }
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-10-01T21:19:47.704Z"
+}

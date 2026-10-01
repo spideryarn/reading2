@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "mode": "illustrated",
+  "promptVersion": "illustrated/4",
+  "model": "anthropic/claude-sonnet-5",
+  "power": "standard",
+  "productionEffort": null,
+  "arms": {
+    "base-a": {
+      "override": null,
+      "expectedOnWire": null
+    },
+    "base-b": {
+      "override": null,
+      "expectedOnWire": null
+    },
+    "low-a": {
+      "override": "low",
+      "expectedOnWire": "low"
+    },
+    "low-b": {
+      "override": "low",
+      "expectedOnWire": "low"
+    },
+    "medium-a": {
+      "override": "medium",
+      "expectedOnWire": "medium"
+    },
+    "medium-b": {
+      "override": "medium",
+      "expectedOnWire": "medium"
+    }
+  },
+  "cacheArticle": false,
+  "profile": null,
+  "sketch": "base-a",
+  "figures": "production-loader",
+  "plates": false
+}

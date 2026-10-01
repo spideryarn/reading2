@@ -4,7 +4,7 @@
 files (overseer queue `qi-hmsgxajb`). Builds on
 [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md) and
 [260928e](260928e-trajectory-rows-show-the-quote-words.md); the mode's doc is
-[trajectory.md](../project/trajectory.md). The "Back to …" chip is
+[trajectory.md](../project/skim.md). The "Back to …" chip is
 [260906g](260906g-back-to-where-you-jumped-from.md) and
 [260916a](260916a-back-to-where-you-were-survives-a-mode-change.md).
 

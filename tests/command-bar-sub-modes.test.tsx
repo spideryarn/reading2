@@ -28,6 +28,7 @@ import {
   modeParam,
   refereeParam,
   rememberParam,
+  structureParam,
   summaryParam,
   threadParam,
 } from "../src/web/params.js";
@@ -93,6 +94,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     diagram: diagramParam,
     referee: refereeParam,
     summary: summaryParam,
+    structure: structureParam,
   });
   return createElement(Dock, {
     slug: "a-piece",
@@ -383,6 +385,23 @@ describe("Enter on a sub-mode row, on the reading view", () => {
   });
 });
 
+/* Structure's Expanded, since 2026-10-01 (spya-gxyhcc). Through Reader's
+   batched setter, which enumerates its keys — a sub-mode missing from it would
+   open the mode and drop the view without a word. GPT Sol's plan review of
+   261001q, finding 4. */
+describe("Enter on Structure › Expanded, on the reading view", () => {
+  it("opens Structure on Expanded, arming nothing", async () => {
+    readingThroughReader("?mode=plain");
+    openBar();
+    type("expanded");
+    press("Enter");
+    await until(() => {
+      const params = new URLSearchParams(location.search);
+      return params.get("mode") === "structure" && params.get("structure") === "expanded";
+    });
+  });
+});
+
 describe("Enter on a sub-mode row, on the metadata page", () => {
   it("goes to the article in that sub-mode and arms nothing, as the mode rows there do", () => {
     metadataPage();
@@ -394,6 +413,17 @@ describe("Enter on a sub-mode row, on the metadata page", () => {
     expect(params.get("mode")).toBe("remember");
     expect(params.get("remember")).toBe("quiz");
     expect(pendingActivation("a-piece", "quiz")).toBeNull();
+  });
+
+  it("carries Structure's Expanded view into the article href", () => {
+    metadataPage();
+    openBar();
+    type("expanded");
+    press("Enter");
+    expect(location.pathname).toBe("/read/a-piece");
+    const params = new URLSearchParams(location.search);
+    expect(params.get("mode")).toBe("structure");
+    expect(params.get("structure")).toBe("expanded");
   });
 });
 
@@ -425,6 +455,7 @@ describe("the registry's two answers agree", () => {
       { mode: "referee", view: "criteria" },
       /* Simple, since the outline went and it became Summary's default (plan 261001p). */
       { mode: "summary", view: "simple" },
+      { mode: "structure", view: "fisheye" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;
       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });

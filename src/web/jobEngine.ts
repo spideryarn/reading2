@@ -169,6 +169,40 @@ export interface JobsSnapshot {
   authFailed: boolean;
 }
 
+/**
+ * **How a watched job ended**, as `watchTerminal` reports it.
+ *
+ * `vanished` is the one that is not a status: the job was registered, and a
+ * list that *began after the registration* left it out — retention took it, or
+ * it was forgotten in another tab. It is never inferred from a list that was
+ * already in flight when the watcher arrived, because that list was asked
+ * before the watcher existed and its silence says nothing.
+ */
+export type TerminalOutcome =
+  | { kind: "done"; job: Job }
+  | { kind: "error"; job: Job }
+  | { kind: "cancelled"; job: Job }
+  | { kind: "vanished" };
+
+/** The outcome a job's status means, or null while it is still going. */
+function terminalOf(job: Job): TerminalOutcome | null {
+  switch (job.status) {
+    case "done":
+      return { kind: "done", job };
+    case "error":
+      return { kind: "error", job };
+    case "cancelled":
+      return { kind: "cancelled", job };
+    case "queued":
+    case "running":
+      return null;
+    default: {
+      const unreachable: never = job.status;
+      throw new Error(`Unknown job status: ${String(unreachable)}`);
+    }
+  }
+}
+
 /** What the engine needs from the world. Injected so a test can be a pure function. */
 export interface JobEngineDeps {
   /** `GET /api/jobs` — every job this reader can see. */
@@ -299,6 +333,31 @@ export interface JobEngine {
    * it. See `tests/job-engine-completions.test.tsx`.
    */
   receive(jobs: Job[]): void;
+  /**
+   * **Tell me once when this job ends, however it ends.** Returns the way to
+   * stop listening.
+   *
+   * Fed by both of the engine's accounts of a job: every list reconciliation
+   * and every `/advance` response. The second matters because the drive loop
+   * keeps going while the tab is hidden and the poll does not, so a job this
+   * tab drives to its end behind a hidden tab is heard the moment it ends
+   * rather than when somebody looks. And it hears every ending, not only
+   * `done` — `error`, `cancelled`, and `vanished` (see `TerminalOutcome`) — so
+   * a caller that holds a slot until the job ends, which is what the batch
+   * upload does, is never left holding it for a job that failed.
+   *
+   * **Session-fenced like everything else here.** A teardown (sign-out, a
+   * different reader) drops every watcher without calling it: whoever
+   * registered them belongs to the same session and is fenced by it too.
+   *
+   * A pending watcher keeps the busy cadence armed, so a job absent from the
+   * list that came back is asked about again rather than waited on for ever. A
+   * job already terminal in the current snapshot is reported on the next
+   * microtask, never synchronously inside this call.
+   *
+   * Plan 261001m § What Sol's plan review changed, item 4.
+   */
+  watchTerminal(jobId: string, onEnd: (outcome: TerminalOutcome) => void): () => void;
   /** Back to the state a fresh engine is in. For tests of the singleton. */
   reset(): void;
 }
@@ -386,6 +445,44 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
    */
   const autoAttempts = new Set<string>();
 
+  /**
+   * **Every list request is numbered when it starts**, so a watcher can tell a
+   * list asked after it arrived from one that was already on the wire. Only the
+   * first kind may say a job has vanished. Never reset, like `generation`.
+   */
+  let listsStarted = 0;
+  /** `watchTerminal`'s registrations: whose job, the callback, and the list number it arrived at. */
+  const watchers = new Map<
+    symbol,
+    { id: string; onEnd: (outcome: TerminalOutcome) => void; since: number }
+  >();
+
+  /** Report an ending to everyone watching that job, once each, and forget them. */
+  const endWatchers = (id: string, outcome: TerminalOutcome): void => {
+    for (const [key, w] of [...watchers]) {
+      if (w.id !== id) continue;
+      watchers.delete(key);
+      w.onEnd(outcome);
+    }
+  };
+
+  /** What one list says to the watchers. `startedAt` is the list's own number. */
+  const tellWatchers = (jobs: Job[], startedAt: number): void => {
+    if (watchers.size === 0) return;
+    const byId = new Map(jobs.map((j) => [j.id, j]));
+    for (const [key, w] of [...watchers]) {
+      if (!watchers.has(key)) continue;
+      const job = byId.get(w.id);
+      if (job) {
+        const outcome = terminalOf(job);
+        if (outcome) endWatchers(w.id, outcome);
+        continue;
+      }
+      /* Absent from a list that was asked after the watcher arrived. */
+      if (startedAt > w.since) endWatchers(w.id, { kind: "vanished" });
+    }
+  };
+
   /* A bound session, and nothing else. See the header: a mounted subscriber
      picks the cadence, it does not grant permission to ask. With no session the
      engine is asleep — no timer, no listener, and no drive loop. */
@@ -448,7 +545,14 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
        have cost every owner the moment it stopped being route-scoped. A quiet
        subscriber is not watching in this sense; the busy cadence above needs
        nobody at all, and neither does an action still owed its poll. */
-    if (!isBusy(snapshot.jobs) && subscribers.size === 0 && !reconciliationOwed()) return;
+    if (
+      !isBusy(snapshot.jobs) &&
+      subscribers.size === 0 &&
+      !reconciliationOwed() &&
+      watchers.size === 0
+    ) {
+      return;
+    }
     timer = setTimeout(() => {
       timer = undefined;
       void poll();
@@ -511,13 +615,16 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     return failures;
   };
 
-  const apply = (jobs: Job[]) => {
+  /* `startedAt` is the number of the list request this answers; `receive`, a
+     test's input with no request behind it, counts as one asked now. */
+  const apply = (jobs: Job[], startedAt: number = ++listsStarted) => {
     const first = !seeded;
     seeded = true;
 
     const kept = sameJobs(snapshot.jobs, jobs) ? snapshot.jobs : jobs;
     recordCompletions(jobs, first);
     set({ jobs: kept, loaded: true, error: null, driverFailures: pruneDriverFailures(jobs) });
+    tellWatchers(jobs, startedAt);
 
     /* **Including on the first list**, unlike the completions above. A job left
        unfinished by a closed tab or a restarted server is exactly what a fresh
@@ -552,16 +659,18 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     }
     const mine = generation;
     const requestedAtStart = reconciliationRequested;
+    listsStarted += 1;
+    const startedAt = listsStarted;
     inFlight = true;
     try {
       const jobs = await deps.listJobs();
       if (pollWasOvertaken(mine)) return;
-      apply(jobs);
+      apply(jobs, startedAt);
       /* A 200 whose body cannot be applied did not reconcile anything. Mark it
          paid only after `apply`, so its throw reaches the retry path while the
          obligation is still live. */
       reconciliationCompleted = Math.max(reconciliationCompleted, requestedAtStart);
-      schedule(isBusy(jobs) ? BUSY_MS : IDLE_MS);
+      schedule(isBusy(jobs) || watchers.size > 0 ? BUSY_MS : IDLE_MS);
     } catch (err) {
       if (pollWasOvertaken(mine)) return;
       if (statusOf(err) === 401) {
@@ -651,6 +760,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     try {
       const advanced = await deps.advance(id);
       if (mine !== generation) return null;
+      /* The server's own account of the job it has just worked on — the one
+         that still arrives while the tab is hidden and the poll is not. */
+      const ended = terminalOf(advanced.job);
+      if (ended) endWatchers(id, ended);
       if (snapshot.driverFailures[id]) {
         const { [id]: _ok, ...rest } = snapshot.driverFailures;
         set({ driverFailures: rest });
@@ -708,6 +821,9 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
        a different shelf, and one of these pairs may name an article they have
        never seen. See `beginAutoAttempt`. */
     autoAttempts.clear();
+    /* Dropped without a word: whoever registered them belongs to the session
+       that is ending, and is fenced by it too. */
+    watchers.clear();
     /* The *sequence* stays where it is, so a cursor a subscriber captured under
        the old session can never be met by a new session's event. Only the
        events themselves go. */
@@ -749,7 +865,8 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
         into === subscribers &&
         subscribers.size === 0 &&
         !isBusy(snapshot.jobs) &&
-        !reconciliationOwed()
+        !reconciliationOwed() &&
+        watchers.size === 0
       ) {
         clearTimeout(timer);
         timer = undefined;
@@ -828,7 +945,44 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       autoAttempts.add(key);
       return true;
     },
-    receive: apply,
+    receive: (jobs) => apply(jobs),
+    watchTerminal(jobId, onEnd) {
+      const key = Symbol(jobId);
+      const mine = generation;
+      watchers.set(key, { id: jobId, onEnd, since: listsStarted });
+      const known = snapshot.jobs.find((j) => j.id === jobId);
+      const already = known ? terminalOf(known) : null;
+      if (already) {
+        queueMicrotask(() => {
+          if (mine !== generation || !watchers.has(key)) return;
+          watchers.delete(key);
+          onEnd(already);
+        });
+      } else if (!inFlight) {
+        /* Something has to go on asking — see the note on the interface.
+           `schedule` declines while hidden, paused or asleep, as it should.
+           It also replaces an existing idle timer: registering a terminal
+           watcher promises the busy cadence, not "within the next eight
+           seconds if a shelf poll happened to be armed first". */
+        schedule(BUSY_MS);
+      }
+      return () => {
+        watchers.delete(key);
+        /* A watcher bought the busy timer even with no job or subscriber in
+           the snapshot. Once its caller leaves, do not spend one trailing poll
+           for a callback nobody can hear. The converse condition in `join`
+           keeps a subscriber unmount from cancelling a live watch. */
+        if (
+          watchers.size === 0 &&
+          subscribers.size === 0 &&
+          !isBusy(snapshot.jobs) &&
+          !reconciliationOwed()
+        ) {
+          clearTimeout(timer);
+          timer = undefined;
+        }
+      };
+    },
     reset() {
       started = false;
       sessionKey = null;

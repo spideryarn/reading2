@@ -1,0 +1,293 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2739.55" width="760" height="2739.55">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2739.55" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel into case studies</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A chain down the page: Feynman's hunt for pseudoscience funnels into his definition of Cargo Cult Science, which</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">fans out into the principle of scientific integrity, then into a run of case studies that illustrate it, closing</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">with a final wish.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">The talk moves from noticing failed beliefs, to naming the disease, to stating the cure, to showing the disease in the</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">wild.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="120" width="712" height="260" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="24" y="550" width="712" height="240" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<rect x="24" y="830" width="712" height="310" rx="8" fill="rgba(240,228,66,0.13)" stroke="rgba(240,228,66,0.62)" stroke-width="1.8"/>
+<path d="M380 90 L140 160" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="140,160 148.62,153.83999999999997 150.57999999999998,160.56" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M240 190 L280 190" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="280,190 270,193.5 270,186.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M480 190 L520 195" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="520,195 509.6430996618011,197.23262522260575 510.5113428039256,190.2866800856101" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M610 230 L370 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,280 379.07596430798407,274.5340259897984 380.503644086768,281.3868889279616" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 220 L370 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,280 359.44035063601706,280.86244148191895 361.2073039160461,274.089120575141" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 350 L380 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,420 375.1209632098128,410.5954798102189 382.05060966544096,409.60553031655775" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 510 L145 590" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="145,590 153.33857576818636,583.4640873507815 155.5944223528165,590.0906366931324" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 510 L385 590" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="385,590 380.8830331137581,580.2377982167143 387.86940116313826,579.801150213628" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 510 L610 590" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="610,590 599.4052098456439,590.0205325390589 601.7048542202328,583.4090549621158" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M145 660 L385 690" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="385,690 374.6430996618011,692.2326252226057 375.5113428039256,685.28668008561" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M385 660 L385 690" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="385,690 381.5,680 388.5,680" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M385 760 L140 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="140,870 147.68912892592618,862.711152604116 150.55626174576304,869.0970393392072" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M385 760 L380 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,870 376.9576867184504,859.8513877846817 383.9504664999225,860.1692414111124" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M385 760 L610 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="610,870 599.4789209287907,868.7522439431679 602.5533918528253,862.4635534167334" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 940 L385 980" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="385,980 380.2866800856101,970.5113428039255 387.23262522260575,969.6430996618011" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M610 950 L385 980" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="385,980 394.44970598650775,975.2090651467006 395.3748520271449,982.1476604514789" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M385 1060 L380 1110" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1110 377.512407024475,1099.7013650813265 384.47766735594496,1100.3978911144736" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>A talk on not fooling yourself — → spya-wv9g0v</title>
+<ellipse cx="380" cy="60" rx="100" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="55.5" font-size="15" text-anchor="middle" fill="#f7f7f7">A talk on not fooling</text>
+<text x="380" y="74.25" font-size="15" text-anchor="middle" fill="#f7f7f7">yourself</text>
+</g>
+<g>
+<title>Science began by discarding what fails — → spya-ddrr9m</title>
+<rect x="40" y="160" width="200" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="140" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Science began by discarding</text>
+<text x="140" y="201.4" font-size="12" text-anchor="middle" fill="#f7f7f7">what fails</text>
+</g>
+<g>
+<title>Isolation tanks, Esalen, Geller's keys — nothing worked — → spya-q4502k</title>
+<rect x="280" y="160" width="200" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="178.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Isolation tanks, Esalen,</text>
+<text x="380" y="193.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Geller's keys — nothing</text>
+<text x="380" y="208.9" font-size="12" text-anchor="middle" fill="#f7f7f7">worked</text>
+</g>
+<g>
+<title>Reading and crime 'sciences' show no progress — → spya-aww976</title>
+<rect x="520" y="160" width="180" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="610" y="183.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Reading and crime</text>
+<text x="610" y="198.9" font-size="12" text-anchor="middle" fill="#f7f7f7">'sciences' show no</text>
+<text x="610" y="213.9" font-size="12" text-anchor="middle" fill="#f7f7f7">progress</text>
+</g>
+<g>
+<title>The cocktail-party test: topics nobody really understands — → spya-wc4h5s</title>
+<rect x="160" y="280" width="420" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="370" y="318.9" font-size="12" text-anchor="middle" fill="#f7f7f7">The cocktail-party test: topics nobody really understands</text>
+</g>
+<g>
+<title>Cargo Cult Science: the form without the substance — → spya-fd2muf</title>
+<polygon points="275,420 485,420 530,465 485,510 275,510 230,465" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="446.5" font-size="20" text-anchor="middle" fill="#f7f7f7">Cargo Cult Science: the</text>
+<text x="380" y="471.5" font-size="20" text-anchor="middle" fill="#f7f7f7">form without the</text>
+<text x="380" y="496.5" font-size="20" text-anchor="middle" fill="#f7f7f7">substance</text>
+</g>
+<g>
+<title>Report everything against your own theory too — → spya-afgs74</title>
+<rect x="40" y="590" width="210" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="145" y="621.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Report everything against your</text>
+<text x="145" y="636.4" font-size="12" text-anchor="middle" fill="#f7f7f7">own theory too</text>
+</g>
+<g>
+<title>Not lying like advertising — a higher bar — → spya-bpyx8n</title>
+<rect x="280" y="590" width="210" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="385" y="621.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Not lying like advertising — a</text>
+<text x="385" y="636.4" font-size="12" text-anchor="middle" fill="#f7f7f7">higher bar</text>
+</g>
+<g>
+<title>Careless work eventually gets exposed — → spya-az6z7k</title>
+<rect x="520" y="590" width="180" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="610" y="626.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Careless work eventually</text>
+<text x="610" y="641.4" font-size="12" text-anchor="middle" fill="#f7f7f7">gets exposed</text>
+</g>
+<g>
+<title>You are the easiest person to fool — → spya-bvx2u8</title>
+<rect x="280" y="690" width="210" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="385" y="721.4" font-size="12" text-anchor="middle" fill="#f7f7f7">You are the easiest person to</text>
+<text x="385" y="736.4" font-size="12" text-anchor="middle" fill="#f7f7f7">fool</text>
+</g>
+<g>
+<title>Millikan's charge crept slowly to the true value — → spya-s9msxy</title>
+<rect x="40" y="870" width="200" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="140" y="901.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Millikan's charge crept</text>
+<text x="140" y="916.4" font-size="12" text-anchor="middle" fill="#f7f7f7">slowly to the true value</text>
+</g>
+<g>
+<title>A student told not to repeat a rat study — → spya-w9nnq6</title>
+<rect x="280" y="870" width="200" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="901.4" font-size="12" text-anchor="middle" fill="#f7f7f7">A student told not to repeat</text>
+<text x="380" y="916.4" font-size="12" text-anchor="middle" fill="#f7f7f7">a rat study</text>
+</g>
+<g>
+<title>Young's careful rat clues, later ignored — → spya-fvenms</title>
+<rect x="520" y="870" width="180" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="610" y="906.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Young's careful rat clues,</text>
+<text x="610" y="921.4" font-size="12" text-anchor="middle" fill="#f7f7f7">later ignored</text>
+</g>
+<g>
+<title>ESP effects shrink as controls improve — → spya-rbpppq</title>
+<rect x="280" y="980" width="210" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="385" y="1016.4" font-size="12" text-anchor="middle" fill="#f7f7f7">ESP effects shrink as controls</text>
+<text x="385" y="1031.4" font-size="12" text-anchor="middle" fill="#f7f7f7">improve</text>
+</g>
+<g>
+<title>Wish: the freedom to keep integrity — → spya-ndyj3t</title>
+<ellipse cx="380" cy="1140" rx="130" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="1135.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Wish: the freedom to keep</text>
+<text x="380" y="1154.25" font-size="15" text-anchor="middle" fill="#f7f7f7">integrity</text>
+</g>
+<text x="34" y="565" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">THE MISSING INGREDIENT: INTEGRITY</text></g>
+</g>
+<g transform="translate(0 1386.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Investigating Pseudoscience</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Four stops in Feynman's search, converging on a rule for spotting subjects nobody understands.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">PART2-INVESTIGATING</text>
+<g transform="translate(0 50.95)"><path d="M150 140 L150 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,180 146.5,170 153.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 225 L320 215" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="320,215 310.7114572172473,220.0963686064661 309.5606643061098,213.19161113964108" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 270 L420 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="420,280 409.87731085054776,283.1274853130849 410.1363924741169,276.1322814767175" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 270 L150 310" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,310 146.5,300 153.5,300" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 355 L320 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="320,420 310.6453869164731,415.02594591329085 315.78901102886556,410.2779851941594" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 400 L150 430" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,430 146.5,420 153.5,420" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 490 L350 490" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="350,490 340,493.5 340,486.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Science began as a method: test an idea, discard it if it fails — → spya-ddrr9m</title>
+<rect x="40" y="60" width="220" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="96.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Science began as a method: test</text>
+<text x="150" y="111.4" font-size="12" text-anchor="middle" fill="#f7f7f7">an idea, discard it if it fails</text>
+</g>
+<g>
+<title>Isolation tanks, Esalen massage, Uri Geller's key-bending — none of it worked — → spya-q4502k</title>
+<rect x="40" y="180" width="220" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="213.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Isolation tanks, Esalen massage,</text>
+<text x="150" y="228.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Uri Geller's key-bending — none</text>
+<text x="150" y="243.9" font-size="12" text-anchor="middle" fill="#f7f7f7">of it worked</text>
+</g>
+<g>
+<title>A reflexology scene at Esalen — → spya-xm9a87</title>
+<path d="M320 180 L506 180 L520 194 L520 250 L320 250 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 180 L506 194 L520 194" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="218.25" font-size="10" text-anchor="middle" fill="#f7f7f7">A reflexology scene at Esalen</text>
+</g>
+<g>
+<title>Geller's keys fail to bend, even underwater — → spya-mmhbvn</title>
+<path d="M320 280 L506 280 L520 294 L520 350 L320 350 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 280 L506 294 L520 294" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="312" font-size="10" text-anchor="middle" fill="#f7f7f7">Geller's keys fail to bend, even</text>
+<text x="420" y="324.5" font-size="10" text-anchor="middle" fill="#f7f7f7">underwater</text>
+</g>
+<g>
+<title>Reading methods and criminal reform claim science but show no progress — → spya-aww976</title>
+<rect x="40" y="310" width="220" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="343.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Reading methods and criminal</text>
+<text x="150" y="358.9" font-size="12" text-anchor="middle" fill="#f7f7f7">reform claim science but show no</text>
+<text x="150" y="373.9" font-size="12" text-anchor="middle" fill="#f7f7f7">progress</text>
+</g>
+<g>
+<title>Teachers and parents intimidated by this pseudoscience — → spya-re4634</title>
+<path d="M320 380 L506 380 L520 394 L520 460 L320 460 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 380 L506 394 L520 394" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="417" font-size="10" text-anchor="middle" fill="#f7f7f7">Teachers and parents intimidated by</text>
+<text x="420" y="429.5" font-size="10" text-anchor="middle" fill="#f7f7f7">this pseudoscience</text>
+</g>
+<g>
+<title>We ought to look into science that isn't science — → spya-g2cwvy</title>
+<rect x="40" y="430" width="220" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="456.4" font-size="12" text-anchor="middle" fill="#f7f7f7">We ought to look into science</text>
+<text x="150" y="471.4" font-size="12" text-anchor="middle" fill="#f7f7f7">that isn't science</text>
+</g>
+<g>
+<title>The cocktail-party test for empty subjects — → spya-wc4h5s</title>
+<polygon points="230,490 470,490 500,520 470,550 230,550 200,520" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="350" y="515.5" font-size="15" text-anchor="middle" fill="#f7f7f7">The cocktail-party test for empty</text>
+<text x="350" y="534.25" font-size="15" text-anchor="middle" fill="#f7f7f7">subjects</text>
+</g></g>
+</g>
+<g transform="translate(0 2025.65)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Case Studies in Poor Science</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Four examples line up to show the same failure: skipping checks, ignoring controls, or refusing to demand</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">repeatability.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">PART5-CASES</text>
+<g transform="translate(0 65.9)"><path d="M260 105 L320 100" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="320,100 310.3252015970393,104.31836495239449 309.7438832380631,97.34254464468032" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M420 140 L420 170" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="420,170 416.5,160 423.5,160" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 150 L150 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,260 146.5,250 153.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 360 L150 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,400 146.5,390 153.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 445 L320 440" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="320,440 310.3252015970393,444.31836495239446 309.7438832380631,437.34254464468034" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 490 L150 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,520 146.5,510 153.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 565 L320 565" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="320,565 310,568.5 310,561.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>A student told not to repeat a prior rat experiment before varying it — → spya-w9nnq6</title>
+<rect x="40" y="60" width="220" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="93.9" font-size="12" text-anchor="middle" fill="#f7f7f7">A student told not to repeat a</text>
+<text x="150" y="108.9" font-size="12" text-anchor="middle" fill="#f7f7f7">prior rat experiment before</text>
+<text x="150" y="123.9" font-size="12" text-anchor="middle" fill="#f7f7f7">varying it</text>
+</g>
+<g>
+<title>Feynman: repeat first, then vary, to isolate the real cause — → spya-tf8rj2</title>
+<path d="M320 60 L506 60 L520 74 L520 140 L320 140 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 60 L506 74 L520 74" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="97" font-size="10" text-anchor="middle" fill="#f7f7f7">Feynman: repeat first, then vary,</text>
+<text x="420" y="109.5" font-size="10" text-anchor="middle" fill="#f7f7f7">to isolate the real cause</text>
+</g>
+<g>
+<title>Her professor refused, calling it a waste of time — → spya-v0xcd7</title>
+<path d="M320 170 L506 170 L520 184 L520 240 L320 240 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 170 L506 184 L520 184" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="202" font-size="10" text-anchor="middle" fill="#f7f7f7">Her professor refused, calling it a</text>
+<text x="420" y="214.5" font-size="10" text-anchor="middle" fill="#f7f7f7">waste of time</text>
+</g>
+<g>
+<title>A physics experiment skipped a comparison run under pressure for new results — → spya-m95kqm</title>
+<rect x="40" y="260" width="220" height="100" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="298.9" font-size="12" text-anchor="middle" fill="#f7f7f7">A physics experiment skipped a</text>
+<text x="150" y="313.9" font-size="12" text-anchor="middle" fill="#f7f7f7">comparison run under pressure for</text>
+<text x="150" y="328.9" font-size="12" text-anchor="middle" fill="#f7f7f7">new results</text>
+</g>
+<g>
+<title>Young eliminated every clue to find what rats actually use to navigate — → spya-fvenms</title>
+<rect x="40" y="400" width="220" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="433.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Young eliminated every clue to</text>
+<text x="150" y="448.9" font-size="12" text-anchor="middle" fill="#f7f7f7">find what rats actually use to</text>
+<text x="150" y="463.9" font-size="12" text-anchor="middle" fill="#f7f7f7">navigate</text>
+</g>
+<g>
+<title>Later researchers ignored his careful method entirely — → spya-wye8g6</title>
+<path d="M320 400 L506 400 L520 414 L520 480 L320 480 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 400 L506 414 L520 414" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="437" font-size="10" text-anchor="middle" fill="#f7f7f7">Later researchers ignored his</text>
+<text x="420" y="449.5" font-size="10" text-anchor="middle" fill="#f7f7f7">careful method entirely</text>
+</g>
+<g>
+<title>ESP effects shrink toward nothing as controls improve — → spya-rbpppq</title>
+<rect x="40" y="520" width="220" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="561.4" font-size="12" text-anchor="middle" fill="#f7f7f7">ESP effects shrink toward nothing</text>
+<text x="150" y="576.4" font-size="12" text-anchor="middle" fill="#f7f7f7">as controls improve</text>
+</g>
+<g>
+<title>Leader rejects repeatability itself as an unfair demand — → spya-g203mu</title>
+<path d="M320 520 L506 520 L520 534 L520 610 L320 610 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M506 520 L506 534 L520 534" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="420" y="562" font-size="10" text-anchor="middle" fill="#f7f7f7">Leader rejects repeatability itself</text>
+<text x="420" y="574.5" font-size="10" text-anchor="middle" fill="#f7f7f7">as an unfair demand</text>
+</g></g>
+</g>
+</svg>

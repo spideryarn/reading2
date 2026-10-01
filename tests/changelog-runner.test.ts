@@ -448,9 +448,17 @@ function planWork(rows: Record<string, unknown>[]): { work: string; args: string
       entries: [],
     })}\n`,
   );
+  /* **Its own pending file, never the repository's.** Without `--pending-file`,
+     `plan --deploys` reads the live `src/web/changelog-pending.json` and refuses
+     while it holds a release — so these tests passed only while dev's copy
+     happened to be null, and the first real `changelog:prepare` turned all five
+     red inside the deploy gate — docs/postmortems/
+     261001c-a-test-on-live-repo-state-passes-only-while-it-is-at-its-default.md. */
+  const pending = path.join(work, "pending.json");
+  writeFileSync(pending, "null\n");
   return {
     work,
-    args: ["plan", "--work", work, "--deploys", deploys, "--file", file],
+    args: ["plan", "--work", work, "--deploys", deploys, "--file", file, "--pending-file", pending],
   };
 }
 
@@ -522,5 +530,27 @@ describe("plan", () => {
     (rows[2] as { created: number }).created += 400;
     const { args } = planWork(rows);
     expect(() => main(args)).toThrow(/share a version id/);
+  });
+
+  /**
+   * Vercel's list starts its range at the history's last line, as a pending
+   * release does, so planning on top of one would describe the same commits
+   * twice. The refusal reads the pending file it is given, which is what lets
+   * the tests above say null without asking what dev happens to hold.
+   */
+  it("refuses while the pending file holds a release", () => {
+    const { work, args } = planWork([WATERMARK, deploy({ id: "dpl_new", at: "2026-09-06T09:00:00Z", sha: HEAD })]);
+    writeJson(path.join(work, "pending.json"), {
+      version: "2026-09-06T08:00:00Z",
+      deployment_id: null,
+      sha: HEAD,
+      previous_sha: OLDER,
+      commit_count: 3,
+      invisible: true,
+      generated_at: "2026-09-06T08:05:00Z",
+      generated_by: { trawl: "t", review: "r", copy: "c" },
+      entries: [],
+    });
+    expect(() => main(args)).toThrow(/holds a release/);
   });
 });

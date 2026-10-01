@@ -235,9 +235,9 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   citations: { kind: "fixed", target: "citations" },
   faq: { kind: "fixed", target: "faq" },
   /* The target is the route even when the job it starts writes the Quotes
-     first (`precededBy`, src/web/useTrajectory.ts): the press is for this
+     first (`precededBy`, src/web/useSkim.ts): the press is for this
      mode's artefact, and the token is keyed on it. */
-  trajectory: { kind: "fixed", target: "trajectory" },
+  skim: { kind: "fixed", target: "skim" },
   tweets: {
     kind: "arrival",
     target: "tweets",
@@ -611,6 +611,9 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
       return REFEREE_TARGET[sub.view] ?? null;
     case "summary":
       return "simple";
+    /* Nothing to generate in either view: the tree is in the page's payload. */
+    case "structure":
+      return null;
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);

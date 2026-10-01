@@ -327,13 +327,13 @@ const PUBLIC_PROJECTIONS = {
        never having had a timeline. Nothing goes red anywhere.
        tests/public-reads.test.ts § the artefacts on the row is what would. */
     timeline: articleRevisions.timeline,
-    /* **The eighth, 2026-09-29: the Trajectory route**, another `jsonb` column
+    /* **The eighth, 2026-09-29: the Skim route**, another `jsonb` column
        on this row. It was withheld for the cost of *planning* one, which a
        visitor never pays; reading it costs nothing (SPIDERYARN-READING2-56).
        `profileHash` comes across inside the document and is dropped by
-       `publicTrajectory` in ../public/dto.ts.
+       `publicSkim` in ../public/dto.ts.
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-    trajectory: articleRevisions.trajectory,
+    skim: articleRevisions.skim,
     /* **The ninth and tenth, 2026-09-29: the FAQ and the Citations list**, two
        more `jsonb` columns on this row, withheld until then for the cost of
        *making* them (SPIDERYARN-READING2-56). Neither carries a profile. Every
@@ -814,7 +814,7 @@ export const pgPublicReader: PublicArticleReader = {
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
-        trajectory: found.revision.trajectory,
+        skim: found.revision.skim,
         faq: found.revision.faq,
         simpleSummary: found.revision.simpleSummary,
         citations: found.revision.citations,

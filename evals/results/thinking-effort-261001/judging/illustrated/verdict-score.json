@@ -1,0 +1,366 @@
+{
+  "mode": "illustrated",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 3, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Every vignette quote verified in its block; the figures are right (100 studies, 11% of 53, 70%, 0.6-6.8%); even uses the small-sample figure caption.",
+            "c2": "Overview funnels evidence to the 70% scene, forks into file-drawer and HARKing, then rejoins; causes plate is two parallel columns.",
+            "c3": "Reason given is generic ('suits a long academic argument about evidence and error'); nothing in the article calls for a manuscript.",
+            "c4": "Short, exact captions with correct numbers: '11% OF CANCER STUDIES CONFIRMED', 'EFFECT SIZES SHRINK 85%', 'ONLY ~34% STATISTICAL POWER'.",
+            "c5": "Concrete, consistent scenes, but the overview packs 11 scenes into one column, and the evidence plate has eight cells plus two wide scenes."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "All quotes check out; 36 of 97 jars glowing, 40 of 50 ingredients ribboned (80%) and 74% heterogeneity are all accurate.",
+            "c2": "Arrows lay out the story's path: precursors, then evidence converging on the 70% crowd, a fork into two causes, and a rejoin at the credibility revolution.",
+            "c3": "Gives a reason tied to the article (a chronicle of warnings and reckonings across science's history); plausible rather than compelling.",
+            "c4": "Few, exact captions: '36 OF 97 REPLICATE', '11 OF 53 CONFIRMED', '50 INGREDIENTS, 80% FLAGGED'.",
+            "c5": "Evidence plate promises 'eight framed scenes' and lists seven; otherwise specific and coherent."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Mostly traceable, but some details are invented: the sashed and badged hooded accused figures, and the 'signing before the open door' scene.",
+            "c2": "Evidence plate converges six streams into one pool and causes are two aisles, but the overview is a plain list with no fork.",
+            "c3": "Reason given: the crisis is a chronicle of events in the history of science.",
+            "c4": "Several metaphor-captions don't decode: 'THE BELL OF CONFIDENCE', 'SIGNING BEFORE THE OPEN DOOR', 'A SMALL FLAME, A GREAT FIRE', 'THREE INSTRUMENTS, ONE OBJECT'.",
+            "c5": "Drawable, but titles are woven into prompt sentences ('sits THE BROKEN MIRROR OF RESULTS:'), which invites stray lettering."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Caption 'SIXTY-ONE PERCENT SMALLER EFFECTS' misstates the economics result (61% replicated; effects were 66% of the original).",
+            "c2": "Processional path narrows, forks and converges; the evidence plate funnels to the ironic citation finding.",
+            "c3": "Reason ('its own history is full of scribes, ledgers and declared verdicts') is a stretch for a Wikipedia article on metascience.",
+            "c4": "One caption is wrong, and 'FIVE IN A HUNDRED' is cryptic; captions are listed apart from their scenes.",
+            "c5": "Each plate puts its titles in a list at the end, matched to scenes only by order; the evidence plate's count is muddled (eight vs seven listed)."
+          }
+        }
+      }
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 3, "c3": 4, "c4": 2, "c5": 3 },
+          "evidence": {
+            "c1": "Each metaphor maps to a cited passage: rich club as inner court, 7% peak as modest summit, 7,828,354 atoms as toppling tablets.",
+            "c2": "The fan and rejoin are drawn, but the metaphor captions hide what each step is, so the argument's shape is legible only as a shape.",
+            "c3": "Reason tied to the paper: its nested ovals and lattices already read like roundels; Figures A, B and D are redrawn.",
+            "c4": "Captions are allegory names that don't decode the science: 'TWO BELLS IN STEP', 'THE RIVER OF FLOW', 'CUTTING THE STONE', 'THE TOPPLING TABLETS'.",
+            "c5": "The overview prompt leaks internal ids ('fan nodes s1-s4') and puts a 'single vertical column' beside a four-wide fan."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 2, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded throughout (512 channels, a quarter of transfer entropy, 7% peak); a 'signpost noting its modest size' adds stray text.",
+            "c2": "The fan of four from the recording scene, then convergence to the ledger, scroll and gatekeeper, is explicit.",
+            "c3": "The exploration map is justified by the spine-and-fan shape, not by anything in a neuroscience review.",
+            "c4": "Mostly metaphor captions ('TWO STREAMS AT A BLANK MILL', 'THE MODEST PEAK', 'THE LOOPING ROAD GLOWS'); some long ('THE OVERFLOWING LEDGER OF 0S AND 1S').",
+            "c5": "Uses all four figures as cartouches in sensible places; the scenes are concrete."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Traceable, though 'no larger than a fifth of the farmland' invents a proportion (the article says under 40% of neurons).",
+            "c2": "Dashed enclosures for framework and findings, a fork from the recording into three results, rejoin, then 'PATTERNS, NOT JUST SUMS'.",
+            "c3": "Reason given: the paper's neurons, lattices and ladders are already branching, vine-like shapes.",
+            "c4": "Captions use the paper's own terms: 'A DOZEN COMPETING RULERS', 'THE RICH CLUB'S SHARE', 'REACH AND GRASP', 'PATTERNS, NOT JUST SUMS'.",
+            "c5": "Figures A-D placed where they carry the argument; the layout (one, then three, then one) is clearly specified."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Grounded, but the '512-square grid' misreads 512 channels, and 'peak where synergy turns to redundancy' overstates the passage.",
+            "c2": "Enclosures for framework and recordings, a four-way fan of findings, convergence to tools and local PID.",
+            "c3": "Reason cites the article's own imagery (lattices, rich 'clubs'); emblem-and-diagram fits.",
+            "c4": "Specific, informative captions ('512 CHANNELS ON A CORTICAL SLICE', 'REACH-AND-GRASP: REDUNDANCY SURGES'), some long.",
+            "c5": "Self-contradictory overview: 'two scenes' then lists four; 'eleven roundels' with ten; hourglass 'marked past' breaks the no-lettering rule."
+          }
+        }
+      }
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Frankenstein/HAL/Ava, the Watt governor, psychē-as-breath are all in the essay; the chains beside 'MORAL STATUS' are decoration.",
+            "c2": "Biases fork, four arguments braid into one cord, then ethics forks and loops back to breath.",
+            "c3": "Chosen because the essay ends at soul, breath and psychē, which is the essay's own material.",
+            "c4": "Mixed: 'THREE BAKED-IN BIASES', 'THE MÜLLER-LYER LINES' are exact, but 'THE EMPTY SEAT', 'THE UNOPENED CHEST', 'THE PARCHMENT STOMACH' don't decode.",
+            "c5": "Clear roundel layout with forks; 'archway labeled with gears' and quoted captions are minor wobbles."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 5, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded (dead sand of silicon, Antikythera, Suleyman and Bengio); the inside plate's 'vessel-and-head' scene was never in the overview.",
+            "c2": "The four arguments are laid out as two rows under each argument, chained into one, then a gate before silicon: the structure is legible.",
+            "c3": "Reason names souls, golems and the mythology of machine minds, the essay's own idiom.",
+            "c4": "Some exact ('SULEYMAN AND BENGIO WARN', 'THE SCALE TIPS TO SEEING TOO MUCH'), many oblique ('LEFT BY THE ROADSIDE', 'NEW SUBJECTS, NEW SHADOWS').",
+            "c5": "Specific and well arranged, but the inside plate says it opens with a scene from the overview that the overview does not contain."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 2, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Traceable, including the 'Garland test'; 'labeled seeds' on the organoid is invented.",
+            "c2": "Biases fork, four scrolls bundle into the cracked tablet, ethics forks and loops back; the four arguments are collapsed in the overview.",
+            "c3": "A map of 'a territory of argument' would fit any essay; nothing in this one calls for it.",
+            "c4": "The prompt misspells a caption ('ALPHABOLD STAYS SILENT'); others ('TWO LOOK-ALIKE MACHINES', 'A LOCKED SILICON GATE') are fair.",
+            "c5": "Concrete scenes; the gate left ajar is a nice true detail."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Mostly grounded, but 'THE OVERBUILT GOVERNOR FAILS' and a 'spinning wheel' among other technologies go beyond the text.",
+            "c2": "The overview reduces the four arguments to a single governor 'standing for all four', so the case's structure is lost there.",
+            "c3": "Cites the soul, breath and medieval Scala naturae, which are the essay's own references.",
+            "c4": "'HISTORY OF GODS', 'OFF THE TABLE' and 'THE WATT GOVERNOR'S BALLS' don't tell a reader what the scene means.",
+            "c5": "Tendril routing in the ethics plate is specified carefully; coherent overall."
+          }
+        }
+      }
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 3, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Every case is the article's own: 7 gives 9, n=32 gives 9, rule 122 inside the rind, x^105 coefficient, 'wily weasel', rind moving left.",
+            "c2": "Fan of failures, convergence on the irreducibility hub, fan to wider surprises, rejoin at bugs-as-discoveries; the hub is only a cracked gear.",
+            "c3": "'A bestiary of bugs' is the brief's own framing, not the article's.",
+            "c4": "Short, exact captions with the right numbers: 'OUTPUTS 9 INSTEAD OF 8', 'INFINITE LOOP AT N=151', 'RULE 122 INSIDE THE RIND'.",
+            "c5": "Concrete tape-creature and grid scenes; prompts say 'titles exactly as given' without giving them inline."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "All grounded, including 'A CELL THAT NEVER DIES' (rule 122 can never die out).",
+            "c2": "Bordered zones for failures, then proofs, converge on 'LURKING AT THE EDGES', and the loop closes; inside plates zone by kind.",
+            "c3": "Reason ('a chain of named little failures and rescues') is about structure, not the article's material.",
+            "c4": "Mostly exact ('SEVEN BECOMES NINE', 'SIXTY-FOUR BECOMES SEVENTY-TWO'); 'LURKING AT THE EDGES' is opaque alone.",
+            "c5": "A fork with only one side described; claims to reuse an overview opener that isn't there; rule 122 is placed twice on one page."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "All grounded, including Young-style details and FindEquationalProof; the laurel mark is the only flourish.",
+            "c2": "Specific roads from each failure site to the maze and the alcove, converging on a sea-serpent at the map's edge for 'lurking at the edges'.",
+            "c3": "Reason given: the article treats the computational universe as a landscape to explore and chart.",
+            "c4": "Exact and decodable: 'BUG AT N=42', 'NO BUG UNTIL N=15', 'HIGHEST-RISK: ALL ONES', 'NEVER FIND A PROOF'.",
+            "c5": "Very specific; the milestone numerals add text beyond the titles, which the prompt says not to do."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded; 'strip ending in three 1s' for input 7 is correct.",
+            "c2": "Fan, then convergence on 'THE KNOT THAT MUST BE PULLED' (irreducibility as running it), then fan and loop; inside plates are clustered.",
+            "c3": "'Wayward creatures' is a loose, self-supplied reason.",
+            "c4": "Inside plates exact ('AT SIXTY-THREE, SEVENTY-TWO APPEARS'); overview vaguer ('SOME TYPICAL SURPRISES', 'THE PATTERN BENEATH THE PATTERN').",
+            "c5": "Drawable; the demonstrations plate's 'beside these... begins a second row' clustering is a little muddled."
+          }
+        }
+      }
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All scenes trace to passages (stencils, one-third of PFC neurons, beta as brake, three anaesthetics, 'not broadcasting').",
+            "c2": "Two bordered zones (router; spatial computing and waves), the synapse-spike-wave loop, a side medallion for rival theories, one wave at the foot.",
+            "c3": "A brain atlas, justified by the article's own language of stencils over the cortical surface and traveling patterns.",
+            "c4": "Mostly informative ('SAME CELL, TWO ANSWERS', 'FIELDS, NOT A TOWN CRIER'); 'ONE FLAT WAVE' misdescribes high-power slow delta.",
+            "c5": "Uses Figures A-F and H in the right places; quoted 'labeled area' names conflict with the no-other-lettering rule."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 2, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded throughout, including Purkinje cells, the three-functions limit and the mismatch-predicts-error result.",
+            "c2": "Gold enclosures for the router and wave-computing sections plus an HOT side-scroll; the chain is clear, the loop less so.",
+            "c3": "'An argument that climbs link by link' would justify any register for any piece.",
+            "c4": "Clear captions ('ONLY WHEN SEEN FIRST', 'SYNAPSES STORE, WAVES DECIDE', 'NEURON INSIDE, THEN OUTSIDE').",
+            "c5": "Figures used well; the mechanism plate claims to open 'exactly as it appeared in the overview' with a scene the overview lacks."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 2, "c4": 2, "c5": 3 },
+          "evidence": {
+            "c1": "Traceable, but horses, bell-towers and oil lamps pile up decoration; 'ONE LAMP OUTLASTS TEN' loosely renders energy efficiency.",
+            "c2": "Single cord with one side branch; the router and wave sections aren't marked as groups.",
+            "c3": "'A chain of reasoning climbing toward one revelation' is generic.",
+            "c4": "Captions are mostly metaphor names: 'LIGHT WITHOUT A WIRE', 'STONE WALL, MOVING TAPESTRY', 'ONLY THREE SHELVES', 'ONE DOME OF LIGHT'.",
+            "c5": "Figure A (the old hierarchy) is 'folded into the cobblestones' next to the stencil, not beside the model it illustrates; the side cartouche has no title."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded; the 'FIRST A, THEN B, NEVER BOTH' caption misstates mixed selectivity (the cell responds to both, by order).",
+            "c2": "Two walled enclosures, the loom beneath the tide, a side 'hot zone' scene, one sea at the foot.",
+            "c3": "The cortex-as-sea idiom suits a paper about waves, but no reason is given.",
+            "c4": "Mixed: 'THREE POTIONS, ONE SLOW TIDE' is good; 'THE NICHE THAT NEVER CHANGES' and 'THE RULER OF JUST RIGHT SIZE' are vague.",
+            "c5": "Figures placed sensibly; the inside plates refer to labelled courtyards the overview never draws."
+          }
+        }
+      }
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded (Saint-Simon's headgear, the West End's destruction), but '85 IN 100 SATISFIED' is drawn as nine of ten starred.",
+            "c2": "Three columns (court, ladies, West End) funnel into 'THREE CIRCLES OF GOSSIP', then split and rejoin at 'I LIKE MY JOB'.",
+            "c3": "Reason names the article's 18th-century courtiers, old ethnographies and Enlightenment philosophers.",
+            "c4": "Mostly exact ('ARISTOCRATS ARE CHIMPANZEES', 'THE DESTRUCTION OF THE WEST END'); 'THE SOMMELIER'S WINDOW' and 'AN ALTERNATIVE ROAD' are vague.",
+            "c5": "The aristocrats plate opens with an 'overview's own vignette' (the hall of light) that isn't in the overview; 'pillars labeled' breaks the no-text rule."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Every scene is in the essay: heraldic litigation, opera and symphony boards, West End girls marrying who they chose, Smith, Hume and Ferguson.",
+            "c2": "Three arcade columns converge on 'PRINCES AND DAY LABORERS GOSSIP', fork into dignity from work, then to the Scots and back in a loop.",
+            "c3": "Reason names court memoirs, parish ethnographies and philosophes, the article's sources.",
+            "c4": "Mostly exact and short; 'WAITRESS AND OFFICE ASSISTANT' and 'SMITH, HUME, AND FERGUSON' name rather than explain.",
+            "c5": "Zoom plates reopen with the matching overview scene; specific and coherent."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Grounded down to Voltaire, the night-shift student and the post-COVID return to the office.",
+            "c2": "Three framed strands (court, ladies, West End, each with its turn) merge at the gossip miniature, then a straight chain to the close, with a loop.",
+            "c3": "Reason given (courts, salons, guild-like peer groups), though it overclaims for 1950s Boston.",
+            "c4": "Clear, specific captions ('TWO CHEERS, NOT THREE', 'FROM STABBING TO ETIQUETTE', 'AMORAL FAMILISM RECEDES'), some long.",
+            "c5": "The overview gives six column titles with no description of what to paint for them."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Grounded, with invented flourishes: a leashed ape, a halo of 'usefulness'.",
+            "c2": "Three named realms converge on 'DEFENDING COLLECTIVE REPUTATION', then a bordered 'why work matters' area and a loop.",
+            "c3": "Reason names courtiers, memoirists and old money.",
+            "c4": "Useful realm labels and exact captions, but 'HOPE IT SURVIVES' and 'WE WANT TO FEEL USEFUL' are vague.",
+            "c5": "Realm labels contradict 'no lettering except titles'; both zoom plates claim overview openers that differ from the overview."
+          }
+        }
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "All traceable: crystal and amorphous regions, pulled not squeezed, a strand around the Earth, Bon's 1709 stockings, goat milk.",
+            "c2": "Spine with two hubs (properties, synthesis) that branch; the properties plate fans five measures from 'energy absorbed'; synthesis forks into two columns and converges.",
+            "c3": "'Spun fibre and old craft history' is a thin reason; plausible, not this article's idiom.",
+            "c4": "Few, short, exact captions: 'PULLED, NOT SQUEEZED', 'SHRINKING IN THE RAIN', 'THICKER, SIMPLER, WEAKER'.",
+            "c5": "Specific and coherent; the 'SEVEN KINDS OF SILK' scene appears in the lettering but is barely described in the prompt."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Grounded (pyrrolidine and ants, pH 4), but 'labelled spider' and a 'tiny scale of sourness' add invented apparatus.",
+            "c2": "Branch-and-rejoin overview, a hub fan for properties, and two columns for synthesis.",
+            "c3": "Reason is gland-by-gland cataloguing; plausible, generic.",
+            "c4": "Exact ones ('AROUND THE EARTH, 2 KG') mixed with vague ones ('THREADS COMPARED', 'THE UNSPUN LIQUID').",
+            "c5": "Says 'three smaller roundels' and lists two; the artificial thread is thicker in the overview but 'thinner and slacker' in the synthesis plate."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "All grounded, including the 60 vs 4 micron gap, silkworm hosts and the biodegradable glue.",
+            "c2": "Properties and synthesis drawn as matching gilt enclosures; the inside plates fan the five measures and converge the two production routes.",
+            "c3": "Reason (the article catalogues silk by gland, property and craft) is plausible but generic.",
+            "c4": "Exact, but several long ('ATTACHMENT DISCS THAT BOND INSTANTLY', 'SOFT COILS: THE AMORPHOUS MATRIX').",
+            "c5": "Enclosures, doorways and side roundels are all specified consistently across the plates."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded, including the bolas spider and the aggregate-silk sticky spiral.",
+            "c2": "Bordered properties and synthesis areas, the fan from the energy hub, two columns converging on 'half the strength'.",
+            "c3": "'Hand-spun biological subject suits vellum': plausible, thinly argued.",
+            "c4": "Clear captions; the area labels 'PROPERTIES' and 'ARTIFICIAL SYNTHESIS' help, though they break the stated rule.",
+            "c5": "The inside plates retitle their opening scenes (e.g. 'HARD TILES IN A SOFT MESH' becomes 'CRYSTAL AND STRETCH, INTERWOVEN'), so the plates don't match each other."
+          }
+        }
+      }
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Every scene is Feynman's: Geller's key, the bamboo headphones, leaning over backwards, Young's sand corridor, the low-nicotine example.",
+            "c2": "Four bands from pseudoscience to the cargo cult to integrity principles to case studies, with a loop; the bands carry the structure.",
+            "c3": "'A kind of monkish rule for honesty' is interpretive; the Middle Ages opening is the only hook.",
+            "c4": "Decodable captions ('THE EASIEST PERSON TO FOOL', 'THE CORRIDOR OF SAND'); 'FREEDOM TO KEEP FAITH' is soft.",
+            "c5": "The second band says three scenes, then routes the third into band three; otherwise concrete."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 3, "c3": 2, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Grounded throughout (Esalen, deuterium shortcut, 'caught on by osmosis').",
+            "c2": "The overview is one column of eleven with a loop, and no grouping or fork shows the funnel.",
+            "c3": "'A talk built from anecdotes and a closing moral' is generic.",
+            "c4": "Clear, short captions ('OTHERS REPEAT THE TEST', 'EFFECTS FADE AWAY'), but the ad scene also asks for the words 'low nicotine'.",
+            "c5": "The case-studies plate says it 'opens with' the corridor 'but placed here as the fifth scene', which contradicts itself."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded, down to the third door, the 'why are you flirting' line and the ignored Mr. Young.",
+            "c2": "Bands and a loop, but the overview leaves out 'you must not fool yourself' and the cigarette example, which are central to the talk.",
+            "c3": "A map, justified by the talk's named places (islands, labs, corridors, parties).",
+            "c4": "Mostly exact ('NO COURSE TEACHES THIS', 'IGNORING MR. YOUNG'); 'WHY ARE YOU FLIRTING?' is cryptic out of context.",
+            "c5": "Specific scenes; putting 'leaning over backwards' on the island shore is an odd placement."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Grounded with precise touches: Millikan's ladder of too-low values, and Young's painted, scent-masked corridor.",
+            "c2": "Four bordered regions (pseudoscience, cargo cult, integrity lab, case studies) carry the funnel, including the core principle, with a loop.",
+            "c3": "The voyage map is justified by the cargo-cult islands and runways in the talk itself.",
+            "c4": "Mostly exact ('SAND SILENCES THE CLUE', 'TRAIN ONLY THE SUCCESSFUL'); 'THE WISH FOR FREEDOM' is vague.",
+            "c5": "Concrete; grouping the rat corridor into a 'second island' is arbitrary."
+          }
+        }
+      }
+    }
+  ]
+}

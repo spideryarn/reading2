@@ -21,7 +21,7 @@ ones Most adds.** No model call changes and no stored route goes out of date.
 
 ## What was measured
 
-[`scripts/eval/trajectory-diversity.ts`](../../scripts/eval/trajectory-diversity.ts) reads every
+[`scripts/eval/trajectory-diversity.ts`](../../scripts/eval/skim-diversity.ts) reads every
 stored route in the local database (six articles: two papers, an essay, a lecture, a long essay and
 an encyclopaedia entry; four at `trajectory/6`, two at `/7`) and counts, per pass, for a reader who
 walked the shallower passes first. No model call, nothing written. Greg's own article is only in

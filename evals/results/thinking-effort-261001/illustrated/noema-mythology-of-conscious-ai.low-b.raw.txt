@@ -1,0 +1,215 @@
+{
+  "style": "An antique hand-drawn map, inked in sepia and faded color washes, with small labeled vignettes scattered along a winding route — suited to an essay that itself traces a journey from myth to verdict and back",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Map of the Mythology",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-cvyfqe",
+          "quote": "He claimed it was conscious, that it had feelings, and was, in an important sense, like a real person.",
+          "depicts": "An engineer at a desk gestures toward a glowing terminal, insisting to an unseen listener that the machine on the screen is alive.",
+          "title": "CHATBOT CLAIMED CONSCIOUS"
+        },
+        {
+          "node": "n2",
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "A scale balances a small chained figure of wire and gears against a scroll, weighing suffering against rights.",
+          "title": "RIGHTS AND SUFFERING AT STAKE"
+        },
+        {
+          "node": "n3",
+          "block": "spya-cvaqgs",
+          "quote": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.",
+          "depicts": "Three cords braided into one rope, each cord subtly shaped like a human eye, hand, and mirror, knotted tightly together.",
+          "title": "THREE BIASES BUNDLED"
+        },
+        {
+          "node": "n4",
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious",
+          "depicts": "Two machines side by side: one with a speaking mouth drawing a crowd of admirers, the other quietly folding a ribbon-like protein shape, ignored.",
+          "title": "THE SILENT PROTEIN-FOLDER"
+        },
+        {
+          "node": "n5",
+          "block": "spya-cke6sj",
+          "quote": "it’s tempting to feel like we are always on the cusp of a major transition",
+          "depicts": "A figure stands at the edge of a steep rising curve etched into the hillside, peering over as if at a cliff's brink.",
+          "title": "ALWAYS ON THE BRINK"
+        },
+        {
+          "node": "b1",
+          "block": "spya-a8jgf4",
+          "quote": "The metaphor of the brain as a carbon-based computer has been hugely influential",
+          "depicts": "A brain drawn half as soft folded tissue and half as a hard metal box of gears, split down the middle.",
+          "title": "THE CARBON-BASED COMPUTER"
+        },
+        {
+          "node": "b2",
+          "block": "spya-gw0hsq",
+          "quote": "Turing computation is powerful but limited.",
+          "depicts": "A tape unspooling from a simple reading device, the tape running off the edge of the map into blank parchment.",
+          "title": "LIMITS OF THE ALGORITHM"
+        },
+        {
+          "node": "b3",
+          "block": "spya-hj5y6s",
+          "quote": "properties of life are necessary, though not necessarily sufficient, for consciousness",
+          "depicts": "A single sprouting seed inside a glass vessel, roots curling, set beside an empty metal vessel with no seed.",
+          "title": "LIFE MAY BE NECESSARY"
+        },
+        {
+          "node": "b4",
+          "block": "spya-npjt4j",
+          "quote": "A simulation of the digestive system does not actually digest anything.",
+          "depicts": "A drawn stomach made of ink-lines and gears sits beside a real loaf of bread, untouched and whole.",
+          "title": "SIMULATION IS NOT THE THING"
+        },
+        {
+          "node": "concl",
+          "block": "spya-uzr60x",
+          "quote": "Many social and psychological factors, including some well-understood cognitive biases, predispose us to overattribute consciousness to machines.",
+          "depicts": "A compass rose whose needle is bent, pulled off true north by small weighted charms hanging from it.",
+          "title": "BIASES TOWARD OVER-ATTRIBUTION"
+        },
+        {
+          "node": "d1",
+          "block": "spya-yverz7",
+          "quote": "Creating conscious machines would be an ethical disaster.",
+          "depicts": "A half-built mechanical figure on a workbench, its chest cavity open and empty, tools set down beside it as if work has stopped.",
+          "title": "ETHICAL DISASTER WARNED"
+        },
+        {
+          "node": "d2",
+          "block": "spya-p8ky7g",
+          "quote": "for some of us, such conscious-seeming systems are already here",
+          "depicts": "A small crowd kneeling before a glowing screen as though before a shrine, the screen showing only flickering light.",
+          "title": "SEEMING-CONSCIOUS, ALREADY HERE"
+        },
+        {
+          "node": "loop",
+          "block": "spya-w8z40d",
+          "quote": "an inchoate feeling of just being alive — more breath than thought and more meat than machine",
+          "depicts": "A single breath of mist rising from an open mouth drawn small at the edge of the map, curling back toward the engineer-and-screen vignette at the top.",
+          "title": "BREATH MORE THAN MACHINE"
+        }
+      ],
+      "prompt": "An antique hand-drawn map in sepia ink and faded watercolor wash on aged parchment, reading top to bottom as a winding pilgrim's route with small labeled scenes along it, each in its own ink-bordered roundel, connected by a thin dotted path. At the top, CHATBOT CLAIMED CONSCIOUS: an engineer gestures at a glowing terminal insisting the machine within is alive. Below, the path forks toward RIGHTS AND SUFFERING AT STAKE: a scale weighing a small wire-and-gear chained figure against a scroll. The path continues into a cluster of three roundels showing THREE BIASES BUNDLED (three cords, shaped like an eye, a hand, a mirror, braided into one rope), THE SILENT PROTEIN-FOLDER (a quiet folding-machine ignored beside a crowd-drawing talking machine), and ALWAYS ON THE BRINK (a figure peering over a steep rising hillside curve). The path narrows into a walled enclosure labeled with four small roundels in a row: THE CARBON-BASED COMPUTER (a brain half tissue, half gearbox), LIMITS OF THE ALGORITHM (a tape spooling off the map's edge), LIFE MAY BE NECESSARY (a sprouting seed in glass beside an empty metal vessel), and SIMULATION IS NOT THE THING (an inked stomach beside an untouched loaf of bread) — all four paths converging downward into BIASES TOWARD OVER-ATTRIBUTION, a compass with a bent needle pulled by hanging charms. From there the path forks again into two roundels side by side: ETHICAL DISASTER WARNED (an unfinished mechanical figure, chest empty, tools abandoned) and SEEMING-CONSCIOUS, ALREADY HERE (a small crowd kneeling before a glowing blank screen). Both paths curl back together at the bottom into the final roundel, BREATH MORE THAN MACHINE: a single curl of breath-mist rising from an open mouth, with a faint dotted line looping back up the page to the RIGHTS AND SUFFERING roundel near the top. Compass rose and faded sea-serpent flourishes fill empty corners sparingly; most of the parchment stays bare. Each roundel is large enough to read clearly, titles lettered in small neat capitals beneath each one, and no other lettering appears anywhere on the page."
+    },
+    {
+      "sceneId": "inside-the-case",
+      "title": "Four Arguments Against the Machine",
+      "vignettes": [
+        {
+          "node": "a0",
+          "block": "spya-d3g67c",
+          "quote": "implementing the right kind of computation, or information processing, is sufficient for consciousness to arise",
+          "depicts": "A locked door with a single key labeled only by a sequence of punched holes, like a program-card, held up to the lock.",
+          "title": "COMPUTATION ENOUGH?"
+        },
+        {
+          "node": "a1",
+          "block": "spya-un9fjn",
+          "quote": "some neurons fire spikes of activity apparently to clear waste products",
+          "depicts": "A single neuron drawn as a small lamp, sweeping tiny flecks of waste out through its base like dust swept from a hearth.",
+          "title": "NEURONS CLEARING WASTE"
+        },
+        {
+          "node": "a2",
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve",
+          "depicts": "The Watt steam-engine governor, its weighted balls swinging wide on their arms as the valve beneath snaps shut.",
+          "title": "THE STEAM GOVERNOR"
+        },
+        {
+          "node": "a3",
+          "block": "spya-b59nm2",
+          "quote": "how we perceive the body, both as an object in the world",
+          "depicts": "A figure looking down at its own hand, a faint dotted line of inference running from the hand up to the eye.",
+          "title": "BODY'S BEST GUESS"
+        },
+        {
+          "node": "a4",
+          "block": "spya-xvm37k",
+          "quote": "uploading their conscious minds into exquisitely detailed simulations of their brains",
+          "depicts": "A tiny figure stepping toward a glass cabinet full of spinning gears and wires, reaching to climb inside it.",
+          "title": "UPLOADING INTO SIMULATION"
+        },
+        {
+          "node": "c",
+          "block": "spya-nv6tp0",
+          "quote": "Questioning computational functionalism reinforces the importance of distinguishing simulation from instantiation.",
+          "depicts": "Four separate ribbons, each trailing from one of the earlier roundels, twisting together into a single braided cord.",
+          "title": "ARGUMENTS REINFORCE EACH OTHER"
+        },
+        {
+          "node": "d",
+          "block": "spya-c5ve5t",
+          "quote": "achieving it may well be impossible for AI systems in general, at least for the silicon-based digital computers",
+          "depicts": "A heavy iron gate, mostly shut but left with a narrow unlatched gap at one corner, at the end of the braided cord.",
+          "title": "UNLIKELY, NOT IMPOSSIBLE"
+        }
+      ],
+      "prompt": "An antique hand-drawn map continuing the same sepia-ink, faded-wash register, opening with the walled enclosure from the overview — the four small roundels THE CARBON-BASED COMPUTER, LIMITS OF THE ALGORITHM, LIFE MAY BE NECESSARY, SIMULATION IS NOT THE THING arranged faintly along the top edge as the frame the reader has stepped inside. Below that frame, drawn larger now, a single roundel labeled COMPUTATION ENOUGH?: a locked door, a key punched with holes like a program-card raised toward it. Four paths fan downward from it in a row: NEURONS CLEARING WASTE, a lamp-shaped neuron sweeping flecks of waste from its base; THE STEAM GOVERNOR, the Watt engine's weighted balls swinging wide as a valve slams shut; BODY'S BEST GUESS, a figure studying its own hand with a dotted inference-line to its eye; and UPLOADING INTO SIMULATION, a tiny figure stepping toward a glass cabinet crowded with spinning gears. All four paths run down and converge into one roundel, ARGUMENTS REINFORCE EACH OTHER: four ribbons twisting into a single braided cord. That cord leads to the final roundel at the bottom, UNLIKELY, NOT IMPOSSIBLE: a heavy iron gate mostly shut, with one small unlatched gap left open at its corner. Dotted path-lines connect each scene in sequence, with faint compass-rose flourishes only in the empty corners, most of the parchment left bare so each roundel reads clearly and large. Small neat capital-letter titles are lettered beneath each roundel exactly as given, and no other lettering appears anywhere on the page."
+    },
+    {
+      "sceneId": "inside-the-ethics",
+      "title": "Real Versus Seeming Minds",
+      "vignettes": [
+        {
+          "node": "e0",
+          "block": "spya-yverz7",
+          "quote": "Creating conscious machines would be an ethical disaster.",
+          "depicts": "The same half-built mechanical figure from the overview, chest open and empty, its tools laid down beside it on a workbench.",
+          "title": "DO NOT BUILD IT"
+        },
+        {
+          "node": "f1",
+          "block": "spya-vs0vpj",
+          "quote": "we ought to be more worried about the accidental emergence of consciousness in cerebral organoids",
+          "depicts": "A small glass dish on a laboratory bench holding a tiny pale rounded growth, faintly glowing, watched by no one.",
+          "title": "ORGANOIDS IN THE LAB"
+        },
+        {
+          "node": "f2",
+          "block": "spya-x63ycg",
+          "quote": "conscious-seeming systems are much, much closer",
+          "depicts": "A glowing terminal screen standing much nearer the viewer on the path than the laboratory dish beside it, out of proportion to its distance.",
+          "title": "SEEMING-CONSCIOUS, ALREADY CLOSE"
+        },
+        {
+          "node": "g2",
+          "block": "spya-kqs33c",
+          "quote": "there aren’t any definitive tests for deciding whether an AI is actually conscious",
+          "depicts": "A set of measuring instruments — calipers, a scale, a ruler — laid uselessly around a sealed box no tool can open.",
+          "title": "NO TEST CAN SETTLE IT"
+        },
+        {
+          "node": "g1",
+          "block": "spya-xk9gne",
+          "quote": "The two lines in the Müller-Lyer illusion",
+          "depicts": "Two drawn lines, equal in length, each capped with opposite arrowheads, so that they appear unequal to the eye.",
+          "title": "THE MÜLLER-LYER ILLUSION"
+        },
+        {
+          "node": "k",
+          "block": "spya-fdefb5",
+          "quote": "Mustafa Suleyman (CEO of Microsoft AI) and Yoshua Bengio",
+          "depicts": "Two robed figures standing at a lookout point on the map, each pointing with concern toward the glowing terminal below.",
+          "title": "LEADERS SOUND THE ALARM"
+        },
+        {
+          "node": "h",
+          "block": "spya-d89xf7",
+          "quote": "Our psychological biases are more likely to lead to false positives than false negatives.",
+          "depicts": "A set of scales tipped heavily to one side, its tipped pan overflowing with small glowing terminal-shaped tokens.",
+          "title": "FALSE POSITIVE, THE BIGGER RISK"
+        }
+      ],
+      "prompt": "An antique hand-drawn map continuing the same sepia-ink register, opening with the ETHICAL DISASTER WARNED roundel from the overview — the half-built mechanical figure with its empty chest and abandoned tools — now drawn larger as DO NOT BUILD IT at the top of this plate, framing the section the reader has entered. Below it the path forks into two: to one side, ORGANOIDS IN THE LAB, a small glass dish on a bench holding a faintly glowing pale growth, unwatched; to the other, SEEMING-CONSCIOUS, ALREADY CLOSE, a glowing terminal screen drawn disproportionately near the viewer on the path. From the organoid dish the path runs down to NO TEST CAN SETTLE IT: calipers, scale and ruler scattered uselessly around a sealed box none of them can open. From the terminal screen the path runs down to THE MÜLLER-LYER ILLUSION: two equal lines capped with opposite arrowheads, drawn so they still look unequal. That roundel's path continues to LEADERS SOUND THE ALARM: two robed figures at a lookout point, pointing down with concern toward the terminal below. Both lower paths — from the test-instruments roundel and the illusion-alarm roundel — converge into a final shared roundel at the bottom, FALSE POSITIVE, THE BIGGER RISK: a set of scales tipped heavily to one side, its pan overflowing with small glowing terminal-shaped tokens. Dotted path-lines connect every scene in sequence; faint compass-rose and sea-serpent flourishes occupy only the empty corners, with most of the parchment left bare so each roundel is large and legible. Small neat capital-letter titles are lettered beneath each roundel exactly as given, and no other lettering appears anywhere on the page."
+    }
+  ]
+}

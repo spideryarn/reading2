@@ -1,0 +1,53 @@
+{"ideas": [
+  {
+    "name": "Work supplies impersonal dignity, not just income",
+    "provenance": "introduced",
+    "statement": "Beyond money, a job gives people a way to earn respect from their skills, effort, and contributions rather than from their family, class, or social connections.",
+    "occurrences": [
+      {"blockId": "spya-zd83ts", "quote": "What we absolutely can’t live without is a social framework for understanding ourselves in relation to the rest of our society and gaining the respect of our peers. The most important thing work gives us — after money, of course — is an alternative way to meet those needs.", "reasoning": "States directly that work's core non-monetary function is impersonal respect."},
+      {"blockId": "spya-ms0vr5", "quote": "Like all other human beings in history, workers want to be respected. But unlike members of relational societies, the things we want respect for are impersonal: our skills, our accomplishments, our contributions to a shared goal.", "reasoning": "Contrasts impersonal work-based respect with status earned through relational standing."},
+      {"blockId": "spya-hdbtc0", "quote": "Moral equality is something relational societies struggle with. They tend to be more restrictive and more exclusionary.", "reasoning": "Frames work-based respect as what makes moral equality possible, unlike relational status."}
+    ]
+  },
+  {
+    "name": "Relational worth makes groups clannish and gossip-driven",
+    "provenance": "introduced",
+    "statement": "When a person's standing depends on belonging to a group rather than on their own achievements, the group's members spend their time watching, ranking, and policing each other, and keeping outsiders out, because the group's reputation is their only source of dignity.",
+    "occurrences": [
+      {"blockId": "spya-qsfkqr", "quote": "It’s not a coincidence that Russian princes and Bostonian Italian day laborers spent most of their time gossiping (or, if we want to be technical, constructing and enforcing norms of behavior). They were defending their collective reputations: the thing that mattered most to them in the world.", "reasoning": "Directly ties gossip/norm-enforcement across disparate societies to group-based status."},
+      {"blockId": "spya-hdbtc0", "quote": "When our dignity depends on our membership in a group, we start to police who else can join and what happens when they do. When humans get relational, we get clannish.", "reasoning": "States the general mechanism explicitly."},
+      {"blockId": "spya-weazcy", "quote": "The major criteria for ranking, differentiating, and estimating compatibility are ingroup loyalty and conformity to established standards of personal behavior", "reasoning": "Gives a concrete ethnographic instance of the mechanism in the West End."},
+      {"blockId": "spya-f6f8d4", "quote": "It’s all about keeping “the social network of congenial people” in good order — that is, the order where they’re on top.", "reasoning": "Shows the same dynamic among upper-class volunteer women."}
+    ]
+  },
+  {
+    "name": "Market society frees friendship from survival need",
+    "provenance": "introduced",
+    "statement": "Before people could support themselves through paid work, every personal tie doubled as a survival alliance; once self-support through labor became possible, friendships could be based on genuine liking rather than mutual dependence.",
+    "occurrences": [
+      {"blockId": "spya-hb8vvc", "quote": "In the bad old days before impersonal markets and bureaucracies, the only way to survive was through personal ties to allies or to kin. As a result, every personal relationship was transactional.", "reasoning": "States the pre-market condition that necessitated transactional relationships."},
+      {"blockId": "spya-d6v2bb", "quote": "When we can all support ourselves by our own labor, these transactions are no longer necessary. For Smith, the absence of necessity created room for a better form of friendship, based on 'natural sympathy' instead of mutual need.", "reasoning": "Directly states that work-based self-sufficiency is what enables freer friendship."}
+    ]
+  },
+  {
+    "name": "Kin-based loyalty blocks impersonal institution-building",
+    "provenance": "introduced",
+    "statement": "People whose trust and obligations run only through family and close peers find it hard to build or sustain impartial institutions like unions, bureaucracies, or civic organizations, because such institutions require treating strangers' rules as more binding than loyalty to one's own circle.",
+    "occurrences": [
+      {"blockId": "spya-ft9x9b", "quote": "They also struggle with the concept of impartial bureaucracy — to a West Ender, the idea of prioritizing a formal rule over the interest of one’s own family seems cold, even immoral.", "reasoning": "States the mechanism directly."},
+      {"blockId": "spya-sd6cmd", "quote": "maximize the material, short-run advantage of the nuclear family; assume that all others will do likewise.", "reasoning": "Defines amoral familism, the kin-first logic that undercuts broader institution-building."},
+      {"blockId": "spya-dma27v", "quote": "This is because the West Enders are not good at organizing. The peer group is, of necessity, egalitarian: They don’t trust anyone who tries to set himself up as a leader.", "reasoning": "Shows the real-world consequence: failure to organize against urban renewal."}
+    ]
+  },
+  {
+    "name": "Removing economic necessity removes the check on status-seeking",
+    "provenance": "assumed",
+    "statement": "When people no longer need to work for survival or advancement, the drive to seek status and belonging does not disappear but redirects fully into relational jockeying, since work had been quietly absorbing and channeling that drive.",
+    "whyYouNeedIt": "Without this, the jump from 'AI ends necessary labor' to 'we will all behave like Versailles courtiers or society-ladies' does not follow — the piece never argues that removing necessity specifically unleashes status drives, it just moves from one case to the next as if this were obvious.",
+    "occurrences": [
+      {"blockId": "spya-c4s3en", "quote": "Aristocrats are (typically) rich, which we certainly will be if we have robots capable of all normal nonrelational labor.", "reasoning": "Treats wealth/no-need-to-work as sufficient reason aristocratic behavior predicts a post-AI future, assuming necessity is the key variable suppressing relational status-seeking."},
+      {"blockId": "spya-d6v2bb", "quote": "We can see it in Ostrander’s ladies: When we take away more impersonal forms of work from the rest of the package, the older ties reassert themselves.", "reasoning": "States the reassertion as fact rather than arguing for the causal mechanism, relying on the reader already granting that necessity was the restraint."},
+      {"blockId": "spya-k26ath": "","quote":"","reasoning":""}
+    ]
+  }
+]}

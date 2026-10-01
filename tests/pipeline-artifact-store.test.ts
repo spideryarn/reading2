@@ -122,11 +122,11 @@ import {
 } from "../src/simple-summary.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
 import {
-  emptyDrops as emptyTrajectoryDrops,
-  PROMPT_VERSION as TRAJECTORY_VERSION,
-  trajectoryInput,
-  trajectoryInputHash,
-} from "../src/trajectory.js";
+  emptyDrops as emptySkimDrops,
+  PROMPT_VERSION as SKIM_VERSION,
+  skimInput,
+  skimInputHash,
+} from "../src/skim.js";
 import {
   inputFingerprint as tweetsFingerprint,
   PROMPT_VERSION as TWEETS_VERSION,
@@ -360,6 +360,8 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   store.plant(SLUG, "extract", "extractedHtml", SOURCE_HTML);
   store.plant(SLUG, "blocks", "stampedHtml", STAMPED_HTML);
   store.plant(SLUG, "extract", "meta", META);
+  /* A minimal paper's step writes the same site; planted so "every step" below means every one. */
+  store.plant(SLUG, "metadata", "meta", META);
   store.plant(SLUG, "blocks", "blocks", { blocks: BLOCKS });
   store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
   store.plant(SLUG, "hierarchy", "tree", TREE);
@@ -680,14 +682,14 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   /* **A route over the one quote planted above**, and its `sourceHash` is the
      route's input hash rather than any article fingerprint — the quote, the
      (empty) Ideas list and the tree's outline, exactly what its prompt renders
-     — so it is computed from the inputs Trajectory reads, through the stage's
+     — so it is computed from the inputs Skim reads, through the stage's
      own functions. `null` profile, for `ideas`' "deliberately without a
      profile" reason: `ctxOf` carries none, and the stamp compares it. */
-  store.plant(SLUG, "trajectory", "trajectory", {
+  store.plant(SLUG, "skim", "skim", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
-    sourceHash: trajectoryInputHash(
-      trajectoryInput({
+    sourceHash: skimInputHash(
+      skimInput({
         quotes: {
           quotes: [{ id: "spya-qqqqqq", blockId: BODY.id, text: "One paragraph of something to hash." }],
         } as Quotes,
@@ -696,12 +698,12 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
         ideas: { ideas: [] } as unknown as Ideas,
       }),
     ),
-    version: TRAJECTORY_VERSION,
+    version: SKIM_VERSION,
     profileHash: null,
     stops: [{ quoteId: "spya-qqqqqq", depth: 1, role: "The one line" }],
     visible: [1, 1, 1],
     offered: 1,
-    dropped: emptyTrajectoryDrops(),
+    dropped: emptySkimDrops(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

@@ -35,7 +35,7 @@
  * ## Who uses it
  *
  * **Fifteen call sites.** Fourteen are step-specific surfaces: Arc, Glossary,
- * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Trajectory,
+ * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Skim,
  * Citations and the Thread page. The fifteenth is `RerunRow` in Metadata,
  * generic over its offered step. This line has repeatedly lagged the real list;
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
@@ -430,7 +430,7 @@ export function useStepJob<S extends StepName>(
    * or another tab shows up as progress — and then, when it *failed*, it simply
    * left the queued/running set. The row vanished, the artefact on screen was
    * unchanged, and nothing was said: which reads exactly like the run having
-   * finished and changed nothing. On `sketch` that is two minutes and $0.20.
+   * finished and changed nothing. On `sketch` that is about a minute.
    *
    * **Then it was `startedId ?? seenId`**, which is the same bug with the sign
    * flipped. Once this mount had started anything, that id won for good: a

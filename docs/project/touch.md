@@ -653,7 +653,7 @@ What it deliberately does not do:
   away, and Back should undo those.
 - **Step aside while the picture is being walked.** Diagram's step buttons and arrow keys follow the
   picture in the prose (`onFollow`); only a press on a node or a row steps the band aside.
-- **Touch Trajectory's own rule.** It jumps when it opens, so it keeps plain `jumpTo` and steps aside
+- **Touch Skim's own rule.** It jumps when it opens, so it keeps plain `jumpTo` and steps aside
   itself when a stop is chosen, as it has since 2026-09-28; it gets the pill like every other mode.
 
 It keys on the band covering the prose (`fit.modeW === 0`), not on a device, so a narrow desktop

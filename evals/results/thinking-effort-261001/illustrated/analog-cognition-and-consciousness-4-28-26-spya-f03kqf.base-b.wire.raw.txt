@@ -1,0 +1,215 @@
+{
+  "style": "An illuminated manuscript page — small gold-bordered miniatures linked by a painted vine-chain down the vellum, fitting an argument that climbs link by link from a failed model to a theory of consciousness.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "From Fixed Neurons to Conscious Waves",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-k6n9n8",
+          "quote": "coordinate hundreds of millions of neurons within fractions of a second",
+          "depicts": "A crowded court of tiny figures (neurons) all turning at once toward a single raised hand, as if answering a call that reaches all of them in an instant.",
+          "title": "A SECOND TO COORDINATE MILLIONS"
+        },
+        {
+          "node": "n2",
+          "block": "spya-amx5qf",
+          "quote": "any given task engages around a third of all neurons in the prefrontal cortex",
+          "depicts": "A walled chamber of identical cells, each bearing a single fixed badge of office; a third of them are shown lit up together for one task, overflowing their assigned stalls. FIGURE A is set as a small inset diagram pinned to the chamber wall, showing the old hierarchy of feature-neurons feeding upward from simple lines to a whole creature.",
+          "title": "THE THIRD OF PREFRONTAL NEURONS"
+        },
+        {
+          "node": "n3",
+          "block": "spya-x5m34h",
+          "quote": "A neuron might spike to object A, but only when it was seen first",
+          "depicts": "One painted cell shown twice: lit and reaching toward a round token only when it stands first in a line of two tokens, dark and indifferent when it stands second.",
+          "title": "ONLY WHEN SEEN FIRST"
+        },
+        {
+          "node": "n4",
+          "block": "spya-bzqaf5",
+          "quote": "cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells",
+          "depicts": "A cluster of tree-shaped cerebellar cells glowing in step together, with faint rays passing between them though no threads or cords connect them.",
+          "title": "SYNCHRONY WITHOUT A WIRE"
+        },
+        {
+          "node": "n5_n6",
+          "block": "spya-ectcj5",
+          "quote": "the same neuron may receive many different sensory signals and may lie inside the inhibitory stencil in one context and outside it in another",
+          "depicts": "A stencil-sheet with cut shapes is laid twice over the same field of small cells; the same cell glows through the opening the first time and is covered over the second. FIGURE C is shown as the stencil-sheet itself, painted with its two colored patches of strong alpha/beta rhythm.",
+          "title": "NEURON INSIDE, THEN OUTSIDE"
+        },
+        {
+          "node": "n7",
+          "block": "spya-mrsvfu",
+          "quote": "alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+          "depicts": "A slow-moving ripple drawn crossing a field of little lit cells, visibly dragging the pattern of lit and dark cells from one arrangement into a different one as it passes.",
+          "title": "A WAVE DRAGS THE PATTERN ALONG"
+        },
+        {
+          "node": "n8",
+          "block": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "depicts": "Two painted wave-crests crossing over cortex, their meeting point rendered as a new braided pattern, neither wave alone.",
+          "title": "WAVES MEET AND COMBINE"
+        },
+        {
+          "node": "n9",
+          "block": "spya-wnqgmn",
+          "quote": "propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+          "depicts": "Three small vials, each labeled only by a differently colored stopper, each pouring into the same cortical field, which flattens into the same slow, heavy ripple regardless of which vial is used.",
+          "title": "THREE DRUGS, ONE SLOW WAVE"
+        },
+        {
+          "node": "n10",
+          "block": "spya-f0dqyd",
+          "quote": "Synaptic connections, shaped by experience, store long\u2011term information and define potential activity patterns.",
+          "depicts": "A stone archive wall of carved synaptic notches (storage) beneath a moving painted sky of waves (control), with a thin beam connecting sky to wall. FIGURE H is drawn as a small framed page held open between the wall and the sky, showing the loop of synapse, spike, and wave.",
+          "title": "SYNAPSES STORE, WAVES DECIDE"
+        },
+        {
+          "node": "n11",
+          "block": "spya-nkg5v2",
+          "quote": "a brain state becomes conscious when it is the target of a higher\u2011order representation, typically from frontal cortex",
+          "depicts": "Set apart to the side as a small side-scroll: a seated figure in a frontal chamber pointing down at a lit cell below, marked as the rival account offered alongside the main chain.",
+          "title": "TARGET OF A HIGHER THOUGHT"
+        },
+        {
+          "node": "n12",
+          "block": "spya-m9exy5",
+          "quote": "Consciousness, then, emerges when these dynamic wave patterns bring the cortex into an organized, globally integrated state",
+          "depicts": "The whole cortical field shown as one unbroken painted wave-sheet, every small cell beneath it now moving together under its single sweeping crest.",
+          "title": "CORTEX BROUGHT INTO ONE STATE"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged vellum, hand-ruled in faded red, divided into eleven small gold-bordered miniatures linked top to bottom by a single painted vine-chain, ink and muted pigment (ochre, lapis, dull vermillion), no modern shading, flat medieval perspective. At top, a crowded court of tiny robed figures all turn toward a raised hand (A SECOND TO COORDINATE MILLIONS). Below it, a walled chamber of identically badged cells with a third of them glowing, FIGURE A pinned to the wall as a small inset of the old feature-hierarchy (THE THIRD OF PREFRONTAL NEURONS). Next, one painted cell shown twice, reaching for a token only when first in line (ONLY WHEN SEEN FIRST), beside it a glowing cluster of tree-shaped cerebellar cells with faint rays passing wirelessly between them (SYNCHRONY WITHOUT A WIRE) — these two share a single gold enclosure labeled by framing alone as the router section. Beneath that enclosure, a stencil sheet laid twice over a field of cells, the same cell lit once and dark once, FIGURE C rendered as the stencil itself with its two colored patches (NEURON INSIDE, THEN OUTSIDE), then a slow ripple dragging a lit pattern across the cortex into a new arrangement (A WAVE DRAGS THE PATTERN ALONG), then two wave-crests crossing into a new braided shape (WAVES MEET AND COMBINE) — these three enclosed together as the wave-computing section. Further down, three small vials with different stoppers all pouring into one cortical field that flattens into the same slow ripple (THREE DRUGS, ONE SLOW WAVE). Then a stone archive wall of carved notches beneath a moving sky of waves joined by a thin beam, FIGURE H as a small framed page held between them (SYNAPSES STORE, WAVES DECIDE). Branching to the side as a smaller side-scroll, a seated figure in a frontal chamber pointing down at a lit cell (TARGET OF A HIGHER THOUGHT), its vine-thread rejoining the main chain. At the bottom, the entire cortical field as one unbroken painted wave-sheet moving every cell beneath it together (CORTEX BROUGHT INTO ONE STATE). No lettering anywhere except the eleven titles in capitals beneath their miniatures."
+    },
+    {
+      "sceneId": "inside-mechanism",
+      "title": "Why Multifunctional Neurons Need a Router",
+      "vignettes": [
+        {
+          "node": "a1",
+          "block": "spya-amx5qf",
+          "quote": "we can only learn about three different cognitive functions before essentially all prefrontal neurons have been \u201cassigned a function\u201d",
+          "depicts": "A scribe filling the last of only three labeled ledgers for a whole chamber of cells, with no blank ledger left on the shelf behind him.",
+          "title": "ONLY THREE FUNCTIONS LEARNED"
+        },
+        {
+          "node": "a3",
+          "block": "spya-x5m34h",
+          "quote": "to object B, but only when it is seen second.",
+          "depicts": "The same small cell shown reaching toward a second round token only when it falls second in the line, idle when it falls first. FIGURE B is set beside it as a small framed diagram contrasting the fixed-tuned cell with this changing one.",
+          "title": "OBJECT B ONLY WHEN SECOND"
+        },
+        {
+          "node": "a4",
+          "block": "spya-njs6ff",
+          "quote": "information is multiplexed across many multifunctional neurons rather than segregated into specialist neurons",
+          "depicts": "A single wide basket of mixed scrolls carried by many hands at once, contrasted with an empty row of narrow single-scroll boxes beside it.",
+          "title": "ONE NEURON, MANY MESSAGES"
+        },
+        {
+          "node": "a5",
+          "block": "spya-fnm872",
+          "quote": "cortical neurons have the capacity to participate in multiple networks, shifting membership as needed",
+          "depicts": "A single small figure standing at the joining point of several overlapping painted circles (guilds), stepping from one circle into another.",
+          "title": "SHIFTING NETWORK MEMBERSHIP"
+        },
+        {
+          "node": "a6",
+          "block": "spya-dtnkkk",
+          "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights.",
+          "depicts": "A tangle of fixed stone-carved wires that a small robed controller tries vainly to re-thread by hand, the wires too rigid to move.",
+          "title": "SYNAPSES ALONE CANNOT ROUTE"
+        },
+        {
+          "node": "a7",
+          "block": "spya-trb3jf",
+          "quote": "information is organized by segregating spiking to different phases of local oscillations",
+          "depicts": "A ringed dial of wave-phases, with little lit cells sorted into separate slices of the ring according to the turning of the dial.",
+          "title": "SPIKES SORTED BY WAVE PHASE"
+        },
+        {
+          "node": "a8",
+          "block": "spya-bzqaf5",
+          "quote": "cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells",
+          "depicts": "A cluster of tree-shaped cerebellar cells glowing together, faint rays passing between them with no connecting cord drawn at all.",
+          "title": "PURKINJE CELLS SYNC WITHOUT SYNAPSES"
+        },
+        {
+          "node": "a10",
+          "block": "spya-f59f0p",
+          "quote": "They can align spike timing, activate or suppress ensembles, and flexibly route information across overlapping networks",
+          "depicts": "A painted field of waves reaching down with many small rays, each ray nudging a different cell into or out of light across several overlapping circles.",
+          "title": "FIELDS ALIGN AND ROUTE SPIKES"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum ground, gold-bordered miniatures in a single downward chain in the same hand and palette (ochre, lapis, dull vermillion) as the other plates. At top, opening this piece of the larger chain exactly as it appeared in the overview, a scribe fills the last of only three ledgers for a crowded chamber of cells (ONLY THREE FUNCTIONS LEARNED). Below, the same small cell reaches for a second token only when it falls second in a line, shown idle when first, FIGURE B framed beside it contrasting a fixed-tuned cell with this changing one (OBJECT B ONLY WHEN SECOND). Next a wide basket of mixed scrolls carried by many hands beside an empty row of single-scroll boxes (ONE NEURON, MANY MESSAGES), then a small figure stepping between several overlapping painted guild-circles (SHIFTING NETWORK MEMBERSHIP). These four form one gold-framed enclosure, the multifunctional-neuron chamber. Below it, a second enclosure begins: a robed controller vainly re-threading a tangle of rigid stone-carved wires (SYNAPSES ALONE CANNOT ROUTE), then a ringed dial of wave-phases sorting lit cells into slices (SPIKES SORTED BY WAVE PHASE), then a cluster of tree-shaped cerebellar cells glowing together with no cord between them (PURKINJE CELLS SYNC WITHOUT SYNAPSES), and at the foot of the page a field of waves reaching down with many rays, nudging cells into and out of light across overlapping circles (FIELDS ALIGN AND ROUTE SPIKES). A single vine-chain threads down through all eight scenes in reading order. No lettering anywhere on the page except the eight titles in capitals beneath their miniatures."
+    },
+    {
+      "sceneId": "inside-spatial-computing",
+      "title": "Stencils, Traveling Waves, and Wave Arithmetic",
+      "vignettes": [
+        {
+          "node": "b1",
+          "block": "spya-thnz7b",
+          "quote": "beta acts like a brake on movement execution",
+          "depicts": "A small figure's raised arm held back by a painted wheel-brake pressing against it, the brake lifting slightly as the arm begins to move.",
+          "title": "BETA AS A BRAKE ON MOVEMENT"
+        },
+        {
+          "node": "b2",
+          "block": "spya-gkfdys",
+          "quote": "They function as temporary inhibitory \u201cstencils\u201d across the surface of cortex.",
+          "depicts": "A cut-paper stencil sheet laid over the painted cortical surface, light passing through its openings and blocked everywhere else. FIGURE C is drawn as this very stencil-sheet, its blue and purple patches shown as the cut shapes.",
+          "title": "INHIBITORY STENCILS OVER CORTEX"
+        },
+        {
+          "node": "b3",
+          "block": "spya-azz3c8",
+          "quote": "predicted behavioral errors through mismatches in contextual representation",
+          "depicts": "Two patterned stencils laid side by side, slightly out of register with one another, with a small stumbling figure shown at the point where the two patterns fail to line up.",
+          "title": "MISMATCH PREDICTS THE ERROR"
+        },
+        {
+          "node": "b4",
+          "block": "spya-q606tk",
+          "quote": "Oscillations in the intermediate alpha/beta range, which extend over a range of a few millimeters, might be just the right spatial scale for top-down control",
+          "depicts": "A measuring cord laid across the cortical surface marking off a span of a few finger-widths, neither as fine as the smallest marks nor as broad as the whole field.",
+          "title": "A FEW MILLIMETERS, JUST RIGHT"
+        },
+        {
+          "node": "b5",
+          "block": "spya-ectcj5",
+          "quote": "the same neuron may receive many different sensory signals and may lie inside the inhibitory stencil in one context and outside it in another",
+          "depicts": "The same small cell shown twice beneath the stencil sheet: lit through an opening in one laying of the stencil, covered over in the next.",
+          "title": "NEURON INSIDE, THEN OUTSIDE"
+        },
+        {
+          "node": "b7",
+          "block": "spya-uqt5yf",
+          "quote": "sweep across the cortical surface, tracing complex, but highly organized, spatiotemporal patterns",
+          "depicts": "A long painted ripple shown mid-crossing over the cortical field, its curling path traced as a visible trail behind it.",
+          "title": "WAVES SWEEP ACROSS THE CORTEX"
+        },
+        {
+          "node": "b8",
+          "block": "spya-mrsvfu",
+          "quote": "alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+          "depicts": "The ripple from the previous scene shown arriving, and behind it the field of small lit cells has rearranged from one pattern into a different one.",
+          "title": "ONE SUBSPACE TO ANOTHER"
+        },
+        {
+          "node": "b9",
+          "block": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "depicts": "Two wave-crests shown crossing, their overlap rendered as a new, third pattern neither wave carried alone. FIGURE F is set as a small framed panel beside them, showing two sine-waves summed at matching points.",
+          "title": "WAVES ADD, CANCEL, COMBINE"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum ground, same hand and palette (ochre, lapis, dull vermillion) as the companion plates, eight gold-bordered miniatures in a single downward chain opened at top by the stencil-image from the overview. First, a small figure's raised arm held back by a painted wheel-brake, the brake easing as the arm moves (BETA AS A BRAKE ON MOVEMENT). Below it, a cut-paper stencil laid over the cortical surface, FIGURE C shown as the stencil itself with its colored cut patches, light passing only through the openings (INHIBITORY STENCILS OVER CORTEX). Next, two such stencils laid slightly out of register, a small figure stumbling where they fail to align (MISMATCH PREDICTS THE ERROR), then a measuring cord laid across the cortex marking off a modest span, neither fine nor broad (A FEW MILLIMETERS, JUST RIGHT). These four share one gold enclosure as the stencil chamber. Below, a second enclosure: the same small cell shown twice beneath the stencil, lit once and covered once (NEURON INSIDE, THEN OUTSIDE), then a long ripple shown mid-crossing over the cortex leaving a curling trail (WAVES SWEEP ACROSS THE CORTEX), then the same ripple arriving as the field of lit cells behind it rearranges into a new pattern (ONE SUBSPACE TO ANOTHER), and at the foot of the page two wave-crests crossing into a third braided pattern, FIGURE F set beside them as a small framed panel of two summed sine-waves (WAVES ADD, CANCEL, COMBINE). A single vine-chain threads down through all eight scenes. No lettering anywhere on the page except the eight titles in capitals beneath their miniatures."
+    }
+  ]
+}

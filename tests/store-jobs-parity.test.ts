@@ -952,22 +952,22 @@ for (const adapter of ADAPTERS) {
       await store.finish(ideas.id, ideasHeld, { status: "done", steps: ideas.steps });
     });
 
-    it("keeps Trajectory waiting while the Quotes it routes through are being made, and runs it after", async () => {
+    it("keeps Skim waiting while the Quotes it routes through are being made, and runs it after", async () => {
       const slug = `${MINE}${mintId()}`;
       const base = Date.now();
       const quotes = modeJob(slug, ["quotes"], base);
-      const trajectory = modeJob(slug, ["trajectory"], base + 1000);
+      const skim = modeJob(slug, ["skim"], base + 1000);
       await store.enqueueOrGet(quotes, { workKey: "k1", reservesName: false });
-      await store.enqueueOrGet(trajectory, { workKey: "k2", reservesName: false });
+      await store.enqueueOrGet(skim, { workKey: "k2", reservesName: false });
 
       const held = mintAttempt();
       expectClaimed(await store.claim(quotes.id, OWNER, held, LEASE, CAP));
-      const waiting = await store.claim(trajectory.id, OWNER, mintAttempt(), LEASE, CAP);
+      const waiting = await store.claim(skim.id, OWNER, mintAttempt(), LEASE, CAP);
       expect(waiting.kind).toBe("busy");
       expect(waiting.kind === "busy" && waiting.why).toMatch(/ahead of it/);
 
       await store.finish(quotes.id, held, { status: "done", steps: quotes.steps });
-      expectClaimed(await store.claim(trajectory.id, OWNER, mintAttempt(), LEASE, CAP));
+      expectClaimed(await store.claim(skim.id, OWNER, mintAttempt(), LEASE, CAP));
     });
 
     it("never makes one step twice at once on one article", async () => {

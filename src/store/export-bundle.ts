@@ -222,9 +222,26 @@ const CONTENT_OMISSIONS: readonly Omission[] = [
  * twice, so the page cannot say something different from the machine-readable
  * answer beside it.
  */
-function omissions(): Omission[] {
-  return [...tableOmissions(), ...CONTENT_OMISSIONS];
+function omissions(rows: Pick<ArticleRows, "article">): Omission[] {
+  return [
+    /* **A paper not yet read through has no article to export** — no blocks, no
+       tree, no augmentations — and an export that just looked empty would be a
+       silent success. So it says so first. Plan 261001m. */
+    ...(rows.article.processing === "minimal" ? [NOT_READ_THROUGH] : []),
+    ...tableOmissions(),
+    ...CONTENT_OMISSIONS,
+  ];
 }
+
+/** What a minimal paper's export says about the article it does not have yet. */
+const NOT_READ_THROUGH: Omission = {
+  kind: "content",
+  what: "the-article",
+  why:
+    "This paper has not been read through yet: only its title, authors and abstract were read " +
+    "when it was added (content/revision.json has them). There are no blocks, no tree and no " +
+    "augmentations to export. Press Read this on the paper, then export it again.",
+};
 
 /** The tables the coverage record says the bundle leaves out, and why. */
 function tableOmissions(): Omission[] {
@@ -349,7 +366,7 @@ function manifestJson(
        2026-09-02. */
     spideryarnUrl: articleUrl(article.slug),
     entries: [...entries].sort((a, b) => a.path.localeCompare(b.path)),
-    omitted: omissions(),
+    omitted: omissions(rows),
   };
 }
 
@@ -399,7 +416,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "citations",
   "quiz",
   "faq",
-  "trajectory",
+  "skim",
   "crossrefs",
   "simpleSummary",
   "sketch",
@@ -478,7 +495,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("citations.json", revision.citations);
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
-  at("trajectory.json", revision.trajectory);
+  at("skim.json", revision.skim);
   at("crossrefs.json", revision.crossrefs);
   at("simple-summary.json", revision.simpleSummary);
   at("sketch.json", revision.sketch);
@@ -601,7 +618,7 @@ one thing that will make the rest of these files make sense.
       illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
-      trajectory.json      A route through the quotes, in the order to read them, at three depths.
+      skim.json            A route through the quotes, in the order to read them, at three depths.
       crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
       simple-summary.json  A few paragraphs in plain words, and the passages each rests on.
       arc.json             The shape of the argument.
@@ -785,7 +802,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
-  "augmentations/trajectory.json":
+  "augmentations/skim.json":
     "A route through the quotes, in the order to read them, at three depths.",
   "augmentations/crossrefs.json":
     "Links from a phrase in one paragraph to the paragraph that backs it.",
@@ -899,7 +916,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works", n: countOf(revision.citations, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
-    { label: "trajectory stops", n: countOf(revision.trajectory, "stops") },
+    { label: "Skim stops", n: countOf(revision.skim, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)
        counts nothing, which is what every other read makes of it. */
@@ -1080,7 +1097,7 @@ function indexHtml(
     .filter(Boolean)
     .join("\n      ");
 
-  const omitted = omissions()
+  const omitted = omissions(rows)
     .map((o) => `<li><code>${safe(o.what)}</code> — ${safe(o.why)}</li>`)
     .join("\n        ");
 

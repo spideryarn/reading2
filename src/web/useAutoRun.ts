@@ -159,7 +159,7 @@ export function useAutoRun(
     /* **Atomic, and before anything else that could be reached twice.**
        `<StrictMode>` invokes this effect twice on mount; the second invocation
        finds the token gone. A check followed by a clear would let both through,
-       which on `sketch` is two minutes and about $0.40. */
+       which on `sketch` is about a minute. */
     if (!consumeActivation(slug, target, nonce, owner)) return;
     if (status !== "none") return;
     /* The session's one automatic try. See jobEngine.ts § beginAutoAttempt. */

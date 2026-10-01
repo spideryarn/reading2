@@ -242,7 +242,7 @@ describe("a centred arrival owns the position until the reader scrolls", () => {
     expect(spy(9, MIDDLE)).toEqual({ at: block(0) });
   });
 
-  it("names the anchored block's section when ?at= is elsewhere (a Trajectory step pushes nothing)", () => {
+  it("names the anchored block's section when ?at= is elsewhere (a Skim step pushes nothing)", () => {
     expect(spy(24, block(3), { anchored: block(26) })).toEqual({ at: LAST });
   });
 

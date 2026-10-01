@@ -80,18 +80,20 @@ export interface Gift {
  * settled successes would tell somebody they had a slot left and then watch the
  * server refuse them.
  *
- * ## Every number here is a whole article, and none of them is a half-unit
+ * ## Every number here is a whole count, and none of them is in points
  *
- * A public article costs half (src/billing/half-units.ts), so `used` and `limit`
- * are no longer two ends of one ratio: eight articles, six of them public, is
- * ten half-units against a free budget of six. **No rounding rule fixes that** —
- * `ceil(5/2)` says *"3 of 3 used"* while the wall still admits one, and `floor`
- * says *"2 of 3"* while two and a half are gone.
+ * A public article costs half and a minimal paper a hundredth
+ * (src/billing/points.ts), so `used` and `limit` are no longer two ends of one
+ * ratio: eight articles, six of them public, is 1,000 points against a free
+ * budget of 600. **No rounding rule fixes that** — `ceil(5/2)` says *"3 of 3
+ * used"* while the wall still admits one, and `floor` says *"2 of 3"* while two
+ * and a half are gone.
  *
- * So the wire carries **integer counts that add up** and never a half-unit:
- * `limit` is the allowance the website markets, `used` is how many ingests are
- * counted against it, `sharedHalfPrice` is how many of those are cheap right
- * now, and `atLimit` is the server's own answer to *did the wall refuse* rather
+ * So the wire carries **integer counts that add up** and never points: `limit`
+ * is the allowance the website markets, `used` is how many ingests are counted
+ * against it, `sharedHalfPrice` is how many of those are cheap right now,
+ * `minimal` is how many papers not yet AI-processed are counted at a hundredth,
+ * and `atLimit` is the server's own answer to *did the wall refuse* rather
  * than a comparison this file reconstructs. That last one is why there is a
  * fourth field instead of a `used >= limit` here: the wall is in
  * src/store/pg-billing.ts and a second spelling of it on the page is how a page
@@ -141,6 +143,16 @@ export type ReaderPlan =
        */
       readonly highPower: number;
       /**
+       * **Papers not yet AI-processed**, counted against this allowance at a
+       * hundredth of an article each — charged and not yet paid for in full by
+       * *Read this*, plus those in flight.
+       *
+       * Not in `used`, which is articles added, and never turned into a
+       * fraction of one: the copy says it as its own fact, and prints no ratio
+       * while it is above zero. Plan 261001m.
+       */
+      readonly minimal: number;
+      /**
        * **Sharing something this account has added would get it back under the
        * wall** — the server's answer, and absent whenever it would not.
        *
@@ -148,8 +160,8 @@ export type ReaderPlan =
        * that any private article is a private article. Two readers it was false
        * for: the one whose charged rows all predate `ingest_events.article_id`,
        * which is every row charged before that day and cannot be cheapened at
-       * all; and the one who has unshared their way to twelve half-units
-       * against a budget of six, where sharing everything they own still would
+       * all; and the one who has unshared their way to 1,200 points against
+       * a budget of 600, where sharing everything they own still would
        * not do it. It cannot be worked out from `used` and `sharedHalfPrice` —
        * `sharingWouldMakeRoom` in src/store/pg-billing.ts is the query, asked
        * only when `atLimit` is true. GPT Sol, 2026-09-05.
@@ -157,7 +169,7 @@ export type ReaderPlan =
       readonly sharingMakesRoom?: true;
       /**
        * **Further private articles the wall would admit** — the server's
-       * `privateHeadroom`, as the lapsed arm has. Never `limit − used`, which
+       * `ingestHeadroom`, as the lapsed arm has. Never `limit − used`, which
        * stopped being an answer when a public article began to cost half
        * (GPT Sol, plan review F3).
        */
@@ -172,8 +184,8 @@ export type ReaderPlan =
    * Had a subscription; does not have an entitled one. See the header.
    *
    * `remaining` is a count of **further private articles**, which is exactly the
-   * wall's own answer rather than a rounded ratio — `privateHeadroom` in
-   * src/billing/half-units.ts says why the division in it is exact.
+   * wall's own answer rather than a rounded ratio — `ingestHeadroom` in
+   * src/billing/points.ts says why the division in it is exact.
    *
    * `gifts` as on `free`: a lapsed reader is back on Free, so the gift counts
    * again (F4), and it is absent when there are none.
@@ -196,6 +208,8 @@ export type ReaderPlan =
       readonly atLimit: boolean;
       /** As `free`'s. */
       readonly highPower: number;
+      /** As `free`'s. */
+      readonly minimal: number;
       /** ISO. When the allowance starts again — the renewal, not the ending. */
       readonly periodEnd: string;
       /**
@@ -482,8 +496,9 @@ function sharedClause(shared: number): string {
 /**
  * **Is `used of limit` still a ratio?**
  *
- * It is one only while every counted ingest costs a whole article's worth *and*
- * there are no more of them than the allowance sells. The second half is the one
+ * It is one only while every counted ingest costs a whole article's worth,
+ * nothing else is counted beside them — no High-powered AI, no minimal papers —
+ * *and* there are no more of them than the allowance sells. The second half is the one
  * that was missing until 2026-09-05: unshare six public articles on a free
  * account and `sharedHalfPrice` goes back to zero while `used` stays at six, so
  * the page printed *"6 of 3 articles used"* — the exact rendering this file's
@@ -494,8 +509,25 @@ function isRatio(plan: {
   limit: number;
   sharedHalfPrice: number;
   highPower: number;
+  minimal: number;
 }): boolean {
-  return plan.sharedHalfPrice === 0 && plan.highPower === 0 && plan.used <= plan.limit;
+  return (
+    plan.sharedHalfPrice === 0 && plan.highPower === 0 && plan.minimal === 0 && plan.used <= plan.limit
+  );
+}
+
+/**
+ * *"You have also added 40 papers not yet AI-processed, at 1/100 of an article
+ * each."* — or nothing, for the account with none.
+ *
+ * A fact beside the count, like `highPowerClause`, and never a fraction of an
+ * article: the papers are a count, and their price is said once in words.
+ */
+function minimalClause(minimal: number): string {
+  if (minimal === 0) return "";
+  return minimal === 1
+    ? "You have also added 1 paper not yet AI-processed, at 1/100 of an article. "
+    : `You have also added ${minimal} papers not yet AI-processed, at 1/100 of an article each. `;
 }
 
 /**
@@ -539,10 +571,20 @@ function nonePublicNow(limit: number): string {
  * clause, plus the *"that is how they fit"* half **only when they do fit**.
  *
  * They stop fitting the moment somebody unshares: five articles with one still
- * public is nine half-units against a budget of six, and *"that is how 5 fit an
+ * public is 900 points against a budget of 600, and *"that is how 5 fit an
  * allowance of 3"* is then a sentence about arithmetic that did not happen.
  */
 function howTheyStand(plan: {
+  used: number;
+  limit: number;
+  sharedHalfPrice: number;
+  highPower: number;
+  minimal: number;
+}): string {
+  return howTheArticlesStand(plan) + minimalClause(plan.minimal);
+}
+
+function howTheArticlesStand(plan: {
   used: number;
   limit: number;
   sharedHalfPrice: number;
@@ -556,10 +598,14 @@ function howTheyStand(plan: {
       highPowerClause(plan.highPower)
     );
   }
+  /* Nothing public, and only papers make this not a ratio: there is nothing to
+     say about the articles beyond the headline. */
+  if (plan.sharedHalfPrice === 0 && plan.used <= plan.limit) return "";
   if (plan.sharedHalfPrice === 0) return nonePublicNow(plan.limit);
-  /* The same `× 2` `/admin/users` does, and for the same reason: the enforcement
-     budget is in half-units, the page is handed integer counts, and neither end
-     has a better claim on the multiplication than the other. */
+  /* The same arithmetic `/admin/users` does, and for the same reason: the
+     enforcement budget is in points, the page is handed integer counts, and
+     neither end has a better claim on the multiplication than the other. Whole
+     articles only, which is what the sentence is about. */
   const fits = plan.used * 2 - plan.sharedHalfPrice <= plan.limit * 2;
   return (
     `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each` +
@@ -693,11 +739,14 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
          twenty is not a ratio either. */
       const shared = isRatio(plan)
         ? ""
-        : plan.highPower > 0
-          ? howTheyStand(plan)
-          : plan.sharedHalfPrice === 0
-            ? nonePublicNow(plan.limit)
-            : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `;
+        : (plan.highPower > 0
+            ? howTheArticlesStand(plan)
+            : plan.sharedHalfPrice === 0
+              ? plan.used <= plan.limit
+                ? ""
+                : nonePublicNow(plan.limit)
+              : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `) +
+          minimalClause(plan.minimal);
       return {
         headline: isRatio(plan)
           ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`

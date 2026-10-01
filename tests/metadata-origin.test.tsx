@@ -163,7 +163,7 @@ async function visitor(meta: Partial<Meta>) {
           quotes: false,
           timeline: false,
           sketch: false,
-          trajectory: false,
+          skim: false,
           faq: false,
           simpleSummary: false,
           citations: false,

@@ -218,9 +218,9 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/* **A stored route, for the Trajectory case** — one stop, on the band link's
+/* **A stored route, for the Skim case** — one stop, on the band link's
    paragraph, so opening the mode jumps somewhere `?at=` can see. The shapes are
-   tests/trajectory-panel.test.tsx's, cut to one quote. */
+   tests/skim-panel.test.tsx's, cut to one quote. */
 const QUOTE_ID = "spya-tq2abc";
 const QUOTES_BODY = {
   quotes: {
@@ -237,8 +237,8 @@ const QUOTES_BODY = {
   outdated: false,
   profileChanged: false,
 };
-const TRAJECTORY_BODY = {
-  trajectory: {
+const SKIM_BODY = {
+  skim: {
     version: "test",
     generator: "test",
     slug: SLUG,
@@ -283,7 +283,7 @@ function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/simple/${SLUG}`) return json(SIMPLE_BODY);
   if (url === `/api/quotes/${SLUG}`) return json(QUOTES_BODY);
-  if (url === `/api/trajectory/${SLUG}`) return json(TRAJECTORY_BODY);
+  if (url === `/api/skim/${SLUG}`) return json(SKIM_BODY);
   if (url.startsWith("/api/ideas/")) return new Response(null, { status: 404 });
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince: null });
@@ -511,58 +511,58 @@ describe("a jump that does not start in the band", () => {
   });
 });
 
-describe("Trajectory, which jumps on opening", () => {
+describe("Skim, which jumps on opening", () => {
   it("opens over the article on a phone and stays there after its opening jump", async () => {
-    /* **The one band Reader hands raw `jumpTo`.** Trajectory's `onJump` is
+    /* **The one band Reader hands raw `jumpTo`.** Skim's `onJump` is
        also called by its own arrival effect when the mode is opened
-       (TrajectoryMode.tsx § arriving in the mode), not only by a press inside
+       (SkimMode.tsx § arriving in the mode), not only by a press inside
        it — so `bandJump` would open the band and hide it in the same breath.
        It steps aside itself, through `onAway`, where a press warrants it.
        GPT Sol, plan review, F1.
 
-       tests/trajectory-panel.test.tsx § "leaves the band open over a deep link
+       tests/skim-panel.test.tsx § "leaves the band open over a deep link
        on a narrow window" is the band's half and cannot see this: its harness
        hands the band a spy for `onJump`, so it is green whichever callback
        Reader passes. Watched red with Reader's owner arm handed
        `onJump={bandJump}`. */
     await open(PHONE);
     const dock = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === MODE_LABEL.trajectory,
+      (b) => b.getAttribute("aria-label") === MODE_LABEL.skim,
     );
-    expect(dock, "the bar must draw Trajectory").toBeDefined();
+    expect(dock, "the bar must draw Skim").toBeDefined();
     await act(async () => dock?.click());
-    await until(() => param("at") === BAND_TARGET, "opening Trajectory never made its opening jump");
+    await until(() => param("at") === BAND_TARGET, "opening Skim never made its opening jump");
 
-    expect(host.querySelector(`.mode-band[aria-label="${MODE_LABEL.trajectory}"]`), "the band opened").not.toBeNull();
+    expect(host.querySelector(`.mode-band[aria-label="${MODE_LABEL.skim}"]`), "the band opened").not.toBeNull();
     expect(reader().classList.contains("band-covers"), "390px must be a covering width").toBe(true);
     expect(reader().classList.contains("band-away"), "the opening jump hid the band it opened").toBe(false);
     expect(pill()).toBeNull();
   });
 
   it("moves focus to the pill and back when a focused stop steps the band aside", async () => {
-    /* Trajectory keeps raw `jumpTo` because it jumps on opening, then uses its
+    /* Skim keeps raw `jumpTo` because it jumps on opening, then uses its
        separate `onAway` callback for deliberate route movement. That callback
        must share `bandJump`'s focus handoff: otherwise `display: none` leaves
        focus inside the hidden band and the return pill is skipped entirely. */
     await open(PHONE);
     const dock = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === MODE_LABEL.trajectory,
+      (b) => b.getAttribute("aria-label") === MODE_LABEL.skim,
     );
-    expect(dock, "the bar must draw Trajectory").toBeDefined();
+    expect(dock, "the bar must draw Skim").toBeDefined();
     await act(async () => dock?.click());
-    await until(() => param("at") === BAND_TARGET, "opening Trajectory never made its opening jump");
+    await until(() => param("at") === BAND_TARGET, "opening Skim never made its opening jump");
 
-    const stop = host.querySelector<HTMLButtonElement>(".traj-go");
-    expect(stop, "Trajectory drew no stop to press").not.toBeNull();
+    const stop = host.querySelector<HTMLButtonElement>(".skim-go");
+    expect(stop, "Skim drew no stop to press").not.toBeNull();
     await act(async () => stop?.focus());
     await act(async () => stop?.click());
     await until(() => reader().classList.contains("band-away"), "the stop did not step the band aside");
 
-    expect(document.activeElement, "focus was left inside the hidden Trajectory band").toBe(pill());
+    expect(document.activeElement, "focus was left inside the hidden Skim band").toBe(pill());
 
     await act(async () => pill()?.click());
     await settle();
 
-    expect(document.activeElement, "focus did not come back to the Trajectory stop").toBe(stop);
+    expect(document.activeElement, "focus did not come back to the Skim stop").toBe(stop);
   });
 });

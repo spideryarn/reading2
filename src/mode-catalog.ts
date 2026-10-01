@@ -430,18 +430,25 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* **True of both faces**, since 2026-09-10: the two columns and the nested
        list each show every part and the sections of the one the reader is in.
        It said "in two linked columns" until then, which a narrow band's list
-       would have contradicted. */
-    description: "The document's shape — every part, and the sections of the one you are in",
+       would have contradicted. **True of both views too**, since 2026-10-01:
+       it said "the sections of the one you are in", which Expanded (every
+       part's sections) contradicts. GPT Sol's plan review of 261001q. */
+    description: "The document's shape — every part, and its sections",
     /* Checked against the code rather than written from the plan, which is the
        failure this field has already had twice (docs/project/mode.md § The
-       card on the button). "Nothing to generate" is true: the tree arrives in
-       the page's own payload and this mode reaches no artefact and makes no
-       request. The rest is the one thing a press does not tell you — that what
-       you get depends on the room, and how to read each — and the reading order
-       of the columns is what a reader would otherwise have to infer from
-       watching the right-hand one change at a boundary.
-       StructureMode.tsx § `structureFace` is the switch. */
-    how: "The same already-built tree as Summary, so there is nothing to generate. With room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list that opens up around the part you are reading.",
+       card on the button). What a press does not tell you: that Fisheye
+       depends on the room, and how to read each face — the reading order of
+       the columns is what a reader would otherwise have to infer from watching
+       the right-hand one change at a boundary — that Expanded is there, and
+       the keys (tooltips.md § A shortcut is named on its card).
+       StructureMode.tsx § `structureFace` is the switch.
+
+       **No "nothing to generate" since 2026-10-01.** It opened this card as
+       "The same already-built tree as Summary, so there is nothing to
+       generate", and Greg asked for it to go (spya-ukr9dp): not much use to a
+       reader, and Summary was about to stop drawing parts and sections. It is
+       still true — the tree arrives in the page's own payload. */
+    how: "Fisheye opens up around the part you are reading: with room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list. Expanded shows every part and section with its summary. ← and → step section by section.",
     /* `columns` is about the wide face. `tree`, `map` and `outline` came from
        Outline on 2026-09-10 with its list: `outline` so the retired mode's own
        name still finds the mode that holds it, the other two because they were
@@ -488,30 +495,32 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* A new mode on an unmeasured prompt — docs/project/experimental-features.md. */
     experimental: true,
   },
-  trajectory: {
+  skim: {
     description: "A route through the piece's quotes, a little deeper each time round",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "a short model pass over its quotes": the `trajectory` step reads the
+       - "a short model pass over its quotes": the `skim` step reads the
          stored Quotes, the tree and the profile; `renderPrompt` in
-         src/trajectory.ts sends each quote's words, section path and priority,
+         src/skim.ts sends each quote's words, section path and priority,
          and never the article's prose.
-       - "puts them in an order and a depth": `TrajectoryStop` is a quote id, a
+       - "puts them in an order and a depth": `SkimStop` is a quote id, a
          depth 1–3 and a role line, in array order (src/types.ts).
        - "for you, if you have said who you are": `profileSection(profile)` in
          the same prompt, and `routeProfileIsStale` marks the route outdated
          when the profile changes.
        - "chosen first when there are none": the step refuses without Quotes
-         (`TRAJECTORY_NO_QUOTES`), and the band asks for `quotes` before it
-         (`precededBy`, src/web/useTrajectory.ts).
+         (`SKIM_NO_QUOTES`), and the band asks for `quotes` before it
+         (`precededBy`, src/web/useSkim.ts).
        About the mode, not the press, and no price. */
     how: "A short model pass over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
-    /* The two words Greg used for it in the brief — docs/project/trajectory.md. */
-    aliases: ["spiral", "route"],
+    /* "spiral" and "route" are the two words Greg used for it in the brief —
+       docs/project/skim.md. `trajectory` was the mode's own word until
+       2026-10-01 (261001r), and Greg asked to keep it as a keyword. */
+    aliases: ["spiral", "route", "trajectory"],
     /* Behind the switch from 2026-09-28 until later that day, when Greg asked
-       for it in the mainstream: "take Trajectory and Quotes modes out of
+       for it in the mainstream: "take Skim and Quotes modes out of
        Experimental features" — docs/project/experimental-features.md. Still
-       owners-only (`POLICY.trajectory`, src/web/visitor.ts). */
+       owners-only (`POLICY.skim`, src/web/visitor.ts). */
     experimental: false,
   },
   tweets: {

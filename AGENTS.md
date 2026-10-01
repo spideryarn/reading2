@@ -57,7 +57,8 @@ listed here; the names under each are files in `docs/project/`.
   `timeline.md` (when the piece says these things happened) ·
   `citations.md` (the works the piece cites, and where each link came from) ·
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
-  `trajectory.md` (skim a paper at increasing depth: a route through its quotes, walked three times) ·
+  `skim.md` (skim a paper at increasing depth: a route through its quotes, walked three times; it
+  was Trajectory until 2026-10-01, and `?mode=trajectory` still opens it) ·
   `search.md` · `referee-mode.md` (helping a peer reviewer, without reading for them) ·
   `diagram.md` · `sketch.md` (the picture a model draws of the argument) ·
   `illustrated.md` (the Sketch, painted) ·

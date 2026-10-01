@@ -1,0 +1,324 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated-manuscript page, its small gilt-edged roundels telling one scene each in the hand of a medieval bestiary, suits the article's own cataloguing of silk by gland, property and craft.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Spider silk: from biology to imitation",
+      "prompt": "An illuminated manuscript page on cream parchment, one continuous column of small framed roundels read top to bottom, connected by a thin inked thread that runs from scene to scene like a dragline. Palette: ochre, rust red, forest green, iron-gall brown ink, with gold leaf only on the border filigree and roundel rims — never on the scenes themselves. At the top, a roundel shows a spider hanging from a thread, another floating on a loose strand, a third swinging clear of a bird's beak, titled SUSPEND, FLOAT, GLIDE. The thread leads down into a wide framed enclosure labelled only by its gilt border (no words), containing: a top roundel of several spiders each holding out a differently-textured thread (SILK TUNED TO EACH SPIDER), which forks into three smaller roundels side by side — soft coiled threads cradling hard blocks (SOFT COILS: THE AMORPHOUS MATRIX), a thread stretched taut between two hands (ABSORBING ENERGY BEFORE IT SNAPS), and a spider pressing a glinting disc onto a leaf (ATTACHMENT DISCS THAT BOND INSTANTLY). Only the centre roundel's thread continues downward, exiting the enclosure. It leads to a spider with seven threads fanning from its body (SEVEN KINDS OF SILK, ONE SPIDER), then a wheel-like web frame with radiating spokes (FRAME, RADII, DRAGLINE), then a spider's legs drawing a thread taut from its own body (PULLED, NOT SQUEEZED OUT). The thread then enters a second wide framed enclosure (matching the first in border style), opening with a craftsman between a jar of liquid and a small mechanical duct (TWO TASKS: PROTEIN AND DUCT), and closing with two threads compared, one coarse and one fine (FEWER PROTEINS, A WEAKER THREAD). The thread exits this frame and ends at a seated figure weaving at a loom beside a basket of spider egg cocoons (STOCKINGS WOVEN FROM SPIDER SILK). Each roundel has its title lettered in small capitals directly beneath it; nothing else on the page is lettered — no banners, no scrolls, no signatures. Leave generous bare parchment between frames; do not crowd the margins with foliage.",
+      "vignettes": [
+        {
+          "block": "spya-gp4t9x",
+          "quote": "to suspend themselves from height, to float through the air, or to glide away from predators",
+          "depicts": "A spider hangs from a single thread high above a hedgerow, a second spider caught mid-air drifting on a loose strand, a third swinging clear of a bird's beak.",
+          "title": "SUSPEND, FLOAT, GLIDE",
+          "node": "intro"
+        },
+        {
+          "block": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function",
+          "depicts": "Several different spiders drawn in a row, each holding out a differently textured thread suited to its own task.",
+          "title": "SILK TUNED TO EACH SPIDER",
+          "node": "propHub"
+        },
+        {
+          "block": "spya-p263u9",
+          "quote": "Glycine is mostly found in the so-called amorphous matrix consisting of helical and beta turn structures",
+          "depicts": "A nest of soft coiled threads, drawn as small loops and turns, cradling a few hard angular blocks half-buried within them.",
+          "title": "SOFT COILS: THE AMORPHOUS MATRIX",
+          "node": "structural"
+        },
+        {
+          "block": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking",
+          "depicts": "A single thread stretched taut between two hands, bowing far out of shape without parting.",
+          "title": "ABSORBING ENERGY BEFORE IT SNAPS",
+          "node": "mechanical"
+        },
+        {
+          "block": "spya-k8bh7d",
+          "quote": "spun into patterns (called \"attachment discs\") using a minimum of silk substrate",
+          "depicts": "A spider presses a small fan-shaped disc of silk onto a leaf, the disc gleaming as it sets.",
+          "title": "ATTACHMENT DISCS THAT BOND INSTANTLY",
+          "node": "adhesive"
+        },
+        {
+          "block": "spya-pn8bvd",
+          "quote": "a single spider can produce up to seven different types of silk for different uses",
+          "depicts": "One spider at the centre of the page with seven distinct threads fanning out from its body, each drawn in a different pattern.",
+          "title": "SEVEN KINDS OF SILK, ONE SPIDER",
+          "node": "uses"
+        },
+        {
+          "block": "spya-g2gw42",
+          "quote": "the force is induced by pulling at the finished fibre rather than squeezing it out of a reservoir",
+          "depicts": "A spider's hind legs drawing a thread taut and away from its own body, the fibre visibly lengthening as it is pulled rather than pushed.",
+          "title": "PULLED, NOT SQUEEZED OUT",
+          "node": "spinning"
+        },
+        {
+          "block": "spya-wgee6t",
+          "quote": "synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions",
+          "depicts": "A craftsman stands between two benches: one holds a jar of pale liquid protein, the other a small mechanical funnel and duct.",
+          "title": "TWO TASKS: PROTEIN AND DUCT",
+          "node": "synthHub"
+        },
+        {
+          "block": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk",
+          "depicts": "Two threads laid side by side, one coarse and dull drawn from the workbench, the other fine and bright coiled beside a spider.",
+          "title": "FEWER PROTEINS, A WEAKER THREAD",
+          "node": "syntheticsilk"
+        },
+        {
+          "block": "spya-jj2arg",
+          "quote": "wove silk derived from spider's egg cocoons into stockings and gloves",
+          "depicts": "A seated figure in old dress working at a small loom, a finished stocking and glove laid beside a basket of spider egg cocoons.",
+          "title": "STOCKINGS WOVEN FROM SPIDER SILK",
+          "node": "humanuses"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A spider hangs from a single thread high above a hedgerow, a second spider caught mid-air drifting on a loose strand, a third swinging clear of a bird's beak.",
+          "title": "SUSPEND, FLOAT, GLIDE"
+        },
+        {
+          "where": "Several different spiders drawn in a row, each holding out a differently textured thread suited to its own task.",
+          "title": "SILK TUNED TO EACH SPIDER"
+        },
+        {
+          "where": "A nest of soft coiled threads, drawn as small loops and turns, cradling a few hard angular blocks half-buried within them.",
+          "title": "SOFT COILS: THE AMORPHOUS MATRIX"
+        },
+        {
+          "where": "A single thread stretched taut between two hands, bowing far out of shape without parting.",
+          "title": "ABSORBING ENERGY BEFORE IT SNAPS"
+        },
+        {
+          "where": "A spider presses a small fan-shaped disc of silk onto a leaf, the disc gleaming as it sets.",
+          "title": "ATTACHMENT DISCS THAT BOND INSTANTLY"
+        },
+        {
+          "where": "One spider at the centre of the page with seven distinct threads fanning out from its body, each drawn in a different pattern.",
+          "title": "SEVEN KINDS OF SILK, ONE SPIDER"
+        },
+        {
+          "where": "A wheel-like web frame with straight spokes radiating from a hub, drawn plainly as the frame and radii of an orb web.",
+          "title": "FRAME, RADII, DRAGLINE"
+        },
+        {
+          "where": "A spider's hind legs drawing a thread taut and away from its own body, the fibre visibly lengthening as it is pulled rather than pushed.",
+          "title": "PULLED, NOT SQUEEZED OUT"
+        },
+        {
+          "where": "A craftsman stands between two benches: one holds a jar of pale liquid protein, the other a small mechanical funnel and duct.",
+          "title": "TWO TASKS: PROTEIN AND DUCT"
+        },
+        {
+          "where": "Two threads laid side by side, one coarse and dull drawn from the workbench, the other fine and bright coiled beside a spider.",
+          "title": "FEWER PROTEINS, A WEAKER THREAD"
+        },
+        {
+          "where": "A seated figure in old dress working at a small loom, a finished stocking and glove laid beside a basket of spider egg cocoons.",
+          "title": "STOCKINGS WOVEN FROM SPIDER SILK"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-properties",
+      "title": "Inside Properties",
+      "prompt": "An illuminated manuscript page on cream parchment, continuing the hand and palette of the overview — ochre, rust red, forest green, iron-gall brown, gold leaf only on borders. The whole page sits inside one wide gilt-bordered frame matching the PROPERTIES enclosure from the overview page. At the top, reused unchanged, is the roundel of several spiders each holding out a differently-textured thread, titled SILK TUNED TO EACH SPIDER — this is the doorway into the frame. Below it, a thread leads to a roundel of soft coiled fibres cradling hard blocks (SOFT COILS: THE AMORPHOUS MATRIX), which feeds into a central roundel of a thick thread bowed wide between two pulling hands (STRENGTH AND STRETCH TOGETHER). From this central roundel the thread forks into five smaller roundels arranged in a loose arc beneath it: a flexible thread curling beside a stiff iron bar (BENDS WHERE STEEL STAYS STIFF); a dragline thread pulled taut beside a steel bar of equal thickness (AS STRONG AS HIGH-GRADE STEEL); a fine thread wound once around a small globe (A THREAD AROUND THE EARTH); a coil of silk beside a spool of woven cord under equal load (TOUGH AS POLYARAMID FIBRE); and a wet, slack thread beaded with dew, shrunk to half its span (SHRINKS LIKE RUBBER WHEN WET). From the globe roundel alone, a thread continues down and out of the arc to a final roundel at the bottom of the frame: a glistening glue-disc bonded to a twig, just beginning to fade into the bark (GLUE THAT SETS AND FADES AWAY). Each roundel is titled beneath it in small lettered capitals; nothing else on the page carries any lettering — no banners, no scrolls, no inscriptions. Keep the roundels large enough to read clearly, spaced with generous bare parchment, the gilt border the only ornament crowding the edge.",
+      "vignettes": [
+        {
+          "block": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function",
+          "depicts": "The same row of spiders from the overview, each holding out a differently textured thread, reused here as the frame's opening scene.",
+          "title": "SILK TUNED TO EACH SPIDER",
+          "node": "propHub"
+        },
+        {
+          "block": "spya-p263u9",
+          "quote": "Glycine is mostly found in the so-called amorphous matrix consisting of helical and beta turn structures",
+          "depicts": "A nest of soft coiled threads looping around a few hard angular blocks, drawn larger here to show the weave clearly.",
+          "title": "SOFT COILS: THE AMORPHOUS MATRIX",
+          "node": "z-structural"
+        },
+        {
+          "block": "spya-nwva2u",
+          "quote": "They exhibit a unique combination of high tensile strength and extensibility (ductility)",
+          "depicts": "A single thick thread bent into a wide bow shape by two hands pulling at its ends, neither snapping nor going slack.",
+          "title": "STRENGTH AND STRETCH TOGETHER",
+          "node": "z-mechHub"
+        },
+        {
+          "block": "spya-dq9b7q",
+          "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus",
+          "depicts": "A flexible thread curling gracefully around a rigid iron bar standing stiff and unbent beside it.",
+          "title": "BENDS WHERE STEEL STAYS STIFF",
+          "node": "z-stiffness"
+        },
+        {
+          "block": "spya-mhe2r5",
+          "quote": "A dragline silk's tensile strength is comparable to that of high-grade alloy steel",
+          "depicts": "A dragline thread pulled taut next to a steel bar of the same thickness, both holding firm under the same weight.",
+          "title": "AS STRONG AS HIGH-GRADE STEEL",
+          "node": "z-strength"
+        },
+        {
+          "block": "spya-hng89u",
+          "quote": "a strand long enough to circle the Earth would weigh about 2 kilograms",
+          "depicts": "A fine silk thread wound once all the way around a small globe of the Earth, impossibly light.",
+          "title": "A THREAD AROUND THE EARTH",
+          "node": "z-density"
+        },
+        {
+          "block": "spya-gfykz5",
+          "quote": "equals that of commercial polyaramid (aromatic nylon) filaments, which themselves are benchmarks of modern polymer fibre technology",
+          "depicts": "A coil of dragline silk set beside a spool of woven synthetic cord of equal thickness, both shown holding the same load.",
+          "title": "TOUGH AS POLYARAMID FIBRE",
+          "node": "z-toughness"
+        },
+        {
+          "block": "spya-qdjb0x",
+          "quote": "dragline silks undergo supercontraction, shrinking up to 50% in length and behaving like a weak rubber under tension",
+          "depicts": "A wet silk thread drooping and slack with morning dew beaded along it, shrunk to half its former span.",
+          "title": "SHRINKS LIKE RUBBER WHEN WET",
+          "node": "z-supercontract"
+        },
+        {
+          "block": "spya-k8bh7d",
+          "quote": "become functional immediately, and are usable indefinitely, remaining biodegradable, versatile and compatible with other materials in the environment",
+          "depicts": "A glistening disc of glue bonded instantly to a twig, shown beginning to soften and fade back into the bark beside it.",
+          "title": "GLUE THAT SETS AND FADES AWAY",
+          "node": "z-adhesive"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same row of spiders from the overview, each holding out a differently textured thread, reused here as the frame's opening scene.",
+          "title": "SILK TUNED TO EACH SPIDER"
+        },
+        {
+          "where": "A nest of soft coiled threads looping around a few hard angular blocks, drawn larger here to show the weave clearly.",
+          "title": "SOFT COILS: THE AMORPHOUS MATRIX"
+        },
+        {
+          "where": "A single thick thread bent into a wide bow shape by two hands pulling at its ends, neither snapping nor going slack.",
+          "title": "STRENGTH AND STRETCH TOGETHER"
+        },
+        {
+          "where": "A flexible thread curling gracefully around a rigid iron bar standing stiff and unbent beside it.",
+          "title": "BENDS WHERE STEEL STAYS STIFF"
+        },
+        {
+          "where": "A dragline thread pulled taut next to a steel bar of the same thickness, both holding firm under the same weight.",
+          "title": "AS STRONG AS HIGH-GRADE STEEL"
+        },
+        {
+          "where": "A fine silk thread wound once all the way around a small globe of the Earth, impossibly light.",
+          "title": "A THREAD AROUND THE EARTH"
+        },
+        {
+          "where": "A coil of dragline silk set beside a spool of woven synthetic cord of equal thickness, both shown holding the same load.",
+          "title": "TOUGH AS POLYARAMID FIBRE"
+        },
+        {
+          "where": "A wet silk thread drooping and slack with morning dew beaded along it, shrunk to half its former span.",
+          "title": "SHRINKS LIKE RUBBER WHEN WET"
+        },
+        {
+          "where": "A glistening disc of glue bonded instantly to a twig, shown beginning to soften and fade back into the bark beside it.",
+          "title": "GLUE THAT SETS AND FADES AWAY"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-synthesis",
+      "title": "Inside Artificial synthesis",
+      "prompt": "An illuminated manuscript page on cream parchment, same hand and palette as the earlier plates — ochre, rust red, forest green, iron-gall brown ink, gold leaf only on the border. The whole page sits inside one wide gilt frame matching the ARTIFICIAL SYNTHESIS enclosure from the overview page. At the top, reused unchanged, is the roundel of a craftsman standing between a jar of liquid protein and a small mechanical duct, titled TWO TASKS: PROTEIN AND DUCT — the doorway into this frame. Below it, the page splits into two columns beneath one linking roundel: a line of small creatures — bacteria dish, silkworm, goat — each holding out a strand of protein toward the bench (BORROWED ORGANISMS, BORROWED PROTEIN). The left column descends through a scientist bent over a glowing dish of bacteria with a thread rising from it (E. COLI SPUN WITH SPIDER GENES), then a goat being milked into a glowing jug (SILK PROTEIN IN GOATS' MILK). The right column, parallel to it, descends through a hand pressing a syringe through a fine needle (FORCED THROUGH A HOLLOW NEEDLE), then a small etched glass chip threading a droplet through delicate channels (TINY CHANNELS, PRECISE CONTROL). Both columns converge at the bottom of the frame into one roundel: two threads beside a small ruler, one thick and rough, one fine and bright (60 MICRONS VS 4: THE GAP). Off to one side, linked by a thin branch from the right-hand column, sits a smaller roundel of round silk beads scattered beside a thin membrane sheet (CAPSULES FOR DELIVERING DRUGS), set apart from the main descent. Each roundel is titled beneath it in small lettered capitals; nothing else on the page carries any lettering. Keep the two columns visually distinct but balanced in width, with generous bare parchment between them so the convergence at the bottom reads clearly.",
+      "vignettes": [
+        {
+          "block": "spya-wgee6t",
+          "quote": "synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions",
+          "depicts": "The same craftsman from the overview standing between a jar of liquid protein and a small mechanical duct, reused as this frame's doorway.",
+          "title": "TWO TASKS: PROTEIN AND DUCT",
+          "node": "z-hub"
+        },
+        {
+          "block": "spya-f399m7",
+          "quote": "succeeded in making spider silk directly using E. coli modified with certain genes of the spider Nephila clavipes",
+          "depicts": "A scientist bent over a dish of bacteria, a thin thread rising from it, a faint spider drawn on the vial's label to mark the borrowed genes.",
+          "title": "E. COLI SPUN WITH SPIDER GENES",
+          "node": "z-ecoli"
+        },
+        {
+          "block": "spya-brz8bx",
+          "quote": "the milk produced by the goats contained significant quantities of the protein, 1–2 grams of silk proteins per litre",
+          "depicts": "A goat being milked into a jug, the milk shown faintly glowing with fine protein strands swirling inside it.",
+          "title": "SILK PROTEIN IN GOATS’ MILK",
+          "node": "z-goats"
+        },
+        {
+          "block": "spya-y4ay23",
+          "quote": "Feedstock is forced through a hollow needle using a syringe",
+          "depicts": "A hand pressing down on a syringe, pale liquid forced through a fine hollow needle and emerging as a thread.",
+          "title": "FORCED THROUGH A HOLLOW NEEDLE",
+          "node": "z-syringe"
+        },
+        {
+          "block": "spya-qbrkma",
+          "quote": "Microfluidics have the advantage of being controllable and able to test spin small volumes of unspun fibre",
+          "depicts": "A small glass chip etched with delicate channels, a droplet of silk dope threading through it under a magnifying lens.",
+          "title": "TINY CHANNELS, PRECISE CONTROL",
+          "node": "z-microfluidics"
+        },
+        {
+          "block": "spya-kp0n2d",
+          "quote": "Silk can be formed into other shapes and sizes such as spherical capsules for drug delivery",
+          "depicts": "A small cluster of round silk beads scattered beside a thin membrane sheet, apart from the threads, off to one side.",
+          "title": "CAPSULES FOR DELIVERING DRUGS",
+          "node": "z-otherShapes"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same craftsman from the overview standing between a jar of liquid protein and a small mechanical duct, reused as this frame's doorway.",
+          "title": "TWO TASKS: PROTEIN AND DUCT"
+        },
+        {
+          "where": "A line-up of small creatures — a dish of bacteria, a silkworm, a goat — each holding out a thin strand of protein toward the craftsman's bench.",
+          "title": "BORROWED ORGANISMS, BORROWED PROTEIN"
+        },
+        {
+          "where": "A scientist bent over a dish of bacteria, a thin thread rising from it, a faint spider drawn on the vial's label to mark the borrowed genes.",
+          "title": "E. COLI SPUN WITH SPIDER GENES"
+        },
+        {
+          "where": "A goat being milked into a jug, the milk shown faintly glowing with fine protein strands swirling inside it.",
+          "title": "SILK PROTEIN IN GOATS’ MILK"
+        },
+        {
+          "where": "A hand pressing down on a syringe, pale liquid forced through a fine hollow needle and emerging as a thread.",
+          "title": "FORCED THROUGH A HOLLOW NEEDLE"
+        },
+        {
+          "where": "A small glass chip etched with delicate channels, a droplet of silk dope threading through it under a magnifying lens.",
+          "title": "TINY CHANNELS, PRECISE CONTROL"
+        },
+        {
+          "where": "Two threads laid beside a small ruler, one thick and rough, the other far finer and bright, showing the size gap between them.",
+          "title": "60 MICRONS VS 4: THE GAP"
+        },
+        {
+          "where": "A small cluster of round silk beads scattered beside a thin membrane sheet, apart from the threads, off to one side.",
+          "title": "CAPSULES FOR DELIVERING DRUGS"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "spider-silk-spya-ge30uz",
+  "profileHash": null
+}

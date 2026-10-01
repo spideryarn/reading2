@@ -133,6 +133,7 @@ function stubHeights(
   padding = 0,
   bandRight = 300,
   wholeTitleExtraPerRow = 0,
+  headHeight = 0,
 ) {
   /* jsdom applies no stylesheet, so the panel's real `0.75rem` padding is not
      here to be read. Without stubbing it, a mutation deleting the padding
@@ -152,10 +153,22 @@ function stubHeights(
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
+    /* **The visible list starts below the padding**, which is where the fit
+       has measured its room from since 2026-10-01 (OutlinePanel.tsx §
+       `measure`): whatever sits above the list — the padding, and now the
+       Fisheye / Expanded toggle — is room it cannot use. */
+    const visibleList = this.tagName === "OL" && !this.dataset.rung;
     return (
       this.classList.contains("outln")
         ? { left: 12, right: bandRight, width: bandRight - 12, top: 0, bottom: 0, height: 0 }
-        : { left: 0, right: 0, width: 0, top: 0, bottom: 0, height: 0 }
+        : {
+            left: 0,
+            right: 0,
+            width: 0,
+            top: visibleList ? padding + headHeight : 0,
+            bottom: 0,
+            height: 0,
+          }
     ) as DOMRect;
   });
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
@@ -197,8 +210,11 @@ function render(
      original height model; a positive value makes the whole and clamped copies
      observably different. */
   wholeTitleExtraPerRow = 0,
+  /* The real toggle is outside this fixture. This is the distance it puts
+     between the band's top and the visible list's top. */
+  headHeight = 0,
 ) {
-  stubHeights(bandHeight, 10, padding, bandRight, wholeTitleExtraPerRow);
+  stubHeights(bandHeight, 10, padding, bandRight, wholeTitleExtraPerRow, headHeight);
   act(() => {
     reactRoot.render(
       <OutlinePanel
@@ -209,6 +225,7 @@ function render(
         proseBeside={proseBeside}
         paragraphLabels={paragraphLabels}
         onJump={() => {}}
+        head={headHeight > 0 ? <div>Fisheye / Expanded</div> : null}
       />,
     );
   });
@@ -349,122 +366,64 @@ describe("what the list says", () => {
     expect(list.getAttribute("role")).toBe("tree");
   });
 
-  it("keeps the reader's arrow-key focus when the article moves under it", () => {
+  it("leaves ↑ / ↓ to the article, and lets go of a held row when they are pressed", () => {
     /**
-     * The bug this is for only appears where two decisions meet. A paragraph
-     * row is never `now` — nothing on the page knows which paragraph the reader
-     * is on — so an effect that reset the focused index to the `now` row on
-     * every change snapped focus BACKWARDS from a paragraph onto its section
-     * the moment `focusRow` moved. The reader could not arrow across a
-     * boundary into a section's paragraphs.
+     * Greg, spya-b2wzjf: "up and down should always do the same thing, i.e.
+     * jump to the next block in the text". Until 2026-10-01 they stepped this
+     * list's rows — a part or a section a press — and `preventDefault`ed, so
+     * the window's handler (keynav.ts), which steps one block, stood down.
      *
-     * So: focus a paragraph row, then move `focusRow` as the article would, and
-     * the focused row must still be that paragraph.
+     * Two halves. The key is not handled here (not prevented, nothing jumped).
+     * And a row held by Home lets go, so the mark follows the reader again as
+     * the article moves; otherwise Home's row would keep it for ever.
+     * Before 2026-10-01 two tests here pinned ↑ / ↓'s own focus rules (a
+     * paragraph row reached by arrowing, kept and then forgotten); nothing can
+     * put focus on a paragraph row now, so they went with the behaviour.
      */
-    const panel = render(10_000, 0);
-    const list = panel.querySelector<HTMLElement>('.outln-list:not([data-rung])')!;
-    const rowsOf = () =>
-      Array.from(panel.querySelectorAll('.outln-list:not([data-rung]) .outln-row'));
-
-    expect(
-      rowsOf().some((r) => r.classList.contains("lvl-3")),
-      "fixture must draw paragraph rows",
-    ).toBe(true);
-
-    /* Arrow down until the focused row IS a paragraph. Stepping a fixed count
-       would be wrong: focus starts on the row the reader is in, not on row 0. */
-    const focusedEl = () => {
-      const id = list.getAttribute("aria-activedescendant");
-      return rowsOf().find((r) => r.id === id)!;
-    };
-    for (let i = 0; i < 20 && !focusedEl().classList.contains("lvl-3"); i++) {
+    const jumps: string[] = [];
+    const draw = (focusRow: number) =>
       act(() => {
-        list.dispatchEvent(
-          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        reactRoot.render(
+          <OutlinePanel
+            root={root}
+            supplementOf={geometry.supplementOf}
+            arcByRow={null}
+            focusRow={focusRow}
+            proseBeside
+            paragraphLabels
+            onJump={(id) => jumps.push(id)}
+          />,
         );
       });
-    }
-    expect(focusedEl().classList.contains("lvl-3")).toBe(true);
-    const focusedId = list.getAttribute("aria-activedescendant");
-
-    /* The article scrolls — same section, then a different focusRow entirely. */
-    act(() => {
-      reactRoot.render(
-        <OutlinePanel
-          root={root}
-          supplementOf={geometry.supplementOf}
-          arcByRow={null}
-          focusRow={2}
-          proseBeside
-          paragraphLabels
-          onJump={() => {}}
-        />,
-      );
-    });
-    expect(list.getAttribute("aria-activedescendant")).toBe(focusedId);
-  });
-
-  it("forgets a focused row that disappears, so it cannot steal focus back", () => {
-    /**
-     * The fallback alone makes this look fixed: focus moves sensibly to the
-     * row the reader is in. But holding the old id means that when that row is
-     * drawn again — the window grows, or the reader comes back — it silently
-     * becomes active again, from wherever the reader had since moved. Sol's
-     * five-step sequence, 2026-08-28.
-     */
     const panel = render(10_000, 0);
     const list = panel.querySelector<HTMLElement>('.outln-list:not([data-rung])')!;
-    const rowsOf = () =>
-      Array.from(panel.querySelectorAll('.outln-list:not([data-rung]) .outln-row'));
-    const focusedEl = () => {
-      const id = list.getAttribute("aria-activedescendant");
-      return rowsOf().find((r) => r.id === id);
-    };
-
-    /* Arrow onto a paragraph row, which only exists at the top rung. */
-    for (let i = 0; i < 20 && !focusedEl()?.classList.contains("lvl-3"); i++) {
+    const press = (key: string) => {
+      const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
       act(() => {
-        list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        list.dispatchEvent(e);
       });
+      return e;
+    };
+    const nowId = () => panel.querySelector('.outln-list:not([data-rung]) .outln-row.now')?.id;
+
+    for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"]) {
+      expect(press(key).defaultPrevented, key).toBe(false);
     }
-    const paragraphId = list.getAttribute("aria-activedescendant");
-    expect(focusedEl()!.classList.contains("lvl-3")).toBe(true);
+    expect(jumps).toEqual([]);
 
-    /* The band shrinks until paragraphs are no longer drawn. */
-    act(() => {
-      reactRoot.render(
-        <OutlinePanel
-          root={root}
-          supplementOf={geometry.supplementOf}
-          arcByRow={null}
-          focusRow={0}
-          proseBeside={false}
-          paragraphLabels
-          onJump={() => {}}
-        />,
-      );
-    });
-    expect(rowsOf().some((r) => r.classList.contains("lvl-3"))).toBe(false);
-    expect(list.getAttribute("aria-activedescendant")).not.toBe(paragraphId);
-    const afterId = list.getAttribute("aria-activedescendant");
+    /* Home holds the first row, and it stays held while the article moves. */
+    expect(press("Home").defaultPrevented).toBe(true);
+    const first = list.getAttribute("aria-activedescendant");
+    const lastRow = (geometry.cells[1] ?? []).reduce((n, c) => n + c.rowSpan, 0) - 1;
+    draw(lastRow);
+    expect(list.getAttribute("aria-activedescendant")).toBe(first);
+    expect(nowId(), "fixture: the reader must be somewhere other than the held row").not.toBe(first);
 
-    /* And it grows back. The paragraph must NOT reclaim the focus. */
-    act(() => {
-      reactRoot.render(
-        <OutlinePanel
-          root={root}
-          supplementOf={geometry.supplementOf}
-          arcByRow={null}
-          focusRow={0}
-          proseBeside
-          paragraphLabels
-          onJump={() => {}}
-        />,
-      );
-    });
-    expect(rowsOf().some((r) => r.classList.contains("lvl-3"))).toBe(true);
-    expect(list.getAttribute("aria-activedescendant")).toBe(afterId);
+    /* ↓ lets go: the mark is the reader's row again. */
+    press("ArrowDown");
+    expect(list.getAttribute("aria-activedescendant")).toBe(nowId());
   });
+
 
   it("does not count the panel's padding as room the list can use", () => {
     /* `clientHeight` includes padding; the list starts below it. Granting the
@@ -481,6 +440,23 @@ describe("what the list says", () => {
     fresh();
     const withPadding = render(60, 0, true, 40).dataset.outlineRung;
     expect(Number(withPadding)).toBeLessThan(Number(noPadding));
+  });
+
+  it("does not count the head row as room the list can use", () => {
+    /* The old padding subtraction happens to remain correct when there is no
+       head. Give the list a second, independent inset so reverting the
+       list-top measurement makes this fail rather than re-testing padding. */
+    const fresh = () => {
+      act(() => reactRoot.unmount());
+      host.remove();
+      host = document.createElement("div");
+      document.body.appendChild(host);
+      reactRoot = createRoot(host);
+    };
+    const noHead = render(60).dataset.outlineRung;
+    fresh();
+    const withHead = render(60, 0, true, 0, 300, true, 0, 40).dataset.outlineRung;
+    expect(Number(withHead)).toBeLessThan(Number(noHead));
   });
 
   it("reports the rung it actually drew, not the highest number that ties", () => {
@@ -539,5 +515,103 @@ describe("what the list says", () => {
   it("hides the measured candidates from assistive tech", () => {
     const panel = render(10_000);
     expect(panel.querySelector(".outln-measure")!.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("Expanded follow-along", () => {
+  /** Give jsdom just enough layout to distinguish an on-screen row from one
+   * below the list. Row positions move with `scrollTop`, as they do in a real
+   * scroll container. */
+  function layout(listHeight: () => number) {
+    /* jsdom exposes `CSS` without the browser's `CSS.escape`. Node ids in this
+       fixture need no escaping; the stub lets the production lookup run. */
+    vi.stubGlobal("CSS", { ...globalThis.CSS, escape: (value: string) => value });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("outln-list") ? listHeight() : 300;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("outln-row") ? 30 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.classList.contains("outln-list")) {
+        return { top: 0, bottom: listHeight(), height: listHeight() } as DOMRect;
+      }
+      if (this.classList.contains("outln-row")) {
+        const list = this.closest<HTMLElement>(".outln-list")!;
+        const rows = Array.from(list.querySelectorAll(".outln-row"));
+        const top = rows.indexOf(this) * 50 - list.scrollTop;
+        return { top, bottom: top + 30, height: 30 } as DOMRect;
+      }
+      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+    });
+  }
+
+  const draw = (focusRow: number) => {
+    act(() => {
+      reactRoot.render(
+        <OutlinePanel
+          root={root}
+          supplementOf={geometry.supplementOf}
+          arcByRow={null}
+          focusRow={focusRow}
+          proseBeside
+          paragraphLabels
+          onJump={() => {}}
+          expanded
+          head={<div>Fisheye / Expanded</div>}
+        />,
+      );
+    });
+    return host.querySelector<HTMLOListElement>(".outln-list")!;
+  };
+
+  it("moves only its own list when `now` changes, and leaves a manual position alone otherwise", () => {
+    layout(() => 100);
+    const list = draw(0);
+    expect(list.scrollTop).toBe(0);
+
+    /* Section 2 starts at row 7 in this fixture and is below the viewport. */
+    draw(7);
+    expect(list.scrollTop).toBeGreaterThan(0);
+
+    /* A re-render inside the same section is not another follow request. */
+    list.scrollTop = 9;
+    draw(7);
+    expect(list.scrollTop).toBe(9);
+
+    /* Crossing the next section boundary follows again. */
+    draw(9);
+    expect(list.scrollTop).toBeGreaterThan(9);
+  });
+
+  it("re-syncs when a hidden list becomes visible again", () => {
+    let height = 0;
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          observers.push(cb);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    layout(() => height);
+    const list = draw(7);
+    expect(list.scrollTop).toBe(0);
+    expect(observers.length).toBeGreaterThanOrEqual(2);
+
+    height = 100;
+    /* The fit observer is first; follow-along's list observer is the last one
+       installed by the component. */
+    observers.at(-1)!([], {} as ResizeObserver);
+    expect(list.scrollTop).toBeGreaterThan(0);
   });
 });

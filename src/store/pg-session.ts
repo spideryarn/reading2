@@ -93,7 +93,7 @@
  * outside this transaction — which was the failure the transaction is for. D3
  * converted `arc` and the rest followed.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { jobs as jobsTable } from "../db/schema.js";
@@ -109,7 +109,7 @@ import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
-import { RELEASED, settleReservation } from "./pg-billing.js";
+import { RELEASED, settleReservation, supersedeMinimal } from "./pg-billing.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
@@ -204,6 +204,33 @@ interface Announcement {
  * tests/helpers/load-article.ts reports it — but nothing here reads it.
  */
 
+/**
+ * **Mark a read paper's minimal row as paid for by the ingest that read it**,
+ * or take the publication back. Inside `settleIn`'s transaction, after that
+ * ingest was charged — the order the ledger trigger
+ * `ingest_events_superseded_by_ingest` requires.
+ *
+ * `supersedeMinimal` answers 1 normally and throws on more than one. **Zero
+ * is a rollback when the paper has a minimal row at all** (Sol's plan review,
+ * P1): it means the row is already superseded, or the charge landed on
+ * something the minimal row cannot name, and a publication over either would be
+ * a paper paid for twice or once too few. Zero with no minimal row is allowed —
+ * a paper the administrator added, who reserves nothing, read later by an
+ * account that pays.
+ */
+async function supersedeReadPaper(tx: Tx, articleId: string, ingestEventId: string): Promise<void> {
+  if ((await supersedeMinimal(tx, articleId, ingestEventId)) === 1) return;
+  const minimal = await tx.execute(sql`
+    select 1 from spideryarn.ingest_events
+     where article_id = ${articleId}::uuid and kind = 'minimal'
+     limit 1`);
+  if (minimal.rows.length === 0) return;
+  throw new Error(
+    `article ${articleId} was read in full by ${ingestEventId}, but its minimal row could not be ` +
+      "marked as paid for by it; refusing the publication rather than charging the paper twice",
+  );
+}
+
 export interface PgStoreSessionOptions {
   /** The draft this claim owns — `openOrBeginJobDraft`'s answer, plus the claim. */
   readonly ref: JobDraftRef;
@@ -222,8 +249,14 @@ export interface PgStoreSessionOptions {
 export async function openPgStoreSession(opts: {
   readonly slug: string;
   readonly job: { readonly id: string; readonly attemptId: string };
+  /** The article is born minimal if this claim creates it — see `lockOrCreateArticle`. */
+  readonly processing?: "minimal";
 }): Promise<StoreSession> {
-  const draft = await openOrBeginJobDraft({ slug: opts.slug, job: opts.job });
+  const draft = await openOrBeginJobDraft({
+    slug: opts.slug,
+    job: opts.job,
+    ...(opts.processing ? { processing: opts.processing } : {}),
+  });
   return pgStoreSession({
     ref: {
       slug: opts.slug,
@@ -568,9 +601,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
      * nobody got. Every other ending **releases, tolerantly**; see
      * src/store/pg-billing.ts for why the two differ.
      */
+    const reservation = await reservationOf(tx, transition.jobId);
     await settleReservation(
       tx,
-      await reservationOf(tx, transition.jobId),
+      reservation,
       /* **The charge carries the article it is for**, and the type is what makes
          that unforgettable — see `Settlement` in ./pg-billing.ts. `ref.articleId`
          is this draft's article, already cross-checked against the locked row by
@@ -578,6 +612,16 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          could be more authoritative than this one. */
       ending.status === "done" ? { kind: "succeeded", articleId: ref.articleId } : RELEASED,
     );
+    /* **Read this, paid in full and no more**: the tree that landed on a minimal
+       paper was charged as an ingest one statement up, so the paper's minimal
+       row is marked as paid for by it, in this same transaction — a paper totals
+       exactly one article (docs/project/billing.md § A minimal paper costs a
+       hundredth). `publishRevisionIn` has already refused a tree that no *Read
+       this* reservation paid for, unless the owner is the administrator, who
+       reserves nothing and has no row to supersede. */
+    if (announce.published?.upgradedFromMinimal && reservation) {
+      await supersedeReadPaper(tx, ref.articleId, reservation);
+    }
     return { settlement: settlementOf(transition, after), announce };
   };
 
