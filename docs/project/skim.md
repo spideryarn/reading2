@@ -20,7 +20,7 @@ typing *Trajectory* in the command bar still finds it.
 A grep for `trajector` outside the historical folders should find only these, each on purpose:
 
 - **The Commands keyword** — `"trajectory"` in `MODE_CATALOG.skim.aliases`
-  ([`src/modes.ts`](../../src/modes.ts)), at Greg's request.
+  ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), at Greg's request.
 - **`RETIRED_MODES`: `trajectory → skim`**, beside `outline`/`hierarchy → structure`, so a bookmarked,
   shared or remembered `?mode=trajectory` opens Skim. Feedback from a tab loaded before the rename
   is normalised the same way (and its `job.step`, by a step alias), rather than refused.

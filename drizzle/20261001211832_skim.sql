@@ -26,6 +26,26 @@
 --   `revision_step_runs.prompt_version`: the prompt is unchanged and the tag
 --   still names it (src/skim.ts § `PROMPT_VERSION`, F1).
 -- - `feedback` rows: evidence, kept as sent (F4).
+-- A valid job has each step at most once (`orderSteps` in src/jobs.ts). A row
+-- carrying BOTH names is therefore anomalous. Blind replacement would make two
+-- `skim` entries and leave their distinct statuses/force flags irreconcilable;
+-- choosing either one would silently throw real progress away. Refuse before
+-- changing anything, including the equivalent ambiguity in a reset plan.
+DO $$
+DECLARE mixed_steps bigint;
+DECLARE mixed_reset bigint;
+BEGIN
+  SELECT count(*) INTO mixed_steps FROM "spideryarn"."jobs"
+   WHERE "steps" @> '[{"name":"trajectory"}]'::jsonb
+     AND "steps" @> '[{"name":"skim"}]'::jsonb;
+  SELECT count(*) INTO mixed_reset FROM "spideryarn"."jobs"
+   WHERE "reset"->'regenerate' @> '["trajectory"]'::jsonb
+     AND "reset"->'regenerate' @> '["skim"]'::jsonb;
+  IF mixed_steps > 0 OR mixed_reset > 0 THEN
+    RAISE EXCEPTION
+      'migration skim: cannot safely merge both spellings in % jobs.steps row(s) and % jobs.reset row(s); inspect those jobs before retrying.', mixed_steps, mixed_reset;
+  END IF;
+END $$;--> statement-breakpoint
 ALTER TABLE "spideryarn"."article_revisions" RENAME COLUMN "trajectory" TO "skim";--> statement-breakpoint
 ALTER TABLE "spideryarn"."revision_step_runs" DROP CONSTRAINT "revision_step_runs_step";--> statement-breakpoint
 UPDATE "spideryarn"."revision_step_runs" SET "step_name" = 'skim' WHERE "step_name" = 'trajectory';--> statement-breakpoint

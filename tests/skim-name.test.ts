@@ -3,6 +3,7 @@
  * sees, the mode word, and the old `?mode=trajectory` still landing on it.
  * docs/plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES, modeFromParam } from "../src/modes.js";
@@ -31,5 +32,10 @@ describe("Skim, the mode once called Trajectory", () => {
     expect(readMode("/read/x?mode=trajectory")).toBe("skim");
     /* The control: an unknown word is still nothing. */
     expect(modeFromParam("trajectoryx")).toBe(null);
+  });
+
+  it("the evergreen kept-spellings list points the command alias at its real owner", () => {
+    const doc = readFileSync(new URL("../docs/project/skim.md", import.meta.url), "utf8");
+    expect(doc).toContain("[`src/mode-catalog.ts`](../../src/mode-catalog.ts)");
   });
 });

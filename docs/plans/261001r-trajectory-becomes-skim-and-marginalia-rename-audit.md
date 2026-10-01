@@ -196,3 +196,8 @@ minutes. What changed:
   them through the legacy `?mode=annotations` rather than `?margin=1`; now canonical (the legacy
   word keeps its own test). `interface-vision.md`'s step "Rename Annotations to Marginalia" marked
   done. The `annotations` Commands alias was already there.
+- Code review (GPT Sol, write access, `261001r-code-review-sol.md`): three narrow fixes, all taken —
+  the migration refuses a job that names both spellings rather than collapsing them (C1);
+  `useFaqRead`, split out only for the removed snippets, folded back into `useFaq` (C2); a doc link
+  (C3). No wider findings. The job rewrites were also run by hand on sample rows in a rolled-back
+  temp table: order kept, NULL and regenerate-less resets untouched.

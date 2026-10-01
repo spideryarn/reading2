@@ -35,6 +35,7 @@ import { STEP_ORDER } from "../src/pipeline.js";
 
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "revision_step_runs_step";
+const SKIM_MIGRATION = path.join(DRIZZLE, "20261001211832_skim.sql");
 
 /**
  * Every `.sql` migration, in the order it runs — **journal order, which is the
@@ -140,5 +141,26 @@ describe("the migration that last set it", () => {
        passes on a fresh `db:reset` and fails on the machines that matter. */
     expect(drop).toBeGreaterThanOrEqual(0);
     expect(drop).toBeLessThan(add);
+  });
+
+  it("refuses a job that already contains both step spellings before rewriting either array", () => {
+    const sql = readFileSync(SKIM_MIGRATION, "utf-8");
+    const rewrite = sql.indexOf('UPDATE "spideryarn"."jobs" SET "steps"');
+    const mixedSteps = sql.search(
+      /WHERE "steps" @> '\[\{"name":"trajectory"\}\]'::jsonb\s+AND "steps" @> '\[\{"name":"skim"\}\]'::jsonb/,
+    );
+    const mixedReset = sql.search(
+      /WHERE "reset"->'regenerate' @> '\["trajectory"\]'::jsonb\s+AND "reset"->'regenerate' @> '\["skim"\]'::jsonb/,
+    );
+
+    /* New jobs are de-duplicated by `orderSteps`. Replacing the old spelling
+       blindly in a mixed row would break that invariant, while choosing either
+       row's status would silently discard real progress. The migration must
+       stop and name the anomalous row instead. The reset list has the same
+       uniqueness contract. */
+    expect(mixedSteps).toBeGreaterThanOrEqual(0);
+    expect(mixedReset).toBeGreaterThanOrEqual(0);
+    expect(mixedSteps).toBeLessThan(rewrite);
+    expect(mixedReset).toBeLessThan(rewrite);
   });
 });
