@@ -15,6 +15,7 @@
  * that a change of width changes it in both directions. Whether 609px is the
  * width at which two columns actually read is a browser question.
  */
+import { NuqsAdapter } from "nuqs/adapters/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -209,17 +210,20 @@ afterEach(() => {
 function mount(proseBeside = true, rootFontPx = 16) {
   act(() => {
     root.render(
-      <StructureBand
-        article={article}
-        leafDepth={geometry.leafDepth}
-        sections={buildSections(geometry, blocks)}
-        layoutKey="k"
-        supplementOf={geometry.supplementOf}
-        arcByRow={null}
-        proseBeside={proseBeside}
-        rootFontPx={rootFontPx}
-        onJump={() => {}}
-      />,
+      /* The band owns `?structure=` since 2026-10-01 (Fisheye / Expanded). */
+      <NuqsAdapter>
+        <StructureBand
+          article={article}
+          leafDepth={geometry.leafDepth}
+          sections={buildSections(geometry, blocks)}
+          layoutKey="k"
+          supplementOf={geometry.supplementOf}
+          arcByRow={null}
+          proseBeside={proseBeside}
+          rootFontPx={rootFontPx}
+          onJump={() => {}}
+        />
+      </NuqsAdapter>,
     );
   });
 }
@@ -299,5 +303,94 @@ describe("StructureBand", () => {
     bandWidth = 0;
     mount();
     expect(columns()).not.toBeNull();
+  });
+});
+
+/* **Fisheye / Expanded** — Greg, 2026-10-01 (spya-gxyhcc).
+   docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
+describe("Fisheye and Expanded", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+  const chip = (label: string) =>
+    Array.from(host.querySelectorAll<HTMLButtonElement>(".struct-view-btn")).find(
+      (b) => b.textContent === label,
+    );
+  const expanded = () => host.querySelector(".mode-band.outln.outln-expanded");
+
+  it("opens on Fisheye, with the toggle in both faces", () => {
+    bandWidth = edge() + 100;
+    mount();
+    expect(columns()).not.toBeNull();
+    expect(chip("Fisheye")?.getAttribute("aria-checked")).toBe("true");
+    expect(chip("Expanded")?.getAttribute("aria-checked")).toBe("false");
+
+    resizeTo(edge() - 1);
+    expect(list()).not.toBeNull();
+    expect(expanded()).toBeNull();
+    expect(chip("Fisheye")?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("degrades an unknown view to Fisheye", () => {
+    window.history.replaceState(null, "", "/?structure=unknown");
+    bandWidth = edge() + 100;
+    mount();
+    expect(columns()).not.toBeNull();
+    expect(expanded()).toBeNull();
+    expect(chip("Fisheye")?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("draws every part and section with its gist, as the list, however wide the band", () => {
+    window.history.replaceState(null, "", "/?structure=expanded");
+    bandWidth = edge() + 100;
+    mount();
+    expect(columns()).toBeNull();
+    const band = expanded();
+    expect(band).not.toBeNull();
+    for (const text of [
+      "FIRST PART TITLE",
+      "What the first part says.",
+      "SECOND PART TITLE",
+      "What the second part says.",
+      "SECTION 0 TITLE",
+      "What section 0 says.",
+      "SECTION 1 TITLE",
+      "What section 1 says.",
+    ]) {
+      expect(band?.textContent, text).toContain(text);
+    }
+  });
+
+  it("switches by the chips, writing ?structure= and taking it off again", async () => {
+    bandWidth = edge() + 100;
+    mount();
+    act(() => chip("Expanded")!.click());
+    expect(expanded()).not.toBeNull();
+    expect(chip("Expanded")?.getAttribute("aria-checked")).toBe("true");
+    /* nuqs writes the address on a tick of its own. */
+    await vi.waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get("structure")).toBe("expanded"),
+    );
+
+    act(() => chip("Fisheye")!.click());
+    expect(columns()).not.toBeNull();
+    await vi.waitFor(() =>
+      expect(new URLSearchParams(window.location.search).has("structure")).toBe(false),
+    );
+  });
+
+  it("keeps measuring the face while Expanded is open", async () => {
+    bandWidth = edge() + 100;
+    mount();
+    act(() => chip("Expanded")!.click());
+    expect(expanded()).not.toBeNull();
+
+    /* Expanded stays a list, but its mounted surface continues feeding the
+       width observer. Returning to Fisheye must use the width reached while it
+       was open, not the stale wide face from before it opened. */
+    resizeTo(edge() - 1);
+    act(() => chip("Fisheye")!.click());
+    await vi.waitFor(() => expect(list()).not.toBeNull());
+    expect(columns()).toBeNull();
   });
 });

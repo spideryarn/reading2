@@ -216,9 +216,9 @@ td.text mark.cite.passage-flash-still { background-color: var(--flash-wash-stron
 tr.row-active .block-ref { opacity: 0.95; }
 
 /* ---------------------------------------------------------- block ids --
-   Every block id still drawn as characters: both ends of a gist's range, the
-   same range under a summary entry, and a cited id in model prose. **Not the
-   gutter beside a paragraph** — that was the fourth until 2026-08-31 and is now
+   Every block id still drawn as characters: both ends of a gist's range and a
+   cited id in model prose. **Not the gutter beside a paragraph** — that was
+   another until 2026-08-31 and is now
    an icon whose `title` carries the id (§ the gutter). Courier at Greg's asking, and small and faint on
    purpose — an id is machine text sitting next to prose, and it should read as
    a footnote to the thing it labels rather than as part of it.

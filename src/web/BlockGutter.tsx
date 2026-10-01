@@ -21,7 +21,8 @@
  * asked for it by name — *"something in the vertical gutter in the text as well
  * … I don't want it to be too obtrusive"* (2026-09-12) — and it is a trace of
  * the reader's own reading, not something a model wrote. The component's last
- * child is a real `.blk-read` span so it can own a title and hover strip; CSS
+ * child is a real `.blk-read` span so it can own a hover strip, which the
+ * reading view's shared card (BlockLinkCard.tsx) explains; CSS
  * positions it absolutely outside the grid, so it takes no control slot. Its
  * line remains a pseudo-element driven by `--read`: gutter.css § reading time,
  * docs/project/reading-time.md.
@@ -612,8 +613,8 @@ export function BlockGutter({
           What changes is the plain left click: the id used to jump, and jumping
           to the paragraph you are already hovering was close to a no-op. This
           slot is for quoting and linking, which is what the id was for too.
-          `BlockRef` still jumps everywhere else — gist ranges, summary entries,
-          chat citations — and is untouched. */}
+          `BlockRef` still jumps everywhere else — gist ranges and model
+          citations — and is untouched. */}
       <a
         className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
         href={blockHref(id, linkBase)}
@@ -856,19 +857,21 @@ export function BlockGutter({
           push a real control out of its slot. gutter.css § reading time
           takes it back out of every `> *` rule.
 
-          Static text, so it re-renders nothing — the darkness still arrives as
-          `--read` from the one generated style element (reading-time.ts §
+          Static, so it re-renders nothing — the strength arrives as `--read`
+          from the one generated style element (reading-time.ts §
           `gutterCss`), and so does the width: zero on a row with no reading
           time, which is every row for a visitor or with the switch off, so
-          there is nothing to hover there. A native `title`, as every other
-          control in this column uses, for the reason given on the permalink
-          above. `aria-hidden` because the line itself is decoration; nothing
-          about reading time is announced anywhere. */}
-      <span
-        className="blk-read"
-        aria-hidden="true"
-        title="Reading time: this line gets darker the longer you spend reading here. Only you see it."
-      />
+          there is nothing to hover there.
+
+          **No `title` since 2026-10-01**: the explanation is the reading
+          view's one delegated rich card (BlockLinkCard.tsx § `ReadingCard`),
+          which costs nothing per row — the permalink's reason above for a
+          `title` was the cost of a card *per trigger*. Greg asked for a rich
+          tooltip, and the `title` also said the line gets "darker" when on
+          this dark page it gets lighter (spya-mn3ruw). `aria-hidden` because
+          the line itself is decoration; nothing about reading time is
+          announced anywhere. */}
+      <span className="blk-read" aria-hidden="true" />
     </div>
   );
 }

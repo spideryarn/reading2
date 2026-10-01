@@ -252,7 +252,7 @@ the gate. Finding 13.
 `tree.provisional` at all, despite [`src/public/dto.ts`](../../src/public/dto.ts):257 claiming it does:
 Hierarchy renders every gistless internal node as a leaf
 ([`src/web/TableView.tsx`](../../src/web/TableView.tsx):854) and Summary says *"No summary for this
-section"* ([`src/web/SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx):437) — while visitor policy
+section"* (`src/web/SummaryPanel.tsx`:437, deleted 2026-10-01 with Summary's outline) — while visitor policy
 declares all three modes available ([`src/web/visitor.ts`](../../src/web/visitor.ts):188). **A visitor
 cannot start a job, so these are permanently misleading modes, not degraded ones.** That converts the
 risk below from "may grate" into a decision Greg has to take before stage 3. Finding 12.

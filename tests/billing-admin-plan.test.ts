@@ -93,6 +93,8 @@ function row(fields: Partial<AccountSnapshot>): AccountSnapshot {
        from the tier. src/billing/quota-adjustment.ts. */
     quotaLimitDelta: null,
     quotaPeriodStart: null,
+    /* No gift vouchers claimed — docs/project/billing.md § Gift vouchers. */
+    voucherArticles: 0,
     ...fields,
   };
 }
@@ -133,6 +135,9 @@ function merged(options: {
         highPowerInPeriod: 0,
         highPowerLifetimeShared: 0,
         highPowerInPeriodShared: 0,
+        minimalLifetime: 0,
+        minimalInPeriod: 0,
+        minimalInFlight: 0,
       },
     ],
     accounts: options.account ? new Map([[OWNER, options.account]]) : new Map(),

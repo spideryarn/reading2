@@ -97,11 +97,15 @@ export function plainWords(...kinds: PlainKind[]): string {
 export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/quiz-verdict.ts": "writes one word — right, wrong or unclear — that no reader sees",
   "src/simple-check.ts": "writes a verdict per paragraph — ok or contradicts — that no reader sees",
+  "src/dig-deeper.ts":
+    "runs a forced web search and writes a one-line keyword query for the library search; no reader sees either — the answer they read is explain's, which carries the rule",
   "src/source-guess-run.ts": "no prompt of its own: it sends citation-find.ts's, whose answer is a URL or null",
   "src/pdf-frontmatter.ts": "writes block ids",
   "src/pdf-authors.ts":
     "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
+  "src/paper-metadata.ts":
+    "copies a paper's title, authors, abstract and DOI off its first pages exactly as printed",
   "src/citation-paper-passages.ts":
     "copies up to three passages from a paper verbatim and picks one of three words for each; the code stores the paper's characters, not the model's",
   "src/crossrefs.ts":

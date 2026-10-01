@@ -195,20 +195,35 @@ function Ingests({ user }: { user: AdminUser }) {
   /* **"used", not "successful ingests"**, because the figure includes
      reservations still in flight — which is what the wall counts, so it is what
      the page has to count or the two disagree about who has a slot left. */
+  /* **The enforcement figure, in points, from integer counts** — the prices
+     the wall adds, `PRIVATE_INGEST_COST`, `PUBLIC_INGEST_COST` and
+     `MINIMAL_COST` in src/billing/points.ts: 200 a private article, 100 a public
+     one, the same again for High-powered AI, and 2 a minimal paper. Done here
+     rather than sent as a total, because the server has no better claim on the
+     multiplication than the page. **Literals rather than an import**, because
+     src/billing/ is the directory the browser may not reach
+     (tests/client-imports.test.ts) — the same reason src/billing-plan.ts is a
+     flat module; tests/admin-page.test.tsx pins the sum. */
+  const spent =
+    (user.ingests - user.ingestsShared) * 200 +
+    user.ingestsShared * 100 +
+    (user.highPower - user.highPowerShared) * 200 +
+    user.highPowerShared * 100 +
+    user.minimal * 2;
+  const budget = user.ingestLimit * 200;
+  const papers =
+    user.minimal === 0
+      ? ""
+      : `, and ${user.minimal} ${user.minimal === 1 ? "paper" : "papers"} not yet AI-processed, at 2 points each`;
   if (user.ingestWindow === "stale") {
     /* **Said on the cell, because the fraction cannot be read without it.** A
        subscription whose stored period has run out has no window to count
        inside, so this is a lifetime count against a monthly limit — and `active`
        in the Plan column beside it is the status of dates we could not read.
-       Drawn in half-slots with a `?`, rather than as a bare ingest fraction,
-       so public rows and High-powered upgrades remain visible without claiming
-       a lifetime numerator belongs to this month's denominator. */
-    const halfUnits =
-      (user.ingests - user.ingestsShared) * 2 +
-      user.ingestsShared +
-      (user.highPower - user.highPowerShared) * 2 +
-      user.highPowerShared;
-    const budget = user.ingestLimit * 2;
+       Drawn in points with a `?`, rather than as a bare ingest fraction, so
+       public rows, High-powered upgrades and minimal papers remain visible
+       without claiming a lifetime numerator belongs to this month's
+       denominator. */
     return (
       <span
         className="tw:text-muted-foreground"
@@ -217,12 +232,13 @@ function Ingests({ user }: { user: AdminUser }) {
           (user.highPower === 0
             ? ""
             : `, and ${user.highPower} switched to High-powered AI, ${user.highPowerShared} public now`) +
-          `. That is ${halfUnits} half-slots against this tier's ${budget} a month — the two are ` +
+          papers +
+          `. That is ${spent} points against this tier's ${budget} a month — the two are ` +
           "not the same window. Stripe's stored " +
           "billing period does not contain now, so there is no current period to count inside."
         }
       >
-        {halfUnits} / {budget} half ?
+        {spent} / {budget} pts ?
       </span>
     );
   }
@@ -230,55 +246,54 @@ function Ingests({ user }: { user: AdminUser }) {
     user.ingestWindow === "period"
       ? "in the current Stripe billing period"
       : "over the lifetime of the account";
-  /* **The plain fraction, while it is still a fraction.** With nothing shared
-     *and* no more ingests than the allowance, one ingest costs one article's
-     worth and `3 / 20` means what it has always meant.
+  /* **The plain fraction, while it is still a fraction.** With nothing shared,
+     no High-powered AI, no minimal papers *and* no more ingests than the
+     allowance, one ingest costs one article's worth and `3 / 20` means what it
+     has always meant.
 
-     **The second half of that condition is not redundant.** An account that
+     **The last half of that condition is not redundant.** An account that
      shared six articles and then made them all private again has nothing public
-     and twelve half-units against a budget of six, and `6 / 3` in this cell
-     would read as the wall having failed — the same rendering the half form
-     below exists to avoid, arrived at from the other direction. GPT Sol,
+     and 1,200 points against a budget of 600, and `6 / 3` in this cell would
+     read as the wall having failed — the same rendering the points form below
+     exists to avoid, arrived at from the other direction. GPT Sol,
      2026-09-05. */
-  if (user.ingestsShared === 0 && user.highPower === 0 && user.ingests <= user.ingestLimit) {
+  if (
+    user.ingestsShared === 0 &&
+    user.highPower === 0 &&
+    user.minimal === 0 &&
+    user.ingests <= user.ingestLimit
+  ) {
     return (
       <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
         {user.ingests} / {user.ingestLimit}
       </span>
     );
   }
-  /* **And the honest pair once something is shared**, because the fraction stops
-     being one: a public article costs half a slot, so twelve ingests can sit
-     inside an allowance of three and `12 / 3` would read as the wall having
-     failed. The enforcement figure is in half-units and no rounding of it is
-     correct beside an article limit (src/billing-plan.ts § *Every number here is
-     a whole article*), so the cell shows the enforcement pair in its own unit
-     and names it. The arithmetic is done here from integer counts rather than
-     sent as a total — the server has no better claim on `× 2` than the page. */
-  /* High-powered AI's upgrades are one more article's worth each, priced like
-     an ingest of the same article — so they join the same sum. */
-  const halfUnits =
-    (user.ingests - user.ingestsShared) * 2 +
-    user.ingestsShared +
-    (user.highPower - user.highPowerShared) * 2 +
-    user.highPowerShared;
-  const budget = user.ingestLimit * 2;
+  /* **And the honest pair once it is not one**, because the fraction stops
+     being one: a public article costs half, and a minimal paper a hundredth, so
+     twelve ingests can sit inside an allowance of three and `12 / 3` would read
+     as the wall having failed. The enforcement figure is in points and no
+     rounding of it is correct beside an article limit (src/billing-plan.ts §
+     *Every number here is a whole count*), so the cell shows the enforcement
+     pair in its own unit and names it — `pts` on the cell, and *points* in the
+     title. */
   return (
     <span
       title={
         `${user.ingests} added ${window}, ` +
         /* *None of them public* is a different fact from *0 of them public*, and
-           it is the one that explains a cell like `12 / 6 half` on an account
+           it is the one that explains a cell like `1200 / 600 pts` on an account
            with nothing shared: they were public when they were added. */
         (user.ingestsShared === 0 ? "none of them public now" : `${user.ingestsShared} of them public`) +
         (user.highPower === 0
           ? ""
           : `, and ${user.highPower} switched to High-powered AI, which counts as one more article each`) +
-        `. A public article counts as half, so that is ${halfUnits} half-slots against an ` +
-        `allowance of ${user.ingestLimit} articles, which is ${budget}.`
+        papers +
+        `. An article is 200 points, half that while public, so that is ${spent} points against ` +
+        `an allowance of ${user.ingestLimit} articles, which is ${budget}.`
       }
     >
-      {halfUnits} / {budget} half
+      {spent} / {budget} pts
     </span>
   );
 }
@@ -496,12 +511,22 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
            list unless each cell says which it is answering. */
         hint:
           "Articles added against the allowance — a paid period, or the account's lifetime. " +
-          "Shown in half-slots for an account with public articles, which count half",
+          "Shown in points (200 to an article) for an account with public articles, which " +
+          "count half, or with papers not yet AI-processed, which count 2",
         ends: ["fewest first", "most first"],
         numeric: true,
       },
       cell: ({ row }) => <Ingests user={row.original} />,
     },
+    /* **Minimal papers get a column of their own** (plan 261001m): a count, the
+       same window as Ingests, and never folded into that column's fraction. */
+    counted(
+      "minimal",
+      "Not processed",
+      "Papers not yet AI-processed",
+      "Papers added with only their title, authors and abstract read, at 1/100 of an article each",
+      (u) => u.minimal,
+    ),
     counted("articles", "Articles", "Articles", "How many are on their shelf", (u) => u.articles),
     counted("archived", "Archived", "Archived", "How many they have taken off it", (u) => u.archived),
     counted("uploads", "Uploads", "Uploads", "PDFs that finished uploading", (u) => u.uploads),

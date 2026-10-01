@@ -573,6 +573,14 @@ The Portal then opens on no payment method and no invoices, which is the honest 
 that started to subscribe and stopped. Seen in the browser on 2026-09-03 and written down because it
 looks wrong for as long as it takes to remember why the mapping comes first.
 
+**The shelf says it too, to a Free reader, since 2026-10-01.** A compact box under the add box
+([library.md § The free-allowance box](library.md#the-free-allowance-box)) for the `free` and `lapsed`
+arms only: `describePlan`'s headline, the server's `remaining` (further *private* articles — never
+`limit − used`), and a collapsed *How free articles work* that links `/pricing` and `/profile`. It
+is the shelf's one `useBilling()`, and the read it makes is also what claims a waiting gift voucher
+(§ Gift vouchers below), so the box is where a new gift first shows — a gift icon by the count, the
+gift listed in the collapsed half, and a dismissible *has been added* line for seven days.
+
 ## We never touch a card
 
 Hosted Stripe Checkout and the hosted Customer Portal, both of which are redirects. Billing
@@ -593,7 +601,7 @@ step on an article you already have is free. A failed ingest is free. Archiving 
 give the slot back — and archiving is the only removal the interface offers
 ([library.md](library.md#archive-and-undo-is-the-confirmation)).
 
-**And a public article costs half of one**, and **switching an article to High-powered AI costs one more article** (half while it is public) — both below.
+**And a public article costs half of one**, **switching an article to High-powered AI costs one more article** (half while it is public), and **a paper added without AI processing costs a hundredth of one** — all three below.
 
 It is an **abuse boundary against model spend**, not an invoice. Nothing is derived from it and it
 reconciles against nothing; the subscription is a fixed charge. (Cost attribution lives in
@@ -633,12 +641,15 @@ that matter: a credit granted once makes share-then-unshare free slots for ever 
 which is the ledger growing a second kind of row; and charging half at add time misses the article
 you decide to share three weeks later, which is most of them.
 
-**The arithmetic is in half-units, and that is not a stylistic preference.** A private ingest costs
-**2**, a currently-public one **1**, and a tier's budget is its article allowance doubled. No
-fraction goes near money, and `usageOf`'s `Number.isInteger` assertion — which exists to stop a
-silent *"this account has used nothing"* — keeps working untouched.
-[`src/billing/half-units.ts`](../../src/billing/half-units.ts) holds the two units, as two branded
-types so that one cannot be passed where the other belongs.
+**The arithmetic is in points, 200 to an article, and that is not a stylistic preference.** A
+private ingest costs **200**, a currently-public one **100**, a minimal paper **2**, and a tier's
+budget is its article allowance times 200. No fraction goes near money, and `usageOf`'s
+`Number.isInteger` assertion — which exists to stop a silent *"this account has used nothing"* —
+keeps working untouched. [`src/billing/points.ts`](../../src/billing/points.ts) holds the two units,
+as two branded types so that one cannot be passed where the other belongs, and the predicates that
+are the wall. Until 2026-10-01 the unit was half-units, 2 to an article; a hundredth of a private
+article does not fit in those, so every rule below was multiplied out by 100 and kept as it was
+([§ A minimal paper costs a hundredth](#a-minimal-paper-costs-a-hundredth)).
 
 **In flight costs full price**, because nobody yet knows whether the article will be shared. It fails
 safe: the cheaper guess would let a burst through a budget that does not fit it.
@@ -646,17 +657,21 @@ safe: the cheaper guess would let a burst through a budget that does not fit it.
 Four things to know before touching any of it.
 
 - **Every tier, delta, proration and clamp stays in *articles*.** `quota_limit_delta` is a signed
-  count of whole ingests, so a Researcher's 150 with a stored −117 means 33. Doubling the tier
-  *before* `limitForPeriod` yields `300 − 117 = 183` half-units where the answer is `(150 − 117) × 2
-  = 66` — ninety-one articles for somebody entitled to thirty-three. `budgetFor` is therefore applied
+  count of whole ingests, so a Researcher's 150 with a stored −117 means 33. Converting the tier
+  *before* `limitForPeriod` yields `150 × 200 − 117 = 29,883` points where the answer is
+  `(150 − 117) × 200 = 6,600` — nearly a hundred and fifty articles for somebody entitled to
+  thirty-three (in half-units it was ninety-one, which is where it was found). `budgetFor` is therefore applied
   only at the admission and usage seam, and **no stored delta was migrated**. GPT Sol found it in the
   design review and rated it the one that would have cost real money.
-- **The wall admits a half-unit of overdraft, knowingly.** `used < budget` never let anybody exceed
-  the limit *only because a reservation cost exactly one*; at two, five-of-six admits an ingest that
-  settles at seven. The money-safe `used + 2 <= budget` would make Greg's own sentence — six public
-  articles on a free account — false, so the overdraft is taken. It is one half-unit, once: at seven
-  everything is refused, and sharing the new article returns them to six, which is still refused.
-  Both halves are pinned by `tests/billing-half-units.test.ts`.
+- **The ingest wall admits half an article of overdraft, knowingly.** In half-units the wall was
+  `used < budget`, which never let anybody exceed the limit *only because a reservation cost exactly
+  one*; at two, five-of-six admits an ingest that settles at seven. The money-safe rule would make
+  Greg's own sentence — six public articles on a free account — false, so the overdraft is taken. In
+  points it is `admitsIngest`, `used + 200 <= budget + 100`: half an article, once — at 700 of 600
+  everything is refused, and sharing the new article returns them to 600, which is still refused.
+  Both halves are pinned by `tests/billing-points.test.ts`, which also checks over a range that
+  `admitsIngest` and the old `used < budget` agree wherever `used` is a multiple of 100. Only a
+  minimal paper can put it anywhere else, and there the old spelling would overdraw by more.
 - **The discount starts from the day it shipped.** A charged row is resolved to its article through
   `ingest_events.article_id`, added 2026-09-05; every row charged before that has nothing to resolve
   and there is no way to backfill one, because jobs are hard-deleted and a slug is not identity. The
@@ -674,7 +689,7 @@ Four things to know before touching any of it.
   generated SQL's parameter count and values identical, so the shape test stays green — and with no
   paid public row anywhere in the suite, 44 tests passed while every paid public success vanished
   from usage, which is sequential public ingests without bound. Watched doing exactly that before the
-  case was written; `tests/billing-half-units.test.ts` § *a paid period counts public rows by its own
+  case was written; `tests/billing-points.test.ts` § *a paid period counts public rows by its own
   bounds* is what now fails on it. GPT Sol, 2026-09-05.
 
 **The lock order is `billing_accounts` before `articles`, everywhere.** Usage is now a function of a
@@ -713,12 +728,12 @@ your articles*. GPT Sol, 2026-09-05.
 has refused. It offered sharing unconditionally until the same day, which was false for every account
 whose rows predate the column — that is every row charged before 2026-09-05.
 
-**No surface ever divides a half-unit.** There is no rounding rule that is correct: `ceil(5/2)` says
+**No surface ever divides points.** There is no rounding rule that is correct: `ceil(5/2)` says
 *"3 of 3 used"* while the wall still admits one, and `floor` says *"2 of 3"* while two and a half are
-gone. So the marketed limit stays in articles, the enforcement budget is a separately named field,
-and any surface that shows usage is handed integer counts it adds up itself — `/profile` and
-`/pricing` through `describePlan`, and `/admin/users`, which shows the enforcement pair in half-slots
-and names the unit rather than printing a fraction.
+gone; a hundredth is worse. So the marketed limit stays in articles, the enforcement budget is a
+separately named field, and any surface that shows usage is handed integer counts it adds up itself —
+`/profile` and `/pricing` through `describePlan`, and `/admin/users`, which shows the enforcement pair
+in points (`280 / 600 pts`) and names the unit rather than printing a fraction.
 
 **And a ratio is only printed while it is one.** *N of the allowance* needs both that nothing is
 public *and* that there are no more ingests than the allowance sells: unshare six public articles on
@@ -768,13 +783,13 @@ the admin page's half-price split imports it rather than repeating it.
 
 Switching an article to [High-powered AI](high-powered-ai.md) writes **one more charged row** to
 `ingest_events`, with `kind = 'high_power'`. That row is priced exactly like an ingest of the same
-article: 2 half-units while private, 1 while public, live, and frozen on delete by the same trigger.
+article: 200 points while private, 100 while public, live, and frozen on delete by the same trigger.
 So the article costs double:
 
 | | ingest | + High-powered AI | in articles |
 |---|---|---|---|
-| private | 2 | 2 | **2** |
-| public | 1 | 1 | **1** |
+| private | 200 | 200 | **2** |
+| public | 100 | 100 | **1** |
 
 The rules, each for a reason:
 
@@ -785,8 +800,9 @@ The rules, each for a reason:
 - **Charged in the period it is switched on**, by the row's own `succeeded_at`, whatever the age of
   the article. Multiplying the ingest's row instead would have charged a three-month-old article's
   upgrade to three months ago.
-- **It must fit whole: `used + cost <= budget`.** This is not the ingest wall's `used < budget`. The
-  half-unit overdraft above exists so a free account can make six public articles; an upgrade is a
+- **It must fit whole: `admitsHighPower`, `used + cost <= budget`.** This is not the ingest wall's
+  `admitsIngest`. The half-article overdraft above exists so a free account can make six public
+  articles; an upgrade is a
   second charge for something already had. If it doesn't fit, the answer is `[pay-high-power]`,
   which carries **no sharing offer**. That offer answers the ingest wall's question, and following
   it could publish an article and still leave the switch refused.
@@ -800,7 +816,7 @@ The rules, each for a reason:
   price. So it can never be counted as an ingest in flight.
 
 **The wall adds both kinds; every sentence that says "added" counts only ingests.** `Usage` has two
-counts per kind. `halfUnitsUsed` adds all of them; `ingestsUsed`, `ReaderPlan.used` and
+counts per kind. `wallUsed` adds all of them; `ingestsUsed`, `ReaderPlan.used` and
 `sharedHalfPrice` count only ingests. `ReaderPlan.highPower` carries the upgrades, and `/profile`
 says them as a separate fact without a ratio. Before the split, one public high-powered article read
 as "2 of them are public". `/admin/users` does the same split. GPT Sol found this in the plan review:
@@ -812,6 +828,99 @@ as "2 of them are public". `/admin/users` does the same split. GPT Sol found thi
   before billing, charged before `article_id` existed, or added by the admin.
 - A re-added URL has N ingest rows and gets one upgrade, not N.
 - Re-runs stay free, so on a high-powered article each re-run costs us about twice what it would.
+
+### A minimal paper costs a hundredth
+
+> Let's say that papers for which we have done minimal AI processing (i.e. you've uploaded but
+> it's basically just extracted authors & abstract, or something like that) cost 0.01x an
+> AI-processed paper. So uploading 1000 papers with minimal AI-processing would use up 10
+> paper-slots.
+>
+> — Greg, 2026-10-01
+
+A **minimal paper** is a PDF added in a batch with only its title, authors and abstract read
+([the plan](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md)). Its ledger row is
+`kind = 'minimal'` and costs **2 points** — a hundredth of a private article, which is why the unit
+is 200 to an article. A free account can add 300 of them, and a Reader 2,000 a month. Pressing *Read
+this* on one costs the other 198, so a paper never costs more than one article in all.
+
+**The wall is four predicates, in one module**
+([`src/billing/points.ts`](../../src/billing/points.ts)), and nothing else compares points:
+
+| what | admits when | why |
+|---|---|---|
+| ingest — a URL, a single upload, a retry of either (`admitsIngest`) | `used + 200 <= budget + 100` | today's rule, multiplied out: the same half-article overdraft, once |
+| *Read this* on a minimal paper (`admitsUpgrade`) | `used + (200 − credit) <= budget + 100` | the same wall, crediting what the paper already paid |
+| a minimal paper (`admitsMinimal`) | `used + 2 <= budget` | must fit whole: a batch of a thousand never steps past the wall |
+| High-powered AI (`admitsHighPower`) | `used + cost <= budget` | must fit whole, as above |
+
+`ingestHeadroom` (`max(0, floor((budget + 100 − used) / 200))`) and `minimalHeadroom`
+(`max(0, floor((budget − used) / 2))`) are exact counts of the adds each wall would admit, not
+roundings of usage. `/profile`'s `atLimit` is `!admitsIngest`, and the sharing offer stops when
+`admitsIngest` would pass. Opus found that every comparison left in half-units would silently have
+ignored minimal papers, and GPT Sol's plan review asked for separate predicates in one module.
+
+**The rows.** `usageSql` counts minimal rows charged in the window and not superseded
+(`minimal_charged`), and in flight is split by kind: an unsettled ingest costs 200 and an unsettled
+minimal paper 2. Anything unsettled that is not `'minimal'` is counted at 200, the safe direction.
+**A minimal row is never priced by visibility**: a minimal article cannot be shared, the delete
+trigger freezes its row `'private'`, and once read it costs nothing. `tests/billing-minimal.test.ts`
+holds that through a public article and its deletion.
+
+**The 0.99 is a supersession, not a 198-point row.** *Read this* reserves an ordinary `'ingest'` row
+(`reserveUpgrade` in [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)), with
+`article_id` set at birth — the only unsettled ingest row that has one, which is what makes it a
+*Read this* reservation. The publication that charges it calls `supersedeMinimal` in the same
+transaction, which stamps `superseded_by` on the paper's minimal row, and a superseded row costs
+nothing. So the paper totals exactly one ingest: 200 private, 100 once shared, and still 200 after it
+is deleted. While *Read this* runs, the paper costs 202, which errs on the safe side. A failed *Read
+this* releases its reservation like any ingest, and the paper stays at 2.
+
+**A reference, not a timestamp**, so the database can say who paid. `ingest_events.superseded_by
+references ingest_events(id)`, and three guards hold it:
+
+- the check `ingest_events_superseded_shape`: only a charged minimal row may carry it;
+- the trigger `ingest_events_superseded_by_ingest`: the row it names is a charged `'ingest'` of the
+  same owner and the same, still-linked article;
+- `supersedeMinimal` throws if an article has more than one charged minimal row to stamp.
+
+A correlated version — count the minimal row only while no ingest exists for its article — was
+rejected: the delete trigger unlinks `article_id` on every row, so deleting a read paper would lose
+the correlation and bring its 2 points back. The stamp survives the unlink. A new stamp is refused
+after deletion: two missing article ids cannot prove that the rows paid for the same paper.
+
+**The credit is the paper's own row, not a constant** (Opus's review). *Read this* is credited 2 only
+when the paper has exactly one charged, unsuperseded minimal row and that row is inside the window
+`used` counts. No live minimal row means there is no *Read this* admission; more than one fails
+closed. A paper added last month on a paid plan is not in this month's `used`, so it gets no credit.
+
+**One *Read this* at a time per paper.** Under the billing lock, an unsettled ingest row already
+bound to the article refuses the second press (`[pay-reading]`, a 409), so two presses cannot both
+take the credit. The unique partial index `ingest_events_one_upgrade_in_flight` is the backstop. A
+settlement may also only land on the article its reservation names: `settleReservation` refuses a
+*Read this* row charged for a different article.
+
+**A retry keeps its kind.** `withRetrySlot` reads the old reservation (`reservationShapeOf`): a
+minimal row re-reserves through `withMinimalSlot` at 2 points, carrying the duplicate/claim callback
+under the fresh reservation's lock; an unsettled ingest row with an article goes through
+`withUpgradeSlot` for the same paper; and anything else is an ordinary ingest at 200.
+
+**The reservation has a seam for what must happen under the same lock.** `withMinimalSlot` takes an
+optional `inLock(tx, { reservationId, ownerId })`, run in the reservation's own transaction after the
+quota check and the insert — where the duplicate check and the upload claim go, so two tabs dropping
+one folder produce one paper. To decline, it throws, and the reservation rolls back with whatever it
+wrote. Nothing in it may open a transaction or touch the network, the rule the locked section is held
+to. The administrator reserves nothing and `inLock` still runs, under the same lock.
+
+**What a reader sees.** `ReaderPlan.minimal` is the count of papers, charged or in flight, as a plain
+number. `/profile` adds *"You have also added N papers not yet AI-processed, at 1/100 of an article
+each"*, and prints a ratio only while N is 0, the rule the public and High-powered counts already
+follow. `/admin/users` gives the papers a column of their own and adds them, at 2 each, to the points
+cell. A refused paper is told how many still fit (`minimalQuotaReached`, `[pay-minimal]`), from
+`minimalHeadroom`.
+
+**Failures are free, said rather than hidden.** A script could loop bad PDFs through the metadata
+model for nothing. At about $0.0005 a call that is the [Known limit](#known-limit) below, repeated.
 
 ### The allowance prorates, and the column holds a delta
 
@@ -968,6 +1077,52 @@ only the request that reserved may release, and only after its enqueue has retur
 A failure releases its slot, so somebody who can reliably make expensive ingests *fail* can repeat
 for ever. True of every design considered, because the quota counts successes and that is the
 product rule. The answer when it matters is a daily attempt cap, not a change to any of the above.
+
+### Gift vouchers: extra free articles, given by email
+
+> I'd like to be able to give somebody a gift voucher (e.g. 20 free articles). … add a new page in
+> `/admin` where I can enter their email address (and if they log in or are already logged in with
+> that email address, it automatically & permanently increases their allotment of articles that
+> they can process while still on the Free pricing plan …
+>
+> — Greg, 2026-10-01
+
+A voucher is a row of `billing_vouchers`: an address, a number of articles (1–1000), a private note,
+who made it, and — once claimed — which account claimed it. Only the administrator makes or changes
+one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review are
+[261001m](../plans/261001m-gift-vouchers-for-free-articles.md). Four rules, each for a reason:
+
+- **It counts on Free only.** `freeEntitlement` in [`pg-billing.ts`](../../src/store/pg-billing.ts)
+  adds the claimed, unrevoked sum to every Free answer `entitlementFromRow` gives, and no paid
+  answer touches it. A lapsed reader is on Free, so they get it back. Because it is added at the
+  one place entitlement is decided, the wall, `/profile`, `/pricing` and `/admin/users` all agree.
+- **The claim binds it to an account, once, and only for a confirmed address.**
+  `GET /api/billing/usage` — what the homepage reads on arrival — first runs `claimVouchersFor`
+  ([`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): if a waiting voucher matches the JWT's
+  address (trimmed, lower-cased), it asks the Auth Admin API whether the account's own record has
+  that address **and** `email_confirmed_at`, and only then, in one transaction, creates the billing
+  anchor and stamps the voucher with `claimed_by`. Any doubt and it does not claim; the next visit
+  tries again. It is the one write in a GET, idempotent, and the response is `private, no-store`.
+  An address with no account yet simply waits.
+- **The sum is cast and checked.** Postgres returns `sum()` as a string unless told otherwise, and
+  `3 + "20"` is `"320"`. The subquery is `::int` *and* `.mapWith(Number)`, and `freeEntitlement`
+  throws on anything that is not a non-negative safe integer (GPT Sol, plan review F1).
+- **Lowering a gift takes the billing lock first.** A revoke or a smaller count on a claimed voucher
+  locks the claimant's `billing_accounts` row before the voucher — the house order — and
+  `lockBillingAccount` reads the bonus in a **second statement after** taking its lock, because a
+  subquery inside the locking statement answers from the snapshot taken before the wait, and would
+  miss a revoke that committed meanwhile (F2). `tests/billing-vouchers.test.ts` holds both halves as
+  held-transaction tests, beside twenty concurrent ingests on a 3+2 account admitting exactly five.
+
+What the reader is told is `ReaderPlan.gifts` — articles, the claim date and an opaque `noticeKey`,
+on the `free` and `lapsed` arms only, and **absent when there are none**, so no surface can mention a
+voucher to somebody without one. The note, the creator and the address never leave the admin
+routes. The copy says *3 free + 20 from a gift* rather than a bare 23 (`giftMakeup`).
+
+**A voucher emails its recipient when it is made, and its creator when it is claimed**, each at most
+once, queued in the same transaction as the event. A failed send changes neither the voucher nor
+the claim. There is no expiry; revoking is the only way to invalidate one.
+[email.md § Gift voucher emails](email.md#gift-voucher-emails).
 
 ## Billing is a Postgres feature
 
@@ -1390,7 +1545,9 @@ and reads no variable, so nothing in the environment can redirect a real custome
 ## What `/admin/users` shows
 
 Two columns since 2026-09-03 — **Plan** and **Ingests** — beside the spend column, because "who is
-paying" and "who is expensive" are two halves of one question.
+paying" and "who is expensive" are two halves of one question. A third, **Not processed**, since
+2026-10-01: the minimal papers, as a count of their own, which the Ingests cell also adds at 2 points
+each once it is drawn in points ([§ A minimal paper costs a hundredth](#a-minimal-paper-costs-a-hundredth)).
 
 **The plan is decided by `entitlementFromRow`**, the same function `reserveIngest` decides with under
 its lock. That reuse is the point: a row this page draws as *reader, 4 of 20* is a row the wall would
@@ -1562,7 +1719,8 @@ Two lessons outlived the bug, and neither of them is about Stripe:
 | [`src/billing/checkout.ts`](../../src/billing/checkout.ts) | The three billing routes: the order that makes the mapping durable, the Portal redirect, and the proof that a Checkout Session belongs to the reader asking about it. |
 | [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) | Read-only. Whether an account is actually fit to take money, one check per thing a real purchase has caught. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
-| [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
+| [`src/billing/points.ts`](../../src/billing/points.ts) | The two units, the prices, and the four predicates that are the wall. Pure, though it sits in the directory the browser may not import. |
+| [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`, `reserveMinimal` and `reserveUpgrade`. |
 | [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |
 | [`src/billing/summary.ts`](../../src/billing/summary.ts) | `GET /api/billing/usage`: the row, the tiers and the ledger, turned into a `ReaderPlan`. |
 | [`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx) · [`useBilling.ts`](../../src/web/useBilling.ts) | The Plan section on `/profile`, and the two redirects. `useBilling` is the one implementation of checkout, shared with `/pricing`. |

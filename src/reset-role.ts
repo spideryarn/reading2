@@ -50,6 +50,9 @@ export type ResetRole = "import" | "successor" | "extra";
  */
 export const RESET_ROLE = {
   fetch: "import",
+  /* Never in a reset's list — a reset is refused on a minimal article, and a
+     full one's revision only carries this run row from the day it was minimal. */
+  metadata: "import",
   extract: "import",
   blocks: "import",
   hierarchy: "import",
@@ -76,7 +79,7 @@ export const RESET_ROLE = {
      DEFAULT_INGEST_STEPS, a whole column: exactly the modes' shape, though it
      is not a mode. */
   crossrefs: "extra",
-  /* Made on a press of Summary's Simple chip, off DEFAULT_INGEST_STEPS, a whole
+  /* Made from Summary's plain-words controls, off DEFAULT_INGEST_STEPS, a whole
      column: the modes' shape. */
   simple: "extra",
 } as const satisfies Record<StepName, ResetRole>;

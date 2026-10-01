@@ -487,6 +487,64 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
+  /**
+   * **A minimal paper may be superseded only by the ingest that paid for it**
+   * (plan 261001m). The check holds the row that carries `superseded_by` to a
+   * charged minimal one; the trigger holds the row it names to a charged ingest
+   * of the same owner and article. drizzle's snapshot records the check and
+   * knows nothing about the trigger, so this is the drift guard for it — and
+   * for the index that lets one *Read this* per article be in flight.
+   */
+  it("a minimal row is superseded only by a charged ingest of the same paper", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const row = async (kind: string, article: string, charged: boolean) =>
+        (
+          await c.query<{ id: string }>(
+            `insert into spideryarn.ingest_events (owner_id, kind, succeeded_at, article_id)
+             values ($1, $2, case when $4 then now() end, $3) returning id`,
+            [OWNER, kind, article, charged],
+          )
+        ).rows[0]!.id;
+      const paper = await row("minimal", ART_1, true);
+      const deletedPaper = await row("minimal", ART_1, true);
+      const unpaid = await row("ingest", ART_1, false);
+      const otherArticle = await row("ingest", ART_2, true);
+
+      /* The one-in-flight index: a second unsettled ingest bound to ART_1. */
+      await expectViolation(c, /ingest_events_one_upgrade_in_flight/, () => row("ingest", ART_1, false));
+
+      for (const payer of [unpaid, otherArticle]) {
+        await expectViolation(c, /superseded by a charged ingest/, () =>
+          c.query("update spideryarn.ingest_events set superseded_by = $1 where id = $2", [payer, paper]),
+        );
+      }
+      await expectViolation(c, /ingest_events_superseded_shape/, () =>
+        c.query("update spideryarn.ingest_events set superseded_by = $1 where id = $1", [otherArticle]),
+      );
+
+      /* And the legitimate one: charge the bound row, then supersede. */
+      await c.query("update spideryarn.ingest_events set succeeded_at = now() where id = $1", [unpaid]);
+      await c.query("update spideryarn.ingest_events set superseded_by = $1 where id = $2", [unpaid, paper]);
+      const { rows } = await c.query<{ superseded_by: string | null }>(
+        "select superseded_by from spideryarn.ingest_events where id = $1",
+        [paper],
+      );
+      expect(rows).toEqual([{ superseded_by: unpaid }]);
+
+      /* Deletion unlinks every event. Two null article ids do not prove two
+         events belonged to the same paper, so a new supersession after unlink
+         must be refused rather than treating null = null as provenance. */
+      await c.query("delete from spideryarn.articles where id in ($1, $2)", [ART_1, ART_2]);
+      await expectViolation(c, /cannot be superseded after its article was deleted/, () =>
+        c.query("update spideryarn.ingest_events set superseded_by = $1 where id = $2", [
+          otherArticle,
+          deletedPaper,
+        ]),
+      );
+    });
+  });
+
   it("the queue_state row cannot be deleted", async () => {
     await inRollback(async (c) => {
       // The CHECK stops a SECOND row. Nothing in SQL can stop the row going

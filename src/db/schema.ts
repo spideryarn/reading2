@@ -296,7 +296,27 @@ export const articles = spideryarn.table("articles", {
    * switch, and it says *when* for free.
    */
   highPowerSince: timestamp("high_power_since", { withTimezone: true }),
+  /**
+   * **How much of the pipeline this article has had: `'minimal'` or `'full'`.**
+   *
+   * A *minimal* paper is a file added in a batch with only its title, authors,
+   * abstract and DOI read (the `metadata` step), and no blocks and no tree —
+   * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md § The thin
+   * article. It is on the shelf, it costs a hundredth of an article, and every
+   * free path into AI work refuses it (`NotProcessed`, src/not-processed.ts), so
+   * adding a thousand at 0.01 and re-running each one free is not a way round the
+   * allowance.
+   *
+   * On `articles` for the reason `visibility` is: it is a property of the work.
+   * A minimal job creates the row as `'minimal'` (`lockOrCreateArticle`), and the
+   * one publication that lands a tree on it sets `'full'` in the same
+   * transaction that charges *Read this* (src/store/pg-session.ts). Nothing ever
+   * sets it back.
+   */
+  processing: text("processing").notNull().default("full"),
 }, (t) => [
+  /** The two states, and a third would be a row every guard reads as full. */
+  check("articles_processing", sql`${t.processing} in ('minimal','full')`),
   /**
    * Two spellings, and a third is a row every public read silently ignores.
    *
@@ -594,6 +614,15 @@ export const articleRevisions = spideryarn.table(
     publishedAt: text("published_at"),
     /** `Meta.note`. Real articles carry one — the noema article's meta.json does. */
     note: text("note"),
+    /**
+     * **`Meta.abstract` and `Meta.doi`: what the `metadata` step read off a
+     * minimal paper's first pages** — the paper's own claims, through a cheap
+     * model, never checked against anything (plan 261001m § The metadata step).
+     * Null on everything else. Carried forward with the rest of `meta`, and kept
+     * by `extract` when it re-reads the paper for *Read this* and finds none.
+     */
+    abstract: text("abstract"),
+    doi: text("doi"),
 
     /**
      * Stage 1's real output. `requestedUrl` and `finalUrl` differ whenever a
@@ -1150,6 +1179,15 @@ export const articleRevisions = spideryarn.table(
       columns: [t.rawSourceSha256, t.rawSourceKind],
       foreignColumns: [rawSources.sha256, rawSources.kind],
     }),
+    /**
+     * **"Is this file already on your shelf?"** — the duplicate check a minimal
+     * upload asks under the owner's billing lock (src/minimal-paper.ts). It
+     * joins from the hash to the article and filters on the owner, so the hash
+     * leads. Partial, because most rows before 2026-08-27 carry no hash.
+     */
+    index("article_revisions_raw_sha256")
+      .on(t.rawSha256, t.articleId)
+      .where(sql`${t.rawSha256} is not null`),
   ],
 );
 
@@ -2025,6 +2063,8 @@ export const uploads = spideryarn.table(
     ),
     check("uploads_rejected_has_reason", sql`${t.status} <> 'rejected' or ${t.reason} is not null`),
     index("uploads_owner_minted").on(t.ownerId, t.mintedAt.desc()),
+    /** The second half of the duplicate check: this owner's other uploads of these bytes. */
+    index("uploads_owner_claimed_sha256").on(t.ownerId, t.claimedSha256),
   ],
 );
 
@@ -2572,7 +2612,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4887,6 +4927,151 @@ export const billingAccounts = spideryarn.table(
 );
 
 /**
+ * **A gift of extra free articles, addressed to an email** — created by the
+ * administrator at `/admin/vouchers`, and bound to an account the first time a
+ * signed-in reader with that *confirmed* address asks for their plan.
+ * docs/plans/261001m-gift-vouchers-for-free-articles.md, and
+ * docs/project/billing.md § *Gift vouchers*.
+ *
+ * **The address is only how it finds its owner; `claimed_by` is who owns it.**
+ * Once claimed it belongs to the account, not the address — an address can
+ * change and an id cannot, the same reasoning as admin.md § *Who the
+ * administrator is*. An address with no account yet simply waits.
+ *
+ * **It raises the Free allowance only**: `entitlementFromRow`
+ * (src/store/pg-billing.ts) adds the claimed, unrevoked sum to every Free
+ * answer and to none of the paid ones. A lapsed reader is on Free, so they get
+ * it back.
+ *
+ * Nothing a reader sends writes here except the claim, which can only stamp the
+ * caller's own id onto a voucher already addressed to the caller's confirmed
+ * address (src/store/pg-vouchers.ts). Every other write is under
+ * `/api/admin/vouchers`, behind the admin namespace gate.
+ *
+ * No hard delete: a revoked voucher stays as a record (`revoked_at`), and
+ * restoring it is clearing that column.
+ */
+export const billingVouchers = spideryarn.table(
+  "billing_vouchers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Stored normalised — trimmed and lower-cased — and compared the same way. */
+    email: text("email").notNull(),
+    /** Whole articles, never points: it is added to an `Articles` limit. */
+    articles: integer("articles").notNull(),
+    /** The administrator's private note. Never sent to the reader. */
+    note: text("note"),
+    createdAt: createdAt(),
+    /** The administrator who made it. A plain uuid, like every admin id. */
+    createdBy: uuid("created_by").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * The account that claimed it. **References the billing anchor, not
+     * `auth.users`**: the claim inserts that anchor first, in the same
+     * transaction, so a claimed voucher always has a row for the locked
+     * admission path to find (GPT Sol, plan review F6).
+     */
+    claimedBy: uuid("claimed_by").references(() => billingAccounts.ownerId, { onDelete: "restrict" }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    /** Revoked, and when. Null is live. Restoring clears it. */
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    /* Normalised on write, so the claim's `email = $1` is one comparison rather
+       than a `lower()` on both sides that one future writer forgets. */
+    check(
+      "billing_vouchers_email_normalised",
+      sql`${t.email} = lower(btrim(${t.email})) and ${t.email} like '%_@_%'`,
+    ),
+    /* Bounded, because this is the one number in the table that raises what a
+       free account may spend. The route validates the same range. */
+    check("billing_vouchers_articles_range", sql`${t.articles} between 1 and 1000`),
+    check("billing_vouchers_note_length", sql`${t.note} is null or char_length(${t.note}) <= 500`),
+    /* A claim is an account and a moment, or neither. */
+    check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),
+    /* The claim's lookup: an unclaimed voucher by address. */
+    index("billing_vouchers_unclaimed_email").on(t.email).where(sql`${t.claimedBy} is null`),
+    /* The entitlement's sum: one claimant's vouchers. */
+    index("billing_vouchers_claimed_by").on(t.claimedBy),
+  ],
+);
+
+/**
+ * **One email about one gift voucher, and how far it got** — the recipient's
+ * (`gift`, on create and on each real change of address) or the creator's
+ * (`claimed`, when it is claimed). docs/plans/261001p-voucher-emails-to-recipient-and-creator.md;
+ * src/store/pg-voucher-emails.ts is the only writer.
+ *
+ * **A row is queued in the same transaction as its event**, so there is no event
+ * without its email and no email without its event. Sending happens after the
+ * response and cannot fail the event.
+ *
+ * **The provider request is frozen when it is queued**: `subject`, `body_text`
+ * and `body_html` are rendered in the event's transaction, and so is
+ * `recipient` for a gift (the voucher's address at that moment). A claim notice
+ * leaves `recipient` null until the first successful lookup of the creator's
+ * address sets it, once. After a provider call has been attempted the request
+ * never changes, so a retry under the same `Idempotency-Key`
+ * (`voucher-email/<id>`) is the same request, which Resend's idempotency needs.
+ * The send reads this row and nothing else.
+ *
+ * **At most once is reserve, send, complete.** A reservation is one `UPDATE …
+ * SET status = 'sending', attempts = attempts + 1, attempt_started_at = now()
+ * … RETURNING attempts`; a completion must match `attempts`.
+ * `attempt_started_at` is the lease: a `sending` row is stale ten minutes on.
+ *
+ * `detail` is a reason — a status code, an error name, `creator address
+ * unavailable` — and **never an address**. The addresses live in `recipient`
+ * and the rendered bodies, which is why a voucher's deletion cascades here.
+ */
+export const billingVoucherEmails = spideryarn.table(
+  "billing_voucher_emails",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    voucherId: uuid("voucher_id")
+      .notNull()
+      .references(() => billingVouchers.id, { onDelete: "cascade" }),
+    /** `gift` to the recipient; `claimed` to the creator. */
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("queued"),
+    /** Bumped by each reservation; the completion must match it. */
+    attempts: integer("attempts").notNull().default(0),
+    /** When the current attempt was reserved: the lease a stale `sending` is judged by. */
+    attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
+    detail: text("detail"),
+    /** Who it goes to: a gift's from its event, a claim notice's from the first lookup. */
+    recipient: text("recipient"),
+    subject: text("subject").notNull(),
+    bodyText: text("body_text").notNull(),
+    bodyHtml: text("body_html"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("billing_voucher_emails_kind", sql`${t.kind} in ('gift', 'claimed')`),
+    check(
+      "billing_voucher_emails_status",
+      sql`${t.status} in ('queued', 'sending', 'sent', 'skipped', 'failed')`,
+    ),
+    check("billing_voucher_emails_attempts", sql`${t.attempts} >= 0`),
+    check("billing_voucher_emails_detail_length", sql`${t.detail} is null or char_length(${t.detail}) <= 200`),
+    /* A gift knows its recipient from the moment it is queued. */
+    check("billing_voucher_emails_gift_has_recipient", sql`${t.kind} <> 'gift' or ${t.recipient} is not null`),
+    /* Reserved means a lease was taken. */
+    check(
+      "billing_voucher_emails_sending_has_lease",
+      sql`${t.status} <> 'sending' or ${t.attemptStartedAt} is not null`,
+    ),
+    /* The list's latest-of-each-kind. */
+    index("billing_voucher_emails_voucher").on(t.voucherId, t.kind, t.createdAt),
+    /* One claim notice per voucher, ever: a voucher is claimed once. */
+    uniqueIndex("billing_voucher_emails_one_claimed")
+      .on(t.voucherId)
+      .where(sql`${t.kind} = 'claimed'`),
+  ],
+);
+
+/**
  * **Every new ingest an owner is charged for, reserved before it runs and
  * settled when it ends** — and, since 2026-09-30, every High-powered AI upgrade,
  * born settled (`kind`). One row per *attempt to spend* — not per article, and
@@ -4978,10 +5163,13 @@ export const ingestEvents = spideryarn.table(
     /**
      * **What this charge is for**: `'ingest'` — a URL or file added, reserved
      * before it runs and settled when it ends, which is every row before
-     * 2026-09-30 — or `'high_power'`, one article switched to High-powered AI.
+     * 2026-09-30 — or `'high_power'`, one article switched to High-powered AI,
+     * or (since 2026-10-01) `'minimal'`, one paper added with only its title,
+     * authors and abstract read, at a hundredth of an ingest whatever its
+     * visibility (`supersededBy` below).
      *
      * An upgrade is one more article's worth, priced exactly like an ingest of
-     * the same article (2 half-units private, 1 public, live; frozen on delete),
+     * the same article (200 points private, 100 public, live; frozen on delete),
      * so the article costs double — Greg, 2026-09-30: *"it should double the
      * processing cost per-article"*. It is inserted already settled, in the
      * transaction that switches the article on, and never refunded
@@ -5090,6 +5278,28 @@ export const ingestEvents = spideryarn.table(
      */
     articleVisibilityAtDelete: text("article_visibility_at_delete"),
     /**
+     * **The ingest that paid for this minimal paper in full** — set on a
+     * charged `'minimal'` row, and null on every other row.
+     *
+     * Greg, 2026-10-01: a minimal paper costs *"0.01x an AI-processed paper"*,
+     * and pressing *Read this* on it costs the rest. So *Read this* reserves an
+     * ordinary `'ingest'` row, and the publication that charges it stamps this
+     * column on the article's minimal row: a superseded row costs nothing, and
+     * the paper totals exactly one ingest (docs/project/billing.md § *A minimal
+     * paper costs a hundredth*).
+     *
+     * **A reference rather than a timestamp**, so the row proves an ingest paid
+     * for it, and it survives the delete trigger unlinking `article_id` — the
+     * correlation "an ingest exists for this article" would not. Ingest rows are
+     * never deleted, so the reference never dangles. Two guards: the check
+     * `ingest_events_superseded_shape` below holds the row it is on to a charged
+     * minimal one, and the trigger `ingest_events_superseded_by_ingest`
+     * (drizzle/20261001211225_bulk_import_minimal.sql) holds the row it points
+     * at to a charged ingest of the same owner and the same article. Written by
+     * `supersedeMinimal` in src/store/pg-billing.ts and nothing else.
+     */
+    supersededBy: uuid("superseded_by").references((): AnyPgColumn => ingestEvents.id),
+    /**
      * What the article was called at the time — **diagnostic only**. A slug is
      * mutable, so it could never be this row's identity; it is here so that a
      * support conversation about "which article was that" has an answer.
@@ -5140,7 +5350,32 @@ export const ingestEvents = spideryarn.table(
       "ingest_events_frozen_only_after_unlink",
       sql`${t.articleId} is null or ${t.articleVisibilityAtDelete} is null`,
     ),
-    check("ingest_events_kind", sql`${t.kind} in ('ingest','high_power')`),
+    check("ingest_events_kind", sql`${t.kind} in ('ingest','high_power','minimal')`),
+    /**
+     * **Only a charged minimal paper can be superseded.** An unsettled one has
+     * not been paid for, so there is nothing for an ingest to replace; and an
+     * ingest or an upgrade that read as superseded would vanish from usage —
+     * a free article. Plan 261001m, Opus's review.
+     */
+    check(
+      "ingest_events_superseded_shape",
+      sql`${t.supersededBy} is null
+          or (${t.kind} = 'minimal' and ${t.succeededAt} is not null)`,
+    ),
+    /**
+     * **One *Read this* at a time, per article.** A *Read this* reservation is
+     * the only unsettled `'ingest'` row born with an `article_id` (an ordinary
+     * ingest gets one only as it settles), so this allows at most one in flight
+     * per article. Without it two presses could both take the minimal paper's
+     * credit. `reserveUpgrade` refuses under the billing lock first; this is the
+     * backstop. Sol's plan review, P1.
+     */
+    uniqueIndex("ingest_events_one_upgrade_in_flight")
+      .on(t.articleId)
+      .where(
+        sql`${t.kind} = 'ingest' and ${t.articleId} is not null
+            and ${t.succeededAt} is null and ${t.releasedAt} is null`,
+      ),
     /**
      * **An upgrade is born settled, and stays that way.** A `high_power` row
      * with no `succeeded_at` would be counted as an ingest in flight by every
@@ -5504,7 +5739,7 @@ export const rateLimitEvents = spideryarn.table(
   (t) => [
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

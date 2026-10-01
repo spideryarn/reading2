@@ -179,11 +179,15 @@ const POLICY: Record<Mode, VisitorPolicy> = {
      button*, this table decides what a visitor is shown on arrival, and a
      shared URL must show two people the same thing. */
   structure: { kind: "available" },
-  /* And summary, since 2026-08-31. It used to be an artefact mode, gated on a
-     `summary.json` a visitor's payload might not carry. The generated ladder is
-     gone (docs/plans/260831s-gist-only-summaries.md) and what the panel draws now is the
-     tree's own gists, which are in the payload the visitor already holds — so
-     there is nothing left to be missing. */
+  /* And summary, since 2026-08-31, when it drew the tree's own gists from the
+     payload (docs/plans/260831s-gist-only-summaries.md). **Still `available`
+     now that it is only the plain-words levels**, which are an artefact
+     (the gists' outline went on 2026-10-01,
+     docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md):
+     `VisitorSummaryBand` reads them off the payload and, when nobody has made
+     them, says so in its own words beside the slider. An artefact gate here
+     would replace that with the generic visitor boundary and take the slider
+     away. GPT Sol's plan review of 261001p, P2. */
   summary: { kind: "available" },
   /* **Marginalia, 2026-10-01** (called Annotations until later that day), the
      same bargain: its column is drawn from the tree (the parts' questions) and

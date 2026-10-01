@@ -38,7 +38,7 @@ import type Stripe from "stripe";
 
 import { eq } from "drizzle-orm";
 
-import { articles } from "./half-units.js";
+import { articles } from "./points.js";
 import { getDb } from "../db/client.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { billingAccounts } from "../db/schema.js";
@@ -289,7 +289,7 @@ export async function syncSubscriptionFromStripe(
           priceId: row.priceId,
           currentPeriodStart: row.currentPeriodStart,
           /* Named as a count of articles on the way out of the database, which
-             is the unit the column is in — src/billing/half-units.ts. */
+             is the unit the column is in — src/billing/points.ts. */
           adjustment: {
             delta: row.quotaLimitDelta === null ? null : articles(row.quotaLimitDelta),
             periodStart: row.quotaPeriodStart,

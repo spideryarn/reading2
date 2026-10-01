@@ -476,9 +476,19 @@ vi.mock("../src/store/pg-billing.js", async () => {
       chargedHalfPrice: 1,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
-      inFlight: 0,
+      inFlightIngest: 0,
+      inFlightMinimal: 0,
+      minimalCharged: 0,
     }),
   };
+});
+
+/* No gift vouchers: the summary asks, and this lane has no database to ask. */
+vi.mock("../src/store/pg-vouchers.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/store/pg-vouchers.js")>(
+    "../src/store/pg-vouchers.js",
+  );
+  return { ...actual, giftsFor: async () => [] };
 });
 
 const { handleApi } = await import("../src/routes.js");
@@ -589,6 +599,7 @@ describe("no AI cost on a reader's payload", () => {
       stripeCustomerId: "cus_test",
       quotaLimitDelta: null,
       quotaPeriodStart: null,
+      voucherArticles: 0,
       cancelAtPeriodEnd: false,
       cancelAt: null,
     };

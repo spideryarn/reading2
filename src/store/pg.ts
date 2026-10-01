@@ -33,6 +33,8 @@ import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "driz
 
 import type { Assets } from "../assets.js";
 import { decodeAuthors } from "../authors.js";
+import { NOT_READ_YET } from "../messages.js";
+import { NotProcessed } from "../not-processed.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
@@ -80,7 +82,8 @@ import {
 import {
   inputFingerprint as simpleFingerprint,
   isStale as simpleIsStale,
-  SIMPLE_VERSION,
+  SIMPLE_PROMPT_VERSION,
+  simplePromptVersion,
 } from "../simple-summary.js";
 import {
   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
@@ -102,6 +105,7 @@ import {
   investigateContextHash,
   matchedPageOf,
 } from "../citation-investigate-context.js";
+import { DIG_DEEPER_MODEL } from "../dig-deeper.js";
 import { investigationFromRow } from "./citation-investigation-row.js";
 import { renderProfile } from "../profile.js";
 import {
@@ -150,7 +154,7 @@ import {
    same head (plan 261001b); re-exported for every caller that imports them
    from here. */
 export { citedMetaFingerprintOf, metaFingerprintOf };
-import { isStale as tweetsStale } from "../tweets.js";
+import { isStale as tweetsStale, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../tweets.js";
 import type {
   Arc,
   ArcFound,
@@ -193,6 +197,7 @@ import type {
   ThreadFound,
   Tree,
   TweetThread,
+  UnreadPaper,
   Visibility,
 } from "../types.js";
 import { isUsableSimpleSummary } from "../types.js";
@@ -665,6 +670,10 @@ const REVISION_READ_POLICY: Record<
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
   note: { article: "value", library: "value" },
+  /* A minimal paper's card shows them (`LibraryEntry.abstract`, `.doi`), and
+     `metaFrom` puts them on every owner-facing `Meta`. No prompt reads either. */
+  abstract: { article: "value", library: "value" },
+  doi: { article: "value", library: "value" },
   /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
      is the one stage whose freshness fingerprint carries the publication date
      (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
@@ -1029,6 +1038,8 @@ const META_COLUMNS = {
   excerpt: articleRevisions.excerpt,
   publishedAt: articleRevisions.publishedAt,
   note: articleRevisions.note,
+  abstract: articleRevisions.abstract,
+  doi: articleRevisions.doi,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
@@ -1692,6 +1703,40 @@ function withAuthors(meta: Meta, stored: Author[] | null): Meta {
   return authors ? { ...meta, authors } : meta;
 }
 
+/** A minimal paper's shelf numbers: it has no blocks to count. */
+const NO_SCALARS: LibraryScalars = {
+  wordCount: 0,
+  blockCount: 0,
+  partCount: 0,
+  sectionCount: 0,
+  rootGist: null,
+};
+
+/**
+ * **The not-yet-read page's whole content**, off the row `loadArticle` already
+ * holds — the body of `NotProcessed`. Through `metaFrom` and `titleFor`, so
+ * the page calls the paper what the shelf calls it.
+ */
+function unreadPaperFrom(
+  slug: string,
+  found: { article: typeof articles.$inferSelect; revision: RevisionRowFor<"article"> },
+): UnreadPaper {
+  const meta = titleFor(metaFrom(slug, found.revision, null), shelfFrom(found.article));
+  const authors = decodeAuthors(found.revision.authors)?.map((a) => a.name) ?? [];
+  return {
+    slug,
+    title: meta.title,
+    authors,
+    ...(meta.abstract ? { abstract: meta.abstract } : {}),
+    ...(meta.doi ? { doi: meta.doi } : {}),
+    ...(meta.filename ? { filename: meta.filename } : {}),
+    /* `source` is set for a PDF and nothing else; an uploaded web page has a
+       filename and no source. */
+    kind: meta.source === "pdf" ? "pdf" : meta.filename ? "html" : null,
+    addedAt: (found.revision.fetchedAt ?? found.article.createdAt).toISOString(),
+  };
+}
+
 function metaFrom(
   slug: string,
   /* **`MetaRow`, not `$inferSelect`** — the columns this function actually
@@ -1731,6 +1776,8 @@ function metaFrom(
        the whole content of this field. src/db/schema.ts § `publishedAt`. */
     ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
     ...(revision.note === null ? {} : { note: revision.note }),
+    ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
+    ...(revision.doi === null ? {} : { doi: revision.doi }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of
        `source === "pdf"` — which is the media kind and stopped being a proxy
@@ -1786,6 +1833,8 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      describing it. This said `article_revisions.raw_bytes` until 2026-09-01,
      when the column that held the document itself was dropped. */
   fetch: ["article_revisions.raw_source_sha256", "raw_sources"],
+  /* The meta columns `extract` also writes, and the two only a minimal paper has. */
+  metadata: ["article_revisions.title", "article_revisions.abstract", "article_revisions.doi"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
   hierarchy: ["article_revisions.tree", "article_revisions.labels"],
@@ -2617,6 +2666,13 @@ const rawPgArticleReader: ArticleReader = {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
+    /* **A minimal paper is not an article yet, and every reader of one is told
+       so the same way** — `NotProcessed`, a 409 carrying the paper's title,
+       authors and abstract, where this used to be the 404 below (it has no
+       tree). Before the blocks are read: there are none, and every caller —
+       chat, live, comments, citations, term lookup, similar, link previews —
+       refuses here, before it spends. Plan 261001m § The thin article. */
+    if (found.article.processing === "minimal") throw new NotProcessed(NOT_READ_YET.message, unreadPaperFrom(slug, found));
 
     /* The guess is one primary-key read beside the blocks, not after them.
        Owner-scoped already: `found` came through `ownedSlug`. */
@@ -2697,7 +2753,9 @@ const rawPgArticleReader: ArticleReader = {
        **Only the rows that survive `hasTree`.** A revision with no tree is not
        a readable article and is dropped below, so recomputing its scalars would
        be work and a warning about a row nobody is going to see. */
-    const scalarsById = await scalarsForShelf(rows.filter((row) => row.revision.hasTree));
+    const scalarsById = await scalarsForShelf(
+      rows.filter((row) => row.revision.hasTree && row.article.processing !== "minimal"),
+    );
 
     const entries: LibraryEntry[] = [];
     for (const row of rows) {
@@ -2711,9 +2769,15 @@ const rawPgArticleReader: ArticleReader = {
          blocks.json to exist and parse, then guards its insert with
          `if (blocks.length)`, so an empty array publishes as a revision with no
          blocks and `block_count = 0`, and the pointer moves to it. */
-      if (!row.revision.hasTree) continue;
-      const scalars = scalarsById.get(row.revision.id);
-      if (!scalars || !scalars.blockCount) continue;
+      /* **A minimal paper is on the shelf with no tree and no blocks**, and it is
+         the one row that may be (plan 261001m): `publishRevisionIn` publishes
+         it only when the article is `'minimal'` and its `metadata` step ran.
+         Its numbers are zero rather than recomputed, and the card says it has
+         not been read through yet. */
+      const minimal = row.article.processing === "minimal";
+      if (!minimal && !row.revision.hasTree) continue;
+      const scalars = minimal ? NO_SCALARS : scalarsById.get(row.revision.id);
+      if (!scalars || (!minimal && !scalars.blockCount)) continue;
 
       entries.push(
         describeArticle({
@@ -2761,6 +2825,7 @@ const rawPgArticleReader: ArticleReader = {
              the draft copied from this current revision: the raw manifest is
              readable and its completed run row is carried with it. */
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
+          processing: minimal ? "minimal" : "full",
         }),
       );
     }
@@ -2966,7 +3031,15 @@ const rawPgArticleReader: ArticleReader = {
           /* The cited head since `tweets/5`, which sends `articleWithIds`; a
              thread from before it is judged on the head it was written from
              inside `isStale` (src/tweets.ts § `fingerprintFor`). */
-          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, citedFingerprint));
+          if (!thread || !tree || tweetsStale(thread, blocks, tree, citedFingerprint)) return false;
+          /* **And the prompt and the model**, as every neighbour asks: until
+             2026-10-01 this arm compared only the article, so a `tweets/5`
+             thread was "current" for ever after `tweets/6` and Metadata never
+             offered the rewrite (GPT Sol's plan review of 261001p, P1-5). */
+          return sameStamp(
+            { promptVersion: thread.version, model: thread.generator },
+            { promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL },
+          );
         }
         case "glossary":
           return glossaryIsCurrent(revision.glossary as Glossary | null, articleHash);
@@ -3141,12 +3214,12 @@ const rawPgArticleReader: ArticleReader = {
           return sameStamp(
             {
               inputHash: simple.sourceHash,
-              promptVersion: simple.version,
+              promptVersion: simplePromptVersion(simple),
               model: simple.generator,
             },
             {
               inputHash: simpleFingerprint(blocks, tree, citedFingerprint),
-              promptVersion: SIMPLE_VERSION,
+              promptVersion: SIMPLE_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
@@ -3668,7 +3741,7 @@ const rawPgArticleReader: ArticleReader = {
       stale:
         !tree ||
         simpleIsStale(simpleSummary, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: simpleSummary.version !== SIMPLE_VERSION,
+      outdated: simplePromptVersion(simpleSummary) !== SIMPLE_PROMPT_VERSION,
     };
   },
 
@@ -3817,13 +3890,19 @@ const rawPgArticleReader: ArticleReader = {
        `lookupContext` the call built its prompt from. Before `attachFinds`, so
        the row it sees is the artefact's, not the upgraded one. */
     const text = new Map(blocks.map((b) => [b.id as string, b.text]));
-    /* `standard` whatever the article's power: the fingerprint hashes the
-       model's generation, so a lookup made at either power attaches (plan
-       260930f, Sol F1). */
-    const model = modelFor("citations-find", "standard");
-    const withLookups = attachLookups(citations, finds, (work) =>
-      lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
-    );
+    /* Standalone Find keeps its configured standard model, including an eval
+       override. Dig deeper deliberately ignores that override and writes its
+       lookup with `DIG_DEEPER_MODEL`, so accept both current policies here.
+       In production Sonnet and Opus share a generation and these are the same
+       hash; the second matters only while a Find-only override is active. */
+    const standaloneFindModel = modelFor("citations-find", "standard");
+    const withLookups = attachLookups(citations, finds, (work) => {
+      const context = lookupContext(work, (id) => text.get(id));
+      return [
+        lookupContextHash(context, standaloneFindModel),
+        lookupContextHash(context, DIG_DEEPER_MODEL),
+      ];
+    });
     const withFinds = attachFinds(withLookups, finds);
     /* **Investigate's answers, the same way and after `attachFinds`** — the
        row the call was made from is the upgraded one, so that is the row the
@@ -3857,8 +3936,10 @@ const rawPgArticleReader: ArticleReader = {
         shelfFrom(found.article),
       );
       const articleKey = investigateArticleKey(promptMeta, blocks);
-      /* `standard` for `model`'s reason above. */
-      const investigateModel = modelFor("citation-investigate", "standard");
+      /* **Dig deeper's model, the very constant the press writes with** (plan
+         261001p stage 2, Sol F2) — not `modelFor`, whose environment override
+         would make this side hash another model and hide every kept answer. */
+      const investigateModel = DIG_DEEPER_MODEL;
       withInvestigations = attachInvestigations(
         withFinds,
         new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),

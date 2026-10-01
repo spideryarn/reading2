@@ -382,6 +382,10 @@ describe("investigate", () => {
     });
     await flush();
     expect(hook?.investigateStage).toBeNull();
+    /* Plan 261001p stage 2: Dig deeper's forced search comes first. */
+    await act(async () => push?.("stage", { stage: "searching" }));
+    await flush();
+    expect(hook?.investigateStage).toBe("searching");
     await act(async () => push?.("stage", { stage: "finding" }));
     await flush();
     expect(hook?.investigateStage).toBe("finding");

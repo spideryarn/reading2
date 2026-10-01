@@ -17,8 +17,8 @@
  * there being two columns: when two copies of "which row is the reader in"
  * disagree, nothing errors — column A marks one part while column B lists
  * another part's sections, and it looks entirely plausible. The repo has already
- * paid for this once, in the summary panel's renderer and its `currentEntryId`
- * walk (docs/project/summaries.md § Which row is "the relevant one").
+ * paid for this once, in Summary's outline renderer and its `currentEntryId`
+ * walk (both removed with that outline on 2026-10-01, plan 261001p).
  *
  * Pure, and takes no DOM. Which rung actually fits is decided by the panel
  * measuring the candidates this builds.

@@ -8,8 +8,9 @@
  * binary search rather than writing a per-row pass over a 2,000-row table —
  * docs/plans/261001n-trajectory-question-above-quote-and-highlight-on-screen-block-links.md.
  */
-import type { BlockId } from "../types.js";
+import { type BlockId, MAX_VISIBLE_BLOCKS } from "../types.js";
 import { firstOnScreen, type RowBox, SAFE_ID } from "./reading-time.js";
+import { dockOffset, stickyOffset } from "./scroll.js";
 
 /** The spelling of a block's row every other reader of this table uses — Spine.tsx, keynav.ts. */
 export const ROW_SELECTOR = "tbody tr[data-block]";
@@ -97,7 +98,7 @@ export function onScreenIds(rows: readonly RowBox[], viewTop: number, viewBottom
  * switch a set of declarations on. The colour is still a token
  * (`--block-link-on-screen`, prose.css), so the look stays the stylesheet's.
  * `opacity: 1` lifts the link's own resting 0.5; a parent that dims its links
- * (Summary's `.summ-range`) still dims them, and the wash still shows.
+ * with its own opacity still dims them, and the wash still shows.
  *
  * An id that fails the format is skipped rather than escaped — it is not ours.
  * Empty for no ids, so the caller can render nothing.
@@ -106,4 +107,21 @@ export function onScreenLinkCss(ids: readonly BlockId[]): string {
   const selectors = ids.filter((id) => SAFE_ID.test(id)).map((id) => `[data-block-link="${id}"]`);
   if (selectors.length === 0) return "";
   return `.mode-band :is(${selectors.join(",")}):not(.block-ref-missing){background-color:var(--block-link-on-screen);opacity:1;border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}`;
+}
+
+/**
+ * **The blocks on screen right now, read once** — for a chat question, which
+ * tells the model what the reader could see when they pressed Send. The same
+ * window and the same 24px rule as `OnScreenLinksStyle`, without its sampler:
+ * one question needs one reading, not one per scroll frame.
+ *
+ * Says nothing about whether the prose is visible at all; a band lying over it
+ * is the caller's to know (Reader's `fit.modeW`).
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export function blocksOnScreenNow(): BlockId[] {
+  const top = stickyOffset();
+  const bottom = window.innerHeight - dockOffset();
+  const rows = Array.from(document.querySelectorAll<HTMLElement>(ROW_SELECTOR));
+  return onScreenIds(rowsOnScreen(rows, top, bottom), top, bottom).slice(0, MAX_VISIBLE_BLOCKS);
 }

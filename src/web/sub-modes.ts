@@ -19,17 +19,16 @@
  * them. What a sub-mode *arms* is activation.ts § `subModeTarget`, next to the
  * mode table it extends.
  *
- * **Not a sub-mode, deliberately**: Summary's outline (`?summary=gists`), which
- * has no control of its own since 2026-10-01 — pressing Parts or Sections is
- * what chooses it, and the Summary mode row is the way there — and the
- * orderings inside a mode (Quotes' rank, Glossary's sort, Search's matcher),
- * which reorder a band rather than replace it.
+ * **Not a sub-mode, deliberately**: the orderings inside a mode (Quotes' rank,
+ * Glossary's sort, Search's matcher), which reorder a band rather than replace
+ * it. Summary's outline (`?summary=gists`) was the other, until it was removed
+ * on 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
  * docs/plans/261001d-command-bar-lists-sub-modes.md.
  */
 import type { Mode } from "../modes.js";
 import { SIMPLE_LEVELS, type SimpleLevel } from "../types.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
-import type { RememberView } from "./params.js";
+import type { RememberView, StructureView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -41,7 +40,8 @@ export type SubMode =
   | { readonly mode: "remember"; readonly view: RememberView }
   | { readonly mode: "diagram"; readonly view: DiagramKind }
   | { readonly mode: "referee"; readonly view: RefereeView }
-  | { readonly mode: "summary"; readonly view: SimpleLevel };
+  | { readonly mode: "summary"; readonly view: SimpleLevel }
+  | { readonly mode: "structure"; readonly view: StructureView };
 
 /** The modes that have sub-modes. */
 export type ModeWithSubModes = SubMode["mode"];
@@ -151,7 +151,25 @@ export const SUMMARY_SUB_MODES: Readonly<Record<SimpleLevel, SubModeWords>> = {
   },
 };
 
-/** The words for one sub-mode. A `switch` so a fifth mode with sub-modes fails to compile here. */
+/**
+ * Structure's two views. The chips' words, StructureMode.tsx §
+ * `StructureViewToggle`. Greg, 2026-10-01 (spya-gxyhcc); the order is the
+ * toggle's, Fisheye first because it is the default.
+ */
+export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> = {
+  fisheye: {
+    label: "Fisheye",
+    description: "Every part, opened up around the one you are reading",
+    experimental: false,
+  },
+  expanded: {
+    label: "Expanded",
+    description: "Every part and section, each with its summary, in one list",
+    experimental: false,
+  },
+};
+
+/** The words for one sub-mode. A `switch` so a sixth mode with sub-modes fails to compile here. */
 export function subModeWords(sub: SubMode): SubModeWords {
   switch (sub.mode) {
     case "remember":
@@ -162,6 +180,8 @@ export function subModeWords(sub: SubMode): SubModeWords {
       return REFEREE_SUB_MODES[sub.view];
     case "summary":
       return SUMMARY_SUB_MODES[sub.view];
+    case "structure":
+      return STRUCTURE_SUB_MODES[sub.view];
     default: {
       const never: never = sub;
       return never;
@@ -187,6 +207,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
       return REFEREE_VIEWS.map((view) => ({ mode, view }));
     case "summary":
       return SIMPLE_LEVELS.map((view) => ({ mode, view }));
+    case "structure":
+      return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
     default:
       return [];
   }
@@ -198,8 +220,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
  * writes these through nuqs (Reader.tsx), the metadata page builds an href from
  * them (Dock.tsx), so the two cannot land in different places.
  *
- * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch
- * and Criteria disappear from the address rather than leaving a redundant
+ * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch,
+ * Criteria and Simple disappear from the address rather than leaving a redundant
  * explicit default in metadata-page links. Remember's Quiz also clears `thread`: Remember's rule 1
  * (ConversationModes.tsx § RememberBand) — no frame in which the URL says both,
  * and one Back undoes the whole trip.
@@ -210,7 +232,8 @@ export interface SubModeParams {
   readonly thread?: null;
   readonly diagram?: DiagramKind | null;
   readonly referee?: RefereeView | null;
-  readonly summary?: SimpleLevel;
+  readonly summary?: SimpleLevel | null;
+  readonly structure?: StructureView | null;
 }
 
 export function subModeParams(sub: SubMode): SubModeParams {
@@ -224,7 +247,9 @@ export function subModeParams(sub: SubMode): SubModeParams {
     case "referee":
       return { mode: "referee", referee: sub.view === "criteria" ? null : sub.view };
     case "summary":
-      return { mode: "summary", summary: sub.view };
+      return { mode: "summary", summary: sub.view === "simple" ? null : sub.view };
+    case "structure":
+      return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

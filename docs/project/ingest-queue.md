@@ -441,6 +441,153 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
   [`src/pdf-read.ts`](../../src/pdf-read.ts) to make it sayable: that module pulls in pdf.js, and
   the browser cannot import it.
 
+### A minimal upload, and Read this
+
+**Built 2026-10-01, the server half** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md),
+Stage 3; the browser is Stage 4, [§ Many at once](#many-at-once)). A *minimal paper* is a file added with only its title, authors,
+abstract and DOI read — no blocks, no tree — at a hundredth of an article
+([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)). It
+is an ordinary shelf entry whose `articles.processing` is `'minimal'`. Any file a single upload
+takes may be one: a PDF or a web page.
+
+> for the avoidance of doubt, it should be possible to bulk-upload (a mix of) both PDFs and HTML etc
+>
+> — Greg, 2026-10-01
+
+```
+  POST /api/uploads {filename, bytes, sha256, level: "minimal"}
+     402 [pay-minimal] if 2 points do not fit · 409 code "duplicate" if these bytes are yours already
+  PUT  <signed url>                                       as for any upload
+  POST /api/jobs {uploadId, level: "minimal"}
+     withMinimalSlot, and in its locked transaction: the duplicate check again, then the claim
+     → job ["fetch", "metadata"], carrying the reservation; its claim creates the article 'minimal'
+  publication: no blocks, no tree — allowed only because the article is minimal and metadata ran
+  POST /api/jobs {slug, readThis: true}                    Read this
+     withUpgradeSlot → the default steps, force ["extract"], over the stored file
+  the publication that lands the tree: processing → 'full', the ingest charged, the minimal row superseded
+```
+
+**The `metadata` step** ([`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`, its `metadata` entry) reads stage
+1's stored bytes as `extract` does and branches on what stage 1 decided they are: a PDF's first two
+pages through pdf.js, a web page through the same Readability and `citation_*` reader the app
+already has (`htmlDocumentText`, [`src/paper-text.ts`](../../src/paper-text.ts)), then one call to
+the `paper-metadata` job either way ([`src/paper-metadata.ts`](../../src/paper-metadata.ts)). It
+writes `meta` — title, authors, byline, and the two columns only a minimal paper has,
+`article_revisions.abstract` and `.doi`. A document with no text gets no call and is named after its
+file. A model failure fails the job, which releases the reservation like any failed ingest. `enqueue`
+refuses the step name in any product request but `["fetch", "metadata"]` over an upload. The verified
+administrator may run `metadata` alone against a slug, as every pipeline stage must remain runnable
+on its own; that exception is unavailable to an ordinary reader and reserves no allowance.
+
+**One paper per file** ([`src/minimal-paper.ts`](../../src/minimal-paper.ts) § the duplicate rule):
+these bytes are already this reader's if an article of theirs, archived ones included, has a
+revision with that `raw_sha256`, or another of their uploads with that `claimed_sha256` is live — its
+job not ended, or no job ever (its record names no article) inside its two-hour grant. Asked unlocked
+at the grant, so a duplicate is refused before it is sent, and again under the billing lock at the
+job, in the same transaction as the claim, which is what makes two tabs dropping one folder one
+paper. The hash is the browser's claim; that is safe only because the check is the owner's own.
+
+**Everything that would read the article free refuses a minimal one**, with a 409 whose body is
+`{ error, code: "not-processed" }` (`NotProcessed`, [`src/not-processed.ts`](../../src/not-processed.ts)):
+
+- `loadArticle` throws it, carrying `paper` — the title, authors, abstract, DOI, filename and kind
+  the not-yet-read page draws — so chat, live, comments, citations, term lookup, similar, link
+  previews and the article read all refuse before they spend. Search and a referee criterion ask
+  first (`refuseAPaperNotReadYet`), because they write a row before they read the article.
+- `enqueue` refuses any job naming a minimal article except the admitted *Read this*: its
+  reservation is an unsettled ingest bound to that article (`isReadThisFor`), or the owner is the
+  administrator asking through *Read this* or retrying it. A mode, Rebuild and a step re-run are
+  refused.
+- Sharing, High-powered AI and *Start again* refuse with a sentence of their own (`[np-share]`,
+  `[np-power]`, `[np-reset]`). Export writes what there is and says, first in `omitted`, that the
+  paper has not been read through.
+- **And the publication is the backstop**: a tree landing on a minimal article is refused
+  (`requirePaidUpgrade`, [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) unless its
+  job carries that article's *Read this* reservation or the owner is the administrator. So a path
+  round `enqueue`, if one is ever found, still cannot read a paper for nothing.
+
+**Read this is Rebuild over the stored file, admitted like an ingest.** Its draft is copied from
+the minimal revision, so the raw source pointer and the done `fetch` carry over and `extract`
+onwards runs. Two things had to learn that a published revision can have no blocks: the baseline
+check in stage 3 (`articleHasPublishedBlocks`, [`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts)),
+which would otherwise refuse the first cut of blocks as a lost baseline, and `extract`, which keeps
+the paper's abstract and DOI when it finds none of its own (`keptPaperMetadata`). The publication
+that lands the tree flips `processing` to `'full'` in the same transaction, and `settleIn`
+([`src/store/pg-session.ts`](../../src/store/pg-session.ts)) charges the reservation and then
+supersedes the minimal row — a zero there, while the paper has a minimal row, rolls the publication
+back. A failed *Read this* releases its reservation and the paper stays minimal; its Retry goes back
+through `withUpgradeSlot`, bound to the same paper. `tests/minimal-paper.test.ts` holds all of it
+against a real database, through the real routes.
+
+### Many at once
+
+**The browser half, built 2026-10-01** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md)
+Stage 4). Drop or pick **two or more** files on the add box and each becomes a minimal paper; one
+file is today's full import, unchanged. The file input takes `multiple`, and a mix of PDFs and web
+pages is fine — each file gets the same `uploadProblem` check a single upload does.
+
+> … if you upload multiple PDFs at the same time, ideally it would be possible to do that. … by
+> default, maybe it wouldn't run AI processing when you do that, only when you open each of them for
+> the first time.
+>
+> — Greg, 2026-10-01 (report `spya-eym66s`)
+
+**[`batchUpload.ts`](../../src/web/batchUpload.ts)** is a module singleton, bound to the reader in
+`useJobSession` beside `uploadEngine` and for its reason: the shelf unmounts when the reader goes
+elsewhere, and the batch must not. For each file:
+
+```
+  waiting ─► hashing ─► sending ─► reading ─► on the shelf
+   (a slot)   (one worker)  grant + PUT   POST /api/jobs {uploadId, level: "minimal"}
+                                          and held until watchTerminal says the job ENDED
+```
+
+- **Three in flight, and in flight lasts until the job has ended**, however it ends. Backpressure,
+  not a defence: the allowance is the defence.
+- **One hashing worker.** A file's `arrayBuffer()` is read when it reaches the front, the digest is
+  kept and handed to `requestGrant` (which takes it, and `level`, from a caller that has one), and
+  the buffer goes. A thousand-file drop is never in memory together.
+- **Identical bytes in one drop are one paper** — the second says *The same file as …* and sends
+  nothing. Across drops, tabs and the archive it is the server's duplicate check: a `409` with
+  `code: "duplicate"`, said as *Already on your shelf* (or *archived*, or *being added*), linked
+  when the body names the article.
+- **The allowance stops the queue.** A `402` at the grant or the job marks that file and every file
+  not yet started *Not started: out of allowance*, with the server's `[pay-minimal]` sentence once
+  and a link to `/pricing`. Files already past their grant finish. A new drop asks again.
+- **It hears every ending**, through the job engine's `watchTerminal` (below): `done` is *On your
+  shelf* with a link, `error` is *Couldn't read this one* with the job's sentence and **Retry**
+  (`POST /api/jobs/:id/retry`; a failed job POST re-posts without re-sending, and a failed send
+  starts again), `cancelled` is *Stopped*, and a job that vanished is *Out of sight: look on your
+  shelf*. None of them stalls the queue.
+- **Stop** stops everything not yet queued — waiting files, and files being hashed or sent, whose
+  transfer is aborted and grant given back (`DELETE /api/uploads/:id`). **A file whose job is
+  already running is left to finish**, for the reason `uploadEngine.cancel` refuses during
+  `queueing`: its reservation is made and its work is seconds long.
+- **Up to 1,000 files in one drop**; beyond that the panel says how many were not taken.
+- A sign-out fences everything, as for one upload.
+
+**[`BatchPanel.tsx`](../../src/web/BatchPanel.tsx)**, under the add box on the shelf: one row per
+file, a counts line, Stop, and *Keep this tab open while it works* — the tab is the worker
+(§ The browser is the worker). Rows wrap at 390px. A minimal paper's job is left out of the add
+box's own job list, which would otherwise draw forty cards for forty seconds-long jobs.
+
+**The terminal seam** is `jobEngine.watchTerminal(jobId, onEnd)`
+([`jobEngine.ts`](../../src/web/jobEngine.ts)), Sol's plan-review P1. It is fed by every list
+reconciliation **and** by every `/advance` response, because the drive loop runs behind a hidden tab
+and the poll does not. A job is *vanished* only when a list **that began after the watcher was
+registered** leaves it out; a list already on the wire knew nothing of it. A pending watcher keeps
+the busy cadence armed, a teardown drops every watcher uncalled, and a job already terminal in the
+snapshot is reported on the next microtask. `tests/job-engine-terminal.test.ts` and
+`tests/batch-upload.test.ts` hold the two halves.
+
+***Read this* from the browser** is `readThis` in [`read-this.ts`](../../src/web/read-this.ts):
+`POST /api/jobs {slug, readThis: true}` through the engine's action seam, so the job is driven at
+once from the shelf card or the paper's page. It keeps the add page's *Generate the main modes*
+promise: when the box was ticked (the same stored choice, `readAutoModes`), it watches the job and
+queues the modes once it is `done` — through `watchTerminal`, because the card that was pressed may
+be long gone by then. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
+has the card and the page.
+
 ## The add page
 
 > Add a url that I can use to add something directly, e.g. `/add/[my-full-url-here]` or

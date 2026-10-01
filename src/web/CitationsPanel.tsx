@@ -35,6 +35,7 @@
 import type { ReactNode } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
+import { OrderGroup } from "./OrderGroup.js";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
@@ -504,10 +505,10 @@ export const CITE_PAGE_FOUND = "We found a web page matching its title, but have
 export function citeReadAssessed(words: number, host: string): string {
   return `We have not read the work itself, only a search engine's extract of a page matching it (${words} ${words === 1 ? "word" : "words"}, from ${host}).`;
 }
-/** *Investigate* read the paper's own text (plan 261001a): a PDF code confirmed is this work. */
+/** *Dig deeper* (was *Investigate*) read the paper's own text (plan 261001a): a PDF code confirmed is this work. */
 export function citeReadPaper(words: number, host: string, readAt: string): string {
   const day = new Date(readAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work (Investigate).`;
+  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work (Dig deeper).`;
 }
 /** `no-extract`: a page, and nothing of it to read. Never drawn as `not-in-extract`. */
 export function citeReadNoExtract(host: string): string {
@@ -863,9 +864,7 @@ function OrderBar({
 }) {
   return (
     <div className="gloss-sort">
-      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
-      <div className="gloss-sort-group" role="group" aria-label="Order the citations by">
+      <OrderGroup label="Order the citations by" selected={order}>
         {options.map((option) => (
           <button
             key={option.key}
@@ -878,7 +877,7 @@ function OrderBar({
             {option.label}
           </button>
         ))}
-      </div>
+      </OrderGroup>
     </div>
   );
 }

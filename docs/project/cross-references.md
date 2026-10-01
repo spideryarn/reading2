@@ -75,6 +75,18 @@ resolves a mark only through `xrefTarget`. That function checks the nonce and th
 the artefact, **never from the DOM**. So an article's own HTML cannot make a working
 cross-reference: it cannot know the nonce.
 
+- **How it looks**: a thin solid grey underline, turning the link colour on hover. Quieter than a
+  glossary term's dotted orange rule on purpose, and a different shape from it:
+
+  > it's a little bit difficult to tell the difference between them and the glossary. Maybe because
+  > they both kind of look like dotted lines […] those internal links are probably less important
+  > than the glossary. So visually the glossary links should be a bit more prominent.
+  >
+  > — Greg, 2026-10-01 (spya-sxvq2j)
+
+  It was a 2px dotted line in the link colour until then. `mark.xref` in
+  [`annotations.css`](../../src/web/styles/annotations.css),
+  [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md).
 - **Precedence**: an xref wins over a glossary term, a citation mark, a comment and a search wash on
   the same words. The one exception is an author's own `<a>`: an xref crossing one is dropped,
   and the author's link keeps its card and its click.

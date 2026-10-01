@@ -849,6 +849,15 @@ the card and the masthead cannot drift. They run on opposite sides of the wire, 
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
 
+**A paper not yet read through is a card too** (plan 261001m, Greg: *"Each paper should be shown on
+the shelf as normal, but indicate in the UI that it hasn't been AI-processed yet"*). It has no blocks
+and no tree, so `listArticles` keeps it by its `processing` rather than dropping it as it drops any
+other row with no tree: `LibraryEntry.processing` is `"minimal"`, its words, blocks, parts and
+sections are 0, and it carries `abstract` and `doi` where a full card has a blurb. Every other row
+says `"full"`; the field is optional only for rows a browser cached before it existed, all of them
+full. How the server makes one is
+[ingest-queue.md § A minimal upload, and Read this](ingest-queue.md#a-minimal-upload-and-read-this).
+
 ### The Shared badge
 
 An article anyone can read without signing in wears a small globe and the word **Shared**, on the
@@ -912,6 +921,43 @@ visibility = 'public'` so the row cap bounds the database's work and not only th
 came out of GPT Sol's review of the built code, 2026-09-04; the argument for each is in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) and
 [security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
+
+### A paper not read through yet
+
+> Each paper should be shown on the shelf as normal, but indicate in the UI that it hasn't been
+> AI-processed yet.
+>
+> — Greg, 2026-10-01
+
+A file added in a batch has only its title, authors, abstract and DOI read
+([ingest-queue.md § Many at once](ingest-queue.md#many-at-once)), and its `LibraryEntry` says
+`processing: "minimal"`, with `abstract` and `doi` beside it and every count at 0. It is an ordinary
+card, with four differences, all in [`ShelfCard`](../../src/web/ShelfEntry.tsx):
+
+- **The marker.** *Not AI-processed yet*, in `ArchivedMark`'s shape (`NotProcessedBadge`), on the
+  meta line of the card and in the title cell of the table.
+- **No numbers it does not have.** The meta line keeps the byline and drops length and blocks; the
+  word count goes; the table's Words cell is a dash and sorts last.
+- **The abstract, behind a closed `<details>`**, because forty open abstracts would be a wall.
+- ***Read this*, with its cost beside it** — *Uses 0.99 of an article from your allowance*
+  ([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)).
+  It is `ReadThisButton` ([`ReadThis.tsx`](../../src/web/ReadThis.tsx)), handed to the card by
+  `Library` as a slot, because `ShelfEntry.tsx` is shared with the lazy `/admin` and `/design`
+  routes and the button brings the job engine behind it (`tests/eager-client-graph.test.ts`). It
+  reads the job engine, so a press here and one on the paper's own page are the same job, and the
+  card shows it running. The table has no button: a row opens the paper's page, which has one.
+
+**Rebuild is not drawn** on a minimal card, in the row or in the "⋯" menu. That breaks *five
+buttons, always five* (§ When a button cannot do its job) on purpose: there is nothing built to
+rebuild, the server refuses it, and *Read this* is the action. Edit, Open, Copy and Archive stay.
+
+**Opening it is free.** The card's link goes to the reading address as usual, where the owned route
+answers `409 not-processed` and the page draws the paper — title, authors, abstract, DOI as a
+`doi.org` link when it has the DOI shape, *Open the PDF* for a PDF, and *Read this*
+([`UnreadPaperPage.tsx`](../../src/web/article/UnreadPaperPage.tsx)). Nothing starts by itself: the
+plan's answer 6, so a reader skimming twenty titles spends nothing. When a *Read this* job on that
+paper ends `done`, the page loads the article in place. `tests/minimal-paper-ui.test.tsx` holds the
+card and the page.
 
 ### Where the numbers on it come from, and why nobody derives them twice
 
@@ -1003,6 +1049,30 @@ that nothing executes drifts from the pipeline silently. The stages are document
 [setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages), which is where they belong,
 and they still run by hand.
 
+## The free-allowance box
+
+> indicate somewhere on the logged-in Homepage for free users how many free articles used &
+> remaining, plus default-collapsed section … If they don't have a voucher, don't mention vouchers
+> at all
+>
+> — Greg, 2026-10-01
+
+Under the add box, for a reader whose plan is `free` or `lapsed` and nobody else:
+[`FreeAllowance.tsx`](../../src/web/FreeAllowance.tsx), the shelf's one `useBilling()`. One line —
+`describePlan`'s headline, the same words `/profile` prints, and the server's `remaining` — then a
+`<details>`, closed by default, saying the allowance is lifetime rather than monthly, that a public
+article counts half, that reading is never limited, and where to subscribe (`/pricing`) and manage
+(`/profile`). The rules behind the numbers are [billing.md § What a reader sees](billing.md#what-a-reader-sees);
+the one this box must not break is that it never prints `limit − used`.
+
+**Gifts appear only when the plan carries them**, and the server omits `gifts` when there are none:
+then a gift icon sits by the count, the collapsed half lists each one (*20 articles, a gift, added 1
+October 2026*), and for seven days after a claim a line says *A gift of 20 articles has been added to
+your free allowance*. Dismissing it is remembered per gift in `localStorage`
+(`spya.giftNotice.dismissed.<noticeKey>`), every access inside a `try`. Nothing is drawn until the
+plan arrives, and nothing if the read fails — `/profile` is where a failed read is explained.
+`tests/free-allowance-box.test.tsx` holds the four rules.
+
 ## `meta.json`, and the article's identity
 
 The shelf needs a title, a byline, a source and a date, and until now nothing wrote them down —
@@ -1079,6 +1149,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/IconButton.tsx`](../../src/web/IconButton.tsx) | the 28px icon-only button every row of them agrees on |
 | [`src/web/relative-time.ts`](../../src/web/relative-time.ts), [`src/web/useNow.ts`](../../src/web/useNow.ts) | "3 days ago", and the clock that keeps it true |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the add box and the progress list — [ingest-queue.md](ingest-queue.md) |
+| [`src/web/FreeAllowance.tsx`](../../src/web/FreeAllowance.tsx) | the free-allowance box under the add box — [§ The free-allowance box](#the-free-allowance-box) |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | where Add takes you: `/add/<a whole URL>` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |

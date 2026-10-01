@@ -72,6 +72,8 @@ let reads = 0;
 let holdRead = false;
 let releaseRead: (() => void) | null = null;
 let readResponse: GlossaryResponse = GLOSSARY;
+/** A JSON refusal the lookup POST answers before any stream, or `null` for a stream. */
+let refuse: { status: number; error: string } | null = null;
 
 vi.mock("../src/web/lib/api.js", () => {
   const api = {
@@ -90,6 +92,12 @@ vi.mock("../src/web/lib/api.js", () => {
       }
       posts += 1;
       signal = init?.signal ?? undefined;
+      if (refuse) {
+        return new Response(JSON.stringify({ error: refuse.error }), {
+          status: refuse.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
       return new Response(
         new ReadableStream<Uint8Array>({
           start(c) {
@@ -99,7 +107,12 @@ vi.mock("../src/web/lib/api.js", () => {
         { status: 200, headers: { "content-type": "text/event-stream" } },
       );
     },
-    readJson: async (res: Response) => res.json(),
+    /* The real one throws the body's sentence on a refusal (`errorFor`). */
+    readJson: async (res: Response) => {
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? String(res.status));
+      return data;
+    },
     failure: async (res: Response) => new Error(String(res.status)),
     fetchOk: async (input: string) => api.apiFetch(input),
   };
@@ -156,6 +169,7 @@ beforeEach(() => {
   holdRead = false;
   releaseRead = null;
   readResponse = GLOSSARY;
+  refuse = null;
   band = null;
   reading = null;
   host = document.createElement("div");
@@ -334,6 +348,54 @@ describe("a lookup that ends without `done`", () => {
     await finished(running);
     expect(entry()?.lookup).toEqual(LOOKUP);
     expect(posts).toBe(1);
+  });
+});
+
+/* Plan 261001p, found by the stage 2 browser check: a *Dig deeper again*
+   whose forced search failed (OpenRouter 402, our 502 `error` frame) showed
+   the busy label, then the button came back with the old answer and no
+   sentence anywhere. These drive the hook and the panel together, because the
+   sentence has to reach the screen, not just the hook's state. */
+describe("a failed Dig deeper, on screen", () => {
+  const SENTENCE = "Our AI provider refused the request. Try again later. [ai-provider-402]";
+  const HAD = {
+    ...GLOSSARY,
+    glossary: { ...GLOSSARY.glossary, entries: [{ ...ENTRY, lookup: LOOKUP }] },
+  } as GlossaryResponse;
+
+  it("says why under Dig deeper again, and keeps the old answer, when the stream ends in `error`", async () => {
+    readResponse = HAD;
+    await mount();
+    expect(host.textContent).toContain(LOOKUP.answer);
+    const { running } = await start();
+    send("error", { error: SENTENCE });
+    end();
+    await finished(running);
+
+    expect(host.textContent).toContain(SENTENCE);
+    expect(host.textContent).toContain(LOOKUP.answer);
+    expect(host.textContent).toContain("Dig deeper again");
+  });
+
+  it("says why under Dig deeper again when the press is refused before the stream", async () => {
+    readResponse = HAD;
+    refuse = { status: 429, error: "Another Dig deeper is still running. Wait for it to finish, then try this one." };
+    await mount();
+    const { running } = await start();
+    await finished(running);
+
+    expect(host.textContent).toContain("Another Dig deeper is still running.");
+    expect(host.textContent).toContain(LOOKUP.answer);
+  });
+
+  it("says why under Dig deeper on a first press too", async () => {
+    await mount();
+    const { running } = await start();
+    send("error", { error: SENTENCE });
+    end();
+    await finished(running);
+
+    expect(host.textContent).toContain(SENTENCE);
   });
 });
 

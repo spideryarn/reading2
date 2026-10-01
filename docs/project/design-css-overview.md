@@ -277,6 +277,9 @@ will eventually have to decide whether they are a system or an accident:
 - **[design-logo.md](design-logo.md)** — the thirteen animations the wordmark plays when you point
   at it or hold it down, how they were picked from about 140 ideas, and the four ways a fourteenth
   can silently do nothing.
+- **[loading-spinner.md](loading-spinner.md)** — the two spinners and which a wait gets: the
+  wordmark, running two of its hover animations at once, for a whole page waiting; `LoaderCircle`
+  for anything inline.
 - **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block in
   [`styles/site.css`](../../src/web/styles/site.css) and the four rules in it, how to shoot a product screenshot that shows what it
   claims to, and the two ways a full-page capture of these pages lies to you.
@@ -287,7 +290,8 @@ will eventually have to decide whether they are a system or an accident:
 - [icons.md](icons.md) — Lucide, one stroke weight, two ways an SVG breaks a layout quietly, and **navigation is an icon with a tooltip, not a text label** (Greg, 2026-09-29)
 - [colour-scales.md](colour-scales.md) — the three palettes that are not the brand, and why every
   published one is upside down on a black page
-- [tooltips.md](tooltips.md) — the one component whose appearance is entirely ours
+- [tooltips.md](tooltips.md) — the one component whose appearance is entirely ours, and **prefer
+  it to a native `title`** wherever something needs explaining (Greg, 2026-10-01)
 - [original-version/overview.md](original-version/overview.md) — where the palette and the typography came from
 - [browser-testing.md](browser-testing.md) — **do not judge colour from a screenshot**
 - **`/design`** — not a doc but the live counterpart to this one:

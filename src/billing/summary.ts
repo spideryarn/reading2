@@ -24,8 +24,16 @@
  *
  * It is a **GET**, unlike the three routes in checkout.ts, and the difference is
  * the rule those state: those are POSTs because each *creates a Stripe object*.
- * This creates nothing, touches no network, and only reads our own tables — so a
- * prefetch or a reload of it costs nothing and means nothing.
+ * This function creates nothing, touches no network, and only reads our own
+ * tables — so a prefetch or a reload of it costs nothing and means nothing.
+ *
+ * **The route does one write before it calls this, on purpose**: it claims any
+ * gift voucher waiting for the reader's confirmed address (`claimVouchersFor`,
+ * ../store/pg-vouchers.ts). That is idempotent — a voucher is claimed by exactly
+ * one statement, and a second call finds nothing waiting — and it costs a network
+ * call to the Auth service only when a voucher actually matches, which is almost
+ * never. The response is `private, no-store` because of it.
+ * docs/plans/261001m-gift-vouchers-for-free-articles.md (F5).
  *
  * ## It never resyncs from Stripe
  *
@@ -41,19 +49,20 @@ import { log } from "../log.js";
 import type { OwnerId } from "../owner.js";
 import {
   accountSnapshot,
-  atTheWall,
   entitlementFromRow,
-  halfUnitsUsed,
   hasLapsed,
   ingestsUsed,
+  minimalUsed,
   sharingWouldMakeRoom,
   usageFor,
+  wallUsed,
 } from "../store/pg-billing.js";
 import type { BillingRow, Stale } from "../store/pg-billing.js";
 import { allTiers } from "../store/pg-tiers.js";
+import { giftsFor } from "../store/pg-vouchers.js";
 import { planEndsAt } from "../billing-plan.js";
 import type { BillingSummary, Purchase, ReaderPlan, TierOffer } from "../billing-plan.js";
-import { budgetFor, privateHeadroom } from "./half-units.js";
+import { admitsIngest, budgetFor, ingestHeadroom } from "./points.js";
 import { stripeConfigured } from "./stripe.js";
 import { subscriptionState, tiersToOffer } from "./tiers.js";
 import type { Entitlement, Standing, TierRow } from "./tiers.js";
@@ -211,15 +220,23 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
      src/store/pg-billing.ts). A page that showed only settled successes would
      say a slot was free and then watch the server refuse it.
 
-     **Three integers and no half-units**, which is the rule ../billing-plan.ts
-     states at length: `used` is a count of ingests, `sharedHalfPrice` is how
-     many of them are cheap right now, and whether the wall would refuse is asked
-     of the wall rather than reconstructed from the pair. */
+     **Integers and no points**, which is the rule ../billing-plan.ts states at
+     length: `used` is a count of ingests, `sharedHalfPrice` is how many of them
+     are cheap right now, `minimal` is how many papers are not yet AI-processed,
+     and whether the wall would refuse is asked of the wall rather than
+     reconstructed from them. `atLimit` means *cannot add an ordinary article*
+     — `admitsIngest`, the predicate the wall itself asks (Sol's plan review of
+     261001m, P1). */
   const used = ingestsUsed(usage);
+  const spent = wallUsed(usage);
+  const budget = budgetFor(entitlement.limit);
   const counted = {
     used,
     sharedHalfPrice: usage.chargedHalfPrice,
-    atLimit: atTheWall(entitlement, usage),
+    atLimit: !admitsIngest(spent, budget),
+    /* Papers at a hundredth each, charged or in flight: a plain count, never a
+       fraction of an article (`ReaderPlan.minimal`). */
+    minimal: minimalUsed(usage),
     /* Upgrades, apart from the ingests: `used` is articles added, and one
        high-powered article is not two of those (`ReaderPlan.highPower`). */
     highPower: usage.highPowerFullPrice + usage.highPowerHalfPrice,
@@ -252,25 +269,35 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     });
   }
 
+  /* **Gift vouchers, on both Free arms and only when there are some** — absent
+     rather than empty, so no surface can mention a voucher to a reader without
+     one. `entitlement.limit` already includes them (`freeEntitlement`,
+     ../store/pg-billing.ts); this is the list the copy says them from. */
+  const [firstGift, ...moreGifts] = await giftsFor(ownerId);
+  const gifts = firstGift ? { gifts: [firstGift, ...moreGifts] as const } : {};
+  /* Further private articles — the wall's own answer, never `limit − used`. */
+  const remaining = ingestHeadroom(spent, budget);
+
   if (hasLapsed(row)) {
     /* **No `used` on this arm**, so the page cannot print "40 of 3" — see
        src/billing-plan.ts. `remaining` is clamped at zero rather than going negative, which
        is the same number said the way round that stays true. */
     return summary({
       kind: "lapsed",
+      ...gifts,
       limit: entitlement.limit,
       /* **Further private articles, which is the wall's own answer** rather than
          `limit - used`: the two are no longer two ends of one ratio now that a
-         public ingest costs half. `privateHeadroom` argues that its division is
+         public ingest costs half. `ingestHeadroom` argues that its division is
          exact, and it can never exceed the limit, which is what this arm of the
          union exists to guarantee. */
-      remaining: privateHeadroom(halfUnitsUsed(usage), budgetFor(entitlement.limit)),
+      remaining,
     });
   }
 
   /* **Asked of the ledger, and only at the wall.** The free arm's copy offers
      sharing as a way out, and whether that is true cannot be worked out from the
-     three counts above — a charged row that predates `ingest_events.article_id`
+     counts above — a charged row that predates `ingest_events.article_id`
      cannot be cheapened at all, and an account that has unshared everything is
      past the point where sharing everything would help. One grouped aggregate,
      for the readers who are being refused and nobody else. See
@@ -281,6 +308,8 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     kind: "free",
     limit: entitlement.limit,
     ...counted,
+    remaining,
     ...(sharingMakesRoom ? { sharingMakesRoom: true as const } : {}),
+    ...gifts,
   });
 }

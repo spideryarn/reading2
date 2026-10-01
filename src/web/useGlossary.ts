@@ -65,7 +65,7 @@ export interface AskedTermDraft extends Omit<AskedTermAnswer, "lookup"> {
 
 /**
  * **The part of an entry's web lookup that has arrived** — `AskedTermDraft`'s
- * counterpart for *Check the web*, and never on the entry. `id` says which
+ * counterpart for *Dig deeper* (was *Check the web*), and never on the entry. `id` says which
  * entry it belongs to, because the band draws every entry and only one may
  * show it.
  */
@@ -591,7 +591,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   useAutoRun(slug, "glossary", status, find, reload);
 
   /**
-   * Check one term on the web — the panel's "check this" button.
+   * Dig deeper into one term — the panel's *Dig deeper* button (was *Check the web*, plan 261001p).
    *
    * **A plain request rather than a job**, unlike everything else here. Finding
    * terms is one call over a whole article and belongs in the queue; checking a

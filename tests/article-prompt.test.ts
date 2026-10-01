@@ -30,6 +30,7 @@ import {
   cachedText,
   estimateTokens,
   readerPositionLine,
+  visibleBlocksLine,
   underCacheFloor,
 } from "../src/article-prompt.js";
 import type { TextPart } from "../src/article-prompt.js";
@@ -219,6 +220,50 @@ describe("readerPositionLine", () => {
   });
 });
 
+describe("visibleBlocksLine", () => {
+  it("names every block on screen, in the order given", () => {
+    expect(visibleBlocksLine(["spya-aaaaaa", "spya-bbbbbb"])).toContain("spya-aaaaaa, spya-bbbbbb");
+  });
+
+  it("carries its caveat, because the point is not to lean on it (spya-ybnas5)", () => {
+    const line = visibleBlocksLine(["spya-aaaaaa"]);
+    expect(line).toMatch(/^For context only/);
+    expect(line).toContain("otherwise ignore them");
+  });
+
+  it("is empty for an empty screen, like readerPositionLine", () => {
+    expect(visibleBlocksLine([])).toBe("");
+  });
+
+  it("replaces only the position line and leaves the cached prefix and suffix order untouched", () => {
+    const shared = {
+      meta,
+      blocks,
+      history: [],
+      question: "what does this mean?",
+      at: "spya-aaaaaa",
+      profile: "About the reader: familiar with biology.",
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      help: true,
+    };
+    const at = buildConverseMessages(shared);
+    const visible = buildConverseMessages({
+      ...shared,
+      visible: ["spya-bbbbbb", "spya-cccccc"],
+    });
+    const atTail = at.at(-1)!.content as string;
+    const visibleTail = visible.at(-1)!.content as string;
+
+    expect(visibleTail).toBe(
+      atTail.replace(
+        readerPositionLine(shared.at),
+        visibleBlocksLine(["spya-bbbbbb", "spya-cccccc"]),
+      ),
+    );
+    expect(cachedText(visible)).toBe(cachedText(at));
+  });
+});
+
 describe("the three request-path builders share one article", () => {
   /* The strongest test here. Search, explain and converse each used to render
      the article themselves, and the copies had already drifted — one omitted the
@@ -404,7 +449,7 @@ describe("the reader profile rides after the breakpoint", () => {
 
   it("leaves explain's cached part untouched", () => {
     const without = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote");
-    const with_ = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, profile);
+    const with_ = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", null, profile);
     expect(cachedText(with_)).toBe(cachedText(without));
     // …and it really did arrive, rather than being dropped on the floor.
     expect(partText(with_[1]!.content, 1)).toContain("rusty on information theory");
@@ -422,8 +467,8 @@ describe("the reader profile rides after the breakpoint", () => {
        edited their box, must share the article's cache entry — otherwise the
        feature quietly multiplies the cost of every article by the number of
        profiles it has ever been read under. */
-    const a = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, profile);
-    const b = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, other);
+    const a = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", null, profile);
+    const b = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", null, other);
     expect(cachedText(a)).toBe(cachedText(b));
   });
 

@@ -104,7 +104,12 @@
  *   POST   /api/jobs/:id/cancel
  *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
  *   POST   /api/jobs/:id/advance run the next step this job has not done yet
- *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought
+ *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought —
+ *                                and, first, claims any gift voucher waiting for the
+ *                                reader's confirmed address (the one write in a GET)
+ *   GET    /api/admin/vouchers   (admin) every gift voucher, with each claimant's usage
+ *   POST   /api/admin/vouchers   (admin) { email, articles, note? } → a voucher, waiting
+ *   PATCH  /api/admin/vouchers/:id (admin) { articles?, note?, email?, revoked? }
  *   POST   /api/billing/checkout { tierId, currency? } → a hosted Checkout, or the Portal
  *   POST   /api/billing/portal   → a hosted Customer Portal session
  *   POST   /api/billing/confirm  { sessionId } → prove a finished Checkout is yours, then sync
@@ -162,6 +167,7 @@ import {
   guessSource,
   loadTimeline,
   loadTweets,
+  fetchAllowanceStore,
 } from "./store/index.js";
 import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
 /* **Pure functions only**, and that is the whole reason this import survived
@@ -273,6 +279,7 @@ import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
+import { type DigFindings, admitDig, searchFirst } from "./dig-deeper.js";
 import { markAnswerStream } from "./quiz-mark.js";
 import { withOldClientBands } from "./quiz.js";
 import { similarBlocks } from "./similar.js";
@@ -327,12 +334,23 @@ import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } fro
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import {
+  NOT_READ_YET,
+  NOT_READ_YET_HIGH_POWER,
   placingFailed,
   UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
   UPLOAD_STILL_ARRIVING,
   UPLOAD_UNAVAILABLE,
 } from "./messages.js";
+import {
+  DuplicateUpload,
+  MINIMAL_STEPS,
+  UploadNotClaimed,
+  claimMinimalUploadInLock,
+  refuseMinimalUploadAtTheDoor,
+  processingOf,
+} from "./minimal-paper.js";
+import { NotProcessed } from "./not-processed.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import {
   confirmCheckout,
@@ -342,8 +360,24 @@ import {
 } from "./billing/checkout.js";
 import { readBillingSummary } from "./billing/summary.js";
 import {
+  claimVouchersFor,
+  createVoucher,
+  listVouchers,
+  parseNewVoucher,
+  parseVoucherPatch,
+  updateVoucher,
+} from "./store/pg-vouchers.js";
+import {
+  deliverReservedVoucherEmail,
+  reserveVoucherEmailRetry,
+  sendQueuedVoucherEmail,
+} from "./store/pg-voucher-emails.js";
+import type { VoucherCreated } from "./admin-vouchers.js";
+import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
+  withMinimalSlot,
+  withUpgradeSlot,
   withIngestSlot,
   withRetrySlot,
   type IngestSlot,
@@ -371,6 +405,7 @@ import {
   noteSlug,
   readUpload,
   recordsSurviveTheRequest,
+  type ClaimFailure,
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
@@ -379,7 +414,7 @@ import { authoredSentence, sayToReader } from "./reader-sentence.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
-import { isStepName, type StepName } from "./pipeline.js";
+import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { routeProfileIsStale } from "./trajectory.js";
 import {
@@ -387,6 +422,7 @@ import {
   articlePower,
   type ModelPower,
   NON_TASK_MODELS,
+  powerFor,
   type Provider,
   STAGE_EFFORT,
   TASK_TIER,
@@ -436,7 +472,7 @@ import type {
 import { isMicPlacement, MIC_PLACEMENTS } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
-import { isThreadKind, THREAD_KINDS } from "./types.js";
+import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
@@ -1590,8 +1626,9 @@ const MAX_QUOTE_CHARS = 2000;
  * Answer a **legacy explanation** a few words at a time, and store the answer.
  *
  * Reached only as `POST /api/comments/:slug/:id/answer`, and only by *Try
- * again* and *Search the web properly* on a comment that already has an answer
- * or an error. Since 2026-08-26 a selection opens a conversation rather than
+ * again* and *Dig deeper* (was *Search the web*) on a comment that already has
+ * an answer or an error — and by the first answer to a comment whose "Also ask
+ * the AI" box was ticked. Since 2026-08-26 a selection opens a conversation rather than
  * buying one of these, and since 2026-08-28 it makes a free comment; nothing
  * creates a new explanation, and this route cannot.
  *
@@ -1609,6 +1646,16 @@ const MAX_QUOTE_CHARS = 2000;
  * the disk and the reader can never disagree. A model failure is a `done` frame
  * carrying a comment whose status is `error` — the request *did* succeed at what
  * it was for; the dialog shows the failure and offers a retry.
+ *
+ * **A *Dig deeper* press (`deep: true`) does two more things before the row is
+ * claimed** (plan 261001p): it takes the `dig-deeper` allowance, and it runs
+ * the forced search (src/dig-deeper.ts § `searchFirst`). Both before
+ * `beginAnswer` on purpose. A refusal or a failed search is then an ordinary
+ * JSON answer and the stored answer is untouched — the client already puts the
+ * previous answer back on any failure before the stream. And the search's
+ * twenty seconds never eat into the row's lease, which is sized for the model
+ * call alone (`COMMENT_ANSWER_LEASE_MS`). A first answer and *Try again* spend
+ * no allowance.
  *
  * Frames: one `begin`, then any number of `delta`, then exactly one `done`.
  */
@@ -1657,17 +1704,66 @@ async function answer(
      stream and be recorded as a failed answer on the reader's own question. */
   const profile = wantsProfile ? await resolveProfile(slug) : null;
 
-  /* Throws `NotAnExplanation` for an unknown id and for a bookmark, which
-     `serveApi`'s error mapping turns into a 404 and a 409. The anchor comes
-     back off the stored row — the request never gets to name one. */
-  const { comment, attempt } = await commentStore.beginAnswer(slug, id);
-  const { blockId, quote } = comment;
-  /* **Unreachable, and written as a guard rather than a `!`.** `beginAnswer`
-     refuses a `status: "none"` row, and `comments_whole_block_is_free` keeps
-     every quote-less row at `none` — so a whole-block bookmark cannot get here.
-     If either of those ever changes, this says so instead of asking the model
-     about the empty string. */
-  if (quote === undefined) throw httpError(409, "A whole-block bookmark was never a question");
+  /* **Dig deeper: the allowance, then the search, then the claim.** The row is
+     read first so that every press `beginAnswer` would refuse — an unknown id,
+     a bookmark — is refused by it below for free, with nothing spent: only a
+     row it would accept takes the allowance. */
+  let dig: DigFindings | undefined;
+  let freeDig: (() => Promise<void>) | null = null;
+  if (deeper) {
+    const stored = (await commentStore.load(slug)).find((c) => c.id === id);
+    /* A row already being answered would lose `beginAnswer`'s claim below
+       anyway — after spending a fill and a search. Refused here for free, so
+       only two truly simultaneous presses can race, and the loser of that race
+       costs one search and writes nothing (plan 261001p, Sol F12, overruled). */
+    if (stored?.status === "pending") throw new NotAnExplanation(id, "running");
+    if (stored && stored.status !== "none" && stored.quote !== undefined) {
+      freeDig = await admitDig(fetchAllowanceStore);
+      try {
+        dig = await searchFirst({
+          slug,
+          /* The words the reader selected are the thing they want dug into. */
+          subject: stored.quote,
+          article: {
+            title: article.meta.title,
+            author: article.meta.byline,
+            date: article.meta.publishedAt,
+          },
+          context: article.blocks.find((b) => b.id === stored.blockId)?.text,
+          library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
+        });
+      } catch (err) {
+        await freeDig();
+        throw err;
+      }
+    }
+  }
+
+  let claimed: Awaited<ReturnType<typeof commentStore.beginAnswer>>;
+  try {
+    /* Throws `NotAnExplanation` for an unknown id and for a bookmark, which
+       `serveApi`'s error mapping turns into a 404 and a 409. The anchor comes
+       back off the stored row — the request never gets to name one. */
+    claimed = await commentStore.beginAnswer(slug, id);
+    /* **Unreachable, and written as a guard rather than a `!`.** `beginAnswer`
+       refuses a `status: "none"` row, and `comments_whole_block_is_free` keeps
+       every quote-less row at `none` — so a whole-block bookmark cannot get here.
+       If either of those ever changes, this says so instead of asking the model
+       about the empty string. */
+    if (claimed.comment.quote === undefined) {
+      throw httpError(409, "A whole-block bookmark was never a question");
+    }
+    /* The same unreachable-by-construction shape for a dig: a row that passed
+       `beginAnswer` passed the check above, unless it changed in between. A
+       press that asked for a dig never gets a plain answer instead. */
+    if (deeper && !dig) throw httpError(409, "This comment changed while it was being dug into");
+  } catch (err) {
+    await freeDig?.();
+    throw err;
+  }
+  const { comment, attempt } = claimed;
+  const { blockId } = comment;
+  const quote: string = comment.quote;
   const key = `${slug}/${comment.id}`;
   const release = beganAnswering(key);
 
@@ -1722,7 +1818,7 @@ async function answer(
       blocks: article.blocks,
       blockId,
       quote,
-      deep: deeper,
+      dig,
       profile,
     })) {
       if (event.type === "delta") {
@@ -1776,6 +1872,7 @@ async function answer(
   } finally {
     release();
     res.end();
+    await freeDig?.();
   }
 }
 
@@ -1906,11 +2003,13 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
 }
 
 /**
- * **Check one glossary entry on the web, a few words at a time, and keep the
- * answer** — `POST /api/glossary/:slug/:id/lookup`, SSE out.
+ * ***Dig deeper* into one glossary entry, a few words at a time, and keep the
+ * answer** — `POST /api/glossary/:slug/:id/lookup`, SSE out. (The path keeps
+ * its old name: it is a URL, not copy.)
  *
- * `streamAskedTerm`'s shape: the 404 and the two 409s are decided by
- * `lookUpTerm` before a header is written, then any number of `delta` and
+ * `streamAskedTerm`'s shape: the 404, the two 409s and the allowance's 429/503
+ * are decided by `lookUpTerm` before a header is written, then any number of
+ * `delta` and
  * exactly one `done` (`{ entry }`, the JSON route's old body) or `error`.
  * **`done` is written only after the lookup is stored** — a save that fails
  * after the words arrived is an `error`, so the panel never draws an answer as
@@ -1927,10 +2026,11 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
  * same reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
 async function streamTermLookup(slug: string, termId: string, res: ServerResponse): Promise<void> {
-  const { stream } = await lookUpTerm(slug, termId);
+  const { stream, release } = await lookUpTerm(slug, termId);
 
-  const { frame } = sse(res);
+  let frame: ReturnType<typeof sse>["frame"] | null = null;
   try {
+    frame = sse(res).frame;
     for await (const event of stream()) {
       if (event.type === "delta") {
         frame("delta", { text: event.text });
@@ -1940,9 +2040,15 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
     }
   } catch (err) {
     captureFailure(err, { route: "glossary-lookup", slug });
-    frame("error", { error: sayToReader(err, { route: "glossary-lookup", slug }) });
+    frame?.("error", { error: sayToReader(err, { route: "glossary-lookup", slug }) });
   } finally {
-    res.end();
+    /* The stream frees the allowance itself when it ends; this is for the
+       path where it never started. Idempotent. */
+    try {
+      await release();
+    } finally {
+      res.end();
+    }
   }
 }
 
@@ -2623,6 +2729,17 @@ function sweepChat(slug: string): Promise<ChatThread[]> {
  *    text so far when it throws, and that partial answer is stored with the
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
+/**
+ * The on-screen ids a chat body sent, kept only where the article has them and
+ * put in article order — the order a reader saw them in. Already shape-checked
+ * by `streamChat`.
+ */
+export function onScreenOf(visible: readonly string[] | undefined, blocks: readonly Block[]): string[] {
+  if (!visible || visible.length === 0) return [];
+  const wanted = new Set(visible);
+  return blocks.filter((b) => wanted.has(b.id)).map((b) => b.id);
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -2637,6 +2754,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     stance,
     help,
     sourceCommentId,
+    visible,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **Validated, never coerced.** An unknown value is a 400 rather than a
@@ -2723,6 +2841,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if ((wantsRetry || wantsEdit) && help !== undefined) {
     throw httpError(400, "A retry or an edit takes its help flag from the stored question");
   }
+  /* **What was on the reader's screen** — context for "this" and "here",
+     hedged in the prompt (`visibleBlocksLine`). A list of block ids, at most
+     `MAX_VISIBLE_BLOCKS`, on an ask or an edit; a retry re-asks a stored
+     question and has no screen of its own to report, so it is refused one, as
+     it is refused a kind. Something that is not an id is refused; an id the
+     article does not have is dropped below instead, because a tab left open
+     across a re-extraction should not lose chat over one stale id.
+     docs/plans/261001q-chat-knows-the-blocks-on-screen.md. */
+  if (visible !== undefined) {
+    if (wantsRetry) throw httpError(400, "A retry takes no visible blocks");
+    if (
+      !Array.isArray(visible) ||
+      !visible.every((id) => typeof id === "string" && isSpideryarnId(id))
+    ) {
+      throw httpError(400, "visible must be a list of block ids");
+    }
+    if (visible.length > MAX_VISIBLE_BLOCKS) {
+      throw httpError(400, `visible may name at most ${MAX_VISIBLE_BLOCKS} blocks`);
+    }
+  }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
@@ -2740,6 +2878,22 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
+  /* **Chat only.** Remember's prompt tells the model not to guess how far the
+     reader has got, and a screenful is exactly that guess; Candidates sends no
+     position at all. The thread's kind decides, as it does for the cap below. */
+  if (visible !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
+    throw httpError(400, "visible only applies to a chat");
+  }
+  /* `storedKind` was read outside `inTurnOrder`. If two first turns carrying the
+     same optimistic id arrive together, the other one can create a Remember
+     thread after that read. Make chat explicit on the authoritative store write
+     whenever `visible` is present, so `withTurn`'s transactional kind check
+     refuses the collision before inserting either message. Without this, the
+     request could append a screenful to a Remember thread even though the fast
+     check above had correctly seen no thread yet. */
+  const beginKind = !wantsRetry && !wantsEdit
+    ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
+    : undefined;
   const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
@@ -2929,9 +3083,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        `withTurn` refuses it again inside the store's transaction, because
        `inTurnOrder` is per-process and this one is not. Here for the status
        code and the sentence; there for the guarantee. */
-    if (wantedKind) {
+    if (beginKind) {
       const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && existing.kind !== wantedKind) {
+      if (existing && existing.kind !== beginKind) {
         throw httpError(409, "That conversation is already a different kind");
       }
     }
@@ -2978,7 +3132,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             threadId,
             question: (question as string).trim(),
             ...(wanted ? { anchor: wanted } : {}),
-            ...(wantedKind ? { kind: wantedKind } : {}),
+            ...(beginKind ? { kind: beginKind } : {}),
             /* Onto the **pending** reply row, inside the same write as the
                question — see `ChatMessage.stance`. Only meaningful on a Remember turn;
                `withTurn` writes whatever it is given and the check constraint
@@ -3134,6 +3288,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       history: thread.messages.slice(0, -2), // everything before this turn
       question: asked,
       at: typeof at === "string" ? at : undefined,
+      visible: onScreenOf(visible as string[] | undefined, article.blocks),
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,
@@ -4169,6 +4324,18 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  * without `done` as *expected* for a run it has already forgotten, rather than
  * as the broken-connection failure it is for any other run.
  */
+/**
+ * **A 409 for a paper not yet read through, before a route writes anything** —
+ * for the two streamed routes that record a row before they read the article
+ * (`search`, `runRefereeCriterion`). Every other caller of `loadArticle`
+ * reads it first and gets `NotProcessed` from there. One indexed read.
+ */
+async function refuseAPaperNotReadYet(slug: string): Promise<void> {
+  if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
+    throw new NotProcessed(NOT_READ_YET.message);
+  }
+}
+
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { id, criterion } = (body ?? {}) as Record<string, unknown>;
   if (typeof criterion !== "string" || criterion.trim() === "") {
@@ -4181,6 +4348,11 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     throw httpError(400, "A criterion must be 500 characters or fewer");
   }
 
+  /* Before `begin`, which writes the run and opens the stream: a paper not yet
+     read through is refused as an answer, not stored as a failed search and
+     reported as a fault. `loadArticle` below would refuse it too, inside the
+     stream. Plan 261001m. */
+  await refuseAPaperNotReadYet(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
     criterion.trim(),
@@ -4445,6 +4617,8 @@ async function runRefereeCriterion(
 ): Promise<void> {
   const { id, criterion, config } = readCriterionRequest(body);
 
+  /* Before `begin`, for `search`'s reason. */
+  await refuseAPaperNotReadYet(slug);
   const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
   const key = `${slug}/${row.id}`;
   refereeing.add(key);
@@ -5112,11 +5286,30 @@ export function parseJobRequest(body: unknown): {
    * load-bearing: *never accept a client-supplied object path*.
    */
   uploadId?: string;
+  /** With `uploadId` only: `"minimal"` queues the minimal job — `parseUploadLevel`. */
+  level?: "minimal";
+  /**
+   * With `slug` only: ***Read this*** on a minimal paper — the full import over
+   * the stored file, admitted like an ingest (plan 261001m).
+   */
+  readThis?: true;
 } {
-  const { url, slug, steps, force, useProfile, uploadId } = (body ?? {}) as Record<
+  const { url, slug, steps, force, useProfile, uploadId, readThis } = (body ?? {}) as Record<
     string,
     unknown
   >;
+  const level = parseUploadLevel(body);
+  if (level !== undefined && uploadId === undefined) {
+    throw httpError(400, "level goes with an uploadId");
+  }
+  if (readThis !== undefined) {
+    if (readThis !== true) throw httpError(400, "readThis must be true, or left out");
+    if (url !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
+      throw httpError(400, "readThis goes with a slug and nothing else");
+    }
+    if (!isSlug(slug)) throw httpError(400, "readThis needs the slug of the paper to read");
+    return { slug, readThis: true };
+  }
 
   const stepList = (value: unknown, field: string): StepName[] | undefined => {
     if (value === undefined) return undefined;
@@ -5164,6 +5357,7 @@ export function parseJobRequest(body: unknown): {
          the only place with no gap between deciding and inserting. */
       slug: "",
       uploadId,
+      ...(level ? { level } : {}),
       ...rest,
     };
   }
@@ -5219,6 +5413,19 @@ export function parseJobRequest(body: unknown): {
    limit never applies to anything on the critical path and `MAX_BODY_BYTES`
    above stays exactly as it is.
    ------------------------------------------------------------------------- */
+
+/**
+ * **`level`, on `POST /api/uploads` and `POST /api/jobs {uploadId}`**: absent
+ * for today's full import, `"minimal"` for a paper added with only its title,
+ * authors and abstract read (plan 261001m). Anything else is a 400 rather than
+ * a guess, because the two cost a hundredfold apart.
+ */
+function parseUploadLevel(body: unknown): "minimal" | undefined {
+  const { level } = (body ?? {}) as Record<string, unknown>;
+  if (level === undefined) return undefined;
+  if (level === "minimal") return "minimal";
+  throw httpError(400, 'level must be "minimal", or left out for the full import');
+}
 
 /** What the browser claims about the file it is about to send. All three are checked. */
 function parseUploadRequest(body: unknown): { filename: string; bytes: number; sha256: string } {
@@ -5290,7 +5497,17 @@ async function mintAnUpload(body: unknown): Promise<{
      rather than after transferring 11 MB — the same reason `uploadProblem` runs
      up here. The gate that actually decides is `POST /api/jobs`, which is
      serialised per owner; this one is allowed to be a moment out of date. */
-  await refuseUploadWithoutQuota(owner);
+  /* **A minimal upload asks the minimal question** — a batch-added paper at a
+     hundredth of an article (plan 261001m): does 0.01 fit, and are these bytes
+     already this reader's? Both refused here, before the file is sent; both
+     asked again under the lock at `POST /api/jobs`, which is the gate. Any
+     file a single upload takes is a minimal one too — Greg, 2026-10-01: *"it
+     should be possible to bulk-upload (a mix of) both PDFs and HTML etc"*. */
+  if (parseUploadLevel(body) === "minimal") {
+    await refuseMinimalUploadAtTheDoor(owner, claim.sha256);
+  } else {
+    await refuseUploadWithoutQuota(owner);
+  }
 
   const minted = await mintUpload({ ...claim, owner }, (key) => grants.sign(key), stagingKey);
   return {
@@ -5517,6 +5734,102 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
 }
 
 /**
+ * `POST /api/jobs { uploadId, level: "minimal" }` — **a paper added with only
+ * its title, authors and abstract read** (plan 261001m), at a hundredth of an
+ * article.
+ *
+ * `queueAnUpload`'s shape with one difference that is the point: **the claim
+ * moves inside the billing lock.** `withMinimalSlot`'s `inLock` runs the
+ * duplicate check and the claim in the reservation's own transaction
+ * (`claimMinimalUploadInLock`, src/minimal-paper.ts), so two tabs dropping one
+ * folder serialise on the owner's lock and the second sees the first's claimed
+ * upload. A duplicate, or a claim that lost, throws there and takes the
+ * reservation back with it. Then the job, over `["fetch", "metadata"]`,
+ * carrying the reservation; its claim creates the article `'minimal'`
+ * (`claimSession`, src/jobs.ts).
+ *
+ * Called, like `queueAnUpload`, only for an upload that is `pending` and has
+ * arrived: `resolveExistingUpload` answers the repeat before any slot.
+ */
+async function queueAMinimalUpload(uploadId: string): Promise<UploadOutcome> {
+  const owner = currentOwnerId();
+  const record = await readUpload(uploadId, owner);
+  if (!record) throw httpError(404, "No such upload");
+  let claimed: UploadRecord | undefined;
+  try {
+    return await withMinimalSlot(
+      {
+        ownerId: owner,
+        inLock: claimMinimalUploadInLock(
+          { id: uploadId, sha256: record.claimedSha256 },
+          (won) => {
+            claimed = won;
+          },
+        ),
+      },
+      async (slot) => {
+        if (!claimed) throw new Error("the minimal upload's claim reported no record");
+        const job = await enqueue({
+          slug: slugFromFilename(claimed.filename) || "document",
+          upload: { id: uploadId, filename: claimed.filename },
+          steps: [...MINIMAL_STEPS],
+          ...slot,
+        });
+        /* For `queueAnUpload`'s reason: `GET /api/uploads/:id` names the article. */
+        await noteSlug(uploadId, job.slug);
+        return { kind: "job", job };
+      },
+    );
+  } catch (err) {
+    if (err instanceof UploadNotClaimed) return await answerALostClaim(uploadId, err.why);
+    throw err;
+  }
+}
+
+/**
+ * **A claim that lost, answered** — `queueAnUpload`'s `taken` branch, which
+ * the minimal path shares: the job the winner made, else the article its record
+ * names, else the 409 nothing can do better than. `unknown` and `expired` are
+ * the same 404 and 410 as there.
+ */
+async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<UploadOutcome> {
+  if (why === "unknown") throw httpError(404, "No such upload");
+  if (why === "expired") throw httpError(410, UPLOAD_MISSING.message);
+  const already = await jobForUpload(uploadId);
+  if (already) return { kind: "job", job: already };
+  const fresh = await readUpload(uploadId, currentOwnerId());
+  if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+  throw httpError(409, "That upload is already being turned into an article.");
+}
+
+/**
+ * `POST /api/jobs { slug, readThis: true }` — ***Read this*** on a minimal paper.
+ *
+ * The full import over the stored file, the way Rebuild re-reads an uploaded
+ * PDF: today's default steps with `force: ["extract"]`, so the carried `fetch`
+ * — done, in the draft copied from the minimal revision, with the raw source
+ * pointer — is skipped and everything from `extract` on runs. Admitted by
+ * `withUpgradeSlot`: an ingest at the wall, credited the paper's own 2 points,
+ * one at a time per paper, its reservation bound to the article from birth.
+ * The publication that lands the tree flips `processing` and supersedes the
+ * minimal row (src/store/pg-session.ts).
+ *
+ * A paper that is not this reader's is a 404; one already read is a 409 with a
+ * plain sentence, because there is nothing to read again here — Rebuild is.
+ */
+async function queueReadThis(slug: string): Promise<Job> {
+  const owner = currentOwnerId();
+  const article = await processingOf(slug, owner);
+  if (!article) throw httpError(404, "No such article.");
+  if (article.processing !== "minimal") {
+    throw httpError(409, "This paper has already been read through, so there is nothing more to read.");
+  }
+  return await withUpgradeSlot({ ownerId: owner, articleId: article.id }, (slot) =>
+    enqueue({ slug, steps: [...DEFAULT_INGEST_STEPS], force: ["extract"], readThis: true, ...slot }),
+  );
+}
+
+/**
  * What `POST /api/jobs { uploadId }` resolves to.
  *
  * Two answers rather than one, because after retention there is a true thing to
@@ -5723,9 +6036,10 @@ function modelsInUse(): { tasks: ModelReport[] } {
        the raw table would have printed `high` beside a stage running at
        `medium`. */
     const effort = task in STAGE_EFFORT ? effortFor(task as ArticleStage) : undefined;
-    /* `standard`: this page reports the app's configuration, not one
-       article's — High-powered AI is per article (plan 260930f). */
-    const { id, provider, source } = resolveModel(task, "standard");
+    /* A standard article: this page reports the app's configuration, not one
+       article's — High-powered AI is per article (plan 260930f). Through
+       `powerFor`, so a task on Opus for every article is reported as Opus. */
+    const { id, provider, source } = resolveModel(task, powerFor(task, "standard"));
     return {
       task,
       model: displayName(id),
@@ -6553,6 +6867,27 @@ async function fileFeedback(
  * direction `ChatConflict` and a missing file both name no status at all, and
  * both are answered 409 and 404 by design. GPT Sol's review, 2026-08-27.
  */
+/**
+ * **The structured fields an error body may carry, and the only ones** — each
+ * one declared class, each its declared fields, as the note at the `send`
+ * below insists: never an error's own enumerable properties, which for a
+ * Drizzle failure carry bound parameters.
+ *
+ * - `NotProcessed` (src/not-processed.ts): `code: "not-processed"`, and the
+ *   paper when `loadArticle` threw it — what the not-yet-read page draws.
+ * - `DuplicateUpload` (src/minimal-paper.ts): `code: "duplicate"`, and the
+ *   article these bytes already are, when they are one.
+ */
+function declaredFields(err: unknown): Record<string, unknown> {
+  if (err instanceof NotProcessed) {
+    return { code: err.code, ...(err.paper ? { paper: err.paper } : {}) };
+  }
+  if (err instanceof DuplicateUpload) {
+    return { code: err.code, ...(err.article ? { article: err.article } : {}) };
+  }
+  return {};
+}
+
 function chosenByUs(err: unknown): boolean {
   return typeof (err as { status?: unknown } | null | undefined)?.status === "number";
 }
@@ -6881,7 +7216,7 @@ async function serveApi(
        Plan 260924a § Stage 2c. */
     const said =
       status >= 500 ? (authoredSentence(err) ?? UNEXPECTED_FAILURE.message) : (err as Error).message;
-    send(res, status, { error: said });
+    send(res, status, { error: said, ...declaredFields(err) });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);
@@ -7044,6 +7379,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * patterns are.
  */
 const JOBS_PATH = "/api/jobs";
+/* Gift vouchers: GET lists, POST creates (261001m). */
+const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
 const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 /* Referee mode's criteria: the collection, and one row. `criteria` sits inside
@@ -7162,6 +7499,96 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          response states it. GPT Sol, 2026-08-27. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
+    },
+  },
+
+  /* **Gift vouchers** — `/admin/vouchers`. The only writes to
+     `billing_vouchers` bar the reader's own claim, and they are here, inside
+     the namespace gate above the table, so no reader can reach them.
+     docs/plans/261001m-gift-vouchers-for-free-articles.md;
+     src/store/pg-vouchers.ts. No hard delete: `revoked` is the invalidation. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: ADMIN_VOUCHERS_PATH,
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      /* Addresses and private notes about other people. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { vouchers: await listVouchers() });
+    },
+  },
+  {
+    kind: "exact",
+    method: "POST",
+    path: ADMIN_VOUCHERS_PATH,
+    article: "none",
+    handler: async ({ user, request: { req, res } }) => {
+      const parsed = parseNewVoucher(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      /* The browser mints the id, so a replay is the same create (261001p). */
+      const answer = await createVoucher(parsed.value, user.id);
+      if (answer.kind === "conflict") throw httpError(409, "A different voucher already has that id.");
+      res.setHeader("Cache-Control", "private, no-store");
+      if (answer.kind === "replayed") {
+        send(res, 200, { id: answer.id, email: "replayed" } satisfies VoucherCreated);
+        return;
+      }
+      /* Registered only now, after the transaction committed: the recipient's
+         email goes after the response, and cannot fail it. */
+      const delivery = answer.delivery;
+      await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
+      send(res, 201, { id: answer.id, email: "queued" } satisfies VoucherCreated);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/admin\/vouchers\/([\w-]+)$/,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [, id = ""] = captures;
+      /* The shape in the pattern is not the rule; this is, before the store. */
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const parsed = parseVoucherPatch(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      const answer = await updateVoucher(id, parsed.value);
+      if (answer.kind === "not-found") throw httpError(404, "There is no such voucher.");
+      if (answer.kind === "claimed") {
+        throw httpError(409, "That voucher has been claimed, so its address can no longer change.");
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      /* A real change of address queued the recipient's email to the new one. */
+      const delivery = answer.giftDelivery;
+      if (delivery) await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
+      send(res, 200, delivery ? { ok: true, email: "queued" } : { ok: true });
+    },
+  },
+  /* **Retry one voucher email** — the Status cell's button. Reserved here, so
+     the answer can say 404 or 409 in the server's words; sent after the
+     response. What may be retried is one SQL fragment, `RETRYABLE` in
+     src/store/pg-voucher-emails.ts, which also sets the list's `retryable`.
+     Under `/api/admin/`, so the namespace gate refuses everybody else. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/admin\/voucher-emails\/([\w-]+)\/retry$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const reserved = await reserveVoucherEmailRetry(id);
+      if (reserved.kind === "not-found") throw httpError(404, "There is no such voucher email.");
+      if (reserved.kind === "refused") {
+        throw httpError(
+          409,
+          "That email cannot be retried: it has been sent, or is being sent now, or its voucher has since been claimed, revoked or given another address.",
+        );
+      }
+      const attempts = reserved.attempts;
+      await afterResponse("voucher email: retry", () => deliverReservedVoucherEmail(id, attempts));
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 202, { id, email: "sending" });
     },
   },
 
@@ -7775,6 +8202,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const { on } = parseHighPowerRequest(await readBody(req));
       const slug = slugPart(captures, 1);
       const owner = currentOwnerId();
+      /* **Not on a paper that has not been read through** (plan 261001m): there
+         is no article for it to power, and charging for it would be a charge for
+         nothing. Here rather than in the store so both switches — the charged
+         one and the administrator's — ask it. Unlocked, and safe that way: a
+         paper only ever goes from minimal to full, so a stale answer can only
+         refuse a paper that has just been read. Switching off is never refused. */
+      if (on && (await processingOf(slug, owner))?.processing === "minimal") {
+        throw new NotProcessed(NOT_READ_YET_HIGH_POWER.message);
+      }
       send(
         res,
         200,
@@ -9334,9 +9770,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         if (!(await uploadHasArrived(uploadId))) {
           throw httpError(409, UPLOAD_STILL_ARRIVING.message);
         }
-        const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
-          queueAnUpload(uploadId, slot),
-        );
+        const outcome =
+          request.level === "minimal"
+            ? await queueAMinimalUpload(uploadId)
+            : await withIngestSlot({ ownerId: currentOwnerId() }, (slot) => queueAnUpload(uploadId, slot));
         /* **200, not 202**: nothing has been accepted, because there is nothing
            left to do. The file became this article a while ago and its job
            record has since been trimmed — `queueAnUpload` for why the record
@@ -9362,6 +9799,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
 
          `=== false`, so absent means yes: a client that has never heard of this
          field gets the profiled run, which is the default the panel offers. */
+      /* ***Read this*** — the full import of a minimal paper, over the file it
+         was added from, admitted like an ingest and crediting what the paper
+         already paid (`withUpgradeSlot`). Plan 261001m. */
+      if (request.readThis) {
+        send(res, 202, publicJob(await queueReadThis(request.slug)));
+        return;
+      }
       const profile =
         request.url !== undefined || request.useProfile === false
           ? null
@@ -9572,18 +10016,43 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
 
   /**
    * **What plan this reader is on, and what they have used.** The one billing
-   * route that is a read.
+   * route that is a read — **with one deliberate, idempotent write first**.
    *
    * It never reaches Stripe — see src/billing/summary.ts. A stored period that
    * has run out comes back as *we cannot say*, rather than as a guess or as
    * the 503 admission answers, because nothing is being decided here.
+   *
+   * **The write is the gift voucher claim** (`claimVouchersFor`,
+   * src/store/pg-vouchers.ts): a voucher waiting for this reader's confirmed
+   * address is bound to their account, so the plan read straight after
+   * includes it. It is here because this is what the homepage reads on
+   * arrival, which is where *"applied when they log in"* is said. Idempotent —
+   * a second call finds nothing waiting — and a failure is logged and the plan
+   * served anyway, because the next visit tries again. Hence `no-store`.
+   * docs/plans/261001m-gift-vouchers-for-free-articles.md (F5).
    */
   {
     kind: "exact",
     method: "GET",
     path: "/api/billing/usage",
     article: "none",
-    handler: async ({ request: { res } }) => {
+    handler: async ({ user, request: { res } }) => {
+      /* The claim and its creator notices commit together or not at all
+         (`claimVouchersFor`, step 4); the notices go after the response, one
+         task each, so one that fails does not stop the next (Sol F8). */
+      let deliveries: readonly string[] = [];
+      try {
+        deliveries = (await claimVouchersFor(user)).deliveries;
+      } catch (err) {
+        log("store").warn(
+          { err: err instanceof Error ? err.name : "unknown" },
+          "claiming a gift voucher failed — the plan is served without it, and the next visit tries again",
+        );
+      }
+      for (const delivery of deliveries) {
+        await afterResponse("voucher email: claimed", () => sendQueuedVoucherEmail(delivery));
+      }
+      res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, await readBillingSummary(currentOwnerId()));
     },
   },

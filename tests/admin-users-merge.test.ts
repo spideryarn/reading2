@@ -81,8 +81,8 @@ describe("joining accounts to their counts", () => {
          tests/billing-admin-plan.test.ts, and this one is only about whose row
          they land on. */
       ingests: [
-        { owner: ALICE, lifetime: 2, inPeriod: 0, inFlight: 0, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0 },
-        { owner: BOB, lifetime: 1, inPeriod: 0, inFlight: 1, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0 },
+        { owner: ALICE, lifetime: 2, inPeriod: 0, inFlight: 0, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0, minimalLifetime: 0, minimalInPeriod: 0, minimalInFlight: 0 },
+        { owner: BOB, lifetime: 1, inPeriod: 0, inFlight: 1, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0, minimalLifetime: 0, minimalInPeriod: 0, minimalInFlight: 0 },
       ],
       accounts: new Map(),
       tiers: [],

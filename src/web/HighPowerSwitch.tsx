@@ -1,6 +1,7 @@
 /**
  * **High-powered AI, one article at a time** — the switch on `/metadata` that
- * moves this article's capable-tier calls from Claude Sonnet to Claude Opus.
+ * moves most of this article's capable-tier calls from Claude Sonnet to Claude
+ * Opus. Simple already uses Opus for every article (plan 261001p).
  * docs/project/high-powered-ai.md; the build is
  * docs/plans/260930f-high-powered-ai-per-article.md, decision 8 and stage 3.
  *
@@ -121,7 +122,8 @@ export function HighPowerSwitch({
         <span>High-powered AI</span>
       </label>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-        Uses a stronger AI model (Claude Opus) for this article — better on difficult pieces.{" "}
+        Uses a stronger AI model (Claude Opus) for this article — better on difficult pieces. Plain-words
+        summaries use it already.{" "}
         {exempt
           ? "Administrator: no charge."
           : "Switching it on counts as one more article against your allowance (half of one while the article is shared publicly). Switching off doesn't give it back, and switching on again is free."}{" "}

@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, ResetResponse, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
+import { batchUpload } from "./batchUpload.js";
 import { uploadEngine } from "./uploadEngine.js";
 import { statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -221,9 +222,13 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
        transfer, which is exactly the mistake the comment above warns about for
        the job list. */
     uploadEngine.start(readerId);
+    /* And the batch (batchUpload.ts), for the same reason: it holds a reader's
+       files and posts their jobs. */
+    batchUpload.start(readerId);
     return () => {
       jobEngine.stop();
       uploadEngine.stop();
+      batchUpload.stop();
     };
   }, [readerId]);
 
@@ -238,6 +243,9 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
        pressing Try again. `resume` there retries a 401 queue phase and nothing
        else. GPT Sol, 2026-09-03, finding 5. */
     uploadEngine.resume();
+    /* A final 401 stops a batch before it sends another file. The file and its
+       retry point stay in the tab; a genuinely new token is what releases it. */
+    batchUpload.resume();
   }, [readerId, accessToken]);
 }
 

@@ -68,7 +68,7 @@
  * ## The lock order: `billing_accounts` before `articles`, everywhere
  *
  * Since 2026-09-05 usage is a function of `articles.visibility` — a public
- * article costs half (src/billing/half-units.ts) — and a different request can
+ * article costs half (src/billing/points.ts) — and a different request can
  * change that at any moment. `pg-visibility.ts` locks the article; admission
  * locks `billing_accounts`. An unshare committing between the usage read and the
  * reservation would let the reservation commit against stale usage. (It does
@@ -89,16 +89,24 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import {
+  MINIMAL_COST,
+  MINIMAL_CREDIT,
   PRIVATE_INGEST_COST,
   PUBLIC_INGEST_COST,
+  admitsHighPower,
+  admitsIngest,
+  admitsMinimal,
+  admitsUpgrade,
   articles as inArticles,
   budgetFor,
-  halfUnits,
-} from "../billing/half-units.js";
-import type { Articles, HalfUnits } from "../billing/half-units.js";
+  minimalHeadroom,
+  points,
+} from "../billing/points.js";
+import type { Articles, Points, UpgradeCredit } from "../billing/points.js";
 import { limitForPeriod } from "../billing/quota-adjustment.js";
 import {
   FREE,
+  FREE_LIFETIME_INGESTS,
   entitlementForTier,
   isEntitledStatus,
   quotaRules,
@@ -142,9 +150,9 @@ export interface Refused {
    * **Ingests counted against the allowance — a whole number of them**, charged
    * plus in flight, whatever each one cost.
    *
-   * Not half-units, and not a half-unit total divided by two. A public ingest
-   * costs one and a private one two, so the two numbers are different questions;
-   * this is the one a person can say out loud. See src/billing/half-units.ts.
+   * Not points, and not a points total divided by anything. A public ingest
+   * costs 100 and a private one 200, so the two numbers are different questions;
+   * this is the one a person can say out loud. See src/billing/points.ts.
    */
   readonly used: number;
   /** The tier's allowance, **in articles** — the number the website markets. */
@@ -162,7 +170,7 @@ export interface Refused {
    *
    * Counted **by article** rather than by ledger row, because a re-added URL owns
    * several charged rows and *"share three articles"* would be false when three
-   * half-units come from one article. `articlesToShare` below is the query.
+   * rows' worth of points come from one article. `articlesToShare` below is the query.
    *
    * ## Why the articles are named rather than counted
    *
@@ -230,10 +238,11 @@ export type Admission = Admitted | Refused | Stale;
 /**
  * What an owner has used, for the wall, `/profile` and `/admin/users`.
  *
- * **Three integer counts of rows, and no total.** The total is a half-unit
- * figure, and a surface that wants to show usage wants integers it can add up
- * itself — see src/billing/half-units.ts § *Nothing here divides*. `halfUnitsUsed`
- * and `ingestsUsed` below are the two things anybody actually asks of this.
+ * **Integer counts of rows, and no total.** The total is a points figure, and a
+ * surface that wants to show usage wants integers it can add up itself — see
+ * src/billing/points.ts § *Nothing here divides for display*. `wallUsed`,
+ * `ingestsUsed` and `minimalUsed` below are the three things anybody actually
+ * asks of this.
  */
 export interface Usage {
   /**
@@ -257,8 +266,29 @@ export interface Usage {
    * mechanism: there is nothing to game, and no second kind of ledger row.
    */
   readonly chargedHalfPrice: number;
-  /** Reservations taken and not yet settled — jobs in flight, at full price. */
-  readonly inFlight: number;
+  /**
+   * Ingest reservations taken and not yet settled — jobs in flight, at full
+   * price, {@link PRIVATE_INGEST_COST}. A *Read this* on a minimal paper is one
+   * of these too, so while it runs the paper costs its minimal 2 plus this 200,
+   * which errs on the safe side and falls back once the publication lands.
+   */
+  readonly inFlightIngest: number;
+  /**
+   * Minimal reservations taken and not yet settled — {@link MINIMAL_COST} each.
+   * Counted apart from `inFlightIngest` because until 2026-10-01 every
+   * unsettled row cost full price, and a batch of a thousand papers in flight
+   * would have read as a thousand articles.
+   */
+  readonly inFlightMinimal: number;
+  /**
+   * **Minimal papers charged inside the current period and not superseded** —
+   * {@link MINIMAL_COST} each, whatever the visibility: a minimal article
+   * cannot be shared, and its row is frozen `'private'` if it is deleted.
+   *
+   * A superseded row is one *Read this* paid for in full, by an ingest row that
+   * is counted above; counting this one as well would charge the paper 1.01.
+   */
+  readonly minimalCharged: number;
   /**
    * **High-powered AI upgrades** inside the current period whose article is not
    * currently public — one more article's worth each, {@link PRIVATE_INGEST_COST}.
@@ -266,7 +296,7 @@ export interface Usage {
    * Counted apart from the ingests above because every sentence that says
    * *added* is about ingests: folded into `chargedFullPrice`, one high-powered
    * article would read as two articles added on /profile. The wall adds all
-   * four counts (`halfUnitsUsed`). GPT Sol, plan review finding 1, 2026-09-30;
+   * the counts (`wallUsed`). GPT Sol, plan review finding 1, 2026-09-30;
    * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
    */
   readonly highPowerFullPrice: number;
@@ -277,14 +307,17 @@ export interface Usage {
 /**
  * **What this usage costs**, in the currency the wall compares.
  *
- * In flight is full price because nobody yet knows whether the article will be
- * shared — see {@link PRIVATE_INGEST_COST}.
+ * In flight is full price for an ingest because nobody yet knows whether the
+ * article will be shared — see {@link PRIVATE_INGEST_COST} — and 2 for a
+ * minimal paper, which is never priced by visibility.
  */
-export function halfUnitsUsed(usage: Usage): HalfUnits {
-  return halfUnits(
+export function wallUsed(usage: Usage): Points {
+  return points(
     usage.chargedFullPrice * PRIVATE_INGEST_COST +
       usage.chargedHalfPrice * PUBLIC_INGEST_COST +
-      usage.inFlight * PRIVATE_INGEST_COST +
+      usage.inFlightIngest * PRIVATE_INGEST_COST +
+      usage.minimalCharged * MINIMAL_COST +
+      usage.inFlightMinimal * MINIMAL_COST +
       usage.highPowerFullPrice * PRIVATE_INGEST_COST +
       usage.highPowerHalfPrice * PUBLIC_INGEST_COST,
   );
@@ -292,11 +325,20 @@ export function halfUnitsUsed(usage: Usage): HalfUnits {
 
 /**
  * The same usage as a count of **ingests**, which is what a sentence can say.
- * High-powered AI upgrades are not in it — they are not articles added; the
- * wall still counts them, through `halfUnitsUsed`.
+ * High-powered AI upgrades and minimal papers are not in it — they are not
+ * articles added; the wall still counts them, through `wallUsed`.
  */
 export function ingestsUsed(usage: Usage): number {
-  return usage.chargedFullPrice + usage.chargedHalfPrice + usage.inFlight;
+  return usage.chargedFullPrice + usage.chargedHalfPrice + usage.inFlightIngest;
+}
+
+/**
+ * **Minimal papers counted against the allowance** — charged and unsuperseded,
+ * plus in flight. `ReaderPlan.minimal` and `/admin/users`'s column say this, as
+ * a plain count: a hundredth is never printed as a fraction of an article.
+ */
+export function minimalUsed(usage: Usage): number {
+  return usage.minimalCharged + usage.inFlightMinimal;
 }
 
 /** The columns entitlement is derived from. */
@@ -315,6 +357,41 @@ export interface BillingRow {
    */
   readonly quotaLimitDelta: number | null;
   readonly quotaPeriodStart: Date | null;
+  /**
+   * **Extra free articles from gift vouchers** — the sum of this owner's
+   * claimed, unrevoked `billing_vouchers` rows, in whole articles. Zero for
+   * almost everybody.
+   *
+   * Read by every query that reads the row (`BILLING_COLUMNS`), so the wall,
+   * `/profile`, `/pricing` and `/admin/users` all add the same number. It counts
+   * **on Free only** — `freeEntitlement` below is where it is added, and no paid
+   * return touches it. docs/project/billing.md § *Gift vouchers*.
+   */
+  readonly voucherArticles: number;
+}
+
+/**
+ * **The Free entitlement for this row** — the lifetime three, plus whatever gift
+ * vouchers the account has claimed and not had revoked.
+ *
+ * **One function for every Free return in `entitlementFromRow`**, so no branch
+ * can come to answer the bare `FREE` while another adds the gift (GPT Sol, plan
+ * review F1).
+ *
+ * **The sum is checked, not trusted.** Postgres hands `sum()` back as a string
+ * unless told otherwise, and `3 + "20"` is `"320"` — an allowance of three
+ * hundred and twenty articles, silently. The column is cast in SQL and mapped
+ * to a number on the way out (`BILLING_COLUMNS`); this is the third guard, and
+ * it throws rather than defaulting, for the reason `usageOf` gives: a wrong
+ * allowance that looks right is the expensive failure.
+ */
+export function freeEntitlement(row: BillingRow | undefined): Entitlement {
+  const bonus: unknown = row?.voucherArticles ?? 0;
+  if (typeof bonus !== "number" || !Number.isSafeInteger(bonus) || bonus < 0) {
+    throw new Error(`the gift voucher sum came back as ${String(bonus)}, which is not a count of articles`);
+  }
+  if (bonus === 0) return FREE;
+  return { tier: "free", limit: inArticles(FREE_LIFETIME_INGESTS + bonus) };
 }
 
 /**
@@ -334,7 +411,7 @@ export function entitlementFromRow(
   tiers: readonly TierRow[],
   now: Date,
 ): Entitlement | Stale {
-  if (!row || !isEntitledStatus(row.status)) return FREE;
+  if (!row || !isEntitledStatus(row.status)) return freeEntitlement(row);
 
   const tier = tierForPrice(row.priceId, tiers);
   if (!tier) {
@@ -342,7 +419,7 @@ export function entitlementFromRow(
       { priceId: row.priceId, status: row.status },
       "an entitled subscription is on a price no tier sells — treating as free",
     );
-    return FREE;
+    return freeEntitlement(row);
   }
 
   const { currentPeriodStart: start, currentPeriodEnd: end } = row;
@@ -365,8 +442,9 @@ export function entitlementFromRow(
     start,
     /* **The column is a signed count of whole ingests**, so it is named as one
        on the way out of the database — the boundary `articles()` exists for. A
-       half-unit reaching this argument is what turned a stored −117 into
-       ninety-one articles in the design review (src/billing/half-units.ts). */
+       count in the enforcement unit reaching this argument is what turned a
+       stored −117 into ninety-one articles in the design review
+       (src/billing/points.ts). */
     {
       delta: row.quotaLimitDelta === null ? null : inArticles(row.quotaLimitDelta),
       periodStart: row.quotaPeriodStart,
@@ -380,10 +458,16 @@ export function entitlementFromRow(
  * The usage half of admission, as SQL, so that the gate and the display ask the
  * same question of the same columns rather than two questions that agree today.
  *
- * **Three counts and no total**, because a charged ingest costs 2 half-units
- * while the article it produced is private and 1 while it is public
- * (src/billing/half-units.ts). The split is done by the database rather than by
- * two round trips, and the arithmetic over it is `halfUnitsUsed`.
+ * **Counts and no total**, because a charged ingest costs 200 points while the
+ * article it produced is private and 100 while it is public, a minimal paper 2,
+ * and a superseded minimal paper nothing (src/billing/points.ts). The split is
+ * done by the database rather than by round trips, and the arithmetic over it
+ * is `wallUsed`.
+ *
+ * **In flight is split by kind**, and the split fails safe: anything unsettled
+ * that is not `'minimal'` is counted as an ingest at full price. A
+ * `'high_power'` row cannot be unsettled (`ingest_events_high_power_shape`), so
+ * in practice that is every ingest and *Read this* reservation.
  *
  * **Live, from `articles.visibility`, on every read** — not a credit granted
  * once at sharing time. Share-then-unshare would otherwise be free slots for
@@ -418,7 +502,9 @@ export function usageSql(ownerId: string, entitlement: Entitlement) {
     select
       count(*) filter (where e.kind = 'ingest' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false)::int as full_price,
       count(*) filter (where e.kind = 'ingest' and ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as half_price,
-      count(*) filter (where e.succeeded_at is null and e.released_at is null)::int as in_flight,
+      count(*) filter (where e.kind <> 'minimal' and e.succeeded_at is null and e.released_at is null)::int as in_flight_ingest,
+      count(*) filter (where e.kind = 'minimal' and e.succeeded_at is null and e.released_at is null)::int as in_flight_minimal,
+      count(*) filter (where e.kind = 'minimal' and ${chargedIn(entitlement)} and e.superseded_by is null)::int as minimal_charged,
       count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false)::int as high_power_full_price,
       count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as high_power_half_price
     from spideryarn.ingest_events e
@@ -493,8 +579,8 @@ function usageOf(result: unknown): Usage {
   }
   const cell = (name: string): number => {
     const value = Number((row as Record<string, unknown>)[name]);
-    /* **Every count stays an integer**, which is the whole reason the discount
-       is expressed in half-units rather than in fractions of an article: this
+    /* **Every count stays an integer**, which is the whole reason the discounts
+       are expressed in points rather than in fractions of an article: this
        assertion is unchanged, and it is what stops a driver shape that changed
        reading as "this account has used nothing". */
     if (!Number.isInteger(value) || value < 0) {
@@ -505,7 +591,9 @@ function usageOf(result: unknown): Usage {
   return {
     chargedFullPrice: cell("full_price"),
     chargedHalfPrice: cell("half_price"),
-    inFlight: cell("in_flight"),
+    inFlightIngest: cell("in_flight_ingest"),
+    inFlightMinimal: cell("in_flight_minimal"),
+    minimalCharged: cell("minimal_charged"),
     highPowerFullPrice: cell("high_power_full_price"),
     highPowerHalfPrice: cell("high_power_half_price"),
   };
@@ -516,7 +604,21 @@ export async function usageFor(ownerId: string, entitlement: Entitlement): Promi
   return usageOf(await getDb().execute(usageSql(ownerId, entitlement)));
 }
 
-/** The columns the two questions below are decided from. One list, one shape. */
+/**
+ * The columns the two questions below are decided from. One list, one shape.
+ *
+ * **`voucherArticles` is a correlated subquery, not a column**, so that every
+ * read of the row carries the gift voucher bonus and none can forget it. Cast
+ * to `int` in SQL **and** mapped to a number here, because a bare `sum()` is a
+ * `bigint` and arrives as a string (GPT Sol, plan review F1) — `freeEntitlement`
+ * then refuses anything that is not a non-negative safe integer.
+ *
+ * **Never read in the statement that takes the lock.** Under `read committed`
+ * a subquery in a `FOR UPDATE` select answers from the snapshot taken *before*
+ * the wait for the lock, so a revoke that committed while this request waited
+ * would not be seen. `lockBillingAccount` locks first and reads these in a
+ * second statement (F2).
+ */
 const BILLING_COLUMNS = {
   status: billingAccounts.status,
   priceId: billingAccounts.priceId,
@@ -526,6 +628,11 @@ const BILLING_COLUMNS = {
   stripeCustomerId: billingAccounts.stripeCustomerId,
   quotaLimitDelta: billingAccounts.quotaLimitDelta,
   quotaPeriodStart: billingAccounts.quotaPeriodStart,
+  voucherArticles: sql<number>`(
+    select coalesce(sum(v.articles), 0)::int
+      from spideryarn.billing_vouchers v
+     where v.claimed_by = ${billingAccounts.ownerId}
+       and v.revoked_at is null)`.mapWith(Number),
 } as const;
 
 /**
@@ -534,22 +641,25 @@ const BILLING_COLUMNS = {
  * **In-flight counts as used**, which is the whole burst defence: a reservation
  * nobody has settled is a slot somebody is spending.
  *
- * ## The comparison is `<`, and that is not the old rule doubled
+ * ## The rule is `admitsIngest`, and it was `<` in half-units
  *
- * It reads like it: `used < limit` became `halfUnitsUsed < limit * 2`. It is
- * not. `used < limit` never let anybody exceed the limit **only because a
- * reservation cost exactly one**; at two, five-of-six admits an ingest that
- * settles at seven. The plan said the doubling was a no-op and GPT Sol showed it
- * was not (2026-09-04).
+ * `used < budget` in half-units was not the old rule doubled. `used < limit`
+ * never let anybody exceed the limit **only because a reservation cost exactly
+ * one**; at two, five-of-six admits an ingest that settles at seven. The plan
+ * said the doubling was a no-op and GPT Sol showed it was not (2026-09-04).
  *
- * **The half-unit overdraft is accepted knowingly**, because Greg's own sentence
- * settles it: he said a free account can make six public articles, and the
- * money-safe `used + 2 <= budget` delivers five. What is accepted is one
- * half-unit, once — a reader at five may add a sixth article and is then refused
+ * **That half-article overdraft is accepted knowingly**, because Greg's own
+ * sentence settles it: he said a free account can make six public articles, and
+ * the money-safe `used + 200 <= budget` delivers five. What is accepted is half
+ * an article, once — a reader at five may add a sixth and is then refused
  * everything until they are back under. **It cannot repeat and it cannot
  * compound**: at seven they are refused, and sharing the new article returns
- * them to six, which is still refused. `tests/billing-half-units.test.ts` pins
- * both halves, because the second is what an add-then-unshare cycle would attack.
+ * them to six, which is still refused. `tests/billing-points.test.ts` pins both
+ * halves, because the second is what an add-then-unshare cycle would attack.
+ *
+ * In points it is `used + 200 <= budget + 100` (`admitsIngest`,
+ * src/billing/points.ts), which is the same rule while `used` is a multiple of
+ * 100 and the right one once minimal papers put it anywhere else.
  *
  * Shared by the two callers that ask the same question of the same columns —
  * `reserveIngest` under the lock, which then takes a slot, and
@@ -561,7 +671,7 @@ function refusalFor(
   usage: Usage,
   row: BillingRow | undefined,
 ): Refused | null {
-  if (!atTheWall(entitlement, usage)) return null;
+  if (admitsIngest(wallUsed(usage), budgetFor(entitlement.limit))) return null;
   /* Read off the row rather than inferred from `used > limit`; see `lapsed`. */
   const lapsed = hasLapsed(row);
   return {
@@ -571,21 +681,6 @@ function refusalFor(
     ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
     ...(lapsed ? { lapsed: true as const } : {}),
   };
-}
-
-/**
- * **Has this usage reached the wall?** The comparison itself, exported so the
- * gate and the page cannot come to spell it differently.
- *
- * `refusalFor` decides *what to say*; `readBillingSummary` (../billing/summary.ts)
- * needs the same yes-or-no to fill in `ReaderPlan.atLimit`, and a page that
- * reconstructed it from `used` and `limit` would be a second opinion about
- * whether somebody may add an article — which those two numbers can no longer
- * answer anyway, now that a public ingest costs half what a private one does.
- * The same reasoning as `hasLapsed` below.
- */
-export function atTheWall(entitlement: Entitlement, usage: Usage): boolean {
-  return halfUnitsUsed(usage) >= budgetFor(entitlement.limit);
 }
 
 /**
@@ -743,8 +838,16 @@ export async function allAccountSnapshots(): Promise<Map<string, AccountSnapshot
  * answer *fewest*: a re-added URL owns several charged rows and sharing that one
  * article frees all of them at once, so counting rows would promise
  * *"share three articles"* to somebody for whom one would do — and, the other way
- * round, would be false when three half-units come from one article. GPT Sol,
- * 2026-09-04.
+ * round, would be false when three rows' worth of points come from one article.
+ * GPT Sol, 2026-09-04.
+ *
+ * **Weighted by kind, and minimal papers left out** (Opus's review of 261001m).
+ * An ingest or a High-powered AI row frees {@link PUBLIC_INGEST_COST} when its
+ * article is shared — 200 becomes 100. A minimal row frees nothing, because it
+ * is never priced by visibility, and an article with only a minimal row is not
+ * offered at all: sharing one is refused anyway, and the offer must never name
+ * a PDF nobody has read. The stop condition is `admitsIngest`, the wall's own
+ * predicate, so the offer answers exactly the question the refusal asked.
  *
  * **Inside the caller's transaction and under the same lock**, so the number a
  * refusal states was true of the same instant the refusal was decided. It opens
@@ -773,7 +876,7 @@ async function articlesToShare(
   usage: Usage,
 ): Promise<readonly [ShareCandidate, ...ShareCandidate[]] | undefined> {
   const budget = budgetFor(entitlement.limit);
-  const used = halfUnitsUsed(usage);
+  const used = wallUsed(usage);
   const rows = rowsOf(
     await tx.execute(sql`
       select count(*)::int as charged_rows,
@@ -783,6 +886,7 @@ async function articlesToShare(
         join spideryarn.articles a on a.id = e.article_id
         left join spideryarn.article_revisions r on r.id = a.current_revision_id
        where e.owner_id = ${ownerId}::uuid
+         and e.kind in ('ingest', 'high_power')
          and ${chargedIn(entitlement)}
          and not (${IS_PUBLIC})
        group by e.article_id, a.slug, a.title_override, r.title
@@ -797,18 +901,18 @@ async function articlesToShare(
   const rest: ShareCandidate[] = [];
   for (const row of rows) {
     const cells = row as Record<string, unknown>;
-    /* One half-unit per charged row: the row goes from 2 to 1. */
+    /* Each charged row goes from 200 to 100 when its article is shared. */
     const chargedRows = Number(cells.charged_rows);
     if (!Number.isInteger(chargedRows) || chargedRows <= 0) continue;
     /* The coalesce cannot return null and a slug is never empty, so this is a
        guard against a shape that changed rather than against the data. */
     const title = String(cells.title ?? "").trim() || String(cells.slug ?? "").trim();
     if (!title) continue;
-    freed += chargedRows;
+    freed += chargedRows * (PRIVATE_INGEST_COST - PUBLIC_INGEST_COST);
     const candidate: ShareCandidate = { title };
     if (head === undefined) head = candidate;
     else rest.push(candidate);
-    if (used - freed < budget) return [head, ...rest];
+    if (admitsIngest(points(used - freed), budget)) return [head, ...rest];
   }
   return undefined;
 }
@@ -822,7 +926,7 @@ async function articlesToShare(
  * the discount — that is every row charged before 2026-09-05 — and false again
  * for the reader who has unshared their way past the wall, where sharing every
  * article they own would still not get them under it. There is no way to answer
- * it from the three usage counts, so it is this query or it is a sentence that
+ * it from the usage counts, so it is this query or it is a sentence that
  * cannot be believed. **Asked only at the wall**, which is the only place the
  * page says it.
  */
@@ -859,12 +963,22 @@ export async function lockBillingAccount(
     .values({ ownerId })
     .onConflictDoNothing({ target: billingAccounts.ownerId });
 
-  const [row] = await tx
-    .select(BILLING_COLUMNS)
+  const [locked] = await tx
+    .select({ ownerId: billingAccounts.ownerId })
     .from(billingAccounts)
     .where(eq(billingAccounts.ownerId, ownerId))
     .for("update")
     .limit(1);
+  /* **And the row read again, in a statement of its own, after the lock is
+     held.** At `read committed` each statement takes a fresh snapshot, so this
+     one sees everything committed before the lock was granted — including a
+     voucher revoked or shrunk by src/store/pg-vouchers.ts, which takes this
+     same lock to do it. Read in the locking statement, the voucher subquery
+     would answer from the snapshot taken *before* the wait, and a revoke racing
+     an admission could be admitted past (GPT Sol, plan review F2). */
+  const [row] = locked
+    ? await tx.select(BILLING_COLUMNS).from(billingAccounts).where(eq(billingAccounts.ownerId, ownerId)).limit(1)
+    : [];
   if (!row) {
     /* Unreachable — the insert above guarantees a row and this transaction
        holds it. Loud rather than silent, because the only way here is the
@@ -918,6 +1032,351 @@ export async function reserveIngest(
   );
 }
 
+/* ------------------------------------------------------ minimal papers -- */
+
+/**
+ * The transaction handle a locked admission runs in — what `inLock` is given.
+ * Drizzle's own type, named so a caller can write a callback against it.
+ */
+export type BillingTx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+/**
+ * **Work a caller needs done under the same billing lock as a minimal
+ * reservation, in the same transaction.** Stage 3 of plan 261001m is the
+ * caller: the duplicate check (*is this paper already on your shelf?*) and the
+ * claim of the upload, so that two tabs dropping one folder produce one paper.
+ *
+ * - It runs **after** the quota check and **after** the reservation row is
+ *   written, so `reservationId` is the row it may link to. For the
+ *   administrator, who reserves nothing, `reservationId` is null and the
+ *   callback still runs under the owner's billing lock (`runUnderBillingLock`).
+ * - **To decline, throw.** The throw rolls back the whole transaction — the
+ *   reservation and anything the callback wrote — and propagates out of
+ *   `reserveMinimal` unchanged, so a route can throw its own 409.
+ * - It is inside the locked section, so the rule there is its rule too:
+ *   **nothing that opens its own transaction and nothing that touches the
+ *   network.** Use `tx` and only `tx`.
+ * - A quota refusal happens before it runs, so a paper that is both a duplicate
+ *   and over the allowance is told about the allowance. A caller that wants the
+ *   duplicate answer first can ask an unlocked question before admission.
+ */
+export type InLock = (
+  tx: BillingTx,
+  context: { readonly reservationId: string | null; readonly ownerId: string },
+) => Promise<void>;
+
+/** A minimal paper does not fit. Carries what `minimalQuotaReached` says. */
+export interface MinimalRefused {
+  readonly kind: "refused";
+  /**
+   * **How many more minimal papers would be admitted** — `minimalHeadroom`,
+   * exact. Zero for the reservation that was refused (it did not fit), and the
+   * number a batch's door can say before it starts.
+   */
+  readonly fits: number;
+  /** The allowance, in articles, for the sentence. */
+  readonly limit: Articles;
+  /** When a paid allowance starts again. Absent for Free, which is lifetime. */
+  readonly resetAt?: Date;
+}
+
+export type MinimalAdmission = Admitted | MinimalRefused | Stale;
+
+/**
+ * **Take a slot for a minimal paper, or refuse** — the same shape as
+ * `reserveIngest`, at 2 points rather than 200.
+ *
+ * Insert-then-lock the billing row, read usage with every unsettled reservation
+ * under that lock, decide with `admitsMinimal` (`used + 2 <= budget`: no
+ * overdraft, so a batch of a thousand never steps past the wall), and write a
+ * `kind = 'minimal'` reservation. Nothing that touches the network runs inside;
+ * see the header. Then `inLock`, if given, in the same transaction.
+ */
+export async function reserveMinimal(
+  ownerId: string,
+  options: { readonly slug?: string; readonly tiers?: readonly TierRow[]; readonly inLock?: InLock } = {},
+): Promise<MinimalAdmission> {
+  const sold = options.tiers ?? (await allTiers());
+  return await getDb().transaction(
+    async (tx): Promise<MinimalAdmission> => {
+      const row = await lockBillingAccount(tx, ownerId);
+      const entitlement = entitlementFromRow(row, sold, new Date());
+      if ("kind" in entitlement) return entitlement; // stale
+
+      const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
+      const used = wallUsed(usage);
+      const budget = budgetFor(entitlement.limit);
+      if (!admitsMinimal(used, budget)) {
+        return {
+          kind: "refused",
+          fits: minimalHeadroom(used, budget),
+          limit: entitlement.limit,
+          ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
+        };
+      }
+
+      const [reservation] = await tx
+        .insert(ingestEvents)
+        .values({ ownerId, kind: "minimal", ...(options.slug ? { slug: options.slug } : {}) })
+        .returning({ id: ingestEvents.id });
+      if (!reservation) throw new Error("reserving a minimal paper returned no row");
+      if (options.inLock) await options.inLock(tx, { reservationId: reservation.id, ownerId });
+      return { kind: "admitted", reservationId: reservation.id, entitlement } satisfies Admitted;
+    },
+    /* Pinned, for the reason `reserveIngest` gives. */
+    { isolationLevel: "read committed" },
+  );
+}
+
+/**
+ * Run `inLock` under the owner's billing lock **without reserving anything** —
+ * the administrator's path through `withMinimalSlot`, so the duplicate check
+ * and the claim are serialised for them too. The anchor row is created if
+ * absent, as every lock here does; it costs nothing and counts nothing.
+ */
+export async function runUnderBillingLock(ownerId: string, inLock: InLock): Promise<void> {
+  await getDb().transaction(
+    async (tx) => {
+      await lockBillingAccount(tx, ownerId);
+      await inLock(tx, { reservationId: null, ownerId });
+    },
+    { isolationLevel: "read committed" },
+  );
+}
+
+/* ------------------------------------------------ Read this on a paper -- */
+
+/**
+ * What *Read this* on a minimal paper came to. See `reserveUpgrade`.
+ *
+ * `refused` is the ingest wall's own refusal, sharing offer and all — *Read
+ * this* is an ingest at the wall, crediting what the paper already paid.
+ */
+export type UpgradeAdmission =
+  | Admitted
+  | Refused
+  | Stale
+  /** Not this owner's article, no such article, or no live minimal charge to upgrade. */
+  | { readonly kind: "not-found" }
+  /** A *Read this* on this article is already in flight; one at a time. */
+  | { readonly kind: "in-flight" };
+
+/**
+ * **Find this article's one live minimal charge, and say whether it is inside
+ * the window `used` counts.** A live row is charged and not yet superseded. No
+ * row means this is not a minimal paper that can be upgraded; more than one is
+ * a broken ledger and fails closed. The one row earns 2 points of credit only
+ * when it is in-window (Opus's review: the credit is this paper's own row, not
+ * a constant).
+ */
+async function upgradeCredit(
+  tx: HasExecute,
+  ownerId: string,
+  articleId: string,
+  entitlement: Entitlement,
+): Promise<UpgradeCredit | undefined> {
+  const rows = rowsOf(
+    await tx.execute(sql`
+      select (${chargedIn(entitlement)}) as credited
+        from spideryarn.ingest_events e
+       where e.owner_id = ${ownerId}::uuid
+         and e.article_id = ${articleId}::uuid
+         and e.kind = 'minimal'
+         and e.succeeded_at is not null
+         and e.superseded_by is null
+       limit 2`),
+  );
+  if (rows.length === 0) return undefined;
+  if (rows.length > 1) {
+    throw new Error(
+      `article ${articleId} has ${rows.length} live minimal charges; one paper has one, so Read this is refused`,
+    );
+  }
+  return rows[0]?.credited === true ? MINIMAL_CREDIT : 0;
+}
+
+/** Postgres's `unique_violation`, on the one index this insert can meet. */
+function isOneUpgradeViolation(err: unknown): boolean {
+  const e = err as { code?: unknown; constraint?: unknown; cause?: { code?: unknown; constraint?: unknown } };
+  const code = e?.code ?? e?.cause?.code;
+  const constraint = e?.constraint ?? e?.cause?.constraint;
+  return code === "23505" && constraint === "ingest_events_one_upgrade_in_flight";
+}
+
+/**
+ * **Take a slot for *Read this* on a minimal paper, or refuse** — the ingest
+ * wall, crediting what the paper already paid.
+ *
+ * Under the billing lock, then the article `for update` — the house lock order:
+ *
+ * 1. the article must be this owner's;
+ * 2. **one at a time**: an unsettled `'ingest'` row already bound to this
+ *    article refuses (`in-flight`), so two presses cannot both take the credit;
+ *    `ingest_events_one_upgrade_in_flight` is the backstop;
+ * 3. there must be exactly one charged, unsuperseded minimal row for this
+ *    paper; its credit is 2 iff it is in-window (`upgradeCredit`), else 0;
+ * 4. `admitsUpgrade(used, budget, credit)`: `used + (200 − credit) <= budget + 100`;
+ * 5. an ordinary `kind = 'ingest'` row is written **with `article_id` set at
+ *    birth** — which is what makes it a *Read this* reservation rather than an
+ *    ordinary one, for retry and for settlement (Sol's plan review, P1).
+ *
+ * The settlement that charges it must supersede the minimal row in the same
+ * transaction — `supersedeMinimal`, which Stage 3 wires into the publication.
+ */
+export async function reserveUpgrade(
+  ownerId: string,
+  articleId: string,
+  tiers?: readonly TierRow[],
+): Promise<UpgradeAdmission> {
+  const sold = tiers ?? (await allTiers());
+  const db = getDb();
+  /* **Is there anything here to charge for?** Unlocked and before any write, as
+     in `switchOnHighPower`: the next step creates the caller's billing anchor,
+     and a stranger's article id should be a 404 without minting one. */
+  const [present] = await db
+    .select({ id: articleRows.id })
+    .from(articleRows)
+    .where(and(eq(articleRows.id, articleId), eq(articleRows.ownerId, ownerId)))
+    .limit(1);
+  if (!present) return { kind: "not-found" };
+
+  try {
+    return await db.transaction(
+      async (tx): Promise<UpgradeAdmission> => {
+        const row = await lockBillingAccount(tx, ownerId);
+        const [article] = await tx
+          .select({ id: articleRows.id, slug: articleRows.slug })
+          .from(articleRows)
+          .where(and(eq(articleRows.id, articleId), eq(articleRows.ownerId, ownerId)))
+          .for("update")
+          .limit(1);
+        if (!article) return { kind: "not-found" };
+
+        const entitlement = entitlementFromRow(row, sold, new Date());
+        if ("kind" in entitlement) return entitlement; // stale
+
+        const busy = rowsOf(
+          await tx.execute(sql`
+            select 1 from spideryarn.ingest_events
+             where article_id = ${articleId}::uuid and kind = 'ingest'
+               and succeeded_at is null and released_at is null
+             limit 1`),
+        );
+        if (busy.length > 0) return { kind: "in-flight" };
+
+        const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
+        const credit = await upgradeCredit(tx, ownerId, articleId, entitlement);
+        if (credit === undefined) return { kind: "not-found" };
+        if (!admitsUpgrade(wallUsed(usage), budgetFor(entitlement.limit), credit)) {
+          const lapsed = hasLapsed(row);
+          const refused: Refused = {
+            kind: "refused",
+            used: ingestsUsed(usage),
+            limit: entitlement.limit,
+            ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
+            ...(lapsed ? { lapsed: true as const } : {}),
+          };
+          const shareToMakeRoom = await articlesToShare(tx, ownerId, entitlement, usage);
+          return shareToMakeRoom === undefined ? refused : { ...refused, shareToMakeRoom };
+        }
+
+        const [reservation] = await tx
+          .insert(ingestEvents)
+          .values({ ownerId, kind: "ingest", articleId, slug: article.slug })
+          .returning({ id: ingestEvents.id });
+        if (!reservation) throw new Error("reserving Read this returned no row");
+        return { kind: "admitted", reservationId: reservation.id, entitlement } satisfies Admitted;
+      },
+      { isolationLevel: "read committed" },
+    );
+  } catch (err) {
+    /* Unreachable while the check above runs under the owner's lock — every
+       writer of an ingest row for this owner waits on it — and kept so the
+       backstop answers in the same words if it is ever the thing that fires. */
+    if (isOneUpgradeViolation(err)) return { kind: "in-flight" };
+    throw err;
+  }
+}
+
+/**
+ * **What a reservation was, for a retry to take the same kind again.**
+ *
+ * `minimal` — a minimal paper; `upgrade` — *Read this*, an `'ingest'` row that
+ * named its article from birth and has not been charged; `ingest` — everything
+ * else. An ordinary ingest names an article only in the statement that charges
+ * it, so an uncharged `'ingest'` row with an article is a *Read this* and
+ * nothing else. Undefined when the row is not this owner's or is not there.
+ */
+export type ReservationShape =
+  | { readonly kind: "ingest" }
+  | { readonly kind: "minimal" }
+  | { readonly kind: "upgrade"; readonly articleId: string };
+
+export async function reservationShapeOf(
+  ingestEventId: string,
+  ownerId: string,
+): Promise<ReservationShape | undefined> {
+  const [row] = await getDb()
+    .select({
+      kind: ingestEvents.kind,
+      articleId: ingestEvents.articleId,
+      succeededAt: ingestEvents.succeededAt,
+    })
+    .from(ingestEvents)
+    .where(and(eq(ingestEvents.id, ingestEventId), eq(ingestEvents.ownerId, ownerId)))
+    .limit(1);
+  if (!row) return undefined;
+  if (row.kind === "minimal") return { kind: "minimal" };
+  if (row.kind === "ingest" && row.articleId !== null && row.succeededAt === null) {
+    return { kind: "upgrade", articleId: row.articleId };
+  }
+  return { kind: "ingest" };
+}
+
+/**
+ * **Mark this article's minimal paper as paid for by `ingestEventId`** — the
+ * write that makes a paper total exactly one ingest.
+ *
+ * For Stage 3's settlement, **inside the publication transaction that charges
+ * `ingestEventId`**, after `settleReservation(tx, ingestEventId, succeeded)`
+ * and in the same `tx`. It stamps `superseded_by` on the article's charged,
+ * unsuperseded minimal row and returns how many it stamped: 1 normally, 0 when
+ * the article has no such row (an article that was never minimal, or already
+ * superseded). **More than one throws**, and the throw takes the publication
+ * with it — one paper has one minimal row, and two would mean the ledger has
+ * charged a paper twice.
+ *
+ * Whether 0 is an error is the caller's to decide: plan 261001m says a
+ * target-bound settlement that supersedes nothing rolls back. The database
+ * holds the rest — `ingest_events_superseded_shape` (only a charged minimal
+ * row) and the trigger `ingest_events_superseded_by_ingest` (the payer is a
+ * charged ingest of the same owner and article), so calling this before the
+ * ingest is charged raises 23514.
+ */
+export async function supersedeMinimal(
+  tx: HasExecute,
+  articleId: string,
+  ingestEventId: string,
+): Promise<number> {
+  const stamped = rowsOf(
+    await tx.execute(sql`
+      update spideryarn.ingest_events
+         set superseded_by = ${ingestEventId}::uuid
+       where article_id = ${articleId}::uuid
+         and kind = 'minimal'
+         and succeeded_at is not null
+         and superseded_by is null
+      returning id`),
+  ).length;
+  if (stamped > 1) {
+    throw new Error(
+      `article ${articleId} has ${stamped} charged minimal rows; one paper has one, so this ` +
+        "publication is refused rather than superseding them all",
+    );
+  }
+  return stamped;
+}
+
 /**
  * What switching an article to High-powered AI came to. See `switchOnHighPower`.
  */
@@ -943,8 +1402,8 @@ export type HighPowerSwitch =
  *
  * Greg, 2026-09-30: *"it should double the processing cost per-article"*. So the
  * switch writes one more charged `ingest_events` row for the article, of `kind`
- * `'high_power'`, priced exactly like an ingest of it — 2 half-units while the
- * article is private, 1 while it is public, recomputed live and frozen on delete
+ * `'high_power'`, priced exactly like an ingest of it — 200 points while the
+ * article is private, 100 while it is public, recomputed live and frozen on delete
  * by the same rules and the same trigger. With the ingest, a private article
  * costs two articles and a public one costs one.
  *
@@ -957,8 +1416,8 @@ export type HighPowerSwitch =
  * the age of the article. Multiplying the ingest's row would have charged a
  * three-month-old article's upgrade to three months ago (GPT Sol, 260930f F3).
  *
- * **It must fit whole: `used + cost <= budget`.** Not the ingest wall's
- * `used < budget`, whose one half-unit of overdraft exists so a free account can
+ * **It must fit whole: `admitsHighPower`, `used + cost <= budget`.** Not the
+ * ingest wall's `admitsIngest`, whose half-article of overdraft exists so a free account can
  * make six public articles; an upgrade is a second charge for something already
  * had, and gets no overdraft.
  *
@@ -1038,7 +1497,7 @@ export async function switchOnHighPower(
         const publicNow = article.visibility === "public";
         const cost = publicNow ? PUBLIC_INGEST_COST : PRIVATE_INGEST_COST;
         const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
-        if (halfUnitsUsed(usage) + cost > budgetFor(entitlement.limit)) {
+        if (!admitsHighPower(wallUsed(usage), budgetFor(entitlement.limit), cost)) {
           return { kind: "no-room", publicNow, entitlement };
         }
         /* The same database timestamp in both columns: the shape check wants
@@ -1228,12 +1687,19 @@ export async function settleReservation(
 
   /* **`succeeded_at` and `article_id` in the same statement.** Two updates would
      be two chances for the second not to happen — and a charged row with no
-     article is charged full price for ever, silently. See `Settlement`. */
+     article is charged full price for ever, silently. See `Settlement`.
+
+     **A *Read this* reservation already names its article** (`reserveUpgrade`),
+     and it may only settle onto that one: a row bound to paper A charged for a
+     publication of B would leave A's credit taken and B's paper unpaid. So the
+     match also asks the existing link to be absent or the same, and a mismatch
+     is the strict charge's throw. */
   const result = await tx.execute(
     sql`update spideryarn.ingest_events
            set succeeded_at = now(), article_id = ${outcome.articleId}::uuid
          where id = ${ingestEventId}::uuid
            and succeeded_at is null and released_at is null
+           and (article_id is null or article_id = ${outcome.articleId}::uuid)
        returning id`,
   );
   if (rowsOf(result).length === 1) return;

@@ -134,3 +134,9 @@ Greg promotes one by saying so, and then it moves up into a plan.
 - **`.dock-modes { flex: 3 0 auto }` under `@media (pointer: coarse)` hard-codes the mode count** as a
   share weight, wrong since the fourth tab landed; no type or test can see it and the symptom is
   proportion, not breakage. Found by GPT Sol reviewing `fleet-dashboard-modes.md`. 2026-09-09.
+- **A merge commit carrying code of its own is invisible to the changelog.** Every range in
+  `scripts/changelog/` is `--no-merges`, and so is the deploy's `changelog` gate, on the belief that
+  every merge here is a plain `Merge … origin/dev`; a conflict resolution that adds code is in no
+  trawl and no gate. Either refuse a merge whose combined diff touches a release path, or trawl it.
+  Found by GPT Sol reviewing [261001q](../plans/261001q-changelog-written-before-the-deploy-so-the-notes-ship-in-it.md),
+  finding 6; out of that plan's scope because it is how the process has always worked. 2026-10-01.

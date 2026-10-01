@@ -46,6 +46,7 @@
 import type { AllowedAttachment } from "./feedback-envelope.js";
 import type { DocumentKind } from "./fetch.js";
 import { articleMetadata, loadArticle, loadSource } from "./store/index.js";
+import { NotProcessed } from "./not-processed.js";
 import { RawObjectTooLarge } from "./store/raw-document.js";
 import type { Article, ArticleMetadata, StepName, Visibility } from "./types.js";
 
@@ -331,7 +332,12 @@ function pickMetadata(metadata: ArticleMetadata): ArticleJson["metadata"] {
  * A 404 is *not yours, or not there*; anything else is a failure. Optional
  * chaining because `throw null` is legal, and a bare `.status` on it would throw
  * from inside the code deciding what a throw means.
+ *
+ * **A paper not yet read through is `none` too** (`NotProcessed`, plan
+ * 261001m): there is no article to attach, which is not a failure to attach
+ * one. Its metadata still goes.
  */
 function outcomeOfThrow(err: unknown): "none" | "failed" {
+  if (err instanceof NotProcessed) return "none";
   return (err as { status?: unknown } | null | undefined)?.status === 404 ? "none" : "failed";
 }

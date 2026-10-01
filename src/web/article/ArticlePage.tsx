@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Article, Comment, Crossref, Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
+import { LogoLoader } from "../LogoLoader.js";
 import type { ArticleView } from "../router.js";
 import { Metadata } from "../Metadata.js";
 import { Reader } from "../reader/Reader.js";
@@ -46,6 +47,7 @@ import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { useArticleAccess } from "./access.js";
+import { UnreadPaperPage } from "./UnreadPaperPage.js";
 
 /**
  * One article, fetched **once for all of its views**.
@@ -97,7 +99,11 @@ export function ArticlePage({
      re-runs that file. src/web/last-view.ts has the whole of it, including why
      a shared link always beats the memory. */
   useLastView(slug);
-  const access = useArticleAccess(slug, readerId);
+  /* Bumped by the not-yet-read page once *Read this* is done, to load the
+     article it made in place. */
+  const [attempt, setAttempt] = useState(0);
+  const reread = useCallback(() => setAttempt((n) => n + 1), []);
+  const access = useArticleAccess(slug, readerId, attempt);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -150,6 +156,12 @@ export function ArticlePage({
      its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
 
+  /* **Yours, and not read through yet** (plan 261001m): the paper's title,
+     authors and abstract, and *Read this*. It draws its own corner pair. Every
+     view of the article — the metadata page, the thread — lands here too,
+     because none of them has an article to draw. */
+  if (access.kind === "unread") return <UnreadPaperPage paper={access.paper} onRead={reread} />;
+
   /* **The corner pair, on the two branches with no bar to put it in.**
      `App` stopped drawing the corner Feedback trigger on the `read` route on
      2026-09-06, because the pages that mount a `Dock` draw it in the bar
@@ -167,14 +179,21 @@ export function ArticlePage({
       </>
     );
 
-  // Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
-  // then a line naming what is being waited for rather than "Loading…".
+  /* Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
+     then the wordmark as a spinner, with the sentence naming what is being
+     waited for kept for a screen reader and for reduced motion — LogoLoader.tsx,
+     docs/project/loading-spinner.md. Greg, 2026-10-01: *"Instead of 'Fetching
+     the article and its summaries', show an animated loading spinner."* */
   if (access.kind === "loading")
     return (
       <>
         <HomeLogo />
         <FeedbackTrigger variant="corner" />
-        <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>
+        {slow && (
+          <div className="tw:flex tw:min-h-[70dvh] tw:items-center tw:justify-center">
+            <LogoLoader label="Fetching the article and its summaries" />
+          </div>
+        )}
       </>
     );
 

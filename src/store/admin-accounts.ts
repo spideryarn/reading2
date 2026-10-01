@@ -445,6 +445,58 @@ export interface AccountEmailDeps {
  * docs/plans/261001b-admin-sign-up-email-carries-the-address.md.
  */
 export async function accountEmail(ownerId: string, deps: AccountEmailDeps = {}): Promise<AccountEmail> {
+  const record = await accountRecord(ownerId, deps);
+  if (record.kind === "unavailable") return record;
+  if (typeof record.body.email !== "string" || record.body.email === "") {
+    return { kind: "unavailable", reason: "the account has no address" };
+  }
+  return { kind: "found", email: record.body.email };
+}
+
+/** Whether the Auth service's own record says this account's address is confirmed. */
+export type AccountConfirmation =
+  | { readonly kind: "confirmed"; readonly email: string }
+  /** The account exists and is about this id, but its address is not confirmed — or it is deleted. */
+  | { readonly kind: "unconfirmed" }
+  | { readonly kind: "unavailable"; readonly reason: string };
+
+/**
+ * **One account's address, and whether the Auth service says it is confirmed**
+ * — the second half of the gift voucher claim's check (src/store/pg-vouchers.ts).
+ *
+ * The JWT's `email` is signed, but whether production refuses sign-ins with an
+ * unconfirmed address rests on a dashboard setting (docs/project/admin.md), so a
+ * voucher is claimed only when the service's own record has the address **and**
+ * `email_confirmed_at` — deliberately not `confirmed_at`, which also means a
+ * phone (see `accountFrom`). A soft-deleted account is `unconfirmed`.
+ *
+ * **Never throws**, as `accountEmail`: any doubt is `unavailable`, and the
+ * caller's answer to doubt is not to claim.
+ */
+export async function confirmedAccountEmail(
+  ownerId: string,
+  deps: AccountEmailDeps = {},
+): Promise<AccountConfirmation> {
+  const record = await accountRecord(ownerId, deps);
+  if (record.kind === "unavailable") return record;
+  const { body } = record;
+  if (typeof body.deleted_at === "string" && body.deleted_at !== "") return { kind: "unconfirmed" };
+  if (typeof body.email !== "string" || body.email === "") return { kind: "unconfirmed" };
+  if (date(body.email_confirmed_at) === null) return { kind: "unconfirmed" };
+  return { kind: "confirmed", email: body.email };
+}
+
+/**
+ * `GET /auth/v1/admin/users/{id}`, checked to be about this id, as an untyped
+ * record — the fetch both functions above share. Never throws.
+ */
+async function accountRecord(
+  ownerId: string,
+  deps: AccountEmailDeps,
+): Promise<
+  | { readonly kind: "record"; readonly body: Record<string, unknown> }
+  | { readonly kind: "unavailable"; readonly reason: string }
+> {
   try {
     const { url, key } = (deps.endpoint ?? authAdminEndpoint)();
     const base = url.replace(/\/+$/, "");
@@ -467,16 +519,14 @@ export async function accountEmail(ownerId: string, deps: AccountEmailDeps = {})
         ? ((wire as { user?: unknown }).user ?? wire)
         : wire;
     const body =
-      candidate !== null && typeof candidate === "object"
-        ? (candidate as { id?: unknown; email?: unknown })
-        : null;
+      candidate !== null && typeof candidate === "object" ? (candidate as Record<string, unknown>) : null;
     /* Checked, not assumed: an answer about another account would put the
-       wrong person's address in front of the admin. */
-    if (body?.id !== ownerId) return { kind: "unavailable", reason: "the answer was not about this account" };
-    if (typeof body.email !== "string" || body.email === "") {
-      return { kind: "unavailable", reason: "the account has no address" };
+       wrong person's address in front of the admin — or, for a voucher, grant
+       one person's gift to another. */
+    if (!body || body.id !== ownerId) {
+      return { kind: "unavailable", reason: "the answer was not about this account" };
     }
-    return { kind: "found", email: body.email };
+    return { kind: "record", body };
   } catch (err) {
     return { kind: "unavailable", reason: err instanceof Error ? err.name : "unknown error" };
   }

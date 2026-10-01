@@ -38,6 +38,7 @@ import { useExperimental } from "../useExperimental.js";
 import { useVoiceFaces } from "../useVoiceFaces.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
+import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
 import { countsTowardReadingTime } from "../../block-policy.js";
@@ -116,6 +117,7 @@ import {
   diagramParam,
   refereeParam,
   summaryParam,
+  structureParam,
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
@@ -125,7 +127,7 @@ import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
-import { bandCoversProse, fitView } from "../layout.js";
+import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
@@ -439,23 +441,23 @@ export function Reader({
   );
   /* The bar's Comments drawer needs it for the same one reason the bands do. */
 
+  /* One answer for both the live fit and the Marginalia press's hypothetical
+     fit. Keeping the value shared stops the press swapping columns at a
+     threshold different from the layout it is about to draw. */
+  const bandShape = bandShapeFor(mode);
+
   const fit = useMemo(
     () =>
       fitView({
         windowWidth,
         modeBand: bandOpen,
-        /* Structure's two columns want a band of their own width where they
-           fit (layout.ts § `structureColumnsBand`); every other band is the
-           ordinary one. docs/plans/260928a-structure-two-columns-readable.md.
-           Tweets' posts are prose, so theirs may grow to a prose column's
-           measure — Greg, 2026-09-29: *"It could be quite a wide left-hand
-           column if that will help to make it be readable."* */
-        bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
+        /* Which band each mode gets, and why: layout.ts § `bandShapeFor`. */
+        bandShape,
         margin: marginOpen,
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, mode],
+    [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, bandShape],
   );
   /* **Where the notes would fit**, for the Marginalia press: beside the band
      that is open, and with no band. A press reads both to decide whether it
@@ -465,13 +467,13 @@ export function Reader({
       notesFit(
         {
           windowWidth,
-          bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
+          bandShape,
           rootFontPx,
           showSpine,
         },
         bandOpen,
       ),
-    [windowWidth, rootFontPx, bandOpen, showSpine, mode],
+    [windowWidth, rootFontPx, bandOpen, showSpine, bandShape],
   );
 
   /**
@@ -522,6 +524,14 @@ export function Reader({
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
   }, [setReadingCounting, proseOnScreen]);
+  /* **What chat is told is on screen**, read once per question — the same
+     `proseOnScreen` the recorder above trusts, so a band lying over the prose
+     on a phone reports nothing rather than the rows hidden under it.
+     docs/plans/261001q-chat-knows-the-blocks-on-screen.md. */
+  const chatOnScreen = useCallback(
+    (): readonly BlockId[] => (proseOnScreen ? blocksOnScreenNow() : []),
+    [proseOnScreen],
+  );
   /* **A jump made while a band lay over the prose flashes when the prose comes
      back** — the band closed or stepped aside. flash.ts holds it until then,
      reading the same fact off the DOM (`.band-covers`, a `.mode-band`, no
@@ -754,6 +764,7 @@ export function Reader({
     diagram: diagramParam,
     referee: refereeParam,
     summary: summaryParam,
+    structure: structureParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
@@ -1272,8 +1283,12 @@ export function Reader({
    * ↑ / ↓ step through one level of the tree, and *which* level is whichever
    * zone the pointer is over — the spine steps by part, the prose by paragraph;
    * see keynav.ts. It writes no state of its own: it scrolls, and the listener
-   * above notices, exactly as it would for a wheel. Off any tagged zone the
-   * stride falls back to the section, which is the unit `?at=` already stores.
+   * above notices, exactly as it would for a wheel. **Off any tagged zone the
+   * stride is one block too**, since 2026-10-01 — it was the section, so over a
+   * mode's band ↓ jumped a section while over the prose it stepped a paragraph.
+   * Greg, spya-b2wzjf: "up and down should always do the same thing, i.e. jump
+   * to the next block in the text". The section stride moved to ← / → in
+   * Structure. docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md.
    *
    * Suspended while the drawer is open. A reader looking at their questions is
    * not reading, and the article scrolling away underneath the dim — silently,
@@ -1293,9 +1308,13 @@ export function Reader({
   useArrowNav(
     nav,
     article.blocks,
-    sectionDepth(geometry),
+    geometry.leafDepth,
     !drawerOpen,
     trajectoryKeys ?? quizStepKeys,
+    /* …and the lowest-level sections while Structure is the mode — the unit
+       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
+       keyboard.md § ← / → in Structure. */
+    mode === "structure" ? sectionDepth(geometry) : null,
   );
 
   /* **The door after the current stop's block** — TrajectoryPanel.tsx §
@@ -1965,6 +1984,7 @@ export function Reader({
             blocks={blockText}
             onJump={bandJump}
             kind="chat"
+            onScreen={chatOnScreen}
             handoff={chatHandoff}
             onHandoffTaken={handoffTaken}
           />
@@ -2057,16 +2077,13 @@ export function Reader({
             onJump={bandJump}
           />
         );
-      /* Gists are the tree's own and free to anyone; Simple is an artefact, so
-         since 2026-09-30 this is an owner/visitor pair — the visitor's band
-         takes the stored paragraphs off the payload and fetches nothing.
+      /* The plain-words levels are an artefact, so since 2026-09-30 this is an
+         owner/visitor pair — the visitor's band takes the stored paragraphs off
+         the payload and fetches nothing.
          docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
       case "summary":
-        if (!owner)
-          return (
-            <VisitorSummaryBand article={article} simple={artefacts?.simpleSummary} onJump={bandJump} />
-          );
-        return <SummaryBand slug={slug} article={article} onJump={bandJump} />;
+        if (!owner) return <VisitorSummaryBand simple={artefacts?.simpleSummary} onJump={bandJump} />;
+        return <SummaryBand slug={slug} onJump={bandJump} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default
@@ -2601,7 +2618,7 @@ export function Reader({
            difference is the whole correctness of this: reading the global here
            would be right only if `Reader` re-rendered on every URL change, and
            it does not. nuqs subscriptions are key-isolated, so ten reading
-           parameters owned by child components — `deep`, `diagram`, `dhue`,
+           parameters owned by child components — `summary`, `diagram`, `dhue`,
            `referee`, `remember` and five more — change the address without
            waking this component at all. Until `TableView` was memoised, `?at=`
            re-rendered it once a second and hid that; it does not any more.

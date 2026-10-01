@@ -1,0 +1,134 @@
+{
+  "arm": "high-none-opusctl5",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:31:24.706Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "5e0266204878b1c1",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "high",
+  "guard": false,
+  "wallMs": 20405,
+  "costUsd": 0.0975514,
+  "tokens": {
+    "input": 5526,
+    "output": 3650,
+    "reasoning": 2225
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 183,
+  "fullerWords": 217,
+  "briefWords": 114,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about how neural networks store information. Neurons here are small units that switch on or off. Spreading information across many neurons is called a \"distributed representation.\" The note argues this one label hides two different ideas, and it warns that mistakes are possible.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-fyxmks",
+        "spya-tj6yyz"
+      ]
+    },
+    {
+      "text": "The author says how networks store information is at the heart of working out how they function inside. Stored the right way, a network can be understood through a short list of separate parts. Otherwise we face a huge explosion of combinations.",
+      "ids": [
+        "spya-v47ca7",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The note uses colored shapes as examples. \"Composition\" means separate features, like \"green\" and \"square,\" combine to describe an object. That helps learning carry over: facts about green circles can help with green squares. \"Superposition\" packs many unrelated items into few neurons, just as four on-off switches can stand for 16 things.",
+      "ids": [
+        "spya-qcd003",
+        "spya-s9fc6n",
+        "spya-bzhkhu"
+      ]
+    },
+    {
+      "text": "The two compete for the same limited space, so using more of one leaves less room for the other. They can still mix when features rarely appear together. Those unused combinations leave gaps where extra features can hide.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-sq6424",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah, published in May 2023, about how neural networks store information. It looks at \"distributed representations\", the classic idea that a network spreads one thing across many neurons. The note argues this phrase actually hides two different ideas, which it calls \"composition\" and \"superposition\".",
+      "ids": [
+        "spya-nwuh77",
+        "spya-fyxmks",
+        "spya-tj6yyz"
+      ]
+    },
+    {
+      "text": "The author cares because understanding a network means breaking what it stores into independent parts. With composition, you can understand it through a modest list of features, not an exploding number of combinations. Mixing up the two ideas also blurs their very different strengths.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7",
+        "spya-sq6424"
+      ]
+    },
+    {
+      "text": "The note uses examples of neurons, each simply on or off, coding for shapes in different colours. In a compositional code, some neurons mean colours and others mean shapes, and they combine. This needs fewer neurons, and learning about green circles can help with green squares.",
+      "ids": [
+        "spya-qcd003",
+        "spya-g8cztv",
+        "spya-s9fc6n"
+      ]
+    },
+    {
+      "text": "Superposition instead packs many unrelated items into few neurons, so 4 neurons can code every coloured shape, just as 4 bits can code 16 numbers. The cost is that a simple weighted sum of neurons can no longer pick out most colours or shapes.",
+      "ids": [
+        "spya-bzhkhu",
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "text": "The key claim is that the two compete for the same limited space. Still, when features are rarely active together, the unused combinations leave gaps where extra features can hide in superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-qbuyka",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an informal note by Chris Olah about how neural networks store ideas. It looks at \"distributed representations\": spreading ideas across many neurons, a network's small working units. The note argues this phrase really hides two different ideas.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The note says telling them apart matters because they behave very differently. It also says understanding networks seems to need splitting what they store into separate, simple parts.",
+      "ids": [
+        "spya-st3tz8",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition means simple features, like green and square, combine to show a green square. Superposition means packing in more things than there are units, as 4 bits can name 16 numbers. The two compete for the same space, so more of one means less of the other.",
+      "ids": [
+        "spya-g9pmmp",
+        "spya-bzhkhu",
+        "spya-xcrca8"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -281,14 +281,18 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   summary: {
-    description:
-      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
-    how: "The sentences are the tree's own, written when the article was ingested — a shorter summary of the same thing is a different level of the tree, not a second request. Its Simple view is the one part a model writes: a few plain-words paragraphs, written once and kept.",
+    description: "The piece in plain words, at the length you choose — brief, simple or fuller",
+    /* Checked against src/simple-summary.ts: one job writes every level (a
+       call each, side by side) and stores them together, and every paragraph
+       keeps one to three passage ids. Until 2026-10-01 this mode was the
+       tree's gists at Parts or Sections, written at ingest; that outline went
+       (plan 261001p), and Structure is where the gists are drawn now. */
+    how: "A model writes all three lengths in one go, the first time you ask, and they are kept. Each paragraph links to the passages it rests on — the article says it better.",
     /* Both spellings, because the reader's keyboard is not ours to choose.
-       `simple` was here for the plain-words sub-mode (plan 260930i) and opened
-       the outline instead; since 2026-10-01 the bar has a *Summary › Simple*
-       row that goes there (src/web/sub-modes.ts, plan 261001d). */
-    aliases: ["summarise", "summarize", "gist"],
+       `simple` is not here: the bar has a *Summary › Simple* row that goes
+       there (src/web/sub-modes.ts, plan 261001d). `gist` went with the outline
+       on 2026-10-01 — nothing in Summary is a gist any more. */
+    aliases: ["summarise", "summarize"],
     experimental: false,
   },
   diagram: {
@@ -416,7 +420,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        price — mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Investigate any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then it writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
+    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: ["references", "bibliography", "sources", "works cited"],
@@ -426,18 +430,25 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* **True of both faces**, since 2026-09-10: the two columns and the nested
        list each show every part and the sections of the one the reader is in.
        It said "in two linked columns" until then, which a narrow band's list
-       would have contradicted. */
-    description: "The document's shape — every part, and the sections of the one you are in",
+       would have contradicted. **True of both views too**, since 2026-10-01:
+       it said "the sections of the one you are in", which Expanded (every
+       part's sections) contradicts. GPT Sol's plan review of 261001q. */
+    description: "The document's shape — every part, and its sections",
     /* Checked against the code rather than written from the plan, which is the
        failure this field has already had twice (docs/project/mode.md § The
-       card on the button). "Nothing to generate" is true: the tree arrives in
-       the page's own payload and this mode reaches no artefact and makes no
-       request. The rest is the one thing a press does not tell you — that what
-       you get depends on the room, and how to read each — and the reading order
-       of the columns is what a reader would otherwise have to infer from
-       watching the right-hand one change at a boundary.
-       StructureMode.tsx § `structureFace` is the switch. */
-    how: "The same already-built tree as Summary, so there is nothing to generate. With room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list that opens up around the part you are reading.",
+       card on the button). What a press does not tell you: that Fisheye
+       depends on the room, and how to read each face — the reading order of
+       the columns is what a reader would otherwise have to infer from watching
+       the right-hand one change at a boundary — that Expanded is there, and
+       the keys (tooltips.md § A shortcut is named on its card).
+       StructureMode.tsx § `structureFace` is the switch.
+
+       **No "nothing to generate" since 2026-10-01.** It opened this card as
+       "The same already-built tree as Summary, so there is nothing to
+       generate", and Greg asked for it to go (spya-ukr9dp): not much use to a
+       reader, and Summary was about to stop drawing parts and sections. It is
+       still true — the tree arrives in the page's own payload. */
+    how: "Fisheye opens up around the part you are reading: with room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list. Expanded shows every part and section with its summary. ← and → step section by section.",
     /* `columns` is about the wide face. `tree`, `map` and `outline` came from
        Outline on 2026-09-10 with its list: `outline` so the retired mode's own
        name still finds the mode that holds it, the other two because they were

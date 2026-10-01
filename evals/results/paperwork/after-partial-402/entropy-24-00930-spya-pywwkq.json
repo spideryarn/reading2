@@ -1,0 +1,276 @@
+{
+  "arm": "after",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "at": "2026-10-01T19:07:05.834Z",
+  "sourceSha256": {
+    "hierarchy.ts": "be8ec11b0875a55886eba9ec1b525753ee3627de1e11c2d559e3fbc9cca3a3f9",
+    "simple-summary.ts": "0b0501b333f9b6e9b604a8503cb90ef0b43c73aa0799a5d2f272c4622e75e22e",
+    "tweets.ts": "14a6167b8e17d64620d432cc06cee679695676d8aecb0b326f664f9f0e2a9a9c",
+    "paperwork.ts": "3eb8b4c90cd68cc9b50412f810f6646c998dbfe9a8e24a7bfe9ff89040da2961"
+  },
+  "versions": {
+    "toc": "toc/10",
+    "tweets": "tweets/6",
+    "simple": "simple/2"
+  },
+  "gists": [
+    {
+      "depth": 0,
+      "range": "spya-ekjksy..spya-gajhn8",
+      "title": "Neural Computation via Information Decomposition",
+      "gist": "Decomposing neural information into redundant, unique, and synergistic parts shows neurons compute, shaped by circuit structure and task."
+    },
+    {
+      "depth": 1,
+      "range": "spya-ekjksy..spya-y66sc5",
+      "title": "Abstract and Overview",
+      "gist": "Multivariate information decomposition, especially partial information decomposition, offers a framework for understanding how neural circuits combine inputs to process information synergistically."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ekjksy..spya-mt3bd6",
+      "title": "Authors and Affiliations",
+      "gist": "The authors and their institutional affiliations and contact information."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xn9j9k..spya-y66sc5",
+      "title": "Abstract and Keywords",
+      "gist": "The abstract argues that partial information decomposition splits neural information sharing into redundant, unique, and synergistic components, with synergy proving widespread and structurally patterned across circuits."
+    },
+    {
+      "depth": 1,
+      "range": "spya-yb735k..spya-gzwbsr",
+      "title": "Open Questions in Neural Information Processing",
+      "gist": "Neuroscience lacks tools to explain how neural circuits transform information, a gap now addressable through new recording technology and information-theoretic analysis methods."
+    },
+    {
+      "depth": 2,
+      "range": "spya-yb735k..spya-fmdncw",
+      "title": "Open Questions in Information Processing",
+      "gist": "Neuroscience aims to explain how brains process information, but basic questions about circuit connectivity, structure, and task-specific transformations remain largely unanswered despite emerging patterns."
+    },
+    {
+      "depth": 2,
+      "range": "spya-s9kmxa..spya-s9kmxa",
+      "title": "Historical Limitations",
+      "gist": "Progress was long blocked by insufficient recording data and the lack of analytical methods able to extract synergistic structure from large-scale neural recordings, both now easing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-gzwbsr..spya-gzwbsr",
+      "title": "Scope of This Review",
+      "gist": "This review offers an accessible overview of partial information decomposition for newcomers while highlighting the authors' own recent advances and future directions for specialists."
+    },
+    {
+      "depth": 1,
+      "range": "spya-ygkzd8..spya-p4pyuy",
+      "title": "Tracking Information in Neural Circuits",
+      "gist": "Tracking information flow between neurons requires choosing data type, elements of interest, and time resolution, using tools like mutual information and transfer entropy."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ygkzd8..spya-t4pc0p",
+      "title": "2. Tracking Information in Neural Circuits",
+      "gist": "Applying information theory to neural circuits means using known activity of some neurons to reduce uncertainty about others, with methods varying by whether data are continuous or discrete spikes."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ds7nxh..spya-bdrp5d",
+      "title": "2.1. Defining Key Dimensions",
+      "gist": "Analyzing neural information processing requires defining the state type (continuous or discrete), the elements and connections under study, and the timescale, since each choice constrains later analysis."
+    },
+    {
+      "depth": 2,
+      "range": "spya-mx45r0..spya-p4pyuy",
+      "title": "2.2. Tracking Information",
+      "gist": "Mutual information measures undirected statistical dependence between neurons, while transfer entropy measures directed information flow from one neuron's past to another's future, distinguishing functional from effective connectivity."
+    },
+    {
+      "depth": 1,
+      "range": "spya-dhy39x..spya-wer4cd",
+      "title": "Information Processing in Neural Circuits",
+      "gist": "Tracking information flow alone cannot explain how neurons integrate multiple inputs into new information, a gap partial information decomposition is proposed to fill."
+    },
+    {
+      "depth": 2,
+      "range": "spya-dhy39x..spya-s0db2g",
+      "title": "Beyond Information Transfer",
+      "gist": "Measuring information transfer shows overall flow but not how neurons combine multiple input streams into new information, motivating multivariate information decomposition as a way to study processing itself."
+    },
+    {
+      "depth": 2,
+      "range": "spya-u5ra3d..spya-wer4cd",
+      "title": "Setting Up the Decomposition",
+      "gist": "Understanding how a target neuron processes two inputs requires tracking four variables—past and future states of all three neurons—which the partial information decomposition framework formally parses."
+    },
+    {
+      "depth": 1,
+      "range": "spya-u0wm5e..spya-rc76qn",
+      "title": "PID: Partial Information Decomposition",
+      "gist": "Partial information decomposition splits the joint information two or more neurons give about a target into redundant, unique, and synergistic pieces, though defining redundancy remains unresolved."
+    },
+    {
+      "depth": 2,
+      "range": "spya-u0wm5e..spya-crsey4",
+      "title": "Introducing PID",
+      "gist": "This section builds partial information decomposition from the two-parent case toward the general multi-parent case, then addresses how to define redundant information, a persistent open problem."
+    },
+    {
+      "depth": 2,
+      "range": "spya-euzn9r..spya-pjdgu6",
+      "title": "4.1. The Basic Problem and Intuition",
+      "gist": "Because the joint information from multiple inputs about a target neuron need not equal the sum of each input's individual information, the difference reveals either synergistic computation or redundant double-counting."
+    },
+    {
+      "depth": 2,
+      "range": "spya-y7wdb7..spya-q9gytb",
+      "title": "The Special Case of Two Parents",
+      "gist": "With two parent neurons, the joint mutual information splits into redundant, unique, and synergistic terms, but Shannon theory alone leaves this system underdetermined, requiring an extra redundancy function to solve."
+    },
+    {
+      "depth": 2,
+      "range": "spya-k378fv..spya-atvpm9",
+      "title": "4.2. The Partial Information Lattice",
+      "gist": "Williams and Beer's key insight orders all possible source combinations into a lattice, so that given a redundancy function, Möbius inversion yields the unique value of every partial information atom."
+    },
+    {
+      "depth": 2,
+      "range": "spya-d2quz5..spya-rc76qn",
+      "title": "4.3. Choosing a Redundancy Measure",
+      "gist": "No single redundancy measure is universally accepted; each of the roughly dozen proposed options trades off generality, data type, and intuitive behavior, forcing context-specific choices for any PID analysis."
+    },
+    {
+      "depth": 1,
+      "range": "spya-cc282b..spya-b32ecw",
+      "title": "PID in Action",
+      "gist": "Applying partial information decomposition to recordings of cortical neurons shows synergy concentrates in richly connected hubs, recurrent circuits, and correlated inputs, and shifts with behavior."
+    },
+    {
+      "depth": 2,
+      "range": "spya-cc282b..spya-urrypy",
+      "title": "Recording and Decomposing Cortical Triads",
+      "gist": "Recording hundreds of cortical neurons in culture and computing transfer-entropy networks lets researchers decompose thousands of source-source-target triads into redundant, unique, and synergistic information for comparison."
+    },
+    {
+      "depth": 2,
+      "range": "spya-e3ghxj..spya-akxt70",
+      "title": "5.1. Synergy in Rich Clubs",
+      "gist": "Rich clubs, the densely interconnected best-connected neurons, host triads with nearly three times the synergy of other triads and account for most of a network's total synergistic computation."
+    },
+    {
+      "depth": 2,
+      "range": "spya-p8by2y..spya-sd9fzd",
+      "title": "5.2. The Importance of Feedforward, Feedback, and Recurrent Connections",
+      "gist": "Triads with more recurrent connections between source neurons show substantially greater synergy, feedback connections tend to reduce it, and feedforward strength predicts the most variance overall, explaining rich-club density."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zfs2z7..spya-cs9fdy",
+      "title": "5.3. Synergy from the Convergence of Correlated Information",
+      "gist": "Synergy rises with the similarity of converging source neurons' activity at short, synaptic timescales but peaks and then falls as that similarity grows further, as redundancy increasingly dominates instead."
+    },
+    {
+      "depth": 2,
+      "range": "spya-vjzxxm..spya-j4cy9j",
+      "title": "5.4. Caveats to Consider",
+      "gist": "These culture-based findings may be limited by overestimated bivariate connectivity measures and by uncertainty about whether cultured circuit dynamics generalize to the demands of a living, behaving brain."
+    },
+    {
+      "depth": 2,
+      "range": "spya-aqcngt..spya-b32ecw",
+      "title": "5.5. PID in Behaving Primates",
+      "gist": "In behaving macaques, synergy again concentrated in rich-club-like, highly connected neurons, but redundancy rose sharply during motor execution, suggesting the brain duplicates signals when reliable transmission matters most."
+    },
+    {
+      "depth": 1,
+      "range": "spya-kmgwhs..spya-qa7gt2",
+      "title": "Practical Considerations in PID",
+      "gist": "Applying partial information decomposition well requires matching redundancy measures to data type, ensuring enough data to estimate probabilities, and knowing available software tools and limits."
+    },
+    {
+      "depth": 2,
+      "range": "spya-uktkdy..spya-tz99zn",
+      "title": "Choosing Methods for PID Analysis",
+      "gist": "Applying PID requires matching a redundancy function to whether data are discrete or continuous, and ensuring enough recorded samples to reliably estimate the joint probability distribution across many neurons."
+    },
+    {
+      "depth": 2,
+      "range": "spya-rf4pp0..spya-cwsuea",
+      "title": "6.1. Tools for Data Analysis",
+      "gist": "Several software packages implement PID analyses, including the Python toolbox DIT for general lattice solving, IDTxl and SxPID for time-series and local measures, and a MATLAB toolbox supporting only Imin."
+    },
+    {
+      "depth": 2,
+      "range": "spya-h6h922..spya-spdx0y",
+      "title": "6.2. Interpreting PID Results as Neural Information Processing",
+      "gist": "PID reliably detects statistical synergy between neurons but does not by itself explain the biological mechanisms, such as neurotransmitter systems or architecture, that produce redundant or synergistic dynamics."
+    },
+    {
+      "depth": 2,
+      "range": "spya-djfyag..spya-qa7gt2",
+      "title": "6.3. Practical Limitations of the PID Framework",
+      "gist": "The number of partial information atoms explodes combinatorially with more parent neurons, and finite-data estimation biases can inflate apparent mutual information, both limiting how completely PID can be applied."
+    },
+    {
+      "depth": 1,
+      "range": "spya-zz5xxs..spya-cds6mm",
+      "title": "Future Directions",
+      "gist": "Partial information decomposition can be extended to single time-point local analyses and to multiple simultaneous targets, both of which have already yielded new biological insights."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zz5xxs..spya-wbm9cf",
+      "title": "Extending the Classic Framework",
+      "gist": "Classic partial information decomposition, as proposed by Williams and Beer, remains the review's focus, though several later extensions have since broadened the framework in promising directions worth introducing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-z39m3x..spya-ckpq7e",
+      "title": "7.1. Local PID",
+      "gist": "Beyond expected averages, PID can be localized to single moments, producing a time-resolved stream of redundancy, synergy, and uniqueness that has already revealed distinct computational phases within neural events."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xn6y4f..spya-cds6mm",
+      "title": "7.2. Multi-Target and Temporal PID",
+      "gist": "Generalizing PID to multiple targets, as in integrated information decomposition, lets researchers track synergy and redundancy over time, revealing new information dynamics linked to consciousness and genetics."
+    },
+    {
+      "depth": 1,
+      "range": "spya-rc5z33..spya-gajhn8",
+      "title": "Synergy as Genuine Computation",
+      "gist": "Statistical synergy demonstrates neurons genuinely compute by integrating patterned input rather than merely summing it, with this integration shaped by circuit and behavioral context."
+    },
+    {
+      "depth": 2,
+      "range": "spya-rc5z33..spya-xxjenw",
+      "title": "Synergy as Genuine Computation",
+      "gist": "Across cultured and behaving circuits, synergy shows neurons genuinely integrate patterned combinations of inputs rather than simply summing them, with this computation shaped by circuit structure and behavioral state."
+    },
+    {
+      "depth": 2,
+      "range": "spya-r2n8q4..spya-gajhn8",
+      "title": "Author and Funding Statements",
+      "gist": "Author contributions, funding sources, data availability, conflict-of-interest statements, and references."
+    }
+  ],
+  "simple": {
+    "error": "Anthropic SDK request failed, status 402. [ai-no-credit]"
+  },
+  "tweets": [
+    "The authors argue that a method called partial information decomposition can reveal how brain circuits actually combine signals from many neurons into new, higher-order information, not just pass signals along.",
+    "Understanding how brains process information has long been stuck for two reasons: not enough data from large groups of neurons, and no good tools to analyze it. New recording tech fixed the first problem.",
+    "Studying neural circuits with information theory means tracking how knowing one neuron's activity reduces uncertainty about another's. Mutual information measures shared patterning; transfer entropy measures directed flow from one neuron's past to another's future.",
+    "Transfer entropy shows how information flows between two neurons, but it cannot show how a neuron combines signals from multiple sources into something new. That gap is what partial information decomposition is built to fill.",
+    "The total information two source neurons carry about a target is not just the sum of what each carries alone. It splits into: information both give redundantly, information each gives uniquely, and information only visible when you look at both together (synergy).",
+    "With more than two sources, the decomposition multiplies into a lattice of distinct information components, and the whole framework still hinges on picking a working definition of 'redundant information' since classic information theory does not supply one.",
+    "Recording hundreds of mouse cortical neurons on microelectrode arrays, the authors found synergy (information processing) concentrated in 'rich clubs': densely connected hub neurons made up well under 40% of cells but accounted for roughly 88% of the circuit's synergy.",
+    "Synergy rose with stronger feedforward connections and more recurrent links between the two source neurons, but feedback connections back to the source neurons did not help and sometimes slightly reduced it.",
+    "Synergy also tracked how correlated two source neurons' activity was, but only up to a point. Past about 7% of the maximum possible shared information, further correlation started increasing redundancy instead and synergy declined.",
+    "In macaque monkeys performing a motor task, the same patterns reappeared: synergy clustered in well-connected neurons. But a new twist: redundancy spiked sharply during movement execution, read as the brain duplicating its 'move' signal for reliability.",
+    "Applying the method well means matching a redundancy formula to your data (discrete spikes versus continuous signals), having enough recorded data to estimate probabilities reliably, and picking from several existing software packages, each with different limits.",
+    "The framework also strains at scale: with six source neurons alone, the possible information components already number over 7.8 million, so newer extensions aim to make it time-resolved or usable with multiple targets at once.",
+    "The upshot, as the authors frame it: neurons do not just sum up their inputs, they respond to the specific pattern across inputs. That sensitivity to pattern is shaped by a neuron's local network position and by what the animal is doing at the time."
+  ]
+}

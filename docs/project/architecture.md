@@ -117,6 +117,11 @@ above are those artefact kinds ([`src/store/artifacts.ts`](../../src/store/artif
 `ArtifactKind`). Every step writes into a draft revision in the store, not into files —
 [§ Storage](#storage).
 
+**One step runs instead of 2–5, never beside them: `metadata`**, a minimal paper's title, authors,
+abstract and DOI off its first pages, in the two-step job `["fetch", "metadata"]` a bulk-added
+file gets. It publishes a revision with no blocks and no tree, which only a `'minimal'` article may
+— [ingest-queue.md § A minimal upload, and Read this](ingest-queue.md#a-minimal-upload-and-read-this).
+
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
 down to a paragraph level" *is* the granularity-zoom tree. Structure is that tree rendered as
@@ -261,7 +266,8 @@ The layout the pipeline used to write, one directory per article, until 2026-09-
     summary.json    GONE 2026-08-31, along with stage 5e that wrote it and the
                     `article_revisions.summary` column that held it
                     (../plans/260831s-gist-only-summaries.md, drizzle/0036). Summary
-                    mode now draws the gists that were always on the tree. Files
+                    mode drew the tree's gists instead until 2026-10-01, and is
+                    now only the plain-words levels (summaries.md). Files
                     left in a `data/` directory are orphans and nothing reads
                     them.
     ideas.json      the propositions the piece needs you to hold — the ones it
@@ -430,17 +436,19 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   none stayed right. The answer is in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`: a step
   caches on a hash when it declares a `stamp()` that `stepIsDone` compares against what the store
   holds — every step in [`src/step-order.ts`](../../src/step-order.ts) § `STEP_ORDER` except the
-  four in the next bullet. Copy *their* choice of hash input rather than only the
+  five in the next bullet. Copy *their* choice of hash input rather than only the
   idea: a
   fingerprint covers **everything the stage's prompt reads**, which for the article-reading model
   steps is the blocks, the tree and the head — and there is one head function per head
   ([`src/source-hash.ts`](../../src/source-hash.ts)) — and for `assets` the blocks alone, because it
   has no prompt.
   [database.md](database.md#the-filesystem-era-files-under-dataslug).
-- **The other four decide freshness some other way, and none of them is a content hash.** They are
+- **The other five decide freshness some other way, and none of them is a content hash.** Four are
   the front of the pipeline, which is what `npm run ingest`, `npm run extract`, `npm run blocks` and
   `npm run hierarchy` re-run, so this is the paragraph to read before trusting a skip:
   - `fetch` and `extract` — **existence**. The step's `produces` are in the store, so it is done.
+    So is `metadata`, the fifth: it runs once, in the job that made the minimal paper, and nothing
+    re-runs it.
   - `blocks` — **structural**, and it is the interesting one: `blocksMatchTheirHtml` re-splits the
     stored HTML and compares it block for block against the stored blocks. No stamp to go stale, and
     it notices a change nothing wrote a hash about.

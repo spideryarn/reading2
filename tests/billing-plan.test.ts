@@ -31,7 +31,13 @@ import {
   switchingPlan,
 } from "../src/billing-plan.js";
 import type { ReaderPlan } from "../src/billing-plan.js";
-import { QUOTA_CODES, codeOfMessage, ingestQuotaReached, isQuotaRefusal } from "../src/messages.js";
+import {
+  QUOTA_CODES,
+  codeOfMessage,
+  ingestQuotaReached,
+  isQuotaRefusal,
+  minimalQuotaReached,
+} from "../src/messages.js";
 import { BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE } from "../src/messages.js";
 
 /** Everything one plan puts on screen, as one string to make claims about. */
@@ -79,17 +85,18 @@ describe("the lapsed plan, which is the one that must not read as a bug", () => 
 
   it("shows what is left when the free allowance is not yet spent", () => {
     /* A lapsed account can still have room — somebody who subscribed, added one
-       article and cancelled. `remaining` can never exceed `limit`, so the ratio
-       here is bounded and true, which is why this case is allowed to have one. */
+       article and cancelled. `remaining` is private headroom, not the unused end
+       of a ratio; public and High-powered charges can make the two differ. */
     const words = rendered({ kind: "lapsed", limit: 3, remaining: 2 });
     expect(words).toContain("plan has ended");
-    expect(words).toContain("2 of 3");
+    expect(words).toContain("2 further private articles");
+    expect(words).not.toContain("2 of 3");
   });
 });
 
 describe("the other plan states", () => {
   it("counts a free account against its lifetime allowance, and says lifetime", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false });
+    const words = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, minimal: 0, atLimit: false, remaining: 2 });
     expect(words).toContain("1 of 3");
     /* The word that stops a reader waiting for the 1st of the month. */
     expect(words).toMatch(/lifetime/i);
@@ -112,8 +119,9 @@ describe("the other plan states", () => {
       kind: "free",
       limit: 3,
       used: 6,
-      sharedHalfPrice: 6, highPower: 0,
+      sharedHalfPrice: 6, highPower: 0, minimal: 0,
       atLimit: true,
+      remaining: 0,
     });
     expect(words).not.toContain("6 of 3");
     expect(words).toContain("6 articles added");
@@ -133,8 +141,9 @@ describe("the other plan states", () => {
       kind: "free",
       limit: 3,
       used: 4,
-      sharedHalfPrice: 2, highPower: 0,
+      sharedHalfPrice: 2, highPower: 0, minimal: 0,
       atLimit: true,
+      remaining: 0,
       /* **The server's answer, not this file's.** Whether sharing would make
          room cannot be worked out from `used` and `sharedHalfPrice` — a charged
          row that predates `ingest_events.article_id` cannot be cheapened at
@@ -156,7 +165,7 @@ describe("the other plan states", () => {
       { used: 4, sharedHalfPrice: 2 },
       { used: 3, sharedHalfPrice: 0 },
     ] as const) {
-      const words = rendered({ kind: "free", limit: 3, atLimit: true, highPower: 0, ...plan });
+      const words = rendered({ kind: "free", limit: 3, atLimit: true, remaining: 0, highPower: 0, minimal: 0, ...plan });
       expect(words).not.toContain("Sharing more");
       expect(words).toContain("A subscription is what adds more");
     }
@@ -171,7 +180,7 @@ describe("the other plan states", () => {
    * rendering this file's header forbids. GPT Sol, 2026-09-05.
    */
   it("stops printing a ratio when the count is larger than the allowance", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 6, sharedHalfPrice: 0, highPower: 0, atLimit: true });
+    const words = rendered({ kind: "free", limit: 3, used: 6, sharedHalfPrice: 0, highPower: 0, minimal: 0, atLimit: true, remaining: 0 });
     expect(words).not.toContain("6 of 3");
     expect(words).toContain("6 articles added");
     expect(words).toContain("allowance of 3");
@@ -186,17 +195,17 @@ describe("the other plan states", () => {
    * inside it.
    */
   it("does not claim a count fits an allowance it is over", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 5, sharedHalfPrice: 1, highPower: 0, atLimit: true });
+    const words = rendered({ kind: "free", limit: 3, used: 5, sharedHalfPrice: 1, highPower: 0, minimal: 0, atLimit: true, remaining: 0 });
     expect(words).not.toContain("fit an allowance");
     expect(words).toContain("One of them is public");
     /* And the case that does fit still says so. */
-    expect(rendered({ kind: "free", limit: 3, used: 4, sharedHalfPrice: 2, highPower: 0, atLimit: true })).toContain(
+    expect(rendered({ kind: "free", limit: 3, used: 4, sharedHalfPrice: 2, highPower: 0, minimal: 0, atLimit: true, remaining: 0 })).toContain(
       "that is how 4 fit an allowance of 3",
     );
   });
 
   it("keeps the plain ratio while nothing is shared", () => {
-    const words = rendered({ kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, highPower: 0, atLimit: true });
+    const words = rendered({ kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, highPower: 0, minimal: 0, atLimit: true, remaining: 0 });
     expect(words).toContain("3 of 3");
     /* And says nothing about sharing: a discount nobody has taken is not news. */
     expect(words).not.toMatch(/public/i);
@@ -209,7 +218,7 @@ describe("the other plan states", () => {
    * said as their own fact, with no ratio. GPT Sol, plan 260930k review finding 1.
    */
   it("says High-powered AI apart from the count, and prints no ratio beside it", () => {
-    const free = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 1, highPower: 1, atLimit: false });
+    const free = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 1, highPower: 1, minimal: 0, atLimit: false, remaining: 2 });
     expect(free).toContain("1 article added, on an allowance of 3");
     expect(free).toContain("One of them is public");
     expect(free).toContain("High-powered AI is counted for one article, which counts as one more article");
@@ -223,7 +232,7 @@ describe("the other plan states", () => {
       limit: 20,
       used: 2,
       sharedHalfPrice: 0,
-      highPower: 2,
+      highPower: 2, minimal: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:37:00Z",
       endsAt: null,
@@ -242,7 +251,7 @@ describe("the other plan states", () => {
       limit: 20,
       used: 1,
       sharedHalfPrice: 0,
-      highPower: 1,
+      highPower: 1, minimal: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:37:00Z",
       endsAt: null,
@@ -259,7 +268,7 @@ describe("the other plan states", () => {
       limit: 20,
       used: 0,
       sharedHalfPrice: 0,
-      highPower: 1,
+      highPower: 1, minimal: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:37:00Z",
       endsAt: null,
@@ -268,7 +277,7 @@ describe("the other plan states", () => {
     expect(paid).toContain("High-powered AI is counted for one article");
     expect(paid).not.toContain("One of them");
 
-    const free = rendered({ kind: "free", limit: 3, used: 0, sharedHalfPrice: 0, highPower: 1, atLimit: false });
+    const free = rendered({ kind: "free", limit: 3, used: 0, sharedHalfPrice: 0, highPower: 1, minimal: 0, atLimit: false, remaining: 2 });
     expect(free).toContain("0 articles added");
     expect(free).toContain("High-powered AI is counted for one article");
     expect(free).not.toContain("One of them");
@@ -281,7 +290,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
-      sharedHalfPrice: 0, highPower: 0,
+      sharedHalfPrice: 0, highPower: 0, minimal: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
@@ -300,7 +309,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 40,
-      sharedHalfPrice: 0, highPower: 0,
+      sharedHalfPrice: 0, highPower: 0, minimal: 0,
       atLimit: true,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
@@ -321,7 +330,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
-      sharedHalfPrice: 0, highPower: 0,
+      sharedHalfPrice: 0, highPower: 0, minimal: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-10-03T11:22:33.000Z",
@@ -349,7 +358,7 @@ describe("the other plan states", () => {
       tierName: "Spideryarn Reader",
       limit: 20,
       used: 3,
-      sharedHalfPrice: 0, highPower: 0,
+      sharedHalfPrice: 0, highPower: 0, minimal: 0,
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-11-17T09:00:00.000Z",
@@ -464,18 +473,21 @@ describe("prices, which come off a row and are never converted here", () => {
 });
 
 describe("which failures get an upgrade link beside them", () => {
-  it("recognises all three quota refusals", () => {
+  it("recognises every quota refusal", () => {
     /* Built through `ingestQuotaReached` rather than from literal strings, so
        the day somebody reworks the copy this still asks about the real
        messages. */
     const free = ingestQuotaReached({ limit: 3 }).message;
     const monthly = ingestQuotaReached({ limit: 20, resetAt: new Date("2026-10-03") }).message;
     const lapsed = ingestQuotaReached({ limit: 3, lapsed: true }).message;
-    for (const message of [free, monthly, lapsed]) expect(isQuotaRefusal(message)).toBe(true);
-    /* And the codes those three carry are exactly the list — so a fourth
-       refusal added to `ingestQuotaReached` without being added to `QUOTA_CODES`
+    const minimal = minimalQuotaReached({ fits: 0 }).message;
+    for (const message of [free, monthly, lapsed, minimal]) expect(isQuotaRefusal(message)).toBe(true);
+    /* And the codes they carry are exactly the list — so another refusal added
+       without being added to `QUOTA_CODES`
        fails here rather than silently losing its link. */
-    expect([free, monthly, lapsed].map(codeOfMessage).sort()).toEqual([...QUOTA_CODES].sort());
+    expect([free, monthly, lapsed, minimal].map(codeOfMessage).sort()).toEqual(
+      [...QUOTA_CODES].sort(),
+    );
   });
 
   it("does not offer an upgrade for the billing failures a subscription cannot fix", () => {
@@ -581,5 +593,106 @@ describe("whether a wire body really is a Purchase", () => {
   it("refuses a door nobody has built", () => {
     expect(isPurchase({ kind: "upgrade" })).toBe(false);
     expect(isPurchase({})).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------ gift vouchers -- */
+
+describe("a gifted allowance says what it is made of (261001m)", () => {
+  const gift = { articles: 20, claimedAt: "2026-10-01T00:00:00.000Z", noticeKey: "k" };
+
+  it("says 3 free + 20 from a gift beside the ratio, and nothing about gifts without one", () => {
+    const gifted = rendered({
+      kind: "free",
+      limit: 23,
+      used: 2,
+      sharedHalfPrice: 0,
+      highPower: 0, minimal: 0,
+      atLimit: false,
+      remaining: 21,
+      gifts: [gift],
+    });
+    expect(gifted).toContain("2 of 23 articles used (3 free + 20 from a gift)");
+    const plain = rendered({ kind: "free", limit: 3, used: 2, sharedHalfPrice: 0, highPower: 0, minimal: 0, atLimit: false, remaining: 1 });
+    expect(plain).not.toMatch(/gift/i);
+  });
+
+  it("keeps the non-ratio form past the allowance, with the makeup", () => {
+    const words = rendered({
+      kind: "free",
+      limit: 23,
+      used: 30,
+      sharedHalfPrice: 0,
+      highPower: 0, minimal: 0,
+      atLimit: true,
+      remaining: 0,
+      gifts: [gift],
+    });
+    expect(words).not.toContain("30 of 23");
+    expect(words).toContain("allowance of 23 (3 free + 20 from a gift)");
+  });
+
+  it("names the gift to a lapsed reader too, and several gifts as gifts", () => {
+    const words = rendered({
+      kind: "lapsed",
+      limit: 28,
+      remaining: 4,
+      gifts: [gift, { ...gift, articles: 5, noticeKey: "j" }],
+    });
+    expect(words).toContain("3 free + 25 from gifts");
+  });
+
+  it("does not turn a lapsed reader's private headroom into an N-of-M ratio", () => {
+    const words = rendered({
+      kind: "lapsed",
+      limit: 28,
+      remaining: 4,
+      gifts: [gift, { ...gift, articles: 5, noticeKey: "j" }],
+    });
+    expect(words).not.toContain("4 of 28");
+    expect(words).toContain("4 further private articles");
+  });
+});
+
+describe("papers not yet AI-processed are their own fact (261001m)", () => {
+  /**
+   * **A minimal paper is a hundredth of an article**, so `1 of 3` beside forty
+   * papers would hide them, and any fraction of an article would be a rounding.
+   * The count is said as its own sentence, and no ratio is printed while it is
+   * above zero — the rule the public and High-powered counts already follow.
+   */
+  it("prints no ratio while there are papers, and says them in words", () => {
+    const free = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, minimal: 40, atLimit: false, remaining: 2 });
+    expect(free).not.toContain("1 of 3");
+    expect(free).toContain("1 article added, on an allowance of 3");
+    expect(free).toContain("You have also added 40 papers not yet AI-processed, at 1/100 of an article each.");
+    /* Nothing about the articles needs explaining: none is public, none over. */
+    expect(free).not.toMatch(/counts in full|half an article/);
+
+    const one = rendered({ kind: "free", limit: 3, used: 0, sharedHalfPrice: 0, highPower: 0, minimal: 1, atLimit: false, remaining: 3 });
+    expect(one).toContain("You have also added 1 paper not yet AI-processed, at 1/100 of an article.");
+
+    const paid = rendered({
+      kind: "paid",
+      tierId: "reader",
+      tierName: "Reader",
+      limit: 20,
+      used: 4,
+      sharedHalfPrice: 1,
+      highPower: 0,
+      minimal: 7,
+      atLimit: false,
+      periodEnd: "2026-11-01T00:00:00Z",
+      endsAt: null,
+    });
+    expect(paid).not.toContain("4 of 20");
+    expect(paid).toContain("One of them is public, which counts as half an article each.");
+    expect(paid).toContain("You have also added 7 papers not yet AI-processed");
+  });
+
+  it("changes nothing for the account with none", () => {
+    const words = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, minimal: 0, atLimit: false, remaining: 2 });
+    expect(words).toContain("1 of 3");
+    expect(words).not.toMatch(/not yet AI-processed/);
   });
 });

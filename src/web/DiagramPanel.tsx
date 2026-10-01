@@ -1075,8 +1075,8 @@ export function DiagramPanel({
    * this" — so the class of bug has nowhere left to live.
    */
 
-  /* The node the reader is standing in — the deepest one drawn, which is the
-     same rule the summary panel's follow mark uses. Computed from the LAID OUT
+  /* The node the reader is standing in — the deepest one drawn, the rule
+     Summary's old outline used too. Computed from the LAID OUT
      nodes rather than from the tree, so a closed section's mark lands on the
      closed section rather than vanishing. */
   const here = useMemo(() => nodeAt(layout?.nodes ?? [], markRow), [layout, markRow]);
@@ -1309,8 +1309,8 @@ export function DiagramPanel({
    *
    * Without this the mark moves and the row it is on can be two screens up
    * inside `.diag-scroll`, which on a long `tree` is the whole picture doing
-   * nothing while the article moves. Same idea as the summary panel following
-   * the reader (docs/project/summaries.md), and the same two rules: it keys on
+   * nothing while the article moves. Same idea as Summary's former outline
+   * following the reader, and the same two rules: it keys on
    * the *target* rather than on scroll events, so it never has to ask whether a
    * scroll was ours or theirs, and it does nothing while the pointer is in the
    * picture — a reader comparing two bands must not have one of them slide out

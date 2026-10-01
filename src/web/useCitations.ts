@@ -470,7 +470,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
 
       const receiveStage = (data: unknown) => {
         const stage = (data as { stage?: unknown } | null)?.stage;
-        if (stage !== "finding" && stage !== "reading-paper" && stage !== "reading") return;
+        if (stage !== "searching" && stage !== "finding" && stage !== "reading-paper" && stage !== "reading") return;
         setInvestigateStage(stage);
         /* This step may replace the row's lookup. Hide its verdict and
            anything derived from it until a server re-read proves what still

@@ -55,7 +55,7 @@ Why the feature exists and what a gist may and may not be:
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
 | [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | mark a passage, note it, and ask about it if you want — [comments.md](comments.md) |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | comments in reading order, and the panel's prev/next — [comments.md](comments.md#several-at-once) |
-| [`src/web/Cited.tsx`](../../src/web/Cited.tsx) | **model prose with block ids in it**, drawn as chips you can press with the paragraph itself on hover. Shared by chat and the summary panel rather than copied into each — [summaries.md § A summary is a door](summaries.md#a-summary-is-a-door) |
+| [`src/web/Cited.tsx`](../../src/web/Cited.tsx) | **model prose with block ids in it**, drawn as chips you can press with the paragraph itself on hover. Shared by chat, Quiz and Referee's candidates rather than copied into each — [summaries.md § A summary is a door](summaries.md#a-summary-is-a-door) |
 | [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, the block-id chips that jump the article, and what a turn can have done to it — copy, retry, edit, **stop** — [260826a-chat-mode.md](../plans/260826a-chat-mode.md), and [§ What a turn can have done to it](../plans/260826a-chat-mode.md#what-a-turn-can-have-done-to-it) for why a stop is a `done` rather than an error |
 | [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
@@ -116,6 +116,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation.
+- **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
+  on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
+  (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.
 - **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
   `applyThreshold`** — "show the items above this score". The FAQ uses the component; the
   Glossary's `GateSlider` and the `BarSlider`s in Citations and Quotes draw the same row for

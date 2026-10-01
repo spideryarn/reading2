@@ -1,17 +1,16 @@
 /**
- * **The reader just pressed this.** One fact, recorded by the two controls that
- * are in a position to know it, and read by the panel that is about to decide
+ * **The reader just pressed this.** One fact, recorded by the control that is
+ * in a position to know it, and read by the panel that is about to decide
  * whether to spend a model call.
  *
- * **Fourteen controls start a paid run on their own**, between them arming
- * **thirteen** targets — the two numbers differ because Diagram's bar button and
- * its Sketch chip are two gestures that arm the same picture. The controls: the
- * Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram buttons in
- * the bar; the Sketch and Illustrated chips inside Diagram; the Quiz half of
- * Remember; and the Claims and Candidates chips inside Referee. The bar's Tweets
- * link was one of them from 2026-09-06 to 2026-09-15, when the thread page began
- * writing on arrival instead — it is a path rather than query state, so the
- * reason below does not reach it (useAutoRun.ts § `useAutoRunOnArrival`).
+ * The controls include artefact-backed mode buttons in the bar and the
+ * sub-mode controls for Diagram, Remember, Referee and Summary (including
+ * their command-bar rows). Several gestures may arm the same target: Summary's
+ * slider, its end buttons and its three command rows all arm `simple`.
+ * The bar's Tweets link armed a token from 2026-09-06 to 2026-09-15, when the
+ * thread page began writing on arrival instead — it is a path rather than
+ * query state, so the reason below does not reach it
+ * (useAutoRun.ts § `useAutoRunOnArrival`).
  * Greg's rule is *"if the user **clicks** a mode that
  * hasn't been run yet, automatically run it"*, and the word that carries the
  * money is **clicks**.
@@ -141,7 +140,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { RememberView, SummaryView } from "./params.js";
+import type { RememberView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -157,11 +156,10 @@ import { jobEngine } from "./jobEngine.js";
 export type { AutoRunTarget };
 
 /**
- * **What a press on this mode's bar button arms**, for every one of the
- * fourteen. Total since 2026-09-06, so a fifteenth word in `MODES` is a
- * typecheck error here until somebody has answered the money question — which
- * is the point of it. This table was `Partial`, and under a `Partial` an
- * omitted row and a considered "nothing" are the same thing, so a new
+ * **What a press on each mode's bar button arms.** Total over `MODES`, so a new
+ * word there is a typecheck error here until somebody has answered the money
+ * question — which is the point of it. This table was `Partial`, and under a
+ * `Partial` an omitted row and a considered "nothing" are the same thing, so a new
  * artefact-backed mode could be wired end to end with nobody ever asked whether
  * pressing it should start generating.
  * docs/plans/260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md
@@ -264,12 +262,18 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
     kind: "none",
     reason: "reads the tree, the arc and any ideas already made; it never starts a job",
   },
-  /* Opens on the outline, which is free. Its plain-words pills arm for
-     themselves one level down, as Remember's Quiz chip does — so pressing
-     Summary on an address that still says `?summary=simple` spends nothing. */
+  /* **Opens on a plain-words level and spends nothing.** Until 2026-10-01 it
+     opened on the tree's gists, which were free; that outline went
+     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
+     what is left is an artefact. The press still arms nothing: an article with
+     no plain-words version shows the empty state's "Write it", and the band's
+     plain-words controls and the command bar's three rows arm `simple` for
+     themselves one level down, as Remember's Quiz chip does. Whether opening
+     Summary should start the run is a product question still open (Overseer
+     queue fb7t-7v). */
   summary: {
     kind: "none",
-    reason: "opens on the outline, from the tree the pipeline already built; the plain-words pills arm themselves",
+    reason: "opens on a plain-words level and shows \"Write it\" if there is none; its controls and the command bar's rows arm themselves",
   },
 
   /* Nothing exists to fill until the reader has typed. */
@@ -607,6 +611,9 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
       return REFEREE_TARGET[sub.view] ?? null;
     case "summary":
       return "simple";
+    /* Nothing to generate in either view: the tree is in the page's payload. */
+    case "structure":
+      return null;
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);
@@ -642,8 +649,9 @@ export function subModeGenerates(sub: SubMode): boolean {
  * to spend it. So each arm below reads the table the press itself read — the
  * bar's `MODE_TARGET` for a mode press, `REFEREE_TARGET` for a Referee chip, and
  * the literal `"quiz"` the Remember toggle arms (QuizPanel.tsx §
- * `RememberSubModeToggle`), and `"simple"` the Summary toggle arms. A Diagram chip arms `activationForDiagram` of the
- * picture it lands on, which is the delegated row's answer too.
+ * `RememberSubModeToggle`), and `"simple"` the Summary controls arm. A Diagram
+ * chip arms `activationForDiagram` of the picture it lands on, which is the
+ * delegated row's answer too.
  *
  * `sub` is the sub-mode each band is showing, **already parsed** the way the
  * band parses it — this module knows nothing about URLs, for the reason
@@ -651,14 +659,15 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
+  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
   /* The literal every plain-words stop arms (SummaryMode.tsx § `SummaryControls`):
      one job writes all levels, so Fuller arms `simple` too. Sol's plan review
-     of 261001b, P1-3. */
-  if (mode === "summary") return sub.summary === "gists" ? null : "simple";
+     of 261001b, P1-3. Every Summary band is a plain-words level since the
+     outline went on 2026-10-01, so it does not depend on `?summary=`. */
+  if (mode === "summary") return "simple";
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {
     case "fixed":

@@ -351,6 +351,15 @@ export type RecordType =
  * not tightened with the change that showed them — a stricter gate would buy
  * re-reads, and so money, on every import, for text the reader sees only as
  * a note — and the place to revisit is here, if a note is ever caught lying.
+ *
+ * **Table cells are the second exception, and they are gated** (`CHECKED`,
+ * below). Since 2026-10-01 `renderHtml` writes `tabledata` inside its table's
+ * figure. They stay out of this set because this set is also the *in-place*
+ * vocabulary — continuations, seam repair and the front-matter window read it,
+ * and none of them should treat a cell as prose. But a table is mostly numbers
+ * a reader will quote, so unlike a note an invented cell becomes a content
+ * warning and triggers the ordinary best-effort retry for an uncached chunk.
+ * docs/plans/261001q-pdf-tables-and-composite-figures.md; GPT Sol, plan review.
  */
 export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "heading1",
@@ -363,6 +372,17 @@ export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "table",
   "code",
 ]);
+
+/**
+ * **What the check gates on** — invented numbers, markup and replacement
+ * characters in these produce a content warning; in anything else they are
+ * only reported (src/pdf-score.ts § `scorePage`). An uncached warning gets the
+ * stage's ordinary best-effort retry before it is published. `RENDERED` and the
+ * table cells, which are shown inside their table rather than in place.
+ * Footnotes are shown too and are deliberately not here — `RENDERED`'s comment
+ * says why.
+ */
+export const CHECKED: ReadonlySet<RecordType> = new Set<RecordType>([...RENDERED, "tabledata"]);
 
 /** How many pages must share a line before it is furniture rather than prose. */
 const FURNITURE_PAGES = 3;
@@ -653,6 +673,70 @@ export async function countPdfPages(
     } catch {
       /* Being abandoned anyway; a failure to release a worker must not replace
          the answer, or the error, we came here for. */
+    }
+  }
+}
+
+/**
+ * **The text layer of the first few pages, and nothing else** — for the bulk
+ * import's metadata step (src/paper-metadata.ts), which wants a paper's title,
+ * authors and abstract off its first two pages and must not pay for `pass0`'s
+ * walk of every page.
+ *
+ * `countPdfPages`'s discipline exactly: a copy of the bytes (pdf.js detaches
+ * the buffer it is given), the signal checked before and after loading, and
+ * `destroy` on every path. Sideways runs are dropped for `pass0`'s reason
+ * (`isSideways`): arXiv's margin stamp would otherwise sit in the middle of the
+ * title. Items are joined as `pass0` joins them; runs of spaces and tabs are
+ * collapsed, newlines kept.
+ *
+ * `maxChars` stops joining runs once that many characters are in hand, and the
+ * result is cut to it. pdf.js still has to decode the page's text content before
+ * it hands over the item array, so this bounds our output and concatenation,
+ * not the library's work on a pathological PDF; the caller's signal is the
+ * operation-wide bound.
+ */
+export async function firstPagesText(
+  source: Uint8Array,
+  opts: { pages: number; maxChars: number; signal?: AbortSignal | undefined },
+): Promise<string> {
+  const { signal } = opts;
+  signal?.throwIfAborted();
+  const data = new Uint8Array(source);
+  const pdfjs = await loadPdfjs();
+  signal?.throwIfAborted();
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
+  const giveUp = () => {
+    void loadingTask.destroy();
+  };
+  signal?.addEventListener("abort", giveUp, { once: true });
+  try {
+    const doc = await loadingTask.promise;
+    const parts: string[] = [];
+    let chars = 0;
+    for (let n = 1; n <= Math.min(opts.pages, doc.numPages) && chars < opts.maxChars; n++) {
+      signal?.throwIfAborted();
+      const content = await (await doc.getPage(n)).getTextContent();
+      let text = "";
+      for (const item of content.items) {
+        if (!("str" in item) || isSideways(item.transform)) continue;
+        text += item.str + (item.hasEOL ? "\n" : "");
+        if (chars + text.length >= opts.maxChars) break;
+      }
+      const tidied = text.replace(/[ \t]+/g, " ").trim();
+      parts.push(tidied);
+      chars += tidied.length + 2;
+    }
+    return parts.join("\n\n").slice(0, opts.maxChars);
+  } catch (err) {
+    signal?.throwIfAborted();
+    throw err;
+  } finally {
+    signal?.removeEventListener("abort", giveUp);
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Being abandoned anyway; see `countPdfPages`. */
     }
   }
 }

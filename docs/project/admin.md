@@ -753,10 +753,56 @@ number over a table that does not look like it. The lesson is the smaller one: *
 the screenshot was wrong"* explains a screenshot away rather than explaining it, and the same
 picture came back.
 
+## `/admin/vouchers` — the one admin page that writes
+
+Gift vouchers: extra free articles for one email address, claimed by the account with that confirmed
+address the next time it reads its plan. What a voucher is, the claim and the lock order are
+[billing.md § Gift vouchers](billing.md); the plan is
+[261001m](../plans/261001m-gift-vouchers-for-free-articles.md).
+
+The routes, all exact rows of the table in [`src/routes.ts`](../../src/routes.ts) and so behind the
+namespace gate — a 403 for anybody but `ADMIN_USER_IDS`, which `tests/billing-vouchers.test.ts`
+checks for each of them:
+
+| Route | Does |
+|---|---|
+| `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`) and free usage — `private, no-store` |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
+| `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued; a different body under that id → 409 |
+| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, email, revoked }`; the address only while unclaimed (409 after) |
+| `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
+
+Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in
+[`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): articles a whole number 1–1000, a note of at
+most 500 characters, an address with an `@`, `revoked` a boolean, and an unknown key is a 400 rather
+than a default. There is no delete: a revoked voucher stays as a record, and `revoked: false`
+restores it.
+
+**The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
+[`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
+from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
+loader is a compile error). A create form — address, articles (20 by default), private note — over
+a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
+row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
+day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
+Edit offers the address only while the voucher waits, and a save sends only the fields that changed.
+Every write is followed by a fresh read, and a refusal is shown in the server's own words beside the
+row. The wire shape is [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), a flat import-free
+module shared by the store and the client because the browser may not import `pg-vouchers.ts`, even
+for a type. `tests/admin-vouchers-page.test.tsx` mounts it.
+
+**Each voucher sends two emails, and the Status cell says what became of each**: *Email to them*
+(the gift, sent when the voucher is made and again when its address is corrected) and *Email to you*
+(the creator, when it is claimed) — sent, not sent and why, failed and why, waiting, or sending, with
+a Retry where the server allows one. How they are kept to once each is
+[email.md § Gift voucher emails](email.md#gift-voucher-emails); the plan is
+[261001p](../plans/261001p-voucher-emails-to-recipient-and-creator.md).
+
 ## What it cannot do, and what is not built
 
-- **Nothing on this page writes.** No delete, no ban, no spend. An admin page that can only look is
-  a much smaller thing to get wrong, and there is no request behind it that could do anything else.
+- **Nothing on `/admin/users` or `/admin/feedback` writes.** No delete, no ban, no spend. An admin
+  page that can only look is a much smaller thing to get wrong. `/admin/vouchers`, above, is the
+  exception, and the only thing it can change is a voucher.
 - **No model spend per user**, though `ai_calls` is right there. It carries no `owner_id` — it hangs
   off a revision — so per-user spend is a join through revisions and articles, and it is a page of
   its own the day a spend limit exists ([auth.md § Still open](auth.md#still-open)).

@@ -3,7 +3,7 @@
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 **What this is now: the tree.** The article cut into nested sections, each with a label and a
-summary, which [Structure](structure.md) draws in the band and Summary, Diagram and the Spine read
+summary, which [Structure](structure.md) draws in the band and Marginalia, Diagram and the Spine read
 too. Open [§ The tree](#the-tree) and [§ Generation](#generation) before changing the tree's shape
 or how it is generated; the stages that build it are in [hierarchy.md](hierarchy.md), and the view
 is in [structure.md](structure.md). The live material later in this doc is in [Structure's two
@@ -20,6 +20,7 @@ but no longer the one everything else is read through.
 > mode is better/sufficient."*, SPIDERYARN-READING2-4B); `?mode=hierarchy` opens Structure, and
 > `?cols=` / `?text=` are ignored. Sections below about the columns, their fitting and their
 > controls are history. [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).
+> Summary stopped drawing the tree on 2026-10-01 ([summaries.md](summaries.md)).
 
 ## Intent
 

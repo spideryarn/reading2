@@ -232,6 +232,10 @@ const SHARED = new Set([
      directory to prove it. See src/billing-plan.ts and docs/project/billing.md
      § What a reader sees. */
   "billing-plan.js",
+  /* One gift voucher as /admin/vouchers draws it, and the route that sends it.
+     Types only, no imports: the same argument as `admin.js` and
+     `billing-plan.js` — a wire contract with an end on each side. */
+  "admin-vouchers.js",
   /* The Sketch diagram's schema, its validator and its painter — the two files
      that turn a model's scene into geometry. On the list for the reason the
      header states rather than for convenience: `sketch-scene.js` imports

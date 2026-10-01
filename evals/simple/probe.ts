@@ -11,6 +11,10 @@
  * npx tsx evals/simple/probe.ts report > evals/simple/results-260930.md    # free
  * ```
  *
+ * `--power high` writes on the high-power model (plan 261001p), and
+ * `--guard off` measures the writer alone; without `--guard` the probe does
+ * what a press does, `SIMPLE_CHECK_ENABLED`.
+ *
  * **Since `simple/2`** (plan 261001b) an arm is `<effort>-<reader>[-<tag>]`,
  * the reader being `none`, `about`, `goalA` or `goalB` from readers.json, and
  * all three levels are recorded; the ELI12 knob went with the real levels. The
@@ -77,6 +81,14 @@ interface ArmFile {
   model?: string;
   articleHash?: string;
   systemsSha256?: string;
+  /**
+   * Since plan 261001p: which capable model wrote it (`--power`), and whether
+   * the fidelity guard ran (`--guard`). Files without them are `standard`;
+   * before 261001i there was no guard, and from 261001i until these flags it
+   * ran on every probe, because the probe took the switch's default.
+   */
+  power?: "standard" | "high";
+  guard?: boolean;
 }
 
 async function list(): Promise<void> {
@@ -117,7 +129,13 @@ async function readerProfile(reader: Reader, slug: string): Promise<string | nul
   return renderProfile({ profile: readers.about, purpose: goal ?? null });
 }
 
-async function run(arm: string, slugs: string[]): Promise<void> {
+interface RunOpts {
+  power: "standard" | "high";
+  /** `undefined` takes `SIMPLE_CHECK_ENABLED`, as a press does. */
+  guard: boolean | undefined;
+}
+
+async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
   const m = /^(low|medium|high|max)-(none|about|goalA|goalB)(-[\w]+)?$/.exec(arm);
   if (!m) throw new Error("--arm must be <low|medium|high|max>-<none|about|goalA|goalB>[-<tag>]");
   const effort = m[1]!;
@@ -129,6 +147,7 @@ async function run(arm: string, slugs: string[]): Promise<void> {
   const { loadArticle } = await import("../../src/store/index.js");
   const simple = await import("../../src/simple-summary.js");
   const { modelFor } = await import("../../src/models.js");
+  const { SIMPLE_CHECK_ENABLED } = await import("../../src/simple-check.js");
   const { isBodyEvidence } = await import("../../src/block-policy.js");
   const { collectSpend } = await import("../../src/ai-spend.js");
   const { costStore } = await import("../../src/store/ai-calls.js");
@@ -149,16 +168,18 @@ async function run(arm: string, slugs: string[]): Promise<void> {
           effort,
           pitch,
           slug,
-          version: simple.SIMPLE_VERSION,
+          version: simple.SIMPLE_PROMPT_VERSION,
           sourceSha256,
           at: new Date().toISOString(),
           bodyWords: body.reduce((n, b) => n + b.words, 0),
           bodyBlocks: body.length,
           /* The resolved call model, including a one-off eval override — not the
              stable generator stamp stored on production artefacts. */
-          model: modelFor("simple", "standard"),
+          model: modelFor("simple", opts.power),
           articleHash,
           systemsSha256,
+          power: opts.power,
+          guard: opts.guard ?? SIMPLE_CHECK_ENABLED,
         };
         const started = Date.now();
         let file: ArmFile;
@@ -185,7 +206,8 @@ async function run(arm: string, slugs: string[]): Promise<void> {
               simple.generateSimpleSummary({
                 article: { ...article, slug },
                 profile: await readerProfile(reader, slug),
-                power: "standard",
+                power: opts.power,
+                ...(opts.guard === undefined ? {} : { guard: opts.guard }),
               }),
             {
               attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
@@ -294,14 +316,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const [cmd, ...rest] = process.argv.slice(2);
   if (cmd === "list") await list();
   else if (cmd === "run") {
-    const at = rest.indexOf("--arm");
-    const arm = at >= 0 ? rest[at + 1] : undefined;
+    const flags = new Map<string, string>();
+    const slugs: string[] = [];
+    for (let i = 0; i < rest.length; i++) {
+      const a = rest[i]!;
+      if (a.startsWith("--")) flags.set(a, rest[++i] ?? "");
+      else slugs.push(a);
+    }
+    const arm = flags.get("--arm");
     if (!arm) throw new Error("run needs --arm <effort>-<reader>");
-    await run(
-      arm,
-      rest.filter((_, i) => i !== at && i !== at + 1),
-    );
+    const power = flags.get("--power") ?? "standard";
+    if (power !== "standard" && power !== "high") throw new Error("--power must be standard or high");
+    const guardFlag = flags.get("--guard");
+    if (guardFlag !== undefined && guardFlag !== "on" && guardFlag !== "off") throw new Error("--guard must be on or off");
+    const unknown = [...flags.keys()].filter((k) => !["--arm", "--power", "--guard"].includes(k));
+    if (unknown.length > 0) throw new Error(`unknown flag ${unknown.join(", ")}`);
+    await run(arm, slugs, { power, guard: guardFlag === undefined ? undefined : guardFlag === "on" });
   } else if (cmd === "report") report();
   else if (cmd === "show") await show(rest[0] ?? "", rest.slice(1));
-  else throw new Error("usage: list | run --arm <effort>-<reader> <slug>... | report");
+  else throw new Error("usage: list | run --arm <effort>-<reader> [--power standard|high] [--guard on|off] <slug>... | report");
 }

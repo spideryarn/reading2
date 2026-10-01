@@ -403,6 +403,20 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* ***Dig deeper*'s answer** (src/explain.ts with a `dig`, plan 261001p) —
+     **explain's row exactly, and it has to be.** The request is explain's:
+     the same system prompt and article part with the same breakpoint, sent
+     to the high-power model, so it shares its cached prefix with a
+     high-powered article's ordinary explain calls. The cache is keyed on the
+     model and the prefix bytes, not on our job name — this row exists for the
+     ledger — so the `order` pin that keeps explain landing on the provider
+     holding its prefix must be the same here, or a dug answer would write a
+     second copy of the article somewhere else. */
+  "dig-deeper": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   search: {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -594,6 +608,19 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* ***Dig deeper*'s forced search** (src/dig-deeper.ts) — `link-summary`'s
+     row, for both of its reasons: no `order`, because this is a quick-tier
+     OpenAI model and the Anthropic pin is wrong quietly there, and no cached
+     prefix to keep; and `require_parameters`, which here guards the point of
+     the call. An upstream that dropped `tool_choice` would let the model skip
+     the search, and one that dropped the Exa tool would answer from memory —
+     both caught downstream by the search-count witness, but only as a refusal
+     the reader sees, where this makes them a routing choice instead. */
+  "dig-deeper-search": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
      policy and its reason: the request sends `openrouter:web_search`, and a
      fallback that silently dropped the tool leaves a model answering from
@@ -696,6 +723,50 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { require_parameters: true, allow_fallbacks: false },
+  },
+  /* **A batch-added paper's title, authors and abstract**
+     (src/paper-metadata.ts) — the one row that names its upstreams with `only`,
+     because the reason is a promise about retention rather than a cache.
+
+     Greg asked for this job to run "via a ZDR provider, e.g. Fireworks", and
+     what it sends is the first two pages of a paper a reader uploaded.
+
+     - `zdr: true` restricts every endpoint considered, fallbacks included, to
+       OpenRouter's zero-retention list (provider-routing docs, read
+       2026-10-01: "the request will only be routed to endpoints that have a
+       Zero Data Retention policy").
+     - `only` is the whitelist and `order` the preference within it, so
+       fallbacks go down this list and nowhere else. All three were on the ZDR
+       list for `deepseek/deepseek-v4.1-flash` on 2026-10-01, all three
+       advertise `response_format` and `structured_outputs`, and none is an fp4
+       endpoint (DeepInfra's is fp8; Fireworks and Together state no
+       quantisation). A base slug matches every endpoint of that provider, so
+       `fireworks` includes `fireworks/us`, which is also ZDR. No
+       `quantizations` filter: the whitelist already excludes the fp4 ones, and
+       a whitelist of quantisations would drop the two that state none.
+     - **`allow_fallbacks: true`, and it was `false`.** Fireworks alone was
+       measured on 2026-10-01: its shared pool answered 429
+       (`limit_source: upstream_provider_shared_pool`) on 8 of 39 papers at two
+       in flight, and one paper failed after six retries
+       (evals/results/paper-metadata-2026-10-01.md).
+     - `require_parameters` for `pdf-figure-locate`'s reason: the answer is a
+       strict JSON schema, and an upstream that dropped `response_format`
+       would answer in a shape the parser refuses.
+
+     The gateway does not retry a 429 on this wire; a refusal that survives
+     the fallbacks reaches the caller as `ProviderRefused`, and the job layer
+     decides whether to try again. tests/paper-metadata.test.ts asserts these
+     bytes on the wire. */
+  "paper-metadata": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: {
+      order: ["fireworks", "deepinfra", "together"],
+      only: ["fireworks", "deepinfra", "together"],
+      zdr: true,
+      require_parameters: true,
+      allow_fallbacks: true,
+    },
   },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
@@ -827,6 +898,13 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Not measured, and the tightest ceiling of the whole-article calls (src/explain.ts). " +
       "Nothing has failed that we know of; the length warning below is what would say so.",
   },
+  /* Explain's decision, because it is explain's call. On the high-power model
+     a `providerDefault` row is sent as `high` (`wireEffort` below). */
+  "dig-deeper": {
+    providerDefault:
+      "Explain's call on the high-power model, so `high` on the wire (wireEffort). Not measured; " +
+      "a probe ran out at explain's 1,500, hence src/dig-deeper.ts § DIG_ANSWER_TOKENS.",
+  },
   search: {
     providerDefault:
       "Measured 2026-09-28 on an 8,290-word essay: 44 and 194 thinking tokens against a " +
@@ -877,6 +955,10 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   /* The effort plan 261001h measured at, through `link-summary`'s row: a
      verdict per paragraph, not a piece of writing. */
   "simple-check": { effort: "low" },
+  /* Low: it writes a search and a one-line keyword query. The reasoning floor
+     (`link-summary`'s note) still buys about a thousand tokens of thinking;
+     src/dig-deeper.ts § DIG_SEARCH_MAX_TOKENS is sized clear of it. */
+  "dig-deeper-search": { effort: "low" },
   "citations-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },
@@ -911,6 +993,12 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Measured 2026-09-29 by the eval that chose the model: 330–1,650 reasoning tokens, " +
       "6–20 s, ~$0.001 a call (plan 260929c). Unmeasured at any named effort.",
   },
+  /* Copying four fields off a page needs no thinking. Probed 2026-10-01 on
+     Fireworks: the default spent ~230 reasoning tokens and ~4 s on a toy page,
+     `none` spent 0 and answered in ~0.9 s, for half the cost. The eval that
+     judged DeepSeek against Luna ran at this setting:
+     evals/results/paper-metadata-2026-10-01.md. */
+  "paper-metadata": { effort: "none" },
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +

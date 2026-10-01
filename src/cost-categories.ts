@@ -207,6 +207,12 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "citation-investigate": "interactive request work",
   /* The paper's passages, inside the same *Investigate* press. */
   "citation-paper-passages": "interactive request work",
+  /* *Dig deeper*'s forced search, before the answer a reader pressed for —
+     src/dig-deeper.ts. Request scope, reader-triggered. */
+  "dig-deeper-search": "interactive request work",
+  /* *Dig deeper*'s answer, on the high-power model — src/explain.ts with a
+     `dig`. Request scope, reader-triggered. */
+  "dig-deeper": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
   /* The word that decides how hard the reader's next question is, judged from
@@ -237,6 +243,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "pdf-frontmatter": "step-driven",
   /* A refused figure, located inside the `assets` step. src/pdf-figure-locate.ts. */
   "pdf-figure-locate": "step-driven",
+  /* A batch-added paper's title, authors and abstract, read inside the bulk
+     import's `metadata` step. src/paper-metadata.ts. */
+  "paper-metadata": "step-driven",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and
      awaited before the handler returns — request scope, owner-attributed,
      triggered by a reader opening their shelf. Nobody waits on it, but it is

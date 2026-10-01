@@ -9,7 +9,7 @@
  *
  * Almost all of that was already built. Everything about how you are looking at
  * an article is in the query string — `?at=` the section, `?mode=`,
- * `?deep=` and thirty more (docs/project/url-state.md) — so this file is not
+ * `?summary=` and thirty more (docs/project/url-state.md) — so this file is not
  * about representing reading state. It answers one question: **what remembers
  * the query string, and when is it replayed?**
  *
@@ -69,8 +69,8 @@ export const REMEMBERED = [
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
-  "deep", // how far down summary mode goes
-  "summary", // gists or one of three plain levels — only a slider gesture spends
+  "summary", // which of three plain-words levels — only a slider gesture spends
+  "structure", // fisheye or expanded — nothing to generate either way
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
   "dhue", // what a dot's colour means
@@ -136,6 +136,16 @@ export const NEVER_REMEMBERED = [
      would then overwrite it with the remembered view, taking the probe off the
      URL that had just switched it on. */
   "probe",
+  /* **A retired key, kept so an old link still wins.** `?deep=` chose Parts or
+     Sections in Summary's outline until the outline went on 2026-10-01
+     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
+     Nothing writes it now, and nothing reads it, so it is never stored. But
+     an address from before then can be `/read/x?deep=2` with no `mode` on it
+     (Summary wrote `deep`, then Plain changed only `mode`), and dropping the
+     key from both lists would make that address read as bare — so a
+     remembered view would be restored over a link somebody had just opened.
+     GPT Sol's plan review of 261001p, P1. */
+  "deep",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */

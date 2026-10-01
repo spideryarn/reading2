@@ -52,6 +52,22 @@ export interface TierOffer {
 }
 
 /**
+ * **One gift voucher this reader holds** — claimed, and not revoked.
+ * docs/project/billing.md § *Gift vouchers*.
+ *
+ * The articles it adds and when it was claimed, and nothing else: the
+ * administrator's note, who made it and the address it was sent to never leave
+ * the admin routes. `noticeKey` is opaque — the homepage keys the dismissal of
+ * its *a gift has been added* line on it, and it grants nothing.
+ */
+export interface Gift {
+  readonly articles: number;
+  /** ISO. The notice is driven by this persisted date, never by "this request claimed". */
+  readonly claimedAt: string;
+  readonly noticeKey: string;
+}
+
+/**
  * What this reader's allowance is right now.
  *
  * A discriminated union rather than a bag of optionals, for the reason
@@ -64,18 +80,20 @@ export interface TierOffer {
  * settled successes would tell somebody they had a slot left and then watch the
  * server refuse them.
  *
- * ## Every number here is a whole article, and none of them is a half-unit
+ * ## Every number here is a whole count, and none of them is in points
  *
- * A public article costs half (src/billing/half-units.ts), so `used` and `limit`
- * are no longer two ends of one ratio: eight articles, six of them public, is
- * ten half-units against a free budget of six. **No rounding rule fixes that** —
- * `ceil(5/2)` says *"3 of 3 used"* while the wall still admits one, and `floor`
- * says *"2 of 3"* while two and a half are gone.
+ * A public article costs half and a minimal paper a hundredth
+ * (src/billing/points.ts), so `used` and `limit` are no longer two ends of one
+ * ratio: eight articles, six of them public, is 1,000 points against a free
+ * budget of 600. **No rounding rule fixes that** — `ceil(5/2)` says *"3 of 3
+ * used"* while the wall still admits one, and `floor` says *"2 of 3"* while two
+ * and a half are gone.
  *
- * So the wire carries **integer counts that add up** and never a half-unit:
- * `limit` is the allowance the website markets, `used` is how many ingests are
- * counted against it, `sharedHalfPrice` is how many of those are cheap right
- * now, and `atLimit` is the server's own answer to *did the wall refuse* rather
+ * So the wire carries **integer counts that add up** and never points: `limit`
+ * is the allowance the website markets, `used` is how many ingests are counted
+ * against it, `sharedHalfPrice` is how many of those are cheap right now,
+ * `minimal` is how many papers not yet AI-processed are counted at a hundredth,
+ * and `atLimit` is the server's own answer to *did the wall refuse* rather
  * than a comparison this file reconstructs. That last one is why there is a
  * fourth field instead of a `used >= limit` here: the wall is in
  * src/store/pg-billing.ts and a second spelling of it on the page is how a page
@@ -125,6 +143,16 @@ export type ReaderPlan =
        */
       readonly highPower: number;
       /**
+       * **Papers not yet AI-processed**, counted against this allowance at a
+       * hundredth of an article each — charged and not yet paid for in full by
+       * *Read this*, plus those in flight.
+       *
+       * Not in `used`, which is articles added, and never turned into a
+       * fraction of one: the copy says it as its own fact, and prints no ratio
+       * while it is above zero. Plan 261001m.
+       */
+      readonly minimal: number;
+      /**
        * **Sharing something this account has added would get it back under the
        * wall** — the server's answer, and absent whenever it would not.
        *
@@ -132,22 +160,42 @@ export type ReaderPlan =
        * that any private article is a private article. Two readers it was false
        * for: the one whose charged rows all predate `ingest_events.article_id`,
        * which is every row charged before that day and cannot be cheapened at
-       * all; and the one who has unshared their way to twelve half-units
-       * against a budget of six, where sharing everything they own still would
+       * all; and the one who has unshared their way to 1,200 points against
+       * a budget of 600, where sharing everything they own still would
        * not do it. It cannot be worked out from `used` and `sharedHalfPrice` —
        * `sharingWouldMakeRoom` in src/store/pg-billing.ts is the query, asked
        * only when `atLimit` is true. GPT Sol, 2026-09-05.
        */
       readonly sharingMakesRoom?: true;
+      /**
+       * **Further private articles the wall would admit** — the server's
+       * `ingestHeadroom`, as the lapsed arm has. Never `limit − used`, which
+       * stopped being an answer when a public article began to cost half
+       * (GPT Sol, plan review F3).
+       */
+      readonly remaining: number;
+      /**
+       * **The gift vouchers inside `limit`** — absent when there are none, so no
+       * surface can mention vouchers to a reader who has not been given one.
+       */
+      readonly gifts?: readonly [Gift, ...Gift[]];
     }
   /**
    * Had a subscription; does not have an entitled one. See the header.
    *
    * `remaining` is a count of **further private articles**, which is exactly the
-   * wall's own answer rather than a rounded ratio — `privateHeadroom` in
-   * src/billing/half-units.ts says why the division in it is exact.
+   * wall's own answer rather than a rounded ratio — `ingestHeadroom` in
+   * src/billing/points.ts says why the division in it is exact.
+   *
+   * `gifts` as on `free`: a lapsed reader is back on Free, so the gift counts
+   * again (F4), and it is absent when there are none.
    */
-  | { readonly kind: "lapsed"; readonly limit: number; readonly remaining: number }
+  | {
+      readonly kind: "lapsed";
+      readonly limit: number;
+      readonly remaining: number;
+      readonly gifts?: readonly [Gift, ...Gift[]];
+    }
   | {
       readonly kind: "paid";
       readonly tierId: string;
@@ -160,6 +208,8 @@ export type ReaderPlan =
       readonly atLimit: boolean;
       /** As `free`'s. */
       readonly highPower: number;
+      /** As `free`'s. */
+      readonly minimal: number;
       /** ISO. When the allowance starts again — the renewal, not the ending. */
       readonly periodEnd: string;
       /**
@@ -446,8 +496,9 @@ function sharedClause(shared: number): string {
 /**
  * **Is `used of limit` still a ratio?**
  *
- * It is one only while every counted ingest costs a whole article's worth *and*
- * there are no more of them than the allowance sells. The second half is the one
+ * It is one only while every counted ingest costs a whole article's worth,
+ * nothing else is counted beside them — no High-powered AI, no minimal papers —
+ * *and* there are no more of them than the allowance sells. The second half is the one
  * that was missing until 2026-09-05: unshare six public articles on a free
  * account and `sharedHalfPrice` goes back to zero while `used` stays at six, so
  * the page printed *"6 of 3 articles used"* — the exact rendering this file's
@@ -458,8 +509,25 @@ function isRatio(plan: {
   limit: number;
   sharedHalfPrice: number;
   highPower: number;
+  minimal: number;
 }): boolean {
-  return plan.sharedHalfPrice === 0 && plan.highPower === 0 && plan.used <= plan.limit;
+  return (
+    plan.sharedHalfPrice === 0 && plan.highPower === 0 && plan.minimal === 0 && plan.used <= plan.limit
+  );
+}
+
+/**
+ * *"You have also added 40 papers not yet AI-processed, at 1/100 of an article
+ * each."* — or nothing, for the account with none.
+ *
+ * A fact beside the count, like `highPowerClause`, and never a fraction of an
+ * article: the papers are a count, and their price is said once in words.
+ */
+function minimalClause(minimal: number): string {
+  if (minimal === 0) return "";
+  return minimal === 1
+    ? "You have also added 1 paper not yet AI-processed, at 1/100 of an article. "
+    : `You have also added ${minimal} papers not yet AI-processed, at 1/100 of an article each. `;
 }
 
 /**
@@ -503,10 +571,20 @@ function nonePublicNow(limit: number): string {
  * clause, plus the *"that is how they fit"* half **only when they do fit**.
  *
  * They stop fitting the moment somebody unshares: five articles with one still
- * public is nine half-units against a budget of six, and *"that is how 5 fit an
+ * public is 900 points against a budget of 600, and *"that is how 5 fit an
  * allowance of 3"* is then a sentence about arithmetic that did not happen.
  */
 function howTheyStand(plan: {
+  used: number;
+  limit: number;
+  sharedHalfPrice: number;
+  highPower: number;
+  minimal: number;
+}): string {
+  return howTheArticlesStand(plan) + minimalClause(plan.minimal);
+}
+
+function howTheArticlesStand(plan: {
   used: number;
   limit: number;
   sharedHalfPrice: number;
@@ -520,15 +598,37 @@ function howTheyStand(plan: {
       highPowerClause(plan.highPower)
     );
   }
+  /* Nothing public, and only papers make this not a ratio: there is nothing to
+     say about the articles beyond the headline. */
+  if (plan.sharedHalfPrice === 0 && plan.used <= plan.limit) return "";
   if (plan.sharedHalfPrice === 0) return nonePublicNow(plan.limit);
-  /* The same `× 2` `/admin/users` does, and for the same reason: the enforcement
-     budget is in half-units, the page is handed integer counts, and neither end
-     has a better claim on the multiplication than the other. */
+  /* The same arithmetic `/admin/users` does, and for the same reason: the
+     enforcement budget is in points, the page is handed integer counts, and
+     neither end has a better claim on the multiplication than the other. Whole
+     articles only, which is what the sentence is about. */
   const fits = plan.used * 2 - plan.sharedHalfPrice <= plan.limit * 2;
   return (
     `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each` +
     (fits ? ` — that is how ${plan.used} fit an allowance of ${plan.limit}. ` : ". ")
   );
+}
+
+/**
+ * **"3 free + 20 from a gift"** — what a gifted allowance is made of, or null
+ * when there are no gifts.
+ *
+ * Exported so the homepage box says it in the same words. The base is the
+ * limit less the gifts rather than a constant this file would have to import:
+ * the server added the two, so taking one back out cannot disagree with it —
+ * except across a read that raced an administrator's edit, when the base comes
+ * out negative and nothing is said rather than a wrong sum.
+ */
+export function giftMakeup(limit: number, gifts: readonly Gift[] | undefined): string | null {
+  if (!gifts || gifts.length === 0) return null;
+  const gifted = gifts.reduce((sum, gift) => sum + gift.articles, 0);
+  const base = limit - gifted;
+  if (base < 0) return null;
+  return `${base} free + ${gifted} from ${gifts.length === 1 ? "a gift" : "gifts"}`;
 }
 
 /**
@@ -551,9 +651,13 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
      three, or six unshared ones outside it — the second form states the count
      and the allowance as two facts rather than as a fraction that would read as
      arithmetic going wrong. Neither form divides anything: see the header. */
+  /* **A gifted allowance says what it is made of**, so 23 never appears as a
+     free tier nobody else has. Absent gifts, nothing changes. */
+  const makeup = giftMakeup(plan.limit, plan.gifts);
+  const madeOf = makeup === null ? "" : ` (${makeup})`;
   if (isRatio(plan)) {
     return {
-      headline: `Free — ${plan.used} of ${plan.limit} articles used`,
+      headline: `Free — ${plan.used} of ${plan.limit} articles used${madeOf}`,
       detail: plan.atLimit
         ? "That is the whole free allowance, which is a lifetime one rather than a monthly " +
           `one. ${wayOut}Everything you have added stays exactly where it is, and reading ` +
@@ -563,7 +667,7 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
     };
   }
   return {
-    headline: `Free — ${articleCount(plan.used)} added, on an allowance of ${plan.limit}`,
+    headline: `Free — ${articleCount(plan.used)} added, on an allowance of ${plan.limit}${madeOf}`,
     detail:
       howTheyStand(plan) +
       (plan.atLimit
@@ -573,6 +677,31 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
         : "The allowance is for the lifetime of the account rather than per month. " +
           "Reading is never limited."),
   };
+}
+
+/**
+ * The lapsed reader's words. **No `used`, and no ratio wider than the limit.**
+ * See the header: this is the one rendering the policy would otherwise make look
+ * like a bug. A gift, when there is one, is named as part of the allowance.
+ */
+function lapsedCopy(plan: Extract<ReaderPlan, { kind: "lapsed" }>): PlanCopy {
+  const makeup = giftMakeup(plan.limit, plan.gifts);
+  const ofWhat = makeup === null ? "" : ` of ${makeup}`;
+  return plan.remaining > 0
+    ? {
+        headline: "Your plan has ended",
+        detail:
+          `You are back on the free allowance${ofWhat}, with room for ${plan.remaining} further private ` +
+          `${plan.remaining === 1 ? "article" : "articles"}. Everything you added while subscribed is still here, and reading is ` +
+          "unaffected — resubscribing is what adds more.",
+      }
+    : {
+        headline: "Your plan has ended",
+        detail:
+          `The free allowance${ofWhat} is already spent, so no more articles can be added. ` +
+          "Everything you have added is still here and reading is unaffected — resubscribing is " +
+          "what adds more.",
+      };
 }
 
 export function describePlan(plan: ReaderPlan): PlanCopy {
@@ -599,23 +728,7 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
     case "free":
       return freeCopy(plan);
     case "lapsed":
-      /* **No `used`, and no ratio wider than the limit.** See the header: this
-         is the one rendering the policy would otherwise make look like a bug. */
-      return plan.remaining > 0
-        ? {
-            headline: "Your plan has ended",
-            detail:
-              `You are back on the free allowance, with ${plan.remaining} of ${plan.limit} ` +
-              "left. Everything you added while subscribed is still here, and reading is " +
-              "unaffected — resubscribing is what adds more.",
-          }
-        : {
-            headline: "Your plan has ended",
-            detail:
-              "The free allowance is already spent, so no more articles can be added. Everything " +
-              "you have added is still here and reading is unaffected — resubscribing is what " +
-              "adds more.",
-          };
+      return lapsedCopy(plan);
     case "paid": {
       /* **The ending, when there is one, and the renewal otherwise** — two
          different dates asked of two different fields, so a plan that ends
@@ -626,11 +739,14 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
          twenty is not a ratio either. */
       const shared = isRatio(plan)
         ? ""
-        : plan.highPower > 0
-          ? howTheyStand(plan)
-          : plan.sharedHalfPrice === 0
-            ? nonePublicNow(plan.limit)
-            : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `;
+        : (plan.highPower > 0
+            ? howTheArticlesStand(plan)
+            : plan.sharedHalfPrice === 0
+              ? plan.used <= plan.limit
+                ? ""
+                : nonePublicNow(plan.limit)
+              : `${sharedClause(plan.sharedHalfPrice)}, which counts as half an article each. `) +
+          minimalClause(plan.minimal);
       return {
         headline: isRatio(plan)
           ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`

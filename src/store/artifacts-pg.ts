@@ -219,6 +219,8 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     excerpt: row.excerpt,
     publishedAt: row.publishedAt,
     note: row.note,
+    abstract: row.abstract,
+    doi: row.doi,
     /* **The reader's own name for a file they uploaded**, and it is here so that
        the two `Meta`s agree. `metaFrom` in src/store/pg.ts — the owner-facing
        read — surfaces `raw_filename` as `Meta.filename`, and this rebuild did
@@ -426,11 +428,17 @@ async function readBlocks(
  */
 async function articleHasPublishedBlocks(exec: Executor, articleId: string): Promise<boolean> {
   const [row] = await exec
-    .select({ current: articles.currentRevisionId })
+    .select({ current: articles.currentRevisionId, processing: articles.processing })
     .from(articles)
     .where(eq(articles.id, articleId))
     .limit(1);
-  return row?.current != null;
+  /* **A minimal paper is the one published revision with no blocks** (plan
+     261001m), so for it a current revision says nothing about blocks — and
+     *Read this*, whose draft is copied from that revision, is exactly a first
+     cut of blocks that must not be refused as a lost baseline. The publication
+     that lands the tree is the one that sets `'full'`, so every later re-read
+     is held to the rule above again. */
+  return row?.current != null && row.processing !== "minimal";
 }
 
 /* --------------------------------------------------------------- read -- */
@@ -681,9 +689,10 @@ export class StampDisagrees extends Error {
  * What the store recorded about this step's last run.
  *
  * **Two sources, and only one of them may answer.** `revision_step_runs` is the
- * row the run wrote; the artefact itself carries `sourceHash`, `version`,
- * `generator` and — only in `ideas` — `profileHash`, for which there is no
- * column at all. That is why the row cannot simply be ignored.
+ * row the run wrote; the artefact itself carries `sourceHash`, its prompt stamp
+ * (`version`, except Simple's separate `promptVersion`), `generator` and — only
+ * in `ideas` — `profileHash`, for which there is no column at all. That is why
+ * the row cannot simply be ignored.
  *
  * The rule, which a review corrected twice:
  *
@@ -804,6 +813,8 @@ const META_COLUMNS = [
   "excerpt",
   "publishedAt",
   "note",
+  "abstract",
+  "doi",
   "source",
   "extractMethod",
   "pages",
@@ -843,6 +854,11 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
        longer claims. */
     publishedAt: meta.publishedAt ?? null,
     note: meta.note ?? null,
+    /* `?? null` like the rest: the `metadata` step writes them, and `extract`
+       carries them over itself when it finds none (src/pipeline.ts), so a
+       re-extraction that clears them has decided to. */
+    abstract: meta.abstract ?? null,
+    doi: meta.doi ?? null,
     source: meta.source ?? null,
     extractMethod: meta.method ?? null,
     pages: meta.pages ?? null,

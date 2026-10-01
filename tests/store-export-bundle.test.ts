@@ -118,6 +118,7 @@ const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came fro
 /** A generated artefact that both export formats must carry whole. */
 const SIMPLE: SimpleSummary = {
   version: "simple/2",
+  promptVersion: "simple-prompt/export-fixture",
   generator: "fixture-model",
   slug: SLUG,
   sourceHash: "0123456789abcdef",
@@ -483,6 +484,8 @@ describe("the bundle is the faithful projection", () => {
   it("leaves out a file with nothing in it, and keeps the README", () => {
     expect(bundled.has("README.md")).toBe(true);
     expect(bundled.get("README.md")).toContain("The block id contract");
+    expect(bundled.get("README.md")).toContain("What the Dig deeper action wrote about cited works");
+    expect(bundled.get("README.md")).not.toContain("What Investigate wrote about cited works");
     expect(bundled.has("augmentations/tree.json")).toBe(true);
     // No glossary was ever generated for this article, so there is no file.
     expect(bundled.has("augmentations/glossary.json")).toBe(false);

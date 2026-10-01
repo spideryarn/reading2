@@ -160,11 +160,11 @@ export interface TreeNode {
    * **One Socratic question the node's prose answers**, on the root and depth-1
    * nodes only, and only where the tree was built after 2026-09-05.
    *
-   * Shown in **Summary mode alone**, under the gist — see
-   * docs/project/summaries.md § Socratic questions. It is a second field rather
-   * than a change to `gist` because the gist is rendered in ten places and is
-   * also fed back to the later structure waves as context; the argument is in
-   * `questionFor` (src/hierarchy.ts) and the plan doc.
+   * Shown in **Marginalia**, beside the first paragraph of each part. It is a
+   * second field rather than a change to `gist` because the gist is rendered in
+   * several places and is also fed back to the later structure waves as
+   * context; the argument is in `questionFor` (src/hierarchy.ts) and the plan
+   * doc.
    *
    * **Absence is ordinary**, unlike a missing `gist`: every tree built before
    * this existed has none, and nothing renders a gap. Do not add it to
@@ -1484,6 +1484,15 @@ export interface Meta {
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
   excerpt?: string;
   note?: string;
+  /**
+   * **A minimal paper's abstract and DOI**, as the `metadata` step read them off
+   * its first pages (src/paper-metadata.ts) — the paper's own claims through a
+   * cheap model, checked for shape and nothing else. Absent on everything
+   * `extract` made; *Read this* keeps them. Owner-facing only, like `filename`:
+   * not in `PublicMeta`. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md.
+   */
+  abstract?: string;
+  doi?: string;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which
@@ -1951,6 +1960,44 @@ export interface LibraryEntry {
    * A count would mean reading the artefact for every card on every load.
    */
   has: { arc: boolean; tweets: boolean; glossary: boolean };
+  /**
+   * **`'minimal'` for a paper on the shelf with only its title, authors and
+   * abstract read** — no blocks and no tree, so its `words`, `blocks`, `parts`
+   * and `sections` are 0 and opening it shows the not-yet-read page with *Read
+   * this* (plan 261001m). `'full'` for everything else.
+   *
+   * The server always sends it. **Optional only for shelf rows cached in the
+   * browser before this field existed**, as `revisionId` is — and every one of
+   * those is a full article, because no minimal paper existed then, so a
+   * missing value reads as `'full'`.
+   */
+  processing?: "minimal" | "full";
+  /** A minimal paper's abstract and DOI, as the `metadata` step read them. Absent otherwise. */
+  abstract?: string;
+  doi?: string;
+}
+
+/**
+ * **What a reader is told about a paper that has not been read through yet** —
+ * the body of the `409 not-processed` that `loadArticle` answers for a minimal
+ * article (`NotProcessed`, src/not-processed.ts), and enough to draw the page:
+ * `{ error, code: "not-processed", paper: UnreadPaper }`.
+ *
+ * Owner-facing only: it is only ever thrown from the owner's own reads.
+ */
+export interface UnreadPaper {
+  slug: string;
+  title: string;
+  /** In the paper's order; empty when nobody was named. */
+  authors: string[];
+  abstract?: string;
+  doi?: string;
+  /** The reader's own name for the file, when it came off their disk. */
+  filename?: string;
+  /** What the file is, for the download link's wording. Null when nothing recorded it. */
+  kind: "pdf" | "html" | null;
+  /** When it was added, ISO — the shelf's `addedAt`. */
+  addedAt: string;
 }
 
 /**
@@ -2842,7 +2889,13 @@ interface CommentFields {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "hierarchy"
+  | "fetch"
+  /* A minimal paper's whole AI work: title, authors, abstract and DOI off the
+     first pages, one cheap call (src/paper-metadata.ts). Only ever in the
+     two-step job a minimal upload queues, `["fetch", "metadata"]` — `enqueue`
+     refuses it anywhere else. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md. */
+  | "metadata"
+  | "extract" | "blocks" | "hierarchy"
   /* The per-paragraph navigation labels, which left the `hierarchy` step on
      2026-09-06 because they were 79.5–92% of its wall clock and one measured
      call took 602s of a 682s pass — past what the job lease allows.
@@ -3390,6 +3443,14 @@ export type ThreadKind = "chat" | "remember" | "candidates";
  * edit rather than four.
  */
 export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
+
+/**
+ * The most block ids one chat question may say were on screen. A screenful is a
+ * few dozen even of one-line blocks on a tall monitor; this bounds a request,
+ * and the client trims to it rather than having Send refused.
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export const MAX_VISIBLE_BLOCKS = 100;
 
 /** Is this one of the three? Used by both stores' normalisers and by the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
@@ -3986,8 +4047,8 @@ export interface CitationInvestigation {
   longestExtractWords: number;
   /**
    * The host of the page *Look it up* matched to this work, **only when that
-   * page was among this answer's own extracts**; `null` means no result was
-   * confirmed to be the work itself, and the view says so.
+   * page was among the extracts shown to this answer**; `null` means no result
+   * was confirmed to be the work itself, and the view says so.
    */
   matchedHost: string | null;
   /** Billed searches the call reported; `null` when the provider did not say. */
@@ -4083,7 +4144,9 @@ export interface InvestigateCitationDone {
 }
 
 /**
- * Which step of the one *Investigate* press is running (plan 260930d): `finding`
+ * Which step of the one *Dig deeper* press (was *Investigate*) is running:
+ * `searching` — the forced web search, first, on every press (plan 261001p
+ * stage 2); then (plan 260930d) `finding`
  * — the lookup that looks for the work's own page, only when the row has no
  * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
  * paper itself fetched and checked, and when read, its passages asked for),
@@ -4091,7 +4154,7 @@ export interface InvestigateCitationDone {
  * a `lookup` frame after `finding` carries the lookup's answer, the same
  * `FindCitationResponse` `POST …/find` answers.
  */
-export type InvestigateStage = "finding" | "reading-paper" | "reading";
+export type InvestigateStage = "searching" | "finding" | "reading-paper" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {
@@ -4753,6 +4816,14 @@ export interface SimpleSummary {
    * reaches a visitor (src/public/dto.ts).
    */
   profileHash: string | null;
+  /**
+   * The prompt's own version, `SIMPLE_PROMPT_VERSION` in src/simple-summary.ts,
+   * separate from `version`, which is the stored shape and must match exactly.
+   * **Absent on a row written before 2026-10-01**, which is the first prompt
+   * (`simplePromptVersion` reads it as `simple-prompt/1`): usable, but
+   * outdated. Plan 261001p.
+   */
+  promptVersion?: string;
   /** Every level, always — validation stores all of them or none. */
   levels: Record<SimpleLevel, SimpleParagraph[]>;
   /**
@@ -4882,6 +4953,7 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
     Number.isFinite(simple.elapsedMs) &&
     simple.elapsedMs >= 0 &&
     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    (simple.promptVersion === undefined || (typeof simple.promptVersion === "string" && simple.promptVersion.length > 0)) &&
     isSimpleLevels(simple.levels) &&
     /* Absent is a row from before the guard, or with it off; present must be whole. */
     (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))

@@ -92,7 +92,14 @@ mark.cmt[data-mark-end]::after {
 mark.term {
   background: none;
   color: inherit;
-  border-bottom: 1px dotted color-mix(in oklab, var(--highlight) 45%, transparent);
+  /* **2px at 70%, since 2026-10-01** — it was 1px at 45%, and the
+     cross-reference below was the heavier dotted line of the two. Greg:
+     *"it's a little bit difficult to tell the difference between them and the
+     glossary […] the glossary links should be a bit more prominent"*
+     (spya-sxvq2j). So the glossary is now the one *dotted orange* rule in the
+     prose and the louder of the two; the cross-reference went thin, solid and
+     grey. docs/plans/261001r-…. */
+  border-bottom: 2px dotted color-mix(in oklab, var(--highlight) 70%, transparent);
   /* The card is the whole point of the mark now, so the pointer should say
      there is something here before the 320ms delay is up. `help` rather than
      `pointer`: a click does nothing, and a pointer cursor promising one is the
@@ -102,7 +109,7 @@ mark.term {
 }
 mark.term:hover {
   background: color-mix(in oklab, var(--highlight) 7%, transparent);
-  border-bottom-color: color-mix(in oklab, var(--highlight) 75%, transparent);
+  border-bottom-color: color-mix(in oklab, var(--highlight) 90%, transparent);
 }
 /* The term pressed in the glossary panel, of the many drawn. Being selected
    cannot mean *having* a mark any more, so it means a heavier one — the same
@@ -135,6 +142,10 @@ mark.term[data-hover-tap] {
    line would make it look inert. */
 mark.cmt.term {
   border-bottom-style: solid;
+  /* And the comment's 1px, not the term's 2px: a third appearance, a heavy
+     solid line, would arrive through the cascade otherwise (Sol, plan review
+     of 261001r). The ✳ already says a comment is there. */
+  border-bottom-width: 1px;
 }
 
 /* ---- a work the piece cites -----------------------------------------
@@ -215,10 +226,17 @@ mark.cite[data-hover-tap] {
    section and opening (BlockLinkCard.tsx); a click, a tap or Enter jumps there.
    docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
 
-   **Dotted, in the link colour, on `text-decoration`.** It is the one mark a
-   click follows, so it takes the link's hue (`--highlight-ink`, as `.prose a`)
-   where the citation's dashed rule is grey and the term's dotted rule is a
-   `border-bottom` in the faint highlight tint several pixels lower. The quote's
+   **Thin, solid and grey at rest; the link colour on hover.** Since
+   2026-10-01. It was a 2px dotted rule in the link colour, which made it the
+   same shape as a glossary term's and the louder of the two, and Greg could not
+   tell them apart: *"those internal links are probably less important than the
+   glossary. So visually the glossary links should be a bit more prominent"*
+   (spya-sxvq2j, docs/plans/261001r-…). Now the glossary is the one dotted
+   orange line, and this differs from it in shape, hue and weight. From a
+   citation's dashed grey rule it differs in shape and strength — both point
+   elsewhere, so a family resemblance is fair. Hover turns it the link's hue
+   (`--highlight-ink`, as `.prose a`), which is where it says it is the one
+   mark a click follows. The quote's
    stroke is a `box-shadow` and a search a `background`, so neither collides.
    It shares `text-decoration` with a citation: over one phrase this rule comes
    later and wins, which is the precedence the handlers already give it — the
@@ -233,10 +251,10 @@ mark.cite[data-hover-tap] {
 mark.xref {
   background: none;
   color: inherit;
-  text-decoration: underline dotted;
-  text-decoration-thickness: 2px;
+  text-decoration: underline solid;
+  text-decoration-thickness: 1px;
   text-underline-offset: 3px;
-  text-decoration-color: color-mix(in oklab, var(--highlight-ink) 75%, transparent);
+  text-decoration-color: color-mix(in oklab, var(--ink-soft) 55%, transparent);
   cursor: pointer;
   transition: text-decoration-color 0.12s, background 0.12s;
   /* Sequential focus scrolls the mark's margin box into view. The reader

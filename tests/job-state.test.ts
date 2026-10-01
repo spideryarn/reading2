@@ -185,6 +185,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   /* The guess everything unmeasured falls back to: three minutes, past every
      successful step in the ledger that is not `hierarchy` or `sketch`. */
   fetch: 180_000,
+  /* Unmeasured, and one cheap call: the fallback, as `fetch`. */
+  metadata: 180_000,
   extract: 180_000,
   blocks: 180_000,
   /* Ten minutes: past every hierarchy attempt on record (the longest ran 498s)

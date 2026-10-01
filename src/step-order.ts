@@ -43,6 +43,14 @@ import type { StepName } from "./types.js";
  */
 export const STEP_ORDER = [
   "fetch",
+  /* **Straight after `fetch`, and only ever with it**: the minimal job is
+     `["fetch", "metadata"]` and nothing else names it (`enqueue` refuses it in
+     any other list). It reads stage 1's stored bytes, as `extract` does, and
+     writes `meta`. Before `extract` so that a positional cascade from `extract`
+     — *Read this*, Rebuild — can never reach it: forcing a step forces only the
+     steps after it. Off `DEFAULT_INGEST_STEPS`.
+     docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md. */
+  "metadata",
   "extract",
   "blocks",
   "hierarchy",
@@ -119,7 +127,7 @@ export const STEP_ORDER = [
      renderer and the body-only evidence, so it is in the `ideas` … `faq`
      cache group and this list keeps its call close to the others. Off `DEFAULT_INGEST_STEPS`
      and in `FORCE_ONLY_WHEN_NAMED`: a model call over the whole article that a
-     reader asks for by pressing Summary's Simple chip.
+     reader asks for through Summary's plain-words controls.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   "simple",
   /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
