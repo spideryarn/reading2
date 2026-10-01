@@ -45,7 +45,7 @@ until you know what they are for.
  │             │ ┊philosophy of mind… │                         │
  │             │ ┊ ↗ en.wikipedia.org │                         │
  │             │ ┌───────────────────┐│                         │
- │             │ │CHECKED         🌐 ││   ← or, before anybody  │
+ │             │ │WEB SEARCH      🌐 ││   ← or, before anybody  │
  │             │ │Seth uses it in the││     pressed it:         │
  │             │ │sense Chalmers…    ││   [🌐 Dig deeper]       │
  │             │ │ ↗ plato.stanford  ││                         │
@@ -79,7 +79,7 @@ until you know what they are for.
  row shows whichever of the two exists — for a person quoted once there is
  no "in this piece" worth writing, and saying so is the entry's whole job.
 
- CHECKED is the only part of an entry that has been near a source. The batch
+ The web-search answer is the only part of an entry that has been near a source. The batch
  call does not search — background is memory, and the ↗ under it is a guess
  at a canonical page — so until somebody presses the button there is a button
  rather than a badge claiming a check nobody ran. The globe has an off state,

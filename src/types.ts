@@ -3983,8 +3983,8 @@ export interface CitationInvestigation {
   longestExtractWords: number;
   /**
    * The host of the page *Look it up* matched to this work, **only when that
-   * page was among this answer's own extracts**; `null` means no result was
-   * confirmed to be the work itself, and the view says so.
+   * page was among the extracts shown to this answer**; `null` means no result
+   * was confirmed to be the work itself, and the view says so.
    */
   matchedHost: string | null;
   /** Billed searches the call reported; `null` when the provider did not say. */

@@ -31,10 +31,10 @@
  *   the guard cannot find in the article, the work's title or reference, or —
  *   in the matched branch only — *Look it up*'s two verified quotes stops the
  *   answer there, unsent and unstored.
- * - **What was read is counted from the call's own annotations**
- *   (`provenanceOf`): only results with a non-empty extract count, at least one
- *   is required to store, and *Look it up*'s match is credited only when its
- *   page is among them.
+ * - **What was read is counted from the extracts shown to the answer**
+ *   (`withSearchStep` then `provenanceOf`): only results with a non-empty
+ *   extract count, at least one is required to store, and *Look it up*'s match
+ *   is credited only when its page is among them.
  * - **Only a clean `finished` ending is stored** (Sol P-8). Every other ending
  *   — an unknown finish reason and a tool request included, which explain
  *   accepts — stores nothing.
@@ -109,6 +109,7 @@ import {
 } from "./citation-investigate-context.js";
 import { wordCount } from "./citation-lookup.js";
 import {
+  DIG_ANSWER_TOKENS,
   DIG_DEEPER_MODEL,
   DIG_SEARCH_TIMEOUT_MS,
   type DigFindings,
@@ -173,12 +174,13 @@ export const INVESTIGATE_MAX_RESULTS = 5;
  */
 export const INVESTIGATE_MAX_CHARACTERS = MAX_EVIDENCE_EXCERPT;
 /**
- * The answer ceiling. The prompt asks for under about 250 words (~700 tokens), but
- * 1,500 — explain's — ended one real call `length` after ~500 characters
- * (plan 260930d, the quote-stop reproduction), so the searches and whatever the
- * model spends before its prose share this. 3,000 costs at most ~2¢ more.
+ * The answer ceiling. The prompt asks for under about 250 words, but the model's
+ * reasoning spends from the same ceiling. A real Sonnet call already exhausted
+ * 1,500, and Stage 1's Opus probe established 4,000 for Dig deeper answers.
+ * Reuse that measured allowance rather than carrying the old 3,000-token
+ * citation ceiling across the model change.
  */
-export const ANSWER_TOKENS = 3_000;
+export const ANSWER_TOKENS = DIG_ANSWER_TOKENS;
 
 /**
  * **The registry's share of the paper read** (plan 261001a stage 3, Sol P-5).
@@ -201,22 +203,22 @@ export const PAPER_REGISTRY_MS = 30_000;
  * about 5¢ at worst, so $0.395, all of it on Sonnet.
  *
  * **Plan 261001p stage 2 moves every one of those calls to Opus** and adds a
- * search first. **Measured on one press**, 2026-10-01: a cold *Dig deeper* on
- * scaling-hypothesis, a ~42k-token article, with no passages call that run
- * (the paper was not read). The run's printed cost was lost, so these dollars
- * are estimated from the recorded token counts at Opus's prices
- * (src/pricing.ts: $5 in and $25 out a million; a cache write is 1.25× input,
- * a cache read 0.1×):
+ * search first. **Measured on three presses**, 2026-10-01, on
+ * scaling-hypothesis, a ~42k-token article, with the provider's own reported
+ * cost (`scripts/probes/261001p-investigate-cost.ts`, through `collectSpend`):
  *
- * - the answer (`citation-investigate`): 46,054 tokens written to the cache
- *   ≈ $0.29, 42,489 read from it ≈ $0.02, ~2k out ≈ $0.05;
- * - *Look it up* (`citations-find`): 6,585 written, 2,654 read, its answer —
- *   ≈ $0.045;
- * - the forced search (`dig-deeper-search`): $0.007.
+ * | work | search | *Look it up* | answer | press |
+ * |---|---|---|---|---|
+ * | spya-cxq887 | $0.007 | $0.049 | $0.258 | **$0.314** |
+ * | spya-x70954 | $0.007 | $0.050 | $0.235 | **$0.292** |
  *
- * About **$0.42 a cold press on a long article**. The budget is about twice
- * that, $0.80, for longer papers and for the passages call this press did not
- * make. Replace it when more presses are measured.
+ * (a third, spya-gshacg, recorded tokens only; its cost was lost, and the
+ * token counts put it in the same range). None of them read the paper, so
+ * none made the passages call — about another 2–4¢ when one does. **Each was
+ * cold:** a second press on the same article a minute later read nothing from
+ * the cache — plan 261001p § The cost line has what that means. The budget is
+ * $0.80, about two and a half times the measured press, for longer papers and
+ * the passages call.
  */
 export const INVESTIGATE_PRESS_BUDGET_USD = 0.8;
 
@@ -907,10 +909,10 @@ export function makeInvestigateCitation(
           /* Its verdict is on the row for the reader to read, so it is Dig
              deeper's model whatever the article's switch says (plan 261001p
              stage 2, Sol F3). The lookup's fingerprint hashes the model's
-             generation, which Opus shares with Sonnet, so it still attaches
-             where `loadCitations` recomputes it with the standard model. With
-             `SPIDERYARN_CITATIONS_FIND_MODEL` set to anything else (an eval,
-             never production) it does not, and the next press looks again. */
+             generation, which Opus shares with Sonnet. `loadCitations` accepts
+             this fixed Dig deeper hash as well as standalone Find's configured
+             hash, so the saved verdict also reattaches while a Find-only model
+             override is active. */
           DIG_DEEPER_MODEL,
         );
       } catch (err) {

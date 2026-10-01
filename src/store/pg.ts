@@ -3818,13 +3818,19 @@ const rawPgArticleReader: ArticleReader = {
        `lookupContext` the call built its prompt from. Before `attachFinds`, so
        the row it sees is the artefact's, not the upgraded one. */
     const text = new Map(blocks.map((b) => [b.id as string, b.text]));
-    /* `standard` whatever the article's power: the fingerprint hashes the
-       model's generation, so a lookup made at either power attaches (plan
-       260930f, Sol F1). */
-    const model = modelFor("citations-find", "standard");
-    const withLookups = attachLookups(citations, finds, (work) =>
-      lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
-    );
+    /* Standalone Find keeps its configured standard model, including an eval
+       override. Dig deeper deliberately ignores that override and writes its
+       lookup with `DIG_DEEPER_MODEL`, so accept both current policies here.
+       In production Sonnet and Opus share a generation and these are the same
+       hash; the second matters only while a Find-only override is active. */
+    const standaloneFindModel = modelFor("citations-find", "standard");
+    const withLookups = attachLookups(citations, finds, (work) => {
+      const context = lookupContext(work, (id) => text.get(id));
+      return [
+        lookupContextHash(context, standaloneFindModel),
+        lookupContextHash(context, DIG_DEEPER_MODEL),
+      ];
+    });
     const withFinds = attachFinds(withLookups, finds);
     /* **Investigate's answers, the same way and after `attachFinds`** — the
        row the call was made from is the upgraded one, so that is the row the

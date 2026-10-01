@@ -37,6 +37,7 @@ import {
 } from "../src/citation-investigate.js";
 import { PASSAGES_TIMEOUT_MS } from "../src/citation-paper-passages.js";
 import {
+  DIG_ANSWER_TOKENS,
   DIG_DEEPER_MODEL,
   DIG_SEARCH_TIMEOUT_MS,
   type DigFindings,
@@ -369,7 +370,10 @@ describe("the request", () => {
        then quoted its own phrases, the paper's terms and result titles too. */
     expect(system).toContain("NO QUOTATION MARKS AT ALL");
     expect(system).not.toContain("Use quotation marks only for");
-    expect(body.max_tokens).toBeGreaterThanOrEqual(3000);
+    /* Opus reasons inside this ceiling. Citations' dug answer gets the same
+       measured headroom as the other Dig deeper answers, rather than keeping
+       the old Sonnet-sized ceiling. */
+    expect(body.max_tokens).toBe(DIG_ANSWER_TOKENS);
   });
 
   it("is its own job, pins Exa with the probe's caps and max_characters, and caches the article", async () => {
@@ -1045,7 +1049,9 @@ describe("High-powered AI — a high-powered article still gets Opus (Dig deeper
       await drain((await h.investigate(SLUG, ID, null)).stream());
     });
     expect(h.lookupCalls[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
-    expect((h.runs[0]?.request as unknown as { model: string }).model).toBe(HIGH_POWER_MODEL_OPENROUTER);
+    expect((h.runs[0]?.request as unknown as { model: string } | undefined)?.model).toBe(
+      HIGH_POWER_MODEL_OPENROUTER,
+    );
   });
 });
 

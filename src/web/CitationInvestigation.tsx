@@ -176,7 +176,7 @@ function sourceHosts(sources: readonly { url: string }[]): string[] {
  *
  * **The identity line has three answers** (plan 260930d P-4):
  *
- * - the first check's page was among this answer's own extracts
+ * - the first check's page was among the extracts shown to this answer
  *   (`matchedHost` non-null, which only the server can say);
  * - the first check matched a page, but this search did not return an extract
  *   from it — `matchedHost` is null and the row's `lookup` identified a page
