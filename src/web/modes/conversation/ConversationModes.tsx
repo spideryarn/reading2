@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { BlockId, ChatThread, RememberStance, ThreadKind } from "../../../types.js";
-import { type BandMode, currentAt, rememberParam, threadParam } from "../../params.js";
+import { currentAt, rememberParam, threadParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
@@ -57,18 +57,19 @@ import { ChatPanel } from "../../ChatPanel.js";
  * which is the bug remember-mode.md already records for opening a thread of the
  * other kind.
  *
- * Three rules, and all three are here:
+ * Two rules, and both are here:
  *
  * 1. **switching to Quiz sets `remember=quiz` and clears `thread`, in one
  *    navigation** — pushed, because switching sub-mode is a deliberate act on
  *    the view and Back should undo it;
  * 2. **a pasted URL carrying both: Quiz wins**, and `thread` is dropped with a
  *    *replace* — a push would put the broken combination one Back press away
- *    from the reader we have just rescued from it;
- * 3. **opening a Remember conversation sets `remember=recall` and `thread=<id>`,
- *    also in one** — that one is in `ConversationBand`'s `onThread`, because it
- *    is the same navigation that already moves `?mode=`, and splitting it would
- *    be the two-entry bug again.
+ *    from the reader we have just rescued from it.
+ *
+ * There was a third — opening a Remember conversation from chat's list set
+ * `remember=recall` with it — and it went on 2026-10-01 with the shared list:
+ * chat no longer lists Remember conversations, so nothing outside this band
+ * opens one (plan 261001m).
  *
  * ## And the live conversation is hung up before the panel goes
  *
@@ -88,7 +89,6 @@ export function RememberBand({
   readSoFar,
   sections,
   onJump,
-  onMode,
   onQuizKeys,
 }: {
   slug: string;
@@ -103,7 +103,6 @@ export function RememberBand({
   /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
-  onMode(next: BandMode): void;
   /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
@@ -130,8 +129,8 @@ export function RememberBand({
         /* Rule 1. Both keys in one call, so this is one history entry — and
            `thread: null` on the way to Quiz rather than only on arrival, so
            there is no frame in which the URL says both. Going the other way
-           leaves `thread` alone: the reader is going back to a list, and the
-           conversation they last had open is the right thing to find. */
+           leaves `thread` alone: Recall opens the one Remember conversation
+           whatever it says, and writes its id back (`ConversationBand`). */
         void setBoth(
           next === "quiz" ? { remember: next, thread: null } : { remember: next },
           { history: "push" },
@@ -166,7 +165,6 @@ export function RememberBand({
       onJump={onJump}
       /* The **persisted thread kind** — src/types.ts § ThreadKind. */
       kind="remember"
-      onMode={onMode}
       subMode={toggle}
     />
   );
@@ -275,9 +273,29 @@ export interface ChatHandoff {
   readonly question: string;
 }
 
-/** Is this a thread the reader's own conversation panel may show and open? */
-function isConversationThread(t: ChatThread): t is ChatThread & { kind: ConversationKind } {
-  return t.kind !== "candidates";
+/**
+ * **The reader's one Remember conversation, out of whatever the list holds.**
+ *
+ * The server keeps at most one per article (plan 261001m § 1), but this tab can
+ * briefly hold more: an empty one it began before a refetch brought the stored
+ * one, or a second tab's. So: one with something in it over an empty one, then
+ * the earliest, then the id — a total order, so every render picks the same.
+ * Pure and exported for that reason.
+ */
+export function oneRemember(threads: readonly ChatThread[]): ChatThread | null {
+  let best: ChatThread | null = null;
+  for (const t of threads) {
+    if (t.kind !== "remember") continue;
+    if (!best || before(t, best)) best = t;
+  }
+  return best;
+}
+
+function before(a: ChatThread, b: ChatThread): boolean {
+  const said = Number(a.messages.length > 0) - Number(b.messages.length > 0);
+  if (said !== 0) return said > 0;
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt;
+  return a.id < b.id;
 }
 
 export function ConversationBand({
@@ -286,7 +304,6 @@ export function ConversationBand({
   onJump,
   kind,
   subMode,
-  onMode,
   handoff,
   onHandoffTaken,
 }: {
@@ -321,15 +338,6 @@ export function ConversationBand({
    * through to `ChatPanel`, which is where it is drawn.
    */
   subMode?: React.ReactNode;
-  /**
-   * Switch mode, for when the reader opens a thread of the *other* kind.
-   *
-   * The list is shared (Greg's call, 2026-08-27), so a Remember thread is
-   * reachable from
-   * chat mode and vice versa. Opening one has to move `?mode=` as well as
-   * `?thread=` or the conversation would be answered with the wrong prompt.
-   */
-  onMode(next: BandMode): void;
 }) {
   useRenderCount("ConversationBand");
   const {
@@ -345,33 +353,57 @@ export function ConversationBand({
     discard,
     rename,
     remove,
+    deleting,
+    settled,
     speak,
     error,
   } = useChat(slug);
   /**
-   * **The reader's conversations — which is not every thread in the article.**
+   * **This mode's conversations, and only this mode's.**
    *
-   * The list is shared between chat and Remember on purpose (Greg's call,
-   * 2026-08-27), so a Remember row is pressable from chat mode and the band
-   * follows it into its own mode. Candidates is **not** in that arrangement and
-   * must not be: it is Referee mode's machinery rather than a reader's
-   * conversation, it lives at `?mode=referee&referee=candidates` where this band
-   * cannot navigate, and a Candidates row opened here would be answered with
-   * chat's prompt with nothing on screen saying so — the exact bug the shared
-   * list already produced once for Remember (GPT Sol's review of
-   * docs/plans/260827ah-review-mode.md, finding 7).
-   *
-   * The filter is a **type guard**, so `onThread` below can hand `target.kind`
-   * straight to `onMode`. `ThreadKind` and `Mode` used to agree on every member
-   * and stopped agreeing the day `candidates` arrived; narrowing here is what
-   * keeps that assignment honest instead of casting it.
+   * The list was shared between chat and Remember from 2026-08-27 until report
+   * `spya-peszam` (Greg, 2026-10-01): *"The Remember mode should be its own
+   * single, special conversation thread (not visible from Chat, nor should
+   * other Chat threads be visible in Remember mode)."* So a thread of the other
+   * kind is not here at all, and neither is Candidates, which is Referee mode's
+   * machinery. Plan 261001m § 4.
    */
-  const threads = useMemo(() => everyThread.filter(isConversationThread), [everyThread]);
+  const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
   const [thread, setThread] = useQueryState("thread", threadParam);
-  /* Write-only, for rule 3 in `onThread` below — the value itself is
-     `RememberBand`'s to read. A setter with no reader still subscribes, which is
-     the cost, and it is paid only by a band the reader has opened. */
-  const [, setRemember] = useQueryState("remember", rememberParam);
+  const remembering = kind === "remember";
+  /**
+   * Start over has two ordered waits: Live must finish writing its last spoken
+   * exchange, then the DELETE must finish. While either is true Remember has no
+   * composer and none of its callbacks may start another write.
+   */
+  const [resetting, setResetting] = useState<"idle" | "stopping-live" | "deleting">("idle");
+  const resettingNow = useRef(false);
+  /**
+   * **Remember's one conversation, derived during render** — never chosen in an
+   * effect, so there is no frame in which the panel is handed a `?thread=` that
+   * names nothing and draws a list. `?thread=` follows it (the effect below)
+   * rather than leading it: a chat's id or a stale one in Remember's URL is
+   * simply overruled. GPT Sol's plan review, F6.
+   */
+  const remembered = useMemo(() => (remembering ? oneRemember(threads) : null), [remembering, threads]);
+  const theRemember = resetting === "idle" ? remembered : null;
+  /** The open conversation's id: Remember's one, or what `?thread=` says in chat. */
+  const current = remembering ? (theRemember?.id ?? null) : thread;
+
+  /* The address follows Remember's conversation, by *replace* — this corrects
+     the URL; it is not a step the reader took. */
+  useEffect(() => {
+    if (!theRemember || thread === theRemember.id) return;
+    void setThread(theRemember.id, { history: "replace" });
+  }, [theRemember, thread, setThread]);
+
+  /* An empty Remember conversation that lost to the stored one — begun before a
+     refetch brought the real one — is this tab's alone, so it is dropped rather
+     than left to resurface. `discard` is a no-op on anything with a message. */
+  useEffect(() => {
+    if (!theRemember) return;
+    for (const t of threads) if (t.id !== theRemember.id && t.messages.length === 0) discard(t.id);
+  }, [theRemember, threads, discard]);
 
   /**
    * The conversations as they are **now**, for a callback that outlives a render.
@@ -383,8 +415,8 @@ export function ConversationBand({
    */
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
-  const selectedThread = useRef(thread);
-  selectedThread.current = thread;
+  const selectedThread = useRef(current);
+  selectedThread.current = current;
   const [pendingLive, setPendingLive] = useState<{ id: string; from: string | null } | null>(null);
   /**
    * The text a handed-over question starts its conversation's composer with.
@@ -446,14 +478,18 @@ export function ConversationBand({
   const hangUp = useRef(live.stop);
   hangUp.current = live.stop;
   useEffect(() => {
+    /* Start over owns this hang-up and awaits it before DELETE. Letting this
+       navigation reaction start a second stop would put the same flush back in
+       a race with the deletion. */
+    if (resetting !== "idle") return;
     if (live.phase === "idle" || live.phase === "failed") return;
-    if (live.threadId && live.threadId !== thread) void hangUp.current();
-  }, [thread, live.phase, live.threadId]);
+    if (live.threadId && live.threadId !== current) void hangUp.current();
+  }, [current, live.phase, live.threadId, resetting]);
 
   useEffect(() => {
     if (!pendingLive) return;
-    if (thread !== pendingLive.id) {
-      if (thread !== pendingLive.from) setPendingLive(null);
+    if (current !== pendingLive.id) {
+      if (current !== pendingLive.from) setPendingLive(null);
       return;
     }
     if (live.phase !== "idle" && live.phase !== "failed") return;
@@ -461,7 +497,7 @@ export function ConversationBand({
     // mistakes a just-created session for one the reader has already left.
     setPendingLive(null);
     live.start({ threadId: pendingLive.id });
-  }, [pendingLive, thread, live.phase, live.start]);
+  }, [pendingLive, current, live.phase, live.start]);
 
   /**
    * A counter that goes up whenever a *new* conversation is started, so the
@@ -486,17 +522,6 @@ export function ConversationBand({
     setFocusNonce((n) => n + 1);
     return id;
   }, [begin, setThread, kind]);
-
-  /**
-   * How many conversations **of this kind** the reader has.
-   *
-   * The list is shared, so `threads.length` is the wrong count for the latch
-   * below: a reader with three chats and no Remember threads would press
-   * Remember and be
-   * shown three chats, which is not what "start a new one if there are none"
-   * ever meant. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 7.
-   */
-  const ownKind = threads.filter((t) => t.kind === kind).length;
 
   /**
    * **An empty chat opens a conversation rather than an empty list.**
@@ -585,12 +610,40 @@ export function ConversationBand({
   }, [handoff, slug, startNew, onHandoffTaken]);
 
   useEffect(() => {
-    if (!loaded || started.current) return;
-    if (ownKind === 0) {
+    if (remembering || !loaded || started.current) return;
+    if (threads.length === 0) {
       started.current = true;
       startNew();
     }
-  }, [loaded, ownKind, startNew]);
+  }, [remembering, loaded, threads.length, startNew]);
+
+  /**
+   * **Remember has a conversation whenever it can have one** — on arrival with
+   * none, and after Start over. No latch: there is no list to come back to and
+   * no close button, so "nothing open" is never a state the reader asked for.
+   * It cannot loop, because `begin` inserts its conversation on the spot.
+   *
+   * **Not while a delete is out** (`deleting`), and that is GPT Sol's P0 on
+   * the plan, F1. The server folds a new Remember thread's first turn into the
+   * article's existing one, so a question typed into a fresh conversation
+   * before Start over's DELETE has landed would be appended to the very thread
+   * the DELETE then removes. With nothing begun there is no composer, so there
+   * is nowhere to type it. A refused delete puts the old conversation back
+   * (`restoreOnFailure` in `onDelete` below), and then there is nothing to
+   * begin.
+   */
+  useEffect(() => {
+    if (!remembering || !loaded || theRemember || deleting || resetting !== "idle") return;
+    startNew();
+  }, [remembering, loaded, theRemember, deleting, resetting, startNew]);
+
+  /* A failed DELETE restores the old thread; a successful one leaves none. In
+     either case the operation retiring is what lets Remember draw again. */
+  useEffect(() => {
+    if (resetting !== "deleting" || deleting) return;
+    resettingNow.current = false;
+    setResetting("idle");
+  }, [resetting, deleting]);
   /* Read, never written, and not a subscription — see `currentAt` in
      params.ts. It is passed to the model so that "this bit" and "what he just
      said" resolve to where the reader actually is. */
@@ -611,7 +664,7 @@ export function ConversationBand({
    * does not overrule them mid-session.
    */
   const [picked, setPicked] = useState<RememberStance | null>(null);
-  const open = threads.find((t) => t.id === thread);
+  const open = threads.find((t) => t.id === current);
   const lastStance = [...(open?.messages ?? [])]
     .reverse()
     .find((m) => m.role === "assistant" && m.stance)?.stance;
@@ -628,41 +681,15 @@ export function ConversationBand({
          a list the reader cannot see yet. See the composer under `ThreadList`. */
       loaded={loaded}
       loadFailed={loadFailed}
-      threads={threads}
-      threadId={thread}
-      /**
-       * Open a conversation — and follow it into its own mode if it is not the
-       * one we are in.
-       *
-       * The list is shared, so a Remember row is pressable from chat mode.
-       * Moving `?thread=` without `?mode=` would leave one open in a panel
-       * that asks with chat's prompt and shows no stance picker, and the
-       * transcript would give no sign why. Both setters fire in the same event,
-       * so they land in one navigation rather than putting a chat-mode-plus-
-       * Remember-thread entry on the Back stack in between.
-       */
+      /* Remember is handed its one conversation and nothing else, so the panel
+         has nothing it could list. */
+      threads={remembering ? (theRemember ? [theRemember] : []) : threads}
+      threadId={current}
+      /* Open a conversation from the list, or close one back to it — chat's
+         only, since Remember has neither. Every row is this mode's kind now, so
+         there is no other mode to follow it into. */
       onThread={(id) => {
         setPendingLive(null);
-        const target = id ? threads.find((t) => t.id === id) : null;
-        /* `ThreadKind` and `Mode` are separate vocabularies (src/types.ts,
-           src/modes.ts) that agree on the two *conversation* kinds — since
-           2026-09-01, when `review` became `remember` in the column as well as
-           the URL. So this assigns rather than maps, and the compiler is what
-           keeps that true: `threads` above is narrowed to those two, and the day
-           `candidates` was added to `ThreadKind` this line went red until it
-           was. A third vocabulary sharing two of three names is exactly the
-           overlap that reads as identity until it isn't. */
-        if (target && target.kind !== kind) onMode(target.kind);
-        /* **Rule 3**: opening a Remember conversation lands on the Recall half,
-           because a conversation is what Recall is and Quiz has nowhere to put
-           one. Set unconditionally rather than only when crossing from chat,
-           so a stale `?remember=quiz` on the URL cannot survive a thread being
-           opened from anywhere. nuqs batches every setter fired in one event
-           into a single navigation, which is what the two lines above already
-           rely on — so this is still one entry on the Back stack, not three.
-           `rememberParam` defaults to `recall`, so this writes nothing to the URL
-           in the ordinary case. */
-        if (!target || target.kind === "remember") void setRemember("recall");
         void setThread(id);
       }}
       onNew={startNew}
@@ -670,9 +697,10 @@ export function ConversationBand({
          switch — see the note where the hook is called. */
       live={live}
       onStartLive={(id) => {
+        if (resettingNow.current) return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");
-        setPendingLive({ id: next, from: thread });
+        setPendingLive({ id: next, from: current });
         void setThread(next);
         return next;
       }}
@@ -680,20 +708,19 @@ export function ConversationBand({
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
       onSend={(question) => {
+        if (resettingNow.current) return;
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.
-        /* The OPEN conversation's kind where there is one, and this mode's
-           where there is not — a first message is what decides a new thread's
-           kind, and after that the thread decides. The server refuses a kind
-           that contradicts an existing thread rather than taking our word for
-           it, so this being wrong is a 409 rather than a corrupted transcript. */
-        const sendKind = open?.kind ?? kind;
-        const id = send(thread, question, at, {
+        /* This mode's kind: every conversation the band can open is of it now.
+           The server refuses a kind that contradicts an existing thread rather
+           than taking our word for it, so this being wrong is a 409 rather than
+           a corrupted transcript. */
+        const id = send(current, question, at, {
           onThreadId: (corrected) => void setThread(corrected),
-          kind: sendKind,
-          ...(sendKind === "remember" ? { stance } : {}),
+          kind,
+          ...(kind === "remember" ? { stance } : {}),
         });
-        if (id !== thread) void setThread(id);
+        if (id !== current) void setThread(id);
       }}
       /* The box under the list. `null` rather than `thread` is the whole
          difference: it mints whatever `?thread=` still says, which on the list
@@ -703,6 +730,7 @@ export function ConversationBand({
          the reader who typed to start it should still have a caret when it
          opens, in the composer that has just replaced the one they typed into. */
       onSendNew={(question) => {
+        if (resettingNow.current) return;
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
         const id = send(null, question, at, {
@@ -713,19 +741,43 @@ export function ConversationBand({
         void setThread(id);
         setFocusNonce((n) => n + 1);
       }}
+      /* **Start over is offered only on a settled conversation** — stored,
+         named by the server, nothing of this tab's still out for it (`settled`
+         in useChat.ts). So its DELETE is never held waiting for a name, and
+         never races this tab's own write. Plan 261001m. */
+      canStartOver={remembering && current !== null && settled(current)}
       onRename={rename}
       onDelete={(id) => {
+        /* **Start over.** The conversation leaves the screen at once, and the
+           fresh one is begun only when the server has answered — see the
+           Remember effect above. If the server refuses, the old one comes back. */
+        if (remembering) {
+          /* The panel offers no button otherwise; this is the same rule held
+             where the request is made, not a second one. */
+          if (resettingNow.current || !settled(id)) return;
+          resettingNow.current = true;
+          setResetting("stopping-live");
+          void (async () => {
+            try {
+              if (live.phase !== "idle" && live.phase !== "failed") await live.stop();
+            } finally {
+              setResetting("deleting");
+              remove(id, { restoreOnFailure: true });
+            }
+          })();
+          return;
+        }
         remove(id);
         // Back to the list rather than to a conversation that is not there.
         if (id === thread) void setThread(null);
       }}
       /* All three carry the *open* thread rather than a thread id from the
          panel, because the panel only ever shows one and the id it would send
-         back is the one it was given. `thread` is non-null wherever these can
+         back is the one it was given. `current` is non-null wherever these can
          be pressed — the conversation view is what renders them. */
-      onRetry={(messageId) => thread && retry(thread, messageId)}
-      onEdit={(messageId, question) => thread && edit(thread, messageId, question, at)}
-      onStop={(messageId) => thread && stop(thread, messageId)}
+      onRetry={(messageId) => current && retry(current, messageId)}
+      onEdit={(messageId, question) => current && edit(current, messageId, question, at)}
+      onStop={(messageId) => current && stop(current, messageId)}
       onJump={onJump}
       recovering={recovering}
       blocks={blocks}

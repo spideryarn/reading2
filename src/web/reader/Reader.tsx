@@ -26,13 +26,13 @@ import {
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry, Ideas } from "../../types.js";
-import { annotationNotes, arcAt, headPath } from "../annotations/notes.js";
+import { marginaliaNotes, arcAt, headPath } from "../marginalia/notes.js";
 import {
-  AnnotationsHead,
+  MarginaliaHead,
   MarginNotesSlot,
   OwnerIdeasFeed,
   useMarginLayout,
-} from "../annotations/AnnotationsColumn.js";
+} from "../marginalia/MarginaliaColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { useVoiceFaces } from "../useVoiceFaces.js";
@@ -119,11 +119,12 @@ import {
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
+import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
-import { annotationsPress, notesFit } from "../annotations/press.js";
+import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { bandCoversProse, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -317,25 +318,27 @@ export function Reader({
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
   /**
-   * **Whether Annotations' column of notes is on**, right of the prose — a
+   * **Whether Marginalia's column of notes is on**, right of the prose — a
    * switch of its own beside `mode` since 2026-10-01, so the notes can sit
-   * beside a band. `mode` never says `annotations` (`BandMode`); the Dock's
-   * Annotations button toggles this instead.
+   * beside a band. `mode` never says `marginalia` (`BandMode`); the Dock's
+   * Marginalia button toggles this instead.
    * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
    */
   const [margin, setMargin] = useQueryState("margin", marginParam);
-  /* **An old `?mode=annotations` link** (Annotations was a mode for its first
+  /* **A `?mode=marginalia` link, or an old `?mode=annotations` one** (the
+     mode was called Annotations, and was a value of `?mode=`, for its first
      day) reads as Plain through `modeParam`; this turns the notes on for it
-     and drops the old word, in one replaced entry so Back does not return to
-     it. Read from `location` because `modeParam` has already discarded it.
-     The Annotations press that swaps the band out writes both through this
-     too, so one Back undoes it (261001k). */
+     and drops the word, in one replaced entry so Back does not return to it.
+     Read from `location` because `modeParam` has already discarded it; which
+     words count is `isMarginaliaModeWord` (src/modes.ts, 261001n). The
+     Marginalia press that swaps the band out writes both through this too, so
+     one Back undoes it (261001k). */
   const [, setModeAndMargin] = useQueryStates({
     mode: modeParam,
     margin: marginParam,
   });
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("mode") === "annotations")
+    if (isMarginaliaModeWord(new URLSearchParams(location.search).get("mode")))
       void setModeAndMargin({ mode: null, margin: true }, { history: "replace" });
   }, [setModeAndMargin]);
   /* The pasted Trajectory stop belongs to this article arrival, not to each
@@ -366,7 +369,7 @@ export function Reader({
    */
   const bandOpen = mode !== "plain";
   /**
-   * **Annotations draws a column to the RIGHT of the prose**, beside whatever
+   * **Marginalia draws a column to the RIGHT of the prose**, beside whatever
    * band is open or none (layout.ts § `fitMargin`, `fitBoth`). It opens no
    * band, so everything that asks `bandOpen` — the band covering the prose on
    * a phone, the herald, the reading-time "is the prose on screen" — sees the
@@ -454,9 +457,9 @@ export function Reader({
       }),
     [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, mode],
   );
-  /* **Where the notes would fit**, for the Annotations press: beside the band
+  /* **Where the notes would fit**, for the Marginalia press: beside the band
      that is open, and with no band. A press reads both to decide whether it
-     swaps the band out (`annotationsPress`, 261001k). */
+     swaps the band out (`marginaliaPress`, 261001k). */
   const wouldFit = useMemo(
     () =>
       notesFit(
@@ -498,7 +501,7 @@ export function Reader({
   // measured before the move. `spine` is in it for a stronger reason than
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
-  // `tableW` and `margReserve` since 2026-10-01: Annotations moves and narrows
+  // `tableW` and `margReserve` since 2026-10-01: Marginalia moves and narrows
   // the prose with `modeW` still 0, so without them switching into it at a
   // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
   // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
@@ -1347,7 +1350,7 @@ export function Reader({
   }, [drawnQuiz, article.blocks, openQuizAt]);
 
   /**
-   * **Annotations: the notes beside each block** — AnnotationsColumn.tsx.
+   * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
    *
    * The ideas are the owner's stored list (read by `OwnerIdeasFeed` beside
    * the column's head, never made) or the visitor's payload. Drawn only while the
@@ -1356,15 +1359,15 @@ export function Reader({
    * not re-render `TableView`.
    */
   const [ownerIdeas, setOwnerIdeas] = useState<Ideas["ideas"] | null>(null);
-  const annotationIdeas = owner ? ownerIdeas : (artefacts?.ideas?.ideas ?? null);
+  const marginaliaIdeas = owner ? ownerIdeas : (artefacts?.ideas?.ideas ?? null);
   const marginRoom = marginOpen && fit.margW > 0;
   const marginNotes = useMemo(() => {
     if (!marginRoom) return null;
-    const byBlock = annotationNotes(article.tree, article.blocks, annotationIdeas);
+    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas);
     const out = new Map<BlockId, ReactElement>();
     for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
     return out;
-  }, [marginRoom, article.tree, article.blocks, annotationIdeas]);
+  }, [marginRoom, article.tree, article.blocks, marginaliaIdeas]);
   useMarginLayout(marginRoom, marginNotes);
 
   /**
@@ -1962,7 +1965,6 @@ export function Reader({
             blocks={blockText}
             onJump={bandJump}
             kind="chat"
-            onMode={setMode}
             handoff={chatHandoff}
             onHandoffTaken={handoffTaken}
           />
@@ -1982,7 +1984,6 @@ export function Reader({
             readSoFar={readSoFar}
             sections={quizSections}
             onJump={bandJump}
-            onMode={setMode}
             onQuizKeys={onQuizKeys}
           />
         ) : null;
@@ -2381,7 +2382,7 @@ export function Reader({
   }
 
   /**
-   * **Annotations' column, apart from its notes** — the head pinned at the top
+   * **Marginalia's column, apart from its notes** — the head pinned at the top
    * of the column and the read of the owner's ideas: what is not anchored to a
    * block (the notes are in the table's cells, `marginNotes`). Beside the band
    * rather than in it since 2026-10-01, inside a boundary of its own so a
@@ -2399,14 +2400,14 @@ export function Reader({
     const covered = bandOpen && fit.modeW === 0;
     return (
       <ModeBoundary
-        mode="annotations"
+        mode="marginalia"
         slug={slug}
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
         {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
         {!covered && (
-          <AnnotationsHead
+          <MarginaliaHead
             room={fit.margW > 0}
             beside={bandOpen}
             path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
@@ -2468,7 +2469,7 @@ export function Reader({
              reading column when it is centred over it (styles.css § plain,
              centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
           "--table-w": `${fit.tableW}px`,
-          /* Annotations' column, and the room `.reader` keeps for it on its
+          /* Marginalia's column, and the room `.reader` keeps for it on its
              right — layout.ts § `fitMargin`. Both 0 in every other mode. */
           "--marg-w": `${fit.margW}px`,
           "--marg-reserve": `${fit.margReserve}px`,
@@ -2991,13 +2992,13 @@ export function Reader({
              nuqs updates React now but may leave `location.href` on the old
              entry for ~50ms, so inferring intent from the address races. Back
              and Forward never call this callback and therefore never arm. */
-          /* **Annotations is a switch, not a band** (`BandMode`): its press
+          /* **Marginalia is a switch, not a band** (`BandMode`): its press
              turns the column on or off and leaves the band, the herald and a
              stepped-aside band exactly as they were — unless the two do not
              fit together, when the notes, pressed last, swap the band out
-             (`annotationsPress`, Greg's 7P). */
-          if (next === "annotations") {
-            const press = annotationsPress({
+             (`marginaliaPress`, Greg's 7P). */
+          if (next === "marginalia") {
+            const press = marginaliaPress({
               margin: marginOpen,
               bandOpen,
               bothFit: wouldFit.both,

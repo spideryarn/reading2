@@ -45,6 +45,12 @@ one turn and you nothing. Add a gloss of your own only where you already hold th
 question for it. Greg, 2026-09-09: *"reject unclear questions/interpret them for me … that might
 require you to get tooooo involved in the details of all the other agents."*
 
+**Give every question you put to Greg a short, human-readable tag**, such as `[Q-public-tailoring]`,
+unique across the session and kept unchanged when the question is asked again. That way his answer
+("public-tailoring A") can't be matched to the wrong question. Greg, 2026-10-01: *"Whenever you ask
+me a question, can you provide some little unique identifier, ideally a human readable identifier,
+that I can refer to so that you always know which question I'm answering?"*
+
 **Oversee; do not do.** Anything beyond a one-line fix or a doc edit is delegated — to a session
 briefed with [engineering-manager.md](../reusable/engineering-manager.md) and told to take technical
 guidance from GPT Sol and product or wording arbitration from Opus rather than from you — so that

@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 /**
  * `matchMedia`, for a caller that must not care whether it exists.
  *
@@ -20,4 +22,28 @@
  */
 export function media(query: string): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia(query).matches;
+}
+
+/**
+ * **`media`, as a hook that follows the viewport** — for a component whose
+ * layout depends on the answer, so a phone turned on its side gets the new
+ * answer without a reload.
+ *
+ * `false` when `matchMedia` is missing (jsdom, and the rule above), and a
+ * `MediaQueryList` without `addEventListener` (older Safari has only
+ * `addListener`) is read once rather than followed. One caller today: the
+ * Remember composer's compact box on short bands (ChatPanel.tsx § Composer).
+ */
+export function useMedia(query: string): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      if (typeof window.matchMedia !== "function") return () => {};
+      const list = window.matchMedia(query);
+      if (typeof list.addEventListener !== "function") return () => {};
+      list.addEventListener("change", onChange);
+      return () => list.removeEventListener("change", onChange);
+    },
+    () => media(query),
+    () => false,
+  );
 }

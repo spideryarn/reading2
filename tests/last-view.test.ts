@@ -95,7 +95,7 @@ describe("rememberableSearch", () => {
     );
   });
 
-  /* Annotations' column, since 2026-10-01 a switch of its own:
+  /* Marginalia's column, since 2026-10-01 a switch of its own:
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. It reads what
      the article already has and starts no job, so restoring it is inert. */
   it("remembers the notes beside a band, and the link always wins", () => {
@@ -113,6 +113,17 @@ describe("rememberableSearch", () => {
     expect(rememberableSearch("?margin=0&mode=annotations")).toBe("?margin=1");
     expect(rememberableSearch("?mode=annotations&margin=0")).toBe("?margin=1");
     expect(restoredHref("/read/x", "", "?mode=annotations")).toBe("/read/x?margin=1");
+  });
+
+  /* The mode's own word since 261001n, `marginalia`, is translated the same
+     way (`isMarginaliaModeWord`): the word wins over any simultaneous margin
+     value, in either order, and neither spelling is put back. */
+  it("reads a remembered mode=marginalia as the notes on", () => {
+    expect(rememberableSearch("?mode=marginalia")).toBe("?margin=1");
+    expect(rememberableSearch("?at=spya-a&mode=marginalia&margin=1")).toBe("?at=spya-a&margin=1");
+    expect(rememberableSearch("?margin=0&mode=marginalia")).toBe("?margin=1");
+    expect(rememberableSearch("?mode=marginalia&margin=0")).toBe("?margin=1");
+    expect(restoredHref("/read/x", "", "?mode=marginalia")).toBe("/read/x?margin=1");
   });
 
   it("reads a percent-encoded key as the parameter it is", () => {

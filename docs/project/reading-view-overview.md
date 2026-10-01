@@ -10,7 +10,7 @@ goes stale.
 what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist columns beside the prose,
 which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
 [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) The other is
-Annotations, which draws a column of notes to the right of the prose instead, behind the
+Marginalia, which draws a column of notes to the right of the prose instead, behind the
 experimental switch — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
 beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mode.md)). So *a mode
 is open* and *a band is open* are separate questions
@@ -48,6 +48,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 
 ### The layout
 
+- **[interface-vision.md](interface-vision.md)** — **not decided**: one direction of travel, three
+  columns — the decorated text in the middle, block-anchored marginalia on the right, what is about
+  the whole piece on the left, and the single-purpose mode bands receding. Open it before redesigning
+  the layout, and for the questions still waiting on Greg.
 - **[web-client.md](web-client.md)** — where the client code lives, how the middle became a slot,
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
 - **[mode.md](mode.md)** — the one checklist for adding a mode: the tables the compiler
@@ -138,23 +142,26 @@ readers never are.
   each post linked to the passages it came from. **The one mode that writes on arrival** rather
   than on a press. Open it for why, and for the plans and the code.
 
-- **Annotations** — the one mode drawn to the *right* of the prose rather than in the band: a
+- **Marginalia** — called Annotations until 2026-10-01, when it was renamed
+  ([261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md); old `?mode=annotations` links still work). The one mode drawn to the *right* of the prose rather than in the band: a
   column of notes, each level with the block it is about and scrolling with the text — each
   part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
   a head pinned at the top saying which part and section you are in and, from the arc, where the
   argument has got to. It opens no band, generates nothing, and hides its notes on a window too
   narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
   at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
-  band you choose; where there is no room for both (under 900px), whichever you pressed last
-  wins — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
+  band you choose; where there is no room for both (under 900px) but room for the column alone
+  (612px with the rail, 600 without), whichever you pressed last wins, and below that the notes
+  stay hidden — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
   [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
-  to the text, the middle for the text, the right for what is. Behind the switch. No
-  `annotations.md` yet; the plan is the reference —
-  [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
+  to the text, the middle for the text, the right for what is. Behind the switch. It has no doc of
+  its own yet; the plans are the reference —
+  [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
+  261001k and 261001n above.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
-That is every band mode; `plain` and Annotations open none — Annotations draws its column on the
+That is every band mode; `plain` and Marginalia open none — Marginalia draws its column on the
 right instead, beside a band or without one.
 
 ### Marking a passage, and asking about one

@@ -1,6 +1,6 @@
-/* marginalia.css — Annotations mode's column, right of the prose: the notes
+/* marginalia.css — Marginalia's column, right of the prose: the notes
    beside each block and the head pinned at the top of the column.
-   AnnotationsColumn.tsx has the shape;
+   MarginaliaColumn.tsx has the shape;
    docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md has
    the reasons, and GPT Astra's design pass (2026-10-01) most of the values.
 
@@ -72,7 +72,7 @@
 /* An idea, at its first occurrence: a stamp in small capitals, then the idea's
    handle, dashed — the underline style the research gives a proposition the
    argument leans on. The statement is in the card, on hover, focus or a tap.
-   A button (AnnotationsColumn.tsx § IdeaStamp), drawn as text. */
+   A button (MarginaliaColumn.tsx § IdeaStamp), drawn as text. */
 .marg-idea {
   all: unset;
   display: block;

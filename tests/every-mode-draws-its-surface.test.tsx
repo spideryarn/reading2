@@ -906,12 +906,12 @@ async function open(search = "", { strict = true }: { strict?: boolean } = {}): 
   await settle();
 }
 
-/* **Annotations is `?margin=1`, not a mode**, since 2026-10-01 (261001i): its
+/* **Marginalia is `?margin=1`, not a mode**, since 2026-10-01 (261001i): its
    press turns the column on and leaves `?mode=` alone, so from Plain it is
    read here as the view it opens. Every fixture this file presses from is Plain. */
 const modeInUrl = (): string => {
   const query = new URLSearchParams(location.search);
-  return query.get("mode") ?? (query.get("margin") === "1" ? "annotations" : "plain");
+  return query.get("mode") ?? (query.get("margin") === "1" ? "marginalia" : "plain");
 };
 
 /** `?mode=` is written behind nuqs' throttle, so a single read is a race. */
@@ -927,7 +927,7 @@ async function modeAfterPress(before: string): Promise<string> {
 /** The real bar button, found the way a screen reader would find it. */
 function modeButton(mode: Mode): HTMLButtonElement {
   const label = MODE_LABEL[mode];
-  /* The radios, and Annotations' toggle after them (261001i). */
+  /* The radios, and Marginalia's toggle after them (261001i). */
   const found = [
     ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
   ].find(
@@ -1139,7 +1139,7 @@ const SPENDS: Record<Mode, Spend> = {
   summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
   /* The tree's questions, the arc and the ideas already made — read, never
      generated. A press that started the Ideas job here would be the bug. */
-  annotations: { kind: "none", why: "draws what the article already has; it never starts a job" },
+  marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },
@@ -1358,7 +1358,7 @@ const DRAWS: Record<Mode, Draws> = {
      read of the ideas happened, reached the notes and was put in a cell. jsdom
      lays nothing out but `innerWidth` is 1024, so `fitMargin` gives the column
      room and the notes are drawn. */
-  annotations: {
+  marginalia: {
     kind: "none",
     why: "its notes sit beside the prose, in the table's own cells",
     query: "?margin=1",
@@ -1432,8 +1432,11 @@ const DRAWS: Record<Mode, Draws> = {
      `remember` as well as `chat`, and without `:not()` a Remember panel drawn
      in Chat's place would satisfy this row. */
   chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE, about: "corner" },
-  /* Recall, which is the half Remember opens on. */
-  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_TITLE, about: "corner" },
+  /* Recall, which is the half Remember opens on — and since plan 261001m it
+     opens the reader's one Remember conversation rather than a list, under a
+     header that says "Remember", so the thing to find is the answer in it
+     rather than the thread's title. */
+  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_ANSWER, about: "corner" },
 };
 
 describe("phase B — what each mode's real controller drew", () => {
@@ -1509,7 +1512,7 @@ describe("phase B — what each mode's real controller drew", () => {
    draw nothing*, and carries the positive control with it. */
 
 /* ===================================================== the notes beside a band ==
-   **Annotations' column beside a band** — `?margin=1`, since 2026-10-01
+   **Marginalia's column beside a band** — `?margin=1`, since 2026-10-01
    (docs/plans/261001i-annotations-column-beside-a-band-mode.md). The width
    arithmetic is swept in tests/layout-margin.test.ts; this is the page: the two
    drawn together where they fit, the band winning where they do not, and an
@@ -1543,9 +1546,9 @@ describe("the notes beside a band", () => {
   /* Greg, 7P: *"whichever has been activated most recently trumps/swaps out
      the other"*. Pressing a band already wins; this is pressing the notes
      (261001k). */
-  it("swaps the band out for the notes when Annotations is pressed below 900px", async () => {
+  it("swaps the band out for the notes when Marginalia is pressed below 900px", async () => {
     await atWidth(800, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
     const query = new URLSearchParams(location.search);
     expect(query.get("margin")).toBe("1");
@@ -1556,7 +1559,7 @@ describe("the notes beside a band", () => {
 
   it("undoes the combined swap with one Back step", async () => {
     await atWidth(800, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     expect(location.search).toContain("margin=1");
 
     await act(async () => history.back());
@@ -1572,7 +1575,7 @@ describe("the notes beside a band", () => {
   it("brings back notes hidden behind a band rather than turning them off", async () => {
     await atWidth(800, "?mode=glossary&margin=1");
     expect(notes()).toBe(0);
-    await press("annotations");
+    await press("marginalia");
     for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
     expect(new URLSearchParams(location.search).get("margin")).toBe("1");
     expect(host.querySelector(".mode-band")).toBeNull();
@@ -1581,7 +1584,7 @@ describe("the notes beside a band", () => {
 
   it("leaves the band open where both fit", async () => {
     await atWidth(1024, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     const query = new URLSearchParams(location.search);
     expect(query.get("mode")).toBe("glossary");
     expect(query.get("margin")).toBe("1");
@@ -1604,15 +1607,15 @@ describe("the notes beside a band", () => {
       expect(url(), `after ${mode}`).toBe(want);
       expect(history.length - before, `entries for ${mode}`).toBe(1);
     };
-    await step("annotations", "plain/1");
+    await step("marginalia", "plain/1");
     await step("glossary", "glossary/1");
-    await step("annotations", "plain/1");
-    await step("annotations", "plain/-");
+    await step("marginalia", "plain/1");
+    await step("marginalia", "plain/-");
   }, PHASE_MS);
 
   it("leaves a phone's band open, where the notes do not fit even alone", async () => {
     await atWidth(390, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     await settle();
     expect(host.querySelector(".mode-band"), "the band closed for nothing").not.toBeNull();
   }, PHASE_MS);
@@ -1626,6 +1629,17 @@ describe("the notes beside a band", () => {
 
   it("opens an old ?mode=annotations link as Plain with the notes on", async () => {
     await atWidth(1024, "?mode=annotations");
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode")).toBeNull();
+    expect(query.get("margin")).toBe("1");
+    expect(host.querySelector(".mode-band")).toBeNull();
+    expect(notes()).toBeGreaterThan(0);
+  }, PHASE_MS);
+
+  /* The mode's own word since 261001n takes the same road as the old one
+     (`isMarginaliaModeWord`): the notes on, and no `mode=` left behind. */
+  it("opens a ?mode=marginalia link as Plain with the notes on", async () => {
+    await atWidth(1024, "?mode=marginalia");
     const query = new URLSearchParams(location.search);
     expect(query.get("mode")).toBeNull();
     expect(query.get("margin")).toBe("1");
