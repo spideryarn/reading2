@@ -189,10 +189,9 @@ export function App() {
      short prompt, so there is one signed-out page rather than two. The address
      bar still holds the article, so signing in lands you on it.
 
-     `/login` is the exception, and the only one. It is a page somebody was
-     *sent* — a password-reset email has to land somewhere — so it keeps the
-     compact screen rather than being answered with the pitch. See
-     SignInPage.tsx.
+     `/login` is the exception, and the only one. It is the dedicated sign-in
+     page somebody was *sent*, so it is answered directly rather than with the
+     pitch. See SignInPage.tsx.
 
      **And `/read/<slug>` is the second exception, since 2026-08-28.** An owner
      can mark a document world-readable, and from that moment a stranger at its
@@ -469,10 +468,10 @@ function SignedIn({
             spider and the way home now, and the fixed corner copy sat on top
             of it (z-index 60 over the bar's 40) — two spiders, two animation
             hosts. GPT Sol, reviewing docs/plans/260929a-…, finding 1. */}
-        {/* **`signedIn` is what keeps the top bar honest here.** Without it the
-            nav drew *Sign in* → `/#sign-in`, and `/` is the shelf for this
-            reader, which has no such panel: a link that visibly does nothing.
-            GPT Sol, stage 2 code review of
+        {/* **`signedIn` is what keeps the top bar honest here.** Before the
+            dedicated sign-in page, omitting it drew *Sign in* → `/#sign-in`,
+            and `/` is the shelf for this reader, which had no such panel: a
+            link that visibly did nothing. GPT Sol, stage 2 code review of
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />

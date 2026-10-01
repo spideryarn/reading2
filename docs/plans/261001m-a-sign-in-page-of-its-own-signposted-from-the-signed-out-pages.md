@@ -169,3 +169,25 @@ two P2. All taken; how each changed the plan:
   on the whole site, and `SignInControls` has one caller.
 - **F7 —** security-map.md and marketing-pages.md join the doc list; `/login` is described as
   what it is (the recovery form is rendered by `AuthCallback`, not by `/login`).
+
+## What landed, and the code review
+
+Built as planned, with the review changes above. Two things the Playwright check (1440 and 390)
+turned up and that were fixed before the code review: `/login`'s footer had no gutter (now inside
+`SHELL`), and the signed-in `/login` redirect navigated during render, which React warns about
+(now `LeaveLogin`, an effect, with a pathname guard for StrictMode's double run).
+`security-map.md` was left as it is: its auth-return row is still true, because `next` goes through
+the same ten-minute, read-once store.
+
+GPT Sol's code review ([261001m-sign-in-page-code-review-sol.md](261001m-sign-in-page-code-review-sol.md))
+fixed six things in place, all checked and kept:
+
+- **C1** — the confirmation message now says to come back to this tab, which finishes F2.
+- **C2** — Google's return destination is remembered *before* the provider preflight, and a click
+  abandoned because a session arrived from another tab no longer starts OAuth after unmount.
+- **C3** — Google being off now forgets the destination, like every other failed start.
+- **C4** — choosing Free on `/pricing` clears an older paid buy-intent marker.
+- **C5** — the landing foot's *Create an account* is outlined, keeping one orange button per page.
+- **C6** — the switch is a labelled `<fieldset>`; plus prose fixes across comments and docs (C7).
+
+My one change to its diff: "afterward" to "afterwards" in the new sentence.

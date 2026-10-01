@@ -82,6 +82,11 @@ describe("the landing page", () => {
     expect(hrefOf(page, "Create an account")).toBe("/login?new");
   });
 
+  it("keeps one orange primary action on the page", async () => {
+    const page = await showAt("/");
+    expect(page.querySelectorAll(".site-cta-primary")).toHaveLength(1);
+  });
+
   it("carries a deep link through every one of those links", async () => {
     const page = await showAt("/read/an-unshared-essay?at=spya-k3m9qt");
     const next = "next=%2Fread%2Fan-unshared-essay%3Fat%3Dspya-k3m9qt";

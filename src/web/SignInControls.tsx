@@ -41,7 +41,7 @@
  * for one screen is more work than not having it, the same call
  * docs/plans/260825a-shadcn-migration.md made about `Dialog`.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   AUTH_EXCHANGE_FAILED,
@@ -94,6 +94,18 @@ export function SignInControls({
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const mounted = useRef(true);
+
+  /* Google's provider preflight is a network wait. A session can arrive from
+     another tab while it is pending, taking this page away; do not let the
+     abandoned click resume afterwards and start a second sign-in. Setting true
+     in the setup matters under StrictMode's setup-cleanup-setup cycle. */
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   /**
    * The password box, so the email box's Enter can move to it.
@@ -115,6 +127,10 @@ export function SignInControls({
   const withGoogle = async () => {
     setBusy(true);
     setError(null);
+    /* Before the awaited preflight: a session arriving from another tab can
+       make App.tsx leave `/login` during that wait, and LeaveLogin must already
+       have the destination to take. Every failure below forgets it. */
+    rememberReturn(returnTo);
 
     /* Ask the project whether Google is on before handing the browser over.
        `signInWithOAuth` navigates rather than requesting, so a provider that is
@@ -123,14 +139,14 @@ export function SignInControls({
        which is exactly what the live site did on 2026-08-27. This fails open;
        see googleSignInAvailable in lib/supabase.ts. The email form is already
        on screen below, which is what the message points at. */
-    if (!(await googleSignInAvailable())) {
-      setBusy(false);
+    const available = await googleSignInAvailable();
+    if (!mounted.current) return;
+    if (!available) {
       setMode("form");
-      setError(AUTH_PROVIDER_OFF.message);
+      failed(AUTH_PROVIDER_OFF.message);
       return;
     }
 
-    rememberReturn(returnTo);
     /* `try`, because this can reject as well as return an error. The SDK writes
        the PKCE verifier to storage and then assigns `location`, and a browser
        with storage blocked throws rather than answering — which without this
@@ -240,10 +256,9 @@ export function SignInControls({
           autocomplete hint and one link. Hidden while asking for a reset link,
           which is neither half. */}
       {mode === "form" && (
-        <div
-          role="group"
+        <fieldset
           aria-label="Sign in or create an account"
-          className="tw:mb-6 tw:grid tw:grid-cols-2 tw:gap-1 tw:rounded-full tw:border tw:border-border tw:p-1"
+          className="tw:mb-6 tw:grid tw:min-w-0 tw:grid-cols-2 tw:gap-1 tw:rounded-full tw:border tw:border-border tw:p-1"
         >
           {(
             [
@@ -269,7 +284,7 @@ export function SignInControls({
               {label}
             </button>
           ))}
-        </div>
+        </fieldset>
       )}
 
       {error && (

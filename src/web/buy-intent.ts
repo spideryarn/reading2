@@ -12,13 +12,12 @@
  * Sol review (docs/plans/260904b-pricing-page-and-public-showcase-review-sol.md)
  * found two separate faults with that:
  *
- * - **It would not have worked.** `SignInControls` calls
- *   `rememberReturn(location.pathname + location.search)` immediately before
- *   OAuth (SignInControls.tsx), so a sign-in that happens anywhere other than
- *   `/pricing` overwrites the destination with its own address. The mechanism
- *   that replaces it is not this file at all: the pricing page carries its own
- *   sign-in panel, so the reader signs in **on `/pricing`** and the existing
- *   `remember()` captures it, with no second OAuth path.
+ * - **It would not have worked.** A sign-in used to remember the address its
+ *   controls stood on immediately before OAuth, so carrying the tier through a
+ *   different sign-in page would have overwritten `/pricing`. The first
+ *   mechanism that replaced it was an inline panel on `/pricing`; since
+ *   2026-10-01 the page instead links to `/login?new&next=/pricing`, and the
+ *   sign-in page validates and remembers that candidate (auth-return.ts).
  * - **A query parameter is not consent.** `/pricing?buy=researcher`, pasted or
  *   sent by somebody else, would have been enough to make an authenticated
  *   browser POST `/api/billing/checkout`, create or reuse a Stripe customer,
@@ -106,7 +105,7 @@ export interface BuyIntent {
   readonly createdAt: number;
 }
 
-/** Remember which plan was pressed, on the way out to the sign-in panel. */
+/** Remember which plan was pressed, on the way to the sign-in page. */
 export function rememberBuyIntent(tierId: string): void {
   const store = storage();
   if (!store) return;

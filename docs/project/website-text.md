@@ -173,7 +173,7 @@ article is the one deciding whether to hand us one.
 ## The landing page
 
 [`LandingPage.tsx`](../../src/web/LandingPage.tsx) — the pitch, four screenshots, the **Beta** badge,
-and the sign-in controls on the page rather than behind a link. Its own header
+and links to the sign-in page at the top and bottom. Its own header
 carries the decisions; the one worth repeating here is that **a claim on it is checked against the
 code, never against a doc about the code** — it said "six diagrams" for a day, having been written
 from a doc, when there were four.
@@ -258,9 +258,10 @@ not jump from the `h1` to the cards' `h3`s, and a `SiteFooter`. **The nav's
 back here*.
 
 **And it is drawn only for a stranger**, since the stage 2 code review. `/features` and `/pricing`
-are both mounted signed in as well, and there neither spelling of that link goes anywhere: on
-`/pricing` the panel lives in the signed-out half of the page, and `/` is the shelf. `SiteNav` takes
-a `signedIn` prop with no default so that a new caller has to answer;
+are both mounted signed in as well. Before the dedicated sign-in page, their links named missing
+panels; now they would merely bounce an already signed-in reader through `/login` to the shelf,
+beside a *Home* link that already goes there. `SiteNav` takes a `signedIn` prop with no default so
+that a new caller has to answer;
 [`tests/site-nav-sign-in.test.tsx`](../../tests/site-nav-sign-in.test.tsx) mounts both pages both
 ways.
 

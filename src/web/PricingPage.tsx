@@ -454,7 +454,8 @@ function PlansForAStranger() {
   /* Both kinds of press end on the sign-in page's Create account tab: every
      reader on this half has no account open. Only a paid tier comes back here,
      because only a paid tier has anything left to do on this page. */
-  const toSignIn = (next?: string) => navigate(loginHref(next === undefined ? { create: true } : { create: true, next }));
+  const toSignIn = (next?: string) =>
+    navigate(loginHref(next === undefined ? { create: true } : { create: true, next }));
 
   const wantPlan = (plan: PlanCard): PlanCardAction | null => {
     /* Pulled out of the property so the closure below closes over a `const`
@@ -464,11 +465,19 @@ function PlansForAStranger() {
     /* **Free gets a button too, and it is not a bought thing.** A card with
        nothing to press on the one plan a stranger is most likely to start on
        was the gap the cards made obvious: the other two say *Get Reader* and
-       Free said nothing at all. It stores no buy intent — there is no tier to
-       buy — and lands them on the same sign-in page, where three articles free is what
-       signing up gets them. */
+       Free said nothing at all. It clears any older paid intent — choosing Free
+       supersedes a paid card pressed before Back brought the reader here — and
+       lands them on the sign-in page, where three articles free is what signing
+       up gets them. */
     if (tierId === null) {
-      return { label: "Start reading", disabled: false, onPress: () => toSignIn() };
+      return {
+        label: "Start reading",
+        disabled: false,
+        onPress: () => {
+          takeBuyIntent();
+          toSignIn();
+        },
+      };
     }
     return {
       /* "Get Reader", not "Sign in to get Reader": the sign-in is a step on the

@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const signInWithPassword = vi.fn();
 const signUp = vi.fn();
 const signInWithOAuth = vi.fn();
+const googleSignInAvailable = vi.fn();
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -27,7 +28,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
       signUp,
     },
   },
-  googleSignInAvailable: async () => true,
+  googleSignInAvailable,
   callbackUrl: () => "https://spideryarn.test/auth/callback",
 }));
 
@@ -116,6 +117,7 @@ beforeEach(() => {
   signInWithPassword.mockReset().mockResolvedValue({ data: {}, error: null });
   signUp.mockReset().mockResolvedValue({ data: { session: null }, error: null });
   signInWithOAuth.mockReset().mockResolvedValue({ data: {}, error: null });
+  googleSignInAvailable.mockReset().mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -189,6 +191,7 @@ describe("submitting", () => {
     expect(signInWithPassword).not.toHaveBeenCalled();
     expect(remembered()).toBe("/read/an-essay");
     expect(host.textContent).toContain("[auth-confirm]");
+    expect(host.textContent).toMatch(/come back to this tab/i);
   });
 
   /* The reason Create account is the form's submit button now rather than a
@@ -235,9 +238,42 @@ describe("submitting", () => {
     expect(remembered()).toBe("/read/an-essay");
   });
 
+  it("remembers before Google's preflight and does not resume after the page leaves", async () => {
+    let finishPreflight: ((available: boolean) => void) | undefined;
+    googleSignInAvailable.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finishPreflight = resolve;
+      }),
+    );
+    await show({ returnTo: "/pricing" });
+    await act(async () => button(/continue with google/i).click());
+
+    /* A session arriving from another tab can unmount these controls while the
+       settings request is pending. LeaveLogin must already be able to take the
+       destination, and this abandoned handler must not then launch OAuth. */
+    expect(remembered()).toBe("/pricing");
+    act(() => root?.unmount());
+    root = null;
+    finishPreflight?.(true);
+    await settle();
+    expect(signInWithOAuth).not.toHaveBeenCalled();
+  });
+
   it("forgets the destination when Google refuses to start", async () => {
     signInWithOAuth.mockResolvedValue({ data: {}, error: new Error("nope") });
     await show({ returnTo: "/read/an-essay" });
+    await act(async () => button(/continue with google/i).click());
+    await settle();
+    expect(remembered()).toBeNull();
+  });
+
+  it("forgets an older destination when Google is unavailable", async () => {
+    sessionStorage.setItem(
+      RETURN_KEY,
+      JSON.stringify({ path: "/read/an-old-essay", createdAt: Date.now() }),
+    );
+    googleSignInAvailable.mockResolvedValue(false);
+    await show({ returnTo: "/pricing" });
     await act(async () => button(/continue with google/i).click());
     await settle();
     expect(remembered()).toBeNull();

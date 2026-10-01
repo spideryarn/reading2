@@ -2,8 +2,8 @@
 /**
  * **The plan you pressed before you signed in — bought once, and only if you may.**
  *
- * A stranger presses *Get Reader* on `/pricing`, signs in with Google on that
- * same page, and comes back to it. The tier they pressed rides in a
+ * A stranger presses *Get Reader* on `/pricing`, signs in on `/login`, and
+ * comes back to the pricing page. The tier they pressed rides in a
  * `sessionStorage` marker (src/web/buy-intent.ts) rather than in the URL, and
  * the page finishes what they started by posting `/api/billing/checkout`.
  *
@@ -58,9 +58,9 @@ vi.mock("../src/web/lib/supabase.js", () => ({
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
   },
-  /* The sign-in panel imports this. It is never called here — nothing in these
-     tests presses Google — but a mock factory that omits an export makes the
-     import itself throw. */
+  /* The shared auth module exports this. It is never called on `/pricing` now
+     that the form lives on `/login`, but a mock factory that omits an export
+     makes the import graph throw. */
   googleSignInAvailable: async () => true,
   callbackUrl: () => "https://spideryarn.test/auth/callback",
   CALLBACK_PATH: "/auth/callback",
@@ -68,6 +68,8 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const { PricingPage } = await import("../src/web/PricingPage.js");
 const { rememberBuyIntent } = await import("../src/web/buy-intent.js");
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** The key buy-intent.ts writes. Spelled out, so a rename here is deliberate. */
 const KEY = "spideryarn:buy-intent";
@@ -219,6 +221,24 @@ describe("a stranger pressing a plan", () => {
        without one: the sign-in page, on its Create account tab, told to come
        back here — where `PlansForAReader` finds the marker. docs/plans/261001m. */
     expect(location.pathname + location.search).toBe("/login?new&next=%2Fpricing");
+  });
+
+  it("drops an older paid choice when the stranger chooses Free", async () => {
+    rememberBuyIntent("reader");
+    vi.stubGlobal("fetch", async () => new Response("nope", { status: 404 }));
+    await act(async () => {
+      root.render(<PricingPage readerId={null} />);
+    });
+    await settle();
+
+    const start = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Start reading",
+    );
+    expect(start, "no way to choose the Free plan").toBeTruthy();
+    await act(async () => start?.click());
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+    expect(location.pathname + location.search).toBe("/login?new");
   });
 });
 

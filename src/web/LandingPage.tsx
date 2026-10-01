@@ -350,7 +350,10 @@ export function LandingPage() {
             you left it.
           </p>
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-            <Link href={createAccount} className="site-cta site-cta-primary">
+            {/* The hero already carries the page's one orange primary action.
+                This second signpost stays outlined, beside Sign in, so the
+                emphasis does not repeat at both ends of the page. */}
+            <Link href={createAccount} className="site-cta site-cta-ghost">
               Create an account
             </Link>
             <GhostCta href={signIn}>Sign in</GhostCta>

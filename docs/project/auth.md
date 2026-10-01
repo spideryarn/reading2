@@ -126,7 +126,9 @@ in — and `forgetReturn` it if the start fails. A password sign-in finishes on 
 `App.tsx`'s signed-in branch *takes* the remembered value, so a signed-in visit to an old or shared
 `/login?next=…` goes to the shelf. `redirectTo` stays the bare callback. **Same tab only**: a
 confirmation link opened in a new tab lands on the shelf, because `sessionStorage` does not cross
-tabs — the simple version, chosen over a server-side return token (GPT Sol, plan review F2).
+tabs. The confirmation message therefore tells the reader to return to the original tab, where the
+stored destination still exists — the simple version, chosen over a server-side return token (GPT
+Sol, plan review F2).
 
 **A deep link gets the same page.** `/read/some-article` while signed out is the full landing page,
 not a shorter prompt. One signed-out page rather than two, and nothing is lost by it: every link from
