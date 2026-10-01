@@ -1,0 +1,626 @@
+{
+  "version": "sketch/3",
+  "title": "Chain with two expansions",
+  "caption": "The article runs as one long chain—from motivation through method to evidence to limits and future—with two dense stretches (the PID math, and the empirical findings) pulled out as zooms.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "Neural information processing: open problem",
+          "size": "md",
+          "block": "spya-yb735k"
+        },
+        {
+          "kind": "node",
+          "id": "track",
+          "shape": "box",
+          "x": 260,
+          "y": 140,
+          "w": 240,
+          "h": 70,
+          "text": "Tracking info: mutual information & transfer entropy",
+          "size": "sm",
+          "block": "spya-ygkzd8"
+        },
+        {
+          "kind": "node",
+          "id": "limit",
+          "shape": "box",
+          "x": 260,
+          "y": 250,
+          "w": 240,
+          "h": 60,
+          "text": "Transfer alone can't show how inputs combine",
+          "size": "sm",
+          "block": "spya-dhy39x"
+        },
+        {
+          "kind": "region",
+          "x": 140,
+          "y": 340,
+          "w": 480,
+          "h": 220,
+          "style": "band",
+          "label": "PID: THE METHOD",
+          "opens": "inside-pid",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "pid",
+          "shape": "hex",
+          "x": 260,
+          "y": 380,
+          "w": 240,
+          "h": 70,
+          "text": "Partial information decomposition",
+          "size": "md",
+          "detail": "Splits joint information into redundant, unique, synergistic parts",
+          "block": "spya-u0wm5e"
+        },
+        {
+          "kind": "node",
+          "id": "lattice",
+          "shape": "box",
+          "x": 260,
+          "y": 480,
+          "w": 240,
+          "h": 60,
+          "text": "Lattice + redundancy measure needed",
+          "size": "sm",
+          "block": "spya-k378fv"
+        },
+        {
+          "kind": "region",
+          "x": 120,
+          "y": 600,
+          "w": 520,
+          "h": 340,
+          "style": "band",
+          "label": "PID IN ACTION",
+          "opens": "inside-evidence",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "richclub",
+          "shape": "box",
+          "x": 160,
+          "y": 640,
+          "w": 200,
+          "h": 60,
+          "text": "Synergy concentrated in rich clubs",
+          "size": "sm",
+          "block": "spya-e3ghxj"
+        },
+        {
+          "kind": "node",
+          "id": "recurrent",
+          "shape": "box",
+          "x": 400,
+          "y": 640,
+          "w": 200,
+          "h": 60,
+          "text": "Recurrent links raise synergy",
+          "size": "sm",
+          "block": "spya-p8by2y"
+        },
+        {
+          "kind": "node",
+          "id": "corr",
+          "shape": "box",
+          "x": 160,
+          "y": 740,
+          "w": 200,
+          "h": 60,
+          "text": "Synergy peaks at mid correlation",
+          "size": "sm",
+          "block": "spya-zfs2z7"
+        },
+        {
+          "kind": "node",
+          "id": "primate",
+          "shape": "box",
+          "x": 400,
+          "y": 740,
+          "w": 200,
+          "h": 70,
+          "text": "In monkeys, redundancy rises during movement",
+          "size": "sm",
+          "block": "spya-aqcngt"
+        },
+        {
+          "kind": "node",
+          "id": "caveat",
+          "shape": "note",
+          "x": 280,
+          "y": 850,
+          "w": 220,
+          "h": 60,
+          "text": "Caveats: cultures, bivariate bias",
+          "size": "sm",
+          "block": "spya-vjzxxm"
+        },
+        {
+          "kind": "node",
+          "id": "practical",
+          "shape": "box",
+          "x": 260,
+          "y": 960,
+          "w": 240,
+          "h": 70,
+          "text": "Practical limits: data type, sampling, tools",
+          "size": "sm",
+          "block": "spya-kmgwhs"
+        },
+        {
+          "kind": "node",
+          "id": "future",
+          "shape": "box",
+          "x": 260,
+          "y": 1060,
+          "w": 240,
+          "h": 60,
+          "text": "Future: local & multi-target PID",
+          "size": "sm",
+          "block": "spya-zz5xxs"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "track",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "track",
+          "to": "limit",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "limit",
+          "to": "pid",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "pid",
+          "to": "lattice",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "lattice",
+          "to": "richclub",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "lattice",
+          "to": "recurrent",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "richclub",
+          "to": "caveat",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "recurrent",
+          "to": "caveat",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "corr",
+          "to": "caveat",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "primate",
+          "to": "caveat",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "caveat",
+          "to": "practical",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "practical",
+          "to": "future",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain from the problem of neural information processing, through the PID method, to empirical tests, practical limits, and future extensions."
+    },
+    {
+      "id": "inside-pid",
+      "title": "The PID method",
+      "height": 700,
+      "items": [
+        {
+          "kind": "node",
+          "id": "joint",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 40,
+          "w": 220,
+          "h": 70,
+          "text": "Joint mutual information (the whole)",
+          "size": "md",
+          "block": "spya-h5dz45"
+        },
+        {
+          "kind": "node",
+          "id": "ineq",
+          "shape": "diamond",
+          "x": 280,
+          "y": 140,
+          "w": 220,
+          "h": 80,
+          "text": "Whole vs sum of parts",
+          "size": "sm",
+          "block": "spya-e94ury"
+        },
+        {
+          "kind": "node",
+          "id": "syn",
+          "shape": "box",
+          "x": 80,
+          "y": 260,
+          "w": 200,
+          "h": 60,
+          "text": "Whole > parts: synergy",
+          "size": "sm",
+          "block": "spya-e94ury"
+        },
+        {
+          "kind": "node",
+          "id": "red",
+          "shape": "box",
+          "x": 480,
+          "y": 260,
+          "w": 200,
+          "h": 60,
+          "text": "Whole < parts: redundancy",
+          "size": "sm",
+          "block": "spya-e94ury"
+        },
+        {
+          "kind": "node",
+          "id": "twoparent",
+          "shape": "box",
+          "x": 280,
+          "y": 360,
+          "w": 220,
+          "h": 70,
+          "text": "Two-parent case: 4 unknowns, 3 equations",
+          "size": "sm",
+          "block": "spya-y7wdb7"
+        },
+        {
+          "kind": "node",
+          "id": "lattice2",
+          "shape": "hex",
+          "x": 280,
+          "y": 460,
+          "w": 220,
+          "h": 70,
+          "text": "General lattice of info atoms",
+          "size": "sm",
+          "block": "spya-k378fv"
+        },
+        {
+          "kind": "node",
+          "id": "mobius",
+          "shape": "box",
+          "x": 280,
+          "y": 560,
+          "w": 220,
+          "h": 60,
+          "text": "Atoms solved via Mobius inversion",
+          "size": "sm",
+          "block": "spya-t8mg0s"
+        },
+        {
+          "kind": "node",
+          "id": "redmeasure",
+          "shape": "note",
+          "x": 280,
+          "y": 640,
+          "w": 220,
+          "h": 60,
+          "text": "No single accepted redundancy measure",
+          "size": "sm",
+          "block": "spya-d2quz5"
+        },
+        {
+          "kind": "edge",
+          "from": "joint",
+          "to": "ineq",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ineq",
+          "to": "syn",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ineq",
+          "to": "red",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "syn",
+          "to": "twoparent",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "red",
+          "to": "twoparent",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "twoparent",
+          "to": "lattice2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "lattice2",
+          "to": "mobius",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "mobius",
+          "to": "redmeasure",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A funnel: joint mutual information is split, first by intuition with two sources, then generalized via a lattice that needs a chosen redundancy measure."
+    },
+    {
+      "id": "inside-evidence",
+      "title": "PID in action",
+      "height": 640,
+      "items": [
+        {
+          "kind": "node",
+          "id": "setup",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 60,
+          "text": "Cultured cortex, thousands of triads",
+          "size": "md",
+          "block": "spya-cc282b"
+        },
+        {
+          "kind": "node",
+          "id": "ff",
+          "shape": "box",
+          "x": 60,
+          "y": 140,
+          "w": 180,
+          "h": 60,
+          "text": "Synergy tracks feedforward strength",
+          "size": "sm",
+          "block": "spya-kqkb58"
+        },
+        {
+          "kind": "node",
+          "id": "rich",
+          "shape": "box",
+          "x": 280,
+          "y": 140,
+          "w": 180,
+          "h": 60,
+          "text": "Rich club: 88% of synergy",
+          "size": "sm",
+          "block": "spya-fud8q3"
+        },
+        {
+          "kind": "node",
+          "id": "motif",
+          "shape": "box",
+          "x": 500,
+          "y": 140,
+          "w": 200,
+          "h": 60,
+          "text": "Recurrent links boost, feedback doesn't",
+          "size": "sm",
+          "block": "spya-sd9fzd"
+        },
+        {
+          "kind": "node",
+          "id": "peak",
+          "shape": "box",
+          "x": 160,
+          "y": 260,
+          "w": 220,
+          "h": 70,
+          "text": "Synergy peaks at intermediate source correlation",
+          "size": "sm",
+          "block": "spya-ybmve2"
+        },
+        {
+          "kind": "node",
+          "id": "concl1",
+          "shape": "diamond",
+          "x": 280,
+          "y": 370,
+          "w": 220,
+          "h": 70,
+          "text": "Synergy is concentrated, structured",
+          "size": "sm",
+          "block": "spya-e3ghxj"
+        },
+        {
+          "kind": "node",
+          "id": "caveats2",
+          "shape": "note",
+          "x": 280,
+          "y": 470,
+          "w": 220,
+          "h": 60,
+          "text": "In vitro, bivariate TE caveats",
+          "size": "sm",
+          "block": "spya-vjzxxm"
+        },
+        {
+          "kind": "node",
+          "id": "primate2",
+          "shape": "box",
+          "x": 280,
+          "y": 560,
+          "w": 260,
+          "h": 70,
+          "text": "Macaques: redundancy rises in motor execution",
+          "size": "sm",
+          "block": "spya-t8fayf"
+        },
+        {
+          "kind": "edge",
+          "from": "setup",
+          "to": "ff",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "setup",
+          "to": "rich",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "setup",
+          "to": "motif",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ff",
+          "to": "peak",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "rich",
+          "to": "concl1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "motif",
+          "to": "concl1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "peak",
+          "to": "concl1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "concl1",
+          "to": "caveats2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "caveats2",
+          "to": "primate2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Several independent findings from cortical cultures and behaving animals converge on one picture: synergy tracks network structure and task demands."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+  "profileHash": null
+}

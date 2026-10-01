@@ -1,0 +1,67 @@
+{"ideas": [
+  {
+    "name": "Toughness is distinct from strength and stiffness",
+    "provenance": "introduced",
+    "statement": "Toughness is the energy a material absorbs before breaking (the area under its stress-strain curve), and it is a different quantity from strength (peak stress withstood) and stiffness (resistance to stretching, i.e. Young's modulus). A material can lead on one of these measures while trailing on another.",
+    "statement_note": "",
+    "occurrences": [
+      {"blockId": "spya-nwva2u", "quote": "This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).", "reasoning": "States the definition of toughness as distinct from the other two mechanical measures discussed nearby."},
+      {"blockId": "spya-hv4xng", "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.", "reasoning": "Only makes sense once the reader holds strength and toughness apart as separate rankings."},
+      {"blockId": "spya-n5mzfc", "quote": "An illustration of the differences between toughness, stiffness and strength", "reasoning": "Flags the three as separate axes the reader must track through the following subsections."},
+      {"blockId": "spya-gfykz5", "quote": "The combination of strength and ductility gives dragline silks a high toughness (or work to fracture)", "reasoning": "Explicitly builds toughness out of two other properties, confirming it is a derived, distinct quantity."}
+    ]
+  },
+  {
+    "name": "Spinning is a pulling-induced phase transition, not extrusion",
+    "provenance": "introduced",
+    "statement": "A spider does not squeeze out already-solid silk; it pulls a liquid protein solution through a duct, and the act of pulling itself (via shear, ion exchange, falling pH, and water removal) is what converts the liquid into solid fibre.",
+    "occurrences": [
+      {"blockId": "spya-g2gw42", "quote": "Silk production is a pultrusion,[42] similar to extrusion, with the subtlety that the force is induced by pulling at the finished fibre rather than squeezing it out of a reservoir.", "reasoning": "States directly that pulling, not pushing, drives fibre formation."},
+      {"blockId": "spya-ba6knb": "ba", "quote": "placeholder"},
+      {"blockId": "spya-mepbwz", "quote": "It is pulled on demand from a precursor out of specialised glands,[41] rather than continuously grown like plant cell walls.", "reasoning": "Frames silk formation as on-demand pulling rather than continuous biological growth, the core of the idea."},
+      {"blockId": "spya-m78y5s", "quote": "This allows the silk to flow through the duct as a liquid while maintaining molecular order.", "reasoning": "Shows the material stays liquid-like until the pulling process through the duct forces the transition."}
+    ]
+  },
+  {
+    "name": "Hard crystals in a stretchy matrix explain silk's mechanics",
+    "provenance": "introduced",
+    "statement": "Spider silk's strength and elasticity both come from the same two-part architecture: rigid crystalline protein blocks are linked by a soft, stretchable amorphous matrix, and the balance between the two gives the fibre its combination of strength and give.",
+    "occurrences": [
+      {"blockId": "spya-p263u9", "quote": "The interplay between the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties.", "reasoning": "States the structure-property link directly."},
+      {"blockId": "spya-ns50b2", "quote": "He suggested crystallites embedded in an amorphous matrix interlinked with hydrogen bonds.", "reasoning": "Gives the foundational model underlying later refinements."},
+      {"blockId": "spya-dadew4", "quote": "Ordered regions (i) mainly reorient by deformation for low-stretched fibres and (ii) the fraction of ordered regions increases progressively for higher fibre stretching.", "reasoning": "Only interpretable if the reader already holds the ordered/amorphous two-phase picture in mind."}
+    ]
+  },
+  {
+    "name": "Different glands make different silks for different jobs",
+    "provenance": "introduced",
+    "statement": "A single spider carries several separate silk-producing glands, each manufacturing a chemically and mechanically distinct silk suited to one particular task, such as framing a web, wrapping prey, lining an egg sac, or gluing threads together.",
+    "occurrences": [
+      {"blockId": "spya-pn8bvd", "quote": "All spiders produce silks, and a single spider can produce up to seven different types of silk for different uses.", "reasoning": "States the core claim of specialized multiplicity."},
+      {"blockId": "spya-bgtqr0", "quote": "These silk types are produced in different glands; so the silk from a particular gland can be linked to its use.", "reasoning": "Makes explicit the gland-to-function mapping the rest of the section relies on."},
+      {"blockId": "spya-m3rk4n", "quote": "Tubiliform (a.k.a. cylindriform) silk Protective egg sacs. Stiffest silk.", "reasoning": "Only coherent as an instance of the general gland-function mapping already established."},
+      {"blockId": "spya-zrcs7h", "quote": "500 pyriform glands for attachment points", "reasoning": "Lists concrete gland counts that make sense only against the backdrop of one-gland-one-job specialization."}
+    ]
+  },
+  {
+    "name": "Strength should be judged per unit weight, not in absolute terms",
+    "provenance": "assumed",
+    "statement": "For a fibre that must be carried, spun, or flown on, what matters is how much strength it delivers for a given mass, not the raw stress figure that would apply to a block of the same material at full density.",
+    "whyYouNeedIt": "Without this the claim that silk 'is stronger than steel' is self-contradicting next to the actual numbers, which show steel with a higher or comparable raw tensile strength; the sentence only resolves once the reader supplies the per-weight framing the article leans on but never names.",
+    "occurrences": [
+      {"blockId": "spya-hv4xng", "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar.", "reasoning": "Asserts a per-weight ranking without ever explaining why per-weight is the right basis for comparison."},
+      {"blockId": "spya-hng89u", "quote": "a given weight of spider silk is five times as strong as the same weight of steel", "reasoning": "Repeats the raw tensile numbers alongside a density figure, which only yields the stated conclusion if the reader converts to a strength-per-mass basis themselves."},
+      {"blockId": "spya-mhe2r5", "quote": "A dragline silk's tensile strength is comparable to that of high-grade alloy steel (450−2000 MPa)", "reasoning": "Gives a raw-stress comparison that looks unremarkable unless paired with the unstated density adjustment used elsewhere to make silk look superior."}
+    ]
+  },
+  {
+    "name": "Copying the molecule is not enough to copy the material",
+    "provenance": "introduced",
+    "statement": "Producing a working artificial version of spider silk requires two separate achievements: synthesizing the right protein feedstock, and separately reproducing the physical spinning conditions (duct geometry, pH changes, pulling forces) that turn that feedstock into a solid fibre with the right properties.",
+    "occurrences": [
+      {"blockId": "spya-wgee6t", "quote": "These are synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions (the funnel, valve, tapering duct, and spigot).", "reasoning": "States the two-part requirement directly."},
+      {"blockId": "spya-up6vkg", "quote": "Spider silks with comparatively simple molecular structure need complex ducts to be able to form an effective fibre.", "reasoning": "Shows that even a simplified molecule still needs the processing half solved, reinforcing that the two problems are independent."},
+      {"blockId": "spya-jzcepa", "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.", "reasoning": "The shortfall is explained by incomplete solutions to both feedstock and process, which only makes sense under the two-part framework."}
+    ]
+  }
+]}

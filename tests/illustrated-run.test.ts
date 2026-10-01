@@ -188,6 +188,20 @@ describe("generateIllustrated", () => {
     expect(system).toMatch(/The ids are for these instructions, not\s+for the reader/);
   });
 
+  /* The effort eval's override (plan 261001p) must leave today's request
+     alone: no `output_config` unless one is asked for, so production keeps the
+     API's implicit default and the eval's base arm is production's bytes. */
+  it("sends no effort by default, and only the eval's option adds one", async () => {
+    const { draw } = drawer();
+    await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw });
+    expect(streamMessage.mock.calls[0]?.[1]).toMatchObject({ thinking: { type: "adaptive" } });
+    expect(streamMessage.mock.calls[0]?.[1]).not.toHaveProperty("output_config");
+
+    streamMessage.mockClear();
+    await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw, effort: "low" });
+    expect(streamMessage.mock.calls[0]?.[1]).toMatchObject({ output_config: { effort: "low" } });
+  });
+
   it("draws a plate per scene, the overview first", async () => {
     const { draw, calls } = drawer();
     const run = await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw });

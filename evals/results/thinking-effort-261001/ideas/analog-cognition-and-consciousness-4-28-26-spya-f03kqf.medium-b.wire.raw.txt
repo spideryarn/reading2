@@ -1,0 +1,82 @@
+{"ideas": [
+  {
+    "name": "Waves and spikes bidirectionally co-construct each other",
+    "provenance": "introduced",
+    "statement": "Brain waves are not just a byproduct of neuron firing; spikes generate the waves, but the waves then feed back to determine when and where the next spikes occur, forming a continuous loop rather than a one-way chain from spikes to waves.",
+    "occurrences": [
+      {"blockId": "spya-z9g2s3", "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.", "reasoning": "States the bidirectional loop that is the paper's central mechanism."},
+      {"blockId": "spya-c5z6sr", "quote": "Cognition and consciousness may arise from bidirectional interactions between neuron spiking and large-scale brain waves.", "reasoning": "Opens the abstract with the same bidirectional claim."},
+      {"blockId": "spya-f0dqyd", "quote": "This creates a feedback loop: Synapses shape spiking, spiking contributes to brain waves, and waves shape spiking.", "reasoning": "Spells out the loop explicitly as the hybrid framework's engine."}
+    ]
+  },
+  {
+    "name": "Multifunctional neurons expand a network's capacity and power",
+    "provenance": "introduced",
+    "statement": "Neurons that respond to nonlinear combinations of different variables (mixed selectivity) rather than one fixed feature let a fixed population of neurons represent and store far more distinct patterns than a population of narrowly specialized neurons could.",
+    "occurrences": [
+      {"blockId": "spya-njs6ff", "quote": "Modeling studies show that such neurons greatly expand a network’s computational power by providing a higher-order representational space", "reasoning": "Directly claims the capacity benefit of mixed selectivity."},
+      {"blockId": "spya-amx5qf", "quote": "Under the traditional connectionist model, this would imply that we can only learn about three different cognitive functions before essentially all prefrontal neurons have been \u201cassigned a function\u201d, and its computational capacity is saturated.", "reasoning": "Shows why fixed, specialized coding runs out of room, motivating the multifunctional alternative."},
+      {"blockId": "spya-fnm872", "quote": "This indicates the cortex is not a mosaic of isolated, specialized, circuits of specialized areas. This means that cortical neurons have the capacity to participate in multiple networks, shifting membership as needed.", "reasoning": "States the reuse-of-neurons consequence of mixed selectivity."}
+    ]
+  },
+  {
+    "name": "Electric fields can steer spiking without synapses (ephaptic coupling)",
+    "provenance": "introduced",
+    "statement": "Oscillating extracellular electric fields push neurons' membrane voltages up or down directly, bypassing synaptic transmission entirely, so a wave can recruit or silence a population of neurons on its own.",
+    "occurrences": [
+      {"blockId": "spya-bzqaf5", "quote": "Ephaptic coupling in the brain is the influence of neuronal electric fields on nearby neurons’ membrane potentials, allowing interaction and coordination independent of synapses", "reasoning": "States the mechanism directly."},
+      {"blockId": "spya-bzqaf5", "quote": "cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells, even when chemical synapses and gap junctions are blocked", "reasoning": "Gives concrete evidence that fields alone (no synapses) can coordinate neurons."},
+      {"blockId": "spya-j7k4hu", "quote": "changes in electric fields arise essentially concurrently with the underlying transmembrane currents and spread through the local tissue at the speed of electromagnetic propagation, making them effectively instantaneous on neuronal timescales", "reasoning": "Explains why this non-synaptic route is fast enough for the proposed control role."}
+    ]
+  },
+  {
+    "name": "Spatial stencils of alpha/beta suppression gate where gamma/spiking appears",
+    "provenance": "introduced",
+    "statement": "A spatially patterned alpha/beta wave acts like a temporary stencil laid over the cortex, damping feedforward gamma activity and spiking everywhere except in the gaps, so the same stimulus produces different spiking patterns depending on which stencil is currently active.",
+    "occurrences": [
+      {"blockId": "spya-gkfdys", "quote": "They function as temporary inhibitory \u201cstencils\u201d across the surface of cortex. This regulates gamma and spiking in the feedforward and local recurrent circuits", "reasoning": "States the core mechanism of the theory."},
+      {"blockId": "spya-vzew3p", "quote": "the same object induces two different spatial patterns of population response, depending on the sculpting effects of alpha/beta.", "reasoning": "Gives the figure's illustration of context-dependent gating."},
+      {"blockId": "spya-ectcj5", "quote": "the same neuron may receive many different sensory signals and may lie inside the inhibitory stencil in one context and outside it in another. This context-dependent gating can make a neuron effectively change its selectivity", "reasoning": "Uses the stencil idea to explain mixed selectivity, showing its explanatory reach."}
+    ]
+  },
+  {
+    "name": "Traveling waves drive transitions between neural coding states",
+    "provenance": "introduced",
+    "statement": "Rather than a stationary rhythm merely holding a representation steady, a wave of alpha/beta activity physically sweeping across cortex can be the event that moves population activity from one coding configuration (subspace) to another.",
+    "occurrences": [
+      {"blockId": "spya-mrsvfu", "quote": "we propose that alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another", "reasoning": "States the hypothesis directly."},
+      {"blockId": "spya-qr9ra4", "quote": "both the onset of beta rhythms evoked by a movement target...and their offset just prior to movement onset...have been shown to form a spatiotemporal wave across the surface of motor cortex", "reasoning": "Gives empirical cases where a wave, not a static level, marks the state change."},
+      {"blockId": "spya-ah94dx", "quote": "As traveling waves sweep continuously over the cortex, they may \u201cpull\u201d population spiking activity along, creating repeatable smooth trajectories", "reasoning": "Links traveling waves causally to the smooth trajectories seen in population activity."}
+    ]
+  },
+  {
+    "name": "Wave interference as analog computation",
+    "provenance": "introduced",
+    "statement": "When multiple brain waves overlap, their summation and interference is itself a computation: the variables are the amplitudes and phases of each wave, and the combined pattern that results is the answer, computed all at once across the tissue rather than step by step.",
+    "occurrences": [
+      {"blockId": "spya-vp5h33", "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference", "reasoning": "States the physical basis of wave computation."},
+      {"blockId": "spya-mgnqxk", "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel. An analog system does not loop through variables but settles into a solution as a whole.", "reasoning": "Explains why this counts as computation rather than mere signal mixing."},
+      {"blockId": "spya-prykb8", "quote": "Their wave summation would essentially compute an intersection of constraints, resulting in a unique spatiotemporal pattern of neural activation for every possible combination of contexts", "reasoning": "Applies the idea concretely to combining two task contexts."}
+    ]
+  },
+  {
+    "name": "Different anesthetics converging on the same wave disruption implicates waves, not receptors, in consciousness",
+    "provenance": "introduced",
+    "statement": "Because chemically unrelated anesthetics acting on completely different molecular targets all produce the same shift toward slow, desynchronized cortical waves, the loss of consciousness they cause is better explained by the resulting breakdown of large-scale wave organization than by any specific receptor or cell type.",
+    "occurrences": [
+      {"blockId": "spya-wnqgmn", "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex", "reasoning": "States the convergence across mechanistically distinct drugs."},
+      {"blockId": "spya-k02vdw", "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.", "reasoning": "Draws the inference that follows from the convergence."}
+    ]
+  },
+  {
+    "name": "A control mechanism must not need to know which specific synapses to touch",
+    "provenance": "assumed",
+    "statement": "A biologically workable system for flexibly routing cognition cannot require some internal overseer to identify and individually adjust the particular synapses and neurons involved in a given thought at that moment; whatever does the routing has to act on populations wholesale rather than by addressing specific connections.",
+    "whyYouNeedIt": "Without this premise, the argument that synapse-based control is 'implausible' and that wave-based gating is the needed alternative has no force; the paper never argues for this standard of plausibility, it just applies it repeatedly.",
+    "occurrences": [
+      {"blockId": "spya-d73kfb", "quote": "That would require a control system to \u201cknow\u201d which synapses and neurons were employed for any given neural representation and selectively coordinate them with subsecond precision, a seemingly implausible computational demand.", "reasoning": "Relies on the reader already accepting that requiring such precise addressed knowledge is a mark against a mechanism, without arguing why that is the right standard."},
+      {"blockId": "spya-gxyg0d", "quote": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information", "reasoning": "Presents avoidance of synapse-specific knowledge as a selling point, assuming the reader already treats that as the key desideratum for a good control mechanism."},
+      {"blockId": "spya-dtnkkk", "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights. A more computationally tractable mechanism seems to be needed.", "reasoning": "Moves from 'hard to reconcile' to 'a different mechanism is needed' only if the reader shares the assumption that synapse-only routing is intractable at the required speed and specificity."}
+    ]
+  }
+]}

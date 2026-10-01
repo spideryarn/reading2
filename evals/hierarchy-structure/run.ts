@@ -277,6 +277,8 @@ async function treeFor(
   built?: BuildReport;
   /** Set when a model arm spent its money and produced nothing. */
   threw?: string;
+  /** The refused answer, verbatim, when there was one — see `ArmFailure.raw`. */
+  failedRaw?: string;
 }> {
   switch (arm.kind) {
     case "headings": {
@@ -304,7 +306,12 @@ async function treeFor(
              throw at depth three, and a row that recorded only the throw lost
              the repair figures for exactly the answers a reader would go
              looking at. GPT Sol, finding 5. */
-          return { threw: err.message, calls: err.calls, ...(err.built ? { built: err.built } : {}) };
+          return {
+            threw: err.message,
+            calls: err.calls,
+            ...(err.built ? { built: err.built } : {}),
+            ...(err.raw !== undefined ? { failedRaw: err.raw } : {}),
+          };
         }
         throw err;
       }
@@ -588,7 +595,7 @@ async function main(): Promise<void> {
         /* The complete cell, timed around `treeFor` — see ArmResult.elapsedMs
            for why `performance.now()` rather than `Date.now()`. */
         const cellStartedAt = performance.now();
-        const { tree, threw, ...chose } = await treeFor(arm, article);
+        const { tree, threw, failedRaw, ...chose } = await treeFor(arm, article);
         const elapsedMs = Math.round(performance.now() - cellStartedAt);
         const shared = {
           arm: arm.name,
@@ -678,6 +685,11 @@ async function main(): Promise<void> {
             `${JSON.stringify(tree, null, 2)}\n`,
             "utf-8",
           );
+        }
+        if (failedRaw !== undefined) {
+          /* Beside the trees, so a refused answer can be read, not only counted. */
+          const suffix = repeat > 1 ? `.r${run}` : "";
+          await writeFile(path.join(runDir, "trees", `${arm.name}.${article.slug}${suffix}.failed.txt`), failedRaw, "utf-8");
         }
         runFile.results.push(result);
         await checkpoint();

@@ -1,0 +1,109 @@
+{
+  "caption": "The talk funnels a broad hunt through pseudoscience down into one named failure, 'Cargo Cult Science', crystallizes a single rule ('you are the easiest person to fool'), fans that rule out into real case studies, then loops back at the end to the same demand for honesty it opened with.",
+  "title": "Funnel into a loop",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "Four movements stacked in reading order: a survey of failed pseudosciences narrows into the named problem and its core rule, which then branches into examples, before the closing wish loops back to the opening demand for honest testing.",
+      "height": 1820,
+      "items": [
+        {"kind":"region","x":190,"y":40,"w":380,"h":450,"label":"SURVEYING PSEUDOSCIENCE","style":"band","tone":1,"opens":"inside-pseudoscience"},
+        {"kind":"node","id":"n1","shape":"ellipse","x":230,"y":90,"w":300,"h":70,"size":"md","tone":1,"text":"Science learns to test ideas, discard failures","block":"spya-ddrr9m","detail":"Science arose from trying an idea and throwing it out if it didn't work; yet many still believe things that never work."},
+        {"kind":"node","id":"n2","shape":"box","x":230,"y":190,"w":300,"h":70,"tone":1,"text":"Mysticism, ESP, Geller's keys — nothing works","block":"spya-q4502k","detail":"Isolation tanks, Esalen, reflexology, and Uri Geller's key-bending all failed to show anything real."},
+        {"kind":"node","id":"n3","shape":"box","x":230,"y":290,"w":300,"h":70,"tone":1,"text":"Reading and crime 'science' shows no real gains","block":"spya-aww976"},
+        {"kind":"node","id":"n4","shape":"box","x":230,"y":390,"w":300,"h":70,"tone":1,"text":"Cocktail-party test flags empty topics","block":"spya-wc4h5s","detail":"If you can talk about it at a party without seeming to talk shop, nobody really knows anything about it."},
+
+        {"kind":"region","x":190,"y":510,"w":540,"h":400,"label":"NAMING THE PROBLEM","style":"band","tone":2},
+        {"kind":"node","id":"n5","shape":"hex","x":230,"y":560,"w":300,"h":80,"size":"md","tone":2,"text":"Names it: Cargo Cult Science","block":"spya-fd2muf","detail":"Like islanders who build fake runways and control towers, hoping planes land — the form of science without the substance that makes it work."},
+        {"kind":"node","id":"n6","shape":"box","x":230,"y":680,"w":300,"h":70,"tone":2,"text":"Integrity: report evidence against yourself","block":"spya-afgs74"},
+        {"kind":"node","id":"n7","shape":"note","x":560,"y":680,"w":170,"h":70,"tone":2,"text":"Unlike ads' true-but-misleading claims","block":"spya-bpyx8n"},
+        {"kind":"node","id":"n8","shape":"box","x":230,"y":780,"w":300,"h":70,"tone":2,"text":"Careless work eventually gets exposed","block":"spya-az6z7k"},
+
+        {"kind":"region","x":190,"y":920,"w":380,"h":440,"label":"GUARDING AGAINST SELF-DECEPTION","style":"band","tone":3},
+        {"kind":"node","id":"n9","shape":"box","x":230,"y":960,"w":300,"h":70,"tone":3,"text":"Millikan's electron charge crept upward for years","block":"spya-s9msxy","detail":"Later measurements inched toward the true value because researchers distrusted results too far from Millikan's flawed original."},
+        {"kind":"node","id":"n10","shape":"hex","x":230,"y":1060,"w":300,"h":80,"size":"md","tone":3,"text":"Rule one: you are easiest to fool","block":"spya-bvx2u8","detail":"The first principle of scientific integrity — after that, being honest with others is easy."},
+        {"kind":"node","id":"n11","shape":"box","x":230,"y":1170,"w":300,"h":70,"tone":3,"text":"Owe the public the same honesty","block":"spya-c46yyu"},
+        {"kind":"node","id":"n12","shape":"box","x":230,"y":1270,"w":300,"h":70,"tone":3,"text":"Publish every outcome, not just favorable ones","block":"spya-jk7mj4"},
+
+        {"kind":"region","x":190,"y":1380,"w":380,"h":280,"label":"CASE STUDIES IN POOR SCIENCE","style":"band","tone":4,"opens":"inside-case-studies"},
+        {"kind":"node","id":"n13a","shape":"box","x":230,"y":1410,"w":300,"h":60,"tone":4,"text":"Psychology skips repeating prior experiments","block":"spya-w9nnq6"},
+        {"kind":"node","id":"n13b","shape":"box","x":230,"y":1490,"w":300,"h":60,"tone":4,"text":"Young's careful rat clues later ignored","block":"spya-fvenms","detail":"Young eliminated every stray clue a rat could use to find the right door; later researchers never adopted his controls."},
+        {"kind":"node","id":"n13c","shape":"box","x":230,"y":1570,"w":300,"h":60,"tone":4,"text":"Rhine's ESP effects shrink toward zero","block":"spya-rbpppq"},
+
+        {"kind":"node","id":"n14","shape":"ellipse","x":230,"y":1700,"w":300,"h":80,"size":"md","tone":1,"text":"Final wish: freedom to keep your integrity","block":"spya-ndyj3t","detail":"Feynman's closing wish: may you work somewhere you're free to hold to this honesty without institutional pressure to drop it."},
+
+        {"kind":"edge","from":"n1","to":"n2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n2","to":"n3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n3","to":"n4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n4","to":"n5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n5","to":"n6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n6","to":"n7","via":"straight","arrow":"none","line":"dashed"},
+        {"kind":"edge","from":"n6","to":"n8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n8","to":"n9","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n9","to":"n10","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n10","to":"n11","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n11","to":"n12","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n12","to":"n13a","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n13a","to":"n13b","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n13b","to":"n13c","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n13c","to":"n14","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n14:left","to":"n1:left","via":"curve","arrow":"end","line":"dashed","label":"same demand for honesty"}
+      ]
+    },
+    {
+      "id": "inside-pseudoscience",
+      "title": "Surveying pseudoscience",
+      "caption": "A chain of Feynman's own investigations, each one failing to produce anything real, leading to the rule of thumb that lets him spot an empty field.",
+      "height": 860,
+      "items": [
+        {"kind":"node","id":"p1","shape":"ellipse","x":230,"y":40,"w":300,"h":70,"size":"md","text":"Science tests ideas and discards the failures","block":"spya-ddrr9m"},
+        {"kind":"node","id":"p2","shape":"box","x":230,"y":140,"w":300,"h":70,"text":"Yet UFOs, astrology, ESP still thrive today","block":"spya-bcgpc3"},
+        {"kind":"node","id":"p3","shape":"box","x":230,"y":240,"w":300,"h":70,"text":"Tries isolation tanks, Esalen, reflexology","block":"spya-q4502k"},
+        {"kind":"node","id":"p4","shape":"note","x":560,"y":240,"w":170,"h":70,"text":"A masseur hunts for the 'pituitary' in a toe","block":"spya-xm9a87"},
+        {"kind":"node","id":"p5","shape":"box","x":230,"y":340,"w":300,"h":70,"text":"Uri Geller's key-bending fails, even underwater","block":"spya-mmhbvn"},
+        {"kind":"node","id":"p6","shape":"box","x":230,"y":440,"w":300,"h":70,"text":"Reading and crime 'science' shows no progress","block":"spya-aww976"},
+        {"kind":"node","id":"p7","shape":"box","x":230,"y":540,"w":300,"h":70,"text":"Pseudoscience intimidates people with good sense","block":"spya-re4634"},
+        {"kind":"node","id":"p8","shape":"box","x":230,"y":640,"w":300,"h":60,"text":"So we should study the sciences that don't work","block":"spya-g2cwvy"},
+        {"kind":"node","id":"p9","shape":"box","x":230,"y":720,"w":300,"h":70,"text":"Cocktail-party test spots empty topics","block":"spya-wc4h5s"},
+        {"kind":"node","id":"p10","shape":"note","x":560,"y":720,"w":170,"h":70,"text":"Psychotherapy added to the list","block":"spya-ankp3d"},
+
+        {"kind":"edge","from":"p1","to":"p2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p2","to":"p3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p3","to":"p4","via":"straight","arrow":"none","line":"dashed"},
+        {"kind":"edge","from":"p3","to":"p5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p5","to":"p6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p6","to":"p7","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p7","to":"p8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p8","to":"p9","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p9","to":"p10","via":"straight","arrow":"none","line":"dashed"}
+      ]
+    },
+    {
+      "id": "inside-case-studies",
+      "title": "Case studies in poor science",
+      "caption": "Four episodes, in the order Feynman tells them, each showing the same gap: a check that was skipped, and what happened because nobody insisted on it.",
+      "height": 850,
+      "items": [
+        {"kind":"node","id":"c1","shape":"box","x":230,"y":40,"w":300,"h":70,"text":"A student wants to test rats under new conditions","block":"spya-w9nnq6"},
+        {"kind":"node","id":"c2","shape":"box","x":230,"y":140,"w":300,"h":70,"text":"First repeat the original experiment exactly","block":"spya-tf8rj2"},
+        {"kind":"node","id":"c3","shape":"box","x":230,"y":240,"w":300,"h":70,"text":"Her professor forbids it as a waste of time","block":"spya-v0xcd7"},
+        {"kind":"node","id":"c4","shape":"box","x":230,"y":340,"w":300,"h":70,"text":"A physics lab skips a needed comparison run too","block":"spya-m95kqm"},
+        {"kind":"node","id":"c5","shape":"hex","x":230,"y":440,"w":300,"h":80,"text":"Young rules out every stray rat clue","block":"spya-fvenms"},
+        {"kind":"node","id":"c6","shape":"note","x":560,"y":440,"w":170,"h":80,"text":"Only sand under the floor finally stops them","block":"spya-npdc6n"},
+        {"kind":"node","id":"c7","shape":"box","x":230,"y":550,"w":300,"h":70,"text":"Later researchers ignore Young's careful method","block":"spya-wye8g6"},
+        {"kind":"node","id":"c8","shape":"box","x":230,"y":650,"w":300,"h":70,"text":"Rhine's ESP effects shrink as controls improve","block":"spya-rbpppq"},
+        {"kind":"node","id":"c9","shape":"box","x":230,"y":750,"w":300,"h":70,"text":"Trains only students who get 'results'","block":"spya-g203mu"},
+
+        {"kind":"edge","from":"c1","to":"c2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c2","to":"c3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c3","to":"c4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c4","to":"c5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c5","to":"c6","via":"straight","arrow":"none","line":"dashed"},
+        {"kind":"edge","from":"c5","to":"c7","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c7","to":"c8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c8","to":"c9","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,224 @@
+```json
+{
+  "style": "An illuminated manuscript page — hand-lettered capitals, gold-leaf accents, sepia and ochre washes, framed vignettes in a scholarly register that suits a long academic argument about evidence and error.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Shape of the Crisis",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-pcnqxn",
+          "quote": "the reproducibility of empirical results is the cornerstone of the scientific method",
+          "depicts": "A stonemason setting a single great cornerstone at the base of a tall unfinished stone tower, other masons waiting above with half-built walls resting on it.",
+          "title": "CORNERSTONE OF SCIENCE"
+        },
+        {
+          "node": "n2",
+          "block": "spya-xrc2re",
+          "quote": "technically precise meanings, which are presented here",
+          "depicts": "A scholar at a lectern displaying a set of calibrated instruments — a balance, a graduated rule, an hourglass — laid out as the precise tools of measurement.",
+          "title": "PRECISE MEANINGS DEFINED"
+        },
+        {
+          "node": "n3",
+          "block": "spya-t3scy3",
+          "quote": "social psychologist John Bargh's much-cited \"elderly-walking\" study",
+          "depicts": "Elderly figures shuffling slowly down a corridor while a young researcher crouches behind a pillar with an hourglass, timing their steps.",
+          "title": "THE ELDERLY-WALKING STUDY"
+        },
+        {
+          "node": "n4",
+          "block": "spya-dg8j93",
+          "quote": "declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A council of robed scholars standing before a tall stack of papers that is visibly toppling, hands raised in alarm.",
+          "title": "CRISIS OF CONFIDENCE DECLARED"
+        },
+        {
+          "node": "n6",
+          "block": "spya-bha57y",
+          "quote": "researchers redid 100 studies in psychological science from three high-ranking psychology journals",
+          "depicts": "A long hall lined with a hundred small scroll-stations, at each of which a robed researcher repeats an experiment from an older scroll beside it.",
+          "title": "100 STUDIES REDONE"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions",
+          "depicts": "A laboratory bench of fifty-three sealed vials in a row; only a handful glow with a confirming light, the rest stand dark and unlit.",
+          "title": "11% OF CANCER STUDIES CONFIRMED"
+        },
+        {
+          "node": "n9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A crowd of scientists at many different workbenches, all attempting the same apparatus and shaking their heads at the same failed result, their benches converging toward one central point.",
+          "title": "70% COULDN'T REPRODUCE RESULTS"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y782zn",
+          "quote": "the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "A heavy wooden cabinet with one drawer stuffed full of blank, crumpled papers being pushed shut, while a neat published pile sits openly on the desk beside it.",
+          "title": "THE FILE DRAWER EFFECT"
+        },
+        {
+          "node": "n12",
+          "block": "spya-kqvxfb",
+          "quote": "HARKing (hypothesizing after results are known)",
+          "depicts": "A researcher at a desk with the finished data already spread before him, now dipping a quill to write a fresh hypothesis onto a blank scroll.",
+          "title": "HYPOTHESIS AFTER THE RESULTS"
+        },
+        {
+          "node": "n14",
+          "block": "spya-t88q4a",
+          "quote": "names such as \"methodological terrorist\" and \"self-appointed data police\"",
+          "depicts": "A robed figure pointing accusingly across a table at another figure who holds a magnifying glass over an open paper.",
+          "title": "CALLED A METHODOLOGICAL TERRORIST"
+        },
+        {
+          "node": "n16",
+          "block": "spya-astgqn",
+          "quote": "the strategic use of multiple approaches to address one question",
+          "depicts": "Three different instruments — a telescope, a balance, and a compass — each held by a separate scholar, all three aimed at the same single distant star.",
+          "title": "MULTIPLE APPROACHES, ONE QUESTION"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vertical, sepia parchment with gold-leaf accents, hand-lettered capitals only beneath each scene and no other writing anywhere on the page. The composition runs top to bottom in a single flowing column of framed vignettes, each large enough to read clearly, separated by thin ruled borders rather than crowded marginalia. At the top, inside a small arch, a mason sets a single cornerstone into a half-built stone tower (CORNERSTONE OF SCIENCE); beside it a scholar at a lectern displays a balance, a graduated rule and an hourglass (PRECISE MEANINGS DEFINED). Below, in a bordered chamber representing the crisis's origin, elderly figures shuffle down a corridor timed secretly by a crouching researcher with an hourglass (THE ELDERLY-WALKING STUDY), followed by a council of scholars recoiling from a toppling stack of papers (CRISIS OF CONFIDENCE DECLARED). Next, in a wider chamber for evidence, a hall of a hundred small scroll-stations where researchers repeat old experiments (100 STUDIES REDONE) sits beside a bench of fifty-three vials where only a few glow with confirmation (11% OF CANCER STUDIES CONFIRMED); both funnel downward into a single wide scene of many workbenches converging toward one point where scientists shake their heads at the same failure (70% COULDN'T REPRODUCE RESULTS). From this convergence the page forks into two framed side-by-side cells: on the left a wooden cabinet with a drawer stuffed with blank crumpled papers beside a neat published pile (THE FILE DRAWER EFFECT); on the right a researcher writing a new hypothesis onto a blank scroll with the finished data already before him (HYPOTHESIS AFTER THE RESULTS). The two forks rejoin at the bottom into a final chamber: a figure pointing accusingly at another holding a magnifying glass over a paper (CALLED A METHODOLOGICAL TERRORIST), followed by the closing vignette of three scholars with a telescope, a balance and a compass, all three aimed at one distant star (MULTIPLE APPROACHES, ONE QUESTION). Palette: warm ochre parchment, iron-gall brown ink, muted cobalt and deep red washes, restrained gold leaf on borders and instruments. Figures drawn in a flat, hand-painted medieval manner with no modern objects. Ample bare parchment between chambers; no text anywhere except the short capital-lettered titles beneath each scene."
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "Evidence Converges Across Fields",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A panel of robed judges examining ninety-seven scrolls laid on a long table, stamping roughly a third of them with a mark of approval and leaving the rest unmarked.",
+          "title": "36% OF STUDIES REPLICATED"
+        },
+        {
+          "node": "e3",
+          "block": "spya-k59a2x",
+          "quote": "the effect sizes were 85% smaller on average than the original findings",
+          "depicts": "A researcher holding two stacked measuring rods side by side — one tall, one much shorter — comparing an original cancer-study result to its shrunken replication.",
+          "title": "EFFECT SIZES SHRINK 85%"
+        },
+        {
+          "node": "e5",
+          "block": "spya-d977mu",
+          "quote": "there were studies that found that the ingredient has an effect on cancer risk",
+          "depicts": "A cook at a table surrounded by many food ingredients, each with a small unmarked paper tag pinned to it, representing a claimed cancer-risk study.",
+          "title": "EVERY INGREDIENT, A CANCER CLAIM"
+        },
+        {
+          "node": "e6",
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated",
+          "depicts": "Economists seated at ledger tables, about six of every ten ledger columns marked with a confirming seal, the remaining columns crossed through.",
+          "title": "61% OF ECONOMICS STUDIES REPLICATED"
+        },
+        {
+          "node": "e7",
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A surveyor beside a river holding a great bundle of water-management reports, most crumbling to dust in his hands, only a tiny fraction held intact.",
+          "title": "ONLY 0.6%–6.8% REPRODUCIBLE"
+        },
+        {
+          "node": "e8",
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "A monk kneeling before a brass clockwork oracle, asking it the same question three times and receiving three different answers unrolled on three separate scrolls.",
+          "title": "SAME QUESTION, SHIFTING ANSWERS"
+        },
+        {
+          "node": "e9",
+          "block": "spya-fuynra",
+          "quote": "87% of chemists, 77% of biologists, 69% of physicists and engineers",
+          "depicts": "A grand hall where streams of robed workers from many different doorways — one holding a flask, one a leaf, one an alchemist's rod — all pour into a single central basin.",
+          "title": "ACROSS EVERY FIELD, THE SAME FAILURE"
+        },
+        {
+          "node": "e10",
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "A crowded library where a crumbling, flawed scroll on a high pedestal receives a long line of bowing visitors, while a sound, unblemished scroll on a lower pedestal stands unvisited.",
+          "title": "THE FLAWED PAPER, MOST CITED"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, the inside view of the evidence chamber glimpsed in the overview, opened by the same convergence imagery drawn larger. At the top, repeat the overview's funnel gesture: a panel of judges stamping about a third of ninety-seven scrolls with approval (36% OF STUDIES REPLICATED). Below it, in its own framed cell, a researcher compares two stacked measuring rods, one far shorter than the other (EFFECT SIZES SHRINK 85%). Beside that, a cook surrounded by tagged ingredients (EVERY INGREDIENT, A CANCER CLAIM), and economists marking ledger columns, six of ten sealed (61% OF ECONOMICS STUDIES REPLICATED). Further down, a surveyor by a river holds crumbling water-reports (ONLY 0.6%–6.8% REPRODUCIBLE), and a monk questions a brass clockwork oracle that gives three different scrolled answers to one question (SAME QUESTION, SHIFTING ANSWERS). All six of these framed cells sit above a single wide scene occupying the lower third of the page: a grand hall where streams of robed workers bearing a flask, a leaf, and an alchemist's rod pour from separate doorways into one shared basin, visually converging as the overview's fork becomes a single pool (ACROSS EVERY FIELD, THE SAME FAILURE). Beneath that, the final scene of the plate: a crowded library in which a crumbling scroll on a high pedestal draws a long bowing line of visitors while a sound scroll nearby stands ignored (THE FLAWED PAPER, MOST CITED), closing the plate on its irony. Palette and hand matched exactly to the overview — warm ochre parchment, iron-gall brown line work, muted cobalt and deep red washes, restrained gold leaf on pedestals and basin rim. No lettering anywhere except the short capital titles beneath each scene; generous bare parchment between the upper cells and the two wide closing scenes."
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Families of Causes",
+      "vignettes": [
+        {
+          "node": "c1",
+          "block": "spya-v697nj",
+          "quote": "the \"generation of new data and scientific publications at an unprecedented rate\"",
+          "depicts": "An overflowing printing press spewing out scrolls far faster than the scribes beside it can gather them, scrolls piling onto the floor.",
+          "title": "PUBLICATIONS AT UNPRECEDENTED RATE"
+        },
+        {
+          "node": "c2",
+          "block": "spya-y782zn",
+          "quote": "the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "A heavy wooden cabinet with one drawer stuffed full of blank, crumpled papers being pushed shut, while a neat published pile sits openly on the desk beside it.",
+          "title": "THE FILE DRAWER EFFECT"
+        },
+        {
+          "node": "c3",
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A scribe comparing two columns of figures in an ornate journal, finding one number that plainly does not match the other and marking it with a small cross.",
+          "title": "11% OF PUBLISHED STATS WRONG"
+        },
+        {
+          "node": "c4",
+          "block": "spya-cw2g6v",
+          "quote": "Intense pressure to publish in recognized journals, driven by hypercompetitive environments",
+          "depicts": "A researcher harnessed to a treadmill built of stacked journals, running to keep pace while an overseer above tallies marks on a board.",
+          "title": "PRESSURE TO PUBLISH OR PERISH"
+        },
+        {
+          "node": "c5",
+          "block": "spya-gjx6ut",
+          "quote": "None of the 193 papers examined had its experimental protocols fully described",
+          "depicts": "A hall of many sealed scroll-cases, all locked shut, with a frustrated researcher trying in vain to pry one open to read its hidden method.",
+          "title": "PROTOCOLS NEVER FULLY DESCRIBED"
+        },
+        {
+          "node": "d1",
+          "block": "spya-kqvxfb",
+          "quote": "HARKing (hypothesizing after results are known)",
+          "depicts": "A researcher at a desk with the finished data already spread before him, now dipping a quill to write a fresh hypothesis onto a blank scroll.",
+          "title": "HYPOTHESIS AFTER THE RESULTS"
+        },
+        {
+          "node": "d2",
+          "block": "spya-zvfgme",
+          "quote": "on average, psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "A nearly empty lecture hall where only a third of the seats hold a test subject, the rest standing bare, while an examiner tries to draw a conclusion from the sparse room.",
+          "title": "ONLY ~34% STATISTICAL POWER"
+        },
+        {
+          "node": "d3",
+          "block": "spya-r5jmvb",
+          "quote": "adding noise overestimates the regression factor about 50% of the times",
+          "depicts": "A measuring scale surrounded by a small scattered handful of data-grains, its needle swinging far higher than it should under the shaking of unsteady hands.",
+          "title": "SMALL SAMPLES INFLATE EFFECTS"
+        },
+        {
+          "node": "d6",
+          "block": "spya-pknetn",
+          "quote": "statistical studies on extrasensory perception reject the null hypothesis at extremely low p-value",
+          "depicts": "A tester holding a hand of marked cards before a blindfolded subject guessing their symbols, while scholars behind a desk shake their heads at the recorded result.",
+          "title": "ESP AND THE NULL HYPOTHESIS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page divided down the centre into two parallel columns beneath a shared upper border, echoing the overview's fork at the causes chamber. The page opens, as in the overview, with the same two framing vignettes placed side by side at the top: on the left, the wooden cabinet with its drawer stuffed with blank crumpled papers (THE FILE DRAWER EFFECT); on the right, the researcher writing a hypothesis onto a blank scroll after the data is already before him (HYPOTHESIS AFTER THE RESULTS) — drawn exactly as before, so the reader recognises which fork they have entered. Above both, a single small scene spans the top margin: an overflowing printing press spewing scrolls faster than scribes can gather them (PUBLICATIONS AT UNPRECEDENTED RATE). Down the left column beneath its opening scene: a scribe comparing two mismatched columns of figures in an ornate journal and marking an error (11% OF PUBLISHED STATS WRONG); a researcher harnessed to a treadmill of stacked journals, driven by an overseer tallying marks (PRESSURE TO PUBLISH OR PERISH); and a hall of locked scroll-cases with a frustrated researcher prying at one in vain (PROTOCOLS NEVER FULLY DESCRIBED). Down the right column beneath its opening scene: a nearly empty lecture hall with only a third of its seats filled by test subjects (ONLY ~34% STATISTICAL POWER); a measuring scale with its needle swinging too high amid a scattering of sparse data-grains (SMALL SAMPLES INFLATE EFFECTS); and a tester with marked cards before a blindfolded guesser, scholars shaking their heads behind a desk (ESP AND THE NULL HYPOTHESIS). The two columns are separated by a plain ruled vertical border, not text, with equal bare parchment either side so neither column crowds the other. Palette and hand matched to the other plates — warm ochre parchment, iron-gall brown line, muted cobalt and deep red washes, restrained gold leaf on borders. No lettering anywhere on the page except the short capital titles beneath each scene."
+    }
+  ]
+}
+```

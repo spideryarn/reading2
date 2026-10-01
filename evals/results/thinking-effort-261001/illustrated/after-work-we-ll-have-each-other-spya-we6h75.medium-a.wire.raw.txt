@@ -1,0 +1,222 @@
+{
+  "style": "An illuminated manuscript page — gold-leafed vellum with small framed historiated scenes linked by vine-scroll borders, fitting an article built on courtiers, memoirists, and old money.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Relational Wager",
+      "vignettes": [
+        {
+          "node": "thesis",
+          "block": "spya-eq7rkm",
+          "quote": "you’ll be giving two cheers for the American work ethic",
+          "depicts": "A robed figure stands at a workbench, hands raised in a two-fold cheer, as if saluting ordinary labor before it vanishes.",
+          "title": "TWO CHEERS FOR WORK"
+        },
+        {
+          "node": "a1",
+          "block": "spya-x4w0zk",
+          "quote": "obsessed with nuances of heredity and precedence to the exclusion of every other human concern",
+          "depicts": "A courtier bent over an unrolled heraldic scroll, magnifying glass in hand, surrounded by idle courtiers and untouched books of philosophy.",
+          "title": "OBSESSED WITH PRECEDENCE"
+        },
+        {
+          "node": "b1",
+          "block": "spya-udyc09",
+          "quote": "the women see to it that the social network of ‘congenial’ people is kept in good order",
+          "depicts": "A well-dressed woman at the center of a web of threads linking small portraits of society friends, straightening a crooked strand.",
+          "title": "KEEPING THE NETWORK IN ORDER"
+        },
+        {
+          "node": "c1",
+          "block": "spya-ghqg2t",
+          "quote": "Work was not a central organizing activity of West End life.",
+          "depicts": "A man in work clothes slips away from a half-finished job to join neighbors gathered on tenement steps.",
+          "title": "PEER GROUP, NOT WORK"
+        },
+        {
+          "node": "a2",
+          "block": "spya-cz0cgg",
+          "quote": "the highly elaborate etiquette and ceremony that consumed life at Versailles was part of a civilizing process",
+          "depicts": "Courtiers bow in an intricate choreographed sequence while a leashed ape crouches at the hall's edge, straining against its collar.",
+          "title": "ETIQUETTE AS A LEASH"
+        },
+        {
+          "node": "b2",
+          "block": "spya-mc24jb",
+          "quote": "It’s that illusion of being useful that’s satisfying.",
+          "depicts": "A lady signs a charity ledger at a fundraising table, a faint translucent halo of 'usefulness' hovering above her hand.",
+          "title": "ILLUSION OF USEFULNESS"
+        },
+        {
+          "node": "c2",
+          "block": "spya-b3pf45",
+          "quote": "the ethos which Banfield calls amoral familism has begun to recede in importance",
+          "depicts": "A young woman steps away from a tight ring of relatives toward an open factory gate in the distance.",
+          "title": "FAMILISM BEGINS TO RECEDE"
+        },
+        {
+          "node": "pattern",
+          "block": "spya-qsfkqr",
+          "quote": "defending their collective reputations: the thing that mattered most to them in the world",
+          "depicts": "Figures from court, salon, and tenement alike stand shoulder to shoulder, all gripping the rim of one shared shield.",
+          "title": "DEFENDING COLLECTIVE REPUTATION"
+        },
+        {
+          "node": "d1",
+          "block": "spya-zd83ts",
+          "quote": "earn respect and dignity as adults from what we do, not who we know, or who we are",
+          "depicts": "A craftsman at a bench receives an approving nod and a small token from fellow workers, for the work itself.",
+          "title": "RESPECT FOR WHAT YOU DO"
+        },
+        {
+          "node": "d2",
+          "block": "spya-sw09bu",
+          "quote": "about 85% of us are “somewhat” or “completely” satisfied with our jobs",
+          "depicts": "A crowd of workers of many trades, most with contented faces, a handful frowning among them.",
+          "title": "85% SATISFIED"
+        },
+        {
+          "node": "d3",
+          "block": "spya-hb8vvc",
+          "quote": "the absence of necessity created room for a better form of friendship, based on “natural sympathy”",
+          "depicts": "Two friends clasp hands beneath an open sky with no ledger or debt-tally between them.",
+          "title": "FRIENDSHIP WITHOUT NEED"
+        },
+        {
+          "node": "final",
+          "block": "spya-dhj4jr",
+          "quote": "I like my job, and I like liberal individualism.",
+          "depicts": "The author-figure stands holding her own work tools in one hand, a small unbound scroll of personal liberty in the other, looking back up the page toward the cheering figure at the top.",
+          "title": "I LIKE MY JOB"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged vellum, gold leaf accents, muted ochre-red-blue palette, small framed historiated scenes connected by thin gold vine-scroll lines, read top to bottom. At the top, a robed figure cheers twice at a workbench ('TWO CHEERS FOR WORK'). Below, three parallel columns fan out under light vine borders marking three grouped realms: ARISTOCRATS — a courtier magnifies a heraldic scroll amid idle philosophy books ('OBSESSED WITH PRECEDENCE'); UPPER-CLASS WOMEN — a lady at the center of a web of society-portrait threads straightens one strand ('KEEPING THE NETWORK IN ORDER'); WORKING CLASS — a laborer leaves his half-finished task to join neighbors on tenement steps ('PEER GROUP, NOT WORK'). Each column continues one scene lower: aristocrats show courtiers bowing in elaborate ceremony beside a leashed, straining ape ('ETIQUETTE AS A LEASH'); upper-class women show a lady signing a charity ledger under a faint halo ('ILLUSION OF USEFULNESS'); working class shows a young woman stepping from a tight family ring toward a distant factory gate ('FAMILISM BEGINS TO RECEDE'). All three gold threads converge into a single wide framed scene: figures from each world grip the rim of one shared shield ('DEFENDING COLLECTIVE REPUTATION'). From that convergence, a new area opens below, bordered as WHY WORK MATTERS: a craftsman receiving a token of respect from peers ('RESPECT FOR WHAT YOU DO'), a crowd of mostly content workers of many trades ('85% SATISFIED'), and two friends clasping hands under open sky with no ledger between them ('FRIENDSHIP WITHOUT NEED'), the last two lines feeding into it. At the very bottom, the author-figure holds her own tools and a small unbound scroll, looking back up the page toward the cheering figure at the top, joined to it by a faint returning gold thread ('I LIKE MY JOB'). Sparse border foliage only at page edges, vellum left bare where empty. No lettering anywhere except the titles beneath each framed scene."
+    },
+    {
+      "sceneId": "zoom-aristocrats",
+      "title": "The Court of Precedence",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-gs52t3",
+          "quote": "the greatest of the four great ages of light, surpassing Athens, Rome, and Florence at their peaks",
+          "depicts": "The grand hall of Versailles, glittering with courtiers in fine dress beneath gilded ceilings.",
+          "title": "GREATEST AGE OF LIGHT"
+        },
+        {
+          "node": "n2",
+          "block": "spya-x4w0zk",
+          "quote": "incomprehensible litigation over which families might be entitled to a certain heraldic emblem",
+          "depicts": "Two noble families argue before a judge over a disputed heraldic emblem unrolled on a table.",
+          "title": "LITIGATION OVER EMBLEMS"
+        },
+        {
+          "node": "n3",
+          "block": "spya-wue7zn",
+          "quote": "their conversation consisted overwhelmingly of political gossip",
+          "depicts": "A salon gathering where guests lean close whispering to one another, untouched volumes of poetry stacked unopened on a side table.",
+          "title": "SALON GOSSIP, NOT PHILOSOPHY"
+        },
+        {
+          "node": "aside",
+          "block": "spya-k0yet6",
+          "quote": "I’ve read a lot of aristocratic memoirs, and all of them are like this.",
+          "depicts": "A scholarly figure seated before a tall stack of leather-bound memoirs, pointing from one open volume to the next.",
+          "title": "A LIFETIME OF MEMOIRS"
+        },
+        {
+          "node": "n4",
+          "block": "spya-f90g2h",
+          "quote": "who was seen speaking to whom, who’s too religious or not religious enough, who’s having an affair",
+          "depicts": "At a St. Petersburg court gathering, courtiers lean in to trade whispered observations about one another.",
+          "title": "GOSSIP AT CATHERINE'S COURT"
+        },
+        {
+          "node": "n5",
+          "block": "spya-de69sf",
+          "quote": "Aristocratic dignity comes from honor, which is to say it comes from maintaining distinctions of family and class.",
+          "depicts": "A noble figure stands proudly beside a mounted family coat of arms, one hand resting on it.",
+          "title": "HONOR FROM FAMILY RANK"
+        },
+        {
+          "node": "n6",
+          "block": "spya-cz0cgg",
+          "quote": "constantly, obsessively tracking alliances, challenges, displays of prowess, and attempts to get ahead",
+          "depicts": "Courtiers in fine dress mirror the postures of apes beside them, both groups eyeing each other's rank with wary attention.",
+          "title": "ALLIANCES AND DOMINANCE"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k26ath",
+          "quote": "Our own society will be evolving from a much saner starting point.",
+          "depicts": "Beyond the palace walls, an open bright horizon stretches past the gates of Versailles.",
+          "title": "A SANER STARTING POINT"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged vellum, gold leaf accents, the same ochre-red-blue palette as the overview page, framed historiated scenes in a single vertical chain connected by thin gold vine-scroll, read top to bottom. Open with the overview's own vignette for this part: the glittering gilded hall of Versailles filled with fine-dressed courtiers ('GREATEST AGE OF LIGHT'). Below it, two noble families argue over a disputed heraldic emblem unrolled on a table before a judge ('LITIGATION OVER EMBLEMS'). The gold line forks briefly: one branch to a salon scene where guests whisper together while poetry volumes lie unopened ('SALON GOSSIP, NOT PHILOSOPHY'), with a small inset beside it of a scholar before a tall stack of memoirs, finger moving between open pages ('A LIFETIME OF MEMOIRS'); the other branch continues down to a St. Petersburg gathering where courtiers lean together trading whispered glances ('GOSSIP AT CATHERINE'S COURT'). The chain continues: a proud noble figure stands beside a mounted coat of arms, hand resting on it ('HONOR FROM FAMILY RANK'); below that, courtiers in fine dress mirror the wary postures of apes seated beside them, both watching rank and challenge ('ALLIANCES AND DOMINANCE'). The chain ends at the bottom in an open framed scene: beyond the palace gates, a bright plain horizon stretches into the distance, uncluttered by courtly ornament ('A SANER STARTING POINT'). Keep borders of vine and foliage light, confined to page edges; leave vellum bare where scenes do not require decoration. No lettering anywhere except the titles beneath each framed scene."
+    },
+    {
+      "sceneId": "zoom-work-matters",
+      "title": "What Work Gives Back",
+      "vignettes": [
+        {
+          "node": "hub",
+          "block": "spya-zd83ts",
+          "quote": "The most important thing work gives us — after money, of course — is an alternative way",
+          "depicts": "A worker stands at a central bench holding up a plain token stamped with no family crest, offered outward to onlookers.",
+          "title": "AN ALTERNATIVE WAY TO BELONG"
+        },
+        {
+          "node": "s1",
+          "block": "spya-sw09bu",
+          "quote": "about 85% of us are “somewhat” or “completely” satisfied with our jobs",
+          "depicts": "A long row of workers of different trades, most smiling, a few indifferent, tallied beside a simple count mark.",
+          "title": "85% SATISFIED WITH JOBS"
+        },
+        {
+          "node": "s4",
+          "block": "spya-n00hd0",
+          "quote": "complained about being treated like a “robot.”",
+          "depicts": "An assembly-line worker stands rigid among gears while a supervisor looks past him without a glance.",
+          "title": "TREATED LIKE A ROBOT"
+        },
+        {
+          "node": "s2",
+          "block": "spya-nm9v43",
+          "quote": "We want to feel useful.",
+          "depicts": "A bartender returning to a reopened counter, apron tied on, pouring a drink with visible relief.",
+          "title": "WE WANT TO FEEL USEFUL"
+        },
+        {
+          "node": "s3",
+          "block": "spya-a5pt8y",
+          "quote": "the pride in a job well done, the skills they developed, or the recognition by bosses and peers",
+          "depicts": "An elderly interview subject sits with a recorder nearby, gesturing toward a well-worn tool of their old trade.",
+          "title": "PRIDE IN A JOB WELL DONE"
+        },
+        {
+          "node": "equality",
+          "block": "spya-hdbtc0",
+          "quote": "we start to police who else can join and what happens when they do",
+          "depicts": "A ring of figures stands guard at a gate, deciding whether a newcomer outside may pass through.",
+          "title": "POLICING WHO MAY JOIN"
+        },
+        {
+          "node": "commercial",
+          "block": "spya-tmepex",
+          "quote": "The possibility of friendship in a commercial society was a serious concern for Adam Smith, David Hume, and Adam Ferguson.",
+          "depicts": "Three robed scholars converse beside a harbor of trading ships, a ledger closed on the ground between them.",
+          "title": "SMITH, HUME, AND FERGUSON"
+        },
+        {
+          "node": "final2",
+          "block": "spya-dhj4jr",
+          "quote": "I hope the latter will survive it.",
+          "depicts": "The author-figure cups a small steady flame in both hands against an open wind.",
+          "title": "HOPE IT SURVIVES"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged vellum, gold leaf accents, the same ochre-red-blue palette as the overview page, framed historiated scenes joined by thin gold vine-scroll, read top to bottom. Open with the overview's own vignette for this part: a worker at a central bench holds up a plain unmarked token toward onlookers ('AN ALTERNATIVE WAY TO BELONG'). Four small framed scenes branch from it side by side across the page's width: a long row of workers of many trades, mostly smiling ('85% SATISFIED WITH JOBS'); an assembly-line worker standing rigid among gears, ignored by a passing supervisor ('TREATED LIKE A ROBOT'); a bartender back at a reopened counter, pouring a drink with visible relief ('WE WANT TO FEEL USEFUL'); and an elderly figure beside a recorder, gesturing at a worn tool from their old trade ('PRIDE IN A JOB WELL DONE'). All four gold threads converge downward into one scene: a ring of figures guarding a gate, deciding whether someone outside may enter ('POLICING WHO MAY JOIN'). From there the chain continues to three robed scholars talking beside a harbor of trading ships, a closed ledger set aside on the ground ('SMITH, HUME, AND FERGUSON'). The page ends with the author-figure cupping a small steady flame in both hands against an open wind ('HOPE IT SURVIVES'). Keep border foliage light and confined to the page edges, vellum left bare where scenes do not need it, scenes large enough to read clearly across the page's width. No lettering anywhere except the titles beneath each framed scene."
+    }
+  ]
+}

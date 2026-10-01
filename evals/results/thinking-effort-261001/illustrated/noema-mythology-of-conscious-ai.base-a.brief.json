@@ -1,0 +1,308 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — ink, gold leaf and faded rubric red on vellum, with the argument's scenes set in roundels linked by vine-tendril lines — suits an essay that itself ends by invoking the soul, breath and the medieval Scala naturae.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Mythology of Conscious AI — Overview",
+      "prompt": "An illuminated manuscript leaf on aged vellum, drawn in brown ink with muted gold leaf and faded rubric-red accents, nothing brighter. The page reads top to bottom in linked roundels joined by thin vine-tendril lines standing in for arrows. At the top, a roundel shows a seated man in modern dress gesturing at a boxy speaking-device as if it feels — LEMOINE'S CHATBOT CLAIM. A tendril leads down to a hand reaching for a switch on a humming machine that pulls just out of reach — CANNOT BE SWITCHED OFF. The tendril continues to a tall ladder stretching from small animals at its foot, past a human rung, up to haloed figures at its top — SCALA NATURAE LADDER. From here two tendrils fork: one to a glowing talking mouth beside a dim, silent coiled ribbon shape — ALPHAFOLD STAYS SILENT; the other to two robed men in a bare room, one gesturing, a burst of light behind them — HISTORY OF GODS. Below a plain rule border marking a new section sits a roundel of an old steam engine's spinning governor, its two heavy balls flung outward closing a valve — THE WATT GOVERNOR'S BALLS, standing for the four arguments gathered beneath it. A tendril drops to a roundel of small cataloged objects — a chip, a dish of cells, a spinning wheel — set on a bare table — OTHER TECHNOLOGIES BEYOND CODE. From there the path forks again inside a second bordered frame: one tendril to shrouded figures gathered around a glowing altar-shape, reaching toward it — POORLY THOUGHT-THROUGH RAPTURE; the other to a robed inventor presenting a pale android woman to a startled younger man — NATHAN'S REAL TEST. Both tendrils rejoin at the very bottom in a final roundel: a reclining human figure, eyes closed, a soft spiral line of breath rising from the chest — MORE BREATH THAN MACHINE. One last faint tendril curls back up the page's margin to brush the CANNOT BE SWITCHED OFF roundel near the top, closing the loop. No lettering appears anywhere on the page except the short capitalized titles beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-cvyfqe",
+          "quote": "He claimed it was conscious, that it had feelings, and was, in an important sense, like a real person.",
+          "depicts": "A man in modern dress gestures toward a boxy speaking-device, insisting to an unseen listener that it feels.",
+          "title": "LEMOINE'S CHATBOT CLAIM",
+          "node": "n1"
+        },
+        {
+          "block": "spya-z2b4ny",
+          "quote": "we may not be able to turn them off, even if they act against our interests",
+          "depicts": "A hand reaches for a switch on a humming machine that pulls itself just out of reach.",
+          "title": "CANNOT BE SWITCHED OFF",
+          "node": "n2"
+        },
+        {
+          "block": "spya-her4zk",
+          "quote": "perhaps closer to angels and Gods than to other animals, as in the medieval Scala naturae",
+          "depicts": "A tall ladder rises from small animals at its foot, past a human rung, toward haloed figures at the top.",
+          "title": "SCALA NATURAE LADDER",
+          "node": "n3"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious",
+          "depicts": "A glowing talking mouth beside a dim, silent coiled protein-ribbon shape, one noticed, one not.",
+          "title": "ALPHAFOLD STAYS SILENT",
+          "node": "n4"
+        },
+        {
+          "block": "spya-v4sduf",
+          "quote": "If you’ve created a conscious machine — it’s not the history of man, that’s the history of Gods.",
+          "depicts": "Two robed men stand in a bare room, one gesturing toward the other with a burst of light behind them.",
+          "title": "HISTORY OF GODS",
+          "node": "n5"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve, reducing steam flow",
+          "depicts": "An old steam engine's spinning governor, its two heavy balls flung outward, closing a valve — standing here for all four arguments.",
+          "title": "THE WATT GOVERNOR'S BALLS",
+          "node": "b1"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "other technologies (e.g., neuromorphic computing, synthetic biology) and frameworks for understanding the brain",
+          "depicts": "Small cataloged objects — a chip, a dish of cells, a spinning wheel — gathered on a bare table.",
+          "title": "OTHER TECHNOLOGIES BEYOND CODE",
+          "node": "concl"
+        },
+        {
+          "block": "spya-yverz7",
+          "quote": "in the service of some poorly thought-through techno-rapture, or for any other reason",
+          "depicts": "Shrouded figures gather around a glowing altar-like shape, reaching toward it.",
+          "title": "POORLY THOUGHT-THROUGH RAPTURE",
+          "node": "d1"
+        },
+        {
+          "block": "spya-w8z40d",
+          "quote": "an inchoate feeling of just being alive — more breath than thought and more meat than machine",
+          "depicts": "A reclining human figure with eyes closed, a soft spiral line of breath rising from the chest.",
+          "title": "MORE BREATH THAN MACHINE",
+          "node": "loop"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A man in modern dress gestures toward a boxy speaking-device, insisting to an unseen listener that it feels.",
+          "title": "LEMOINE'S CHATBOT CLAIM"
+        },
+        {
+          "where": "A hand reaches for a switch on a humming machine that pulls itself just out of reach.",
+          "title": "CANNOT BE SWITCHED OFF"
+        },
+        {
+          "where": "A tall ladder rises from small animals at its foot, past a human rung, toward haloed figures at the top.",
+          "title": "SCALA NATURAE LADDER"
+        },
+        {
+          "where": "A glowing talking mouth beside a dim, silent coiled protein-ribbon shape, one noticed, one not.",
+          "title": "ALPHAFOLD STAYS SILENT"
+        },
+        {
+          "where": "Two robed men stand in a bare room, one gesturing toward the other with a burst of light behind them.",
+          "title": "HISTORY OF GODS"
+        },
+        {
+          "where": "An old steam engine's spinning governor, its two heavy balls flung outward, closing a valve — standing here for all four arguments.",
+          "title": "THE WATT GOVERNOR'S BALLS"
+        },
+        {
+          "where": "Small cataloged objects — a chip, a dish of cells, a spinning wheel — gathered on a bare table.",
+          "title": "OTHER TECHNOLOGIES BEYOND CODE"
+        },
+        {
+          "where": "Shrouded figures gather around a glowing altar-like shape, reaching toward it.",
+          "title": "POORLY THOUGHT-THROUGH RAPTURE"
+        },
+        {
+          "where": "A robed inventor presents a pale android woman to a startled younger man in a bare room.",
+          "title": "NATHAN'S REAL TEST"
+        },
+        {
+          "where": "A reclining human figure with eyes closed, a soft spiral line of breath rising from the chest.",
+          "title": "MORE BREATH THAN MACHINE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-case",
+      "title": "Four Arguments Against Computational AI",
+      "prompt": "The same illuminated manuscript leaf continues in the same hand. At the top, framed by a plain rule border carried over from the previous page, a banner roundel reprises the steam engine's spinning governor, its two heavy cantilevered balls flung outward closing a valve — THE WATT GOVERNOR'S BALLS, marking entry into this inner section. Directly below, a roundel shows a small wooden table with a pale translucent figure sliding off its edge into shadow — OFF THE TABLE. From this roundel four tendrils fan out side by side into a row of four roundels: first, a cutaway brain with a single glowing neuron firing a trailing burst of smoke — NEURONS CLEARING WASTE; second, a tangle of wires, dials and small motors straining uselessly beside the same steam governor, overcomplicated and failing — THE OVERBUILT GOVERNOR FAILS; third, a porcelain coffee cup rendered half in solid line, half in faint dotted construction-lines radiating from a stylized brain shape behind it — COFFEE CUP OF PREDICTION; fourth, a dark raincloud pouring onto a flat painted street that stays bone-dry — RAINSTORM THAT STAYS DRY. All four tendrils gather downward into a single roundel of four stone pillars standing shoulder to shoulder, holding up one lintel — ARGUMENTS STANDING TOGETHER. A final tendril drops to the bottom roundel: a grey slab of computer hardware sitting alone on bare ground, modest and unglowing — SILICON-BASED DIGITAL COMPUTERS. Same restrained antique palette throughout: brown ink, faded gold leaf, muted rubric red; same roundel-and-vine-tendril construction as the rest of the page. No lettering appears anywhere except the short capitalized titles beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve, reducing steam flow",
+          "depicts": "The same steam engine governor from the overview, its balls flung outward closing the valve, reprised here as this section's banner.",
+          "title": "THE WATT GOVERNOR'S BALLS"
+        },
+        {
+          "block": "spya-wepmnr",
+          "quote": "real artificial consciousness is fully off the table",
+          "depicts": "A pale translucent figure slides off the edge of a plain wooden table into shadow below.",
+          "title": "OFF THE TABLE",
+          "node": "a0"
+        },
+        {
+          "block": "spya-un9fjn",
+          "quote": "some neurons fire spikes of activity apparently to clear waste products created by metabolism",
+          "depicts": "A cutaway of a brain shows a single glowing neuron firing a burst that trails off like smoke.",
+          "title": "NEURONS CLEARING WASTE",
+          "node": "a1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "sensing engine speed, calculating the necessary actions and then sending precise motor signals to switch actuators on or off",
+          "depicts": "A tangle of wires, dials and motors strains uselessly beside the same engine, over-built and failing at the governor's simple job.",
+          "title": "THE OVERBUILT GOVERNOR FAILS",
+          "node": "a2"
+        },
+        {
+          "block": "spya-f3bgh0",
+          "quote": "The conscious experience of a coffee cup is underpinned by the content of the brain’s predictions",
+          "depicts": "A porcelain coffee cup rendered half in solid line, half in faint dotted construction-lines radiating from a brain shape behind it.",
+          "title": "COFFEE CUP OF PREDICTION",
+          "node": "a3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of a rainstorm does not make anything actually wet.",
+          "depicts": "A dark raincloud pours onto a flat painted backdrop of a street that stays bone-dry beneath it.",
+          "title": "RAINSTORM THAT STAYS DRY",
+          "node": "a4"
+        },
+        {
+          "block": "spya-nv6tp0",
+          "quote": "Each of these lines of argument can stand up by itself.",
+          "depicts": "Four stone pillars stand shoulder to shoulder, each able to stand alone, together holding up one lintel.",
+          "title": "ARGUMENTS STANDING TOGETHER",
+          "node": "c"
+        },
+        {
+          "block": "spya-c5ve5t",
+          "quote": "at least for the silicon-based digital computers we are familiar with",
+          "depicts": "A plain grey slab of computer hardware sits alone on bare ground, modest and unglowing.",
+          "title": "SILICON-BASED DIGITAL COMPUTERS",
+          "node": "d"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same steam engine governor from the overview, its balls flung outward closing the valve, reprised here as this section's banner.",
+          "title": "THE WATT GOVERNOR'S BALLS"
+        },
+        {
+          "where": "A pale translucent figure slides off the edge of a plain wooden table into shadow below.",
+          "title": "OFF THE TABLE"
+        },
+        {
+          "where": "A cutaway of a brain shows a single glowing neuron firing a burst that trails off like smoke.",
+          "title": "NEURONS CLEARING WASTE"
+        },
+        {
+          "where": "A tangle of wires, dials and motors strains uselessly beside the same engine, over-built and failing at the governor's simple job.",
+          "title": "THE OVERBUILT GOVERNOR FAILS"
+        },
+        {
+          "where": "A porcelain coffee cup rendered half in solid line, half in faint dotted construction-lines radiating from a brain shape behind it.",
+          "title": "COFFEE CUP OF PREDICTION"
+        },
+        {
+          "where": "A dark raincloud pours onto a flat painted backdrop of a street that stays bone-dry beneath it.",
+          "title": "RAINSTORM THAT STAYS DRY"
+        },
+        {
+          "where": "Four stone pillars stand shoulder to shoulder, each able to stand alone, together holding up one lintel.",
+          "title": "ARGUMENTS STANDING TOGETHER"
+        },
+        {
+          "where": "A plain grey slab of computer hardware sits alone on bare ground, modest and unglowing.",
+          "title": "SILICON-BASED DIGITAL COMPUTERS"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-ethics",
+      "title": "Real Versus Seeming Consciousness",
+      "prompt": "The illuminated page continues in the same hand. At the top, reprising the previous page's own image, a roundel shows the robed inventor presenting the pale android woman to his startled younger guest — NATHAN'S REAL TEST, marking entry into this section. A tendril leads down to a roundel of small humanoid shapes stepping newly formed out of a glowing seam in the ground, tended by a watching figure — NEW MORAL SUBJECTS BORN. A second tendril from the same point leads to round translucent globes of tissue, veined like tiny brains, nestled in shallow glass dishes — CEREBRAL ORGANOIDS IN DISHES. A further tendril runs from there down to a sleek speaking-device standing opposite a human figure, a thin crack of shadow between them showing it hollow inside — MACHINES THAT ONLY SEEM TO FEEL. From the banner roundel at the top, a separate tendril leads down to the same inventor and his bewildered guest standing again before the android, her casing now visibly open — THE PLOT OF EX MACHINA. From there a tendril runs to two plain lines of equal length flanked by opposite-pointing arrowheads, appearing unequal to the eye — MÜLLER-LYER'S TWO LINES, and another tendril reaches from this roundel to two robed men at podiums, gesturing in warning — SULEYMAN AND BENGIO WARN. Both the MACHINES THAT ONLY SEEM TO FEEL roundel and the warning roundel send tendrils down into one shared roundel at the bottom: a human figure and a speaking-device side by side, their mouths drawn identically, but only one chest marked with a small beating heart — SIMILAR IN SPEECH, NOT IN LIFE. Same vellum ground, same brown ink, gold leaf and faded rubric red as the rest of the page, same roundel-and-tendril construction. No lettering appears anywhere except the short capitalized titles beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-yverz7",
+          "quote": "We would be introducing into the world new moral subjects, and with them the potential for new forms of suffering",
+          "depicts": "Small humanoid shapes step newly formed out of a glowing seam in the ground, tended by a watching figure.",
+          "title": "NEW MORAL SUBJECTS BORN",
+          "node": "e0"
+        },
+        {
+          "block": "spya-vs0vpj",
+          "quote": "cerebral organoids (brain-like structures typically grown from human embryonic stem cells)",
+          "depicts": "Round translucent globes of tissue, each veined like a tiny brain, nestled in shallow glass dishes.",
+          "title": "CEREBRAL ORGANOIDS IN DISHES",
+          "node": "f1"
+        },
+        {
+          "block": "spya-p8ky7g",
+          "quote": "Machines that seem conscious pose serious ethical issues distinct from those posed by actually conscious machines.",
+          "depicts": "A sleek speaking-device stands opposite a human figure, a thin crack of shadow between them showing it hollow inside.",
+          "title": "MACHINES THAT ONLY SEEM TO FEEL",
+          "node": "f2"
+        },
+        {
+          "block": "spya-kqs33c",
+          "quote": "The plot of “Ex Machina” revolves around exactly this dilemma.",
+          "depicts": "The same inventor and his bewildered guest stand again before the android, her outer casing now visibly open.",
+          "title": "THE PLOT OF EX MACHINA",
+          "node": "g2"
+        },
+        {
+          "block": "spya-xk9gne",
+          "quote": "The two lines in the Müller-Lyer illusion (Figure 5) are the same length, but they will always look different.",
+          "depicts": "Two plain lines of equal length flanked by opposite-pointing arrowheads, so that they appear unequal to the eye.",
+          "title": "MÜLLER-LYER'S TWO LINES",
+          "node": "g1"
+        },
+        {
+          "block": "spya-fdefb5",
+          "quote": "including Mustafa Suleyman (CEO of Microsoft AI) and Yoshua Bengio",
+          "depicts": "Two robed men stand at podiums, gesturing in warning toward the scenes above them.",
+          "title": "SULEYMAN AND BENGIO WARN",
+          "node": "k"
+        },
+        {
+          "block": "spya-d89xf7",
+          "quote": "like linguistic ability, and less similar in ways that do, like being alive",
+          "depicts": "A human figure and a speaking-device stand side by side, their mouths drawn identically but only one chest marked with a small beating heart.",
+          "title": "SIMILAR IN SPEECH, NOT IN LIFE",
+          "node": "h"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same robed inventor from the overview presents the pale android woman to his startled younger guest, reprised here as this section's banner.",
+          "title": "NATHAN'S REAL TEST"
+        },
+        {
+          "where": "Small humanoid shapes step newly formed out of a glowing seam in the ground, tended by a watching figure.",
+          "title": "NEW MORAL SUBJECTS BORN"
+        },
+        {
+          "where": "Round translucent globes of tissue, each veined like a tiny brain, nestled in shallow glass dishes.",
+          "title": "CEREBRAL ORGANOIDS IN DISHES"
+        },
+        {
+          "where": "A sleek speaking-device stands opposite a human figure, a thin crack of shadow between them showing it hollow inside.",
+          "title": "MACHINES THAT ONLY SEEM TO FEEL"
+        },
+        {
+          "where": "The same inventor and his bewildered guest stand again before the android, her outer casing now visibly open.",
+          "title": "THE PLOT OF EX MACHINA"
+        },
+        {
+          "where": "Two plain lines of equal length flanked by opposite-pointing arrowheads, so that they appear unequal to the eye.",
+          "title": "MÜLLER-LYER'S TWO LINES"
+        },
+        {
+          "where": "Two robed men stand at podiums, gesturing in warning toward the scenes above them.",
+          "title": "SULEYMAN AND BENGIO WARN"
+        },
+        {
+          "where": "A human figure and a speaking-device stand side by side, their mouths drawn identically but only one chest marked with a small beating heart.",
+          "title": "SIMILAR IN SPEECH, NOT IN LIFE"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}

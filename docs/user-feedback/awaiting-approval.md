@@ -13,13 +13,6 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
-- 2026-10-01 · no Sentry issue (Overseer dispatch) · one article cache shared across modes: the
-  ceiling is about 15–16% of a normal article, and what can be built without changing any output is
-  about 4%. Thinking is about a quarter of the bill. The recommendation is an effort-vs-quality eval
-  of Sketch, Illustrated, Hierarchy and Ideas first, and no caching plumbing yet ·
-  [261001o § Recommendation](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md) ·
-  [note](261001_1738-one-article-cache-shared-across-modes.md)
-
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,

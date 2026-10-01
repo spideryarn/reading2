@@ -1,0 +1,699 @@
+{
+  "version": "sketch/3",
+  "title": "Funnel into case studies",
+  "caption": "A chain down the page: Feynman's hunt for pseudoscience funnels into his definition of Cargo Cult Science, which fans out into the principle of scientific integrity, then into a run of case studies that illustrate it, closing with a final wish.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 200,
+          "h": 60,
+          "text": "A talk on not fooling yourself",
+          "size": "md",
+          "block": "spya-wv9g0v"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 120,
+          "w": 712,
+          "h": 260,
+          "style": "band",
+          "label": "LOOKING FOR WHAT DOESN'T WORK",
+          "opens": "part2-investigating",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "science-v-superstition",
+          "shape": "box",
+          "x": 40,
+          "y": 160,
+          "w": 200,
+          "h": 60,
+          "text": "Science began by discarding what fails",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "node",
+          "id": "mysticism",
+          "shape": "box",
+          "x": 280,
+          "y": 160,
+          "w": 200,
+          "h": 60,
+          "text": "Isolation tanks, Esalen, Geller's keys — nothing worked",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "edu-justice",
+          "shape": "box",
+          "x": 520,
+          "y": 160,
+          "w": 180,
+          "h": 70,
+          "text": "Reading and crime 'sciences' show no progress",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "cocktail",
+          "shape": "box",
+          "x": 160,
+          "y": 280,
+          "w": 420,
+          "h": 70,
+          "text": "The cocktail-party test: topics nobody really understands",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "node",
+          "id": "cargo-cult",
+          "shape": "hex",
+          "x": 230,
+          "y": 420,
+          "w": 300,
+          "h": 90,
+          "text": "Cargo Cult Science: the form without the substance",
+          "size": "lg",
+          "block": "spya-fd2muf"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 550,
+          "w": 712,
+          "h": 240,
+          "style": "band",
+          "label": "THE MISSING INGREDIENT: INTEGRITY",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "integrity",
+          "shape": "box",
+          "x": 40,
+          "y": 590,
+          "w": 210,
+          "h": 70,
+          "text": "Report everything against your own theory too",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-afgs74"
+        },
+        {
+          "kind": "node",
+          "id": "advertising",
+          "shape": "box",
+          "x": 280,
+          "y": 590,
+          "w": 210,
+          "h": 70,
+          "text": "Not lying like advertising — a higher bar",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bpyx8n"
+        },
+        {
+          "kind": "node",
+          "id": "truth-out",
+          "shape": "box",
+          "x": 520,
+          "y": 590,
+          "w": 180,
+          "h": 80,
+          "text": "Careless work eventually gets exposed",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-az6z7k"
+        },
+        {
+          "kind": "node",
+          "id": "self-fool",
+          "shape": "box",
+          "x": 280,
+          "y": 690,
+          "w": 210,
+          "h": 70,
+          "text": "You are the easiest person to fool",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bvx2u8"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 830,
+          "w": 712,
+          "h": 310,
+          "style": "band",
+          "label": "CASE STUDIES OF THE DISEASE",
+          "opens": "part5-cases",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "millikan",
+          "shape": "box",
+          "x": 40,
+          "y": 870,
+          "w": 200,
+          "h": 70,
+          "text": "Millikan's charge crept slowly to the true value",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-s9msxy"
+        },
+        {
+          "kind": "node",
+          "id": "rat-repeat",
+          "shape": "box",
+          "x": 280,
+          "y": 870,
+          "w": 200,
+          "h": 70,
+          "text": "A student told not to repeat a rat study",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-w9nnq6"
+        },
+        {
+          "kind": "node",
+          "id": "young-rats",
+          "shape": "box",
+          "x": 520,
+          "y": 870,
+          "w": 180,
+          "h": 80,
+          "text": "Young's careful rat clues, later ignored",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-fvenms"
+        },
+        {
+          "kind": "node",
+          "id": "rhine",
+          "shape": "box",
+          "x": 280,
+          "y": 980,
+          "w": 210,
+          "h": 80,
+          "text": "ESP effects shrink as controls improve",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-rbpppq"
+        },
+        {
+          "kind": "node",
+          "id": "final-wish",
+          "shape": "ellipse",
+          "x": 250,
+          "y": 1110,
+          "w": 260,
+          "h": 60,
+          "text": "Wish: the freedom to keep integrity",
+          "size": "md",
+          "block": "spya-ndyj3t"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "science-v-superstition",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "science-v-superstition",
+          "to": "mysticism",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "mysticism",
+          "to": "edu-justice",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "edu-justice",
+          "to": "cocktail",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "science-v-superstition",
+          "to": "cocktail",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cocktail",
+          "to": "cargo-cult",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cargo-cult",
+          "to": "integrity",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cargo-cult",
+          "to": "advertising",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cargo-cult",
+          "to": "truth-out",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "integrity",
+          "to": "self-fool",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "advertising",
+          "to": "self-fool",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "self-fool",
+          "to": "millikan",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "self-fool",
+          "to": "rat-repeat",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "self-fool",
+          "to": "young-rats",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "rat-repeat",
+          "to": "rhine",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "young-rats",
+          "to": "rhine",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "rhine",
+          "to": "final-wish",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "The talk moves from noticing failed beliefs, to naming the disease, to stating the cure, to showing the disease in the wild."
+    },
+    {
+      "id": "part2-investigating",
+      "title": "Investigating Pseudoscience",
+      "height": 560,
+      "items": [
+        {
+          "kind": "node",
+          "id": "p2-science",
+          "shape": "box",
+          "x": 40,
+          "y": 60,
+          "w": 220,
+          "h": 80,
+          "text": "Science began as a method: test an idea, discard it if it fails",
+          "size": "sm",
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "node",
+          "id": "p2-mysticism",
+          "shape": "box",
+          "x": 40,
+          "y": 180,
+          "w": 220,
+          "h": 90,
+          "text": "Isolation tanks, Esalen massage, Uri Geller's key-bending — none of it worked",
+          "size": "sm",
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "p2-reflexology",
+          "shape": "note",
+          "x": 320,
+          "y": 180,
+          "w": 200,
+          "h": 70,
+          "text": "A reflexology scene at Esalen",
+          "size": "xs",
+          "block": "spya-xm9a87"
+        },
+        {
+          "kind": "node",
+          "id": "p2-geller",
+          "shape": "note",
+          "x": 320,
+          "y": 280,
+          "w": 200,
+          "h": 70,
+          "text": "Geller's keys fail to bend, even underwater",
+          "size": "xs",
+          "block": "spya-mmhbvn"
+        },
+        {
+          "kind": "node",
+          "id": "p2-edu",
+          "shape": "box",
+          "x": 40,
+          "y": 310,
+          "w": 220,
+          "h": 90,
+          "text": "Reading methods and criminal reform claim science but show no progress",
+          "size": "sm",
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "p2-intimidation",
+          "shape": "note",
+          "x": 320,
+          "y": 380,
+          "w": 200,
+          "h": 80,
+          "text": "Teachers and parents intimidated by this pseudoscience",
+          "size": "xs",
+          "block": "spya-re4634"
+        },
+        {
+          "kind": "node",
+          "id": "p2-lookinto",
+          "shape": "box",
+          "x": 40,
+          "y": 430,
+          "w": 220,
+          "h": 60,
+          "text": "We ought to look into science that isn't science",
+          "size": "sm",
+          "block": "spya-g2cwvy"
+        },
+        {
+          "kind": "node",
+          "id": "p2-cocktail",
+          "shape": "hex",
+          "x": 200,
+          "y": 490,
+          "w": 300,
+          "h": 60,
+          "text": "The cocktail-party test for empty subjects",
+          "size": "md",
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-science",
+          "to": "p2-mysticism",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-mysticism",
+          "to": "p2-reflexology",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-mysticism",
+          "to": "p2-geller",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-mysticism",
+          "to": "p2-edu",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-edu",
+          "to": "p2-intimidation",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-edu",
+          "to": "p2-lookinto",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2-lookinto",
+          "to": "p2-cocktail",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Four stops in Feynman's search, converging on a rule for spotting subjects nobody understands."
+    },
+    {
+      "id": "part5-cases",
+      "title": "Case Studies in Poor Science",
+      "height": 620,
+      "items": [
+        {
+          "kind": "node",
+          "id": "p5-psych-student",
+          "shape": "box",
+          "x": 40,
+          "y": 60,
+          "w": 220,
+          "h": 90,
+          "text": "A student told not to repeat a prior rat experiment before varying it",
+          "size": "sm",
+          "block": "spya-w9nnq6"
+        },
+        {
+          "kind": "node",
+          "id": "p5-should-repeat",
+          "shape": "note",
+          "x": 320,
+          "y": 60,
+          "w": 200,
+          "h": 80,
+          "text": "Feynman: repeat first, then vary, to isolate the real cause",
+          "size": "xs",
+          "block": "spya-tf8rj2"
+        },
+        {
+          "kind": "node",
+          "id": "p5-rejected",
+          "shape": "note",
+          "x": 320,
+          "y": 170,
+          "w": 200,
+          "h": 70,
+          "text": "Her professor refused, calling it a waste of time",
+          "size": "xs",
+          "block": "spya-v0xcd7"
+        },
+        {
+          "kind": "node",
+          "id": "p5-physics",
+          "shape": "box",
+          "x": 40,
+          "y": 260,
+          "w": 220,
+          "h": 100,
+          "text": "A physics experiment skipped a comparison run under pressure for new results",
+          "size": "sm",
+          "block": "spya-m95kqm"
+        },
+        {
+          "kind": "node",
+          "id": "p5-young",
+          "shape": "box",
+          "x": 40,
+          "y": 400,
+          "w": 220,
+          "h": 90,
+          "text": "Young eliminated every clue to find what rats actually use to navigate",
+          "size": "sm",
+          "block": "spya-fvenms"
+        },
+        {
+          "kind": "node",
+          "id": "p5-young-ignored",
+          "shape": "note",
+          "x": 320,
+          "y": 400,
+          "w": 200,
+          "h": 80,
+          "text": "Later researchers ignored his careful method entirely",
+          "size": "xs",
+          "block": "spya-wye8g6"
+        },
+        {
+          "kind": "node",
+          "id": "p5-rhine",
+          "shape": "box",
+          "x": 40,
+          "y": 520,
+          "w": 220,
+          "h": 90,
+          "text": "ESP effects shrink toward nothing as controls improve",
+          "size": "sm",
+          "block": "spya-rbpppq"
+        },
+        {
+          "kind": "node",
+          "id": "p5-rhine-reject",
+          "shape": "note",
+          "x": 320,
+          "y": 520,
+          "w": 200,
+          "h": 90,
+          "text": "Leader rejects repeatability itself as an unfair demand",
+          "size": "xs",
+          "block": "spya-g203mu"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-psych-student",
+          "to": "p5-should-repeat",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-should-repeat",
+          "to": "p5-rejected",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-psych-student",
+          "to": "p5-physics",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-physics",
+          "to": "p5-young",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-young",
+          "to": "p5-young-ignored",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-young",
+          "to": "p5-rhine",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5-rhine",
+          "to": "p5-rhine-reject",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Four examples line up to show the same failure: skipping checks, ignoring controls, or refusing to demand repeatability."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null
+}

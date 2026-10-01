@@ -1,0 +1,327 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2754.5" width="760" height="2754.5">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2754.5" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel, converge, loop</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The piece funnels from the lure of believing machines are conscious, into four independent arguments that knock</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">out the assumption behind that belief, then opens back out into what we should do about real versus merely seeming</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">conscious AI, looping back at the end to the embodied, biological view of mind it opened by setting against…</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">The Mythology Of Conscious AI — overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A funnel (why we're tempted) narrows into a converge (four arguments against machine consciousness), then opens into</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">practical stakes, looping back to the essay's opening worry about mistaking ourselves for our machines.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="200" width="712" height="220" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="24" y="450" width="712" height="270" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<rect x="24" y="740" width="712" height="200" rx="8" fill="rgba(240,228,66,0.07)" stroke="rgba(240,228,66,0.24)" stroke-width="1"/>
+<path d="M380 100 L380 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,130 376.5,120 383.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 190 L380 225" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,225 376.5,215 383.5,215" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 285 C380 305 150 300 150 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,320 146.5,310 153.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 285 L380 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,320 376.5,310 383.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 285 C380 305 610 300 610 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="610,320 606.5,310 613.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M610 390 C610 421.5 390 428.5 390 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,460 386.5,450 393.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 520 C390 540 120 530 120 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="120,550 116.5,540 123.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 520 C390 540 300 530 300 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="300,550 296.5,540 303.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 520 C390 540 480 530 480 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="480,550 476.5,540 483.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 520 C390 540 660 530 660 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="660,550 656.5,540 663.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M120 620 C120 640 380 635 380 655" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,655 376.5,645 383.5,645" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M300 620 C300 640 380 635 380 655" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,655 376.5,645 383.5,645" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M480 620 C480 640 380 635 380 655" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,655 376.5,645 383.5,645" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M660 620 C660 640 380 635 380 655" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,655 376.5,645 383.5,645" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 715 L390 750" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,750 383.88745490428335,741.3462844712326 390.61812253776907,739.423236575951" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 810 C390 830 180 830 180 850" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="180,850 176.5,840 183.5,840" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 810 C390 830 580 830 580 850" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="580,850 576.5,840 583.5,840" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M180 910 C180 930 390 930 390 950" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,950 386.5,940 393.5,940" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M580 910 C580 930 390 930 390 950" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,950 386.5,940 393.5,940" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M270 985 C8 985 8 70 280 70" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="280,70 270,73.5 270,66.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Does AI really feel? — Seth opens with the long, mostly unhappy cultural history of fantasies about conscious machines. — → spya-tgnssb</title>
+<ellipse cx="380" cy="70" rx="100" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="74.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Does AI really feel?</text>
+</g>
+<g>
+<title>Why it matters ethically — rights, suffering, self-understanding — → spya-e68t9h</title>
+<rect x="260" y="130" width="240" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="157.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Why it matters ethically</text>
+<text x="380" y="174.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">rights, suffering, self-understanding</text>
+</g>
+<g>
+<title>Intelligence ≠ consciousness — → spya-nh8mt7</title>
+<polygon points="320,225 440,225 470,255 440,285 320,285 290,255" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="251.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Intelligence ≠</text>
+<text x="380" y="266.4" font-size="12" text-anchor="middle" fill="#f7f7f7">consciousness</text>
+</g>
+<g>
+<title>Three biases — anthropocentrism etc. — → spya-cvaqgs</title>
+<rect x="60" y="320" width="180" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="150" y="352.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Three biases</text>
+<text x="150" y="369.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">anthropocentrism etc.</text>
+</g>
+<g>
+<title>Fluent talk fools us — hype, techno-rapture — → spya-k6fpme</title>
+<rect x="290" y="320" width="180" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="352.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Fluent talk fools us</text>
+<text x="380" y="369.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">hype, techno-rapture</text>
+</g>
+<g>
+<title>Seeing faces in toast — pareidolia, not proof — → spya-k850tu</title>
+<rect x="520" y="320" width="180" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="610" y="352.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Seeing faces in toast</text>
+<text x="610" y="369.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">pareidolia, not proof</text>
+</g>
+<g>
+<title>Is computation enough? — → spya-d3g67c</title>
+<polygon points="390,460 500,490 390,520 280,490" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="390" y="493.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Is computation enough?</text>
+</g>
+<g>
+<title>Brains aren't computers — → spya-sk4su6</title>
+<rect x="40" y="550" width="160" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="120" y="588.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Brains aren't computers</text>
+</g>
+<g>
+<title>Other kinds of process — → spya-affgsh</title>
+<rect x="220" y="550" width="160" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="300" y="588.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Other kinds of process</text>
+</g>
+<g>
+<title>Life itself may matter — → spya-e7jqx4</title>
+<rect x="400" y="550" width="160" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="480" y="588.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Life itself may matter</text>
+</g>
+<g>
+<title>Simulation ≠ instantiation — → spya-cqh5wq</title>
+<rect x="580" y="550" width="160" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="660" y="588.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Simulation ≠ instantiation</text>
+</g>
+<g>
+<title>Functionalism looks shaky — → spya-uzr60x</title>
+<rect x="260" y="655" width="240" height="60" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="688.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Functionalism looks shaky</text>
+</g>
+<g>
+<title>Don't try to build it — too risky under uncertainty — → spya-e7fdmb</title>
+<rect x="280" y="750" width="220" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="390" y="777.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Don't try to build it</text>
+<text x="390" y="794.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">too risky under uncertainty</text>
+</g>
+<g>
+<title>Seeming-conscious AI — already here — → spya-vs0vpj</title>
+<rect x="80" y="850" width="200" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="180" y="877.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Seeming-conscious AI</text>
+<text x="180" y="894.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">already here</text>
+</g>
+<g>
+<title>Illusion won't go away — like an optical illusion — → spya-gwz5eu</title>
+<rect x="480" y="850" width="200" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="580" y="877.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Illusion won't go away</text>
+<text x="580" y="894.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">like an optical illusion</text>
+</g>
+<g>
+<title>More meat than machine — an embodied 'soul' — → spya-v98v5u</title>
+<rect x="270" y="950" width="240" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="982.465" font-size="15" text-anchor="middle" fill="#f7f7f7">More meat than machine</text>
+<text x="390" y="1002.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">an embodied 'soul'</text>
+</g>
+<text x="34" y="755" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">WHAT (NOT) TO DO</text>
+<rect x="4" y="513.5" width="156.4" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="82.2" y="523.5" font-size="10" text-anchor="middle" fill="#8f8f8f">returns to the opening worry</text></g>
+</g>
+<g transform="translate(0 1246.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Why we're tempted to see consciousness</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A hub-and-satellite scene: one core confusion (intelligence mistaken for consciousness) is reinforced by three</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">overlapping biases, which together explain the illusion without proving anything about real machine experience.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-TEMPTATIONS</text>
+<g transform="translate(0 65.9)"><path d="M390 110 C390 141.5 135 148.5 135 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="135,180 131.5,170 138.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 110 L375 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="375,180 373.6729824380378,169.48862404866784 380.5175993365797,170.95532766978394" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 110 C390 141.5 615 148.5 615 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="615,180 611.5,170 618.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M135 250 C135 272.5 190 277.5 190 300" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,300 186.5,290 193.5,290" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M375 250 C375 272.5 190 277.5 190 300" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,300 186.5,290 193.5,290" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M375 250 C375 272.5 550 277.5 550 300" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="550,300 546.5,290 553.5,290" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M615 250 C615 272.5 550 277.5 550 300" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="550,300 546.5,290 553.5,290" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 370 C190 390 190 380 190 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,400 186.5,390 193.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M550 370 C550 390 550 380 550 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="550,400 546.5,390 553.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 470 C190 492.5 380 497.5 380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M550 470 C550 492.5 380 497.5 380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>We conflate intelligence with consciousness — → spya-nj888h</title>
+<ellipse cx="390" cy="75" rx="110" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="70.5" font-size="15" text-anchor="middle" fill="#f7f7f7">We conflate intelligence</text>
+<text x="390" y="89.25" font-size="15" text-anchor="middle" fill="#f7f7f7">with consciousness</text>
+</g>
+<g>
+<title>Anthropocentrism — human case as the default — → spya-h4mwb2</title>
+<rect x="40" y="180" width="190" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="135" y="212.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropocentrism</text>
+<text x="135" y="229.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">human case as the default</text>
+</g>
+<g>
+<title>Human exceptionalism — humans atop every pile — → spya-her4zk</title>
+<rect x="280" y="180" width="190" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="375" y="212.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Human exceptionalism</text>
+<text x="375" y="229.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">humans atop every pile</text>
+</g>
+<g>
+<title>Anthropomorphism — projecting human traits — → spya-her4zk</title>
+<rect x="520" y="180" width="190" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="615" y="212.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropomorphism</text>
+<text x="615" y="229.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">projecting human traits</text>
+</g>
+<g>
+<title>Language is the trigger — fluent chat, loaded words like 'hallucinate' — → spya-k6fpme</title>
+<rect x="40" y="300" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="190" y="332.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Language is the trigger</text>
+<text x="190" y="349.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">fluent chat, loaded words like 'hallucinate'</text>
+</g>
+<g>
+<title>Exponential hype — every point feels like a turning point — → spya-cke6sj</title>
+<rect x="400" y="300" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="550" y="332.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Exponential hype</text>
+<text x="550" y="349.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">every point feels like a turning point</text>
+</g>
+<g>
+<title>Techno-rapture dreams — playing god, mind-uploading — → spya-v4sduf</title>
+<rect x="40" y="400" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="190" y="432.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Techno-rapture dreams</text>
+<text x="190" y="449.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">playing god, mind-uploading</text>
+</g>
+<g>
+<title>Still just pareidolia — a face in a cinnamon bun — → spya-k850tu</title>
+<rect x="400" y="400" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="550" y="432.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Still just pareidolia</text>
+<text x="550" y="449.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">a face in a cinnamon bun</text>
+</g>
+<g>
+<title>So: dig deeper into computation itself — → spya-rtcxt4</title>
+<rect x="220" y="520" width="320" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="553.9" font-size="12" text-anchor="middle" fill="#f7f7f7">So: dig deeper into computation itself</text>
+</g></g>
+</g>
+<g transform="translate(0 1980.6)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Four arguments against computational consciousness</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A converge: four independent lines of reasoning, each able to stand alone, meet at the same shaky conclusion about</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">whether computation alone can produce consciousness.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-ARGUMENTS</text>
+<g transform="translate(0 65.9)"><path d="M390 100 C390 122.5 125 127.5 125 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="125,150 121.5,140 128.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 100 C390 122.5 315 127.5 315 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="315,150 311.5,140 318.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 100 C390 122.5 505 127.5 505 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="505,150 501.5,140 508.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 100 C390 122.5 670 127.5 670 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="670,150 666.5,140 673.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M125 230 L125 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M315 230 L315 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M505 230 L505 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M670 230 L670 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M125 330 C125 361.5 380 368.5 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M315 330 C315 361.5 380 368.5 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M505 330 C505 361.5 380 368.5 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M670 330 C670 361.5 380 368.5 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Is computation sufficient? — → spya-cv97j7</title>
+<polygon points="390,40 500,70 390,100 280,70" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="73.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Is computation sufficient?</text>
+</g>
+<g>
+<title>No software/hardware split in brains — brain as meat-computer fails — → spya-a8jgf4</title>
+<rect x="40" y="150" width="170" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="125" y="180.472" font-size="12" text-anchor="middle" fill="#f7f7f7">No software/hardware</text>
+<text x="125" y="195.472" font-size="12" text-anchor="middle" fill="#f7f7f7">split in brains</text>
+<text x="125" y="211.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">brain as meat-computer fails</text>
+</g>
+<g>
+<title>Turing computation is limited — continuous, random dynamics matter too — → spya-n393ru</title>
+<rect x="230" y="150" width="170" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="315" y="180.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Turing computation is</text>
+<text x="315" y="195.472" font-size="12" text-anchor="middle" fill="#f7f7f7">limited</text>
+<text x="315" y="211.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">continuous, random dynamics…</text>
+</g>
+<g>
+<title>Life may be necessary — predictive, self-sustaining bodies — → spya-hj5y6s</title>
+<rect x="420" y="150" width="170" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="505" y="187.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Life may be necessary</text>
+<text x="505" y="204.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">predictive, self-sustaining…</text>
+</g>
+<g>
+<title>Simulation isn't the real thing — a sim doesn't digest — → spya-cepmwf</title>
+<rect x="610" y="150" width="120" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="670" y="181.15" font-size="10" text-anchor="middle" fill="#f7f7f7">Simulation isn't the</text>
+<text x="670" y="193.65" font-size="10" text-anchor="middle" fill="#f7f7f7">real thing</text>
+<text x="670" y="207.5" font-size="9" text-anchor="middle" fill="#8f8f8f">a sim doesn't digest</text>
+</g>
+<g>
+<title>Neural replacement thought-experiment fails — → spya-ahtr6e</title>
+<path d="M40 270 L196 270 L210 284 L210 330 L40 330 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M196 270 L196 284 L210 284" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="125" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Neural replacement</text>
+<text x="125" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">thought-experiment fails</text>
+</g>
+<g>
+<title>Watt governor: not computing at all — → spya-sq9v5k</title>
+<path d="M230 270 L386 270 L400 284 L400 330 L230 330 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M386 270 L386 284 L400 284" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="315" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Watt governor: not computing</text>
+<text x="315" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">at all</text>
+</g>
+<g>
+<title>Perception as controlled hallucination — → spya-xhvztm</title>
+<path d="M420 270 L576 270 L590 284 L590 330 L420 330 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M576 270 L576 284 L590 284" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="505" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Perception as controlled</text>
+<text x="505" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">hallucination</text>
+</g>
+<g>
+<title>Mind-uploading assumes its own conclusion — → spya-xvm37k</title>
+<path d="M610 270 L716 270 L730 284 L730 330 L610 330 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 270 L716 284 L730 284" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="670" y="290.75" font-size="10" text-anchor="middle" fill="#f7f7f7">Mind-uploading</text>
+<text x="670" y="303.25" font-size="10" text-anchor="middle" fill="#f7f7f7">assumes its own</text>
+<text x="670" y="315.75" font-size="10" text-anchor="middle" fill="#f7f7f7">conclusion</text>
+</g>
+<g>
+<title>Functionalism looks shaky; real machine consciousness unlikely, not impossible — → spya-c5ve5t</title>
+<rect x="240" y="400" width="280" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="426.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Functionalism looks shaky; real</text>
+<text x="380" y="444.875" font-size="15" text-anchor="middle" fill="#f7f7f7">machine consciousness unlikely,</text>
+<text x="380" y="463.625" font-size="15" text-anchor="middle" fill="#f7f7f7">not impossible</text>
+</g></g>
+</g>
+</svg>

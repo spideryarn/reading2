@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2894.5" width="760" height="2894.5">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2894.5" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel into convergence, then loop</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The piece funnels one worry (work disappearing) into three parallel historical case studies that converge on the</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">same pattern — dignity from group status, not achievement — then follows a chain explaining why ordinary paid work</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">escapes that trap, looping back at the end to the fear it opened with.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">After Work, We'll Have Each Other</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Three historical case studies converge on one pattern, which a closing chain uses to explain — and worry about losing —</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">what paid work actually gives us.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="30" y="140" width="200" height="230" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="280" y="140" width="200" height="230" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<rect x="530" y="140" width="200" height="230" rx="8" fill="rgba(240,228,66,0.07)" stroke="rgba(240,228,66,0.24)" stroke-width="1"/>
+<rect x="120" y="530" width="520" height="220" rx="8" fill="rgba(92,143,232,0.13)" stroke="rgba(92,143,232,0.62)" stroke-width="1.8"/>
+<path d="M380 130 C380 151.6 130 156.4 130 178" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="130,178 126.5,168 133.5,168" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 130 C380 151.6 380 156.4 380 178" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,178 376.5,168 383.5,168" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 130 C380 151.6 630 156.4 630 178" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="630,178 626.5,168 633.5,168" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M130 348 C130 371.4 380 376.6 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 348 C380 371.4 380 376.6 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M630 348 C630 371.4 380 376.6 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 490 C380 525.1 250 532.9 250 568" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="250,568 246.5,558 253.5,558" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 490 C380 525.1 510 532.9 510 568" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="510,568 506.5,558 513.5,558" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M250 638 C250 658 400 638 400 658" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,658 396.5,648 403.5,648" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M510 638 C510 658 400 638 400 658" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,658 396.5,648 403.5,648" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 728 L400 790" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,790 396.5,780 403.5,780" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M270 835 C8 835 8 85 260 85" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="260,85 250,88.5 250,81.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>When AI ends work, relationships supply status — the relational-sector thesis — If machines do all economically necessary labor, the argument goes, humans fall back on relationships for status and meaning. — → spya-eq7rkm</title>
+<ellipse cx="380" cy="85" rx="120" ry="45" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="63.715" font-size="15" text-anchor="middle" fill="#f7f7f7">When AI ends work,</text>
+<text x="380" y="82.465" font-size="15" text-anchor="middle" fill="#f7f7f7">relationships supply</text>
+<text x="380" y="101.215" font-size="15" text-anchor="middle" fill="#f7f7f7">status</text>
+<text x="380" y="121.675" font-size="11.4" text-anchor="middle" fill="#8f8f8f">the relational-sector thesis</text>
+</g>
+<g>
+<title>Versailles ran on petty status feuds, not ideas — Saint-Simon's memoirs show courtiers obsessed with heraldic precedence over culture or philosophy. — → spya-y827zc</title>
+<rect x="50" y="178" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="130" y="209.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Versailles ran on petty</text>
+<text x="130" y="224.4" font-size="12" text-anchor="middle" fill="#f7f7f7">status feuds, not ideas</text>
+</g>
+<g>
+<title>Etiquette curbed — not proved — ape instincts — Elias: court ceremony was a civilizing restraint on primate dominance behavior, not its inevitable expression. — → spya-cz0cgg</title>
+<rect x="50" y="268" width="160" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="130" y="304.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Etiquette curbed — not</text>
+<text x="130" y="319.4" font-size="12" text-anchor="middle" fill="#f7f7f7">proved — ape instincts</text>
+</g>
+<g>
+<title>Lives built around defending class standing — Ostrander's 1980s subjects never worked and organized life around keeping their social network 'in good order.' — → spya-uum3xk</title>
+<rect x="300" y="178" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="201.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Lives built around</text>
+<text x="380" y="216.9" font-size="12" text-anchor="middle" fill="#f7f7f7">defending class</text>
+<text x="380" y="231.9" font-size="12" text-anchor="middle" fill="#f7f7f7">standing</text>
+</g>
+<g>
+<title>Charity valued for its 'illusion of usefulness' — Board fundraising mattered for status, not for measurable results — by the women's own admission. — → spya-mdncme</title>
+<rect x="300" y="268" width="160" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="296.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Charity valued for its</text>
+<text x="380" y="311.9" font-size="12" text-anchor="middle" fill="#f7f7f7">'illusion of</text>
+<text x="380" y="326.9" font-size="12" text-anchor="middle" fill="#f7f7f7">usefulness'</text>
+</g>
+<g>
+<title>Peer groups and gossip ruled over dead-end jobs — Gans's Boston Italian-Americans spent as little time at work as possible, organizing life around close peer groups. — → spya-y02mr5</title>
+<rect x="550" y="178" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="630" y="201.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Peer groups and gossip</text>
+<text x="630" y="216.9" font-size="12" text-anchor="middle" fill="#f7f7f7">ruled over dead-end</text>
+<text x="630" y="231.9" font-size="12" text-anchor="middle" fill="#f7f7f7">jobs</text>
+</g>
+<g>
+<title>Amoral familism faded as options improved — Distrust of outsiders was a rational response to poverty, and it receded as material conditions changed. — → spya-dma27v</title>
+<rect x="550" y="268" width="160" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="630" y="304.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Amoral familism faded</text>
+<text x="630" y="319.4" font-size="12" text-anchor="middle" fill="#f7f7f7">as options improved</text>
+</g>
+<g>
+<title>Status comes from the group, not achievement — Across courts, old money, and peer groups, dignity depends on group membership, which makes every society of this kind clannish and exclusive. — → spya-qsfkqr</title>
+<polygon points="325,400 435,400 480,445 435,490 325,490 280,445" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="431.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Status comes from the</text>
+<text x="380" y="449.875" font-size="15" text-anchor="middle" fill="#f7f7f7">group, not</text>
+<text x="380" y="468.625" font-size="15" text-anchor="middle" fill="#f7f7f7">achievement</text>
+</g>
+<g>
+<title>Work gives impersonal respect, not just money — Unlike group-based honor, work lets you earn dignity for what you do, not who you know. — → spya-zd83ts</title>
+<rect x="140" y="568" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="250" y="599.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Work gives impersonal respect,</text>
+<text x="250" y="614.4" font-size="12" text-anchor="middle" fill="#f7f7f7">not just money</text>
+</g>
+<g>
+<title>Surveys and oral histories: workers want respect — From Pew surveys to Studs Terkel's interviews, workers consistently value feeling competent and respected over enjoying the task itself. — → spya-t9qyhk</title>
+<rect x="400" y="568" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="510" y="599.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Surveys and oral histories:</text>
+<text x="510" y="614.4" font-size="12" text-anchor="middle" fill="#f7f7f7">workers want respect</text>
+</g>
+<g>
+<title>Commercial society freed friendship from necessity — Because relational societies struggle with equality, the market's loosening of feudal and family ties let friendship become freer. — → spya-hdbtc0</title>
+<rect x="270" y="658" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="689.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Commercial society freed friendship</text>
+<text x="400" y="704.4" font-size="12" text-anchor="middle" fill="#f7f7f7">from necessity</text>
+</g>
+<g>
+<title>Author's wary hope: liberal individualism survives — The author likes her job and liberal individualism, and hopes that if a relational world is coming, it won't cost us the latter. — → spya-dhj4jr</title>
+<ellipse cx="400" cy="835" rx="130" ry="45" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="830.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Author's wary hope: liberal</text>
+<text x="400" y="849.25" font-size="15" text-anchor="middle" fill="#f7f7f7">individualism survives</text>
+</g>
+<g>
+<title>Notes &amp; further reading (sources, citations) — → spya-u4ztzw</title>
+<path d="M270 910 L516 910 L530 924 L530 960 L270 960 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M516 910 L516 924 L530 924" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="400" y="938.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Notes &amp; further reading (sources, citations)</text>
+</g>
+<text x="290" y="155" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">UPPER-CLASS WOMEN</text>
+<text x="540" y="155" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">WORKING CLASS</text>
+<rect x="15.25" y="446" width="114" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="72.25" y="456" font-size="10" text-anchor="middle" fill="#8f8f8f">echoes opening worry</text></g>
+</g>
+<g transform="translate(0 1206.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Versailles, salons, and apes</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain of escalating evidence that aristocratic life without work was petty and status-obsessed, ending with a caveat</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">that this need not be our fate.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">ZOOM-ARISTOCRATS</text>
+<g transform="translate(0 65.9)"><path d="M430 120 L430 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,150 426.5,140 433.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 220 L430 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,250 426.5,240 433.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M580 285 L600 285" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<path d="M430 320 L430 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,350 426.5,340 433.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 420 L430 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,450 426.5,440 433.5,440" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 520 L430 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,550 426.5,540 433.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 620 L430 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,650 426.5,640 433.5,640" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Versailles: Europe's wealthiest, most brilliant court — Voltaire called it one of history's four great ages of light — yet its culture was dominated by status games. — → spya-gs52t3</title>
+<rect x="280" y="50" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="81.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Versailles: Europe's wealthiest, most</text>
+<text x="430" y="96.4" font-size="12" text-anchor="middle" fill="#f7f7f7">brilliant court</text>
+</g>
+<g>
+<title>Saint-Simon obsessed over heraldic precedence — His memoirs devote hundreds of pages to disputes over emblems and ceremonial headgear, not culture or ideas. — → spya-x4w0zk</title>
+<rect x="280" y="150" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="188.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Saint-Simon obsessed over heraldic precedence</text>
+</g>
+<g>
+<title>Salons were gossip, not philosophy — Despite their Enlightenment reputation, salon attendees mostly talked politics and each other, not ideas. — → spya-wue7zn</title>
+<rect x="280" y="250" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="288.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Salons were gossip, not philosophy</text>
+</g>
+<g>
+<title>Lilti: salon talk was mostly political gossip — → spya-k0yet6</title>
+<path d="M600 250 L716 250 L730 264 L730 320 L600 320 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 250 L716 264 L730 264" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="665" y="275.75" font-size="10" text-anchor="middle" fill="#f7f7f7">Lilti: salon talk was</text>
+<text x="665" y="288.25" font-size="10" text-anchor="middle" fill="#f7f7f7">mostly political</text>
+<text x="665" y="300.75" font-size="10" text-anchor="middle" fill="#f7f7f7">gossip</text>
+</g>
+<g>
+<title>Catherine's Petersburg: same gossip-driven pattern — Even a brilliant, pragmatic ruler's court ran on tracking who offended whom to gain favor. — → spya-f90g2h</title>
+<rect x="280" y="350" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="381.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Catherine's Petersburg: same gossip-driven</text>
+<text x="430" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">pattern</text>
+</g>
+<g>
+<title>Aristocratic dignity: honor, not diligence — Bourgeois dignity comes from being productive; aristocratic dignity comes from maintaining rank and family distinction. — → spya-de69sf</title>
+<rect x="280" y="450" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="488.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Aristocratic dignity: honor, not diligence</text>
+</g>
+<g>
+<title>Aristocrats act like status-obsessed chimpanzees — Constant tracking of alliances, challenges, and displays of rank resembles primate dominance hierarchies. — → spya-cz0cgg</title>
+<rect x="280" y="550" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="581.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Aristocrats act like status-obsessed</text>
+<text x="430" y="596.4" font-size="12" text-anchor="middle" fill="#f7f7f7">chimpanzees</text>
+</g>
+<g>
+<title>Elias: civilizing, not fixed, instinct — we might do better — Versailles behavior reflected centuries of specific feudal institutions, not an inevitable return to primate nature. — → spya-k26ath</title>
+<rect x="280" y="650" width="300" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="687.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Elias: civilizing, not fixed, instinct</text>
+<text x="430" y="704.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">we might do better</text>
+</g></g>
+</g>
+<g transform="translate(0 2080.6)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Why work gives respect</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Four kinds of evidence feed one claim about what work supplies, which then explains why commercial society freed</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">friendship — and the author's wary conclusion.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">ZOOM-WORK-MATTERS</text>
+<g transform="translate(0 65.9)"><path d="M400 140 C400 167 115 173 115 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="115,200 111.5,190 118.5,190" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 140 C400 189.5 315 200.5 315 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="315,250 311.5,240 318.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 140 C400 189.5 505 200.5 505 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="505,250 501.5,240 508.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 140 C400 167 655 173 655 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="655,200 651.5,190 658.5,190" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M115 270 C115 310.5 410 319.5 410 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,360 406.5,350 413.5,350" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M315 320 C315 340 410 340 410 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,360 406.5,350 413.5,350" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M505 320 C505 340 410 340 410 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,360 406.5,350 413.5,350" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M655 270 C655 310.5 410 319.5 410 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,360 406.5,350 413.5,350" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 440 L410 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,470 406.5,460 413.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 550 L410 580" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,580 406.5,570 413.5,570" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Work supplies impersonal respect and competence — The central claim: paid work's main gift, besides money, is a way to earn dignity for what you do rather than who you know. — → spya-zd83ts</title>
+<ellipse cx="400" cy="95" rx="120" ry="45" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="90.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Work supplies impersonal</text>
+<text x="400" y="109.25" font-size="15" text-anchor="middle" fill="#f7f7f7">respect and competence</text>
+</g>
+<g>
+<title>85% of workers report job satisfaction — Pew, Gallup, and The Conference Board surveys agree, even for unglamorous jobs. — → spya-sw09bu</title>
+<rect x="30" y="200" width="170" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="115" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">85% of workers report job</text>
+<text x="115" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">satisfaction</text>
+</g>
+<g>
+<title>Strauss: COVID return showed pride, relief — Workers returning from lockdown spoke of feeling useful again, not of loving their tasks. — → spya-nm9v43</title>
+<rect x="230" y="250" width="170" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="315" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Strauss: COVID return</text>
+<text x="315" y="296.4" font-size="12" text-anchor="middle" fill="#f7f7f7">showed pride, relief</text>
+</g>
+<g>
+<title>FWP interviews: work mattered as much as family — Depression-era life stories rated pride in work and recognition by peers alongside family and community. — → spya-a5pt8y</title>
+<rect x="420" y="250" width="170" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="505" y="273.9" font-size="12" text-anchor="middle" fill="#f7f7f7">FWP interviews: work</text>
+<text x="505" y="288.9" font-size="12" text-anchor="middle" fill="#f7f7f7">mattered as much as</text>
+<text x="505" y="303.9" font-size="12" text-anchor="middle" fill="#f7f7f7">family</text>
+</g>
+<g>
+<title>Terkel's Working: respect beat job content — 1970s Chicago workers hated disrespect far more than repetition, and prized being useful to peers. — → spya-n00hd0</title>
+<rect x="580" y="200" width="150" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="655" y="223.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Terkel's Working:</text>
+<text x="655" y="238.9" font-size="12" text-anchor="middle" fill="#f7f7f7">respect beat job</text>
+<text x="655" y="253.9" font-size="12" text-anchor="middle" fill="#f7f7f7">content</text>
+</g>
+<g>
+<title>Relational societies struggle with moral equality — When dignity depends on group membership, societies get clannish — policing who belongs and who doesn't. — → spya-hdbtc0</title>
+<rect x="280" y="360" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Relational societies struggle with</text>
+<text x="410" y="411.4" font-size="12" text-anchor="middle" fill="#f7f7f7">moral equality</text>
+</g>
+<g>
+<title>Commercial society freed friendship from necessity — Smith, Hume, and Ferguson argued that once labor meets our needs, friendship can rest on sympathy rather than transaction. — → spya-tmepex</title>
+<rect x="280" y="470" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="506.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Commercial society freed friendship</text>
+<text x="410" y="521.4" font-size="12" text-anchor="middle" fill="#f7f7f7">from necessity</text>
+</g>
+<g>
+<title>Author's wary hope: liberal individualism survives — If a more relational future is coming, the author hopes we keep the freedom commercial society gave our relationships. — → spya-dhj4jr</title>
+<ellipse cx="410" cy="625" rx="130" ry="45" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="620.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Author's wary hope: liberal</text>
+<text x="410" y="639.25" font-size="15" text-anchor="middle" fill="#f7f7f7">individualism survives</text>
+</g></g>
+</g>
+</svg>

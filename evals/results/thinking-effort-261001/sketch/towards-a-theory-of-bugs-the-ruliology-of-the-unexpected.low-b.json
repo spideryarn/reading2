@@ -1,0 +1,691 @@
+{
+  "version": "sketch/3",
+  "title": "funnel into hub, then diverge",
+  "caption": "A funnel of concrete examples (Turing machines, specifications, cellular automata, proofs) narrows into one central claim—computational irreducibility makes bugs inevitable—which then fans out into three consequences: testing can't save you, ruliology keeps finding surprises everywhere, and practice can only push the problem back, never eliminate it.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Towards a Theory of Bugs",
+      "height": 1040,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 24,
+          "w": 240,
+          "h": 64,
+          "text": "Bugs = simple mental model vs. richer computation",
+          "size": "md",
+          "detail": "A program's actual computation can be far more sophisticated than our simple picture of what it should do.",
+          "block": "spya-d46wsq"
+        },
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 120,
+          "w": 700,
+          "h": 430,
+          "style": "band",
+          "label": "EXAMPLES: WHERE BUGS HIDE",
+          "opens": "inside-examples",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "tm",
+          "shape": "box",
+          "x": 60,
+          "y": 160,
+          "w": 200,
+          "h": 64,
+          "text": "Turing machine computing n+1 breaks at n=7",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-s7uc4u"
+        },
+        {
+          "kind": "node",
+          "id": "spec",
+          "shape": "box",
+          "x": 300,
+          "y": 160,
+          "w": 200,
+          "h": 64,
+          "text": "What counts as a bug depends on the spec chosen",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-gjut02"
+        },
+        {
+          "kind": "node",
+          "id": "ca",
+          "shape": "box",
+          "x": 540,
+          "y": 160,
+          "w": 160,
+          "h": 64,
+          "text": "Doubling cellular automata fail at n=14",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-cy4dgs"
+        },
+        {
+          "kind": "node",
+          "id": "tell",
+          "shape": "diamond",
+          "x": 300,
+          "y": 270,
+          "w": 200,
+          "h": 80,
+          "text": "Can you tell in advance?",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-gt6430"
+        },
+        {
+          "kind": "node",
+          "id": "proof",
+          "shape": "hex",
+          "x": 300,
+          "y": 390,
+          "w": 220,
+          "h": 70,
+          "text": "Formal proof possible only if truly bug-free",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-qr6x2h"
+        },
+        {
+          "kind": "node",
+          "id": "irred",
+          "shape": "box",
+          "x": 260,
+          "y": 600,
+          "w": 240,
+          "h": 90,
+          "text": "Computational irreducibility: behavior knowable only by running it",
+          "size": "md",
+          "tone": 0,
+          "block": "spya-wcnws7"
+        },
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 730,
+          "w": 700,
+          "h": 280,
+          "style": "band",
+          "label": "CONSEQUENCES OF IRREDUCIBILITY",
+          "opens": "inside-consequences",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "test",
+          "shape": "box",
+          "x": 60,
+          "y": 780,
+          "w": 200,
+          "h": 70,
+          "text": "Testing can't rule out bugs—rare ones hide forever",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-yc9e2z"
+        },
+        {
+          "kind": "node",
+          "id": "surprise",
+          "shape": "box",
+          "x": 300,
+          "y": 780,
+          "w": 200,
+          "h": 70,
+          "text": "Ruliology keeps turning up surprises",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-kjsjh5"
+        },
+        {
+          "kind": "node",
+          "id": "math",
+          "shape": "box",
+          "x": 540,
+          "y": 780,
+          "w": 160,
+          "h": 70,
+          "text": "Even math has rare 'bugs' in conjectures",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bhwh4d"
+        },
+        {
+          "kind": "node",
+          "id": "practice",
+          "shape": "box",
+          "x": 240,
+          "y": 900,
+          "w": 280,
+          "h": 80,
+          "text": "Good language design pushes bugs back, never removes them",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-kdks69"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "tm",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "spec",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "ca",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "tm",
+          "to": "tell",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spec",
+          "to": "tell",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ca",
+          "to": "tell",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "tell",
+          "to": "proof",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "proof",
+          "to": "irred",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "irred",
+          "to": "test",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "irred",
+          "to": "surprise",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "irred",
+          "to": "math",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "test",
+          "to": "practice",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "surprise",
+          "to": "practice",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "math",
+          "to": "practice",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Examples build down to the core claim about irreducibility, which then spreads into three separate consequences."
+    },
+    {
+      "id": "inside-examples",
+      "title": "The Examples: Bugs Hiding in Plain Sight",
+      "height": 900,
+      "items": [
+        {
+          "kind": "node",
+          "id": "e1",
+          "shape": "box",
+          "x": 260,
+          "y": 30,
+          "w": 260,
+          "h": 70,
+          "text": "3-state TM seems to compute n+1, fails at n=7",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-s7uc4u"
+        },
+        {
+          "kind": "node",
+          "id": "e2",
+          "shape": "box",
+          "x": 260,
+          "y": 130,
+          "w": 260,
+          "h": 70,
+          "text": "Among thousands of correct machines, first bugs come at varied, sometimes large n",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-rhc6t0"
+        },
+        {
+          "kind": "node",
+          "id": "e3",
+          "shape": "box",
+          "x": 260,
+          "y": 230,
+          "w": 260,
+          "h": 70,
+          "text": "A machine runs perfectly to n=14, fails at n=15",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-pt0hmz"
+        },
+        {
+          "kind": "node",
+          "id": "e4",
+          "shape": "box",
+          "x": 260,
+          "y": 330,
+          "w": 260,
+          "h": 70,
+          "text": "Larger machines hide bugs even longer; all-1s inputs riskiest",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-hqukdz"
+        },
+        {
+          "kind": "node",
+          "id": "e5",
+          "shape": "box",
+          "x": 260,
+          "y": 430,
+          "w": 260,
+          "h": 70,
+          "text": "Two machines that look equivalent diverge at n=27",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-gjut02"
+        },
+        {
+          "kind": "node",
+          "id": "e6",
+          "shape": "box",
+          "x": 260,
+          "y": 530,
+          "w": 260,
+          "h": 70,
+          "text": "Prohibitions (no runaway memory) also get violated eventually",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-rt2gb2"
+        },
+        {
+          "kind": "node",
+          "id": "e7",
+          "shape": "box",
+          "x": 260,
+          "y": 630,
+          "w": 260,
+          "h": 70,
+          "text": "CA designed to double input fails at n=14, or later at n=24/32",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-pqwf4x"
+        },
+        {
+          "kind": "node",
+          "id": "e8",
+          "shape": "box",
+          "x": 260,
+          "y": 730,
+          "w": 260,
+          "h": 90,
+          "text": "Rule 122 structure lets one PROVE one CA case has no bug, despite complex look",
+          "size": "sm",
+          "detail": "The pattern's boundary only moves left; interior reduces to rule 122, which can never stabilize wrongly.",
+          "tone": 1,
+          "block": "spya-gagsuk"
+        },
+        {
+          "kind": "edge",
+          "from": "e1",
+          "to": "e2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e2",
+          "to": "e3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e3",
+          "to": "e4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e4",
+          "to": "e5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e5",
+          "to": "e6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e6",
+          "to": "e7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e7",
+          "to": "e8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain of increasingly careful tests—Turing machines, specification choice, cellular automata, then rigorous proof—each showing bugs surface late, or can sometimes be ruled out only by deep structural argument."
+    },
+    {
+      "id": "inside-consequences",
+      "title": "Living With Irreducibility",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "c0",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 24,
+          "w": 200,
+          "h": 60,
+          "text": "Irreducibility: must run it to know",
+          "size": "md",
+          "tone": 0,
+          "block": "spya-wcnws7"
+        },
+        {
+          "kind": "node",
+          "id": "c1",
+          "shape": "box",
+          "x": 40,
+          "y": 150,
+          "w": 210,
+          "h": 80,
+          "text": "Scientific induction from testing fails—rare bugs can escape even huge samples",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-yc9e2z"
+        },
+        {
+          "kind": "node",
+          "id": "c2",
+          "shape": "box",
+          "x": 280,
+          "y": 150,
+          "w": 200,
+          "h": 80,
+          "text": "Rule 30, a long-delayed halt, a broken symmetry—surprises recur across systems",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-kjsjh5"
+        },
+        {
+          "kind": "node",
+          "id": "c3",
+          "shape": "box",
+          "x": 520,
+          "y": 150,
+          "w": 200,
+          "h": 80,
+          "text": "Prime-counting trend flips sign only after 23 billion primes",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-cc855a"
+        },
+        {
+          "kind": "node",
+          "id": "c4",
+          "shape": "box",
+          "x": 160,
+          "y": 290,
+          "w": 200,
+          "h": 70,
+          "text": "Math mostly avoids this by sticking to human-graspable questions",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-zcpn8u"
+        },
+        {
+          "kind": "node",
+          "id": "c5",
+          "shape": "box",
+          "x": 400,
+          "y": 290,
+          "w": 200,
+          "h": 70,
+          "text": "Good language design packs irreducibility into primitives",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-kdks69"
+        },
+        {
+          "kind": "node",
+          "id": "c6",
+          "shape": "box",
+          "x": 160,
+          "y": 410,
+          "w": 200,
+          "h": 70,
+          "text": "Short, well-designed programs tend to be bug-free ones",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-x8ag2t"
+        },
+        {
+          "kind": "node",
+          "id": "c7",
+          "shape": "box",
+          "x": 400,
+          "y": 410,
+          "w": 200,
+          "h": 70,
+          "text": "Seeing the whole computation (visualization) builds confidence",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-qexzj4"
+        },
+        {
+          "kind": "node",
+          "id": "c8",
+          "shape": "box",
+          "x": 160,
+          "y": 530,
+          "w": 200,
+          "h": 70,
+          "text": "Trained neural nets are especially exposed—mechanisms aren't human-understandable",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-sggbeh"
+        },
+        {
+          "kind": "node",
+          "id": "c9",
+          "shape": "box",
+          "x": 400,
+          "y": 530,
+          "w": 200,
+          "h": 80,
+          "text": "A 'bug' can be reframed as scientific discovery, not failure",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-xdwm97"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c0",
+          "to": "c3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c1",
+          "to": "c4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2",
+          "to": "c4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2",
+          "to": "c5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c3",
+          "to": "c5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c4",
+          "to": "c6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c5",
+          "to": "c7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c6",
+          "to": "c8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c7",
+          "to": "c9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Three parallel consequences fan out from the same root cause, side by side rather than ranked, since the piece treats them as equally live effects of irreducibility."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "sourceHash": "fa2d01c869c0a26f.94c19520d2431db5.893f578d23ba5f72",
+  "profileHash": null
+}

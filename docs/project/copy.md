@@ -171,7 +171,7 @@ them. The same narrow exception registers `[auth-down]` and
 `mic-` family in the one way that matters: they carry **no bracketed code at
 all**. They live in [`src/job-state.ts`](../../src/job-state.ts) —
 `WAITING_TO_CONTINUE`, `TAKING_LONGER`, `STOPPING_AFTER_STEP`, `KEEP_A_TAB_OPEN`,
-`DRIVER_STALLED`, `RUNNING_A_WHILE` and `STEP_USUALLY_A_COUPLE_OF_MINUTES` — beside `displayJob`,
+`DRIVER_STALLED`, `RUNNING_A_WHILE` and `STEP_USUALLY_ABOUT_A_MINUTE` — beside `displayJob`,
 which is the one place that decides what state an import is in.
 
 Not in `src/messages.ts` for the same reason as the `mic-` family: that file is

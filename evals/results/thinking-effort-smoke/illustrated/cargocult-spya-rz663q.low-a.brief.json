@@ -1,0 +1,376 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map, its chain of reasoning laid out as a route of little scenes connected by inked paths, fitting a talk that itself tells a chain of true stories.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Route of Cargo Cult Science",
+      "prompt": "Draw an antique hand-inked map in sepia and faded ochre, aged parchment paper, with a single winding path running from the top of the page to the bottom through fourteen small framed vignettes connected by thin inked roads. At the top: a lectern scene titled THE COMMENCEMENT ADDRESS. The path forks into a region labeled by a dotted border enclosing three scenes — a man floating in a dark salt tank (THE ISOLATION TANK), a stack of books beside a prison gate (NO PROGRESS ON CRIME), and a fork into a cocktail party scene (THE COCKTAIL-PARTY TEST) where both branches converge. From there the road leads to an island scene of bamboo huts and a coconut-headphone controller watching an empty sky (CARGO CULT SCIENCE NAMED). The path narrows through a bent-backward scholar with a ledger (LEANING OVER BACKWARDS), which splits to an oil bottle and thermometer scene (NOT JUST ADVERTISING) and two repeating benches (THE TRUTH WILL OUT), which converge into a stair of climbing scales (THE CREEPING NUMBER), then an unrolling corrected scroll (LEARNING NOT TO FOOL ONESELF), then a scientist addressing townsfolk with a chart (HONESTY TO THE LAYMAN), into a maze-and-rat scene marked X and A (CASE STUDIES BEGIN), ending at an open gate scene of a graduate walking into open country (THE CLOSING WISH). Hand-lettered capital titles sit beneath each vignette only, in a uniform antique script, nothing else on the page is lettered. Use fine cross-hatching, muted browns and faded gold, and keep every scene large enough to read clearly, filling the width of the page.",
+      "vignettes": [
+        {
+          "block": "spya-wv9g0v",
+          "quote": "Some remarks on science, pseudoscience, and learning how to not fool yourself.",
+          "depicts": "A lectern at the top of the map with a scholar in academic robes beginning an address to rows of seated graduates.",
+          "title": "THE COMMENCEMENT ADDRESS",
+          "node": "n1"
+        },
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a method was discovered for separating the ideas—which was to try one to see if it worked",
+          "depicts": "A hand sorting small labeled stones into two piles, one glowing, one crumbling to dust — the method of testing ideas.",
+          "title": "SEPARATING THE IDEAS",
+          "node": "n2"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "I went into isolation tanks (they’re dark and quiet and you float in Epsom salts)",
+          "depicts": "A man floating inside a dark sealed tank, eyes closed, salt crystals drifting in the water around him.",
+          "title": "THE ISOLATION TANK",
+          "node": "n3"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "you can be sure you are talking about something about which nobody knows anything",
+          "depicts": "Two guests at a cocktail party, drinks in hand, caught mid-sentence by a hostess peering around the door.",
+          "title": "THE COCKTAIL-PARTY TEST",
+          "node": "n5"
+        },
+        {
+          "block": "spya-fd2muf",
+          "quote": "So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation",
+          "depicts": "Islanders standing beside a bamboo hut with a man wearing coconut-shell headphones, watching an empty sky for planes that never come.",
+          "title": "CARGO CULT SCIENCE NAMED",
+          "node": "n6"
+        },
+        {
+          "block": "spya-bpyx8n",
+          "quote": "no oils soak through food, if operated at a certain temperature",
+          "depicts": "A bottle of oil on a table beside a cooking pan, with a thermometer propped against it, half the scene lit, half shadowed.",
+          "title": "NOT JUST ADVERTISING",
+          "node": "n8"
+        },
+        {
+          "block": "spya-az6z7k",
+          "quote": "Other experimenters will repeat your experiment and find out whether you were wrong or right",
+          "depicts": "Two scholars at separate benches repeating the same apparatus, comparing results across a table between them.",
+          "title": "THE TRUTH WILL OUT",
+          "node": "n9"
+        },
+        {
+          "block": "spya-s9msxy",
+          "quote": "until finally they settle down to a number which is higher",
+          "depicts": "A row of measuring scales each showing a slightly larger weight than the last, climbing stepwise across the page.",
+          "title": "THE CREEPING NUMBER",
+          "node": "n10"
+        },
+        {
+          "block": "spya-bvx2u8",
+          "quote": "this long history of learning how to not fool ourselves—of having utter scientific integrity",
+          "depicts": "A long winding scroll unrolling from a scholar's hands, filled with small corrected marks and crossed-out errors.",
+          "title": "LEARNING NOT TO FOOL ONESELF",
+          "node": "n11"
+        },
+        {
+          "block": "spya-c46yyu",
+          "quote": "bending over backwards to show how you’re maybe wrong, that you ought to do when acting as a scientist",
+          "depicts": "A scientist addressing a crowd of ordinary townsfolk and a robed official, pointing to a chart that shows against himself as well as for.",
+          "title": "HONESTY TO THE LAYMAN",
+          "node": "n12"
+        },
+        {
+          "block": "spya-w9nnq6",
+          "quote": "it had been found by others that under certain circumstances, X, rats did something, A",
+          "depicts": "A maze with small rats, and a student pointing at a sign marked with the letters X and A, puzzling over them.",
+          "title": "CASE STUDIES BEGIN",
+          "node": "n13"
+        },
+        {
+          "block": "spya-ndyj3t",
+          "quote": "the good luck to be somewhere where you are free to maintain the kind of integrity I have described",
+          "depicts": "A graduate stepping through an open gate into open country, free of walls, looking back once at the lectern.",
+          "title": "THE CLOSING WISH",
+          "node": "n14"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A lectern at the top of the map with a scholar in academic robes beginning an address to rows of seated graduates.",
+          "title": "THE COMMENCEMENT ADDRESS"
+        },
+        {
+          "where": "A hand sorting small labeled stones into two piles, one glowing, one crumbling to dust — the method of testing ideas.",
+          "title": "SEPARATING THE IDEAS"
+        },
+        {
+          "where": "A man floating inside a dark sealed tank, eyes closed, salt crystals drifting in the water around him.",
+          "title": "THE ISOLATION TANK"
+        },
+        {
+          "where": "A stack of thick theory-books beside an unchanging prison gate, nothing moving between them.",
+          "title": "NO PROGRESS ON CRIME"
+        },
+        {
+          "where": "Two guests at a cocktail party, drinks in hand, caught mid-sentence by a hostess peering around the door.",
+          "title": "THE COCKTAIL-PARTY TEST"
+        },
+        {
+          "where": "Islanders standing beside a bamboo hut with a man wearing coconut-shell headphones, watching an empty sky for planes that never come.",
+          "title": "CARGO CULT SCIENCE NAMED"
+        },
+        {
+          "where": "A scholar bent backward at the waist, arms open, offering a ledger of both favorable and unfavorable findings.",
+          "title": "LEANING OVER BACKWARDS"
+        },
+        {
+          "where": "A bottle of oil on a table beside a cooking pan, with a thermometer propped against it, half the scene lit, half shadowed.",
+          "title": "NOT JUST ADVERTISING"
+        },
+        {
+          "where": "Two scholars at separate benches repeating the same apparatus, comparing results across a table between them.",
+          "title": "THE TRUTH WILL OUT"
+        },
+        {
+          "where": "A row of measuring scales each showing a slightly larger weight than the last, climbing stepwise across the page.",
+          "title": "THE CREEPING NUMBER"
+        },
+        {
+          "where": "A long winding scroll unrolling from a scholar's hands, filled with small corrected marks and crossed-out errors.",
+          "title": "LEARNING NOT TO FOOL ONESELF"
+        },
+        {
+          "where": "A scientist addressing a crowd of ordinary townsfolk and a robed official, pointing to a chart that shows against himself as well as for.",
+          "title": "HONESTY TO THE LAYMAN"
+        },
+        {
+          "where": "A maze with small rats, and a student pointing at a sign marked with the letters X and A, puzzling over them.",
+          "title": "CASE STUDIES BEGIN"
+        },
+        {
+          "where": "A graduate stepping through an open gate into open country, free of walls, looking back once at the lectern.",
+          "title": "THE CLOSING WISH"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-investigating",
+      "title": "Searching for What Doesn't Work",
+      "prompt": "In the same antique inked-map style as before, sepia parchment with fine cross-hatching, draw this plate as the inside of the overview's 'SEARCHING FOR WHAT DOESN'T WORK' region, opening with a small woodcut-style scene of an apothecary holding up a carved horn to a patient (THE RHINOCEROS HORN) at the top, matching how the overview drew that region. Below it, a dinner table scene with guests gesturing at a glowing saucer and a star chart (UFOS AND ASTROLOGY), leading down to a cliffside retreat with meditating figures (THE ESALEN RETREAT). From that retreat scene, two paths branch sideways to smaller framed vignettes: a bathhouse scene of a foot-rub and a skeptical onlooker (A LONG WAY FROM THE PITUITARY), and a hotel bathroom scene of a man rubbing a key under running water (THE UNBENT KEY); both paths rejoin the main road. The road continues down to a chart on an easel showing falling scores with puzzled teachers (FLAT READING SCORES), then a teacher at her desk confronted by an official with a manual (THE SILENCED TEACHER), then a party scene of a couple mid-argument with drinks spilling (WHY ARE YOU FLIRTING), ending at a library table scene with open books, one showing a couch and seated patient (PSYCHOTHERAPY'S EFFECTIVENESS). Hand-lettered capital titles beneath each vignette only, uniform antique script, nothing else lettered on the page. Keep scenes large and spread across the width of the page, muted browns and faded gold ink, aged paper texture.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a piece of rhinoceros horn would increase potency",
+          "depicts": "A medieval apothecary holding up a carved horn to a skeptical patient, in the style of an old woodcut.",
+          "title": "THE RHINOCEROS HORN",
+          "node": "a1"
+        },
+        {
+          "block": "spya-bcgpc3",
+          "quote": "I meet lots of people who sooner or later get me into a conversation about UFO’s, or astrology",
+          "depicts": "A dinner table scene where guests gesture toward a glowing saucer shape and a star chart pinned on the wall.",
+          "title": "UFOS AND ASTROLOGY",
+          "node": "a2"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "Then I went to Esalen, which is a hotbed of this kind of thought",
+          "depicts": "A cliffside retreat house with figures meditating on a terrace overlooking the sea.",
+          "title": "THE ESALEN RETREAT",
+          "node": "a3"
+        },
+        {
+          "block": "spya-xm9a87",
+          "quote": "I say, “You’re a hell of a long way from the pituitary, man.”",
+          "depicts": "A bathhouse scene: one man pressing another's bare foot while a scholar in the same tub raises an eyebrow and speaks.",
+          "title": "A LONG WAY FROM THE PITUITARY",
+          "node": "a3a"
+        },
+        {
+          "block": "spya-mmhbvn",
+          "quote": "a man who is supposed to be able to bend keys by rubbing them with his finger",
+          "depicts": "A man in a hotel bathroom rubbing a key held under running water, onlookers watching intently, the key unbent.",
+          "title": "THE UNBENT KEY",
+          "node": "a3b"
+        },
+        {
+          "block": "spya-aww976",
+          "quote": "the reading scores keep going down—or hardly going up",
+          "depicts": "A chart on an easel showing a flat or falling line, with teachers gathered around it looking puzzled.",
+          "title": "FLAT READING SCORES",
+          "node": "a4"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "Why are you flirting again?”—then you can be sure you are talking about something about which nobody knows anything",
+          "depicts": "A husband and wife at a party, she gesturing accusingly as he gestures back mid-conversation, drinks spilling slightly.",
+          "title": "WHY ARE YOU FLIRTING",
+          "node": "a6"
+        },
+        {
+          "block": "spya-ankp3d",
+          "quote": "I discovered a few more topics that I had forgotten—among them the efficacy of various forms of psychotherapy",
+          "depicts": "A scholar at a library table surrounded by open books, one labeled with a couch and a seated patient sketched on its cover.",
+          "title": "PSYCHOTHERAPY'S EFFECTIVENESS",
+          "node": "a7"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A medieval apothecary holding up a carved horn to a skeptical patient, in the style of an old woodcut.",
+          "title": "THE RHINOCEROS HORN"
+        },
+        {
+          "where": "A dinner table scene where guests gesture toward a glowing saucer shape and a star chart pinned on the wall.",
+          "title": "UFOS AND ASTROLOGY"
+        },
+        {
+          "where": "A cliffside retreat house with figures meditating on a terrace overlooking the sea.",
+          "title": "THE ESALEN RETREAT"
+        },
+        {
+          "where": "A bathhouse scene: one man pressing another's bare foot while a scholar in the same tub raises an eyebrow and speaks.",
+          "title": "A LONG WAY FROM THE PITUITARY"
+        },
+        {
+          "where": "A man in a hotel bathroom rubbing a key held under running water, onlookers watching intently, the key unbent.",
+          "title": "THE UNBENT KEY"
+        },
+        {
+          "where": "A chart on an easel showing a flat or falling line, with teachers gathered around it looking puzzled.",
+          "title": "FLAT READING SCORES"
+        },
+        {
+          "where": "A teacher at her desk holding a torn page of her own method, while a stern official points to an official manual.",
+          "title": "THE SILENCED TEACHER"
+        },
+        {
+          "where": "A husband and wife at a party, she gesturing accusingly as he gestures back mid-conversation, drinks spilling slightly.",
+          "title": "WHY ARE YOU FLIRTING"
+        },
+        {
+          "where": "A scholar at a library table surrounded by open books, one labeled with a couch and a seated patient sketched on its cover.",
+          "title": "PSYCHOTHERAPY'S EFFECTIVENESS"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-case-studies",
+      "title": "Case Studies in Poor Science",
+      "prompt": "In the same antique inked-map style, sepia parchment with fine cross-hatching, open this plate as the inside of the overview's 'CASE STUDIES IN POOR SCIENCE' region, beginning with a small framed scene matching that region's vignette of a maze and rats marked X and A. Below it, draw a chain of scenes: a young researcher sketching a plan beside a rat cage (THE STUDENT'S PROPOSAL), leading to her repeating the original setup labeled X beside a new one labeled Y (REPEAT CONDITION X FIRST), which forks to a professor waving her off at his desk (DEEMED A WASTE OF TIME) and separately down to a scientist at a large accelerator with borrowed data sheets (THE DEUTERIUM SHORTCUT). From the accelerator scene the road continues to a long corridor of identical doors with a rat running to the third one (THE THIRD DOOR), then a researcher pouring chemicals while a rat still finds its way (STILL THE RATS COULD TELL), then workers pouring sand across the corridor floor (THE CORRIDOR OF SAND), then the researcher standing over the finished corridor with his ledger of ruled-out clues (THE TRUE CLUE FOUND). This scene forks into two final vignettes side by side: a later researcher running rats in an ordinary corridor, Young's sand corridor forgotten behind him (YOUNG'S WORK IGNORED), and a row of shrinking glowing auras above test subjects fading to nothing (THE SHRINKING EFFECT), which itself leads to an instructor admitting only the already-glowing students at a classroom door (TRAINING ONLY THE HITS). Hand-lettered capital titles beneath each vignette only, uniform antique script, no other lettering anywhere on the page. Keep every scene large and spread across the page's width, muted browns and faded gold ink, aged parchment texture throughout.",
+      "vignettes": [
+        {
+          "block": "spya-w9nnq6",
+          "quote": "she wanted to do an experiment that went something like this",
+          "depicts": "A young researcher in a laboratory coat sketching a plan on paper beside a cage of rats.",
+          "title": "THE STUDENT'S PROPOSAL",
+          "node": "c1"
+        },
+        {
+          "block": "spya-tf8rj2",
+          "quote": "to do it under condition X to see if she could also get result A",
+          "depicts": "The same researcher now repeating the original setup exactly, labeled X, comparing it beside her new one labeled Y.",
+          "title": "REPEAT CONDITION X FIRST",
+          "node": "c2"
+        },
+        {
+          "block": "spya-v0xcd7",
+          "quote": "no, you cannot do that, because the experiment has already been done and you would be wasting time",
+          "depicts": "A professor at a desk waving away the student's proposal with a dismissive hand.",
+          "title": "DEEMED A WASTE OF TIME",
+          "node": "c3"
+        },
+        {
+          "block": "spya-fvenms",
+          "quote": "He wanted to see if he could train the rats to go in at the third door down",
+          "depicts": "A long corridor of identical doors with a researcher pointing to the third door while rats scurry past the others.",
+          "title": "THE THIRD DOOR",
+          "node": "c5"
+        },
+        {
+          "block": "spya-rndcqw",
+          "quote": "he used chemicals to change the smell after each run. Still the rats could tell.",
+          "depicts": "The same researcher pouring chemicals along the corridor floor while a rat, nose lifted, still finds its way unerringly.",
+          "title": "STILL THE RATS COULD TELL",
+          "node": "c6"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "he could only fix that by putting his corridor in sand",
+          "depicts": "Workers pouring sand across the corridor floor, muffling the rats' footsteps at last.",
+          "title": "THE CORRIDOR OF SAND",
+          "node": "c7"
+        },
+        {
+          "block": "spya-yzzxkw",
+          "quote": "That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using",
+          "depicts": "The researcher standing triumphant over the sand-covered corridor with a ledger of every ruled-out clue in hand.",
+          "title": "THE TRUE CLUE FOUND",
+          "node": "c8"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "depicts": "A row of shrinking glowing auras above a line of test subjects, each fainter than the last, fading to nothing.",
+          "title": "THE SHRINKING EFFECT",
+          "node": "c10"
+        },
+        {
+          "block": "spya-g203mu",
+          "quote": "be sure they only train students who have shown their ability to get PSI results to an acceptable extent",
+          "depicts": "An instructor selecting only the students whose cards already glow, turning away the others at the classroom door.",
+          "title": "TRAINING ONLY THE HITS",
+          "node": "c11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A young researcher in a laboratory coat sketching a plan on paper beside a cage of rats.",
+          "title": "THE STUDENT'S PROPOSAL"
+        },
+        {
+          "where": "The same researcher now repeating the original setup exactly, labeled X, comparing it beside her new one labeled Y.",
+          "title": "REPEAT CONDITION X FIRST"
+        },
+        {
+          "where": "A professor at a desk waving away the student's proposal with a dismissive hand.",
+          "title": "DEEMED A WASTE OF TIME"
+        },
+        {
+          "where": "A scientist at a large particle accelerator adjusting a chamber of heavy hydrogen, borrowed data sheets pinned beside it.",
+          "title": "THE DEUTERIUM SHORTCUT"
+        },
+        {
+          "where": "A long corridor of identical doors with a researcher pointing to the third door while rats scurry past the others.",
+          "title": "THE THIRD DOOR"
+        },
+        {
+          "where": "The same researcher pouring chemicals along the corridor floor while a rat, nose lifted, still finds its way unerringly.",
+          "title": "STILL THE RATS COULD TELL"
+        },
+        {
+          "where": "Workers pouring sand across the corridor floor, muffling the rats' footsteps at last.",
+          "title": "THE CORRIDOR OF SAND"
+        },
+        {
+          "where": "The researcher standing triumphant over the sand-covered corridor with a ledger of every ruled-out clue in hand.",
+          "title": "THE TRUE CLUE FOUND"
+        },
+        {
+          "where": "A later researcher running rats through an ordinary bare corridor, Young's sand-filled corridor forgotten and gathering dust in the background.",
+          "title": "YOUNG'S WORK IGNORED"
+        },
+        {
+          "where": "A row of shrinking glowing auras above a line of test subjects, each fainter than the last, fading to nothing.",
+          "title": "THE SHRINKING EFFECT"
+        },
+        {
+          "where": "An instructor selecting only the students whose cards already glow, turning away the others at the classroom door.",
+          "title": "TRAINING ONLY THE HITS"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "cargocult-spya-rz663q",
+  "profileHash": null
+}

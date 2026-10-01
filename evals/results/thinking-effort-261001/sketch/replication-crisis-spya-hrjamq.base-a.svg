@@ -1,0 +1,327 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3438.9" width="760" height="3438.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3438.9" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel, Chain, Converge, Fork</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The piece funnels from a definition into a historical chain of origins, converges onto evidence from many fields,</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">forks into two families of causes, then converges again into institutional response and reform.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Replication Crisis: Shape of the Argument</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Definition and vocabulary funnel into a chain of historical origins, which converges on evidence from many fields,</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">forks into two families of causes, and converges again into response and reform.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="225" width="712" height="235" rx="8" fill="none" stroke="rgba(232,112,58,0.24)" stroke-width="1" stroke-dasharray="5 4"/>
+<rect x="24" y="490" width="712" height="310" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<rect x="24" y="830" width="712" height="290" rx="8" fill="rgba(240,228,66,0.13)" stroke="rgba(240,228,66,0.62)" stroke-width="1.8"/>
+<rect x="24" y="1150" width="712" height="220" rx="8" fill="none" stroke="rgba(92,143,232,0.24)" stroke-width="1" stroke-dasharray="5 4"/>
+<path d="M380 100 L380 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,130 376.5,120 383.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 190 C380 226 155 234 155 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="155,270 151.5,260 158.5,260" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 310 L280 310" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="280,310 270,313.5 270,306.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M480 310 L500 310" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="500,310 490,313.5 490,306.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M605 350 C605 431 150 449 150 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,530 146.5,520 153.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 610 C150 637 380 643 380 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,670 376.5,660 383.5,660" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 610 C380 637 380 643 380 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,670 376.5,660 383.5,660" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M610 610 C610 637 380 643 380 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,670 376.5,660 383.5,660" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 750 C380 804 200 816 200 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,870 196.5,860 203.5,860" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 750 C380 804 560 816 560 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,870 556.5,860 563.5,860" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M200 940 L200 970" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,970 196.5,960 203.5,960" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 940 L560 970" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,970 556.5,960 563.5,960" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M200 1040 C200 1107.5 200 1122.5 200 1190" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,1190 196.5,1180 203.5,1180" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 1040 C560 1107.5 200 1122.5 200 1190" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,1190 196.5,1180 203.5,1180" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M350 1225 L410 1225" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,1225 400,1228.5 400,1221.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 1260 C560 1327.5 380 1342.5 380 1410" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1410 376.5,1400 383.5,1400" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Published findings often fail to reproduce — The replication crisis: widespread failure to reproduce published results undermines trust in findings. — → spya-pcnqxn</title>
+<ellipse cx="380" cy="70" rx="100" ry="30" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Published findings</text>
+<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">often fail to…</text>
+</g>
+<g>
+<title>Key terms: power, effect size, p-value — Technical vocabulary needed to understand why studies fail to replicate. — → spya-xrc2re</title>
+<rect x="280" y="130" width="200" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="156.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Key terms: power, effect</text>
+<text x="380" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">size, p-value</text>
+</g>
+<g>
+<title>Early-2010s failed replications spark alarm — social priming, ESP, cancer biology — → spya-yru28f</title>
+<rect x="50" y="270" width="210" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="155" y="300.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Early-2010s failed replications</text>
+<text x="155" y="315.472" font-size="12" text-anchor="middle" fill="#f7f7f7">spark alarm</text>
+<text x="155" y="331.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">social priming, ESP, cancer biology</text>
+</g>
+<g>
+<title>A 'crisis of confidence' is declared — → spya-dg8j93</title>
+<rect x="280" y="270" width="200" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="306.4" font-size="12" text-anchor="middle" fill="#f7f7f7">A 'crisis of confidence' is</text>
+<text x="380" y="321.4" font-size="12" text-anchor="middle" fill="#f7f7f7">declared</text>
+</g>
+<g>
+<title>Warnings had gone unheeded for decades — low power known since the 1960s — → spya-u3tg84</title>
+<rect x="500" y="270" width="210" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="605" y="300.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Warnings had gone unheeded for</text>
+<text x="605" y="315.472" font-size="12" text-anchor="middle" fill="#f7f7f7">decades</text>
+<text x="605" y="331.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">low power known since the 1960s</text>
+</g>
+<g>
+<title>Psychology: only ~36-50% replicate — → spya-bha57y</title>
+<rect x="50" y="530" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="150" y="565.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Psychology: only</text>
+<text x="150" y="584.25" font-size="15" text-anchor="middle" fill="#f7f7f7">~36-50% replicate</text>
+</g>
+<g>
+<title>Cancer biology: as low as 11% replicate — → spya-k59a2x</title>
+<rect x="280" y="530" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="566.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Cancer biology: as low as 11%</text>
+<text x="380" y="581.4" font-size="12" text-anchor="middle" fill="#f7f7f7">replicate</text>
+</g>
+<g>
+<title>Economics, nutrition, water studies also falter — → spya-acfh3t</title>
+<rect x="510" y="530" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="610" y="566.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Economics, nutrition, water</text>
+<text x="610" y="581.4" font-size="12" text-anchor="middle" fill="#f7f7f7">studies also falter</text>
+</g>
+<g>
+<title>Most scientists admit they've failed to reproduce others' work — → spya-fuynra</title>
+<rect x="230" y="670" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="705.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Most scientists admit they've failed</text>
+<text x="380" y="724.25" font-size="15" text-anchor="middle" fill="#f7f7f7">to reproduce others' work</text>
+</g>
+<g>
+<title>Publication bias &amp; 'publish or perish' pressure — → spya-d040tg</title>
+<rect x="50" y="870" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="200" y="901.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Publication bias &amp; 'publish or perish'</text>
+<text x="200" y="916.4" font-size="12" text-anchor="middle" fill="#f7f7f7">pressure</text>
+</g>
+<g>
+<title>Papers too sparse in detail to redo — → spya-wjstmr</title>
+<rect x="50" y="970" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="200" y="1008.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Papers too sparse in detail to redo</text>
+</g>
+<g>
+<title>Flexible choices inflate false positives, low power — → spya-bfx638</title>
+<rect x="410" y="870" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="560" y="901.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Flexible choices inflate false positives, low</text>
+<text x="560" y="916.4" font-size="12" text-anchor="middle" fill="#f7f7f7">power</text>
+</g>
+<g>
+<title>Null-hypothesis testing misapplied in 'soft' fields — → spya-h9wzrk</title>
+<rect x="410" y="970" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="560" y="1001.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Null-hypothesis testing misapplied in 'soft'</text>
+<text x="560" y="1016.4" font-size="12" text-anchor="middle" fill="#f7f7f7">fields</text>
+</g>
+<g>
+<title>Public split: reformers vs 'methodological terrorists' — → spya-rx27qq</title>
+<rect x="50" y="1190" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="200" y="1221.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Public split: reformers vs 'methodological</text>
+<text x="200" y="1236.4" font-size="12" text-anchor="middle" fill="#f7f7f7">terrorists'</text>
+</g>
+<g>
+<title>A 'credibility revolution': preregistration, transparency — → spya-n0zj55</title>
+<rect x="410" y="1190" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="560" y="1221.4" font-size="12" text-anchor="middle" fill="#f7f7f7">A 'credibility revolution': preregistration,</text>
+<text x="560" y="1236.4" font-size="12" text-anchor="middle" fill="#f7f7f7">transparency</text>
+</g>
+<g>
+<title>Triangulate and revise theories, not just replicate — → spya-sbakqy</title>
+<ellipse cx="380" cy="1445" rx="100" ry="35" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="1431.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Triangulate and</text>
+<text x="380" y="1449.875" font-size="15" text-anchor="middle" fill="#f7f7f7">revise theories,</text>
+<text x="380" y="1468.625" font-size="15" text-anchor="middle" fill="#f7f7f7">not just replicate</text>
+</g>
+<text x="34" y="240" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">ORIGINS OF THE CRISIS</text>
+<text x="34" y="1165" font-size="11" text-anchor="start" fill="rgba(92,143,232,0.95)" font-weight="500" letter-spacing="0.07em">RESPONSE</text></g>
+</g>
+<g transform="translate(0 1711.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Evidence Converges Across Fields</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Eight independent fields of replication testing all point the same way, converging on one general finding — and then an</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">ironic twist: the papers that don't replicate get cited more, not less.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-EVIDENCE</text>
+<g transform="translate(0 65.9)"><path d="M112.5 150 C112.5 240 290 260 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M297.5 150 C297.5 240 290 260 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M482.5 150 C482.5 240 290 260 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M667.5 150 C667.5 240 290 260 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M112.5 280 C112.5 311.5 290 318.5 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M297.5 280 C297.5 311.5 290 318.5 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M482.5 280 C482.5 311.5 290 318.5 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M667.5 280 C667.5 311.5 290 318.5 290 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,350 286.5,340 293.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M290 440 L290 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,500 286.5,490 293.5,490" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Psychology: ~36% replicate — Reproducibility Project — → spya-bha57y</title>
+<rect x="30" y="60" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="112.5" y="95.47200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">Psychology: ~36%</text>
+<text x="112.5" y="110.47200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">replicate</text>
+<text x="112.5" y="126.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Reproducibility Project</text>
+</g>
+<g>
+<title>Brain studies need huge samples — effects are tiny — → spya-ekg3fe</title>
+<rect x="215" y="60" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="297.5" y="95.47200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">Brain studies need huge</text>
+<text x="297.5" y="110.47200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">samples</text>
+<text x="297.5" y="126.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">effects are tiny</text>
+</g>
+<g>
+<title>Cancer studies: effects shrink ~85% — → spya-d8g53k</title>
+<rect x="400" y="60" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="482.5" y="101.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Cancer studies: effects</text>
+<text x="482.5" y="116.4" font-size="12" text-anchor="middle" fill="#f7f7f7">shrink ~85%</text>
+</g>
+<g>
+<title>Medical claims often later contradicted — → spya-esjmns</title>
+<rect x="585" y="60" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="667.5" y="101.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Medical claims often</text>
+<text x="667.5" y="116.4" font-size="12" text-anchor="middle" fill="#f7f7f7">later contradicted</text>
+</g>
+<g>
+<title>Nutrition claims often unverified — → spya-d977mu</title>
+<rect x="30" y="190" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="112.5" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Nutrition claims often</text>
+<text x="112.5" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">unverified</text>
+</g>
+<g>
+<title>Economics: ~61% replicate, effects shrink — → spya-s2xfzn</title>
+<rect x="215" y="190" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="297.5" y="223.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Economics: ~61%</text>
+<text x="297.5" y="238.9" font-size="12" text-anchor="middle" fill="#f7f7f7">replicate, effects</text>
+<text x="297.5" y="253.9" font-size="12" text-anchor="middle" fill="#f7f7f7">shrink</text>
+</g>
+<g>
+<title>Water studies: under 7% reproducible — → spya-gvvmwj</title>
+<rect x="400" y="190" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="482.5" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Water studies: under 7%</text>
+<text x="482.5" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">reproducible</text>
+</g>
+<g>
+<title>LLM research: unstable, hard to redo — → spya-ch4h0b</title>
+<rect x="585" y="190" width="165" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="667.5" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">LLM research: unstable,</text>
+<text x="667.5" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">hard to redo</text>
+</g>
+<g>
+<title>Across fields, most scientists have failed to reproduce someone's results — → spya-fuynra</title>
+<rect x="150" y="350" width="280" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="290" y="381.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Across fields, most scientists</text>
+<text x="290" y="399.875" font-size="15" text-anchor="middle" fill="#f7f7f7">have failed to reproduce</text>
+<text x="290" y="418.625" font-size="15" text-anchor="middle" fill="#f7f7f7">someone's results</text>
+</g>
+<g>
+<title>Yet unreplicable papers get cited more, not less — → spya-m3et6t</title>
+<rect x="150" y="500" width="280" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="290" y="536.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Yet unreplicable papers get cited more,</text>
+<text x="290" y="551.4" font-size="12" text-anchor="middle" fill="#f7f7f7">not less</text>
+</g></g>
+</g>
+<g transform="translate(0 2565)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Two Families of Causes</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">The article lays its causes out as two parallel columns: flaws in how science gets published on the left, flaws in how</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">research is designed and analysed on the right.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-CAUSES</text>
+<g transform="translate(0 65.9)"><path d="M190 150 L190 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,180 186.5,170 193.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 250 L190 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,280 186.5,270 193.5,270" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 350 L190 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,380 186.5,370 193.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 450 L190 480" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,480 186.5,470 193.5,470" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 150 L570 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,180 566.5,170 573.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 250 L570 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,280 566.5,270 573.5,270" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 350 L570 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,380 566.5,370 573.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 450 L570 480" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,480 566.5,470 573.5,470" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 550 L570 580" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,580 566.5,570 573.5,570" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Science's growth fuels 'publish or perish' — → spya-x52rky</title>
+<rect x="30" y="80" width="320" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="190" y="118.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Science's growth fuels 'publish or perish'</text>
+</g>
+<g>
+<title>Publication bias hides null results ('file drawer') — → spya-d040tg</title>
+<rect x="30" y="180" width="320" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="190" y="211.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Publication bias hides null results ('file</text>
+<text x="190" y="226.4" font-size="12" text-anchor="middle" fill="#f7f7f7">drawer')</text>
+</g>
+<g>
+<title>Even top journals contain math and stats errors — → spya-xxd5as</title>
+<rect x="30" y="280" width="320" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="190" y="318.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Even top journals contain math and stats errors</text>
+</g>
+<g>
+<title>Careers reward publishing volume over validity — → spya-h2nvfj</title>
+<rect x="30" y="380" width="320" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="190" y="418.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Careers reward publishing volume over validity</text>
+</g>
+<g>
+<title>Papers too sparse in detail to let others redo them — → spya-wjstmr</title>
+<rect x="30" y="480" width="320" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="190" y="511.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Papers too sparse in detail to let others redo</text>
+<text x="190" y="526.4" font-size="12" text-anchor="middle" fill="#f7f7f7">them</text>
+</g>
+<g>
+<title>Flexible choices let researchers p-hack, HARK — → spya-bfx638</title>
+<rect x="410" y="80" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="570" y="118.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Flexible choices let researchers p-hack, HARK</text>
+</g>
+<g>
+<title>Average power is only ~20-35%, guaranteeing misses — → spya-p7pun6</title>
+<rect x="410" y="180" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="570" y="211.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Average power is only ~20-35%, guaranteeing</text>
+<text x="570" y="226.4" font-size="12" text-anchor="middle" fill="#f7f7f7">misses</text>
+</g>
+<g>
+<title>Underpowered studies inflate the effects they report — → spya-nqwfh4</title>
+<rect x="410" y="280" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="570" y="311.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Underpowered studies inflate the effects they</text>
+<text x="570" y="326.4" font-size="12" text-anchor="middle" fill="#f7f7f7">report</text>
+</g>
+<g>
+<title>Meta-analysis has its own blind spots — → spya-z2xbqp</title>
+<rect x="410" y="380" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="570" y="418.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Meta-analysis has its own blind spots</text>
+</g>
+<g>
+<title>Hidden heterogeneity and context sensitivity vary results — → spya-ngbkx2</title>
+<rect x="410" y="480" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="570" y="511.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Hidden heterogeneity and context sensitivity</text>
+<text x="570" y="526.4" font-size="12" text-anchor="middle" fill="#f7f7f7">vary results</text>
+</g>
+<g>
+<title>Null-hypothesis testing poorly suited to 'soft' sciences — → spya-h9wzrk</title>
+<rect x="410" y="580" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="570" y="611.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Null-hypothesis testing poorly suited to 'soft'</text>
+<text x="570" y="626.4" font-size="12" text-anchor="middle" fill="#f7f7f7">sciences</text>
+</g>
+<text x="190" y="40" font-size="12" text-anchor="middle" fill="#b8b8b8">PUBLICATION SYSTEM</text>
+<text x="570" y="40" font-size="12" text-anchor="middle" fill="#b8b8b8">RESEARCH PRACTICE &amp; STATISTICS</text></g>
+</g>
+</svg>

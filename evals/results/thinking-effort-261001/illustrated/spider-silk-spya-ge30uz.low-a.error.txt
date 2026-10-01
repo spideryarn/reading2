@@ -1,0 +1,11 @@
+MalformedJson: the model's answer is not valid JSON: it breaks at position 1723 of 13098 characters
+    at parseJsonFrom (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/parse-json.ts:258:11)
+    at parseJsonAnswer (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/parse-json.ts:634:10)
+    at parseJson (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/illustrated.ts:984:10)
+    at generateIllustrated (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/illustrated.ts:1113:50)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async collectSpend.attribution.scopeKind (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:936:23)
+    at async collectSpend (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/ai-spend.ts:929:20)
+    at async runOne (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:901:19)
+    at async <anonymous> (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:785:25)
+    at async main (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:762:5)

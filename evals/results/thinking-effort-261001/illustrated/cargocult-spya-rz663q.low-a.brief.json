@@ -1,0 +1,334 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map with small inset vignettes in ink and faded wash, fitting a talk that moves like a journey through false lands into one true principle",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Map of the Talk",
+      "prompt": "Draw an antique hand-inked map, aged parchment color, with a single continuous winding road running top to bottom carrying the reader through eleven small framed vignettes in strict order. At the top: an apothecary holding a rhinoceros horn to a patient in a cluttered shop (THE RHINOCEROS HORN). Below, a man floating eyes-shut in an open dark tank ringed with salt crystals (THE ISOLATION TANK). Next a hostess at a party pointing at two men mid-conversation (THE COCKTAIL PARTY TEST). The road then enters a walled compound labeled by its own vignette: an islander in a bamboo hut with wooden headphone-shapes on his head, watching an empty firelit runway (THE BAMBOO CONTROLLER) — mark this compound's edge faintly to suggest it is its own region. From it branch two paths: one to a scholar leaning backward with arms open, balanced on his heels (LEANING OVER BACKWARDS), and from him two further branches: a grocer's bottle with oil beading on bread (THE OIL THAT DOES NOT SOAK), and a rising ladder of small dots on a vertical scale (THE CREEPING MEASUREMENT). The road continues to a traveler following his own old footprints on an unrolled scroll through fog (THE LONG HISTORY OF NOT FOOLING YOURSELF), then to a scribe reaching toward two open ledgers at once (PUBLISH BOTH OUTCOMES), then to a long corridor of identical doors with a rat mid-run and a watching man (THE THIRD DOOR). Finally the road loops back, drawn curving around the map's edge, to end at a gate where a small unchained figure looks back up toward the rhinoceros-horn shop at the very top (FREEDOM TO KEEP INTEGRITY), closing the loop visually. Use fine cross-hatched ink linework, a muted wash of browns and faded blue-greens, compass rose and sea-serpent flourishes only in truly empty margins, never crowding the vignettes. Each vignette sits in its own small rectangular frame with its capitalized title lettered directly beneath it in a plain serif hand; nothing else on the page is lettered.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a piece of rhinoceros horn would increase potency",
+          "depicts": "A medieval apothecary holds up a curved horn to a skeptical patient, in a shop of dusty jars.",
+          "title": "THE RHINOCEROS HORN",
+          "node": "n1"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "I went into isolation tanks (they're dark and quiet and you float in Epsom salts)",
+          "depicts": "A man floats inside an open dark tank, eyes shut, salt crystals drawn around the water's edge.",
+          "title": "THE ISOLATION TANK",
+          "node": "n2"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "Why are you fellows talking shop?",
+          "depicts": "A hostess leans into a cocktail party, pointing accusingly at two men deep in conversation.",
+          "title": "THE COCKTAIL PARTY TEST",
+          "node": "n4"
+        },
+        {
+          "block": "spya-fd2muf",
+          "quote": "two wooden pieces on his head like headphones and bars of bamboo sticking out like antennas",
+          "depicts": "An islander sits in a bamboo hut wearing wooden headphone-shapes, watching an empty runway lined with fires.",
+          "title": "THE BAMBOO CONTROLLER",
+          "node": "n5"
+        },
+        {
+          "block": "spya-afgs74",
+          "quote": "a kind of scientific integrity, a principle of scientific thought that corresponds to a kind of utter honesty",
+          "depicts": "A robed scholar leans backward deliberately, balancing on his heels, arms open in a gesture of exposing himself to view.",
+          "title": "LEANING OVER BACKWARDS",
+          "node": "n6"
+        },
+        {
+          "block": "spya-bpyx8n",
+          "quote": "Wesson Oil doesn't soak through food",
+          "depicts": "A grocer's shelf bottle labeled only with a drizzle of oil beading on bread, nothing else shown.",
+          "title": "THE OIL THAT DOES NOT SOAK",
+          "node": "n7"
+        },
+        {
+          "block": "spya-s9msxy",
+          "quote": "one is a little bigger than Millikan's, and the next one's a little bit bigger than that",
+          "depicts": "A ladder of small oil-drop measurements drawn as rising dots on a vertical scale, each slightly higher than the last.",
+          "title": "THE CREEPING MEASUREMENT",
+          "node": "n9"
+        },
+        {
+          "block": "spya-bvx2u8",
+          "quote": "this long history of learning how to not fool ourselves—of having utter scientific integrity",
+          "depicts": "A long unrolled scroll of footprints trailing back through fog, a single traveler following his own old tracks.",
+          "title": "THE LONG HISTORY OF NOT FOOLING YOURSELF",
+          "node": "n10"
+        },
+        {
+          "block": "spya-jk7mj4",
+          "quote": "you should always decide to publish it whichever way it comes out",
+          "depicts": "A scribe at two open ledgers, one hand reaching for each, refusing to close either.",
+          "title": "PUBLISH BOTH OUTCOMES",
+          "node": "n12"
+        },
+        {
+          "block": "spya-fvenms",
+          "quote": "He wanted to see if he could train the rats to go in at the third door down",
+          "depicts": "A long corridor of identical doors, a rat mid-run, a man with a notebook watching the third door.",
+          "title": "THE THIRD DOOR",
+          "node": "n13b"
+        },
+        {
+          "block": "spya-ndyj3t",
+          "quote": "the good luck to be somewhere where you are free to maintain the kind of integrity",
+          "depicts": "A small figure stands at an open gate at the edge of the map, free of chains, looking back toward the rhinoceros-horn shop at the top.",
+          "title": "FREEDOM TO KEEP INTEGRITY",
+          "node": "n14"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A medieval apothecary holds up a curved horn to a skeptical patient, in a shop of dusty jars.",
+          "title": "THE RHINOCEROS HORN"
+        },
+        {
+          "where": "A man floats inside an open dark tank, eyes shut, salt crystals drawn around the water's edge.",
+          "title": "THE ISOLATION TANK"
+        },
+        {
+          "where": "A hostess leans into a cocktail party, pointing accusingly at two men deep in conversation.",
+          "title": "THE COCKTAIL PARTY TEST"
+        },
+        {
+          "where": "An islander sits in a bamboo hut wearing wooden headphone-shapes, watching an empty runway lined with fires.",
+          "title": "THE BAMBOO CONTROLLER"
+        },
+        {
+          "where": "A robed scholar leans backward deliberately, balancing on his heels, arms open in a gesture of exposing himself to view.",
+          "title": "LEANING OVER BACKWARDS"
+        },
+        {
+          "where": "A grocer's shelf bottle labeled only with a drizzle of oil beading on bread, nothing else shown.",
+          "title": "THE OIL THAT DOES NOT SOAK"
+        },
+        {
+          "where": "A ladder of small oil-drop measurements drawn as rising dots on a vertical scale, each slightly higher than the last.",
+          "title": "THE CREEPING MEASUREMENT"
+        },
+        {
+          "where": "A long unrolled scroll of footprints trailing back through fog, a single traveler following his own old tracks.",
+          "title": "THE LONG HISTORY OF NOT FOOLING YOURSELF"
+        },
+        {
+          "where": "A scribe at two open ledgers, one hand reaching for each, refusing to close either.",
+          "title": "PUBLISH BOTH OUTCOMES"
+        },
+        {
+          "where": "A long corridor of identical doors, a rat mid-run, a man with a notebook watching the third door.",
+          "title": "THE THIRD DOOR"
+        },
+        {
+          "where": "A small figure stands at an open gate at the edge of the map, free of chains, looking back toward the rhinoceros-horn shop at the top.",
+          "title": "FREEDOM TO KEEP INTEGRITY"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-pseudoscience",
+      "title": "The Survey of Failed Wonders",
+      "prompt": "Draw an antique map-style inset, the same ink-and-wash register as a larger map, this one framed as a single region labeled by its own border vignette at the top matching the overview's bamboo-hut scene faintly echoed in a corner medallion. Down the page in reading order: a hand testing a potion against jars with a crude balance scale (TRYING AN IDEA TO SEE IF IT WORKS); a night sky crowded with a flying saucer, zodiac wheel, and glowing head over onlookers (UFOS AND ASTROLOGY); a man floating alone in a dark tank ringed with salt crystals (FLOATING IN EPSOM SALTS); a masseur pressing a woman's bare toe on a table while a bystander in the bath watches skeptically (HUNTING THE PITUITARY IN A TOE); a group crowded at a bathroom sink watching a key held under running water do nothing (THE KEY UNDER WATER); a classroom chart with a flat or drooping line and a worried teacher (READING SCORES GOING NOWHERE); a hostess leaning toward two seated men with an accusing finger at a party (TALKING SHOP AT THE PARTY); a patient reclining on a couch before a shelf of indistinguishable therapy books (THE COUCH OF MANY THERAPIES). Connect the vignettes with a faint dotted ink trail winding top to bottom. Use fine cross-hatching, faded sepia and muted blue-green wash, small flourishes only in genuinely empty corners. Each vignette in its own small frame with its capitalized title lettered beneath it in plain serif hand; no other lettering anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a method was discovered for separating the ideas—which was to try one to see if it worked",
+          "depicts": "A hand tests a potion against a row of discarded jars, a crude scale beside it weighing one idea at a time.",
+          "title": "TRYING AN IDEA TO SEE IF IT WORKS",
+          "node": "p1"
+        },
+        {
+          "block": "spya-bcgpc3",
+          "quote": "UFO's, or astrology, or some form of mysticism, expanded consciousness, new types of awareness, ESP",
+          "depicts": "A night sky crowded with a flying saucer, a zodiac wheel, and a glowing head, all drawn as separate small clouds over a crowd of onlookers.",
+          "title": "UFOS AND ASTROLOGY",
+          "node": "p2"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "I went into isolation tanks (they're dark and quiet and you float in Epsom salts)",
+          "depicts": "A man floats alone in a sealed dark tank, salt crystals drawn floating in the water around him.",
+          "title": "FLOATING IN EPSOM SALTS",
+          "node": "p3"
+        },
+        {
+          "block": "spya-xm9a87",
+          "quote": "I feel a kind of dent. Is that the pituitary?",
+          "depicts": "A masseur presses a woman's bare toe on a table, looking up puzzled at an instructor, a bystander in the bath watching skeptically.",
+          "title": "HUNTING THE PITUITARY IN A TOE",
+          "node": "p4"
+        },
+        {
+          "block": "spya-mmhbvn",
+          "quote": "nothing happened. Then he told us it works better under water",
+          "depicts": "A group of men crowd around a bathroom sink, water running over a key held under the tap, all staring at it doing nothing.",
+          "title": "THE KEY UNDER WATER",
+          "node": "p5"
+        },
+        {
+          "block": "spya-aww976",
+          "quote": "the reading scores keep going down—or hardly going up",
+          "depicts": "A classroom chart with a line that stays flat or droops, a teacher pointing at it with a worried frown.",
+          "title": "READING SCORES GOING NOWHERE",
+          "node": "p6"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "Why are you fellows talking shop?",
+          "depicts": "A hostess at a party leaning toward two seated men, finger raised in mock accusation.",
+          "title": "TALKING SHOP AT THE PARTY",
+          "node": "p9"
+        },
+        {
+          "block": "spya-ankp3d",
+          "quote": "the efficacy of various forms of psychotherapy",
+          "depicts": "A patient reclines on a couch before a shelf of differently labeled therapy books, none distinguishable from the others.",
+          "title": "THE COUCH OF MANY THERAPIES",
+          "node": "p10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A hand tests a potion against a row of discarded jars, a crude scale beside it weighing one idea at a time.",
+          "title": "TRYING AN IDEA TO SEE IF IT WORKS"
+        },
+        {
+          "where": "A night sky crowded with a flying saucer, a zodiac wheel, and a glowing head, all drawn as separate small clouds over a crowd of onlookers.",
+          "title": "UFOS AND ASTROLOGY"
+        },
+        {
+          "where": "A man floats alone in a sealed dark tank, salt crystals drawn floating in the water around him.",
+          "title": "FLOATING IN EPSOM SALTS"
+        },
+        {
+          "where": "A masseur presses a woman's bare toe on a table, looking up puzzled at an instructor, a bystander in the bath watching skeptically.",
+          "title": "HUNTING THE PITUITARY IN A TOE"
+        },
+        {
+          "where": "A group of men crowd around a bathroom sink, water running over a key held under the tap, all staring at it doing nothing.",
+          "title": "THE KEY UNDER WATER"
+        },
+        {
+          "where": "A classroom chart with a line that stays flat or droops, a teacher pointing at it with a worried frown.",
+          "title": "READING SCORES GOING NOWHERE"
+        },
+        {
+          "where": "A hostess at a party leaning toward two seated men, finger raised in mock accusation.",
+          "title": "TALKING SHOP AT THE PARTY"
+        },
+        {
+          "where": "A patient reclines on a couch before a shelf of differently labeled therapy books, none distinguishable from the others.",
+          "title": "THE COUCH OF MANY THERAPIES"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-case-studies",
+      "title": "Four Skipped Checks",
+      "prompt": "Draw an antique map-style inset in the same ink-and-wash hand as the larger map, framed by a faint echo of the overview's third-door vignette in a corner medallion to show this is that region opened up. Down the page in order: a student sketching a maze diagram with a rat and labeled conditions X and A (RATS UNDER CONDITION X); a man gesturing across a desk at the student, pointing back to an earlier identical setup (REPEAT IT FIRST); a stern gowned professor blocking the student at his office door beside a closed ledger (THE PROFESSOR FORBIDS IT); a physicist at a large accelerator apparatus reaching for a stack of borrowed paper records from a different machine (BORROWED DATA, DIFFERENT MACHINE); a long corridor of identical doors with a researcher counting on his fingers as a rat runs past (TRAINING TO THE THIRD DOOR); workers pouring sand into that same corridor's floor (THE CORRIDOR OF SAND); later researchers running rats through a plain bare floor with no sand in sight (THE SAND FORGOTTEN); a row of shrinking bar-marks fading to nothing beside a puzzled card-guesser at a table (THE SHRINKING EFFECT). Join the vignettes with a faint dotted trail winding top to bottom. Fine cross-hatched linework, faded sepia and muted blue-green wash, ornament only in genuinely empty margins, vignettes large enough to read clearly and spread across the page's width. Each vignette framed individually with its capitalized title lettered beneath it in plain serif hand; no other lettering anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-w9nnq6",
+          "quote": "under certain circumstances, X, rats did something, A",
+          "depicts": "A student sketches a maze diagram on paper, a rat drawn mid-corridor beside the labeled conditions X and A.",
+          "title": "RATS UNDER CONDITION X",
+          "node": "c1"
+        },
+        {
+          "block": "spya-tf8rj2",
+          "quote": "it was necessary first to repeat in her laboratory the experiment of the other person",
+          "depicts": "Feynman gestures across a desk at the student, pointing back toward an earlier identical maze setup.",
+          "title": "REPEAT IT FIRST",
+          "node": "c2"
+        },
+        {
+          "block": "spya-v0xcd7",
+          "quote": "no, you cannot do that, because the experiment has already been done",
+          "depicts": "A stern professor in a gown raises a hand to block the student at his office door, a closed ledger on his desk.",
+          "title": "THE PROFESSOR FORBIDS IT",
+          "node": "c3"
+        },
+        {
+          "block": "spya-m95kqm",
+          "quote": "he had to use data from someone else's experiment on light hydrogen, which was done on different apparatus",
+          "depicts": "A physicist at a large accelerator apparatus reaches instead for a stack of borrowed paper records from a different machine.",
+          "title": "BORROWED DATA, DIFFERENT MACHINE",
+          "node": "c4"
+        },
+        {
+          "block": "spya-fvenms",
+          "quote": "he wanted to see if he could train the rats to go in at the third door down",
+          "depicts": "A long corridor of identical doors, a researcher counting doors with his finger as a rat runs past.",
+          "title": "TRAINING TO THE THIRD DOOR",
+          "node": "c5"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "he could only fix that by putting his corridor in sand",
+          "depicts": "Workers pour sand into the floor of the same corridor, muffling the sound of running feet.",
+          "title": "THE CORRIDOR OF SAND",
+          "node": "c6"
+        },
+        {
+          "block": "spya-wye8g6",
+          "quote": "they never used any of his criteria of putting the corridor on sand",
+          "depicts": "Later researchers run rats through a plain bare-floored corridor, the sand and careful controls nowhere to be seen.",
+          "title": "THE SAND FORGOTTEN",
+          "node": "c7"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "depicts": "A row of shrinking bar-chart marks fading to nothing, a card-guesser at a table beside them looking puzzled.",
+          "title": "THE SHRINKING EFFECT",
+          "node": "c8"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A student sketches a maze diagram on paper, a rat drawn mid-corridor beside the labeled conditions X and A.",
+          "title": "RATS UNDER CONDITION X"
+        },
+        {
+          "where": "Feynman gestures across a desk at the student, pointing back toward an earlier identical maze setup.",
+          "title": "REPEAT IT FIRST"
+        },
+        {
+          "where": "A stern professor in a gown raises a hand to block the student at his office door, a closed ledger on his desk.",
+          "title": "THE PROFESSOR FORBIDS IT"
+        },
+        {
+          "where": "A physicist at a large accelerator apparatus reaches instead for a stack of borrowed paper records from a different machine.",
+          "title": "BORROWED DATA, DIFFERENT MACHINE"
+        },
+        {
+          "where": "A long corridor of identical doors, a researcher counting doors with his finger as a rat runs past.",
+          "title": "TRAINING TO THE THIRD DOOR"
+        },
+        {
+          "where": "Workers pour sand into the floor of the same corridor, muffling the sound of running feet.",
+          "title": "THE CORRIDOR OF SAND"
+        },
+        {
+          "where": "Later researchers run rats through a plain bare-floored corridor, the sand and careful controls nowhere to be seen.",
+          "title": "THE SAND FORGOTTEN"
+        },
+        {
+          "where": "A row of shrinking bar-chart marks fading to nothing, a card-guesser at a table beside them looking puzzled.",
+          "title": "THE SHRINKING EFFECT"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "cargocult-spya-rz663q",
+  "profileHash": null
+}

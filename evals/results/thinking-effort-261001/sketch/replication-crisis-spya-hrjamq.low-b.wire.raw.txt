@@ -1,0 +1,25 @@
+{
+  "caption": "A funnel into statistical groundwork narrows into a chain of origin-and-evidence, which forks into two parallel streams of causes, then converges into a chain of responses and reforms.",
+  "title": "Funnel, fork, converge",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Replication crisis: overview",
+      "caption": "The article opens by defining terms, traces how a crisis emerged and was documented across fields, forks into two families of causes, then converges on institutional and scholarly responses.",
+      "height": 920,
+      "items": [
+        {"kind":"node","id":"define","shape":"ellipse","x":280,"y":40,"w":200,"h":70,"text":"What is the replication crisis?","size":"md","block":"spya-kv0w8d","detail":"Widespread failure to reproduce published findings; gave rise to metascience."},
+        {"kind":"node","id":"stats","shape":"box","x":280,"y":140,"w":200,"h":64,"text":"Statistical vocabulary: power, effect size, p-values","size":"sm","block":"spya-cxcn8h"},
+        {"kind":"node","id":"origins","shape":"box","x":280,"y":234,"w":200,"h":70,"text":"Early-2010s failures crystallize a named crisis","sub":"social priming, ESP, cancer biology","size":"sm","block":"spya-yru28f"},
+        {"kind":"node","id":"evidence","shape":"box","x":280,"y":334,"w":200,"h":70,"text":"Evidence across disciplines: roughly half of findings fail to reproduce","size":"sm","block":"spya-bha57y","opens":"inside-evidence"},
+        {"kind":"region","x":30,"y":440,"w":300,"h":210,"label":"CAUSES: PUBLICATION SYSTEM","style":"band","tone":1,"opens":"inside-causes"},
+        {"kind":"node","id":"causeA","shape":"hex","x":60,"y":490,"w":240,"h":80,"text":"Publication bias, errors, publish-or-perish","size":"sm","tone":1,"block":"spya-d040tg"},
+        {"kind":"region","x":430,"y":440,"w":300,"h":210,"label":"CAUSES: PRACTICES & STATISTICS","style":"band","tone":2,"opens":"inside-causes"},
+        {"kind":"node","id":"causeB","shape":"hex","x":460,"y":490,"w":240,"h":80,"text":"Questionable practices, low power, misread p-values","size":"sm","tone":2,"block":"spya-bfx638"},
+        {"kind":"node","id":"response","shape":"box","x":280,"y":700,"w":200,"h":76,"text":"Public trust shaken; academia splits over how to respond","size":"sm","block":"spya-qht6nk"},
+        {"kind":"node","id":"reform","shape":"box","x":280,"y":800,"w":200,"h":64,"text":"Reforms: preregistration, result-blind review, stricter thresholds","size":"sm","block":"spya-h32yv9"},
+        {"kind":"node","id":"broader","shape":"box","x":280,"y":880,"w":200,"h":... "text":"","block":"spya-hc3p7c"}
+      ]
+    }
+  ]
+}

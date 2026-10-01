@@ -1,0 +1,303 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — small painted vignettes in gilded frames connected by hairline rubricated paths, because the article's layered, gland-by-gland structure suits a bestiary-like catalogue of parts more than a cartographer's open landscape",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Spider Silk: From Biology to Imitation",
+      "prompt": "An illuminated manuscript page on aged cream vellum, bordered in thin gold rule, divided into eleven small gilt-framed roundels arranged in a single descending column from top to bottom, connected by thin red-ink hairlines showing the order of reading. At the top: a spider winding silk around a struggling insect beside a small cocoon-nest (SPIDER WRAPPING PREY). Below, a roundel of several silk strands of differing thickness laid side by side like compared jewels (THREADS COMPARED), branching into three smaller roundels beneath it: a moist silk strand with tiny ants turning away (MOIST THREAD, FLEEING ANTS), a balance scale weighing silk against a steel bar and a swatch of cloth (SILK AGAINST STEEL), and these converge back into the spine. Continuing down: one spider at the centre of its page with seven distinct coloured threads radiating from its body (SEVEN THREADS, ONE SPIDER); a small orb-web diagram with gold-threaded frame and spokes (FRAME AND SPOKES); a spider falling from a branch trailing a straight unspooling thread, no wheel present (NO WHEEL, NO TURNING); a glass vial of glistening liquid held beside a drawing of a spider gland, studied by a robed workshop figure (THE UNSPUN LIQUID); two threads measured side by side under a ruler, one coarser (THICKER THAN THE SPIDER'S OWN); a laboratory bench with a flask of bacteria culture and thread emerging from it (BACTERIA SPINNING SILK); and at the bottom, an eighteenth-century weaver at a loom with stockings, gloves, and cocoons nearby (STOCKINGS FROM COCOONS). Palette: ochre, verdigris green, deep red ink lines, gold leaf accents, muted browns. Fine pen hatching in the manner of a medieval bestiary, uniform style across all roundels. The page carries no lettering except the title beneath each roundel exactly as given; no other words, banners, or inscriptions anywhere.",
+      "vignettes": [
+        {
+          "block": "spya-gp4t9x",
+          "quote": "to entangle and restrain prey before biting, to transmit tactile information, or as nests or cocoons to protect their offspring",
+          "depicts": "A spider at the top of the page winding silk around a struggling insect, with a small cocoon-nest tucked beside the web.",
+          "title": "SPIDER WRAPPING PREY",
+          "node": "intro"
+        },
+        {
+          "block": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function",
+          "depicts": "A gilded roundel holding several silk strands of different thickness and sheen laid side by side, as if a jeweller were comparing threads.",
+          "title": "THREADS COMPARED",
+          "node": "propHub"
+        },
+        {
+          "block": "spya-p263u9",
+          "quote": "Pyrrolidine has hygroscopic properties that keep the silk moist while warding off ant invasion",
+          "depicts": "A single silk strand shown beaded with moisture, with tiny ants turning away from it at its edge.",
+          "title": "MOIST THREAD, FLEEING ANTS",
+          "node": "structural"
+        },
+        {
+          "block": "spya-hv4xng",
+          "quote": "silk is stronger than steel, but not as strong as Kevlar",
+          "depicts": "A balance scale weighing a coil of silk against a steel bar and a swatch of Kevlar cloth.",
+          "title": "SILK AGAINST STEEL",
+          "node": "mechanical"
+        },
+        {
+          "block": "spya-pn8bvd",
+          "quote": "a single spider can produce up to seven different types of silk for different uses",
+          "depicts": "One spider at the centre of the page with seven distinct threads radiating from its spinnerets, each thread painted a slightly different colour.",
+          "title": "SEVEN THREADS, ONE SPIDER",
+          "node": "uses"
+        },
+        {
+          "block": "spya-gu2z3s",
+          "quote": "Major ampullate silk - Frame, radii, dragline",
+          "depicts": "A small orb-web diagram with its outer frame and spokes picked out in gold thread, labelled by the gland that made them.",
+          "title": "FRAME AND SPOKES",
+          "node": "silktypes"
+        },
+        {
+          "block": "spya-g2gw42",
+          "quote": "The term \"spinning\" is misleading because no rotation occurs",
+          "depicts": "A spider falling slowly from a branch, a straight unspooling thread trailing from its body with no spinning wheel in sight.",
+          "title": "NO WHEEL, NO TURNING",
+          "node": "spinning"
+        },
+        {
+          "block": "spya-wgee6t",
+          "quote": "the unspun silk dope in spiders",
+          "depicts": "A glass vial of thick, glistening liquid held beside a drawing of a spider's gland, as a workshop figure studies both.",
+          "title": "THE UNSPUN LIQUID",
+          "node": "synthHub"
+        },
+        {
+          "block": "spya-jzcepa",
+          "quote": "This process has produced silk fibres of diameters ranging from 10 to 60",
+          "depicts": "Two threads laid side by side under a measuring rule, one markedly thicker and coarser than the other.",
+          "title": "THICKER THAN THE SPIDER'S OWN",
+          "node": "syntheticsilk"
+        },
+        {
+          "block": "spya-aju2vt",
+          "quote": "First successful synthesis of Spider silk by E. coli",
+          "depicts": "A small laboratory bench scene with a flask of bacteria culture and a coil of thread emerging from it, a scribe's tally mark beside it.",
+          "title": "BACTERIA SPINNING SILK",
+          "node": "research"
+        },
+        {
+          "block": "spya-jj2arg",
+          "quote": "wove silk derived from spider's egg cocoons into stockings and gloves",
+          "depicts": "An eighteenth-century weaver at a hand loom, a pair of stockings and gloves draped over a stool beside gathered silk cocoons.",
+          "title": "STOCKINGS FROM COCOONS",
+          "node": "humanuses"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A spider at the top of the page winding silk around a struggling insect, with a small cocoon-nest tucked beside the web.",
+          "title": "SPIDER WRAPPING PREY"
+        },
+        {
+          "where": "A gilded roundel holding several silk strands of different thickness and sheen laid side by side, as if a jeweller were comparing threads.",
+          "title": "THREADS COMPARED"
+        },
+        {
+          "where": "A single silk strand shown beaded with moisture, with tiny ants turning away from it at its edge.",
+          "title": "MOIST THREAD, FLEEING ANTS"
+        },
+        {
+          "where": "A balance scale weighing a coil of silk against a steel bar and a swatch of Kevlar cloth.",
+          "title": "SILK AGAINST STEEL"
+        },
+        {
+          "where": "One spider at the centre of the page with seven distinct threads radiating from its spinnerets, each thread painted a slightly different colour.",
+          "title": "SEVEN THREADS, ONE SPIDER"
+        },
+        {
+          "where": "A small orb-web diagram with its outer frame and spokes picked out in gold thread, labelled by the gland that made them.",
+          "title": "FRAME AND SPOKES"
+        },
+        {
+          "where": "A spider falling slowly from a branch, a straight unspooling thread trailing from its body with no spinning wheel in sight.",
+          "title": "NO WHEEL, NO TURNING"
+        },
+        {
+          "where": "A glass vial of thick, glistening liquid held beside a drawing of a spider's gland, as a workshop figure studies both.",
+          "title": "THE UNSPUN LIQUID"
+        },
+        {
+          "where": "Two threads laid side by side under a measuring rule, one markedly thicker and coarser than the other.",
+          "title": "THICKER THAN THE SPIDER'S OWN"
+        },
+        {
+          "where": "A small laboratory bench scene with a flask of bacteria culture and a coil of thread emerging from it, a scribe's tally mark beside it.",
+          "title": "BACTERIA SPINNING SILK"
+        },
+        {
+          "where": "An eighteenth-century weaver at a hand loom, a pair of stockings and gloves draped over a stool beside gathered silk cocoons.",
+          "title": "STOCKINGS FROM COCOONS"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-properties",
+      "title": "Inside Properties: Crystal, Fibre, and Glue",
+      "prompt": "An illuminated manuscript page, same gilded border, cream vellum, red hairline connectors. This plate opens with the hub roundel from the overview page redrawn larger at the top: a taut silk thread stretched between two posts, bending far without parting (STRETCHED NEAR BREAKING), fed from above by a smaller roundel of an alchemical vessel pouring crystals into a thread with acid droplets (ACID-GUARDED THREAD). From the central hub, four roundels fan outward in a row beneath it: a labelled spider beside a notably stiff straight thread (STIFFEST OF ALL THREADS); a spider hauling a weighted hook on an unbroken thread (THE STRONGEST THREAD); a tiny globe wrapped once by a thread with a small scale beside it (AROUND THE EARTH, 2 KG); and a spider at the centre of a frayed but unbroken web (THE TOUGHEST THREAD). From the globe roundel, a hairline descends to a smaller pair of roundels at the foot of the page: a dew-soaked thread curling and shortening on itself beside a water droplet (SHRUNK BY THE DEW), and beneath it a star-shaped silk disc pressed onto a leaf like a wax seal (THE ATTACHMENT DISC). Palette: ochre, verdigris, gold leaf, deep red ink lines, muted brown washes, consistent fine pen hatching throughout, matching the first plate's hand exactly. Vignettes are large enough to read clearly and use the plate's width, not crowded into a narrow column. No lettering anywhere on the page except the titles given beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-p263u9",
+          "quote": "Potassium hydrogen phosphate releases hydrogen ions in aqueous solution, resulting in a pH of about 4",
+          "depicts": "A small alchemical vessel pouring crystals into a thread, with droplets shown turning the thread faintly acidic against a tiny scale of sourness.",
+          "title": "ACID-GUARDED THREAD",
+          "node": "z-structural"
+        },
+        {
+          "block": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking",
+          "depicts": "A taut silk thread stretched almost to snapping between two posts, bending far without parting, at the hub of the page.",
+          "title": "STRETCHED NEAR BREAKING",
+          "node": "z-mechHub"
+        },
+        {
+          "block": "spya-dq9b7q",
+          "quote": "Ariadna lateralis silk has the highest Young's modulus with 37 GPa",
+          "depicts": "A single labelled spider perched beside its own thread, the thread drawn stiffer and straighter than the others around it.",
+          "title": "STIFFEST OF ALL THREADS",
+          "node": "z-stiffness"
+        },
+        {
+          "block": "spya-mhe2r5",
+          "quote": "Clubiona vigil silk has the highest tensile strength",
+          "depicts": "A small spider hauling a weighted hook on a single unbroken thread, the thread shown taut but unbroken.",
+          "title": "THE STRONGEST THREAD",
+          "node": "z-strength"
+        },
+        {
+          "block": "spya-hng89u",
+          "quote": "a strand long enough to circle the Earth would weigh about 2 kilograms",
+          "depicts": "A tiny globe of the earth wrapped once around by a thin silk thread, with a small scale beside it showing a modest weight.",
+          "title": "AROUND THE EARTH, 2 KG",
+          "node": "z-density"
+        },
+        {
+          "block": "spya-gfykz5",
+          "quote": "Araneus ishisawai silk is the toughest",
+          "depicts": "A single labelled spider drawn at the centre of a frayed-but-unbroken web, thread intact after many blows.",
+          "title": "THE TOUGHEST THREAD",
+          "node": "z-toughness"
+        },
+        {
+          "block": "spya-qdjb0x",
+          "quote": "shrinking up to 50% in length and behaving like a weak rubber under tension",
+          "depicts": "A dew-soaked thread shown curling and shortening upon itself, half its former length, beside a droplet of water.",
+          "title": "SHRUNK BY THE DEW",
+          "node": "z-supercontract"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A small alchemical vessel pouring crystals into a thread, with droplets shown turning the thread faintly acidic against a tiny scale of sourness.",
+          "title": "ACID-GUARDED THREAD"
+        },
+        {
+          "where": "A taut silk thread stretched almost to snapping between two posts, bending far without parting, at the hub of the page.",
+          "title": "STRETCHED NEAR BREAKING"
+        },
+        {
+          "where": "A single labelled spider perched beside its own thread, the thread drawn stiffer and straighter than the others around it.",
+          "title": "STIFFEST OF ALL THREADS"
+        },
+        {
+          "where": "A small spider hauling a weighted hook on a single unbroken thread, the thread shown taut but unbroken.",
+          "title": "THE STRONGEST THREAD"
+        },
+        {
+          "where": "A tiny globe of the earth wrapped once around by a thin silk thread, with a small scale beside it showing a modest weight.",
+          "title": "AROUND THE EARTH, 2 KG"
+        },
+        {
+          "where": "A single labelled spider drawn at the centre of a frayed-but-unbroken web, thread intact after many blows.",
+          "title": "THE TOUGHEST THREAD"
+        },
+        {
+          "where": "A dew-soaked thread shown curling and shortening upon itself, half its former length, beside a droplet of water.",
+          "title": "SHRUNK BY THE DEW"
+        },
+        {
+          "where": "A small star-shaped disc of silk pressed onto a leaf's surface, anchoring a thread to it like a wax seal.",
+          "title": "THE ATTACHMENT DISC"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-synthesis",
+      "title": "Inside Artificial Synthesis: Protein and Duct",
+      "prompt": "An illuminated manuscript page, same gilded border, cream vellum, red hairline connectors, matching hand throughout. This plate opens with the vial-and-gland roundel from the overview page, enlarged at the top (THE UNSPUN LIQUID). From it, the page forks into two descending columns joined by thin red lines. Left column: a workshop table with vials poured and filtered in sequence (EXTRACT, PURIFY, SPIN), leading to two roundels side by side beneath it — a flask of bacteria culture with a scholar drawing thread from it (BACTERIA-MADE SILK), and a goat being milked with a thread-like swirl in the pail (SILK IN GOAT'S MILK). Right column: a winding coiled tube apparatus with a thread emerging from its narrow end (THE WINDING DUCT), leading to two roundels beneath it — a hand pressing a syringe plunger with liquid protein emerging from the needle (FORCED THROUGH A NEEDLE), and a mechanical reel winding an unbroken thread with a sealed document beside it (A CONTINUOUS SPOOL). Both columns' four lower roundels send hairlines converging to a single roundel at the foot of the page: two threads measured under a ruler, the artificial one thinner and slacker (HALF OF THE NATURAL THREAD). Off to one side, a small separate roundel, linked by its own thin line from the duct roundel, shows droplets of silk protein on a water-beaded surface forming tiny wire shapes and round sheets (NANOWIRES ON WATER). Palette: ochre, verdigris, gold leaf, deep red ink, muted brown wash, fine pen hatching consistent with the earlier plates. Vignettes are large and clear, filling the page's width as well as its height; no lettering anywhere except the titles given beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-wgee6t",
+          "quote": "the unspun silk dope in spiders",
+          "depicts": "The same glass vial of glistening liquid from the overview, now opened into a larger roundel at the top of this plate, beside a drawing of the spider's gland it was drawn from.",
+          "title": "THE UNSPUN LIQUID",
+          "node": "z-hub"
+        },
+        {
+          "block": "spya-f399m7",
+          "quote": "researchers from the Korea Advanced Institute of Science & Technology succeeded in making spider silk directly using E. coli",
+          "depicts": "A small flask of bacteria culture on a bench with a scholar's hand holding a freshly drawn thread from it.",
+          "title": "BACTERIA-MADE SILK",
+          "node": "z-ecoli"
+        },
+        {
+          "block": "spya-y4ay23",
+          "quote": "Feedstock is forced through a hollow needle using a syringe",
+          "depicts": "A hand pressing a plunger on a glass syringe, a thin thread of liquid protein emerging from its needle tip.",
+          "title": "FORCED THROUGH A NEEDLE",
+          "node": "z-syringe"
+        },
+        {
+          "block": "spya-qbrkma",
+          "quote": "A patent has been granted and continuously spun fibres have achieved commercial use",
+          "depicts": "A small mechanical reel steadily winding an unbroken thread onto a spool, with a sealed document resting beside the machine.",
+          "title": "A CONTINUOUS SPOOL",
+          "node": "z-microfluidics"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same glass vial of glistening liquid from the overview, now opened into a larger roundel at the top of this plate, beside a drawing of the spider's gland it was drawn from.",
+          "title": "THE UNSPUN LIQUID"
+        },
+        {
+          "where": "A workshop table with vials being poured and filtered in sequence, a thread emerging thin and pale at the end of the row.",
+          "title": "EXTRACT, PURIFY, SPIN"
+        },
+        {
+          "where": "A winding coiled tube drawn like a small mechanical apparatus, with a thin thread emerging from its narrow end.",
+          "title": "THE WINDING DUCT"
+        },
+        {
+          "where": "A small flask of bacteria culture on a bench with a scholar's hand holding a freshly drawn thread from it.",
+          "title": "BACTERIA-MADE SILK"
+        },
+        {
+          "where": "A hand pressing a plunger on a glass syringe, a thin thread of liquid protein emerging from its needle tip.",
+          "title": "FORCED THROUGH A NEEDLE"
+        },
+        {
+          "where": "A goat being milked into a pail, with a faint thread-like swirl visible in the milk as it falls.",
+          "title": "SILK IN GOAT'S MILK"
+        },
+        {
+          "where": "A small mechanical reel steadily winding an unbroken thread onto a spool, with a sealed document resting beside the machine.",
+          "title": "A CONTINUOUS SPOOL"
+        },
+        {
+          "where": "Two threads measured against each other under a ruler at the base of the page, the artificial one visibly thinner and slacker than the natural one.",
+          "title": "HALF OF THE NATURAL THREAD"
+        },
+        {
+          "where": "A small side-roundel showing droplets of silk protein on a water-beaded surface forming tiny wire-like threads and round sheets off to the side.",
+          "title": "NANOWIRES ON WATER"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "spider-silk-spya-ge30uz",
+  "profileHash": null
+}

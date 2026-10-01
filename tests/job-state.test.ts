@@ -49,7 +49,6 @@ import {
   driverStalled,
   elapsedLabel,
   RUNNING_A_WHILE,
-  STEP_USUALLY_A_COUPLE_OF_MINUTES,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
@@ -129,7 +128,7 @@ it("a running step is working, and carries how long it has been going", () => {
  */
 it("says nothing about how long a step usually takes unless it was measured", () => {
   const measured = displayJob(job("running", { steps: [running("sketch")] }), START + 1000);
-  expect(measured.usually).toBe(STEP_USUALLY_A_COUPLE_OF_MINUTES);
+  expect(measured.usually).toBe("This step usually takes about a minute.");
 
   const guessed = displayJob(job("running", { steps: [running("fetch")] }), START + 1000);
   expect(guessed.usually, "invented a number for a step nobody has timed").toBeNull();
@@ -207,8 +206,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   timeline: 180_000,
   quiz: 180_000,
   faq: 180_000,
-  /* Seven minutes: past twice the worst of the thirteen sketch runs (199s). */
-  sketch: 420_000,
+  /* Three minutes: past the worst of the sixteen low-effort draws (101s). */
+  sketch: 180_000,
   illustrated: 600_000,
   debate: 180_000,
   citations: 180_000,

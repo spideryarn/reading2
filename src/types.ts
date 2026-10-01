@@ -2924,17 +2924,20 @@ export type StepName =
   /* The questions the piece can ask you back, the second sub-mode of Remember —
      docs/plans/260831al-review-quiz-sub-mode.md. Beside `ideas` and `timeline`
      for the third time and the same reason: `articleWithIds` at `high` effort,
-     so all four share one cached article prefix and `STEP_ORDER` keeps them
-     contiguous. */
+     so the group shares one cached article prefix. `STEP_ORDER` keeps its calls
+     close inside the provider's five-minute lifetime; cache lookup itself is
+     position-blind. */
   | "quiz"
   /* The questions a careful reader would put to this piece while reading it,
      and the passages where the piece responds — docs/plans/260916d-faq-mode.md.
      Beside `quiz` for the same reason `quiz` is beside `timeline`:
      `articleWithIds` over the body at `high` effort, so it joins the
-     `ideas`/`timeline`/`quiz`/`sketch` cached article prefix. */
+     `ideas`/`timeline`/`quiz` cached article prefix. */
   | "faq"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
-     Nothing reads what it writes except the one below. */
+     Nothing reads what it writes except the one below. The same bytes as
+     `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
+     (src/models.ts § STAGE_EFFORT). */
   | "sketch"
   /* The same argument painted, docs/project/diagram.md § Illustrated. **The only
      step here whose input is another step's artefact rather than the article**,

@@ -765,7 +765,7 @@ const MODES_UI = [
      for a second press — and Greg asked for the second press to go
      (docs/plans/260906b-opening-a-mode-starts-it-generating.md). So it was, until
      2026-09-29, the most expensive button in the bar in front of *every*
-     reader: ~$0.20 and about two minutes. It is still that press for a reader
+     reader: one model call and about a minute. It is still that press for a reader
      with the switch on. Only the Sketch; Illustrated is still its own
      chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
      empty state still says the wait for anyone who arrives without pressing
@@ -2564,7 +2564,7 @@ function DockModes({
    * **And selection here spends money.** Since the auto-run rule
    * (docs/plans/260831ai-…), landing on a mode with no artefact starts a model
    * call — so holding → was four paid jobs from one keypress, and the same
-   * pattern on `.diag-kinds` put a 121–194 second, ~$0.20 sketch one arrow away.
+   * pattern on `.diag-kinds` put a 30–101 second sketch one arrow away.
    * A settle delay was drafted to race that; taking the arrows off removes it
    * instead, which is the smaller thing to have to be right about.
    *

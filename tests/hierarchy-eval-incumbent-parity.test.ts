@@ -26,7 +26,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { armByName } from "../evals/hierarchy-structure/arms.js";
+import { armByName, effortOf } from "../evals/hierarchy-structure/arms.js";
 import { PRODUCTION_EFFORT } from "../src/hierarchy.js";
 import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 
@@ -40,7 +40,7 @@ describe("the hierarchy-structure eval's incumbent", () => {
        file spells the value out too. When production genuinely moves, both
        literals change in the same commit, on purpose — which is what happened
        on 2026-09-04, `medium` to `low`. */
-    expect(arm.call.effort).toBe("low");
+    expect(effortOf(arm.call)).toBe("low");
     expect(PRODUCTION_EFFORT).toBe("low");
     expect(arm.call.model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
@@ -70,6 +70,6 @@ describe("the hierarchy-structure eval's incumbent", () => {
     expect(other.comparison).toBe("isolated");
     expect(other.call.model).toBe(incumbent.call.model);
     expect(other.seed).toBe(incumbent.seed);
-    expect(other.call.effort).not.toBe(incumbent.call.effort);
+    expect(effortOf(other.call)).not.toBe(effortOf(incumbent.call));
   });
 });

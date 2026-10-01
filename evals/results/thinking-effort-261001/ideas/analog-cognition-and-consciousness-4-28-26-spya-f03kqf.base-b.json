@@ -1,0 +1,214 @@
+{
+  "version": "ideas/3",
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-m67mws",
+      "name": "Consciousness is fundamentally about unifying distributed activity",
+      "provenance": "assumed",
+      "statement": "What must be explained about consciousness is how separately-processed pieces of neural information get bound into one single, coherent experience; a theory of consciousness is judged by whether it accounts for this unification.",
+      "whyYouNeedIt": "The claims that wave organization 'solves the binding problem' and that consciousness 'emerges' from globally integrated wave states only count as explanations of consciousness if integration is already taken to be the thing consciousness consists in; the piece never argues for this starting point, it just adopts it from prior theories it aligns itself with.",
+      "occurrences": [
+        {
+          "blockId": "spya-tdqde5",
+          "quote": "Brain waves can thus help solve the binding problem by dynamically linking distributed neural representations into a unified conscious experience.",
+          "reasoning": "Presupposes that solving binding (linking distributed representations) is what explaining conscious experience requires.",
+          "start": 456
+        },
+        {
+          "blockId": "spya-m3dn2u",
+          "quote": "Like Global Workspace (GW) and Global Neuronal Workspace Theory (GNWT), our model holds that a distributed cortical network supports flexible, global integration",
+          "reasoning": "Aligns the framework with theories whose shared premise is that global integration is the explanandum of consciousness, without independently defending that premise.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-m9exy5",
+          "quote": "Consciousness, then, emerges when these dynamic wave patterns bring the cortex into an organized, globally integrated state, one that naturally links and influences widespread activity.",
+          "reasoning": "States the conclusion as following directly from achieving integration, relying on the unstated premise that integration is constitutive of consciousness.",
+          "start": 308
+        }
+      ]
+    },
+    {
+      "id": "spya-chfeev",
+      "name": "Spikes and waves causally shape each other",
+      "provenance": "introduced",
+      "statement": "Neural spiking generates large-scale electric field oscillations, and those oscillations feed back to alter when and where spikes occur, forming a two-way causal loop rather than a one-way chain from spikes to behavior.",
+      "occurrences": [
+        {
+          "blockId": "spya-z9g2s3",
+          "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+          "reasoning": "Makes explicit the two-way causal relationship the rest of the argument depends on.",
+          "start": 602
+        },
+        {
+          "blockId": "spya-k6n9n8",
+          "quote": "This kind of flexible, self-directed neural processing requires a control system that can coordinate hundreds of millions of neurons within fractions of a second.",
+          "reasoning": "Sets up the need for a fast coordinating mechanism that the spike-wave loop is introduced to supply.",
+          "start": 670
+        }
+      ]
+    },
+    {
+      "id": "spya-nhcn74",
+      "name": "Neurons are multifunctional, not dedicated specialists",
+      "provenance": "introduced",
+      "statement": "Many cortical neurons carry nonlinearly mixed combinations of sensory, motor, and contextual information rather than each having one fixed, stable meaning, so the same neuron can take part in many different computations depending on context.",
+      "occurrences": [
+        {
+          "blockId": "spya-amx5qf",
+          "quote": "Alternatively, many cortical neurons may be multifunctional, rather than specialized (Duncan and Miller, 2013, 2002).",
+          "reasoning": "Directly proposes multifunctionality as an alternative to fixed specialization.",
+          "start": 670
+        },
+        {
+          "blockId": "spya-njs6ff",
+          "quote": "Thus, these neurons embody the flexible, context-dependent behavior associated with higher cognition (Rigotti et al., 2013; Fusi et al., 2016; Tye et al., 2024).",
+          "reasoning": "Links mixed selectivity directly to flexible cognitive behavior.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-dtnkkk",
+          "quote": "A control system therefore has the challenge of dynamically routing signals through a dense web of overlapping networks, allowing the same neurons to contribute to different computations in different contexts.",
+          "reasoning": "Draws out the routing problem created by multifunctional neurons, motivating the wave-based solution that follows.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-u7us3m",
+      "name": "Electric fields coordinate neurons without synapses",
+      "provenance": "introduced",
+      "statement": "Oscillating extracellular electric fields can directly push nearby neurons' membrane potentials up or down and synchronize their firing, through ephaptic coupling, entirely apart from synaptic transmission.",
+      "occurrences": [
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Ephaptic coupling in the brain is the influence of neuronal electric fields on nearby neurons’ membrane potentials, allowing interaction and coordination independent of synapses",
+          "reasoning": "Defines and asserts the extra-synaptic coordinating mechanism the paper relies on.",
+          "start": 156
+        },
+        {
+          "blockId": "spya-j7k4hu",
+          "quote": "the electric fields it helps create can spread across millimeters or more, due to correlated activity (Łęski et al., 2013; Xing et al., 2009). This could coordinate large cortical neighborhoods simultaneously.",
+          "reasoning": "Explains why fields, unlike individual spikes, can coordinate large populations at once.",
+          "start": 191
+        },
+        {
+          "blockId": "spya-f59f0p",
+          "quote": "These properties make oscillatory electric fields excellent candidates for rapid, large-scale control.",
+          "reasoning": "Summarizes ephaptic coupling's properties as the basis for proposing waves as a control mechanism.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-vuqgs4",
+      "name": "Alpha/beta waves gate gamma spiking in a spatial push-pull",
+      "provenance": "introduced",
+      "statement": "Spatially patterned alpha/beta oscillations act like temporary inhibitory stencils laid across the cortical surface, suppressing gamma-band spiking in some locations while leaving it free in others, and this pattern of suppression determines where feedforward sensory signals actually get expressed.",
+      "occurrences": [
+        {
+          "blockId": "spya-gkfdys",
+          "quote": "Alpha/beta rhythms thus dampen or suppress gamma and associated spiking in targeted locations, creating a push-pull dynamic that determines where feedforward signals are suppressed.",
+          "reasoning": "States the core push-pull gating mechanism of Spatial Computing theory.",
+          "start": 473
+        },
+        {
+          "blockId": "spya-hcav4k",
+          "quote": "The “Spatial Computing” model builds on this idea by proposing how spatially-structured oscillations can exert flexible executive control over neural computation",
+          "reasoning": "Names and introduces the theory as an executive control mechanism built from spatial wave patterning.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-gxyg0d",
+          "quote": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information",
+          "reasoning": "Draws out the key advantage of stencil-based gating over a synapse-specific control scheme.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-f40q4f",
+      "name": "Wave gating organizes population activity into separable subspaces",
+      "provenance": "introduced",
+      "statement": "By turning different, partially overlapping subsets of broadly-tuned neurons on or off, alpha/beta control signals impose structured correlations on population activity, producing the low-dimensional, often orthogonal 'subspaces' seen in recorded population spiking.",
+      "occurrences": [
+        {
+          "blockId": "spya-ns23sq",
+          "quote": "Alpha/beta control signals segregate spiking activity into partially overlapping active subsets, each of which exhibits structured patterns of correlation",
+          "reasoning": "States the mechanism by which wave gating produces structured subspace organization.",
+          "start": 533
+        },
+        {
+          "blockId": "spya-xphb7u",
+          "quote": "population spiking tends to occupy a lower-dimensional “subspace” or “manifold” within the high-dimensional space defined by all possible population activity patterns",
+          "reasoning": "Introduces the subspace/manifold phenomenon that the wave-gating mechanism is then invoked to explain.",
+          "start": 275
+        },
+        {
+          "blockId": "spya-az9405",
+          "quote": "This may also underlie the segregation of different types of information, such as distinct contexts, into orthogonal population activity subspaces.",
+          "reasoning": "Connects the gating mechanism directly to orthogonal subspace segregation across contexts.",
+          "start": 653
+        }
+      ]
+    },
+    {
+      "id": "spya-wxvaae",
+      "name": "Traveling waves drive switches between coding states",
+      "provenance": "introduced",
+      "statement": "Rather than standing still, alpha/beta waves sweep across cortex, and as they move they can drag population activity from one representational pattern (subspace) to another, so representational change is a moving wave front rather than a simple rise or fall in oscillatory power.",
+      "occurrences": [
+        {
+          "blockId": "spya-mrsvfu",
+          "quote": "we propose that alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another.",
+          "reasoning": "States directly that traveling waves cause transitions between coding states.",
+          "start": 340
+        },
+        {
+          "blockId": "spya-ah94dx",
+          "quote": "As traveling waves sweep continuously over the cortex, they may “pull” population spiking activity along, creating repeatable smooth trajectories (Batabyal et al., 2026).",
+          "reasoning": "Explains the mechanism by which a moving wave produces smooth trajectories in neural state space.",
+          "start": 643
+        },
+        {
+          "blockId": "spya-gbpnax",
+          "quote": "We propose this shift may be driven by alpha/beta traveling waves transitioning from one static pattern to the other.",
+          "reasoning": "Figure caption restating the wave-driven transition mechanism applied to the running example task.",
+          "start": 280
+        }
+      ]
+    },
+    {
+      "id": "spya-jq5pkc",
+      "name": "Wave interference computes, it does not just coordinate",
+      "provenance": "introduced",
+      "statement": "When separate oscillatory wave patterns overlap in the cortex, their superposition combines the information each wave carries in parallel across the whole tissue at once, functioning as a genuine analog computation rather than mere synchronization, and this parallel, continuous processing is far more energy-efficient than step-by-step digital computation.",
+      "occurrences": [
+        {
+          "blockId": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "reasoning": "States the physical basis of wave-based analog computation.",
+          "start": 328
+        },
+        {
+          "blockId": "spya-mgnqxk",
+          "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel.",
+          "reasoning": "Draws out that wave summation performs computation in parallel rather than merely organizing timing.",
+          "start": 330
+        },
+        {
+          "blockId": "spya-jbtup9",
+          "quote": "The efficiency of analog computation could explain how the brain performs vast amounts of computation while consuming only about 20 watts, roughly the power of a dim light bulb (Kováč, 2010).",
+          "reasoning": "Connects the computational character of wave interference to the brain's low energy budget.",
+          "start": 162
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-01T18:42:20.415Z",
+  "elapsedMs": 88063
+}

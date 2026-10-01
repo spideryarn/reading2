@@ -70,14 +70,14 @@ export interface UseSketch {
    * There was no unforced entry point at all until 2026-09-02, because the only
    * caller was a button and forcing was right for it. It is wrong for the two
    * of them together: `work_key` includes `force`, so a forced press landing
-   * during an unforced automatic start is a second key and a second two-minute,
-   * $0.20 job. useIdeas.ts § `ensure`.
+   * during an unforced automatic start is a second key and a second model call.
+   * useIdeas.ts § `ensure`.
    */
   ensure(): Promise<void>;
   /**
    * **Draw it again** — forced, for a redraw offered beside a picture that is
    * already there, where an unforced run would skip while the reader watched a
-   * two-minute job change nothing. Safe to force because the step replaces
+   * minute-long job change nothing. Safe to force because the step replaces
    * rather than appends, and `sketch` is in `FORCE_ONLY_WHEN_NAMED` so nothing
    * else is swept in with it.
    */
@@ -228,7 +228,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
  * reason this is not `useSketch` with the rest thrown away. A second
  * `useSketch` on the page would be a second auto-runner: mounted with the
  * activation token armed, both instances would call `ensure`, and `ensure`
- * buys a two-minute, $0.20 model call. A hover card must not be able to reach
+ * buys a model call that takes about a minute. A hover card must not be able to reach
  * that.
  *
  * The caller is the Sketch chip's hover card in

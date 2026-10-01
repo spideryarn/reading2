@@ -1,0 +1,98 @@
+{"ideas": [
+  {
+    "name": "Synergy marks genuine computation, not mere summation",
+    "provenance": "introduced",
+    "statement": "When the joint information that several neurons' past activity carries about a target's future exceeds the sum of what each neuron carries alone, that extra ('synergistic') information signals that the target is performing an integrative computation on the pattern of inputs, not just adding them up.",
+    "occurrences": [
+      {"blockId": "spya-e94ury", "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs considered jointly", "reasoning": "States directly that synergy is defined as the excess of joint over summed information and equates this excess with computation."},
+      {"blockId": "spya-s0db2g", "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources", "reasoning": "Sets up the need for a synergy-sensitive measure by contrasting it with mere transfer, presupposing synergy as the marker of processing."},
+      {"blockId": "spya-sp50v3", "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead they are also sensitive to the particular patterns of incoming stimuli.", "reasoning": "Explicitly restates the idea as the paper's main interpretive conclusion."}
+    ]
+  },
+  {
+    "name": "Redundancy has no unique definition in classical information theory",
+    "provenance": "introduced",
+    "statement": "The equations relating joint, marginal, redundant, unique, and synergistic information are under-determined; Shannon theory alone cannot pick out one correct way to measure redundancy, so any decomposition depends on which redundancy function the analyst chooses.",
+    "occurrences": [
+      {"blockId": "spya-bgsd4n", "quote": "The result is an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values (the partial information terms). If any of the unknown terms can be defined, then the other three emerge “for free”. Unfortunately, classical Shannon information theory provides no unique solution to any of these", "reasoning": "States plainly that the decomposition is mathematically underdetermined and requires an external choice."},
+      {"blockId": "spya-rc76qn", "quote": "To date, no single universally accepted measure has been proposed. All measures have their own trade-offs and drawbacks... There are, at present, close to a dozen competing redundancy functions", "reasoning": "Confirms the underdetermination persists in practice, with many competing solutions rather than one."},
+      {"blockId": "spya-t02v4p", "quote": "it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts", "reasoning": "Frames the decomposition as requiring a special added construction, implying it was not derivable from classical theory alone."}
+    ]
+  },
+  {
+    "name": "Mutual information tracks correlation; transfer entropy tracks directed flow",
+    "provenance": "introduced",
+    "statement": "Mutual information measures undirected statistical dependence between two signals (like a nonlinear correlation, corresponding to 'functional connectivity'), whereas transfer entropy measures how much one signal's past reduces uncertainty about another's future beyond its own history, corresponding to directed 'effective connectivity' or information flow.",
+    "occurrences": [
+      {"blockId": "spya-f6sbgx", "quote": "It can be thought of as a nonlinear correlation between two patterns of activity... It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as “transfer” or “flow.”", "reasoning": "Defines mutual information as undirected correlation, distinct from flow."},
+      {"blockId": "spya-p4pyuy", "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity [14]. In other words, transfer entropy provides a measure of information propagation.", "reasoning": "Directly states the distinction between the two measures and what each corresponds to."}
+    ]
+  },
+  {
+    "name": "Statistical dependency is not the same as mechanism",
+    "provenance": "introduced",
+    "statement": "Finding that neurons share information redundantly, uniquely, or synergistically tells you about statistical patterns in their activity, but it does not by itself explain the biological machinery (such as neurotransmitter systems or circuit architecture) that produces those patterns.",
+    "occurrences": [
+      {"blockId": "spya-spdx0y", "quote": "while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated", "reasoning": "States the idea directly as an interpretive caveat for all the empirical findings reported earlier."},
+      {"blockId": "spya-h6h922", "quote": "6.2. Interpreting PID Results as Neural Information Processing", "reasoning": "The section heading signals that interpreting PID output as 'processing' requires separating statistical result from mechanistic claim."}
+    ]
+  },
+  {
+    "name": "Rich clubs are disproportionate hubs of information processing",
+    "provenance": "introduced",
+    "statement": "The densely interconnected 'rich club' neurons that dominate information propagation in a network also account for a disproportionate share of synergistic (integrative) processing, far beyond what their numbers would predict.",
+    "occurrences": [
+      {"blockId": "spya-fud8q3", "quote": "Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club... Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for ∼88% of the network-wide synergy.", "reasoning": "Gives the concrete empirical result establishing the idea."},
+      {"blockId": "spya-bftp48", "quote": "Rich clubs, in the context of the effective networks built from cortical circuit spiking recordings, are comprised of the neurons that propagate the most information (i.e., sending and receiving). By definition, rich clubs are disproportionately dense in information propagation: 20% of the neurons account for 70% of the information propagation", "reasoning": "Establishes the premise that rich clubs are information-dense, motivating the synergy finding."}
+    ]
+  },
+  {
+    "name": "Recurrent connections, not feedback, drive synergy",
+    "provenance": "introduced",
+    "statement": "Among a target neuron's input motifs, having more connections between the two source neurons (recurrence) increases synergistic integration, while connections looping back from the target to the sources (feedback) do not reliably increase synergy and may even reduce it.",
+    "occurrences": [
+      {"blockId": "spya-sd9fzd", "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.", "reasoning": "States the empirical dissociation between recurrent and feedback connection effects on synergy."},
+      {"blockId": "spya-xs5660", "quote": "The question for our analysis was whether synergistic integration was sensitive to the number of feedback or recurrent connections.", "reasoning": "Frames the comparison that the idea resolves."}
+    ]
+  },
+  {
+    "name": "Synergy peaks at intermediate, not maximal, input correlation",
+    "provenance": "introduced",
+    "statement": "As two input neurons' activity becomes more similar, the synergy they jointly produce in a downstream target first rises but then falls once similarity passes a certain point, with redundancy taking over as correlation keeps increasing; synergy is thus maximized at intermediate rather than high correlation.",
+    "occurrences": [
+      {"blockId": "spya-ybmve2", "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease", "reasoning": "Directly states the non-monotonic relationship between source correlation and synergy."},
+      {"blockId": "spya-cs9fdy", "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.", "reasoning": "Explains the mechanism behind the peak, reinforcing the idea."}
+    ]
+  },
+  {
+    "name": "Inferred effective connectivity stands in for real circuit wiring",
+    "provenance": "assumed",
+    "statement": "When a study labels transfer-entropy-derived links between neurons as 'feedforward', 'feedback', or 'recurrent' connections and draws conclusions about how circuit topology shapes computation, it is treating these statistically inferred links as if they reflect the underlying synaptic or anatomical connectivity.",
+    "whyYouNeedIt": "The claims that rich-club wiring or recurrent motifs 'cause' more synergy only make sense as statements about circuit structure if the transfer-entropy network is accepted as a reasonable stand-in for actual connectivity, a step the text takes for granted rather than argues for.",
+    "occurrences": [
+      {"blockId": "spya-tfcqnh", "quote": "Analyzing the effective connectivity among neurons using transfer entropy enables extraction of the full effective network upon which the spiking dynamics occurred. The computational triads, consisting of two neurons (source neurons) connecting to a common third neuron (target neuron), can then be identified.", "reasoning": "Treats the transfer-entropy network as 'the' effective network of the circuit, silently equating statistical inference with circuit structure."},
+      {"blockId": "spya-xs5660", "quote": "Understanding how connectivity patterns relate to synergistic integration may be useful for predicting how a network with a given topology might perform computationally.", "reasoning": "Speaks of 'network topology' performing computation, which only follows if the inferred effective links are taken as the network's real topology."},
+      {"blockId": "spya-sd9fzd", "quote": "in comparison to the simplest computational triads (those with no feedback or recurrent connections), triads with two recurrent connections and no feedback connections had 50% more synergy", "reasoning": "Counts of 'recurrent' and 'feedback' connections are treated as physical circuit features whose presence causes synergy differences, assuming the inferred links track real connections."}
+    ]
+  },
+  {
+    "name": "Local triad analysis can stand in for whole-network computation",
+    "provenance": "assumed",
+    "statement": "Breaking a large neural network into isolated two-source, one-target triads and analyzing each separately is treated as a valid way to characterize how the network as a whole processes information, even though each triad ignores the rest of the circuit's influence.",
+    "whyYouNeedIt": "Conclusions like 'rich club triads account for most network-wide synergy' or that topology predicts processing only carry meaning for the network's overall computation if triad-level synergy values can be meaningfully aggregated and compared across a network, a compositional step the text never defends.",
+    "occurrences": [
+      {"blockId": "spya-sw5ukx", "quote": "From these, we then identified all triads consisting of two source neurons connecting to a common target neuron (totalling thousands of triads) and performed the full partial information decomposition into redundant, unique, and synergistic atoms.", "reasoning": "Studies thousands of isolated triads and treats their properties as informative about circuit-wide processing."},
+      {"blockId": "spya-q9gytb", "quote": "By far the most common approach to applying PID in neurosciences involves analyzing only triads, with two parents and a single target", "reasoning": "Acknowledges the triad-only scope as standard practice while still building network-level claims (rich clubs, motifs) on top of it."},
+      {"blockId": "spya-fud8q3", "quote": "Due to rich clubs having a high density of triads and rich club triads having a greater synergy per triad, a majority of the network-wide synergy was accounted for by rich club triads.", "reasoning": "Sums triad-level synergy values into a 'network-wide' quantity, assuming triad decomposition composes into a meaningful whole-network measure."}
+    ]
+  },
+  {
+    "name": "Multivariate analysis needs exponentially more data as variables grow",
+    "provenance": "introduced",
+    "statement": "Because information-theoretic analysis of k interacting variables requires estimating a joint probability distribution over all their combined states, the amount of data needed grows exponentially with the number of variables, quickly outstripping what is practically recordable.",
+    "occurrences": [
+      {"blockId": "spya-tz99zn", "quote": "For a system of k interacting variables, any multivariate information-theoretic analysis (beyond just the PID) requires a k-dimensional joint probability distribution to be constructed, which can require incredibly large amounts of data as k becomes large. For a system of binary elements such as spiking neurons, there are 2 k possible combinations of 0s and 1s.", "reasoning": "States directly the exponential data requirement underlying scalability limits."},
+      {"blockId": "spya-aby2dp", "quote": "For a system with k parent neurons, the number of distinct PI atoms is given by the kth Dedekind number (minus two)... This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms", "reasoning": "Shows a parallel explosive growth in the number of decomposition terms itself, reinforcing the scaling problem."}
+    ]
+  }
+]}

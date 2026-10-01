@@ -1,0 +1,215 @@
+{
+  "style": "An illuminated manuscript page in parchment and tempera, since the crisis is itself a chronicle of events in the history of science, told as a sequence of labelled scenes with gold-leaf initials and ruled borders.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Chronicle of the Replication Crisis",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-pcnqxn",
+          "quote": "widespread failures to reproduce published scientific results",
+          "depicts": "At the top of the page, a cracked hand-mirror held up before a shelf of books, the reflection in the glass broken into fragments that do not match the books themselves.",
+          "title": "THE BROKEN MIRROR OF RESULTS"
+        },
+        {
+          "node": "n3",
+          "block": "spya-yru28f",
+          "quote": "Felipe Romero identified four precursors to the crisis",
+          "depicts": "A robed scholar at a crossroads of four paths, each path marked only by a different small open scroll lying at its foot, none of the scrolls bearing writing a reader could mistake for a caption.",
+          "title": "FOUR PATHS TO THE CRISIS"
+        },
+        {
+          "node": "n4",
+          "block": "spya-dg8j93",
+          "quote": "declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A ring of robed scholars standing at a lectern, one of them striking a great hand-bell, the sound rippling outward as drawn lines toward the other figures who turn with alarmed faces.",
+          "title": "THE BELL OF CONFIDENCE"
+        },
+        {
+          "node": "n6",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A long bench of ninety-seven small glass flasks in a row, most of them shattered or empty, only a third still glowing with lit liquid inside.",
+          "title": "36% OF FLASKS STILL LIT"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions",
+          "depicts": "Fifty-three small labelled jars arranged on a stone shelf in a physician's study, nearly all of them sealed shut with wax, only a handful standing open and full.",
+          "title": "11% OF THE CANCER JARS"
+        },
+        {
+          "node": "n9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A crowd of robed researchers in a courtyard, each holding an instrument or vial, the great majority of them shown shrugging or shaking their heads over a failed apparatus, only a few looking satisfied.",
+          "title": "MOST HAVE FAILED TO REPEAT IT"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y782zn",
+          "quote": "creates the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "A wooden cabinet of many drawers, one drawer pulled fully open and stuffed to bursting with crumpled papers, while a single clean sheet sits displayed on the desk above it.",
+          "title": "THE FILE DRAWER EFFECT"
+        },
+        {
+          "node": "n12",
+          "block": "spya-kqvxfb",
+          "quote": "Examples of questionable research practices include data dredging",
+          "depicts": "A figure kneeling at a riverbank sifting a pan through loose earth and water, pulling out only the glinting flecks and letting the rest of the pan's contents spill back into the stream.",
+          "title": "DREDGING FOR DATA"
+        },
+        {
+          "node": "n14",
+          "block": "spya-t88q4a",
+          "quote": "names such as \"methodological terrorist\" and \"self-appointed data police\"",
+          "depicts": "A scholar in formal dress at a podium pointing accusingly outward at two hooded figures in the crowd below, one marked by a sash and one by a badge, both recoiling.",
+          "title": "METHODOLOGICAL TERRORIST"
+        },
+        {
+          "node": "n15",
+          "block": "spya-qthy2u",
+          "quote": "emphasizing transparency and openness, preregistering research projects, and replicating research with higher standards for evidence",
+          "depicts": "A line of researchers before an open ledger on a lectern beneath a window of clear daylight, each signing the ledger before an unlocked door rather than the shuttered cabinet from the earlier scene.",
+          "title": "SIGNING BEFORE THE OPEN DOOR"
+        },
+        {
+          "node": "n16",
+          "block": "spya-astgqn",
+          "quote": "Results that agree across different methodologies are less likely to be artefacts",
+          "depicts": "At the foot of the page, three different instruments — a telescope, a set of scales, and a magnifying glass — each held by a different robed figure, all three trained upon the same single object resting on a stand between them.",
+          "title": "THREE INSTRUMENTS, ONE OBJECT"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged parchment, bordered with a ruled gold-leaf frame and small ivy-leaf corner flourishes, the whole page in tempera colours of ochre, verdigris, and lamp-black, reading top to bottom as a chronicle. At the very top sits THE BROKEN MIRROR OF RESULTS: a cracked hand-mirror held before a shelf of books, its broken reflection scattered. Below it, set within a band labelled only by its scenes (no banner text), a scholar stands at FOUR PATHS TO THE CRISIS, a crossroads with four small unmarked scrolls at the feet of four paths. Beside it, a ring of robed figures gathers for THE BELL OF CONFIDENCE, one striking a great hand-bell whose sound-lines ripple outward to alarmed faces. Next, a horizontal band of evidence: a bench of ninety-seven small flasks for 36% OF FLASKS STILL LIT, most shattered, a third still glowing; beside it a shelf of fifty-three sealed jars for 11% OF THE CANCER JARS, only a handful open; and below both, a crowded courtyard of researchers shaking their heads over broken instruments for MOST HAVE FAILED TO REPEAT IT, drawn wider than the other scenes to show the convergence of many figures. Beneath this, two further scenes side by side: a wooden cabinet with one drawer stuffed with crumpled paper for THE FILE DRAWER EFFECT, and a kneeling figure panning a riverbank for glinting flecks for DREDGING FOR DATA. Below these, a scholar at a podium pointing at two hooded figures, one sashed and one badged, for METHODOLOGICAL TERRORIST. Beneath that, a line of researchers signing an open ledger before a sunlit doorway for SIGNING BEFORE THE OPEN DOOR. At the very bottom of the page, three robed figures each holding a different instrument — telescope, scales, magnifying glass — all trained on one object between them, for THREE INSTRUMENTS, ONE OBJECT. Each vignette is large enough to read clearly, framed loosely by hairline ink borders rather than heavy boxes, letting the composition breathe with bare parchment between scenes. A short capitalized title is lettered in plain block script directly beneath each vignette, and nothing else on the page carries any lettering at all — no banners, no scrolls of writing, no signatures."
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "Many Rivers, One Current",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "Opening the plate with the overview's own scene: a bench of ninety-seven small flasks, most shattered, a third still glowing.",
+          "title": "36% OF FLASKS STILL LIT"
+        },
+        {
+          "node": "e2",
+          "block": "spya-ekg3fe",
+          "quote": "the replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A physician holding a single small brain-shaped vessel, dwarfed behind him by an enormous crowd of thousands of tiny figures stretching into the distance, needed to balance the scale beside the vessel.",
+          "title": "THOUSANDS NEEDED FOR ONE BRAIN"
+        },
+        {
+          "node": "e3",
+          "block": "spya-k59a2x",
+          "quote": "the effect sizes were 85% smaller on average than the original findings",
+          "depicts": "Two bar-like stacks of coloured glass rods side by side on a table, the left stack rising tall, the right stack — the repeated version — reduced to a small fraction of its height.",
+          "title": "EFFECTS SHRINK 85%"
+        },
+        {
+          "node": "e6",
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated",
+          "depicts": "A merchant's stall of ledgers in a marketplace, a clerk stamping roughly six in ten of the open ledgers as verified while turning the rest aside unstamped.",
+          "title": "ECONOMICS: 61% REPLICATE"
+        },
+        {
+          "node": "e7",
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A river-keeper standing on a bank among scattered notebooks swept half into the water, only a tiny handful of them still dry and legible on the shore.",
+          "title": "UNDER 7% REPRODUCIBLE"
+        },
+        {
+          "node": "e8",
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "A hooded oracle-figure at a lectern giving two different scrolls of answer to the same question asked twice by a kneeling scholar, the scrolls' contents visibly unlike each other.",
+          "title": "SAME QUESTION, SHIFTING ANSWER"
+        },
+        {
+          "node": "e9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "All six streams of the scenes above are drawn converging as painted rivulets into one wide pool, around which stands a crowd of robed researchers, most of them shaking their heads over broken apparatus.",
+          "title": "MOST HAVE FAILED TO REPEAT IT"
+        },
+        {
+          "node": "e10",
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "At the foot of the page, a single cracked tablet set upon a raised pedestal, surrounded by admiring figures laying garlands at its foot despite the visible crack running through its surface.",
+          "title": "UNRELIABLE BUT MORE HONOURED"
+        }
+      ],
+      "prompt": "An illuminated manuscript page in parchment and tempera, matching the hand of the overview page, with a thin gold-leaf rule border and sparse ivy-corner flourishes, bare parchment left generous between scenes. Six wide vignettes are arranged in two rows of three across the upper two-thirds of the page, each its own river or current feeding downward: a physician dwarfed by a vast crowd of tiny figures for THOUSANDS NEEDED FOR ONE BRAIN; two stacks of glass rods, one tall and one shrunk, for EFFECTS SHRINK 85%; a market stall of ledgers being stamped for ECONOMICS: 61% REPLICATE; a river-keeper among half-drowned notebooks for UNDER 7% REPRODUCIBLE; a hooded oracle giving two unlike scrolls to the same question for SAME QUESTION, SHIFTING ANSWER; and, echoing the overview's own image, a bench of ninety-seven flasks, most shattered, a third glowing, for 36% OF FLASKS STILL LIT. Painted rivulets of ink-wash lead down from all six scenes, converging into a single wide pool around which stands a crowd of robed researchers shaking their heads over broken instruments, for MOST HAVE FAILED TO REPEAT IT — this scene spans the full width of the page as the point of convergence. Below it, smaller and set apart at the very foot of the page, a cracked tablet on a pedestal receives garlands from admiring figures despite its visible crack, for UNRELIABLE BUT MORE HONOURED — the ironic final turn. Every scene is drawn large enough that the action within it is legible, using the full width of the page rather than crowding into a narrow column. A short capitalized title is lettered in plain block script beneath each vignette only, and no other words appear anywhere on the page."
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Columns of Fault",
+      "vignettes": [
+        {
+          "node": "c1",
+          "block": "spya-ghwh8u",
+          "quote": "science could reach \"senility\" as a result of its own exponential growth",
+          "depicts": "Opening the left column with the overview's own image of growth gone wrong: an old scholar visibly aging among towering, ever-multiplying stacks of papers that dwarf him.",
+          "title": "SCIENCE REACHES SENILITY"
+        },
+        {
+          "node": "c2",
+          "block": "spya-y782zn",
+          "quote": "less than 10% of accounting, economics, and finance articles",
+          "depicts": "A library shelf crowded with bound volumes of original studies, among which only a single thin, unlabelled volume stands out as a repeated study, nearly lost among the rest.",
+          "title": "FEW REPEATED STUDIES PUBLISHED"
+        },
+        {
+          "node": "c4",
+          "block": "spya-cw2g6v",
+          "quote": "incentivizes researchers to prioritize publishable results over validity",
+          "depicts": "A robed scholar running on a treadmill built of stacked papers, reaching for a trophy held just out of reach, while a pair of scales behind him lies tipped over and ignored on the floor.",
+          "title": "THE PUBLISH-OR-PERISH TREADMILL"
+        },
+        {
+          "node": "c5",
+          "block": "spya-gjx6ut",
+          "quote": "None of the 193 papers examined had its experimental protocols fully described",
+          "depicts": "A stack of one hundred and ninety-three papers on a desk, a second scholar leafing through them with a puzzled expression, each page he opens trailing off into blank, unfinished parchment.",
+          "title": "PROTOCOLS LEFT UNWRITTEN"
+        },
+        {
+          "node": "d1",
+          "block": "spya-kqvxfb",
+          "quote": "Examples of questionable research practices include data dredging",
+          "depicts": "Opening the right column with the kneeling figure from the evidence plate: a researcher panning a riverbank, keeping only the glinting flecks and letting the rest spill away.",
+          "title": "DREDGING FOR DATA"
+        },
+        {
+          "node": "d2",
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "A large dial mounted on a workshop wall, its needle resting far short of the mark painted at the top of the dial, with a cluster of researchers watching it anxiously below.",
+          "title": "ONLY 33% STATISTICAL POWER"
+        },
+        {
+          "node": "d3",
+          "block": "spya-r42sms",
+          "quote": "studies have a large effect size bias",
+          "depicts": "A single small candle-flame drawn beside its own exaggerated reflection in a window, the reflection rendered as a towering bonfire far larger than the modest candle that casts it.",
+          "title": "A SMALL FLAME, A GREAT FIRE"
+        },
+        {
+          "node": "d6",
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A courtroom scene where a robed figure representing the null hypothesis stands accused before a judge's bench, the bench marked only by its carved ornament rather than any inscription, lawyers arguing on either side.",
+          "title": "TRIAL OF THE NULL HYPOTHESIS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page in the same parchment, gold-leaf border, and tempera hand as the preceding plates, divided by a single painted architectural column or pillar running down the centre of the page — not lettered, simply drawn as a carved stone divider — so that two parallel files of scenes read downward on either side of it, left and right, like two aisles of a cloister. On the left aisle, top to bottom: an aging scholar dwarfed by ever-growing stacks of paper for SCIENCE REACHES SENILITY; a crowded library shelf with a single thin volume of repeated study lost among many for FEW REPEATED STUDIES PUBLISHED; a scholar running on a treadmill of stacked papers reaching for a trophy while a scale lies tipped over for THE PUBLISH-OR-PERISH TREADMILL; and a desk piled with one hundred and ninety-three papers whose pages trail into blank parchment for PROTOCOLS LEFT UNWRITTEN. On the right aisle, top to bottom, aligned with the left: a figure panning a riverbank for glinting flecks for DREDGING FOR DATA; a large wall-dial with its needle resting far short of the mark, watched anxiously by researchers, for ONLY 33% STATISTICAL POWER; a small candle beside its own reflection rendered as a towering bonfire for A SMALL FLAME, A GREAT FIRE; and a courtroom where a robed figure stands trial before a judge's bench for TRIAL OF THE NULL HYPOTHESIS. Each pair of facing scenes sits at the same height, giving the sense of two parallel chains of cause descending the page together without crossing. The scenes are drawn wide and clear, using the full width of each aisle, with generous bare parchment between them rather than crowding. A short capitalized title is lettered beneath each vignette only, in the same plain block script as the other plates, and no other lettering, banner, or inscription appears anywhere on the page."
+    }
+  ]
+}

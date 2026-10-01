@@ -1,0 +1,409 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map, with small inked vignettes scattered across continents and seas of the argument, in the manner of a 16th-century atlas page",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Map of the Replication Crisis",
+      "prompt": "An antique hand-inked map in sepia and faded blue-green wash, aged parchment paper with soft foxing at the edges, in the style of a 16th-century atlas page annotated with small pictorial vignettes rather than text blocks. Top of the page: a toppling stack of papers scattering pages (TOPPLING STACK), beside a lexicon stand with a scholar and magnifying glass (GLOSSARY STONE). Below, a calendar scroll unrolling into three pinned scenes of an elderly walker, a card-table, and a lab mouse (EVENTS OF THE EARLY 2010s), leading to robed scholars raising a cracked seal before a broken column (CRISIS OF CONFIDENCE), and behind them three old sages writing unheeded warnings while a storm gathers (THE UNHEEDED SAGES). The map then opens into a wide convergence zone labeled only by imagery: a field of 97 small flags mostly fallen (97 FLAGS, FEW STANDING), a shelf of 53 jars mostly cracked open (53 JARS, FEW SEALED), and two ledgers with shrinking coin-stacks (SHRUNKEN LEDGERS) — all three paths flowing down into a great crossroads gathering of robed researchers shaking their heads over empty flasks (THE GATHERING OF FAILURES). From that crossroads the map forks into two descending valleys: on the left, a locked drawer stuffed with discarded papers (THE FILE DRAWER) and a figure choosing among many garden gates (THE GARDEN OF CHOICES); on the right, a torn recipe scroll missing half its words (THE TORN RECIPE) and a tilting balance-scale sinking into soft ground (SCALES ON SOFT GROUND). The two valleys converge again at the bottom into two final opposing figures shouting across a table, one accusing, one inspecting with a magnifying glass (THE QUARREL AT THE TABLE), then a scholar nailing an open unsealed scroll to a post in daylight (THE OPEN SCROLL), and finally three instruments — a compass, a scale, a sundial — all pointing to the same spot (THREE INSTRUMENTS AGREE). Compass roses, faint coastlines, and fine cross-hatching fill empty paper sparingly; no lettering anywhere except the sixteen titles lettered in small antique capitals directly beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-pcnqxn",
+          "quote": "widespread failures to reproduce published scientific results",
+          "depicts": "A toppling stack of published papers, pages scattering as the stack collapses, at the top of the map like a broken monument.",
+          "title": "THE TOPPLING STACK",
+          "node": "n1"
+        },
+        {
+          "block": "spya-xrc2re",
+          "quote": "Certain terms commonly used in discussions of the replication crisis have technically precise meanings",
+          "depicts": "A small lexicon stand bearing carved words like P-VALUE and POWER, a scholar consulting it with a magnifying glass.",
+          "title": "GLOSSARY STONE",
+          "node": "n2"
+        },
+        {
+          "block": "spya-yru28f",
+          "quote": "The replication crisis dates to a number of events in the early 2010s",
+          "depicts": "A calendar scroll unrolling to show the early 2010s, with three small scenes pinned to it — an elderly walker, a card-guessing table, a mouse in a lab.",
+          "title": "EVENTS OF THE EARLY 2010S",
+          "node": "n3"
+        },
+        {
+          "block": "spya-dg8j93",
+          "quote": "led prominent scholars to declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "Robed scholars raising a banner reading nothing but drawn as a cracked seal, standing before a cracked column labeled with no text, declaring alarm.",
+          "title": "CRISIS OF CONFIDENCE",
+          "node": "n4"
+        },
+        {
+          "block": "spya-u3tg84",
+          "quote": "the works of Paul Meehl, Jacob Cohen, and Tversky and Kahneman in the 1960s-70s were early warnings",
+          "depicts": "Three old sages at desks decades earlier, writing unheeded warnings into ledgers while a storm gathers unseen behind them.",
+          "title": "THE UNHEEDED SAGES",
+          "node": "n5"
+        },
+        {
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A field of 97 small flags, only about a third standing upright and the rest fallen flat in the grass.",
+          "title": "97 FLAGS, FEW STANDING",
+          "node": "n6"
+        },
+        {
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions",
+          "depicts": "A row of 53 sealed jars on a laboratory shelf, nearly all cracked open and empty, a handful still sealed.",
+          "title": "53 JARS, FEW SEALED",
+          "node": "n7"
+        },
+        {
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66% of the original reported effect sizes",
+          "depicts": "Two ledgers side by side, coins stacked taller in the original column than in the replication column beside it.",
+          "title": "SHRUNKEN LEDGERS",
+          "node": "n8"
+        },
+        {
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A great gathering of robed researchers at a crossroads where all the field-paths meet, most shaking their heads over empty flasks.",
+          "title": "THE GATHERING OF FAILURES",
+          "node": "n9"
+        },
+        {
+          "block": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A locked cabinet drawer stuffed with discarded papers, while only the bright ones on top are laid out on a desk for display.",
+          "title": "THE FILE DRAWER",
+          "node": "n10"
+        },
+        {
+          "block": "spya-gjx6ut",
+          "quote": "articles often come with insufficient descriptions for other scholars to reproduce the study",
+          "depicts": "A thin, torn recipe scroll with half its instructions missing, held up by a puzzled reader trying to follow it.",
+          "title": "THE TORN RECIPE",
+          "node": "n11"
+        },
+        {
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A balance-scale tilting oddly on soft, sinking ground, unable to weigh anything properly.",
+          "title": "SCALES ON SOFT GROUND",
+          "node": "n13"
+        },
+        {
+          "block": "spya-t88q4a",
+          "quote": "called these unidentified \"adversaries\" names such as \"methodological terrorist\" and \"self-appointed data police\"",
+          "depicts": "Two opposing figures shouting across a table, one pointing an accusing finger, the other holding a magnifying glass over a paper.",
+          "title": "THE QUARREL AT THE TABLE",
+          "node": "n14"
+        },
+        {
+          "block": "spya-qthy2u",
+          "quote": "may include emphasizing transparency and openness, preregistering research projects",
+          "depicts": "A scholar nailing an open, unsealed scroll to a public post before any experiment begins, in full daylight.",
+          "title": "THE OPEN SCROLL",
+          "node": "n15"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A toppling stack of published papers, pages scattering as the stack collapses, at the top of the map like a broken monument.",
+          "title": "THE TOPPLING STACK"
+        },
+        {
+          "where": "A small lexicon stand bearing carved words like P-VALUE and POWER, a scholar consulting it with a magnifying glass.",
+          "title": "GLOSSARY STONE"
+        },
+        {
+          "where": "A calendar scroll unrolling to show the early 2010s, with three small scenes pinned to it — an elderly walker, a card-guessing table, a mouse in a lab.",
+          "title": "EVENTS OF THE EARLY 2010S"
+        },
+        {
+          "where": "Robed scholars raising a banner reading nothing but drawn as a cracked seal, standing before a cracked column labeled with no text, declaring alarm.",
+          "title": "CRISIS OF CONFIDENCE"
+        },
+        {
+          "where": "Three old sages at desks decades earlier, writing unheeded warnings into ledgers while a storm gathers unseen behind them.",
+          "title": "THE UNHEEDED SAGES"
+        },
+        {
+          "where": "A field of 97 small flags, only about a third standing upright and the rest fallen flat in the grass.",
+          "title": "97 FLAGS, FEW STANDING"
+        },
+        {
+          "where": "A row of 53 sealed jars on a laboratory shelf, nearly all cracked open and empty, a handful still sealed.",
+          "title": "53 JARS, FEW SEALED"
+        },
+        {
+          "where": "Two ledgers side by side, coins stacked taller in the original column than in the replication column beside it.",
+          "title": "SHRUNKEN LEDGERS"
+        },
+        {
+          "where": "A great gathering of robed researchers at a crossroads where all the field-paths meet, most shaking their heads over empty flasks.",
+          "title": "THE GATHERING OF FAILURES"
+        },
+        {
+          "where": "A locked cabinet drawer stuffed with discarded papers, while only the bright ones on top are laid out on a desk for display.",
+          "title": "THE FILE DRAWER"
+        },
+        {
+          "where": "A figure at a forked garden path with many gates, quietly choosing and re-choosing which gate to walk through until the count comes out favorable.",
+          "title": "THE GARDEN OF CHOICES"
+        },
+        {
+          "where": "A thin, torn recipe scroll with half its instructions missing, held up by a puzzled reader trying to follow it.",
+          "title": "THE TORN RECIPE"
+        },
+        {
+          "where": "A balance-scale tilting oddly on soft, sinking ground, unable to weigh anything properly.",
+          "title": "SCALES ON SOFT GROUND"
+        },
+        {
+          "where": "Two opposing figures shouting across a table, one pointing an accusing finger, the other holding a magnifying glass over a paper.",
+          "title": "THE QUARREL AT THE TABLE"
+        },
+        {
+          "where": "A scholar nailing an open, unsealed scroll to a public post before any experiment begins, in full daylight.",
+          "title": "THE OPEN SCROLL"
+        },
+        {
+          "where": "Three different measuring instruments — a compass, a scale, and a sundial — all pointing to the same spot on the map at once.",
+          "title": "THREE INSTRUMENTS AGREE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "Many Seas, One Tide",
+      "prompt": "An antique hand-inked map in sepia and faded blue-green wash on aged parchment, continuing the same atlas style. At the top, eight separate coastal inlets, each a different field of study rendered as a small vignette: a field of mostly-fallen flags (97 FLAGS, FEW STANDING); a tiny spark surrounded by thousands of gathered lanterns (THOUSANDS OF LANTERNS); a bench of tipped-over vials with an idle robot arm (THE TIPPED VIALS); 49 physician's scrolls stamped 'effective' with contradicting scrolls shadowed behind (49 PHYSICIAN SCROLLS); an open cookbook with circled ingredients (THE CIRCLED COOKBOOK); two ledgers of coin-stacks, the second shorter (SHRUNKEN LEDGERS); a dried riverbed of cracked charts with one trickle (THE DRIED RIVERBED); and a strange oracle-machine giving different answers each time (THE SHIFTING ORACLE). All eight inlets' currents are drawn flowing downward and inward, joining at the center of the page into one great tide — a harbor crowded with robed figures from every shore, most carrying empty nets (THE CONVERGING TIDE). From that harbor, a single final current flows further down to a glowing broken scroll being copied far more eagerly than the sound scrolls beside it (THE BRIGHTER BROKEN SCROLL), drawn at the very bottom of the map as an ironic coda. Fine cross-hatched waves, faint compass roses, and small sailing ships mark the empty sea between inlets, but the page stays uncluttered, the vignettes large and legible. No lettering anywhere except the ten titles in small antique capitals beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A field of 97 small flags, roughly a third upright, the rest fallen.",
+          "title": "97 FLAGS, FEW STANDING",
+          "node": "e1"
+        },
+        {
+          "block": "spya-ekg3fe",
+          "quote": "replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A tiny spark of light that can only be seen by gathering thousands of lanterns around it.",
+          "title": "THOUSANDS OF LANTERNS",
+          "node": "e2"
+        },
+        {
+          "block": "spya-d8g53k",
+          "quote": "most studies of the cancer research sector may not be replicable",
+          "depicts": "A laboratory bench of cancer-research vials, most tipped over and empty, a robot arm standing idle among them.",
+          "title": "THE TIPPED VIALS",
+          "node": "e3"
+        },
+        {
+          "block": "spya-d977mu",
+          "quote": "out of a random sample of 50 ingredients from a cookbook, 80% had articles reporting on their cancer risk",
+          "depicts": "An open cookbook with 50 ingredients listed, most circled in ink by an anxious annotator.",
+          "title": "THE CIRCLED COOKBOOK",
+          "node": "e5"
+        },
+        {
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66% of the original reported effect sizes",
+          "depicts": "Two ledgers of coin stacks side by side, the second notably shorter than the first.",
+          "title": "SHRUNKEN LEDGERS",
+          "node": "e6"
+        },
+        {
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A dried-up riverbed of water-management charts, almost all cracked and unusable, a single trickle still flowing.",
+          "title": "THE DRIED RIVERBED",
+          "node": "e7"
+        },
+        {
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "A strange oracle-machine giving a different answer each time the same question is asked of it.",
+          "title": "THE SHIFTING ORACLE",
+          "node": "e8"
+        },
+        {
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A great tide of robed figures from all the separate shores above, converging into one wide harbor, most carrying empty nets.",
+          "title": "THE CONVERGING TIDE",
+          "node": "e9"
+        },
+        {
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "A broken, unreplicated scroll glowing brighter and being copied more often than the sound scrolls beside it.",
+          "title": "THE BRIGHTER BROKEN SCROLL",
+          "node": "e10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A field of 97 small flags, roughly a third upright, the rest fallen.",
+          "title": "97 FLAGS, FEW STANDING"
+        },
+        {
+          "where": "A tiny spark of light that can only be seen by gathering thousands of lanterns around it.",
+          "title": "THOUSANDS OF LANTERNS"
+        },
+        {
+          "where": "A laboratory bench of cancer-research vials, most tipped over and empty, a robot arm standing idle among them.",
+          "title": "THE TIPPED VIALS"
+        },
+        {
+          "where": "A row of 49 physician's scrolls stamped 'effective', with a shadow of later contradicting scrolls stacked behind them.",
+          "title": "49 PHYSICIAN SCROLLS"
+        },
+        {
+          "where": "An open cookbook with 50 ingredients listed, most circled in ink by an anxious annotator.",
+          "title": "THE CIRCLED COOKBOOK"
+        },
+        {
+          "where": "Two ledgers of coin stacks side by side, the second notably shorter than the first.",
+          "title": "SHRUNKEN LEDGERS"
+        },
+        {
+          "where": "A dried-up riverbed of water-management charts, almost all cracked and unusable, a single trickle still flowing.",
+          "title": "THE DRIED RIVERBED"
+        },
+        {
+          "where": "A strange oracle-machine giving a different answer each time the same question is asked of it.",
+          "title": "THE SHIFTING ORACLE"
+        },
+        {
+          "where": "A great tide of robed figures from all the separate shores above, converging into one wide harbor, most carrying empty nets.",
+          "title": "THE CONVERGING TIDE"
+        },
+        {
+          "where": "A broken, unreplicated scroll glowing brighter and being copied more often than the sound scrolls beside it.",
+          "title": "THE BRIGHTER BROKEN SCROLL"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Shores of Causes",
+      "prompt": "An antique hand-inked map in sepia and faded blue-green wash, same atlas style as before, this plate showing two parallel coastal shores running down the page, divided by a thin inked channel. At the head of the channel, framing both shores, a small overflowing printing press spewing endless scrolls (THE OVERFLOWING PRESS), echoing the outer map's crossroads gathering. Down the left shore, labeled only by its own imagery: a locked drawer crammed with discarded papers beside a desk of bright ones (THE FILE DRAWER); a scribe's ledger with numbers that do not add up and a stray ink blot (THE MISCOUNTED LEDGER); a scholar racing a treadmill of stacked journals whipped on by a tally-keeper (THE PUBLISHING TREADMILL); a torn recipe scroll missing half its instructions (THE TORN RECIPE). Down the right shore: a traveler at a forking garden path trying gate after gate (THE GARDEN OF CHOICES); a weak lantern casting barely a third of needed light in a dark room (THE DIM LANTERN); a small object casting an oversized shadow on a wall (THE OVERSIZED SHADOW); a scholar stitching a patchwork quilt with mismatched seams (THE MISMATCHED QUILT); identical seeds sprouting into strangely different plants across different soils (SEEDS IN DIFFERENT SOIL); and at the very bottom of the right shore, a balance-scale tilting on soft sinking ground (SCALES ON SOFT GROUND). The two shores run side by side down the page without merging, each vignette large and clear, separated by the thin inked channel with small wave-hatching. Faint compass rose in a corner, light foxing at the page edges, no clutter in the margins. No lettering anywhere except the eleven titles in small antique capitals lettered directly beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-v697nj",
+          "quote": "generation of new data and scientific publications at an unprecedented rate",
+          "depicts": "A overflowing printing press spewing out endless scrolls faster than any scribe can read them.",
+          "title": "THE OVERFLOWING PRESS",
+          "node": "c1"
+        },
+        {
+          "block": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A locked drawer crammed with discarded null-result papers beside a desk displaying only the bright successful ones.",
+          "title": "THE FILE DRAWER",
+          "node": "c2"
+        },
+        {
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "A weak lantern casting barely a third of the light needed to find anything in a dark room.",
+          "title": "THE DIM LANTERN",
+          "node": "d2"
+        },
+        {
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A scribe's ledger with numbers that do not add up, a stray ink blot smudging one figure.",
+          "title": "THE MISCOUNTED LEDGER",
+          "node": "c3"
+        },
+        {
+          "block": "spya-cw2g6v",
+          "quote": "Intense pressure to publish in recognized journals, driven by hypercompetitive environments and bibliometric career evaluations",
+          "depicts": "A scholar racing on a treadmill of stacked journals, whipped onward by a tally-keeper with a scoring tablet.",
+          "title": "THE PUBLISHING TREADMILL",
+          "node": "c4"
+        },
+        {
+          "block": "spya-th90w0",
+          "quote": "Meta-analyses have their own methodological problems and disputes",
+          "depicts": "A scholar trying to stitch together many patchwork studies into one quilt, the seams visibly mismatched.",
+          "title": "THE MISMATCHED QUILT",
+          "node": "d4"
+        },
+        {
+          "block": "spya-gjx6ut",
+          "quote": "articles often come with insufficient descriptions for other scholars to reproduce the study",
+          "depicts": "A thin, torn recipe scroll with half its instructions missing, held up by a puzzled reader.",
+          "title": "THE TORN RECIPE",
+          "node": "c5"
+        },
+        {
+          "block": "spya-ddw4ya",
+          "quote": "high heterogeneity of the to-be-replicated effects",
+          "depicts": "Several identical-looking seeds planted in different soils, each sprouting a strangely different plant.",
+          "title": "SEEDS IN DIFFERENT SOIL",
+          "node": "d5"
+        },
+        {
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A balance-scale tilting oddly on soft, sinking ground, unable to weigh anything properly.",
+          "title": "SCALES ON SOFT GROUND",
+          "node": "d6"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A overflowing printing press spewing out endless scrolls faster than any scribe can read them.",
+          "title": "THE OVERFLOWING PRESS"
+        },
+        {
+          "where": "A traveler at a forking garden path with many gates, quietly trying gate after gate until the count favors him.",
+          "title": "THE GARDEN OF CHOICES"
+        },
+        {
+          "where": "A locked drawer crammed with discarded null-result papers beside a desk displaying only the bright successful ones.",
+          "title": "THE FILE DRAWER"
+        },
+        {
+          "where": "A weak lantern casting barely a third of the light needed to find anything in a dark room.",
+          "title": "THE DIM LANTERN"
+        },
+        {
+          "where": "A scribe's ledger with numbers that do not add up, a stray ink blot smudging one figure.",
+          "title": "THE MISCOUNTED LEDGER"
+        },
+        {
+          "where": "A small true object casting an exaggerated, oversized shadow on the wall behind it.",
+          "title": "THE OVERSIZED SHADOW"
+        },
+        {
+          "where": "A scholar racing on a treadmill of stacked journals, whipped onward by a tally-keeper with a scoring tablet.",
+          "title": "THE PUBLISHING TREADMILL"
+        },
+        {
+          "where": "A scholar trying to stitch together many patchwork studies into one quilt, the seams visibly mismatched.",
+          "title": "THE MISMATCHED QUILT"
+        },
+        {
+          "where": "A thin, torn recipe scroll with half its instructions missing, held up by a puzzled reader.",
+          "title": "THE TORN RECIPE"
+        },
+        {
+          "where": "Several identical-looking seeds planted in different soils, each sprouting a strangely different plant.",
+          "title": "SEEDS IN DIFFERENT SOIL"
+        },
+        {
+          "where": "A balance-scale tilting oddly on soft, sinking ground, unable to weigh anything properly.",
+          "title": "SCALES ON SOFT GROUND"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "replication-crisis-spya-hrjamq",
+  "profileHash": null
+}

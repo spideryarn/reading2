@@ -1,0 +1,7430 @@
+{
+  "version": "toc/9",
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0042",
+        "n0068",
+        "n0092",
+        "n0126",
+        "n0178",
+        "n0219",
+        "n0258",
+        "n0280",
+        "n0329"
+      ],
+      "range": [
+        "spya-kv0w8d",
+        "spya-z26x82"
+      ],
+      "title": "Replication Crisis",
+      "gist": "Science's results often fail to repeat because of weak statistics, biased publishing, and career pressures, prompting reforms to restore trust.",
+      "question": "Replication crisis — why do so many published findings fail to replicate, and what can fix it? (a survey and reform agenda)",
+      "sourceHeading": "Replication crisis"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0010",
+        "n0020",
+        "n0024",
+        "n0035"
+      ],
+      "range": [
+        "spya-kv0w8d",
+        "spya-bnzb3f"
+      ],
+      "title": "Definitions and Background",
+      "gist": "Replication means re-running a study with new data to check a result, and whether a finding counts as supported depends on statistical significance tests whose logic this section lays out.",
+      "question": "Replication crisis — what do key terms like replication, significance, and power actually mean? (a glossary)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009"
+      ],
+      "range": [
+        "spya-kv0w8d",
+        "spya-umxmuu"
+      ],
+      "title": "Overview of the Crisis",
+      "gist": "Widespread failure to reproduce published results, most visible in psychology and medicine, has spread across sciences and given rise to a new field, metascience, that studies research practice itself."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-kv0w8d",
+        "spya-kv0w8d"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-kjxxn0",
+        "spya-kjxxn0"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-twgsnd",
+        "spya-twgsnd"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-pcnqxn",
+        "spya-pcnqxn"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-ur36f2",
+        "spya-ur36f2"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-umxmuu",
+        "spya-umxmuu"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014",
+        "n0015",
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019"
+      ],
+      "range": [
+        "spya-rtgcqu",
+        "spya-cxcn8h"
+      ],
+      "title": "Types of Replication",
+      "gist": "Researchers separate reproducibility, rerunning the same data, from replication, repeating a study with new data, and distinguish direct, systematic, and conceptual replication types."
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-rtgcqu",
+        "spya-rtgcqu"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-vmrrb6",
+        "spya-vmrrb6"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-xa7p42",
+        "spya-xa7p42"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-v2xjsr",
+        "spya-v2xjsr"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-gjq4t4",
+        "spya-gjq4t4"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-dt47ut",
+        "spya-dt47ut"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-xhu6sc",
+        "spya-xhu6sc"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-rpm4a9",
+        "spya-rpm4a9"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-cxcn8h",
+        "spya-cxcn8h"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0021",
+        "n0022",
+        "n0023"
+      ],
+      "range": [
+        "spya-tbsjz3",
+        "spya-qnsh78"
+      ],
+      "title": "Statistical Significance Basics",
+      "gist": "A result counts as supported when it crosses a preset probability threshold, the p-value, which is routinely misunderstood even though it only estimates the chance of a false positive."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-tbsjz3",
+        "spya-tbsjz3"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-xrc2re",
+        "spya-xrc2re"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-qnsh78",
+        "spya-qnsh78"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029",
+        "n0030",
+        "n0031",
+        "n0032",
+        "n0033",
+        "n0034"
+      ],
+      "range": [
+        "spya-cxbx9m",
+        "spya-mhwjtq"
+      ],
+      "title": "Null Hypothesis Testing Framework",
+      "gist": "A null-hypothesis test compares a measured effect to a threshold and can go wrong in four ways, producing false positives or false negatives depending on sample and effect size."
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-cxbx9m",
+        "spya-cxbx9m"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-c08svn",
+        "spya-c08svn"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-akqqjg",
+        "spya-akqqjg"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-m09hdw",
+        "spya-m09hdw"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-v94yfb",
+        "spya-v94yfb"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-xwz6wm",
+        "spya-xwz6wm"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-g90jq8",
+        "spya-g90jq8"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-x0wutf",
+        "spya-x0wutf"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-gva0r9",
+        "spya-gva0r9"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-mhwjtq",
+        "spya-mhwjtq"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0036",
+        "n0037",
+        "n0038",
+        "n0039",
+        "n0040",
+        "n0041"
+      ],
+      "range": [
+        "spya-rf6fau",
+        "spya-bnzb3f"
+      ],
+      "title": "Significance, Power, and P-values",
+      "gist": "The chance a test wrongly rejects a true null hypothesis is the significance level, while the chance it correctly detects a real effect is called statistical power, and together they set how trustworthy any single p-value is."
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-rf6fau",
+        "spya-rf6fau"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-snscum",
+        "spya-snscum"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-m4dued",
+        "spya-m4dued"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-sg0nmn",
+        "spya-sg0nmn"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-vzfkh8",
+        "spya-vzfkh8"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-bnzb3f",
+        "spya-bnzb3f"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0043",
+        "n0049",
+        "n0054",
+        "n0058",
+        "n0064"
+      ],
+      "range": [
+        "spya-yru28f",
+        "spya-k59a2x"
+      ],
+      "title": "History of the Crisis",
+      "gist": "A cluster of failed replications in the early 2010s, from social priming to cancer biology, triggered the label 'replication crisis,' though concerns about weak replication stretch back decades.",
+      "question": "Replication crisis — how and when did the crisis become visible, and was it really new? (a historical account)"
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048"
+      ],
+      "range": [
+        "spya-yru28f",
+        "spya-t3us9w"
+      ],
+      "title": "Precursors to the Crisis",
+      "gist": "Four episodes, failed social-priming replications, discredited ESP studies, dismal biomedical replication rates, and new p-hacking research, together sparked a 'crisis of confidence' across fields."
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-yru28f",
+        "spya-yru28f"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-t3scy3",
+        "spya-t3scy3"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-vux5b3",
+        "spya-vux5b3"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-yj72uc",
+        "spya-yj72uc"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-t3us9w",
+        "spya-t3us9w"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0050",
+        "n0051",
+        "n0052",
+        "n0053"
+      ],
+      "range": [
+        "spya-dg8j93",
+        "spya-ytj90k"
+      ],
+      "title": "Emergence of the Term",
+      "gist": "The label 'replication crisis' arose in the early 2010s, but scholars note that similar worries about weak replication and biased publishing were already voiced from the 1960s onward."
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-dg8j93",
+        "spya-dg8j93"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-z3zj97",
+        "spya-z3zj97"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-nq8y2f",
+        "spya-nq8y2f"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-ytj90k",
+        "spya-ytj90k"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0055",
+        "n0056",
+        "n0057"
+      ],
+      "range": [
+        "spya-q6hdur",
+        "spya-h7qg2e"
+      ],
+      "title": "Earlier Warnings",
+      "gist": "Later technological ease of large-scale testing, a bigger and more diverse research community, and decades-old warnings from scholars like Meehl and Kahneman explain why old concerns finally erupted into a crisis."
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0054",
+      "children": [],
+      "range": [
+        "spya-q6hdur",
+        "spya-q6hdur"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0054",
+      "children": [],
+      "range": [
+        "spya-u3tg84",
+        "spya-u3tg84"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0054",
+      "children": [],
+      "range": [
+        "spya-h7qg2e",
+        "spya-h7qg2e"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063"
+      ],
+      "range": [
+        "spya-ut47ry",
+        "spya-ekg3fe"
+      ],
+      "title": "Psychology Replication Studies",
+      "gist": "Large coordinated replication projects in psychology found that only about a third to half of classic findings reproduced, with effect sizes shrinking sharply and little support for sample differences as the cause."
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-ut47ry",
+        "spya-ut47ry"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-bha57y",
+        "spya-bha57y"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-vqgtc4",
+        "spya-vqgtc4"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-g7w0hc",
+        "spya-g7w0hc"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0058",
+      "children": [],
+      "range": [
+        "spya-ekg3fe",
+        "spya-ekg3fe"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0065",
+        "n0066",
+        "n0067"
+      ],
+      "range": [
+        "spya-d8g53k",
+        "spya-k59a2x"
+      ],
+      "title": "Medicine and Cancer Biology",
+      "gist": "Studies of highly cited medical and cancer research found replication rates as low as 11 to 44 percent, with effect sizes often far smaller than originally reported."
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-d8g53k",
+        "spya-d8g53k"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-esjmns",
+        "spya-esjmns"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-k59a2x",
+        "spya-k59a2x"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0069",
+        "n0076",
+        "n0080",
+        "n0087"
+      ],
+      "range": [
+        "spya-acfh3t",
+        "spya-b679yr"
+      ],
+      "title": "In Other Disciplines",
+      "gist": "Low replication rates and poor reporting standards extend well beyond psychology, turning up in nutrition science, economics, water management, and new research involving large language models.",
+      "question": "In other disciplines — does the crisis reach beyond psychology and medicine? (four field case studies)",
+      "sourceHeading": "In other disciplines"
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0070",
+        "n0071",
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075"
+      ],
+      "range": [
+        "spya-acfh3t",
+        "spya-s2xfzn"
+      ],
+      "title": "Nutrition and Economics",
+      "gist": "Nearly every common food ingredient has a study linking it to cancer risk, while economics replication attempts succeed only about 60 percent of the time with inflated original effect sizes."
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-acfh3t",
+        "spya-acfh3t"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-z9kxy3",
+        "spya-z9kxy3"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-t5mxxc",
+        "spya-t5mxxc"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-z76bt2",
+        "spya-z76bt2"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-d977mu",
+        "spya-d977mu"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-s2xfzn",
+        "spya-s2xfzn"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0077",
+        "n0078",
+        "n0079"
+      ],
+      "range": [
+        "spya-ac3f22",
+        "spya-gvvmwj"
+      ],
+      "title": "Water Resource Management",
+      "gist": "A 2019 analysis of nearly 2,000 water-management articles estimated that under 7 percent could even in principle be reproduced, mainly because papers omitted the information needed to redo them."
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-ac3f22",
+        "spya-ac3f22"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-xtbd9y",
+        "spya-xtbd9y"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-gvvmwj",
+        "spya-gvvmwj"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086"
+      ],
+      "range": [
+        "spya-ypznph",
+        "spya-v8ghsw"
+      ],
+      "title": "Large Language Model Research",
+      "gist": "Research on and using large language models faces its own reproducibility threats, since closed commercial models change without notice, outputs vary run to run, and key methodological details often go unreported."
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-ypznph",
+        "spya-ypznph"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-bvr9j3",
+        "spya-bvr9j3"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-ch4h0b",
+        "spya-ch4h0b"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-k47jy2",
+        "spya-k47jy2"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-hsmjer",
+        "spya-hsmjer"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-v8ghsw",
+        "spya-v8ghsw"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091"
+      ],
+      "range": [
+        "spya-fuynra",
+        "spya-b679yr"
+      ],
+      "title": "Survey Evidence Across Fields",
+      "gist": "Large surveys find most scientists have failed to reproduce someone else's results, that unreplicable papers get cited more rather than less, and that half of thousands of recent social-science papers failed to replicate."
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0087",
+      "children": [],
+      "range": [
+        "spya-fuynra",
+        "spya-fuynra"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0087",
+      "children": [],
+      "range": [
+        "spya-jn2qy3",
+        "spya-jn2qy3"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0087",
+      "children": [],
+      "range": [
+        "spya-m3et6t",
+        "spya-m3et6t"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0087",
+      "children": [],
+      "range": [
+        "spya-b679yr",
+        "spya-b679yr"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0093",
+        "n0101",
+        "n0108",
+        "n0113",
+        "n0120"
+      ],
+      "range": [
+        "spya-sy87zk",
+        "spya-ftd2ng"
+      ],
+      "title": "Causes: History and Publication System",
+      "gist": "The crisis traces partly to science's runaway growth and commercialization, and partly to a publishing system that rewards positive, significant results over careful, reported-in-full ones.",
+      "question": "Replication crisis — why does the system itself produce unreliable results? (historical and structural causes)"
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 2,
+      "parent": "n0092",
+      "children": [
+        "n0094",
+        "n0095",
+        "n0096",
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100"
+      ],
+      "range": [
+        "spya-sy87zk",
+        "spya-afzc0x"
+      ],
+      "title": "Historical and Sociological Causes",
+      "gist": "Science's exponential growth, its commercialization through corporate-funded research, and confusion between the codes of science, media, and profit may have eroded quality control over decades.",
+      "sourceHeading": "Historical and sociological causes"
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-sy87zk",
+        "spya-sy87zk"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-yza3w9",
+        "spya-yza3w9"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-x52rky",
+        "spya-x52rky"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-v697nj",
+        "spya-v697nj"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-ghwh8u",
+        "spya-ghwh8u"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-ktsjv4",
+        "spya-ktsjv4"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-afzc0x",
+        "spya-afzc0x"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 2,
+      "parent": "n0092",
+      "children": [
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107"
+      ],
+      "range": [
+        "spya-d040tg",
+        "spya-asmt0d"
+      ],
+      "title": "Problems with the Publication System",
+      "gist": "Journals overwhelmingly publish positive results, leaving negative findings in a 'file drawer,' which inflates the apparent rate of true discoveries and biases the published literature toward false positives.",
+      "sourceHeading": "Problems with the publication system in science"
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-d040tg",
+        "spya-d040tg"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-b5ds50",
+        "spya-b5ds50"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-y782zn",
+        "spya-y782zn"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-f76az5",
+        "spya-f76az5"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-av0n2t",
+        "spya-av0n2t"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-asmt0d",
+        "spya-asmt0d"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 2,
+      "parent": "n0092",
+      "children": [
+        "n0109",
+        "n0110",
+        "n0111",
+        "n0112"
+      ],
+      "range": [
+        "spya-xxd5as",
+        "spya-mtsaxw"
+      ],
+      "title": "Mathematical Errors",
+      "gist": "Even top journals contain frequent statistical errors, such as mismatched p-values or wrongly testing whether one effect differs from another rather than testing the difference directly.",
+      "sourceHeading": "Mathematical errors"
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-xxd5as",
+        "spya-xxd5as"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-mb7cxf",
+        "spya-mb7cxf"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-wahvbn",
+        "spya-wahvbn"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-mtsaxw",
+        "spya-mtsaxw"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 2,
+      "parent": "n0092",
+      "children": [
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119"
+      ],
+      "range": [
+        "spya-h2nvfj",
+        "spya-ys59mk"
+      ],
+      "title": "Publish or Perish Culture",
+      "gist": "Career pressure to publish frequently pushes researchers toward strategies that make results look publishable rather than valid, discouraging the unglamorous but necessary work of replication.",
+      "sourceHeading": "\"Publish or perish\" culture"
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-h2nvfj",
+        "spya-h2nvfj"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-unp0ay",
+        "spya-unp0ay"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-cw2g6v",
+        "spya-cw2g6v"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-huxt52",
+        "spya-huxt52"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-jk4f5n",
+        "spya-jk4f5n"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-ys59mk",
+        "spya-ys59mk"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 2,
+      "parent": "n0092",
+      "children": [
+        "n0121",
+        "n0122",
+        "n0123",
+        "n0124",
+        "n0125"
+      ],
+      "range": [
+        "spya-wjstmr",
+        "spya-ftd2ng"
+      ],
+      "title": "Standards of Reporting",
+      "gist": "Many papers omit the experimental details needed to redo them, and cognitive biases about whether a null result reflects a bad instrument or a bad theory let non-replicable findings accumulate unnoticed.",
+      "sourceHeading": "Standards of reporting"
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0120",
+      "children": [],
+      "range": [
+        "spya-wjstmr",
+        "spya-wjstmr"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 3,
+      "parent": "n0120",
+      "children": [],
+      "range": [
+        "spya-vdmrak",
+        "spya-vdmrak"
+      ],
+      "title": ""
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0120",
+      "children": [],
+      "range": [
+        "spya-gjx6ut",
+        "spya-gjx6ut"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0120",
+      "children": [],
+      "range": [
+        "spya-nbztjn",
+        "spya-nbztjn"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0120",
+      "children": [],
+      "range": [
+        "spya-ftd2ng",
+        "spya-ftd2ng"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0127",
+        "n0138",
+        "n0147",
+        "n0153",
+        "n0171"
+      ],
+      "range": [
+        "spya-bfx638",
+        "spya-cdhqgt"
+      ],
+      "title": "Questionable Practices and Statistical Issues",
+      "gist": "Flexible research choices, from selective reporting to outright fraud, combined with chronically underpowered studies and shaky meta-analyses, make many positive findings statistically unreliable.",
+      "question": "Replication crisis — what specific research and statistical practices generate false positives? (several mechanisms examined)"
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 2,
+      "parent": "n0126",
+      "children": [
+        "n0128",
+        "n0129",
+        "n0130",
+        "n0131",
+        "n0132",
+        "n0133",
+        "n0134",
+        "n0135",
+        "n0136",
+        "n0137"
+      ],
+      "range": [
+        "spya-bfx638",
+        "spya-a8tr3x"
+      ],
+      "title": "Questionable Research Practices",
+      "gist": "Exploiting flexibility in data collection, analysis, and reporting, such as HARKing or selective reporting, is common across psychology and machine learning and inflates false-positive rates, sometimes shading into outright fraud.",
+      "sourceHeading": "Questionable research practices"
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-bfx638",
+        "spya-bfx638"
+      ],
+      "title": ""
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-t4zm6g",
+        "spya-t4zm6g"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-kqvxfb",
+        "spya-kqvxfb"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-j8h7w7",
+        "spya-j8h7w7"
+      ],
+      "title": ""
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-k74qem",
+        "spya-k74qem"
+      ],
+      "title": ""
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-dyt8c2",
+        "spya-dyt8c2"
+      ],
+      "title": ""
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-msmx4h",
+        "spya-msmx4h"
+      ],
+      "title": ""
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-scx28p",
+        "spya-scx28p"
+      ],
+      "title": ""
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-f44um7",
+        "spya-f44um7"
+      ],
+      "title": ""
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0127",
+      "children": [],
+      "range": [
+        "spya-a8tr3x",
+        "spya-a8tr3x"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 2,
+      "parent": "n0126",
+      "children": [
+        "n0139",
+        "n0140",
+        "n0141",
+        "n0142",
+        "n0143",
+        "n0144",
+        "n0145",
+        "n0146"
+      ],
+      "range": [
+        "spya-p7pun6",
+        "spya-fgq7vr"
+      ],
+      "title": "Low Statistical Power",
+      "gist": "Psychology, neuroscience, and economics studies typically have statistical power far below the 80 percent considered adequate, meaning a positive finding is unlikely to replicate even if it reflects a real effect.",
+      "sourceHeading": "Low statistical power"
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-p7pun6",
+        "spya-p7pun6"
+      ],
+      "title": ""
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-ymq643",
+        "spya-ymq643"
+      ],
+      "title": ""
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-hdubm3",
+        "spya-hdubm3"
+      ],
+      "title": ""
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-x7d5t5",
+        "spya-x7d5t5"
+      ],
+      "title": ""
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-zvfgme",
+        "spya-zvfgme"
+      ],
+      "title": ""
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-m66r6m",
+        "spya-m66r6m"
+      ],
+      "title": ""
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-efs6mn",
+        "spya-efs6mn"
+      ],
+      "title": ""
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-fgq7vr",
+        "spya-fgq7vr"
+      ],
+      "title": ""
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 2,
+      "parent": "n0126",
+      "children": [
+        "n0148",
+        "n0149",
+        "n0150",
+        "n0151",
+        "n0152"
+      ],
+      "range": [
+        "spya-nqwfh4",
+        "spya-hw9d4p"
+      ],
+      "title": "Positive Effect Size Bias",
+      "gist": "Underpowered studies systematically distort estimated effect sizes, usually inflating them when samples are small, which is why replications almost always find smaller effects than the original.",
+      "sourceHeading": "Positive effect size bias"
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 3,
+      "parent": "n0147",
+      "children": [],
+      "range": [
+        "spya-nqwfh4",
+        "spya-nqwfh4"
+      ],
+      "title": ""
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 3,
+      "parent": "n0147",
+      "children": [],
+      "range": [
+        "spya-sv83tx",
+        "spya-sv83tx"
+      ],
+      "title": ""
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0147",
+      "children": [],
+      "range": [
+        "spya-r42sms",
+        "spya-r42sms"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0147",
+      "children": [],
+      "range": [
+        "spya-r5jmvb",
+        "spya-r5jmvb"
+      ],
+      "title": ""
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 3,
+      "parent": "n0147",
+      "children": [],
+      "range": [
+        "spya-hw9d4p",
+        "spya-hw9d4p"
+      ],
+      "title": ""
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 2,
+      "parent": "n0126",
+      "children": [
+        "n0154",
+        "n0155",
+        "n0156",
+        "n0157",
+        "n0158",
+        "n0159",
+        "n0160",
+        "n0161",
+        "n0162",
+        "n0163",
+        "n0164",
+        "n0165",
+        "n0166",
+        "n0167",
+        "n0168",
+        "n0169",
+        "n0170"
+      ],
+      "range": [
+        "spya-z2xbqp",
+        "spya-nwgxra"
+      ],
+      "title": "Problems of Meta-analysis",
+      "gist": "Meta-analysis has its own flaws, since methods like the fail-safe number for unpublished null results can be miscalculated, and a single bad study can distort an entire pooled estimate.",
+      "sourceHeading": "Problems of meta-analysis"
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-z2xbqp",
+        "spya-z2xbqp"
+      ],
+      "title": ""
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-s3h7cm",
+        "spya-s3h7cm"
+      ],
+      "title": ""
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-th90w0",
+        "spya-th90w0"
+      ],
+      "title": ""
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-n75efu",
+        "spya-n75efu"
+      ],
+      "title": ""
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-q6s08t",
+        "spya-q6s08t"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-kkp77d",
+        "spya-kkp77d"
+      ],
+      "title": ""
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-d29jpu",
+        "spya-d29jpu"
+      ],
+      "title": ""
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-qsad7n",
+        "spya-qsad7n"
+      ],
+      "title": ""
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-zjcy3c",
+        "spya-zjcy3c"
+      ],
+      "title": ""
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-umu7gf",
+        "spya-umu7gf"
+      ],
+      "title": ""
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-jp3k7e",
+        "spya-jp3k7e"
+      ],
+      "title": ""
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-gnxfb0",
+        "spya-gnxfb0"
+      ],
+      "title": ""
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-dz88bh",
+        "spya-dz88bh"
+      ],
+      "title": ""
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-kf0t33",
+        "spya-kf0t33"
+      ],
+      "title": ""
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-uxuzz0",
+        "spya-uxuzz0"
+      ],
+      "title": ""
+    },
+    "n0169": {
+      "id": "n0169",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-xty2jr",
+        "spya-xty2jr"
+      ],
+      "title": ""
+    },
+    "n0170": {
+      "id": "n0170",
+      "depth": 3,
+      "parent": "n0153",
+      "children": [],
+      "range": [
+        "spya-nwgxra",
+        "spya-nwgxra"
+      ],
+      "title": ""
+    },
+    "n0171": {
+      "id": "n0171",
+      "depth": 2,
+      "parent": "n0126",
+      "children": [
+        "n0172",
+        "n0173",
+        "n0174",
+        "n0175",
+        "n0176",
+        "n0177"
+      ],
+      "range": [
+        "spya-ngbkx2",
+        "spya-cdhqgt"
+      ],
+      "title": "Statistical Heterogeneity",
+      "gist": "Much of the failure to replicate stems not from error but from genuine variation in true effect sizes across contexts, a heterogeneity so large in psychology that even exact replications often disagree.",
+      "sourceHeading": "Statistical heterogeneity"
+    },
+    "n0172": {
+      "id": "n0172",
+      "depth": 3,
+      "parent": "n0171",
+      "children": [],
+      "range": [
+        "spya-ngbkx2",
+        "spya-ngbkx2"
+      ],
+      "title": ""
+    },
+    "n0173": {
+      "id": "n0173",
+      "depth": 3,
+      "parent": "n0171",
+      "children": [],
+      "range": [
+        "spya-t4f77m",
+        "spya-t4f77m"
+      ],
+      "title": ""
+    },
+    "n0174": {
+      "id": "n0174",
+      "depth": 3,
+      "parent": "n0171",
+      "children": [],
+      "range": [
+        "spya-ddw4ya",
+        "spya-ddw4ya"
+      ],
+      "title": ""
+    },
+    "n0175": {
+      "id": "n0175",
+      "depth": 3,
+      "parent": "n0171",
+      "children": [],
+      "range": [
+        "spya-r23rs2",
+        "spya-r23rs2"
+      ],
+      "title": ""
+    },
+    "n0176": {
+      "id": "n0176",
+      "depth": 3,
+      "parent": "n0171",
+      "children": [],
+      "range": [
+        "spya-x02d6v",
+        "spya-x02d6v"
+      ],
+      "title": ""
+    },
+    "n0177": {
+      "id": "n0177",
+      "depth": 3,
+      "parent": "n0171",
+      "children": [],
+      "range": [
+        "spya-cdhqgt",
+        "spya-cdhqgt"
+      ],
+      "title": ""
+    },
+    "n0178": {
+      "id": "n0178",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0179",
+        "n0184",
+        "n0192",
+        "n0205"
+      ],
+      "range": [
+        "spya-z4db8z",
+        "spya-h32yv9"
+      ],
+      "title": "Context, Bayesian, and NHST Critiques",
+      "gist": "Some failures to replicate reflect genuine sensitivity to context, Bayesian reasoning shows that a significant result rarely guarantees future replication, and the entire logic of null-hypothesis testing may be unsuited to complex fields like social psychology, yet public trust in science has largely held.",
+      "question": "Replication crisis — are failed replications inherent to how certain sciences test hypotheses? (several theoretical critiques)"
+    },
+    "n0179": {
+      "id": "n0179",
+      "depth": 2,
+      "parent": "n0178",
+      "children": [
+        "n0180",
+        "n0181",
+        "n0182",
+        "n0183"
+      ],
+      "range": [
+        "spya-z4db8z",
+        "spya-audpsj"
+      ],
+      "title": "Context Sensitivity",
+      "gist": "Psychological effects often depend heavily on hidden contextual factors, and studies that re-coded the Reproducibility Project data found that higher context sensitivity strongly predicted lower replication success.",
+      "sourceHeading": "Context sensitivity"
+    },
+    "n0180": {
+      "id": "n0180",
+      "depth": 3,
+      "parent": "n0179",
+      "children": [],
+      "range": [
+        "spya-z4db8z",
+        "spya-z4db8z"
+      ],
+      "title": ""
+    },
+    "n0181": {
+      "id": "n0181",
+      "depth": 3,
+      "parent": "n0179",
+      "children": [],
+      "range": [
+        "spya-a7fpjz",
+        "spya-a7fpjz"
+      ],
+      "title": ""
+    },
+    "n0182": {
+      "id": "n0182",
+      "depth": 3,
+      "parent": "n0179",
+      "children": [],
+      "range": [
+        "spya-qn347b",
+        "spya-qn347b"
+      ],
+      "title": ""
+    },
+    "n0183": {
+      "id": "n0183",
+      "depth": 3,
+      "parent": "n0179",
+      "children": [],
+      "range": [
+        "spya-audpsj",
+        "spya-audpsj"
+      ],
+      "title": ""
+    },
+    "n0184": {
+      "id": "n0184",
+      "depth": 2,
+      "parent": "n0178",
+      "children": [
+        "n0185",
+        "n0186",
+        "n0187",
+        "n0188",
+        "n0189",
+        "n0190",
+        "n0191"
+      ],
+      "range": [
+        "spya-pytr5c",
+        "spya-esjk29"
+      ],
+      "title": "Bayesian Explanation",
+      "gist": "Using Bayes' theorem shows that rejecting the null hypothesis at the common 5 percent threshold does not make the alternative 95 percent probable, and when the alternative is a priori unlikely, replication probability can be quite low.",
+      "sourceHeading": "Bayesian explanation"
+    },
+    "n0185": {
+      "id": "n0185",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-pytr5c",
+        "spya-pytr5c"
+      ],
+      "title": ""
+    },
+    "n0186": {
+      "id": "n0186",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-dfgdk8",
+        "spya-dfgdk8"
+      ],
+      "title": ""
+    },
+    "n0187": {
+      "id": "n0187",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-fhcf00",
+        "spya-fhcf00"
+      ],
+      "title": ""
+    },
+    "n0188": {
+      "id": "n0188",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-gn5b3a",
+        "spya-gn5b3a"
+      ],
+      "title": ""
+    },
+    "n0189": {
+      "id": "n0189",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-eg9dm4",
+        "spya-eg9dm4"
+      ],
+      "title": ""
+    },
+    "n0190": {
+      "id": "n0190",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-jhpanr",
+        "spya-jhpanr"
+      ],
+      "title": ""
+    },
+    "n0191": {
+      "id": "n0191",
+      "depth": 3,
+      "parent": "n0184",
+      "children": [],
+      "range": [
+        "spya-esjk29",
+        "spya-esjk29"
+      ],
+      "title": ""
+    },
+    "n0192": {
+      "id": "n0192",
+      "depth": 2,
+      "parent": "n0178",
+      "children": [
+        "n0193",
+        "n0194",
+        "n0195",
+        "n0196",
+        "n0197",
+        "n0198",
+        "n0199",
+        "n0200",
+        "n0201",
+        "n0202",
+        "n0203",
+        "n0204"
+      ],
+      "range": [
+        "spya-h9wzrk",
+        "spya-x6vcuf"
+      ],
+      "title": "Problem with Null Hypothesis Testing",
+      "gist": "In complex fields like social psychology, where everything correlates a little, rejecting the null hypothesis barely supports any specific alternative, so a surplus of untested theories can accumulate without real evidence.",
+      "sourceHeading": "Problem with null hypothesis testing"
+    },
+    "n0193": {
+      "id": "n0193",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-h9wzrk",
+        "spya-h9wzrk"
+      ],
+      "title": ""
+    },
+    "n0194": {
+      "id": "n0194",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-g6pvfw",
+        "spya-g6pvfw"
+      ],
+      "title": ""
+    },
+    "n0195": {
+      "id": "n0195",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-cjt38s",
+        "spya-cjt38s"
+      ],
+      "title": ""
+    },
+    "n0196": {
+      "id": "n0196",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-rzjbzy",
+        "spya-rzjbzy"
+      ],
+      "title": ""
+    },
+    "n0197": {
+      "id": "n0197",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-j0ubfk",
+        "spya-j0ubfk"
+      ],
+      "title": ""
+    },
+    "n0198": {
+      "id": "n0198",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-pknetn",
+        "spya-pknetn"
+      ],
+      "title": ""
+    },
+    "n0199": {
+      "id": "n0199",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-ew7pwx",
+        "spya-ew7pwx"
+      ],
+      "title": ""
+    },
+    "n0200": {
+      "id": "n0200",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-dzsa7e",
+        "spya-dzsa7e"
+      ],
+      "title": ""
+    },
+    "n0201": {
+      "id": "n0201",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-jxfrbv",
+        "spya-jxfrbv"
+      ],
+      "title": ""
+    },
+    "n0202": {
+      "id": "n0202",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-p6eutd",
+        "spya-p6eutd"
+      ],
+      "title": ""
+    },
+    "n0203": {
+      "id": "n0203",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-wcf9y7",
+        "spya-wcf9y7"
+      ],
+      "title": ""
+    },
+    "n0204": {
+      "id": "n0204",
+      "depth": 3,
+      "parent": "n0192",
+      "children": [],
+      "range": [
+        "spya-x6vcuf",
+        "spya-x6vcuf"
+      ],
+      "title": ""
+    },
+    "n0205": {
+      "id": "n0205",
+      "depth": 2,
+      "parent": "n0178",
+      "children": [
+        "n0206",
+        "n0207",
+        "n0208",
+        "n0209",
+        "n0210",
+        "n0211",
+        "n0212",
+        "n0213",
+        "n0214",
+        "n0215",
+        "n0216",
+        "n0217",
+        "n0218"
+      ],
+      "range": [
+        "spya-qht6nk",
+        "spya-h32yv9"
+      ],
+      "title": "Public Awareness and Academic Response",
+      "gist": "Most members of the public remain unaware of replication failures and still trust science's self-correction, even as the crisis provoked sharp, sometimes personal, disputes among researchers over how to respond.",
+      "sourceHeading": "Public awareness and perceptions"
+    },
+    "n0206": {
+      "id": "n0206",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-qht6nk",
+        "spya-qht6nk"
+      ],
+      "title": ""
+    },
+    "n0207": {
+      "id": "n0207",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-nucety",
+        "spya-nucety"
+      ],
+      "title": ""
+    },
+    "n0208": {
+      "id": "n0208",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-am34t9",
+        "spya-am34t9"
+      ],
+      "title": ""
+    },
+    "n0209": {
+      "id": "n0209",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-rx27qq",
+        "spya-rx27qq"
+      ],
+      "title": ""
+    },
+    "n0210": {
+      "id": "n0210",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-e3h2j2",
+        "spya-e3h2j2"
+      ],
+      "title": ""
+    },
+    "n0211": {
+      "id": "n0211",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-t88q4a",
+        "spya-t88q4a"
+      ],
+      "title": ""
+    },
+    "n0212": {
+      "id": "n0212",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-n0zj55",
+        "spya-n0zj55"
+      ],
+      "title": ""
+    },
+    "n0213": {
+      "id": "n0213",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-n8fw2c",
+        "spya-n8fw2c"
+      ],
+      "title": ""
+    },
+    "n0214": {
+      "id": "n0214",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-qthy2u",
+        "spya-qthy2u"
+      ],
+      "title": ""
+    },
+    "n0215": {
+      "id": "n0215",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-qfhrdu",
+        "spya-qfhrdu"
+      ],
+      "title": ""
+    },
+    "n0216": {
+      "id": "n0216",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-peeeth",
+        "spya-peeeth"
+      ],
+      "title": ""
+    },
+    "n0217": {
+      "id": "n0217",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-dcd9k5",
+        "spya-dcd9k5"
+      ],
+      "title": ""
+    },
+    "n0218": {
+      "id": "n0218",
+      "depth": 3,
+      "parent": "n0205",
+      "children": [],
+      "range": [
+        "spya-h32yv9",
+        "spya-h32yv9"
+      ],
+      "title": ""
+    },
+    "n0219": {
+      "id": "n0219",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0220",
+        "n0228",
+        "n0232",
+        "n0237",
+        "n0241",
+        "n0246",
+        "n0252"
+      ],
+      "range": [
+        "spya-jp6erf",
+        "spya-yfy5jn"
+      ],
+      "title": "Reform in Scientific Publishing",
+      "gist": "Proposed fixes include clearer reporting standards, pre-registering studies before seeing results, stricter significance thresholds, better handling of p-values, and larger sample sizes.",
+      "question": "Replication crisis — what publishing and statistical reforms could make results more trustworthy? (several proposed fixes)"
+    },
+    "n0220": {
+      "id": "n0220",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0221",
+        "n0222",
+        "n0223",
+        "n0224",
+        "n0225",
+        "n0226",
+        "n0227"
+      ],
+      "range": [
+        "spya-jp6erf",
+        "spya-epfeeh"
+      ],
+      "title": "Presentation of Methodology",
+      "gist": "Poor reporting of experimental and statistical methods is widely blamed for the crisis, prompting calls for cultural change in how journals and funders demand transparency about design and analysis.",
+      "sourceHeading": "Presentation of methodology"
+    },
+    "n0221": {
+      "id": "n0221",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-jp6erf",
+        "spya-jp6erf"
+      ],
+      "title": ""
+    },
+    "n0222": {
+      "id": "n0222",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-na9ke6",
+        "spya-na9ke6"
+      ],
+      "title": ""
+    },
+    "n0223": {
+      "id": "n0223",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-q8mbr9",
+        "spya-q8mbr9"
+      ],
+      "title": ""
+    },
+    "n0224": {
+      "id": "n0224",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-bzdyqn",
+        "spya-bzdyqn"
+      ],
+      "title": ""
+    },
+    "n0225": {
+      "id": "n0225",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-nvbpzb",
+        "spya-nvbpzb"
+      ],
+      "title": ""
+    },
+    "n0226": {
+      "id": "n0226",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-cstzz5",
+        "spya-cstzz5"
+      ],
+      "title": ""
+    },
+    "n0227": {
+      "id": "n0227",
+      "depth": 3,
+      "parent": "n0220",
+      "children": [],
+      "range": [
+        "spya-epfeeh",
+        "spya-epfeeh"
+      ],
+      "title": ""
+    },
+    "n0228": {
+      "id": "n0228",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0229",
+        "n0230",
+        "n0231"
+      ],
+      "range": [
+        "spya-wv05ca",
+        "spya-pqp4ce"
+      ],
+      "title": "Result-Blind Peer Review",
+      "gist": "Over 140 psychology journals now accept studies based on methodological rigor before results are known, a practice that has produced a far higher share of reported null results than earlier research.",
+      "sourceHeading": "Result-blind peer review"
+    },
+    "n0229": {
+      "id": "n0229",
+      "depth": 3,
+      "parent": "n0228",
+      "children": [],
+      "range": [
+        "spya-wv05ca",
+        "spya-wv05ca"
+      ],
+      "title": ""
+    },
+    "n0230": {
+      "id": "n0230",
+      "depth": 3,
+      "parent": "n0228",
+      "children": [],
+      "range": [
+        "spya-u7djwh",
+        "spya-u7djwh"
+      ],
+      "title": ""
+    },
+    "n0231": {
+      "id": "n0231",
+      "depth": 3,
+      "parent": "n0228",
+      "children": [],
+      "range": [
+        "spya-pqp4ce",
+        "spya-pqp4ce"
+      ],
+      "title": ""
+    },
+    "n0232": {
+      "id": "n0232",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0233",
+        "n0234",
+        "n0235",
+        "n0236"
+      ],
+      "range": [
+        "spya-wraexy",
+        "spya-d97yu8"
+      ],
+      "title": "Pre-registration of Studies",
+      "gist": "Registered reports require researchers to lock in their methods and analysis plan before collecting data, which guarantees publication regardless of outcome and discourages after-the-fact data tweaking.",
+      "sourceHeading": "Pre-registration of studies"
+    },
+    "n0233": {
+      "id": "n0233",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-wraexy",
+        "spya-wraexy"
+      ],
+      "title": ""
+    },
+    "n0234": {
+      "id": "n0234",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-u46v89",
+        "spya-u46v89"
+      ],
+      "title": ""
+    },
+    "n0235": {
+      "id": "n0235",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-neds6m",
+        "spya-neds6m"
+      ],
+      "title": ""
+    },
+    "n0236": {
+      "id": "n0236",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-d97yu8",
+        "spya-d97yu8"
+      ],
+      "title": ""
+    },
+    "n0237": {
+      "id": "n0237",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0238",
+        "n0239",
+        "n0240"
+      ],
+      "range": [
+        "spya-wtg89f",
+        "spya-uq4qqe"
+      ],
+      "title": "Metadata and Tracking Tools",
+      "gist": "Proposed digital tools would track how often studies have been replicated and whether findings held up, letting journals, reviewers, or readers rate reproducibility directly.",
+      "sourceHeading": "Metadata and digital tools for tracking replications"
+    },
+    "n0238": {
+      "id": "n0238",
+      "depth": 3,
+      "parent": "n0237",
+      "children": [],
+      "range": [
+        "spya-wtg89f",
+        "spya-wtg89f"
+      ],
+      "title": ""
+    },
+    "n0239": {
+      "id": "n0239",
+      "depth": 3,
+      "parent": "n0237",
+      "children": [],
+      "range": [
+        "spya-mwja6s",
+        "spya-mwja6s"
+      ],
+      "title": ""
+    },
+    "n0240": {
+      "id": "n0240",
+      "depth": 3,
+      "parent": "n0237",
+      "children": [],
+      "range": [
+        "spya-uq4qqe",
+        "spya-uq4qqe"
+      ],
+      "title": ""
+    },
+    "n0241": {
+      "id": "n0241",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0242",
+        "n0243",
+        "n0244",
+        "n0245"
+      ],
+      "range": [
+        "spya-pge7t0",
+        "spya-vxp8je"
+      ],
+      "title": "Requiring Smaller P-values",
+      "gist": "A widely signed proposal to lower the significance threshold from 0.005 to 0.05 promised fewer false positives, but a follow-up study found neither that nor rival case-by-case recommendations were actually adopted in practice.",
+      "sourceHeading": "Requiring smaller p-values"
+    },
+    "n0242": {
+      "id": "n0242",
+      "depth": 3,
+      "parent": "n0241",
+      "children": [],
+      "range": [
+        "spya-pge7t0",
+        "spya-pge7t0"
+      ],
+      "title": ""
+    },
+    "n0243": {
+      "id": "n0243",
+      "depth": 3,
+      "parent": "n0241",
+      "children": [],
+      "range": [
+        "spya-c622pm",
+        "spya-c622pm"
+      ],
+      "title": ""
+    },
+    "n0244": {
+      "id": "n0244",
+      "depth": 3,
+      "parent": "n0241",
+      "children": [],
+      "range": [
+        "spya-c9bf7m",
+        "spya-c9bf7m"
+      ],
+      "title": ""
+    },
+    "n0245": {
+      "id": "n0245",
+      "depth": 3,
+      "parent": "n0241",
+      "children": [],
+      "range": [
+        "spya-vxp8je",
+        "spya-vxp8je"
+      ],
+      "title": ""
+    },
+    "n0246": {
+      "id": "n0246",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0247",
+        "n0248",
+        "n0249",
+        "n0250",
+        "n0251"
+      ],
+      "range": [
+        "spya-eejydp",
+        "spya-d6muwy"
+      ],
+      "title": "Addressing Misinterpretation of P-values",
+      "gist": "Statisticians agree p-values are weaker evidence than commonly assumed, and some propose reporting an accompanying false-positive risk, calculated by working backward from an assumed prior probability, instead of labeling results simply significant or not.",
+      "sourceHeading": "Addressing misinterpretation of p-values"
+    },
+    "n0247": {
+      "id": "n0247",
+      "depth": 3,
+      "parent": "n0246",
+      "children": [],
+      "range": [
+        "spya-eejydp",
+        "spya-eejydp"
+      ],
+      "title": ""
+    },
+    "n0248": {
+      "id": "n0248",
+      "depth": 3,
+      "parent": "n0246",
+      "children": [],
+      "range": [
+        "spya-u73dx8",
+        "spya-u73dx8"
+      ],
+      "title": ""
+    },
+    "n0249": {
+      "id": "n0249",
+      "depth": 3,
+      "parent": "n0246",
+      "children": [],
+      "range": [
+        "spya-eg8p4m",
+        "spya-eg8p4m"
+      ],
+      "title": ""
+    },
+    "n0250": {
+      "id": "n0250",
+      "depth": 3,
+      "parent": "n0246",
+      "children": [],
+      "range": [
+        "spya-raafdf",
+        "spya-raafdf"
+      ],
+      "title": ""
+    },
+    "n0251": {
+      "id": "n0251",
+      "depth": 3,
+      "parent": "n0246",
+      "children": [],
+      "range": [
+        "spya-d6muwy",
+        "spya-d6muwy"
+      ],
+      "title": ""
+    },
+    "n0252": {
+      "id": "n0252",
+      "depth": 2,
+      "parent": "n0219",
+      "children": [
+        "n0253",
+        "n0254",
+        "n0255",
+        "n0256",
+        "n0257"
+      ],
+      "range": [
+        "spya-vnwm97",
+        "spya-yfy5jn"
+      ],
+      "title": "Encouraging Larger Sample Sizes",
+      "gist": "Because small samples and significance filtering inflate reported effect sizes, replications typically need larger samples, and techniques like cross-validation can curb overfitting without wasting data.",
+      "sourceHeading": "Encouraging larger sample sizes"
+    },
+    "n0253": {
+      "id": "n0253",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-vnwm97",
+        "spya-vnwm97"
+      ],
+      "title": ""
+    },
+    "n0254": {
+      "id": "n0254",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-xbjrcx",
+        "spya-xbjrcx"
+      ],
+      "title": ""
+    },
+    "n0255": {
+      "id": "n0255",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-q8j4xp",
+        "spya-q8j4xp"
+      ],
+      "title": ""
+    },
+    "n0256": {
+      "id": "n0256",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-ctx94n",
+        "spya-ctx94n"
+      ],
+      "title": ""
+    },
+    "n0257": {
+      "id": "n0257",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-yfy5jn",
+        "spya-yfy5jn"
+      ],
+      "title": ""
+    },
+    "n0258": {
+      "id": "n0258",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0259",
+        "n0264",
+        "n0268",
+        "n0275"
+      ],
+      "range": [
+        "spya-hc3p7c",
+        "spya-dtq8wq"
+      ],
+      "title": "Replication Efforts and Collaboration",
+      "gist": "Funders, universities, and large multi-lab collaborations have begun pooling money, training, and data across countries to systematically test whether findings generalize.",
+      "question": "Replication efforts — what concrete institutional steps are being taken to replicate more research? (funding, training, databases)",
+      "sourceHeading": "Replication efforts"
+    },
+    "n0259": {
+      "id": "n0259",
+      "depth": 2,
+      "parent": "n0258",
+      "children": [
+        "n0260",
+        "n0261",
+        "n0262",
+        "n0263"
+      ],
+      "range": [
+        "spya-hc3p7c",
+        "spya-f3fc4d"
+      ],
+      "title": "Funding Replication",
+      "gist": "Government agencies and private foundations have committed millions of dollars to fund replication studies and new institutes devoted to improving scientific research methods."
+    },
+    "n0260": {
+      "id": "n0260",
+      "depth": 3,
+      "parent": "n0259",
+      "children": [],
+      "range": [
+        "spya-hc3p7c",
+        "spya-hc3p7c"
+      ],
+      "title": ""
+    },
+    "n0261": {
+      "id": "n0261",
+      "depth": 3,
+      "parent": "n0259",
+      "children": [],
+      "range": [
+        "spya-mg8hbx",
+        "spya-mg8hbx"
+      ],
+      "title": ""
+    },
+    "n0262": {
+      "id": "n0262",
+      "depth": 3,
+      "parent": "n0259",
+      "children": [],
+      "range": [
+        "spya-rb0uw8",
+        "spya-rb0uw8"
+      ],
+      "title": ""
+    },
+    "n0263": {
+      "id": "n0263",
+      "depth": 3,
+      "parent": "n0259",
+      "children": [],
+      "range": [
+        "spya-f3fc4d",
+        "spya-f3fc4d"
+      ],
+      "title": ""
+    },
+    "n0264": {
+      "id": "n0264",
+      "depth": 2,
+      "parent": "n0258",
+      "children": [
+        "n0265",
+        "n0266",
+        "n0267"
+      ],
+      "range": [
+        "spya-xg9hvq",
+        "spya-vn8ngk"
+      ],
+      "title": "Education Reform",
+      "gist": "Some university methods courses now have students attempt replications rather than original studies, and some recommend graduate students complete a replication before graduating.",
+      "sourceHeading": "Emphasis in post-secondary education"
+    },
+    "n0265": {
+      "id": "n0265",
+      "depth": 3,
+      "parent": "n0264",
+      "children": [],
+      "range": [
+        "spya-xg9hvq",
+        "spya-xg9hvq"
+      ],
+      "title": ""
+    },
+    "n0266": {
+      "id": "n0266",
+      "depth": 3,
+      "parent": "n0264",
+      "children": [],
+      "range": [
+        "spya-p2kx6g",
+        "spya-p2kx6g"
+      ],
+      "title": ""
+    },
+    "n0267": {
+      "id": "n0267",
+      "depth": 3,
+      "parent": "n0264",
+      "children": [],
+      "range": [
+        "spya-vn8ngk",
+        "spya-vn8ngk"
+      ],
+      "title": ""
+    },
+    "n0268": {
+      "id": "n0268",
+      "depth": 2,
+      "parent": "n0258",
+      "children": [
+        "n0269",
+        "n0270",
+        "n0271",
+        "n0272",
+        "n0273",
+        "n0274"
+      ],
+      "range": [
+        "spya-k6r4cy",
+        "spya-qr0mf0"
+      ],
+      "title": "Replication Databases",
+      "gist": "Concern about wasted effort from uncoordinated replication attempts has led to new databases tracking replication studies across disciplines, alongside calls for undergraduate theses to include replication work.",
+      "sourceHeading": "Replication database"
+    },
+    "n0269": {
+      "id": "n0269",
+      "depth": 3,
+      "parent": "n0268",
+      "children": [],
+      "range": [
+        "spya-k6r4cy",
+        "spya-k6r4cy"
+      ],
+      "title": ""
+    },
+    "n0270": {
+      "id": "n0270",
+      "depth": 3,
+      "parent": "n0268",
+      "children": [],
+      "range": [
+        "spya-g4r9vq",
+        "spya-g4r9vq"
+      ],
+      "title": ""
+    },
+    "n0271": {
+      "id": "n0271",
+      "depth": 3,
+      "parent": "n0268",
+      "children": [],
+      "range": [
+        "spya-v232aw",
+        "spya-v232aw"
+      ],
+      "title": ""
+    },
+    "n0272": {
+      "id": "n0272",
+      "depth": 3,
+      "parent": "n0268",
+      "children": [],
+      "range": [
+        "spya-gm8gn3",
+        "spya-gm8gn3"
+      ],
+      "title": ""
+    },
+    "n0273": {
+      "id": "n0273",
+      "depth": 3,
+      "parent": "n0268",
+      "children": [],
+      "range": [
+        "spya-nj479j",
+        "spya-nj479j"
+      ],
+      "title": ""
+    },
+    "n0274": {
+      "id": "n0274",
+      "depth": 3,
+      "parent": "n0268",
+      "children": [],
+      "range": [
+        "spya-qr0mf0",
+        "spya-qr0mf0"
+      ],
+      "title": ""
+    },
+    "n0275": {
+      "id": "n0275",
+      "depth": 2,
+      "parent": "n0258",
+      "children": [
+        "n0276",
+        "n0277",
+        "n0278",
+        "n0279"
+      ],
+      "range": [
+        "spya-j4vetz",
+        "spya-dtq8wq"
+      ],
+      "title": "Involving Original Authors",
+      "gist": "Some argue original authors should join replication efforts since published methods are often too vague, and data show replications succeed far more often, 92 versus 65 percent, when original authors are involved.",
+      "sourceHeading": "Involving original authors"
+    },
+    "n0276": {
+      "id": "n0276",
+      "depth": 3,
+      "parent": "n0275",
+      "children": [],
+      "range": [
+        "spya-j4vetz",
+        "spya-j4vetz"
+      ],
+      "title": ""
+    },
+    "n0277": {
+      "id": "n0277",
+      "depth": 3,
+      "parent": "n0275",
+      "children": [],
+      "range": [
+        "spya-g2apww",
+        "spya-g2apww"
+      ],
+      "title": ""
+    },
+    "n0278": {
+      "id": "n0278",
+      "depth": 3,
+      "parent": "n0275",
+      "children": [],
+      "range": [
+        "spya-p6uw40",
+        "spya-p6uw40"
+      ],
+      "title": ""
+    },
+    "n0279": {
+      "id": "n0279",
+      "depth": 3,
+      "parent": "n0275",
+      "children": [],
+      "range": [
+        "spya-dtq8wq",
+        "spya-dtq8wq"
+      ],
+      "title": ""
+    },
+    "n0280": {
+      "id": "n0280",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0281",
+        "n0288",
+        "n0294",
+        "n0298",
+        "n0302"
+      ],
+      "range": [
+        "spya-sbakqy",
+        "spya-bzsg5k"
+      ],
+      "title": "Broader Changes and Open Science",
+      "gist": "Beyond better statistics, some argue science needs triangulation across methods, models that treat psychological variables as context-dependent, theory-revising replication, and open data to truly fix the crisis.",
+      "question": "Replication crisis — what deeper conceptual shifts, beyond procedural fixes, might resolve it? (several proposals)",
+      "sourceHeading": "Broader changes to scientific approach"
+    },
+    "n0281": {
+      "id": "n0281",
+      "depth": 2,
+      "parent": "n0280",
+      "children": [
+        "n0282",
+        "n0283",
+        "n0284",
+        "n0285",
+        "n0286",
+        "n0287"
+      ],
+      "range": [
+        "spya-sbakqy",
+        "spya-w073xf"
+      ],
+      "title": "Emphasize Triangulation, Not Just Replication",
+      "gist": "Researchers argue that relying on replication alone can falsely reassure, and that combining independent methods with different weaknesses, called triangulation, better protects against flawed conclusions.",
+      "sourceHeading": "Emphasize triangulation, not just replication"
+    },
+    "n0282": {
+      "id": "n0282",
+      "depth": 3,
+      "parent": "n0281",
+      "children": [],
+      "range": [
+        "spya-sbakqy",
+        "spya-sbakqy"
+      ],
+      "title": ""
+    },
+    "n0283": {
+      "id": "n0283",
+      "depth": 3,
+      "parent": "n0281",
+      "children": [],
+      "range": [
+        "spya-rd67eu",
+        "spya-rd67eu"
+      ],
+      "title": ""
+    },
+    "n0284": {
+      "id": "n0284",
+      "depth": 3,
+      "parent": "n0281",
+      "children": [],
+      "range": [
+        "spya-g2wgkw",
+        "spya-g2wgkw"
+      ],
+      "title": ""
+    },
+    "n0285": {
+      "id": "n0285",
+      "depth": 3,
+      "parent": "n0281",
+      "children": [],
+      "range": [
+        "spya-b8sd0x",
+        "spya-b8sd0x"
+      ],
+      "title": ""
+    },
+    "n0286": {
+      "id": "n0286",
+      "depth": 3,
+      "parent": "n0281",
+      "children": [],
+      "range": [
+        "spya-astgqn",
+        "spya-astgqn"
+      ],
+      "title": ""
+    },
+    "n0287": {
+      "id": "n0287",
+      "depth": 3,
+      "parent": "n0281",
+      "children": [],
+      "range": [
+        "spya-w073xf",
+        "spya-w073xf"
+      ],
+      "title": ""
+    },
+    "n0288": {
+      "id": "n0288",
+      "depth": 2,
+      "parent": "n0280",
+      "children": [
+        "n0289",
+        "n0290",
+        "n0291",
+        "n0292",
+        "n0293"
+      ],
+      "range": [
+        "spya-vhasyu",
+        "spya-q49kc6"
+      ],
+      "title": "Complex Systems Paradigm",
+      "gist": "Some argue psychology's standard linear causal model wrongly assumes stable, independent variables, and that treating mental variables as interdependent and context-adapting better explains why replications fail.",
+      "sourceHeading": "Complex systems paradigm"
+    },
+    "n0289": {
+      "id": "n0289",
+      "depth": 3,
+      "parent": "n0288",
+      "children": [],
+      "range": [
+        "spya-vhasyu",
+        "spya-vhasyu"
+      ],
+      "title": ""
+    },
+    "n0290": {
+      "id": "n0290",
+      "depth": 3,
+      "parent": "n0288",
+      "children": [],
+      "range": [
+        "spya-yj52bd",
+        "spya-yj52bd"
+      ],
+      "title": ""
+    },
+    "n0291": {
+      "id": "n0291",
+      "depth": 3,
+      "parent": "n0288",
+      "children": [],
+      "range": [
+        "spya-mq4uts",
+        "spya-mq4uts"
+      ],
+      "title": ""
+    },
+    "n0292": {
+      "id": "n0292",
+      "depth": 3,
+      "parent": "n0288",
+      "children": [],
+      "range": [
+        "spya-rfa98m",
+        "spya-rfa98m"
+      ],
+      "title": ""
+    },
+    "n0293": {
+      "id": "n0293",
+      "depth": 3,
+      "parent": "n0288",
+      "children": [],
+      "range": [
+        "spya-q49kc6",
+        "spya-q49kc6"
+      ],
+      "title": ""
+    },
+    "n0294": {
+      "id": "n0294",
+      "depth": 2,
+      "parent": "n0280",
+      "children": [
+        "n0295",
+        "n0296",
+        "n0297"
+      ],
+      "range": [
+        "spya-d4kvnh",
+        "spya-hnkzvj"
+      ],
+      "title": "Replication Should Seek to Revise Theories",
+      "gist": "Replication alone cannot resolve the crisis; efforts should also prune and strengthen theories, since reproducible findings best predict whether results generalize across contexts and time.",
+      "sourceHeading": "Replication should seek to revise theories"
+    },
+    "n0295": {
+      "id": "n0295",
+      "depth": 3,
+      "parent": "n0294",
+      "children": [],
+      "range": [
+        "spya-d4kvnh",
+        "spya-d4kvnh"
+      ],
+      "title": ""
+    },
+    "n0296": {
+      "id": "n0296",
+      "depth": 3,
+      "parent": "n0294",
+      "children": [],
+      "range": [
+        "spya-w33f8e",
+        "spya-w33f8e"
+      ],
+      "title": ""
+    },
+    "n0297": {
+      "id": "n0297",
+      "depth": 3,
+      "parent": "n0294",
+      "children": [],
+      "range": [
+        "spya-hnkzvj",
+        "spya-hnkzvj"
+      ],
+      "title": ""
+    },
+    "n0298": {
+      "id": "n0298",
+      "depth": 2,
+      "parent": "n0280",
+      "children": [
+        "n0299",
+        "n0300",
+        "n0301"
+      ],
+      "range": [
+        "spya-k8gpmq",
+        "spya-zzxwdt"
+      ],
+      "title": "Open Data and Open Science",
+      "gist": "Open data, open-source software, and public repositories like the Open Science Framework aim to make analyses verifiable, though sophisticated researchers who share data may paradoxically face more scrutiny and criticism."
+    },
+    "n0299": {
+      "id": "n0299",
+      "depth": 3,
+      "parent": "n0298",
+      "children": [],
+      "range": [
+        "spya-k8gpmq",
+        "spya-k8gpmq"
+      ],
+      "title": ""
+    },
+    "n0300": {
+      "id": "n0300",
+      "depth": 3,
+      "parent": "n0298",
+      "children": [],
+      "range": [
+        "spya-a3xcsc",
+        "spya-a3xcsc"
+      ],
+      "title": ""
+    },
+    "n0301": {
+      "id": "n0301",
+      "depth": 3,
+      "parent": "n0298",
+      "children": [],
+      "range": [
+        "spya-zzxwdt",
+        "spya-zzxwdt"
+      ],
+      "title": ""
+    },
+    "n0302": {
+      "id": "n0302",
+      "depth": 2,
+      "parent": "n0280",
+      "children": [
+        "n0303",
+        "n0304",
+        "n0305",
+        "n0306",
+        "n0307",
+        "n0308",
+        "n0309",
+        "n0310",
+        "n0311",
+        "n0312",
+        "n0313",
+        "n0314",
+        "n0315",
+        "n0316",
+        "n0317",
+        "n0318",
+        "n0319",
+        "n0320",
+        "n0321",
+        "n0322",
+        "n0323",
+        "n0324",
+        "n0325",
+        "n0326",
+        "n0327",
+        "n0328"
+      ],
+      "range": [
+        "spya-wc96k8",
+        "spya-bzsg5k"
+      ],
+      "title": "See Also and References",
+      "gist": "A list of related statistical and methodological concepts and the cited sources underlying the article's claims."
+    },
+    "n0303": {
+      "id": "n0303",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-wc96k8",
+        "spya-wc96k8"
+      ],
+      "title": ""
+    },
+    "n0304": {
+      "id": "n0304",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-ne765k",
+        "spya-ne765k"
+      ],
+      "title": ""
+    },
+    "n0305": {
+      "id": "n0305",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-m9qdg8",
+        "spya-m9qdg8"
+      ],
+      "title": ""
+    },
+    "n0306": {
+      "id": "n0306",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-ntxsm4",
+        "spya-ntxsm4"
+      ],
+      "title": ""
+    },
+    "n0307": {
+      "id": "n0307",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-qszaja",
+        "spya-qszaja"
+      ],
+      "title": ""
+    },
+    "n0308": {
+      "id": "n0308",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-hg5p8d",
+        "spya-hg5p8d"
+      ],
+      "title": ""
+    },
+    "n0309": {
+      "id": "n0309",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-dmck6r",
+        "spya-dmck6r"
+      ],
+      "title": ""
+    },
+    "n0310": {
+      "id": "n0310",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-h0evtk",
+        "spya-h0evtk"
+      ],
+      "title": ""
+    },
+    "n0311": {
+      "id": "n0311",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-beuha9",
+        "spya-beuha9"
+      ],
+      "title": ""
+    },
+    "n0312": {
+      "id": "n0312",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-jk7fbv",
+        "spya-jk7fbv"
+      ],
+      "title": ""
+    },
+    "n0313": {
+      "id": "n0313",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-n39pbv",
+        "spya-n39pbv"
+      ],
+      "title": ""
+    },
+    "n0314": {
+      "id": "n0314",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-va5sak",
+        "spya-va5sak"
+      ],
+      "title": ""
+    },
+    "n0315": {
+      "id": "n0315",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-tbcf40",
+        "spya-tbcf40"
+      ],
+      "title": ""
+    },
+    "n0316": {
+      "id": "n0316",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-yg5a3e",
+        "spya-yg5a3e"
+      ],
+      "title": ""
+    },
+    "n0317": {
+      "id": "n0317",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-h4e447",
+        "spya-h4e447"
+      ],
+      "title": ""
+    },
+    "n0318": {
+      "id": "n0318",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-g0jmds",
+        "spya-g0jmds"
+      ],
+      "title": ""
+    },
+    "n0319": {
+      "id": "n0319",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-mp92km",
+        "spya-mp92km"
+      ],
+      "title": ""
+    },
+    "n0320": {
+      "id": "n0320",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-at4ge6",
+        "spya-at4ge6"
+      ],
+      "title": ""
+    },
+    "n0321": {
+      "id": "n0321",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-x2u7u0",
+        "spya-x2u7u0"
+      ],
+      "title": ""
+    },
+    "n0322": {
+      "id": "n0322",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-eu3adf",
+        "spya-eu3adf"
+      ],
+      "title": ""
+    },
+    "n0323": {
+      "id": "n0323",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-u7ehw9",
+        "spya-u7ehw9"
+      ],
+      "title": ""
+    },
+    "n0324": {
+      "id": "n0324",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-hdyvbx",
+        "spya-hdyvbx"
+      ],
+      "title": ""
+    },
+    "n0325": {
+      "id": "n0325",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-hwp839",
+        "spya-hwp839"
+      ],
+      "title": ""
+    },
+    "n0326": {
+      "id": "n0326",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-pcmkn2",
+        "spya-pcmkn2"
+      ],
+      "title": ""
+    },
+    "n0327": {
+      "id": "n0327",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-m5hqe5",
+        "spya-m5hqe5"
+      ],
+      "title": ""
+    },
+    "n0328": {
+      "id": "n0328",
+      "depth": 3,
+      "parent": "n0302",
+      "children": [],
+      "range": [
+        "spya-bzsg5k",
+        "spya-bzsg5k"
+      ],
+      "title": ""
+    },
+    "n0329": {
+      "id": "n0329",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0330",
+        "n0331",
+        "n0332",
+        "n0333",
+        "n0334",
+        "n0335",
+        "n0336",
+        "n0337",
+        "n0338",
+        "n0339",
+        "n0340",
+        "n0341",
+        "n0342",
+        "n0343",
+        "n0344",
+        "n0345",
+        "n0346",
+        "n0347",
+        "n0348",
+        "n0349",
+        "n0350",
+        "n0351",
+        "n0352",
+        "n0353",
+        "n0354",
+        "n0355",
+        "n0356",
+        "n0357",
+        "n0358",
+        "n0359",
+        "n0360",
+        "n0361",
+        "n0362",
+        "n0363",
+        "n0364",
+        "n0365",
+        "n0366",
+        "n0367",
+        "n0368",
+        "n0369",
+        "n0370",
+        "n0371",
+        "n0372",
+        "n0373",
+        "n0374",
+        "n0375",
+        "n0376",
+        "n0377",
+        "n0378",
+        "n0379",
+        "n0380",
+        "n0381",
+        "n0382",
+        "n0383",
+        "n0384",
+        "n0385",
+        "n0386",
+        "n0387",
+        "n0388",
+        "n0389",
+        "n0390",
+        "n0391",
+        "n0392",
+        "n0393",
+        "n0394",
+        "n0395",
+        "n0396",
+        "n0397",
+        "n0398",
+        "n0399",
+        "n0400",
+        "n0401",
+        "n0402",
+        "n0403",
+        "n0404",
+        "n0405",
+        "n0406",
+        "n0407",
+        "n0408",
+        "n0409",
+        "n0410",
+        "n0411",
+        "n0412",
+        "n0413",
+        "n0414",
+        "n0415",
+        "n0416",
+        "n0417",
+        "n0418",
+        "n0419",
+        "n0420",
+        "n0421",
+        "n0422",
+        "n0423",
+        "n0424",
+        "n0425",
+        "n0426",
+        "n0427",
+        "n0428",
+        "n0429",
+        "n0430",
+        "n0431",
+        "n0432",
+        "n0433",
+        "n0434",
+        "n0435",
+        "n0436",
+        "n0437",
+        "n0438",
+        "n0439",
+        "n0440",
+        "n0441",
+        "n0442",
+        "n0443",
+        "n0444",
+        "n0445",
+        "n0446",
+        "n0447",
+        "n0448",
+        "n0449",
+        "n0450",
+        "n0451",
+        "n0452",
+        "n0453",
+        "n0454",
+        "n0455",
+        "n0456",
+        "n0457",
+        "n0458",
+        "n0459",
+        "n0460",
+        "n0461",
+        "n0462",
+        "n0463",
+        "n0464",
+        "n0465",
+        "n0466",
+        "n0467",
+        "n0468",
+        "n0469",
+        "n0470",
+        "n0471",
+        "n0472",
+        "n0473",
+        "n0474",
+        "n0475",
+        "n0476",
+        "n0477",
+        "n0478",
+        "n0479",
+        "n0480",
+        "n0481",
+        "n0482",
+        "n0483",
+        "n0484",
+        "n0485",
+        "n0486",
+        "n0487",
+        "n0488",
+        "n0489",
+        "n0490",
+        "n0491",
+        "n0492",
+        "n0493",
+        "n0494",
+        "n0495",
+        "n0496",
+        "n0497",
+        "n0498",
+        "n0499",
+        "n0500",
+        "n0501",
+        "n0502",
+        "n0503",
+        "n0504",
+        "n0505",
+        "n0506",
+        "n0507",
+        "n0508",
+        "n0509",
+        "n0510",
+        "n0511",
+        "n0512",
+        "n0513",
+        "n0514",
+        "n0515",
+        "n0516",
+        "n0517",
+        "n0518",
+        "n0519",
+        "n0520",
+        "n0521",
+        "n0522",
+        "n0523",
+        "n0524",
+        "n0525",
+        "n0526",
+        "n0527",
+        "n0528",
+        "n0529",
+        "n0530",
+        "n0531",
+        "n0532",
+        "n0533",
+        "n0534",
+        "n0535",
+        "n0536",
+        "n0537",
+        "n0538",
+        "n0539",
+        "n0540",
+        "n0541",
+        "n0542",
+        "n0543",
+        "n0544",
+        "n0545",
+        "n0546",
+        "n0547",
+        "n0548",
+        "n0549",
+        "n0550",
+        "n0551",
+        "n0552",
+        "n0553",
+        "n0554",
+        "n0555",
+        "n0556",
+        "n0557",
+        "n0558",
+        "n0559",
+        "n0560",
+        "n0561",
+        "n0562",
+        "n0563",
+        "n0564",
+        "n0565",
+        "n0566",
+        "n0567",
+        "n0568",
+        "n0569",
+        "n0570",
+        "n0571",
+        "n0572",
+        "n0573",
+        "n0574",
+        "n0575",
+        "n0576",
+        "n0577",
+        "n0578",
+        "n0579",
+        "n0580",
+        "n0581",
+        "n0582",
+        "n0583",
+        "n0584",
+        "n0585",
+        "n0586",
+        "n0587",
+        "n0588",
+        "n0589",
+        "n0590",
+        "n0591",
+        "n0592",
+        "n0593",
+        "n0594",
+        "n0595",
+        "n0596",
+        "n0597",
+        "n0598",
+        "n0599",
+        "n0600",
+        "n0601",
+        "n0602",
+        "n0603",
+        "n0604",
+        "n0605",
+        "n0606"
+      ],
+      "range": [
+        "spya-n7x4aa",
+        "spya-z26x82"
+      ],
+      "title": "Notes",
+      "treatment": "supplement"
+    },
+    "n0330": {
+      "id": "n0330",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n7x4aa",
+        "spya-n7x4aa"
+      ],
+      "title": ""
+    },
+    "n0331": {
+      "id": "n0331",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-psn0u2",
+        "spya-psn0u2"
+      ],
+      "title": ""
+    },
+    "n0332": {
+      "id": "n0332",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ur9jhd",
+        "spya-ur9jhd"
+      ],
+      "title": ""
+    },
+    "n0333": {
+      "id": "n0333",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-zvgnt8",
+        "spya-zvgnt8"
+      ],
+      "title": ""
+    },
+    "n0334": {
+      "id": "n0334",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kep4nd",
+        "spya-kep4nd"
+      ],
+      "title": ""
+    },
+    "n0335": {
+      "id": "n0335",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kmjsxv",
+        "spya-kmjsxv"
+      ],
+      "title": ""
+    },
+    "n0336": {
+      "id": "n0336",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fjjg8a",
+        "spya-fjjg8a"
+      ],
+      "title": ""
+    },
+    "n0337": {
+      "id": "n0337",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-vvy9qp",
+        "spya-vvy9qp"
+      ],
+      "title": ""
+    },
+    "n0338": {
+      "id": "n0338",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-jp9pct",
+        "spya-jp9pct"
+      ],
+      "title": ""
+    },
+    "n0339": {
+      "id": "n0339",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-bj2gg0",
+        "spya-bj2gg0"
+      ],
+      "title": ""
+    },
+    "n0340": {
+      "id": "n0340",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-s9402t",
+        "spya-s9402t"
+      ],
+      "title": ""
+    },
+    "n0341": {
+      "id": "n0341",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-u4ttja",
+        "spya-u4ttja"
+      ],
+      "title": ""
+    },
+    "n0342": {
+      "id": "n0342",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kdm9z2",
+        "spya-kdm9z2"
+      ],
+      "title": ""
+    },
+    "n0343": {
+      "id": "n0343",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-u7b6uz",
+        "spya-u7b6uz"
+      ],
+      "title": ""
+    },
+    "n0344": {
+      "id": "n0344",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-mbjzy5",
+        "spya-mbjzy5"
+      ],
+      "title": ""
+    },
+    "n0345": {
+      "id": "n0345",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kavc7e",
+        "spya-kavc7e"
+      ],
+      "title": ""
+    },
+    "n0346": {
+      "id": "n0346",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-guw54x",
+        "spya-guw54x"
+      ],
+      "title": ""
+    },
+    "n0347": {
+      "id": "n0347",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qqh6wj",
+        "spya-qqh6wj"
+      ],
+      "title": ""
+    },
+    "n0348": {
+      "id": "n0348",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-jchejd",
+        "spya-jchejd"
+      ],
+      "title": ""
+    },
+    "n0349": {
+      "id": "n0349",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-bakfsv",
+        "spya-bakfsv"
+      ],
+      "title": ""
+    },
+    "n0350": {
+      "id": "n0350",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kvtr6s",
+        "spya-kvtr6s"
+      ],
+      "title": ""
+    },
+    "n0351": {
+      "id": "n0351",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n0cxja",
+        "spya-n0cxja"
+      ],
+      "title": ""
+    },
+    "n0352": {
+      "id": "n0352",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z538gw",
+        "spya-z538gw"
+      ],
+      "title": ""
+    },
+    "n0353": {
+      "id": "n0353",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qcrrwn",
+        "spya-qcrrwn"
+      ],
+      "title": ""
+    },
+    "n0354": {
+      "id": "n0354",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kjpb5a",
+        "spya-kjpb5a"
+      ],
+      "title": ""
+    },
+    "n0355": {
+      "id": "n0355",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-esvaj5",
+        "spya-esvaj5"
+      ],
+      "title": ""
+    },
+    "n0356": {
+      "id": "n0356",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-bmcz6q",
+        "spya-bmcz6q"
+      ],
+      "title": ""
+    },
+    "n0357": {
+      "id": "n0357",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-r0tmd5",
+        "spya-r0tmd5"
+      ],
+      "title": ""
+    },
+    "n0358": {
+      "id": "n0358",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-scwghh",
+        "spya-scwghh"
+      ],
+      "title": ""
+    },
+    "n0359": {
+      "id": "n0359",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wmyt2w",
+        "spya-wmyt2w"
+      ],
+      "title": ""
+    },
+    "n0360": {
+      "id": "n0360",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-vc6gfs",
+        "spya-vc6gfs"
+      ],
+      "title": ""
+    },
+    "n0361": {
+      "id": "n0361",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-j9knht",
+        "spya-j9knht"
+      ],
+      "title": ""
+    },
+    "n0362": {
+      "id": "n0362",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n8nx3z",
+        "spya-n8nx3z"
+      ],
+      "title": ""
+    },
+    "n0363": {
+      "id": "n0363",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-nnnawk",
+        "spya-nnnawk"
+      ],
+      "title": ""
+    },
+    "n0364": {
+      "id": "n0364",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-brj4bc",
+        "spya-brj4bc"
+      ],
+      "title": ""
+    },
+    "n0365": {
+      "id": "n0365",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-b63336",
+        "spya-b63336"
+      ],
+      "title": ""
+    },
+    "n0366": {
+      "id": "n0366",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k34f4v",
+        "spya-k34f4v"
+      ],
+      "title": ""
+    },
+    "n0367": {
+      "id": "n0367",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-had76s",
+        "spya-had76s"
+      ],
+      "title": ""
+    },
+    "n0368": {
+      "id": "n0368",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-q8rqwr",
+        "spya-q8rqwr"
+      ],
+      "title": ""
+    },
+    "n0369": {
+      "id": "n0369",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-c3ar57",
+        "spya-c3ar57"
+      ],
+      "title": ""
+    },
+    "n0370": {
+      "id": "n0370",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-urjh63",
+        "spya-urjh63"
+      ],
+      "title": ""
+    },
+    "n0371": {
+      "id": "n0371",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hackb9",
+        "spya-hackb9"
+      ],
+      "title": ""
+    },
+    "n0372": {
+      "id": "n0372",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-w5sqk2",
+        "spya-w5sqk2"
+      ],
+      "title": ""
+    },
+    "n0373": {
+      "id": "n0373",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-c9scdx",
+        "spya-c9scdx"
+      ],
+      "title": ""
+    },
+    "n0374": {
+      "id": "n0374",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-tvu3ae",
+        "spya-tvu3ae"
+      ],
+      "title": ""
+    },
+    "n0375": {
+      "id": "n0375",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-d8bw33",
+        "spya-d8bw33"
+      ],
+      "title": ""
+    },
+    "n0376": {
+      "id": "n0376",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fbt79h",
+        "spya-fbt79h"
+      ],
+      "title": ""
+    },
+    "n0377": {
+      "id": "n0377",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-sytvc8",
+        "spya-sytvc8"
+      ],
+      "title": ""
+    },
+    "n0378": {
+      "id": "n0378",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cc2g3v",
+        "spya-cc2g3v"
+      ],
+      "title": ""
+    },
+    "n0379": {
+      "id": "n0379",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ngcuqj",
+        "spya-ngcuqj"
+      ],
+      "title": ""
+    },
+    "n0380": {
+      "id": "n0380",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-vc8yj3",
+        "spya-vc8yj3"
+      ],
+      "title": ""
+    },
+    "n0381": {
+      "id": "n0381",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ww734g",
+        "spya-ww734g"
+      ],
+      "title": ""
+    },
+    "n0382": {
+      "id": "n0382",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k6zegy",
+        "spya-k6zegy"
+      ],
+      "title": ""
+    },
+    "n0383": {
+      "id": "n0383",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fcncfa",
+        "spya-fcncfa"
+      ],
+      "title": ""
+    },
+    "n0384": {
+      "id": "n0384",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-enptp9",
+        "spya-enptp9"
+      ],
+      "title": ""
+    },
+    "n0385": {
+      "id": "n0385",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wkvcjj",
+        "spya-wkvcjj"
+      ],
+      "title": ""
+    },
+    "n0386": {
+      "id": "n0386",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kwgp27",
+        "spya-kwgp27"
+      ],
+      "title": ""
+    },
+    "n0387": {
+      "id": "n0387",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-e24fw7",
+        "spya-e24fw7"
+      ],
+      "title": ""
+    },
+    "n0388": {
+      "id": "n0388",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fb8tju",
+        "spya-fb8tju"
+      ],
+      "title": ""
+    },
+    "n0389": {
+      "id": "n0389",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cmjtga",
+        "spya-cmjtga"
+      ],
+      "title": ""
+    },
+    "n0390": {
+      "id": "n0390",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-nb4sx5",
+        "spya-nb4sx5"
+      ],
+      "title": ""
+    },
+    "n0391": {
+      "id": "n0391",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-r3aspn",
+        "spya-r3aspn"
+      ],
+      "title": ""
+    },
+    "n0392": {
+      "id": "n0392",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n9zbup",
+        "spya-n9zbup"
+      ],
+      "title": ""
+    },
+    "n0393": {
+      "id": "n0393",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-knqevg",
+        "spya-knqevg"
+      ],
+      "title": ""
+    },
+    "n0394": {
+      "id": "n0394",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-a4kpf0",
+        "spya-a4kpf0"
+      ],
+      "title": ""
+    },
+    "n0395": {
+      "id": "n0395",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hrgmnj",
+        "spya-hrgmnj"
+      ],
+      "title": ""
+    },
+    "n0396": {
+      "id": "n0396",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-sanbdw",
+        "spya-sanbdw"
+      ],
+      "title": ""
+    },
+    "n0397": {
+      "id": "n0397",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-uc48y9",
+        "spya-uc48y9"
+      ],
+      "title": ""
+    },
+    "n0398": {
+      "id": "n0398",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hcx8wr",
+        "spya-hcx8wr"
+      ],
+      "title": ""
+    },
+    "n0399": {
+      "id": "n0399",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kh2b6r",
+        "spya-kh2b6r"
+      ],
+      "title": ""
+    },
+    "n0400": {
+      "id": "n0400",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-tnmusy",
+        "spya-tnmusy"
+      ],
+      "title": ""
+    },
+    "n0401": {
+      "id": "n0401",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qcdaeq",
+        "spya-qcdaeq"
+      ],
+      "title": ""
+    },
+    "n0402": {
+      "id": "n0402",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-m89qje",
+        "spya-m89qje"
+      ],
+      "title": ""
+    },
+    "n0403": {
+      "id": "n0403",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-pctpzt",
+        "spya-pctpzt"
+      ],
+      "title": ""
+    },
+    "n0404": {
+      "id": "n0404",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wd7w2s",
+        "spya-wd7w2s"
+      ],
+      "title": ""
+    },
+    "n0405": {
+      "id": "n0405",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-d6wst8",
+        "spya-d6wst8"
+      ],
+      "title": ""
+    },
+    "n0406": {
+      "id": "n0406",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rrn09h",
+        "spya-rrn09h"
+      ],
+      "title": ""
+    },
+    "n0407": {
+      "id": "n0407",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-dqyg09",
+        "spya-dqyg09"
+      ],
+      "title": ""
+    },
+    "n0408": {
+      "id": "n0408",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wj8fn5",
+        "spya-wj8fn5"
+      ],
+      "title": ""
+    },
+    "n0409": {
+      "id": "n0409",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k533ng",
+        "spya-k533ng"
+      ],
+      "title": ""
+    },
+    "n0410": {
+      "id": "n0410",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-gqhpn9",
+        "spya-gqhpn9"
+      ],
+      "title": ""
+    },
+    "n0411": {
+      "id": "n0411",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-t8a7t8",
+        "spya-t8a7t8"
+      ],
+      "title": ""
+    },
+    "n0412": {
+      "id": "n0412",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xy89xn",
+        "spya-xy89xn"
+      ],
+      "title": ""
+    },
+    "n0413": {
+      "id": "n0413",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-bqjkn9",
+        "spya-bqjkn9"
+      ],
+      "title": ""
+    },
+    "n0414": {
+      "id": "n0414",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-nmv2va",
+        "spya-nmv2va"
+      ],
+      "title": ""
+    },
+    "n0415": {
+      "id": "n0415",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n7upqm",
+        "spya-n7upqm"
+      ],
+      "title": ""
+    },
+    "n0416": {
+      "id": "n0416",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-eh3hws",
+        "spya-eh3hws"
+      ],
+      "title": ""
+    },
+    "n0417": {
+      "id": "n0417",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-akm48u",
+        "spya-akm48u"
+      ],
+      "title": ""
+    },
+    "n0418": {
+      "id": "n0418",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qymsc3",
+        "spya-qymsc3"
+      ],
+      "title": ""
+    },
+    "n0419": {
+      "id": "n0419",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-g08vdp",
+        "spya-g08vdp"
+      ],
+      "title": ""
+    },
+    "n0420": {
+      "id": "n0420",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ptjsau",
+        "spya-ptjsau"
+      ],
+      "title": ""
+    },
+    "n0421": {
+      "id": "n0421",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ya4kse",
+        "spya-ya4kse"
+      ],
+      "title": ""
+    },
+    "n0422": {
+      "id": "n0422",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-te4eg2",
+        "spya-te4eg2"
+      ],
+      "title": ""
+    },
+    "n0423": {
+      "id": "n0423",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-sm75sw",
+        "spya-sm75sw"
+      ],
+      "title": ""
+    },
+    "n0424": {
+      "id": "n0424",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rvwez7",
+        "spya-rvwez7"
+      ],
+      "title": ""
+    },
+    "n0425": {
+      "id": "n0425",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-q9ptzm",
+        "spya-q9ptzm"
+      ],
+      "title": ""
+    },
+    "n0426": {
+      "id": "n0426",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xfqv3z",
+        "spya-xfqv3z"
+      ],
+      "title": ""
+    },
+    "n0427": {
+      "id": "n0427",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hn3bux",
+        "spya-hn3bux"
+      ],
+      "title": ""
+    },
+    "n0428": {
+      "id": "n0428",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kehzcr",
+        "spya-kehzcr"
+      ],
+      "title": ""
+    },
+    "n0429": {
+      "id": "n0429",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hkndc0",
+        "spya-hkndc0"
+      ],
+      "title": ""
+    },
+    "n0430": {
+      "id": "n0430",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-prfur7",
+        "spya-prfur7"
+      ],
+      "title": ""
+    },
+    "n0431": {
+      "id": "n0431",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cxsdqm",
+        "spya-cxsdqm"
+      ],
+      "title": ""
+    },
+    "n0432": {
+      "id": "n0432",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-eqduqq",
+        "spya-eqduqq"
+      ],
+      "title": ""
+    },
+    "n0433": {
+      "id": "n0433",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z6qbza",
+        "spya-z6qbza"
+      ],
+      "title": ""
+    },
+    "n0434": {
+      "id": "n0434",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-esdq3k",
+        "spya-esdq3k"
+      ],
+      "title": ""
+    },
+    "n0435": {
+      "id": "n0435",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-gkmfcj",
+        "spya-gkmfcj"
+      ],
+      "title": ""
+    },
+    "n0436": {
+      "id": "n0436",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cf800j",
+        "spya-cf800j"
+      ],
+      "title": ""
+    },
+    "n0437": {
+      "id": "n0437",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-vebbeb",
+        "spya-vebbeb"
+      ],
+      "title": ""
+    },
+    "n0438": {
+      "id": "n0438",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-e9m3w6",
+        "spya-e9m3w6"
+      ],
+      "title": ""
+    },
+    "n0439": {
+      "id": "n0439",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-e788cp",
+        "spya-e788cp"
+      ],
+      "title": ""
+    },
+    "n0440": {
+      "id": "n0440",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ta0xvh",
+        "spya-ta0xvh"
+      ],
+      "title": ""
+    },
+    "n0441": {
+      "id": "n0441",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-mr4ngf",
+        "spya-mr4ngf"
+      ],
+      "title": ""
+    },
+    "n0442": {
+      "id": "n0442",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-f6p3e9",
+        "spya-f6p3e9"
+      ],
+      "title": ""
+    },
+    "n0443": {
+      "id": "n0443",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kbn2my",
+        "spya-kbn2my"
+      ],
+      "title": ""
+    },
+    "n0444": {
+      "id": "n0444",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-q6en4q",
+        "spya-q6en4q"
+      ],
+      "title": ""
+    },
+    "n0445": {
+      "id": "n0445",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-yqsn9u",
+        "spya-yqsn9u"
+      ],
+      "title": ""
+    },
+    "n0446": {
+      "id": "n0446",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-dcn96c",
+        "spya-dcn96c"
+      ],
+      "title": ""
+    },
+    "n0447": {
+      "id": "n0447",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ta2w6d",
+        "spya-ta2w6d"
+      ],
+      "title": ""
+    },
+    "n0448": {
+      "id": "n0448",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-uyrwx9",
+        "spya-uyrwx9"
+      ],
+      "title": ""
+    },
+    "n0449": {
+      "id": "n0449",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k80wp3",
+        "spya-k80wp3"
+      ],
+      "title": ""
+    },
+    "n0450": {
+      "id": "n0450",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ja2zmx",
+        "spya-ja2zmx"
+      ],
+      "title": ""
+    },
+    "n0451": {
+      "id": "n0451",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qubzts",
+        "spya-qubzts"
+      ],
+      "title": ""
+    },
+    "n0452": {
+      "id": "n0452",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-q46abk",
+        "spya-q46abk"
+      ],
+      "title": ""
+    },
+    "n0453": {
+      "id": "n0453",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-v8eynw",
+        "spya-v8eynw"
+      ],
+      "title": ""
+    },
+    "n0454": {
+      "id": "n0454",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-tmc50k",
+        "spya-tmc50k"
+      ],
+      "title": ""
+    },
+    "n0455": {
+      "id": "n0455",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-y3d8ta",
+        "spya-y3d8ta"
+      ],
+      "title": ""
+    },
+    "n0456": {
+      "id": "n0456",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fe9bfh",
+        "spya-fe9bfh"
+      ],
+      "title": ""
+    },
+    "n0457": {
+      "id": "n0457",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ak8y2r",
+        "spya-ak8y2r"
+      ],
+      "title": ""
+    },
+    "n0458": {
+      "id": "n0458",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-m6gqtw",
+        "spya-m6gqtw"
+      ],
+      "title": ""
+    },
+    "n0459": {
+      "id": "n0459",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-t8rajs",
+        "spya-t8rajs"
+      ],
+      "title": ""
+    },
+    "n0460": {
+      "id": "n0460",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qy226h",
+        "spya-qy226h"
+      ],
+      "title": ""
+    },
+    "n0461": {
+      "id": "n0461",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wd925g",
+        "spya-wd925g"
+      ],
+      "title": ""
+    },
+    "n0462": {
+      "id": "n0462",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wtqugk",
+        "spya-wtqugk"
+      ],
+      "title": ""
+    },
+    "n0463": {
+      "id": "n0463",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ep7byf",
+        "spya-ep7byf"
+      ],
+      "title": ""
+    },
+    "n0464": {
+      "id": "n0464",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-jrde92",
+        "spya-jrde92"
+      ],
+      "title": ""
+    },
+    "n0465": {
+      "id": "n0465",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-eyhyjv",
+        "spya-eyhyjv"
+      ],
+      "title": ""
+    },
+    "n0466": {
+      "id": "n0466",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qxaqxm",
+        "spya-qxaqxm"
+      ],
+      "title": ""
+    },
+    "n0467": {
+      "id": "n0467",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-h7tucn",
+        "spya-h7tucn"
+      ],
+      "title": ""
+    },
+    "n0468": {
+      "id": "n0468",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-jmp7yx",
+        "spya-jmp7yx"
+      ],
+      "title": ""
+    },
+    "n0469": {
+      "id": "n0469",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-q60cre",
+        "spya-q60cre"
+      ],
+      "title": ""
+    },
+    "n0470": {
+      "id": "n0470",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-j0mbp4",
+        "spya-j0mbp4"
+      ],
+      "title": ""
+    },
+    "n0471": {
+      "id": "n0471",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n6u8d2",
+        "spya-n6u8d2"
+      ],
+      "title": ""
+    },
+    "n0472": {
+      "id": "n0472",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ktgh23",
+        "spya-ktgh23"
+      ],
+      "title": ""
+    },
+    "n0473": {
+      "id": "n0473",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z2ybn5",
+        "spya-z2ybn5"
+      ],
+      "title": ""
+    },
+    "n0474": {
+      "id": "n0474",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wxud6u",
+        "spya-wxud6u"
+      ],
+      "title": ""
+    },
+    "n0475": {
+      "id": "n0475",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-smbncd",
+        "spya-smbncd"
+      ],
+      "title": ""
+    },
+    "n0476": {
+      "id": "n0476",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-bfruhs",
+        "spya-bfruhs"
+      ],
+      "title": ""
+    },
+    "n0477": {
+      "id": "n0477",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hf7svk",
+        "spya-hf7svk"
+      ],
+      "title": ""
+    },
+    "n0478": {
+      "id": "n0478",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-uyfvpk",
+        "spya-uyfvpk"
+      ],
+      "title": ""
+    },
+    "n0479": {
+      "id": "n0479",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-yycchu",
+        "spya-yycchu"
+      ],
+      "title": ""
+    },
+    "n0480": {
+      "id": "n0480",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-m748h2",
+        "spya-m748h2"
+      ],
+      "title": ""
+    },
+    "n0481": {
+      "id": "n0481",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-j6kvnj",
+        "spya-j6kvnj"
+      ],
+      "title": ""
+    },
+    "n0482": {
+      "id": "n0482",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-zznnv3",
+        "spya-zznnv3"
+      ],
+      "title": ""
+    },
+    "n0483": {
+      "id": "n0483",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xryrz0",
+        "spya-xryrz0"
+      ],
+      "title": ""
+    },
+    "n0484": {
+      "id": "n0484",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-dnfm98",
+        "spya-dnfm98"
+      ],
+      "title": ""
+    },
+    "n0485": {
+      "id": "n0485",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fjzd70",
+        "spya-fjzd70"
+      ],
+      "title": ""
+    },
+    "n0486": {
+      "id": "n0486",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cwfpsr",
+        "spya-cwfpsr"
+      ],
+      "title": ""
+    },
+    "n0487": {
+      "id": "n0487",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-yshmtw",
+        "spya-yshmtw"
+      ],
+      "title": ""
+    },
+    "n0488": {
+      "id": "n0488",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-snd092",
+        "spya-snd092"
+      ],
+      "title": ""
+    },
+    "n0489": {
+      "id": "n0489",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ne05a4",
+        "spya-ne05a4"
+      ],
+      "title": ""
+    },
+    "n0490": {
+      "id": "n0490",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-uqne3d",
+        "spya-uqne3d"
+      ],
+      "title": ""
+    },
+    "n0491": {
+      "id": "n0491",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-musknq",
+        "spya-musknq"
+      ],
+      "title": ""
+    },
+    "n0492": {
+      "id": "n0492",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-yk0wwb",
+        "spya-yk0wwb"
+      ],
+      "title": ""
+    },
+    "n0493": {
+      "id": "n0493",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-uy5uhw",
+        "spya-uy5uhw"
+      ],
+      "title": ""
+    },
+    "n0494": {
+      "id": "n0494",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-zdh06u",
+        "spya-zdh06u"
+      ],
+      "title": ""
+    },
+    "n0495": {
+      "id": "n0495",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z2pkzx",
+        "spya-z2pkzx"
+      ],
+      "title": ""
+    },
+    "n0496": {
+      "id": "n0496",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k8x036",
+        "spya-k8x036"
+      ],
+      "title": ""
+    },
+    "n0497": {
+      "id": "n0497",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ytjenm",
+        "spya-ytjenm"
+      ],
+      "title": ""
+    },
+    "n0498": {
+      "id": "n0498",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xmcwwb",
+        "spya-xmcwwb"
+      ],
+      "title": ""
+    },
+    "n0499": {
+      "id": "n0499",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xfpz9f",
+        "spya-xfpz9f"
+      ],
+      "title": ""
+    },
+    "n0500": {
+      "id": "n0500",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-u8jkdd",
+        "spya-u8jkdd"
+      ],
+      "title": ""
+    },
+    "n0501": {
+      "id": "n0501",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-mr828e",
+        "spya-mr828e"
+      ],
+      "title": ""
+    },
+    "n0502": {
+      "id": "n0502",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-mqh778",
+        "spya-mqh778"
+      ],
+      "title": ""
+    },
+    "n0503": {
+      "id": "n0503",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z9gsg4",
+        "spya-z9gsg4"
+      ],
+      "title": ""
+    },
+    "n0504": {
+      "id": "n0504",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-y97fme",
+        "spya-y97fme"
+      ],
+      "title": ""
+    },
+    "n0505": {
+      "id": "n0505",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ydyc3s",
+        "spya-ydyc3s"
+      ],
+      "title": ""
+    },
+    "n0506": {
+      "id": "n0506",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-df48mp",
+        "spya-df48mp"
+      ],
+      "title": ""
+    },
+    "n0507": {
+      "id": "n0507",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hr9002",
+        "spya-hr9002"
+      ],
+      "title": ""
+    },
+    "n0508": {
+      "id": "n0508",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-g2b928",
+        "spya-g2b928"
+      ],
+      "title": ""
+    },
+    "n0509": {
+      "id": "n0509",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xty5rv",
+        "spya-xty5rv"
+      ],
+      "title": ""
+    },
+    "n0510": {
+      "id": "n0510",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rsnk0t",
+        "spya-rsnk0t"
+      ],
+      "title": ""
+    },
+    "n0511": {
+      "id": "n0511",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z0fnws",
+        "spya-z0fnws"
+      ],
+      "title": ""
+    },
+    "n0512": {
+      "id": "n0512",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hvtnrz",
+        "spya-hvtnrz"
+      ],
+      "title": ""
+    },
+    "n0513": {
+      "id": "n0513",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-a9be5k",
+        "spya-a9be5k"
+      ],
+      "title": ""
+    },
+    "n0514": {
+      "id": "n0514",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-vt6pvu",
+        "spya-vt6pvu"
+      ],
+      "title": ""
+    },
+    "n0515": {
+      "id": "n0515",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-npbtah",
+        "spya-npbtah"
+      ],
+      "title": ""
+    },
+    "n0516": {
+      "id": "n0516",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rzvgha",
+        "spya-rzvgha"
+      ],
+      "title": ""
+    },
+    "n0517": {
+      "id": "n0517",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-en3why",
+        "spya-en3why"
+      ],
+      "title": ""
+    },
+    "n0518": {
+      "id": "n0518",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-nuy8tt",
+        "spya-nuy8tt"
+      ],
+      "title": ""
+    },
+    "n0519": {
+      "id": "n0519",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xs4tz2",
+        "spya-xs4tz2"
+      ],
+      "title": ""
+    },
+    "n0520": {
+      "id": "n0520",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rch4yv",
+        "spya-rch4yv"
+      ],
+      "title": ""
+    },
+    "n0521": {
+      "id": "n0521",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-f6jymv",
+        "spya-f6jymv"
+      ],
+      "title": ""
+    },
+    "n0522": {
+      "id": "n0522",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rtxcaj",
+        "spya-rtxcaj"
+      ],
+      "title": ""
+    },
+    "n0523": {
+      "id": "n0523",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-p3hwcw",
+        "spya-p3hwcw"
+      ],
+      "title": ""
+    },
+    "n0524": {
+      "id": "n0524",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-u62xex",
+        "spya-u62xex"
+      ],
+      "title": ""
+    },
+    "n0525": {
+      "id": "n0525",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-bymavs",
+        "spya-bymavs"
+      ],
+      "title": ""
+    },
+    "n0526": {
+      "id": "n0526",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-x5e79u",
+        "spya-x5e79u"
+      ],
+      "title": ""
+    },
+    "n0527": {
+      "id": "n0527",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kdpm88",
+        "spya-kdpm88"
+      ],
+      "title": ""
+    },
+    "n0528": {
+      "id": "n0528",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-x0ssgf",
+        "spya-x0ssgf"
+      ],
+      "title": ""
+    },
+    "n0529": {
+      "id": "n0529",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ukh603",
+        "spya-ukh603"
+      ],
+      "title": ""
+    },
+    "n0530": {
+      "id": "n0530",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hn8nru",
+        "spya-hn8nru"
+      ],
+      "title": ""
+    },
+    "n0531": {
+      "id": "n0531",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-jw6zkx",
+        "spya-jw6zkx"
+      ],
+      "title": ""
+    },
+    "n0532": {
+      "id": "n0532",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n4g986",
+        "spya-n4g986"
+      ],
+      "title": ""
+    },
+    "n0533": {
+      "id": "n0533",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ghbvp0",
+        "spya-ghbvp0"
+      ],
+      "title": ""
+    },
+    "n0534": {
+      "id": "n0534",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-x9eq0d",
+        "spya-x9eq0d"
+      ],
+      "title": ""
+    },
+    "n0535": {
+      "id": "n0535",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ywa8ce",
+        "spya-ywa8ce"
+      ],
+      "title": ""
+    },
+    "n0536": {
+      "id": "n0536",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wrwqcd",
+        "spya-wrwqcd"
+      ],
+      "title": ""
+    },
+    "n0537": {
+      "id": "n0537",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-pvcbp3",
+        "spya-pvcbp3"
+      ],
+      "title": ""
+    },
+    "n0538": {
+      "id": "n0538",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qdq7wt",
+        "spya-qdq7wt"
+      ],
+      "title": ""
+    },
+    "n0539": {
+      "id": "n0539",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-gpqcvp",
+        "spya-gpqcvp"
+      ],
+      "title": ""
+    },
+    "n0540": {
+      "id": "n0540",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xu43ff",
+        "spya-xu43ff"
+      ],
+      "title": ""
+    },
+    "n0541": {
+      "id": "n0541",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-vekeza",
+        "spya-vekeza"
+      ],
+      "title": ""
+    },
+    "n0542": {
+      "id": "n0542",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ajb0b4",
+        "spya-ajb0b4"
+      ],
+      "title": ""
+    },
+    "n0543": {
+      "id": "n0543",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-aq0jyq",
+        "spya-aq0jyq"
+      ],
+      "title": ""
+    },
+    "n0544": {
+      "id": "n0544",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-w35z4p",
+        "spya-w35z4p"
+      ],
+      "title": ""
+    },
+    "n0545": {
+      "id": "n0545",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-t5fdfr",
+        "spya-t5fdfr"
+      ],
+      "title": ""
+    },
+    "n0546": {
+      "id": "n0546",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-n0e2x4",
+        "spya-n0e2x4"
+      ],
+      "title": ""
+    },
+    "n0547": {
+      "id": "n0547",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ysnj0z",
+        "spya-ysnj0z"
+      ],
+      "title": ""
+    },
+    "n0548": {
+      "id": "n0548",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-d64jsw",
+        "spya-d64jsw"
+      ],
+      "title": ""
+    },
+    "n0549": {
+      "id": "n0549",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xwe050",
+        "spya-xwe050"
+      ],
+      "title": ""
+    },
+    "n0550": {
+      "id": "n0550",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-mybbpt",
+        "spya-mybbpt"
+      ],
+      "title": ""
+    },
+    "n0551": {
+      "id": "n0551",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-za8uv4",
+        "spya-za8uv4"
+      ],
+      "title": ""
+    },
+    "n0552": {
+      "id": "n0552",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-et2gqd",
+        "spya-et2gqd"
+      ],
+      "title": ""
+    },
+    "n0553": {
+      "id": "n0553",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-an6cwb",
+        "spya-an6cwb"
+      ],
+      "title": ""
+    },
+    "n0554": {
+      "id": "n0554",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-jbmj40",
+        "spya-jbmj40"
+      ],
+      "title": ""
+    },
+    "n0555": {
+      "id": "n0555",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cn2bnx",
+        "spya-cn2bnx"
+      ],
+      "title": ""
+    },
+    "n0556": {
+      "id": "n0556",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k7wwf2",
+        "spya-k7wwf2"
+      ],
+      "title": ""
+    },
+    "n0557": {
+      "id": "n0557",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-t69c9g",
+        "spya-t69c9g"
+      ],
+      "title": ""
+    },
+    "n0558": {
+      "id": "n0558",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qtp8up",
+        "spya-qtp8up"
+      ],
+      "title": ""
+    },
+    "n0559": {
+      "id": "n0559",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kxkx7q",
+        "spya-kxkx7q"
+      ],
+      "title": ""
+    },
+    "n0560": {
+      "id": "n0560",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ub0qyz",
+        "spya-ub0qyz"
+      ],
+      "title": ""
+    },
+    "n0561": {
+      "id": "n0561",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-gbjhqp",
+        "spya-gbjhqp"
+      ],
+      "title": ""
+    },
+    "n0562": {
+      "id": "n0562",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wb7ms6",
+        "spya-wb7ms6"
+      ],
+      "title": ""
+    },
+    "n0563": {
+      "id": "n0563",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rfu93f",
+        "spya-rfu93f"
+      ],
+      "title": ""
+    },
+    "n0564": {
+      "id": "n0564",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xa02as",
+        "spya-xa02as"
+      ],
+      "title": ""
+    },
+    "n0565": {
+      "id": "n0565",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xez744",
+        "spya-xez744"
+      ],
+      "title": ""
+    },
+    "n0566": {
+      "id": "n0566",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-gvu6b3",
+        "spya-gvu6b3"
+      ],
+      "title": ""
+    },
+    "n0567": {
+      "id": "n0567",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-arhwvn",
+        "spya-arhwvn"
+      ],
+      "title": ""
+    },
+    "n0568": {
+      "id": "n0568",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-xk0zac",
+        "spya-xk0zac"
+      ],
+      "title": ""
+    },
+    "n0569": {
+      "id": "n0569",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-h2evjb",
+        "spya-h2evjb"
+      ],
+      "title": ""
+    },
+    "n0570": {
+      "id": "n0570",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-yjvk3m",
+        "spya-yjvk3m"
+      ],
+      "title": ""
+    },
+    "n0571": {
+      "id": "n0571",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-k80bxs",
+        "spya-k80bxs"
+      ],
+      "title": ""
+    },
+    "n0572": {
+      "id": "n0572",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-uxwtr2",
+        "spya-uxwtr2"
+      ],
+      "title": ""
+    },
+    "n0573": {
+      "id": "n0573",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-dxv6z9",
+        "spya-dxv6z9"
+      ],
+      "title": ""
+    },
+    "n0574": {
+      "id": "n0574",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-d74v52",
+        "spya-d74v52"
+      ],
+      "title": ""
+    },
+    "n0575": {
+      "id": "n0575",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-q200bj",
+        "spya-q200bj"
+      ],
+      "title": ""
+    },
+    "n0576": {
+      "id": "n0576",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fb7fuj",
+        "spya-fb7fuj"
+      ],
+      "title": ""
+    },
+    "n0577": {
+      "id": "n0577",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-qpakek",
+        "spya-qpakek"
+      ],
+      "title": ""
+    },
+    "n0578": {
+      "id": "n0578",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hezttg",
+        "spya-hezttg"
+      ],
+      "title": ""
+    },
+    "n0579": {
+      "id": "n0579",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-pwp0jh",
+        "spya-pwp0jh"
+      ],
+      "title": ""
+    },
+    "n0580": {
+      "id": "n0580",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-axewx5",
+        "spya-axewx5"
+      ],
+      "title": ""
+    },
+    "n0581": {
+      "id": "n0581",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-nf2yne",
+        "spya-nf2yne"
+      ],
+      "title": ""
+    },
+    "n0582": {
+      "id": "n0582",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-c5nqez",
+        "spya-c5nqez"
+      ],
+      "title": ""
+    },
+    "n0583": {
+      "id": "n0583",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rt5eh3",
+        "spya-rt5eh3"
+      ],
+      "title": ""
+    },
+    "n0584": {
+      "id": "n0584",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-r22rcs",
+        "spya-r22rcs"
+      ],
+      "title": ""
+    },
+    "n0585": {
+      "id": "n0585",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-t3tz63",
+        "spya-t3tz63"
+      ],
+      "title": ""
+    },
+    "n0586": {
+      "id": "n0586",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-czpx65",
+        "spya-czpx65"
+      ],
+      "title": ""
+    },
+    "n0587": {
+      "id": "n0587",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-fm55sp",
+        "spya-fm55sp"
+      ],
+      "title": ""
+    },
+    "n0588": {
+      "id": "n0588",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-dte9j6",
+        "spya-dte9j6"
+      ],
+      "title": ""
+    },
+    "n0589": {
+      "id": "n0589",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-byn9er",
+        "spya-byn9er"
+      ],
+      "title": ""
+    },
+    "n0590": {
+      "id": "n0590",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-c7pd0e",
+        "spya-c7pd0e"
+      ],
+      "title": ""
+    },
+    "n0591": {
+      "id": "n0591",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-aq6mew",
+        "spya-aq6mew"
+      ],
+      "title": ""
+    },
+    "n0592": {
+      "id": "n0592",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-t5myxb",
+        "spya-t5myxb"
+      ],
+      "title": ""
+    },
+    "n0593": {
+      "id": "n0593",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-c6jfdz",
+        "spya-c6jfdz"
+      ],
+      "title": ""
+    },
+    "n0594": {
+      "id": "n0594",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-hst8ny",
+        "spya-hst8ny"
+      ],
+      "title": ""
+    },
+    "n0595": {
+      "id": "n0595",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-gp7m0u",
+        "spya-gp7m0u"
+      ],
+      "title": ""
+    },
+    "n0596": {
+      "id": "n0596",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-ksr0cv",
+        "spya-ksr0cv"
+      ],
+      "title": ""
+    },
+    "n0597": {
+      "id": "n0597",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-kgxau5",
+        "spya-kgxau5"
+      ],
+      "title": ""
+    },
+    "n0598": {
+      "id": "n0598",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-r5cupz",
+        "spya-r5cupz"
+      ],
+      "title": ""
+    },
+    "n0599": {
+      "id": "n0599",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-rxsmf0",
+        "spya-rxsmf0"
+      ],
+      "title": ""
+    },
+    "n0600": {
+      "id": "n0600",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-wjvyjd",
+        "spya-wjvyjd"
+      ],
+      "title": ""
+    },
+    "n0601": {
+      "id": "n0601",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-mrz5n9",
+        "spya-mrz5n9"
+      ],
+      "title": ""
+    },
+    "n0602": {
+      "id": "n0602",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-cfr9sf",
+        "spya-cfr9sf"
+      ],
+      "title": ""
+    },
+    "n0603": {
+      "id": "n0603",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-dhqazh",
+        "spya-dhqazh"
+      ],
+      "title": ""
+    },
+    "n0604": {
+      "id": "n0604",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-d9pzj3",
+        "spya-d9pzj3"
+      ],
+      "title": ""
+    },
+    "n0605": {
+      "id": "n0605",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-pp6n87",
+        "spya-pp6n87"
+      ],
+      "title": ""
+    },
+    "n0606": {
+      "id": "n0606",
+      "depth": 2,
+      "parent": "n0329",
+      "children": [],
+      "range": [
+        "spya-z26x82",
+        "spya-z26x82"
+      ],
+      "title": ""
+    }
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "caption": "The piece funnels one worry (work disappearing) into three parallel historical case studies that converge on the same pattern — dignity from group status, not achievement — then follows a chain explaining why ordinary paid work escapes that trap, looping back at the end to the fear it opened with.",
+  "title": "Funnel into convergence, then loop",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "After Work, We'll Have Each Other",
+      "caption": "Three historical case studies converge on one pattern, which a closing chain uses to explain — and worry about losing — what paid work actually gives us.",
+      "height": 1000,
+      "items": [
+        {"kind":"node","id":"thesis","shape":"ellipse","x":260,"y":40,"w":240,"h":90,"size":"md",
+         "text":"When AI ends work, relationships supply status","sub":"the relational-sector thesis",
+         "block":"spya-eq7rkm","detail":"If machines do all economically necessary labor, the argument goes, humans fall back on relationships for status and meaning."},
+
+        {"kind":"region","x":30,"y":140,"w":200,"h":230,"label":"ARISTOCRATS","style":"band","tone":1,"opens":"zoom-aristocrats"},
+        {"kind":"node","id":"a1","shape":"box","x":50,"y":178,"w":160,"h":70,"size":"sm",
+         "text":"Versailles ran on petty status feuds, not ideas","block":"spya-y827zc",
+         "detail":"Saint-Simon's memoirs show courtiers obsessed with heraldic precedence over culture or philosophy."},
+        {"kind":"node","id":"a2","shape":"box","x":50,"y":268,"w":160,"h":80,"size":"sm",
+         "text":"Etiquette curbed — not proved — ape instincts","block":"spya-cz0cgg",
+         "detail":"Elias: court ceremony was a civilizing restraint on primate dominance behavior, not its inevitable expression."},
+
+        {"kind":"region","x":280,"y":140,"w":200,"h":230,"label":"UPPER-CLASS WOMEN","style":"band","tone":2},
+        {"kind":"node","id":"b1","shape":"box","x":300,"y":178,"w":160,"h":70,"size":"sm",
+         "text":"Lives built around defending class standing","block":"spya-uum3xk",
+         "detail":"Ostrander's 1980s subjects never worked and organized life around keeping their social network 'in good order.'"},
+        {"kind":"node","id":"b2","shape":"box","x":300,"y":268,"w":160,"h":80,"size":"sm",
+         "text":"Charity valued for its 'illusion of usefulness'","block":"spya-mdncme",
+         "detail":"Board fundraising mattered for status, not for measurable results — by the women's own admission."},
+
+        {"kind":"region","x":530,"y":140,"w":200,"h":230,"label":"WORKING CLASS","style":"band","tone":3},
+        {"kind":"node","id":"c1","shape":"box","x":550,"y":178,"w":160,"h":70,"size":"sm",
+         "text":"Peer groups and gossip ruled over dead-end jobs","block":"spya-y02mr5",
+         "detail":"Gans's Boston Italian-Americans spent as little time at work as possible, organizing life around close peer groups."},
+        {"kind":"node","id":"c2","shape":"box","x":550,"y":268,"w":160,"h":80,"size":"sm",
+         "text":"Amoral familism faded as options improved","block":"spya-dma27v",
+         "detail":"Distrust of outsiders was a rational response to poverty, and it receded as material conditions changed."},
+
+        {"kind":"node","id":"pattern","shape":"hex","x":280,"y":400,"w":200,"h":90,"size":"md",
+         "text":"Status comes from the group, not achievement","block":"spya-qsfkqr",
+         "detail":"Across courts, old money, and peer groups, dignity depends on group membership, which makes every society of this kind clannish and exclusive."},
+
+        {"kind":"edge","from":"thesis","to":"a1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"thesis","to":"b1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"thesis","to":"c1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"a2","to":"pattern","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"b2","to":"pattern","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"c2","to":"pattern","via":"curve","arrow":"end"},
+
+        {"kind":"region","x":120,"y":530,"w":520,"h":220,"label":"WHY WORK MATTERS","style":"band","tone":4,"opens":"zoom-work-matters"},
+        {"kind":"node","id":"d1","shape":"box","x":140,"y":568,"w":220,"h":70,"size":"sm",
+         "text":"Work gives impersonal respect, not just money","block":"spya-zd83ts",
+         "detail":"Unlike group-based honor, work lets you earn dignity for what you do, not who you know."},
+        {"kind":"node","id":"d2","shape":"box","x":400,"y":568,"w":220,"h":70,"size":"sm",
+         "text":"Surveys and oral histories: workers want respect","block":"spya-t9qyhk",
+         "detail":"From Pew surveys to Studs Terkel's interviews, workers consistently value feeling competent and respected over enjoying the task itself."},
+        {"kind":"node","id":"d3","shape":"box","x":270,"y":658,"w":260,"h":70,"size":"sm",
+         "text":"Commercial society freed friendship from necessity","block":"spya-hdbtc0",
+         "detail":"Because relational societies struggle with equality, the market's loosening of feudal and family ties let friendship become freer."},
+
+        {"kind":"edge","from":"pattern","to":"d1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"pattern","to":"d2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"d1","to":"d3","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"d2","to":"d3","via":"curve","arrow":"end"},
+
+        {"kind":"node","id":"final","shape":"ellipse","x":270,"y":790,"w":260,"h":90,"size":"md",
+         "text":"Author's wary hope: liberal individualism survives","block":"spya-dhj4jr",
+         "detail":"The author likes her job and liberal individualism, and hopes that if a relational world is coming, it won't cost us the latter."},
+        {"kind":"edge","from":"d3","to":"final","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"final:left","to":"thesis:left","via":"curve","arrow":"end","line":"dashed","label":"echoes opening worry"},
+
+        {"kind":"node","id":"notes","shape":"note","x":270,"y":910,"w":260,"h":50,"size":"xs",
+         "text":"Notes & further reading (sources, citations)","block":"spya-u4ztzw"}
+      ]
+    },
+    {
+      "id": "zoom-aristocrats",
+      "title": "Versailles, salons, and apes",
+      "caption": "A chain of escalating evidence that aristocratic life without work was petty and status-obsessed, ending with a caveat that this need not be our fate.",
+      "height": 780,
+      "items": [
+        {"kind":"node","id":"n1","shape":"box","x":280,"y":50,"w":300,"h":70,"size":"sm",
+         "text":"Versailles: Europe's wealthiest, most brilliant court","block":"spya-gs52t3",
+         "detail":"Voltaire called it one of history's four great ages of light — yet its culture was dominated by status games."},
+        {"kind":"node","id":"n2","shape":"box","x":280,"y":150,"w":300,"h":70,"size":"sm",
+         "text":"Saint-Simon obsessed over heraldic precedence","block":"spya-x4w0zk",
+         "detail":"His memoirs devote hundreds of pages to disputes over emblems and ceremonial headgear, not culture or ideas."},
+        {"kind":"node","id":"n3","shape":"box","x":280,"y":250,"w":300,"h":70,"size":"sm",
+         "text":"Salons were gossip, not philosophy","block":"spya-wue7zn",
+         "detail":"Despite their Enlightenment reputation, salon attendees mostly talked politics and each other, not ideas."},
+        {"kind":"node","id":"aside","shape":"note","x":600,"y":250,"w":130,"h":70,"size":"xs",
+         "text":"Lilti: salon talk was mostly political gossip","block":"spya-k0yet6"},
+        {"kind":"node","id":"n4","shape":"box","x":280,"y":350,"w":300,"h":70,"size":"sm",
+         "text":"Catherine's Petersburg: same gossip-driven pattern","block":"spya-f90g2h",
+         "detail":"Even a brilliant, pragmatic ruler's court ran on tracking who offended whom to gain favor."},
+        {"kind":"node","id":"n5","shape":"box","x":280,"y":450,"w":300,"h":70,"size":"sm",
+         "text":"Aristocratic dignity: honor, not diligence","block":"spya-de69sf",
+         "detail":"Bourgeois dignity comes from being productive; aristocratic dignity comes from maintaining rank and family distinction."},
+        {"kind":"node","id":"n6","shape":"box","x":280,"y":550,"w":300,"h":70,"size":"sm",
+         "text":"Aristocrats act like status-obsessed chimpanzees","block":"spya-cz0cgg",
+         "detail":"Constant tracking of alliances, challenges, and displays of rank resembles primate dominance hierarchies."},
+        {"kind":"node","id":"n7","shape":"box","x":280,"y":650,"w":300,"h":80,"size":"sm",
+         "text":"Elias: civilizing, not fixed, instinct","sub":"we might do better",
+         "block":"spya-k26ath",
+         "detail":"Versailles behavior reflected centuries of specific feudal institutions, not an inevitable return to primate nature."},
+
+        {"kind":"edge","from":"n1","to":"n2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n2","to":"n3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n3","to":"aside","via":"straight","arrow":"none","line":"dashed"},
+        {"kind":"edge","from":"n3","to":"n4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n4","to":"n5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n5","to":"n6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n6","to":"n7","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "zoom-work-matters",
+      "title": "Why work gives respect",
+      "caption": "Four kinds of evidence feed one claim about what work supplies, which then explains why commercial society freed friendship — and the author's wary conclusion.",
+      "height": 720,
+      "items": [
+        {"kind":"node","id":"hub","shape":"ellipse","x":280,"y":50,"w":240,"h":90,"size":"md",
+         "text":"Work supplies impersonal respect and competence","block":"spya-zd83ts",
+         "detail":"The central claim: paid work's main gift, besides money, is a way to earn dignity for what you do rather than who you know."},
+
+        {"kind":"node","id":"s1","shape":"box","x":30,"y":200,"w":170,"h":70,"size":"sm",
+         "text":"85% of workers report job satisfaction","block":"spya-sw09bu",
+         "detail":"Pew, Gallup, and The Conference Board surveys agree, even for unglamorous jobs."},
+        {"kind":"node","id":"s2","shape":"box","x":230,"y":250,"w":170,"h":70,"size":"sm",
+         "text":"Strauss: COVID return showed pride, relief","block":"spya-nm9v43",
+         "detail":"Workers returning from lockdown spoke of feeling useful again, not of loving their tasks."},
+        {"kind":"node","id":"s3","shape":"box","x":420,"y":250,"w":170,"h":70,"size":"sm",
+         "text":"FWP interviews: work mattered as much as family","block":"spya-a5pt8y",
+         "detail":"Depression-era life stories rated pride in work and recognition by peers alongside family and community."},
+        {"kind":"node","id":"s4","shape":"box","x":580,"y":200,"w":150,"h":70,"size":"sm",
+         "text":"Terkel's Working: respect beat job content","block":"spya-n00hd0",
+         "detail":"1970s Chicago workers hated disrespect far more than repetition, and prized being useful to peers."},
+
+        {"kind":"edge","from":"hub","to":"s1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"hub","to":"s2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"hub","to":"s3","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"hub","to":"s4","via":"curve","arrow":"end"},
+
+        {"kind":"node","id":"equality","shape":"box","x":280,"y":360,"w":260,"h":80,"size":"sm",
+         "text":"Relational societies struggle with moral equality","block":"spya-hdbtc0",
+         "detail":"When dignity depends on group membership, societies get clannish — policing who belongs and who doesn't."},
+        {"kind":"edge","from":"s1","to":"equality","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s2","to":"equality","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s3","to":"equality","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s4","to":"equality","via":"curve","arrow":"end"},
+
+        {"kind":"node","id":"commercial","shape":"box","x":280,"y":470,"w":260,"h":80,"size":"sm",
+         "text":"Commercial society freed friendship from necessity","block":"spya-tmepex",
+         "detail":"Smith, Hume, and Ferguson argued that once labor meets our needs, friendship can rest on sympathy rather than transaction."},
+        {"kind":"edge","from":"equality","to":"commercial","via":"straight","arrow":"end"},
+
+        {"kind":"node","id":"final2","shape":"ellipse","x":280,"y":580,"w":260,"h":90,"size":"md",
+         "text":"Author's wary hope: liberal individualism survives","block":"spya-dhj4jr",
+         "detail":"If a more relational future is coming, the author hopes we keep the freedom commercial society gave our relationships."},
+        {"kind":"edge","from":"commercial","to":"final2","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

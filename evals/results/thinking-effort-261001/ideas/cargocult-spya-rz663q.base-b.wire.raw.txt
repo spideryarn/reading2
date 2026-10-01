@@ -1,0 +1,56 @@
+{"ideas": [
+  {
+    "name": "Copying science's form without its substance yields nothing",
+    "provenance": "introduced",
+    "statement": "A field can reproduce every outward feature of scientific work—procedures, controls, publications, statistics—and still fail to produce real, working results, because it is missing the one thing that actually makes results happen.",
+    "occurrences": [
+      {"blockId": "spya-fd2muf", "quote": "They're doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn't work. No airplanes land. So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they're missing something essential, because the planes don't land.", "reasoning": "This states the idea directly: correct form plus absent substance equals failure, independent of any specific field."},
+      {"blockId": "spya-afgs74", "quote": "It is not something simple like telling them how to improve the shapes of the earphones. But there is one feature I notice that is generally missing in Cargo Cult Science.", "reasoning": "He clarifies that the missing ingredient is not a technical detail but something deeper, reinforcing that form and substance are separable."},
+      {"blockId": "spya-rub3a2", "quote": "A great deal of their difficulty is, of course, the difficulty of the subject and the inapplicability of the scientific method to the subject. Nevertheless, it should be remarked that this is not the only difficulty. That's why the planes don't land—but they don't land.", "reasoning": "He insists the failure isn't just subject-matter difficulty, keeping the form-versus-substance distinction as the operative diagnosis."}
+    ]
+  },
+  {
+    "name": "Integrity means actively arguing against your own result",
+    "provenance": "introduced",
+    "statement": "Real scientific honesty is not just avoiding lies; it means deliberately searching out and reporting every reason your own result might be wrong, every rival explanation, and every piece of contrary evidence, even when no one would catch you if you didn't.",
+    "occurrences": [
+      {"blockId": "spya-afgs74", "quote": "It's a kind of scientific integrity, a principle of scientific thought that corresponds to a kind of utter honesty—a kind of leaning over backwards.", "reasoning": "States the core claim: integrity is an active, effortful stance, not mere absence of lying."},
+      {"blockId": "spya-rxj5wa", "quote": "Details that could throw doubt on your interpretation must be given, if you know them. You must do the best you can—if you know anything at all wrong, or possibly wrong—to explain it.", "reasoning": "Spells out the obligation to surface self-damaging detail, which only makes sense under the 'leaning over backwards' standard just introduced."},
+      {"blockId": "spya-qpwryx", "quote": "In summary, the idea is to try to give all of the information to help others to judge the value of your contribution; not just the information that leads to judgment in one particular direction or another.", "reasoning": "Restates the principle as a general rule for presenting evidence, generalizing beyond the specific examples given."},
+      {"blockId": "spya-bpyx8n", "quote": "The fact that should be added to that advertising statement is that no oils soak through food, if operated at a certain temperature... So it's the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with.", "reasoning": "Shows the idea applied: a true statement can still violate the standard if it conveys a misleading implication, which is the finer-grained content of 'leaning over backwards.'"}
+    ]
+  },
+  {
+    "name": "Unconscious bias toward prior results silently drifts data",
+    "provenance": "introduced",
+    "statement": "Researchers can distort results without lying or even noticing, simply by scrutinizing harder any measurement that disagrees with an authoritative earlier value and accepting too easily any measurement that matches it, so that error creeps in only slowly over many separate experiments.",
+    "occurrences": [
+      {"blockId": "spya-s9msxy", "quote": "If you plot them as a function of time, you find that one is a little bigger than Millikan's, and the next one's a little bit bigger than that, and the next one's a little bit bigger than that, until finally they settle down to a number which is higher.", "reasoning": "Describes the slow drift pattern that is the observable signature of this bias."},
+      {"blockId": "spya-uj9v2h", "quote": "When they got a number that was too high above Millikan's, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan's value they didn't look so hard.", "reasoning": "States the mechanism explicitly: asymmetric scrutiny driven by agreement with a prior authority, not by the data itself."},
+      {"blockId": "spya-az6z7k", "quote": "We've learned from experience that the truth will out... And, although you may gain some temporary fame and excitement, you will not gain a good reputation as a scientist if you haven't tried to be very careful in this kind of work.", "reasoning": "Connects the Millikan pattern back to the general warning about self-deception, showing why the example was given."},
+      {"blockId": "spya-ed9mzv", "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.", "reasoning": "Generalizes the lesson of the Millikan drift into the overarching maxim the rest of the talk is organized around."}
+    ]
+  },
+  {
+    "name": "Whether a result gets published must not depend on what it shows",
+    "provenance": "introduced",
+    "statement": "If researchers or advisors only publish or report findings that support a favored conclusion and suppress the ones that don't, the resulting record is systematically misleading even though every individual reported fact may be true.",
+    "occurrences": [
+      {"blockId": "spya-jk7mj4", "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result... In other words, publication probability depends upon the answer. That should not be done.", "reasoning": "States the rule directly and names the failure mode as publication probability depending on the result."},
+      {"blockId": "spya-s05sub", "quote": "If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don't publish it at all. That's not giving scientific advice.", "reasoning": "Applies the same rule to policy advice, showing it's a general principle rather than a one-off point about cigarette ads."},
+      {"blockId": "spya-mjty2q", "quote": "He said, 'Yes, but then we won't get support for more research of this kind.' I think that's kind of dishonest.", "reasoning": "Shows the same selective-reporting logic in a third context (justifying research by overstating practical applications), reinforcing that the idea is general."}
+    ]
+  },
+  {
+    "name": "One empirical standard governs physics and human affairs alike",
+    "provenance": "assumed",
+    "statement": "The same test used to judge physics—does it reliably produce correct, working results when tried—can be applied without modification to education, criminal justice, psychotherapy, and other human and social practices.",
+    "whyYouNeedIt": "The talk moves directly from witch doctors and physics to reading instruction, crime policy, and psychotherapy as if a single yardstick covered all of them; the argument that these are 'pseudoscience' only works if that cross-domain comparison is legitimate, and the piece never defends the comparison itself.",
+    "occurrences": [
+      {"blockId": "spya-ddrr9m", "quote": "Then a method was discovered for separating the ideas—which was to try one to see if it worked, and if it didn't work, to eliminate it. This method became organized, of course, into science.", "reasoning": "Defines science purely by a working/not-working test, with no restriction to physical subject matter, setting up the later transfer to social fields."},
+      {"blockId": "spya-aww976", "quote": "There are big schools of reading methods and mathematics methods, and so forth, but if you notice, you'll see the reading scores keep going down—or hardly going up... There's a witch doctor remedy that doesn't work.", "reasoning": "Applies the witch-doctor/physics-style working test to education without pausing to justify why a method for judging potions or particle measurements should also judge reading instruction."},
+      {"blockId": "spya-re4634", "quote": "Yet these things are said to be scientific. We study them. And I think ordinary people with commonsense ideas are intimidated by this pseudoscience.", "reasoning": "Treats education and criminal rehabilitation as failing a single scientific standard, presupposing that standard is the correct one to judge them by."},
+      {"blockId": "spya-g2cwvy", "quote": "So we really ought to look into theories that don't work, and science that isn't science.", "reasoning": "States the conclusion that only follows if the physics-derived 'does it work' test is assumed valid across all these disparate domains."}
+    ]
+  }
+]}

@@ -1,0 +1,552 @@
+{
+  "version": "sketch/3",
+  "title": "Chain: nature to imitation",
+  "caption": "The article is a chain running from what silk is and how it behaves, through how spiders make it, to how humans try to copy and use it — each stage building on the last.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Spider silk: from web to lab",
+      "height": 1150,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "Silk's many jobs for spiders",
+          "size": "md",
+          "sub": "prey, shelter, mating, food",
+          "block": "spya-gp4t9x"
+        },
+        {
+          "kind": "node",
+          "id": "props",
+          "shape": "hex",
+          "x": 260,
+          "y": 140,
+          "w": 240,
+          "h": 80,
+          "text": "Structure gives it strength and stretch",
+          "size": "md",
+          "sub": "crystal sheets + stretchy matrix",
+          "tone": 1,
+          "block": "spya-py9zw6",
+          "opens": "inside-properties"
+        },
+        {
+          "kind": "node",
+          "id": "uses",
+          "shape": "box",
+          "x": 40,
+          "y": 260,
+          "w": 220,
+          "h": 70,
+          "text": "Many ecological uses",
+          "size": "sm",
+          "sub": "capture, dispersal, nests, signals",
+          "tone": 2,
+          "block": "spya-rty5kb"
+        },
+        {
+          "kind": "node",
+          "id": "types",
+          "shape": "box",
+          "x": 500,
+          "y": 260,
+          "w": 220,
+          "h": 70,
+          "text": "Different glands, different silks",
+          "size": "sm",
+          "sub": "dragline, capture-spiral, wrap, glue",
+          "tone": 2,
+          "block": "spya-hg7j7e"
+        },
+        {
+          "kind": "node",
+          "id": "spin",
+          "shape": "hex",
+          "x": 260,
+          "y": 370,
+          "w": 240,
+          "h": 80,
+          "text": "Spun on demand through a tapering duct",
+          "size": "md",
+          "sub": "liquid protein → solid fibre",
+          "block": "spya-g3h8qq"
+        },
+        {
+          "kind": "node",
+          "id": "gland",
+          "shape": "note",
+          "x": 40,
+          "y": 480,
+          "w": 220,
+          "h": 70,
+          "text": "One spider, hundreds of glands",
+          "size": "sm",
+          "sub": "garden cross spider example",
+          "block": "spya-zrcs7h"
+        },
+        {
+          "kind": "node",
+          "id": "synth",
+          "shape": "hex",
+          "x": 260,
+          "y": 580,
+          "w": 240,
+          "h": 80,
+          "text": "Copying silk is still hard",
+          "size": "md",
+          "sub": "feedstock + duct both needed",
+          "tone": 3,
+          "block": "spya-d7d7m8",
+          "opens": "inside-synthesis"
+        },
+        {
+          "kind": "node",
+          "id": "research",
+          "shape": "note",
+          "x": 500,
+          "y": 580,
+          "w": 220,
+          "h": 70,
+          "text": "Decades of mapping silk's science",
+          "size": "sm",
+          "sub": "chemistry, genes, mechanics",
+          "block": "spya-jvxbb8"
+        },
+        {
+          "kind": "node",
+          "id": "human",
+          "shape": "box",
+          "x": 260,
+          "y": 700,
+          "w": 240,
+          "h": 80,
+          "text": "Human uses: cloth, medicine, tech",
+          "size": "md",
+          "sub": "rare textile, wound dressing, optics",
+          "tone": 4,
+          "block": "spya-chy97m"
+        },
+        {
+          "kind": "node",
+          "id": "back",
+          "shape": "note",
+          "x": 260,
+          "y": 820,
+          "w": 240,
+          "h": 55,
+          "text": "References & related topics",
+          "size": "xs",
+          "tone": 0,
+          "block": "spya-jdybu5"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "props",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "props",
+          "to": "uses",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "props",
+          "to": "types",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "uses",
+          "to": "spin",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "types",
+          "to": "spin",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spin",
+          "to": "gland",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spin",
+          "to": "synth",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "synth",
+          "to": "research",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "synth",
+          "to": "human",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "research",
+          "to": "human",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "human",
+          "to": "back",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain down the page: silk's biology and properties lead to its natural production, then to artificial copying, then to human application; research and references sit as apparatus alongside."
+    },
+    {
+      "id": "inside-properties",
+      "title": "Properties: structure, mechanics, glue",
+      "height": 650,
+      "items": [
+        {
+          "kind": "node",
+          "id": "p0",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 70,
+          "text": "Hierarchical protein structure",
+          "size": "md",
+          "sub": "beta-sheets + amorphous matrix",
+          "block": "spya-p263u9"
+        },
+        {
+          "kind": "node",
+          "id": "p1",
+          "shape": "box",
+          "x": 60,
+          "y": 180,
+          "w": 210,
+          "h": 70,
+          "text": "Models of the fibre's architecture",
+          "size": "sm",
+          "sub": "Termonia's 1994 model, refined",
+          "tone": 1,
+          "block": "spya-ns50b2"
+        },
+        {
+          "kind": "node",
+          "id": "p2",
+          "shape": "box",
+          "x": 280,
+          "y": 180,
+          "w": 220,
+          "h": 80,
+          "text": "Strength, toughness, elasticity",
+          "size": "sm",
+          "sub": "tougher than Kevlar, lighter than steel",
+          "tone": 2,
+          "block": "spya-nwva2u"
+        },
+        {
+          "kind": "node",
+          "id": "p3",
+          "shape": "box",
+          "x": 520,
+          "y": 180,
+          "w": 200,
+          "h": 70,
+          "text": "Adhesive attachment discs",
+          "size": "sm",
+          "sub": "instant cure, biodegradable",
+          "tone": 3,
+          "block": "spya-k8bh7d"
+        },
+        {
+          "kind": "node",
+          "id": "p2a",
+          "shape": "note",
+          "x": 200,
+          "y": 320,
+          "w": 190,
+          "h": 60,
+          "text": "Stiffness (Young's modulus)",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-w9q80j"
+        },
+        {
+          "kind": "node",
+          "id": "p2b",
+          "shape": "note",
+          "x": 400,
+          "y": 320,
+          "w": 190,
+          "h": 60,
+          "text": "Tensile strength & toughness",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-mhe2r5"
+        },
+        {
+          "kind": "node",
+          "id": "p2c",
+          "shape": "note",
+          "x": 200,
+          "y": 400,
+          "w": 190,
+          "h": 60,
+          "text": "Stretch & supercontraction in water",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-qdjb0x"
+        },
+        {
+          "kind": "node",
+          "id": "p2d",
+          "shape": "note",
+          "x": 400,
+          "y": 400,
+          "w": 190,
+          "h": 60,
+          "text": "Darwin's bark spider: toughest known",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-ug9bz2"
+        },
+        {
+          "kind": "edge",
+          "from": "p0",
+          "to": "p1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p0",
+          "to": "p2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p0",
+          "to": "p3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2",
+          "to": "p2a",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2",
+          "to": "p2b",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2",
+          "to": "p2c",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2",
+          "to": "p2d",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "One starting point, molecular structure, fanning into the three kinds of performance it explains."
+    },
+    {
+      "id": "inside-synthesis",
+      "title": "Artificial synthesis: two problems at once",
+      "height": 700,
+      "items": [
+        {
+          "kind": "node",
+          "id": "s0",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 70,
+          "text": "Two tasks: protein + spinning conditions",
+          "size": "md",
+          "block": "spya-wgee6t"
+        },
+        {
+          "kind": "node",
+          "id": "s1",
+          "shape": "box",
+          "x": 60,
+          "y": 160,
+          "w": 260,
+          "h": 80,
+          "text": "Feedstock from E. coli, silkworms, goats, plants",
+          "size": "sm",
+          "sub": "results vary in strength",
+          "tone": 1,
+          "block": "spya-rw0wtg"
+        },
+        {
+          "kind": "node",
+          "id": "s2",
+          "shape": "box",
+          "x": 440,
+          "y": 160,
+          "w": 260,
+          "h": 80,
+          "text": "Reproducing the spinning duct",
+          "size": "sm",
+          "sub": "syringe, microfluidics, electrospinning",
+          "tone": 2,
+          "block": "spya-x4bwhf"
+        },
+        {
+          "kind": "node",
+          "id": "s3",
+          "shape": "note",
+          "x": 60,
+          "y": 280,
+          "w": 260,
+          "h": 60,
+          "text": "Also used for capsules, sheets, nanowires",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-r4r9au"
+        },
+        {
+          "kind": "node",
+          "id": "s4",
+          "shape": "box",
+          "x": 220,
+          "y": 400,
+          "w": 320,
+          "h": 80,
+          "text": "Synthetic silk still thinner, weaker than natural",
+          "size": "sm",
+          "sub": "wet-spun fibres from engineered organisms",
+          "tone": 3,
+          "block": "spya-j7hems"
+        },
+        {
+          "kind": "node",
+          "id": "s5",
+          "shape": "box",
+          "x": 220,
+          "y": 520,
+          "w": 320,
+          "h": 70,
+          "text": "Commercial efforts",
+          "size": "sm",
+          "sub": "AMSilk, Bolt Threads, Spiber, Nexia",
+          "tone": 4,
+          "block": "spya-m99ub7"
+        },
+        {
+          "kind": "edge",
+          "from": "s0",
+          "to": "s1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s0",
+          "to": "s2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s2",
+          "to": "s3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s1",
+          "to": "s4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s2",
+          "to": "s4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s4",
+          "to": "s5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Two columns running together: getting the right protein, and getting it to form a fibre, before either reaches real-world use."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "spider-silk-spya-ge30uz",
+  "sourceHash": "e1b739438681beb3.e79e41a4b4b6b689.5a9dbcf7548ed3c5",
+  "profileHash": null
+}
