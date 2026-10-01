@@ -1,0 +1,437 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page, with small painted scenes in framed compartments and gold-leaf-style borders, suiting the article's historical chain of origins and its scholarly vocabulary",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Chronicle of the Replication Crisis",
+      "prompt": "An illuminated manuscript page, cream vellum, framed compartments bordered in faded gold and deep blue ink, each holding one small painted scene, arranged top to bottom in a single flowing column that a reader's eye follows like a chronicle. At the top: a scholar holding up two identical experiment setups giving different results, shaking his head (TWO TRIALS, TWO ANSWERS). Below, a scribe at a lectern with small labeled instruments — a scale, an hourglass, a measuring rod (THE SCHOLAR'S TOOLS). Next, a calendar-wheel marked with the early 2010s, three small scenes orbiting it: an elderly walker, a card-guessing table, a mouse in a cage (THE TURNING WHEEL). Then a council of robed scholars arguing beneath a plain stone arch, hands raised (THE COUNCIL'S ALARM), followed by three scribes at separate desks writing warnings into scrolls that pile up dusty and unread (THE UNHEEDED SCRIBES). The page then opens into a wider band labeled by composition (not lettering) showing evidence: a balance scale with only a third of its stones matching (THE UNEVEN SCALE), a row of 53 small vials mostly dark (THE DARK VIALS), a merchant's ledger-table with coins stacked at two-thirds height (THE SHRUNKEN COINS), converging into a great crowd of robed figures raising hands in confession before a dais (THE CONFESSING CROWD). From this crowd the page forks into two branches: on the left, a scribe stuffing failed scrolls into a locked drawer while handing bright ones to a herald (THE FULL DRAWER), a figure at a crossroads choosing the path to a false gem (THE FORKING PATH), a pile of torn scrolls (THE TORN SCROLLS); on the right, a carpenter's square bending uselessly against soft cloth (THE BENT SQUARE). The branches converge again at the bottom: two robed figures shouting and pointing fingers at a table (THE QUARRELING SCHOLARS), masons building a new gate beside a crumbling older archway (THE NEW GATEWAY), and finally three surveyors on separate hilltops sighting lines toward one distant tower (THE THREE SURVEYORS). Palette: faded gold, deep blue, oxblood red, aged ivory vellum texture. No lettering anywhere except the sixteen titles in small capitals beneath each compartment. Generous bare vellum between scenes, no crowded marginalia.",
+      "vignettes": [
+        {
+          "block": "spya-pcnqxn",
+          "quote": "widespread failures to reproduce published scientific results",
+          "depicts": "A scholar holds up two identical experiment setups that give different results, shaking his head in dismay.",
+          "title": "TWO TRIALS, TWO ANSWERS",
+          "node": "n1"
+        },
+        {
+          "block": "spya-xrc2re",
+          "quote": "Certain terms commonly used in discussions of the replication crisis have technically precise meanings",
+          "depicts": "A scribe at a lectern with small labeled instruments (scale, hourglass, measuring rod) representing the technical vocabulary.",
+          "title": "THE SCHOLAR'S TOOLS",
+          "node": "n2"
+        },
+        {
+          "block": "spya-yru28f",
+          "quote": "dates to a number of events in the early 2010s",
+          "depicts": "A calendar-wheel marked with the early 2010s, with three small scenes orbiting it (an elderly walker, a card-guessing table, a mouse in a cage).",
+          "title": "THE TURNING WHEEL",
+          "node": "n3"
+        },
+        {
+          "block": "spya-dg8j93",
+          "quote": "a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A council of robed scholars arguing beneath a banner-less arch, hands raised in alarm.",
+          "title": "THE COUNCIL'S ALARM",
+          "node": "n4"
+        },
+        {
+          "block": "spya-u3tg84",
+          "quote": "the works of Paul Meehl, Jacob Cohen, and Tversky and Kahneman in the 1960s-70s were early warnings",
+          "depicts": "Three scribes at separate desks each writing unheeded warnings into scrolls that pile up, dusty and unread.",
+          "title": "THE UNHEEDED SCRIBES",
+          "node": "n5"
+        },
+        {
+          "block": "spya-bha57y",
+          "quote": "36% replicated successfully (p value below 0.05), with effect sizes averaging half the original magnitude",
+          "depicts": "A balance scale where only a third of the weighted stones on one side match the other, the rest sliding off.",
+          "title": "THE UNEVEN SCALE",
+          "node": "n6"
+        },
+        {
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions",
+          "depicts": "A row of 53 small vials, only a handful glowing, the rest dark and empty.",
+          "title": "THE DARK VIALS",
+          "node": "n7"
+        },
+        {
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66%",
+          "depicts": "A merchant's ledger-table with coins stacked at two-thirds height beside taller original stacks.",
+          "title": "THE SHRUNKEN COINS",
+          "node": "n8"
+        },
+        {
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A great crowd of robed figures, most raising their hands in confession before a central dais.",
+          "title": "THE CONFESSING CROWD",
+          "node": "n9"
+        },
+        {
+          "block": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A scribe stuffing failed scroll after scroll into a locked drawer while handing only bright ones to a herald.",
+          "title": "THE FULL DRAWER",
+          "node": "n10"
+        },
+        {
+          "block": "spya-kqvxfb",
+          "quote": "exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates",
+          "depicts": "A figure at a crossroads with many forked paths, choosing the one leading to a shining false gem.",
+          "title": "THE FORKING PATH",
+          "node": "n12"
+        },
+        {
+          "block": "spya-gjx6ut",
+          "quote": "none of the 193 papers examined had its experimental protocols fully described",
+          "depicts": "A pile of 193 scrolls, each torn off mid-sentence, a frustrated reader turning them over.",
+          "title": "THE TORN SCROLLS",
+          "node": "n11"
+        },
+        {
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A carpenter's square being used to measure a soft cloth instead of hard wood, bending uselessly.",
+          "title": "THE BENT SQUARE",
+          "node": "n13"
+        },
+        {
+          "block": "spya-t88q4a",
+          "quote": "unidentified \"adversaries\" names such as \"methodological terrorist\" and \"self-appointed data police\"",
+          "depicts": "Two robed figures shouting at each other across a table, one pointing an accusing finger.",
+          "title": "THE QUARRELING SCHOLARS",
+          "node": "n14"
+        },
+        {
+          "block": "spya-astgqn",
+          "quote": "triangulation, not just replication, to protect against flawed ideas",
+          "depicts": "Three surveyors each sighting the same distant tower from different hilltops, their lines meeting at one point.",
+          "title": "THE THREE SURVEYORS",
+          "node": "n16"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A scholar holds up two identical experiment setups that give different results, shaking his head in dismay.",
+          "title": "TWO TRIALS, TWO ANSWERS"
+        },
+        {
+          "where": "A scribe at a lectern with small labeled instruments (scale, hourglass, measuring rod) representing the technical vocabulary.",
+          "title": "THE SCHOLAR'S TOOLS"
+        },
+        {
+          "where": "A calendar-wheel marked with the early 2010s, with three small scenes orbiting it (an elderly walker, a card-guessing table, a mouse in a cage).",
+          "title": "THE TURNING WHEEL"
+        },
+        {
+          "where": "A council of robed scholars arguing beneath a banner-less arch, hands raised in alarm.",
+          "title": "THE COUNCIL'S ALARM"
+        },
+        {
+          "where": "Three scribes at separate desks each writing unheeded warnings into scrolls that pile up, dusty and unread.",
+          "title": "THE UNHEEDED SCRIBES"
+        },
+        {
+          "where": "A balance scale where only a third of the weighted stones on one side match the other, the rest sliding off.",
+          "title": "THE UNEVEN SCALE"
+        },
+        {
+          "where": "A row of 53 small vials, only a handful glowing, the rest dark and empty.",
+          "title": "THE DARK VIALS"
+        },
+        {
+          "where": "A merchant's ledger-table with coins stacked at two-thirds height beside taller original stacks.",
+          "title": "THE SHRUNKEN COINS"
+        },
+        {
+          "where": "A great crowd of robed figures, most raising their hands in confession before a central dais.",
+          "title": "THE CONFESSING CROWD"
+        },
+        {
+          "where": "A scribe stuffing failed scroll after scroll into a locked drawer while handing only bright ones to a herald.",
+          "title": "THE FULL DRAWER"
+        },
+        {
+          "where": "A figure at a crossroads with many forked paths, choosing the one leading to a shining false gem.",
+          "title": "THE FORKING PATH"
+        },
+        {
+          "where": "A pile of 193 scrolls, each torn off mid-sentence, a frustrated reader turning them over.",
+          "title": "THE TORN SCROLLS"
+        },
+        {
+          "where": "A carpenter's square being used to measure a soft cloth instead of hard wood, bending uselessly.",
+          "title": "THE BENT SQUARE"
+        },
+        {
+          "where": "Two robed figures shouting at each other across a table, one pointing an accusing finger.",
+          "title": "THE QUARRELING SCHOLARS"
+        },
+        {
+          "where": "A new banner-less gate being built by masons, replacing a crumbling older archway.",
+          "title": "THE NEW GATEWAY"
+        },
+        {
+          "where": "Three surveyors each sighting the same distant tower from different hilltops, their lines meeting at one point.",
+          "title": "THE THREE SURVEYORS"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "The Eight Witnesses",
+      "prompt": "An illuminated manuscript page, same cream vellum, gold-and-blue framed compartments as before. Eight scenes arranged in two columns of four, converging downward toward a ninth large central scene, which funnels into a tenth scene at the very bottom. Column left, top to bottom: a row of 97 small lanterns with only a third lit (97 LANTERNS, FEW LIT); a physician's workbench of cancer vials mostly crossed out with ink (THE CROSSED-OUT VIALS); a cook pulling ingredients from an open cookbook, each trailing a small warning scroll (THE COOKBOOK'S WARNINGS); a surveyor beside a vast dry riverbed with only a tiny trickle marked true (THE DRY RIVERBED). Column right, top to bottom: a physician measuring one faint pulse against a vast waiting crowd (THE THOUSAND PULSES); two physicians at a table, one striking through an old remedy chart and writing a stronger dose above it (THE REVISED REMEDY); a merchant weighing coin-stacks on a scale, the replicated stack shorter (THE MERCHANT'S SHORT STACK); an oracle's mirror showing a different face each time the same question is asked (THE SHIFTING ORACLE). Both columns' lines of sight converge toward a large central scene below them: a great gathering of robed figures of many trades — physician, cook, merchant, surveyor, scribe — converging toward one central well, all drawing the same empty bucket (THE EMPTY WELL). Beneath this, at the very bottom of the page, one final scene: a crooked, cracked stone monument still being crowned with fresh garlands by passing scholars who do not notice the cracks (THE CROOKED MONUMENT, CROWNED). Palette: faded gold, deep blue, oxblood red, aged ivory. Only the ten titles lettered in small capitals beneath their scenes; no other writing anywhere on the page. Wide spacing between scenes, vellum left bare rather than crowded with ornament.",
+      "vignettes": [
+        {
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A row of 97 small lanterns, only about a third lit, the rest dark.",
+          "title": "97 LANTERNS, FEW LIT",
+          "node": "e1"
+        },
+        {
+          "block": "spya-ekg3fe",
+          "quote": "replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A physician measuring a single faint pulse against a vast crowd of thousands waiting behind him.",
+          "title": "THE THOUSAND PULSES",
+          "node": "e2"
+        },
+        {
+          "block": "spya-d8g53k",
+          "quote": "Results from The Reproducibility Project: Cancer Biology suggest most studies of the cancer research sector may not be replicable",
+          "depicts": "A physician's workbench of cancer vials, most crossed out with ink.",
+          "title": "THE CROSSED-OUT VIALS",
+          "node": "e3"
+        },
+        {
+          "block": "spya-esjmns",
+          "quote": "16% were contradicted by subsequent studies, 16% had found stronger effects",
+          "depicts": "Two physicians at a table, one striking through an old remedy chart, another writing a stronger dose above it.",
+          "title": "THE REVISED REMEDY",
+          "node": "e4"
+        },
+        {
+          "block": "spya-d977mu",
+          "quote": "out of a random sample of 50 ingredients from a cookbook, 80% had articles reporting on their cancer risk",
+          "depicts": "A cook pulling ingredients from an open cookbook, each one trailing a small warning scroll.",
+          "title": "THE COOKBOOK'S WARNINGS",
+          "node": "e5"
+        },
+        {
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66%",
+          "depicts": "A merchant weighing coin-stacks on a scale, the replicated stack visibly shorter than the original.",
+          "title": "THE MERCHANT'S SHORT STACK",
+          "node": "e6"
+        },
+        {
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A surveyor beside a vast dry riverbed, only a tiny trickle of water marked as true.",
+          "title": "THE DRY RIVERBED",
+          "node": "e7"
+        },
+        {
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "An oracle's mirror showing a different face each time the same question is asked before it.",
+          "title": "THE SHIFTING ORACLE",
+          "node": "e8"
+        },
+        {
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A great gathering of robed figures of many trades converging toward a single central well, all drawing the same empty bucket.",
+          "title": "THE EMPTY WELL",
+          "node": "e9"
+        },
+        {
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "A crooked, cracked monument still being crowned with fresh garlands by passing scholars.",
+          "title": "THE CROOKED MONUMENT, CROWNED",
+          "node": "e10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A row of 97 small lanterns, only about a third lit, the rest dark.",
+          "title": "97 LANTERNS, FEW LIT"
+        },
+        {
+          "where": "A physician measuring a single faint pulse against a vast crowd of thousands waiting behind him.",
+          "title": "THE THOUSAND PULSES"
+        },
+        {
+          "where": "A physician's workbench of cancer vials, most crossed out with ink.",
+          "title": "THE CROSSED-OUT VIALS"
+        },
+        {
+          "where": "Two physicians at a table, one striking through an old remedy chart, another writing a stronger dose above it.",
+          "title": "THE REVISED REMEDY"
+        },
+        {
+          "where": "A cook pulling ingredients from an open cookbook, each one trailing a small warning scroll.",
+          "title": "THE COOKBOOK'S WARNINGS"
+        },
+        {
+          "where": "A merchant weighing coin-stacks on a scale, the replicated stack visibly shorter than the original.",
+          "title": "THE MERCHANT'S SHORT STACK"
+        },
+        {
+          "where": "A surveyor beside a vast dry riverbed, only a tiny trickle of water marked as true.",
+          "title": "THE DRY RIVERBED"
+        },
+        {
+          "where": "An oracle's mirror showing a different face each time the same question is asked before it.",
+          "title": "THE SHIFTING ORACLE"
+        },
+        {
+          "where": "A great gathering of robed figures of many trades converging toward a single central well, all drawing the same empty bucket.",
+          "title": "THE EMPTY WELL"
+        },
+        {
+          "where": "A crooked, cracked monument still being crowned with fresh garlands by passing scholars.",
+          "title": "THE CROOKED MONUMENT, CROWNED"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Roads of Fault",
+      "prompt": "An illuminated manuscript page, the same cream vellum and gold-blue frames as the earlier plates, divided into two parallel vertical columns descending the page, like twin aisles of a chronicle, meeting at the bottom beneath a shared horizon line. Left column, top to bottom: a printing workshop overwhelmed by an avalanche of freshly printed pages (THE OVERFLOWING PRESS); a scribe stuffing dull gray scrolls into a locked drawer while bright gilded ones reach a herald (THE LOCKED DRAWER); a clerk comparing two ledgers whose sums do not match (THE MISMATCHED LEDGERS); a scribe racing a sundial's shadow, stamping scrolls as judges watch (THE RACING SUNDIAL); a reader holding a recipe scroll with its middle steps torn away (THE TORN RECIPE). Right column, top to bottom: a figure at a crossroads of many signposts, each pointing to a glittering false gem (THE MANY FORKING SIGNPOSTS); an archer whose weakly drawn bow sends arrows falling short of a distant target (THE WEAK-DRAWN BOW); two identical vessels of water, the second less full (THE DWINDLING VESSEL); two scholars arguing over a stitched tapestry of mismatched cloths (THE MISALIGNED TAPESTRY); a gardener planting the same seed in many soils, each sprouting differently (THE VARYING SOIL). At the very bottom, spanning both columns, one final shared scene: a carpenter pressing his hard measuring square against soft cloth that bends around it instead of being measured (THE SOFT CLOTH, HARD SQUARE). Palette: faded gold, deep blue, oxblood red, aged ivory vellum. Only the eleven titles lettered in small capitals beneath their own scenes; nothing else written anywhere on the page. Generous bare vellum between the two columns so the twin-aisle structure reads clearly.",
+      "vignettes": [
+        {
+          "block": "spya-v697nj",
+          "quote": "generation of new data and scientific publications at an unprecedented rate",
+          "depicts": "A printing workshop overwhelmed with an avalanche of freshly printed pages spilling off the presses.",
+          "title": "THE OVERFLOWING PRESS",
+          "node": "c1"
+        },
+        {
+          "block": "spya-kqvxfb",
+          "quote": "exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates",
+          "depicts": "A figure standing at a crossroads of many paths, each signpost pointing toward a glittering but false gem.",
+          "title": "THE MANY FORKING SIGNPOSTS",
+          "node": "d1"
+        },
+        {
+          "block": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A scribe stuffing dull gray scrolls into a locked drawer while only bright gilded ones reach the herald's hand.",
+          "title": "THE LOCKED DRAWER",
+          "node": "c2"
+        },
+        {
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "An archer whose bow is drawn too weakly, most arrows falling short of a distant target.",
+          "title": "THE WEAK-DRAWN BOW",
+          "node": "d2"
+        },
+        {
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A clerk comparing two ledgers side by side, finding the sums do not match on several entries.",
+          "title": "THE MISMATCHED LEDGERS",
+          "node": "c3"
+        },
+        {
+          "block": "spya-r42sms",
+          "quote": "Even when the study replicates, the replication typically has a smaller effect size",
+          "depicts": "Two identical vessels of water, the second one visibly less full than the first.",
+          "title": "THE DWINDLING VESSEL",
+          "node": "d3"
+        },
+        {
+          "block": "spya-cw2g6v",
+          "quote": "Intense pressure to publish in recognized journals, driven by hypercompetitive environments and bibliometric career evaluations",
+          "depicts": "A scribe racing against a sundial's shadow, hastily stamping scrolls as a queue of judges watches.",
+          "title": "THE RACING SUNDIAL",
+          "node": "c4"
+        },
+        {
+          "block": "spya-th90w0",
+          "quote": "Meta-analyses have their own methodological problems and disputes",
+          "depicts": "Two scholars arguing over a great stitched tapestry made of many smaller cloths that do not quite align.",
+          "title": "THE MISALIGNED TAPESTRY",
+          "node": "d4"
+        },
+        {
+          "block": "spya-gjx6ut",
+          "quote": "none of the 193 papers examined had its experimental protocols fully described",
+          "depicts": "A reader holding a recipe scroll with its middle steps torn away, unable to repeat the dish.",
+          "title": "THE TORN RECIPE",
+          "node": "c5"
+        },
+        {
+          "block": "spya-ddw4ya",
+          "quote": "a further reason studies might fail to replicate is high heterogeneity of the to-be-replicated effects",
+          "depicts": "A gardener planting the same seed in many different soils, each sprouting a differently shaped plant.",
+          "title": "THE VARYING SOIL",
+          "node": "d5"
+        },
+        {
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A carpenter pressing his hard measuring square against a soft, yielding cloth that bends around it.",
+          "title": "THE SOFT CLOTH, HARD SQUARE",
+          "node": "d6"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A printing workshop overwhelmed with an avalanche of freshly printed pages spilling off the presses.",
+          "title": "THE OVERFLOWING PRESS"
+        },
+        {
+          "where": "A figure standing at a crossroads of many paths, each signpost pointing toward a glittering but false gem.",
+          "title": "THE MANY FORKING SIGNPOSTS"
+        },
+        {
+          "where": "A scribe stuffing dull gray scrolls into a locked drawer while only bright gilded ones reach the herald's hand.",
+          "title": "THE LOCKED DRAWER"
+        },
+        {
+          "where": "An archer whose bow is drawn too weakly, most arrows falling short of a distant target.",
+          "title": "THE WEAK-DRAWN BOW"
+        },
+        {
+          "where": "A clerk comparing two ledgers side by side, finding the sums do not match on several entries.",
+          "title": "THE MISMATCHED LEDGERS"
+        },
+        {
+          "where": "Two identical vessels of water, the second one visibly less full than the first.",
+          "title": "THE DWINDLING VESSEL"
+        },
+        {
+          "where": "A scribe racing against a sundial's shadow, hastily stamping scrolls as a queue of judges watches.",
+          "title": "THE RACING SUNDIAL"
+        },
+        {
+          "where": "Two scholars arguing over a great stitched tapestry made of many smaller cloths that do not quite align.",
+          "title": "THE MISALIGNED TAPESTRY"
+        },
+        {
+          "where": "A reader holding a recipe scroll with its middle steps torn away, unable to repeat the dish.",
+          "title": "THE TORN RECIPE"
+        },
+        {
+          "where": "A gardener planting the same seed in many different soils, each sprouting a differently shaped plant.",
+          "title": "THE VARYING SOIL"
+        },
+        {
+          "where": "A carpenter pressing his hard measuring square against a soft, yielding cloth that bends around it.",
+          "title": "THE SOFT CLOTH, HARD SQUARE"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "replication-crisis-spya-hrjamq",
+  "profileHash": null
+}

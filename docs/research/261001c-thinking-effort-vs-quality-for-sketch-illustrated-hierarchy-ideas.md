@@ -24,11 +24,32 @@ less valuable to him.
 | mode | today | decided | why |
 |---|---|---|---|
 | **Sketch** | `high` | **`low`** | Neither judge sees a loss (mean U 1.56 and 1.69 against a no-difference 2.0). Each call is 57% cheaper and four times faster. |
-| **Illustrated** | `high` (implicit) | *pending: the last nine draws wait on OpenRouter credit* | — |
+| **Illustrated** | `high` (implicit) | **stays `high`** | Both judges find `low` clearly worse (mean U 1.06 and 0.31). The brief stops choosing a style from the article, and its captions become riddles. At `medium` the judges split (1.56 and 1.06); the rule takes the worse of the two, and a close call keeps today's effort. |
 | **Ideas** | `high` | **stays `high`** | Below `high` it writes broken JSON most of the time: 10 of 16 draws at `medium` and at `low`, against 1 of 16 at `high`. |
 | **Hierarchy** | `low` | **stays `low`** | It is already at the bottom of the effort ladder. With thinking off, both draws put a sentence of prose before the JSON, and the shipping parser refused them. |
 
-<!-- Illustrated and the per-article saving are filled in when its run completes. -->
+**What it saves.** Sketch at `low` costs 57% less per call ($0.235 → $0.100), and its picture
+arrives in about 40 seconds instead of about three minutes.
+
+Across the 44 normal articles in 261001b's 30 days, Sketch spent about $4.66 (its $6.77 total, less
+the book's $2.11). 57% of that is about $2.66, which comes to **about 6¢ a normal article, roughly
+5% of the mean normal article's Claude bill** ($48.52 over 44 articles, $1.10 each).
+
+That is about half the 9–10% the plan hoped for. The hope assumed all four modes could halve their
+thinking, and only one could.
+
+**Sketch and Illustrated are not standardised, and that departs from the plan's rule.** The plan
+said the two would end on the higher level each passes. Read literally, Illustrated passing only
+`high` would hold Sketch at `high` as well. I set that aside, for two reasons:
+
+- **Greg's leaning was conditional.** He said *"I'm leaning towards standardising the effort level
+  for them if it makes them cheaper"*. Standardising at `high` makes neither of them cheaper.
+- **It buys nothing technically.** The reason relayed for standardising was a shared cache, and
+  Illustrated shares a cache with nothing at any effort: its article is fenced, so its bytes differ
+  from every other stage's (src/models.ts § `ArticleStage`).
+
+So each mode takes its own result. If Greg wants them on one level regardless, it is one line, and
+he can say so.
 
 And one finding nobody asked for: **today's `high` also writes broken JSON**, in 1 of 16 Ideas
 draws and 1 of 16 Sketch draws. Nothing retries a malformed answer, so the reader gets a failed card
@@ -176,9 +197,47 @@ structured outputs again — and the saving is small: about 4,000 thinking token
 Greg's question, *"I'm not convinced the problem it's solving needs a really high effort level"*,
 has the answer that it already runs at the lowest one.
 
-## Illustrated
+## Illustrated: stays `high`
 
-<!-- pending -->
+Judged on the brief, the written composition the image model paints, because two paintings of one
+identical brief vary visibly.
+
+| level | Sol mean U | Opus mean U | verdict | invalid | thinking | cost per call | wall clock |
+|---|---:|---:|---|---:|---:|---:|---:|
+| `high` (today) | — | — | — | 0 of 16 | 20,874 | $0.320 | 245 s |
+| `medium` | 1.56 | **1.06** | clear loss (Opus) | 0 of 16 | 7,345 | $0.182 | 122 s |
+| `low` | **1.06** | **0.31** | clear loss (both) | 1 of 16 | 2,121 | $0.126 | 74 s |
+
+**`low` loses the two things [illustrated.md](../project/illustrated.md) says the mode is for.**
+
+- **Choosing the style from the article.** At `high`, the essay that invokes golems and souls gets
+  an illuminated manuscript. At `low`, the style falls back to an antique map justified only as
+  *"charts an argument's territory — generic"* (Opus, noema).
+- **Captions a reader can decode.** The reader's complaint was that without readable lettering the
+  pictures make no sense. At `low` the captions become riddles: *"THE NEARER LANTERN", "THE FORGE
+  LEFT UNLIT"*, *"Cryptic captions needing a key: 'THE DROWNED TALLY', 'THE NEEDLED SLICE'"* (Opus,
+  noema and entropy). Sol, on noema: the `high` briefs *"choose the article's own
+  illuminated-manuscript register from its golems, Scala naturae, gods, soul, and breath, while Y's
+  map is less intrinsically tied to the essay"* (Y was `low-b`).
+
+**`medium` is a close call, and the rule keeps `high`.**
+- Sol sees no consistent loss. On replication-crisis it ranks a `medium` brief top for *"the
+  clearest evidence-causes-remedies structure with accurate, concise lettering"*.
+- Opus scores `medium` lower on five of eight articles, and its mean U falls just under the
+  clear-loss line, at 1.06.
+- Had `medium` been adopted, it would have saved about 43% a call, about 4¢ a normal article.
+  Greg could still choose it on this evidence, knowing the judges split.
+
+**`low`'s one invalid draw was a separate question**, and it was settled before the quality verdicts
+came in. The gate as worded (no more invalid draws than base) fails 1 against 0. At these counts
+that is a coin flip, so Opus arbitrated, and the plan records a fixed test: 32 more validity-only
+`low` draws, failing at 3 or more invalid. That test was stopped after 4 draws (0 invalid, $0.69),
+because both judges had by then found `low` clearly worse on quality, so its validity could no
+longer change the outcome.
+
+**One note on method.** The Opus judge for the `low` round gave each article to its own sub-judge.
+All four candidates of an article still shared one context, which is what U needs, but the scale
+was not shared across articles. The `medium` round's judge scored every article itself.
 
 ## A finding on the side: broken JSON at today's effort
 
@@ -209,9 +268,10 @@ or structured outputs. Either is its own piece of work; neither was done here.
 
 Effort is part of the prompt-cache key ([prompt-caching.md](../project/prompt-caching.md)).
 
-- **Sketch** leaves the big `ids` + `high` group (ideas, timeline, quiz, faq, simple, tweets).
-- **Illustrated** shares a cache with nothing, before or after: its article is fenced, so its bytes
-  differ from every other stage's.
+- **Sketch** leaves the big `ids` + `high` group (ideas, timeline, quiz, faq, simple, tweets) and
+  is alone at `ids` + `low`.
+- **Illustrated** is unchanged, and shares a cache with nothing anyway: its article is fenced, so
+  its bytes differ from every other stage's.
 
 In production a cross-job share almost never happens: each mode is its own job, and a job marks the
 article only for a sibling in the same job ([261001b](261001b-cost-per-article-and-the-cross-mode-article-cache/README.md)).
@@ -220,7 +280,16 @@ assumed one effort per group.
 
 ## What it cost
 
-<!-- filled in at the end -->
+**About $22.30 in API spend**, all through OpenRouter: 138 generation calls in this harness
+(including the smoke, the medium rounds and the 4 stopped validity draws), the three Hierarchy smoke
+calls ($0.22), and three smoke plates ($0.20). The judges ran on Codex and Claude subscriptions.
+
+Partway through, on 2026-10-01 at about 20:30, the OpenRouter **account** (shared by the dev and prod
+keys) ran out of credit, at $309.13 of $310. Three Illustrated calls came back
+`402 ai-no-credit`, and the harness stopped itself rather than record them as answers. The account
+was topped up to $410 in total (the Overseer relayed it), and those three cells were re-run; the failed rows are kept in
+`evals/results/thinking-effort-261001/outage-402/`. This eval was about $17 of the dev key's
+$50.89 that day.
 
 ## What this does not show
 

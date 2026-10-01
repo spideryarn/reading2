@@ -35,11 +35,33 @@ inside output tokens. `$` is the ledger's (OpenRouter's settled cost) for the mo
 | illustrated | low-a | after-work-we-ll-have-each-other-spya-we6h75 | low | 3,584 | 9,107 | 18,370 | $0.1278 | $0.1278 | 86s | end_turn | Anthropic | yes | 97 | 34,272 | 3 plates in brief, 0 figures offered |
 | illustrated | low-b | after-work-we-ll-have-each-other-spya-we6h75 | low | 11 | 5,405 | 18,370 | $0.0908 | $0.0908 | 53s | end_turn | Anthropic | yes | 97 | 34,272 | 3 plates in brief, 0 figures offered |
 | illustrated | base-b | after-work-we-ll-have-each-other-spya-we6h75 | (none) | 22,870 | 29,272 | 18,370 | $0.3295 | $0.3295 | 266s | end_turn | Anthropic | yes | 97 | 34,272 | 3 plates in brief, 0 figures offered |
-| illustrated | base-a | after-work-we-ll-have-each-other-spya-we6h75 | (none) | ? | ? | ? | ? | $0.0000 | 0s | ? | ? | **no**: Anthropic SDK request failed, status 402. [ai-no-credit]; provider attempt is mi | 97 | 34,272 | ? plates in brief, 0 figures offered |
-| illustrated | base-a | spider-silk-spya-ge30uz | (none) | ? | ? | ? | ? | $0.0000 | 0s | ? | ? | **no**: Anthropic SDK request failed, status 402. [ai-no-credit]; provider attempt is mi | 263 | 62,920 | ? plates in brief, 0 figures offered |
-| illustrated | low-b | cargocult-spya-rz663q | low | ? | ? | ? | ? | $0.0000 | 0s | ? | ? | **no**: Anthropic SDK request failed, status 402. [ai-no-credit]; provider attempt is mi | 41 | 21,195 | ? plates in brief, 0 figures offered |
+| illustrated | base-a | after-work-we-ll-have-each-other-spya-we6h75 | (none) | 22,720 | 28,924 | 18,370 | $0.3260 | $0.3260 | 252s | end_turn | Anthropic | yes | 97 | 34,272 | 3 plates in brief, 0 figures offered |
+| illustrated | base-a | spider-silk-spya-ge30uz | (none) | 20,929 | 27,237 | 20,501 | $0.3134 | $0.3134 | 241s | end_turn | Anthropic | yes | 263 | 62,920 | 3 plates in brief, 0 figures offered |
+| illustrated | low-a | spider-silk-spya-ge30uz | low | 206 | 5,326 | 20,501 | $0.0943 | $0.0943 | 49s | end_turn | Anthropic | **no**: the model's answer is not valid JSON: it breaks at position 1723 of 13098 charac | 263 | 62,920 | ? plates in brief, 0 figures offered |
+| illustrated | low-b | spider-silk-spya-ge30uz | low | 11 | 5,252 | 20,501 | $0.0935 | $0.0935 | 49s | end_turn | Anthropic | yes | 263 | 62,920 | 3 plates in brief, 0 figures offered |
+| illustrated | base-b | spider-silk-spya-ge30uz | (none) | 20,257 | 26,816 | 20,501 | $0.3092 | $0.3092 | 238s | end_turn | Anthropic | yes | 263 | 62,920 | 3 plates in brief, 0 figures offered |
+| illustrated | low-b | cargocult-spya-rz663q | low | 20 | 5,389 | 13,124 | $0.0801 | $0.0801 | 48s | end_turn | Anthropic | yes | 41 | 21,195 | 3 plates in brief, 0 figures offered |
+| illustrated | base-b | cargocult-spya-rz663q | (none) | 9,797 | 16,097 | 13,124 | $0.1872 | $0.1872 | 139s | end_turn | Anthropic | yes | 41 | 21,195 | 3 plates in brief, 0 figures offered |
+| illustrated | low-a | cargocult-spya-rz663q | low | 2,003 | 7,131 | 13,124 | $0.0976 | $0.0976 | 61s | end_turn | Anthropic | yes | 41 | 21,195 | 3 plates in brief, 0 figures offered |
+| illustrated | base-a | cargocult-spya-rz663q | (none) | 13,285 | 19,334 | 13,124 | $0.2196 | $0.2196 | 176s | end_turn | Anthropic | yes | 41 | 21,195 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-a | replication-crisis-spya-hrjamq | medium | 12,897 | 19,192 | 36,426 | $0.2648 | $0.2648 | 173s | end_turn | Anthropic | yes | 551 | 149,817 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-b | replication-crisis-spya-hrjamq | medium | 8,911 | 15,370 | 36,426 | $0.2266 | $0.2266 | 150s | end_turn | Anthropic | yes | 551 | 149,817 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-b | entropy-24-00930-spya-pywwkq | medium | 13,793 | 20,039 | 25,860 | $0.2521 | $0.2521 | 179s | end_turn | Anthropic | yes | 99 | 56,536 | 3 plates in brief, 4 figures offered |
+| illustrated | medium-a | entropy-24-00930-spya-pywwkq | medium | 3,606 | 9,495 | 25,860 | $0.1467 | $0.1467 | 89s | end_turn | Anthropic | yes | 99 | 56,536 | 3 plates in brief, 4 figures offered |
+| illustrated | medium-a | noema-mythology-of-conscious-ai | medium | 8,940 | 14,933 | 23,534 | $0.1964 | $0.1964 | 140s | end_turn | Anthropic | yes | 141 | 52,573 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-b | noema-mythology-of-conscious-ai | medium | 6,159 | 11,858 | 23,534 | $0.1656 | $0.1656 | 104s | end_turn | Anthropic | yes | 141 | 52,573 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-a | towards-a-theory-of-bugs-the-ruliology-of-the-unexpected | medium | 9,036 | 15,925 | 23,710 | $0.2067 | $0.2067 | 141s | end_turn | Anthropic | yes | 244 | 46,808 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-b | towards-a-theory-of-bugs-the-ruliology-of-the-unexpected | medium | 8,531 | 15,153 | 23,710 | $0.1989 | $0.1989 | 138s | end_turn | Anthropic | yes | 244 | 46,808 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-a | analog-cognition-and-consciousness-4-28-26-spya-f03kqf | medium | 6,171 | 12,612 | 24,702 | $0.1755 | $0.1755 | 113s | end_turn | Anthropic | yes | 92 | 45,461 | 3 plates in brief, 8 figures offered |
+| illustrated | medium-b | analog-cognition-and-consciousness-4-28-26-spya-f03kqf | medium | 5,327 | 12,267 | 24,702 | $0.1721 | $0.1721 | 111s | end_turn | Anthropic | yes | 92 | 45,461 | 3 plates in brief, 8 figures offered |
+| illustrated | medium-b | after-work-we-ll-have-each-other-spya-we6h75 | medium | 5,083 | 11,339 | 18,370 | $0.1501 | $0.1501 | 104s | end_turn | Anthropic | yes | 97 | 34,272 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-a | after-work-we-ll-have-each-other-spya-we6h75 | medium | 7,356 | 13,221 | 18,370 | $0.1689 | $0.1689 | 119s | end_turn | Anthropic | yes | 97 | 34,272 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-b | spider-silk-spya-ge30uz | medium | 6,315 | 12,295 | 20,501 | $0.1640 | $0.1640 | 113s | end_turn | Anthropic | yes | 263 | 62,920 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-a | spider-silk-spya-ge30uz | medium | 6,429 | 12,870 | 20,501 | $0.1697 | $0.1697 | 112s | end_turn | Anthropic | yes | 263 | 62,920 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-a | cargocult-spya-rz663q | medium | 4,135 | 9,165 | 13,124 | $0.1179 | $0.1179 | 75s | end_turn | Anthropic | yes | 41 | 21,195 | 3 plates in brief, 0 figures offered |
+| illustrated | medium-b | cargocult-spya-rz663q | medium | 4,829 | 10,466 | 13,124 | $0.1309 | $0.1309 | 90s | end_turn | Anthropic | yes | 41 | 21,195 | 3 plates in brief, 0 figures offered |
 
-Total, model calls: $5.4245; plates: none drawn.
+Total, model calls: $10.0522; plates: none drawn.
 
 ## Hierarchy
 

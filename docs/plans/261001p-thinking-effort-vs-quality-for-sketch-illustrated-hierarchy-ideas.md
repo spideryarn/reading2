@@ -4,6 +4,12 @@
 findings, folded in below — [the review](../../evals/thinking-effort/reviews/plan-review-sol-r1.md)).
 Stage 1 (the harness) built and smoked on `cargocult` for $1.12.
 
+**Stages 2–3 done, 22:00.** Decided, by the rule below: **Sketch `low`; Illustrated, Ideas and
+Hierarchy unchanged.** Illustrated failed `low` (both judges) and `medium` (Opus, 1.06 against the
+1.1 line). The standardising rule was set aside — Greg's leaning was "if it makes them cheaper", and
+it would have held Sketch at `high`; the reasoning is in research 261001c § Sketch. GPT Sol reviews
+the decision next, then the change. Earlier status, kept:
+
 **Stages 2–3, as of 20:45:** Sketch, Ideas (with its `medium` round) and 23 of 32 Illustrated draws
 are in; Sketch is judged. Then the OpenRouter **account** ran out of credit ($309.13 of $310,
 shared by the dev and prod keys) and three Illustrated calls came back `402 ai-no-credit`. The
@@ -233,6 +239,23 @@ comparison, so Ideas stays at `high`, and its quality panel is not run (most lin
 four valid candidates to rank). Nothing retries a malformed answer in production — the reader gets
 a failed card and a Retry, and the failed call is billed — so a 60% failure rate is not shippable at
 any quality.
+
+**Illustrated, written 2026-10-01 before any further draws and before its quality verdicts:** `low`
+came back invalid in 1 of 16 draws against `high`'s 0 of 16, which fails the comparison above read
+literally (1 > 0). I am not deciding on it, because at these counts the comparison cannot
+discriminate: if the two levels failed equally often, a lone failure would land in either arm with
+probability ½, so the gate as worded fails an equally reliable candidate about half the time. 1 of 16
+also cannot exclude a broken level (its 95% upper bound is about 30%), so passing it on the argument
+would be no better. The gate's purpose is to catch an effort level that breaks the JSON often, as
+Ideas did at 10 of 16. So I am buying 32 more `low` draws for Illustrated, validity only (4 per
+article, the same eight articles, the same harness and parser check, about $3.20). **Illustrated
+`low` passes the validity gate if 2 or fewer of those 32 are invalid, and fails if 3 or more are**,
+judged on the new draws alone. That threshold wrongly fails a level as reliable as production's
+observed `high` (about 3–4%) about 7% of the time, and wrongly passes a 15% failure rate about 12%
+of the time, a 20% one about 3%. If it fails, the `medium` round runs under the rule above, and
+Sketch and Illustrated standardise on the higher level each passes. The literal result (1 vs 0,
+fail) is reported alongside. A transport or 402 error is re-run and does not count. (Arbitrated by
+Opus, which recommended this over both the literal reading and passing it on the statistics.)
 
 ### Cache groups — what a change would move
 
