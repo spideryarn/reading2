@@ -235,6 +235,14 @@
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
 
+    /* One face per voice — the author's, the model's, the reader's — read ONLY by
+       src/web/styles/voices.css, and only while the Experimental switch is on. Greg, 2026-10-01:
+       Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
+       becomes the fourth voice by being left alone. docs/project/typography.md § A face per voice. */
+    --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
+    --font-ai: 'Courier Prime', 'Courier New', Courier, monospace;
+    --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
+
     /* ---- reading measure --------------------------------------------- */
     /* 55-70 chars/line; 80 reads ~7% faster but comprehends ~12% worse (Dyson & Kipping 1998).
        65ch is also what the original app actually shipped — `max-w-[65ch]` on the document

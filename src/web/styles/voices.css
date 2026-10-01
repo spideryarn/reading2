@@ -1,0 +1,133 @@
+/* A face for each voice — the author's, the model's, the reader's.
+
+   Greg, 2026-10-01 (SPIDERYARN-READING2-7C): "Courier for all AI-generated
+   text … a serif font for the author-text … Arial or something like that for
+   user-generated … Perhaps try a v1 of this and I'll see how I feel about it."
+   This is that v1: docs/plans/261001d-typeface-per-voice.md has the reasoning,
+   docs/project/typography.md § A face per voice the summary.
+
+   EVERY RULE IS UNDER `:root[data-voices]`, which App.tsx sets only while the
+   Experimental switch is on (useVoiceFaces.ts). Off, this file matches nothing
+   and every face is what it was. Promoting it is deleting that guard;
+   abandoning it is deleting this file, its import and the hook.
+
+   The whole decision is in this one file on purpose: three lists of selectors
+   that already exist, so nothing in the other stylesheets had to change.
+   `:root[data-voices] .x` outranks the plain `.x` it overrides, and this file
+   is imported late (after every sheet but the logo animations). It sits in `@layer app` like its neighbours, so a `tw:font-*`
+   utility on an element still wins — none of the elements below carries one.
+
+   Geist is not named here. The chrome keeps it, and that makes it the fourth
+   voice: once the three below move off it, Geist means "the app".
+
+   tests/voices-css.test.ts fails if a class named here no longer exists in any
+   component, so a rename cannot drop an element out of its voice quietly. */
+
+/* ---- the author: the article, and verbatim quotes of it ------------------ */
+:root[data-voices] :is(
+    .prose,
+    /* The author's headings too: shell.css sets `h1` a face of its own, so
+       inheriting from `.prose` is not enough. */
+    .prose :is(h1, h2, h3, h4, h5, h6),
+    .quotes-text,
+    .cmt-quote,
+    .annotate-quote,
+    .chat-dialog-quote,
+    .chat-dialog-opening,
+    .dock-question-quote,
+    .ill-quote,
+    .note-preview,
+    .ideas-quote,
+    .tl-quote,
+    .srch-hit-quote,
+    .clm-quote,
+    .crit-quote,
+    .mir-quote,
+    .mir-passage,
+    .traj-words,
+    .prose-card-quote,
+    .cite-entry
+) {
+    font-family: var(--font-author);
+}
+
+/* ---- the model: everything an AI wrote ----------------------------------- */
+:root[data-voices] :is(
+    /* summaries and gists */
+    .summ-text:not(.missing),
+    .summ-question,
+    .struct-gist,
+    .outln-gist,
+    .outln-arc,
+    .outln-card-gist,
+    .root-gist,
+    .tip-gist,
+    .tip-navlabel,
+    .simple-text,
+    /* glossary, and the shared part text Ideas, Timeline and FAQ reuse */
+    .gloss-gloss,
+    /* not FAQ's passages (the author's words, under the same class) and not
+       Timeline's (a quoted phrase and our own note in one paragraph) */
+    .gloss-part-text:not(.faq-quote, .tl-detail *),
+    .prose-card-part-relation .prose-card-text,
+    .prose-card-part-why .prose-card-text,
+    .prose-card-part-senseHere .prose-card-text,
+    .prose-card-part-background .prose-card-text,
+    /* ideas, FAQ, quiz */
+    .ideas-blurb,
+    .ideas-reason,
+    .faq-question,
+    .quiz-premise,
+    .quiz-question,
+    .quiz-list-q,
+    .quiz-reply,
+    .quiz-reference-text,
+    .quiz-in-prose-q,
+    /* chat, and the comment's Explanation */
+    .chat-turn.model,
+    .chat-turn.model .fmt-h,
+    .cmt-answer,
+    /* the rest of the band */
+    .traj-cue,
+    .tl-label,
+    .cite-why,
+    .cite-verdict-text,
+    .cite-does,
+    .cite-inv-lead,
+    .cite-inv-text,
+    .cite-inv-draft,
+    .srch-hit-why,
+    .clm-claim,
+    .clm-why,
+    .crit-why,
+    .mir-note,
+    .dbt-ai,
+    .dbt-thread-gist,
+    .dbt-key-why,
+    .dbt-relation
+) {
+    font-family: var(--font-ai);
+}
+
+/* ---- the reader: what they typed ----------------------------------------- */
+:root[data-voices] :is(
+    .chat-turn.you,
+    .chat-input,
+    .chat-edit-box,
+    textarea.cmt-note,
+    p.cmt-body,
+    .cmt-followup input,
+    .annotate-dialog textarea,
+    .dock-question-state.own,
+    .mir-yours,
+    .quiz-answer,
+    .srch-input,
+    .srch-saved-criterion,
+    .gloss-ask-input,
+    .traj-purpose-said,
+    .traj-purpose-input,
+    .crit-criterion,
+    .crit-yours
+) {
+    font-family: var(--font-reader);
+}

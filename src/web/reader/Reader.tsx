@@ -28,6 +28,7 @@ import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
+import { useVoiceFaces } from "../useVoiceFaces.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
@@ -261,6 +262,7 @@ export function Reader({
    * stranger's at zero.
    */
   const experimental = useExperimental();
+  useVoiceFaces(experimental.on);
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
