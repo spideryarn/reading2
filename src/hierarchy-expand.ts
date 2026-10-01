@@ -78,6 +78,7 @@ import { type Effort, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
 import { budgetFor, THINKING_HEADROOM } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import type { Block } from "./types.js";
 
 /* ------------------------------------------------------------- the prompt */
@@ -124,8 +125,13 @@ import type { Block } from "./types.js";
  *
  * **`expand/6`, 2026-09-28**: EXPAND_SYSTEM gained the shared plain-words core,
  * `plainWords()` from src/plain-words.ts, at its end. Plan 260926a § Stage 3.
+ *
+ * **`expand/7`, 2026-10-01**: EXPAND_SYSTEM gained the paperwork rule,
+ * `paperwork("structure")` from src/paperwork.ts, after the plain-words core —
+ * a child that is only authors, funding or disclosures is labelled, not
+ * summarised, and asked no question. Plan 261001p.
  */
-export const EXPAND_PROMPT_VERSION = "expand/6";
+export const EXPAND_PROMPT_VERSION = "expand/7";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -236,8 +242,9 @@ const ENVELOPE_TOKENS = 200;
  *
  * 7. **A question, on the children of the whole work and on nothing else.**
  *    `EXPAND_SYSTEM` had no such field, so a part built by the cascade drew a
- *    bare gist beside a neighbour's question once `SummaryPanel` began drawing
- *    `question ?? gist` — GPT Sol's P1-5, recorded on 2026-09-05 and fixed here.
+ *    bare gist beside a neighbour's question once Summary's former outline
+ *    began drawing `question ?? gist` — GPT Sol's P1-5, recorded on 2026-09-05
+ *    and fixed here.
  *    The content rules are **V4's shape plus `toc/8`'s plain-words rule**,
  *    copied from the QUESTIONS block in src/hierarchy.ts § `SYSTEM` and put
  *    into this prompt's voice, because two paths writing two kinds of line is
@@ -385,7 +392,9 @@ order you were given them, each naming its own number:
 
 Use only block ids that appear in that section's blocks. Do not invent ids.
 
-${plainWords()}`;
+${plainWords()}
+
+${paperwork("structure")}`;
 
 /* ------------------------------------------------------------ the request */
 

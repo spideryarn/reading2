@@ -97,7 +97,7 @@ export function onScreenIds(rows: readonly RowBox[], viewTop: number, viewBottom
  * switch a set of declarations on. The colour is still a token
  * (`--block-link-on-screen`, prose.css), so the look stays the stylesheet's.
  * `opacity: 1` lifts the link's own resting 0.5; a parent that dims its links
- * (Summary's `.summ-range`) still dims them, and the wash still shows.
+ * with its own opacity still dims them, and the wash still shows.
  *
  * An id that fails the format is skipped rather than escaped — it is not ours.
  * Empty for no ids, so the caller can render nothing.

@@ -218,10 +218,11 @@ export function LandingPage() {
             Say what you took from the piece and hear, plainly and concisely, where it diverges from
             the text. Or take a dozen short questions, easy first, central first.
           </Tile>
-          {/* Greg, 2026-08-26, the summary request, and 2026-08-31. */}
+          {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
+              levels; 2026-10-01, the outline removed (plan 261001p). */}
           <Tile name="Summary.">
-            One sentence on every part of the piece, and every section of every part, as deep as you
-            ask — beside the prose, never instead of it.
+            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
+            passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Greg, 2026-08-31, the timeline request; docs/project/timeline.md. */}
           <Tile name="Timeline.">

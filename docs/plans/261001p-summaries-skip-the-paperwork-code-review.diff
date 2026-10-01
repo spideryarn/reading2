@@ -1,0 +1,916 @@
+diff --git a/evals/paperwork/run.ts b/evals/paperwork/run.ts
+new file mode 100644
+index 000000000..ac1e7cee1
+--- /dev/null
++++ b/evals/paperwork/run.ts
+@@ -0,0 +1,275 @@
++/**
++ * **Do the summaries leave the paperwork out, lead with the takeaway, and is
++ * Brief shorter?** — docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md
++ * § Measuring it.
++ *
++ * ```
++ * npx tsx evals/paperwork/run.ts generate --arm before   <slug>...   # paid
++ * npx tsx evals/paperwork/run.ts generate --arm before-2 <slug>...   # the same prompt again: the wobble
++ * npx tsx evals/paperwork/run.ts generate --arm after    <slug>...   # paid, on the commit with the change
++ * npx tsx evals/paperwork/run.ts report                              # free: the screens, per arm
++ * npx tsx evals/paperwork/run.ts pairs --a before --b after          # free: a blind side-by-side, and its key
++ * ```
++ *
++ * **The arms are separated in time, not in code**, as in
++ * evals/plain-words/run.ts: `generate` sends what production sends now — the
++ * structure call (`structureRequest`, gists only, not assembled into a tree),
++ * `generateSimpleSummary` (all three levels, no profile) and `generateTweets`
++ * (no profile) — and records a hash of each prompt's source file beside the
++ * answer. There is no copy of a prompt in here to drift.
++ *
++ * Reads the local database, writes nothing there beyond the `ai_calls` rows
++ * every call records. Output under `evals/results/paperwork/<arm>/`.
++ *
++ * **What the screen cannot say.** `PAPERWORK` is a regex over the output, so it
++ * counts a sentence about a funder in a piece *about* funding as paperwork too.
++ * Every hit is printed so it can be read; the count is a screen, never the
++ * evidence.
++ */
++
++import fs from "node:fs";
++import path from "node:path";
++import { createHash } from "node:crypto";
++import { loadEnvLocal } from "../../src/env.js";
++import { blindCoin } from "../plain-words/run.js";
++
++const REPO = path.join(import.meta.dirname, "..", "..");
++const OUT = path.join(REPO, "evals", "results", "paperwork");
++const SOURCES = ["hierarchy.ts", "simple-summary.ts", "tweets.ts", "paperwork.ts"];
++
++/** Words that mark a line as being about the paperwork rather than the piece. A screen. */
++export const PAPERWORK =
++  /\b(affiliat\w*|universit\w*|institut\w*|college|hospital|acknowledg\w*|thank\w*|fund\w*|grant\w*|conflicts? of interest|competing interests?|disclos\w*|declar\w*|honorari\w*|consult\w*|correspondence|e-?mail|ethic\w* (approval|committee)|data availab\w*)\b/i;
++
++interface Line {
++  depth: number;
++  range: string;
++  title: string;
++  gist?: string;
++}
++
++interface ModelNode {
++  title: string;
++  range: [string, string];
++  gist?: string;
++  children?: ModelNode[];
++}
++
++interface ArmFile {
++  arm: string;
++  slug: string;
++  at: string;
++  sourceSha256: Record<string, string>;
++  versions: { toc: string; tweets: string; simple: string };
++  gists: Line[] | { error: string };
++  simple: { brief: string[]; simple: string[]; fuller: string[] } | { error: string };
++  tweets: string[] | { error: string };
++}
++
++function words(text: string): number {
++  return text.trim().split(/\s+/).filter(Boolean).length;
++}
++
++function failed(x: unknown): x is { error: string } {
++  return typeof x === "object" && x !== null && !Array.isArray(x) && "error" in x;
++}
++
++async function generate(arm: string, slugs: string[]): Promise<void> {
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
++  const { loadArticle } = await import("../../src/store/index.js");
++  const { structureRequest } = await import("../../src/hierarchy.js");
++  const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/hierarchy-prompt.js");
++  const { splitBlocks } = await import("../../src/supplement.js");
++  const { streamMessage } = await import("../../src/messages-stream.js");
++  const { parseJsonAnswer } = await import("../../src/parse-json.js");
++  const simple = await import("../../src/simple-summary.js");
++  const tweets = await import("../../src/tweets.js");
++  const { collectSpend } = await import("../../src/ai-spend.js");
++  const { costStore } = await import("../../src/store/ai-calls.js");
++  const { closeDb } = await import("../../src/db/client.js");
++
++  const sourceSha256 = Object.fromEntries(
++    SOURCES.filter((f) => fs.existsSync(path.join(REPO, "src", f))).map((f) => [
++      f,
++      createHash("sha256").update(fs.readFileSync(path.join(REPO, "src", f))).digest("hex"),
++    ]),
++  );
++
++  function flatten(node: ModelNode, depth: number, out: Line[]): Line[] {
++    out.push({
++      depth,
++      range: `${node.range[0]}..${node.range[1]}`,
++      title: node.title,
++      ...(node.gist?.trim() ? { gist: node.gist.trim() } : {}),
++    });
++    for (const c of node.children ?? []) flatten(c, depth + 1, out);
++    return out;
++  }
++
++  const attempt = async <T>(f: () => Promise<T>): Promise<T | { error: string }> => {
++    try {
++      return await f();
++    } catch (err) {
++      return { error: err instanceof Error ? err.message : String(err) };
++    }
++  };
++
++  fs.mkdirSync(path.join(OUT, arm), { recursive: true });
++  let costNanos = 0;
++  await runAsOwner(environmentOwnerId(), async () => {
++    await Promise.all(
++      slugs.map(async (slug) => {
++        const out = path.join(OUT, arm, `${slug}.json`);
++        if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(REPO, out)}`);
++        const article = await loadArticle(slug);
++        const withSlug = { ...article, slug };
++        const { result } = await collectSpend(
++          async () => {
++            const [gists, summary, thread] = await Promise.all([
++              attempt(async () => {
++                const { body } = splitBlocks(article.blocks);
++                const { params } = structureRequest(body);
++                const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
++                const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
++                /* Production's own parse (src/hierarchy.ts § `parseJson`), not the
++                   strict one evals/plain-words uses: the first `after` run lost two
++                   structure answers to a parse production might have mended, and
++                   kept nothing to tell. So the raw answer is kept when it fails. */
++                try {
++                  const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, "paperwork structure answer");
++                  return flatten(root, 0, []);
++                } catch (err) {
++                  fs.writeFileSync(path.join(OUT, arm, `${slug}.structure-raw.txt`), raw);
++                  throw err;
++                }
++              }),
++              attempt(async () => {
++                const run = await simple.generateSimpleSummary({ article: withSlug, profile: null, power: "standard" });
++                const texts = (level: "brief" | "simple" | "fuller") =>
++                  run.simpleSummary.levels[level].map((p) => p.text);
++                return { brief: texts("brief"), simple: texts("simple"), fuller: texts("fuller") };
++              }),
++              attempt(async () => {
++                const run = await tweets.generateTweets({ article: withSlug, profile: null, power: "standard" });
++                return run.thread.tweets.map((t) => t.text);
++              }),
++            ]);
++            return { gists, summary, thread };
++          },
++          {
++            attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
++            sink: (row) => costStore.record(row),
++            onDone: (report) => {
++              for (const c of (report as { calls: { cost: { source: string; costNanos?: number; computedCostNanos?: number } }[] }).calls) {
++                costNanos += c.cost.source === "provider" ? (c.cost.costNanos ?? 0) : (c.cost.computedCostNanos ?? 0);
++              }
++            },
++          },
++        );
++        const file: ArmFile = {
++          arm,
++          slug,
++          at: new Date().toISOString(),
++          sourceSha256,
++          versions: { toc: TOC_VERSION, tweets: tweets.PROMPT_VERSION, simple: simple.SIMPLE_VERSION },
++          gists: result.gists,
++          simple: result.summary,
++          tweets: result.thread,
++        };
++        fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
++        const fail = [result.gists, result.summary, result.thread].filter(failed).map((x) => x.error);
++        console.log(`${arm} ${slug}: ${fail.length ? `FAILED ${fail.join(" | ")}` : "ok"}`);
++      }),
++    );
++  });
++  console.log(`spent $${(costNanos / 1e9).toFixed(3)}`);
++  await closeDb();
++}
++
++function readArm(arm: string): ArmFile[] {
++  const dir = path.join(OUT, arm);
++  return fs
++    .readdirSync(dir)
++    .filter((f) => f.endsWith(".json"))
++    .sort()
++    .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as ArmFile);
++}
++
++function report(): void {
++  const arms = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()).sort();
++  for (const arm of arms) {
++    console.log(`\n== ${arm}`);
++    for (const r of readArm(arm)) {
++      const hits: string[] = [];
++      let brief = "failed";
++      if (!failed(r.simple)) {
++        brief = `${words(r.simple.brief.join(" "))} words / ${r.simple.brief.length} paragraphs`;
++        for (const level of ["brief", "simple", "fuller"] as const)
++          for (const p of r.simple[level]) for (const s of p.split(/(?<=[.!?])\s+/)) if (PAPERWORK.test(s)) hits.push(`summary.${level}: ${s}`);
++      }
++      if (!failed(r.tweets)) for (const [i, t] of r.tweets.entries()) if (PAPERWORK.test(t)) hits.push(`tweet ${i + 1}/${r.tweets.length}: ${t}`);
++      if (!failed(r.gists)) for (const g of r.gists) if (g.gist && PAPERWORK.test(g.gist)) hits.push(`gist d${g.depth}: ${g.gist}`);
++      console.log(`${r.slug} (${r.versions.toc}, ${r.versions.tweets}): Brief ${brief}; simple ${failed(r.simple) ? "-" : words(r.simple.simple.join(" "))}, fuller ${failed(r.simple) ? "-" : words(r.simple.fuller.join(" "))}; ${hits.length} paperwork hits`);
++      for (const h of hits) console.log(`    ${h}`);
++      for (const f of [r.gists, r.simple, r.tweets]) if (failed(f)) console.log(`    FAILED: ${f.error}`);
++    }
++  }
++}
++
++/** Brief against Brief and thread against thread, per article, sides by a tested coin. */
++function pairs(a: string, b: string): void {
++  const coin = blindCoin(261001);
++  const A = new Map(readArm(a).map((r) => [r.slug, r]));
++  const B = new Map(readArm(b).map((r) => [r.slug, r]));
++  const lines: string[] = [`# Blind pairs\n`];
++  const key: { id: string; left: string; right: string }[] = [];
++  let n = 0;
++  for (const [slug, ra] of A) {
++    const rb = B.get(slug);
++    if (!rb) continue;
++    const fields: [string, (r: ArmFile) => string | null][] = [
++      ["Brief summary", (r) => (failed(r.simple) ? null : r.simple.brief.join("\n\n"))],
++      ["Thread", (r) => (failed(r.tweets) ? null : r.tweets.map((t, i) => `${i + 1}. ${t}`).join("\n"))],
++    ];
++    for (const [label, get] of fields) {
++      const xa = get(ra);
++      const xb = get(rb);
++      if (xa === null || xb === null) continue;
++      n++;
++      const aLeft = coin();
++      const id = `P${n}`;
++      key.push({ id, left: aLeft ? a : b, right: aLeft ? b : a });
++      lines.push(`## ${id} — ${label} of \`${slug}\`\n\n### Left\n\n${aLeft ? xa : xb}\n\n### Right\n\n${aLeft ? xb : xa}\n`);
++    }
++  }
++  const dir = path.join(OUT, `pairs-${a}-vs-${b}`);
++  fs.mkdirSync(dir, { recursive: true });
++  fs.writeFileSync(path.join(dir, "pairs.md"), lines.join("\n"));
++  fs.writeFileSync(path.join(dir, "key.json"), `${JSON.stringify(key, null, 2)}\n`);
++  const leftA = key.filter((k) => k.left === a).length;
++  console.log(`${n} pairs in ${path.relative(REPO, dir)}; ${a} on the left in ${leftA}, on the right in ${n - leftA}`);
++}
++
++if (import.meta.url === `file://${process.argv[1]}`) {
++  const [cmd, ...rest] = process.argv.slice(2);
++  const flag = (name: string) => {
++    const at = rest.indexOf(name);
++    return at >= 0 ? rest[at + 1] : undefined;
++  };
++  const positional = rest.filter((x, i) => !x.startsWith("--") && !rest[i - 1]?.startsWith("--"));
++  if (cmd === "generate") {
++    const arm = flag("--arm");
++    if (!arm || positional.length === 0) throw new Error("generate --arm <arm> <slug>...");
++    await generate(arm, positional);
++  } else if (cmd === "report") {
++    report();
++  } else if (cmd === "pairs") {
++    const a = flag("--a");
++    const b = flag("--b");
++    if (!a || !b) throw new Error("pairs --a <arm> --b <arm>");
++    pairs(a, b);
++  } else {
++    throw new Error("usage: generate | report | pairs (see the header)");
++  }
++}
+diff --git a/src/article-prompt.ts b/src/article-prompt.ts
+index 48486a8f3..e69e4bfd5 100644
+--- a/src/article-prompt.ts
++++ b/src/article-prompt.ts
+@@ -127,9 +127,11 @@ function head(meta: Meta, identity: ArticleIdentity): string {
+  * is shown ids, including one written next year, is told in the same breath,
+  * and a prompt that is shown none (the glossary, the arc) is not. The
+  * hierarchy prompts render their own numbered blocks (src/hierarchy-prompt.ts)
+- * and are not told yet: their request bytes are pinned to `toc/9`, and a
+- * sentence there is a version bump that regenerates every tree. No hierarchy
+- * leak has been seen; add it at the next bump —
++ * and are not told yet. No hierarchy leak has been seen. It was to ride on the
++ * next bump, and `toc/10` (plan 261001p) passed it by on purpose: that bump was
++ * measured as one change, and this note's first line ("Each block below starts
++ * with its id") is not true of the hierarchy's `[i] id <tag>:` lines, so it
++ * would want its own wording there, not a copy —
+  * docs/plans/260928c-block-refs-shown-to-readers.md.
+  */
+ export const BLOCK_ID_NOTE = `Each block below starts with its id. The ids are for these instructions, not
+diff --git a/src/hierarchy-expand.ts b/src/hierarchy-expand.ts
+index cdbb49ce0..c4b56d360 100644
+--- a/src/hierarchy-expand.ts
++++ b/src/hierarchy-expand.ts
+@@ -78,6 +78,7 @@ import { type Effort, type ModelPower, modelFor } from "./models.js";
+ import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
+ import { budgetFor, THINKING_HEADROOM } from "./token-budget.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import type { Block } from "./types.js";
+ 
+ /* ------------------------------------------------------------- the prompt */
+@@ -124,8 +125,13 @@ import type { Block } from "./types.js";
+  *
+  * **`expand/6`, 2026-09-28**: EXPAND_SYSTEM gained the shared plain-words core,
+  * `plainWords()` from src/plain-words.ts, at its end. Plan 260926a § Stage 3.
++ *
++ * **`expand/7`, 2026-10-01**: EXPAND_SYSTEM gained the paperwork rule,
++ * `paperwork("structure")` from src/paperwork.ts, after the plain-words core —
++ * a child that is only authors, funding or disclosures is labelled, not
++ * summarised, and asked no question. Plan 261001p.
+  */
+-export const EXPAND_PROMPT_VERSION = "expand/6";
++export const EXPAND_PROMPT_VERSION = "expand/7";
+ 
+ /**
+  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
+@@ -385,7 +391,9 @@ order you were given them, each naming its own number:
+ 
+ Use only block ids that appear in that section's blocks. Do not invent ids.
+ 
+-${plainWords()}`;
++${plainWords()}
++
++${paperwork("structure")}`;
+ 
+ /* ------------------------------------------------------------ the request */
+ 
+diff --git a/src/hierarchy-prompt.ts b/src/hierarchy-prompt.ts
+index b9a086f44..259bef5ec 100644
+--- a/src/hierarchy-prompt.ts
++++ b/src/hierarchy-prompt.ts
+@@ -98,7 +98,14 @@ import type { Block } from "./types.js";
+    `plainWords()` from src/plain-words.ts, after OUTPUT so the eval's GISTS and
+    QUESTIONS slices are unchanged. `toc/8` had reached main, so this could not
+    ride on it. docs/plans/260926a-plainer-summaries-and-glossary.md § Stages 2–3. */
+-export const PROMPT_VERSION = "toc/9";
++/* **`toc/10`, 2026-10-01**: SYSTEM gained the paperwork rule,
++   `paperwork("structure")` from src/paperwork.ts, after the plain-words core, so
++   the eval's GISTS and QUESTIONS slices are again unchanged. A range that is only
++   authors, affiliations, acknowledgements, funding or disclosures keeps its node
++   and gets a gist saying what it is, not what it says (Greg,
++   SPIDERYARN-READING2-8M). New articles only, as before.
++   docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md. */
++export const PROMPT_VERSION = "toc/10";
+ 
+ /**
+  * How hard the model thinks before it starts writing.
+diff --git a/src/hierarchy.ts b/src/hierarchy.ts
+index 343fe5bdd..ddee42f40 100644
+--- a/src/hierarchy.ts
++++ b/src/hierarchy.ts
+@@ -71,6 +71,7 @@ import {
+ } from "./hierarchy-deepen.js";
+ import { log } from "./log.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ 
+ /**
+  * **The three values that moved to [`hierarchy-prompt.ts`](hierarchy-prompt.ts),
+@@ -210,7 +211,9 @@ JSON only, no prose, no code fence:
+ 
+ Use only block ids that appear in the input. Do not invent ids.
+ 
+-${plainWords()}`;
++${plainWords()}
++
++${paperwork("structure")}`;
+ 
+ export interface ModelNode {
+   title: string;
+diff --git a/src/paperwork.ts b/src/paperwork.ts
+new file mode 100644
+index 000000000..7afe42118
+--- /dev/null
++++ b/src/paperwork.ts
+@@ -0,0 +1,59 @@
++/**
++ * **The paperwork rule, once, for every prompt that summarises the whole piece.**
++ *
++ * > The structure, summary, tweet thread, and other such modes don't really need to include
++ * > summaries of stuff like acknowledgements or conflicts of interest or affiliations or, you know,
++ * > stuff like that that isn't really the content of the paper.
++ * >
++ * > — Greg, 2026-10-01, SPIDERYARN-READING2-8M
++ *
++ * A prompt interpolates `${paperwork(kind)}` as its own section, beside `plainWords(...)`
++ * (src/plain-words.ts), the same way. The list of what counts as paperwork is the shared half, so
++ * the next mode that needs it gets the same list rather than another copy; what a prompt does with
++ * a paperwork passage is the kind's half, because a summary can leave it out and a table of
++ * contents cannot: every block must be covered by a node (src/tree-invariants.ts).
++ *
++ * **Paperwork by role, not by label** (GPT Sol's plan review, P1-1). A funder can be part of the
++ * argument — a sponsor's role that qualifies the evidence, an ethics constraint that shaped the
++ * method — and then it is content. The rule says so rather than listing headings to drop.
++ *
++ * The model still SEES the paperwork. Taking it out of the article before any model reads it is
++ * the deterministic version, deferred in
++ * docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md § Deferred.
++ */
++
++/** What the prompt does with a passage that is only paperwork. */
++export type PaperworkKind =
++  /** A summary or a thread: leave it out. */
++  | "summary"
++  /** A table of contents: the node stays, labelled, and nothing else mentions it. */
++  | "structure";
++
++const KINDS: Record<PaperworkKind, string> = {
++  summary: `Leave it out: do not summarise it, spend a sentence on it, or present it as
++one of the piece's caveats or limits. Name an author only to say who argues
++something.`,
++  structure: `A range that is only paperwork still gets its node, because every block
++must be covered. For that node alone, and as the only exception to the gist
++rules above: its gist is a short plain label of WHAT it is ("The authors and
++where they work.", "Funding and conflict-of-interest statements."), never what
++it says, with no word floor and no claim. Send no "question" on it, at any
++depth. Every other gist, the root's included, ignores it.`,
++};
++
++export function paperwork(kind: PaperworkKind): string {
++  return `PAPERWORK IS NOT THE PIECE
++
++Around a piece's content there may be paperwork: the list of authors and where
++they work, contact and correspondence details, acknowledgements and thanks,
++funding and grants, conflict-of-interest and other disclosures, ethics
++approval, author contributions, data-availability statements, and the
++publisher's notices. Where it only records how the piece was produced and
++published, it is paperwork.
++${KINDS[kind]}
++
++Judge it by what it does, not by its heading. If the piece uses any of these as
++evidence, reasoning, method or a limit on its findings — a funder's role that
++it says may bias the result, an ethics rule that shaped the study, an article
++ABOUT research funding — it is content, and the usual rules apply.`;
++}
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 956dc08c8..b0ff06457 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -100,7 +100,7 @@ import {
+   generateSimpleSummary,
+   inputFingerprint as simpleFingerprint,
+   SIMPLE_LEVELS,
+-  SIMPLE_VERSION,
++  SIMPLE_PROMPT_VERSION,
+ } from "./simple-summary.js";
+ import {
+   generateDebate,
+@@ -3888,7 +3888,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+       if (!article) return null;
+       return {
+         inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
+-        promptVersion: SIMPLE_VERSION,
++        promptVersion: SIMPLE_PROMPT_VERSION,
+         model: CAPABLE_MODEL,
+       };
+     },
+diff --git a/src/simple-summary.ts b/src/simple-summary.ts
+index 957b2e98c..7d90441a5 100644
+--- a/src/simple-summary.ts
++++ b/src/simple-summary.ts
+@@ -90,6 +90,7 @@ import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js"
+ import { parseJsonAnswer } from "./parse-json.js";
+ import { plainWords } from "./plain-words.js";
+ import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
++import { paperwork } from "./paperwork.js";
+ import { checkLevel, type CheckOutcome, SIMPLE_CHECK_ENABLED, SIMPLE_CHECK_VERSION } from "./simple-check.js";
+ import {
+   type BlockFingerprint,
+@@ -118,15 +119,33 @@ export type { SimpleLevel, SimpleParagraph, SimpleSummary } from "./types.js";
+ export { SIMPLE_LEVELS } from "./types.js";
+ 
+ /**
+- * Bumped whenever the prompt changes what a paragraph *is*. The one constant:
+- * stamped into the artefact by `buildSimpleSummary` and compared against by the
+- * pipeline's stamp and the owner's read (src/pipeline.ts, src/store/pg.ts).
++ * **The stored shape's version**, stamped into the artefact as `version`.
++ * Bumped only when what is stored changes shape, because `isUsableSimpleSummary`
++ * (src/types.ts) requires an exact match and reads anything else as absent.
+  *
+  * `simple/2` (2026-10-01) is three levels and the profile. A `simple/1` row has
+- * no `levels` and reads as absent (`isUsableSimpleSummary`, src/types.ts).
++ * no `levels` and reads as absent.
+  */
+ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
+ 
++/**
++ * **The prompt's version**, bumped whenever the wording changes what a level
++ * says. Stamped as `promptVersion`, and what the pipeline's stamp, Metadata and
++ * the owner's `outdated` compare (src/pipeline.ts, src/store/pg.ts). Split from
++ * `SIMPLE_VERSION` on 2026-10-01, when the paperwork rule and the shorter Brief
++ * changed the prompt and not the shape: bumping the shape would have made every
++ * stored summary unreadable (GPT Sol's plan review of 261001p, P1-3).
++ *
++ * `simple-prompt/2` (2026-10-01): the paperwork rule (src/paperwork.ts), an
++ * ending on the takeaway, a shorter Brief (Greg, SPIDERYARN-READING2-8M, -8F).
++ */
++export const SIMPLE_PROMPT_VERSION = "simple-prompt/2";
++
++/** The prompt a stored summary was written with; a row from before the field is the first. */
++export function simplePromptVersion(simple: Pick<SimpleSummary, "promptVersion">): string {
++  return simple.promptVersion ?? "simple-prompt/1";
++}
++
+ /** Passages per paragraph. Extra ids are dropped and counted. */
+ export const MAX_IDS = SIMPLE_MAX_IDS;
+ 
+@@ -171,8 +190,8 @@ export const ANSWER_TOKENS =
+ const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number; sentence: number }> = {
+   brief: {
+     reader: "A bright twelve-year-old",
+-    shape: "Two or three short paragraphs, each two or three sentences",
+-    words: 100,
++    shape: "Two short paragraphs, each two or three sentences; three only if the piece truly needs it",
++    words: 80,
+     sentence: 18,
+   },
+   simple: {
+@@ -197,8 +216,9 @@ const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number;
+ const NOTCH_UP: Record<SimpleLevel, string> = {
+   brief: `
+ 
+-Keep it very simple: the one thing the piece is about, why it matters, and at
+-most two key ideas. Leave out anything a first-time reader could do without.`,
++Keep it very simple: the one thing the piece is about, why it matters, and
++what it concludes. At most one other key idea. Leave out anything a first-time
++reader could do without.`,
+   simple: "",
+   fuller: `
+ 
+@@ -249,6 +269,8 @@ THE SHAPE
+ - Then: why it matters — why THE PIECE says it matters, not why you think it
+   might.
+ - Then: its key ideas or findings.
++- End on the takeaway: the piece's main conclusion, and any implication it
++  states itself. Never advice or a consequence it does not give.
+ 
+ FAITHFUL, NOT JUST SIMPLE
+ 
+@@ -269,6 +291,8 @@ The ids go only in "ids". Never write an id, or "block …", in the text.
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("summary")}
++
+ ${PROFILE_RULES}
+ 
+ OUTPUT
+@@ -551,6 +575,7 @@ export function buildSimpleSummary(
+ function stamped(levels: Record<SimpleLevel, SimpleParagraph[]>, opts: StampOptions): SimpleSummary {
+   return {
+     version: SIMPLE_VERSION,
++    promptVersion: SIMPLE_PROMPT_VERSION,
+     /* The model's name for this power — every staleness check compares against it. */
+     generator: generatorFor(opts.power),
+     slug: opts.slug,
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 47a56d665..407b45864 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -80,7 +80,8 @@ import {
+ import {
+   inputFingerprint as simpleFingerprint,
+   isStale as simpleIsStale,
+-  SIMPLE_VERSION,
++  SIMPLE_PROMPT_VERSION,
++  simplePromptVersion,
+ } from "../simple-summary.js";
+ import {
+   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
+@@ -150,7 +151,7 @@ import {
+    same head (plan 261001b); re-exported for every caller that imports them
+    from here. */
+ export { citedMetaFingerprintOf, metaFingerprintOf };
+-import { isStale as tweetsStale } from "../tweets.js";
++import { isStale as tweetsStale, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../tweets.js";
+ import type {
+   Arc,
+   ArcFound,
+@@ -2966,7 +2967,15 @@ const rawPgArticleReader: ArticleReader = {
+           /* The cited head since `tweets/5`, which sends `articleWithIds`; a
+              thread from before it is judged on the head it was written from
+              inside `isStale` (src/tweets.ts § `fingerprintFor`). */
+-          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, citedFingerprint));
++          if (!thread || !tree || tweetsStale(thread, blocks, tree, citedFingerprint)) return false;
++          /* **And the prompt and the model**, as every neighbour asks: until
++             2026-10-01 this arm compared only the article, so a `tweets/5`
++             thread was "current" for ever after `tweets/6` and Metadata never
++             offered the rewrite (GPT Sol's plan review of 261001p, P1-5). */
++          return sameStamp(
++            { promptVersion: thread.version, model: thread.generator },
++            { promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL },
++          );
+         }
+         case "glossary":
+           return glossaryIsCurrent(revision.glossary as Glossary | null, articleHash);
+@@ -3141,12 +3150,12 @@ const rawPgArticleReader: ArticleReader = {
+           return sameStamp(
+             {
+               inputHash: simple.sourceHash,
+-              promptVersion: simple.version,
++              promptVersion: simplePromptVersion(simple),
+               model: simple.generator,
+             },
+             {
+               inputHash: simpleFingerprint(blocks, tree, citedFingerprint),
+-              promptVersion: SIMPLE_VERSION,
++              promptVersion: SIMPLE_PROMPT_VERSION,
+               model: CAPABLE_MODEL,
+             },
+           );
+@@ -3668,7 +3677,7 @@ const rawPgArticleReader: ArticleReader = {
+       stale:
+         !tree ||
+         simpleIsStale(simpleSummary, blocks, tree, citedMetaFingerprintOf(found.revision)),
+-      outdated: simpleSummary.version !== SIMPLE_VERSION,
++      outdated: simplePromptVersion(simpleSummary) !== SIMPLE_PROMPT_VERSION,
+     };
+   },
+ 
+diff --git a/src/tweets.ts b/src/tweets.ts
+index 0acd1acd3..13fede062 100644
+--- a/src/tweets.ts
++++ b/src/tweets.ts
+@@ -57,8 +57,13 @@ import { articleWithIds } from "./article-prompt.js";
+ import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
+ import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ 
+ /**
++ * `tweets/6`, 2026-10-01: the paperwork rule (src/paperwork.ts), a last post that
++ * ends on the takeaway, and no author lists (Greg, SPIDERYARN-READING2-8M;
++ * docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
++ *
+  * `tweets/5`, 2026-09-29: each post names the passages it was drawn from, so the
+  * band can link it back to them (Greg, SPIDERYARN-READING2-5A;
+  * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
+@@ -67,7 +72,7 @@ import { plainWords } from "./plain-words.js";
+  *
+  * `tweets/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+  */
+-export const PROMPT_VERSION = "tweets/5";
++export const PROMPT_VERSION = "tweets/6";
+ 
+ /** The most passages one post may link to. More is a row of chips nobody reads. */
+ export const MAX_POST_BLOCKS = 3;
+@@ -259,9 +264,10 @@ Says what the piece CLAIMS. Not what it is about, and never a tease.
+ 
+ THE LAST POST
+ 
+-Says what the piece leaves open or deliberately unsettled. Not a call to action,
+-not "follow for more", not credits — whatever shows this thread carries the
+-article's own link already.
++Ends on the piece's conclusion: where it lands, and any implication it states
++itself. If it deliberately reaches no conclusion, end on the central question
++it leaves open. Not a call to action, not "follow for more", not credits — whatever
++shows this thread carries the article's own link already.
+ 
+ WHERE EACH POST CAME FROM
+ 
+@@ -305,6 +311,8 @@ commentary about the thread.
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("summary")}
++
+ ${PROFILE_RULES}`;
+ 
+ /**
+@@ -348,8 +356,16 @@ export function renderPrompt(opts: {
+      metadata: it is an *instruction* about how to refer to the author, not a
+      fact about the article, and the cached block has to be the same bytes for
+      every stage that reads it. */
++  /* **Never a list of authors** (Greg, SPIDERYARN-READING2-8M): "Refer to them
++     by surname" over a nine-name byline opened a thread with all nine. When the
++     structured list says there are more than two we say so outright, rather
++     than asking the model to count a free-text byline (GPT Sol's plan review,
++     P2-9); without it, the model is asked to count. */
++  const count = meta?.authors?.length ?? 0;
+   const author = meta?.byline
+-    ? `Written by ${meta.byline}. Refer to them by surname.`
++    ? count > 2
++      ? `Written by ${meta.byline}. That is ${count} authors: write "the authors", or the first author's surname and "colleagues". Never list them.`
++      : `Written by ${meta.byline}. Refer to them by surname; if there are more than two, write "the authors", or the first author's surname and "colleagues". Never list them.`
+     : "The byline is unknown. Write \"the author\" — do not guess a name.";
+ 
+   /* The full text and the title moved to a cached `system` block — see
+diff --git a/src/types.ts b/src/types.ts
+index 3dfa9a260..9eeb6b584 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -4750,6 +4750,14 @@ export interface SimpleSummary {
+    * reaches a visitor (src/public/dto.ts).
+    */
+   profileHash: string | null;
++  /**
++   * The prompt's own version, `SIMPLE_PROMPT_VERSION` in src/simple-summary.ts,
++   * separate from `version`, which is the stored shape and must match exactly.
++   * **Absent on a row written before 2026-10-01**, which is the first prompt
++   * (`simplePromptVersion` reads it as `simple-prompt/1`): usable, but
++   * outdated. Plan 261001p.
++   */
++  promptVersion?: string;
+   /** Every level, always — validation stores all of them or none. */
+   levels: Record<SimpleLevel, SimpleParagraph[]>;
+   /**
+@@ -4879,6 +4887,7 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
+     Number.isFinite(simple.elapsedMs) &&
+     simple.elapsedMs >= 0 &&
+     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
++    (simple.promptVersion === undefined || (typeof simple.promptVersion === "string" && simple.promptVersion.length > 0)) &&
+     isSimpleLevels(simple.levels) &&
+     /* Absent is a row from before the guard, or with it off; present must be whole. */
+     (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))
+diff --git a/tests/hierarchy-expand.test.ts b/tests/hierarchy-expand.test.ts
+index 69aeab7f2..830b03724 100644
+--- a/tests/hierarchy-expand.test.ts
++++ b/tests/hierarchy-expand.test.ts
+@@ -339,9 +339,12 @@ describe("the constants a scoped call is made with", () => {
+    *
+    * `expand/6`, 2026-09-28: the shared plain-words core, `plainWords()` from
+    * src/plain-words.ts, at the prompt's end (plan 260926a § Stage 3).
++   *
++   * `expand/7`, 2026-10-01: the paperwork rule, `paperwork("structure")` from
++   * src/paperwork.ts, after it (plan 261001p).
+    */
+-  it("is at expand/6, since the prompt carries the shared plain-words core", () => {
+-    expect(EXPAND_PROMPT_VERSION).toBe("expand/6");
++  it("is at expand/7, since the prompt carries the paperwork rule", () => {
++    expect(EXPAND_PROMPT_VERSION).toBe("expand/7");
+   });
+ 
+   /**
+@@ -357,8 +360,8 @@ describe("the constants a scoped call is made with", () => {
+    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
+    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
+    */
+-  it("stamps toc/9+expand/6, both halves named", () => {
+-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/9+expand/6");
++  it("stamps toc/10+expand/7, both halves named", () => {
++    expect(EXPANSION_PROMPT_STAMP).toBe("toc/10+expand/7");
+   });
+ 
+   /**
+diff --git a/tests/hierarchy-prompt-hoist.test.ts b/tests/hierarchy-prompt-hoist.test.ts
+index 76cea7080..dee37c2f3 100644
+--- a/tests/hierarchy-prompt-hoist.test.ts
++++ b/tests/hierarchy-prompt-hoist.test.ts
+@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
+ 
+ describe("hoisting the structure prompt's three values", () => {
+   it("moved the stamp and the effort without moving either value", () => {
+-    expect(PROMPT_VERSION).toBe("toc/9");
++    expect(PROMPT_VERSION).toBe("toc/10");
+     expect(PRODUCTION_EFFORT).toBe("low");
+   });
+ 
+@@ -118,11 +118,13 @@ describe("hoisting the structure prompt's three values", () => {
+    * ceiling went from 25 to 30 words (plan 260926a § Stage 2, Greg: "plain
+    * beats short"). And, because `toc/8` had reached main by then, that
+    * change and the shared plain-words core (`plainWords()`, appended after
+-   * OUTPUT) went out as `toc/9`, 2026-09-28 — plan 260926a § Stage 3.
++   * OUTPUT) went out as `toc/9`, 2026-09-28 — plan 260926a § Stage 3. It
++   * moved from `749c4a601f07fea7` on 2026-10-01, when SYSTEM gained the
++   * paperwork rule and the stamp went to `toc/10` (plan 261001p).
+    */
+-  it("mints one stable key for the toc/9 structure request", () => {
++  it("mints one stable key for the toc/10 structure request", () => {
+     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params, "standard"))).toBe(
+-      "749c4a601f07fea7",
++      "b6130eea42744aee",
+     );
+   });
+ });
+diff --git a/tests/hierarchy-structure-request-parity.test.ts b/tests/hierarchy-structure-request-parity.test.ts
+index 6f95c74a9..f030a4989 100644
+--- a/tests/hierarchy-structure-request-parity.test.ts
++++ b/tests/hierarchy-structure-request-parity.test.ts
+@@ -51,6 +51,9 @@
+  * pin holds its text literally, not by calling `plainWords()`, so an edit to the
+  * shared rule reddens this pin too — which is what it should do, since every
+  * byte of it is sent. Plan 260926a § Stage 3.
++ * **RE-PINNED 2026-10-01 for `toc/10`**: the paperwork rule,
++ * `paperwork("structure")` from src/paperwork.ts, follows the plain-words core,
++ * held literally for the same reason (Greg, SPIDERYARN-READING2-8M; plan 261001p).
+  * docs/plans/260926a-plainer-summaries-and-glossary.md.
+  */
+ 
+@@ -226,7 +229,27 @@ never changes which field a fact belongs in, which source may support it, or
+ the shape and length these instructions set for each field: where those rules
+ are more specific, they win. Text you are told to copy exactly stays exactly as written.
+ 
+-Plainer than the article, never further from it: never less exact, and never beyond what it says.`;
++Plainer than the article, never further from it: never less exact, and never beyond what it says.
++
++PAPERWORK IS NOT THE PIECE
++
++Around a piece's content there may be paperwork: the list of authors and where
++they work, contact and correspondence details, acknowledgements and thanks,
++funding and grants, conflict-of-interest and other disclosures, ethics
++approval, author contributions, data-availability statements, and the
++publisher's notices. Where it only records how the piece was produced and
++published, it is paperwork.
++A range that is only paperwork still gets its node, because every block
++must be covered. For that node alone, and as the only exception to the gist
++rules above: its gist is a short plain label of WHAT it is ("The authors and
++where they work.", "Funding and conflict-of-interest statements."), never what
++it says, with no word floor and no claim. Send no "question" on it, at any
++depth. Every other gist, the root's included, ignores it.
++
++Judge it by what it does, not by its heading. If the piece uses any of these as
++evidence, reasoning, method or a limit on its findings — a funder's role that
++it says may bias the result, an ethics rule that shaped the study, an article
++ABOUT research funding — it is content, and the usual rules apply.`;
+ 
+ const BLOCKS: Block[] = [
+   { id: "spya-par001", tag: "h2", kind: "heading", level: 2, text: "First Part", words: 2, html: "<h2>First Part</h2>", gistable: true },
+diff --git a/tests/simple-summary.test.ts b/tests/simple-summary.test.ts
+index cb7222bed..0f5edda59 100644
+--- a/tests/simple-summary.test.ts
++++ b/tests/simple-summary.test.ts
+@@ -20,8 +20,10 @@ import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../sr
+ import {
+   ANSWER_TOKENS,
+   SIMPLE_SYSTEMS,
++  SIMPLE_PROMPT_VERSION,
+   SIMPLE_VERSION,
+   buildSimpleSummary,
++  simplePromptVersion,
+   emptyDropped,
+   generateSimpleSummary,
+   inputFingerprint,
+@@ -1014,3 +1016,33 @@ describe("parseCheckVerdicts", () => {
+     ]);
+   });
+ });
++
++/* ------------------------------------------------ the prompt's own stamp -- */
++
++/**
++ * **The prompt has a version of its own, and the shape keeps `simple/2`** —
++ * plan 261001p, GPT Sol's plan review P1-3. A wording change must be able to
++ * mark a summary outdated without making it unreadable, which bumping the shape
++ * version would.
++ */
++describe("the prompt version (plan 261001p)", () => {
++  it("stamps today's prompt beside the unchanged shape version", () => {
++    const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
++    expect(out.version).toBe("simple/2");
++    expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
++    expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
++  });
++
++  it("reads a row from before the field as the first prompt: usable, and outdated", () => {
++    const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
++    const { promptVersion: _, ...legacy } = out;
++    expect(isUsableSimpleSummary(legacy)).toBe(true);
++    expect(simplePromptVersion(legacy)).toBe("simple-prompt/1");
++    expect(simplePromptVersion(legacy)).not.toBe(SIMPLE_PROMPT_VERSION);
++  });
++
++  it("refuses an empty prompt version rather than reading it as the first", () => {
++    const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
++    expect(isUsableSimpleSummary({ ...out, promptVersion: "" })).toBe(false);
++  });
++});
+diff --git a/tests/store-tweets-stale.test.ts b/tests/store-tweets-stale.test.ts
+index 99bf1dc6a..02b830009 100644
+--- a/tests/store-tweets-stale.test.ts
++++ b/tests/store-tweets-stale.test.ts
+@@ -47,6 +47,8 @@ import { pgArticleReader } from "../src/store/pg.js";
+ import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
+ import type { Block, StepName, Tree, TweetThread } from "../src/types.js";
+ import { pgReady } from "./helpers/pg-ready.js";
++import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
++import { CAPABLE_MODEL } from "../src/models.js";
+ 
+ loadEnvLocal();
+ 
+@@ -250,3 +252,24 @@ describe("loadTweets on a thread written before tweets/5", () => {
+     }
+   }, 30_000);
+ });
++
++/**
++ * **Metadata's Tweets row asks about the prompt and the model too** — plan
++ * 261001p, GPT Sol's plan review P1-5. Until then `isCurrent`'s `case "tweets"`
++ * compared only the article, so a thread written by an older prompt was
++ * "current" for ever and the page never offered the rewrite. The positive
++ * control is the same thread at today's version and model.
++ */
++describe("articleMetadata's Tweets row", () => {
++  const tweetsDone = async (): Promise<boolean | undefined> =>
++    (await pgArticleReader.articleMetadata(SLUG)).stages.find((s) => s.step === "tweets")?.done;
++
++  it("is current at today's prompt and model, and not at an older prompt", async () => {
++    const hash = articleWithIdsFingerprint(BLOCKS, TREE, CITED_META);
++    await step("tweets", hash);
++    await setRevision({ tweets: { ...threadFor(TWEETS_PROMPT_VERSION, hash), generator: CAPABLE_MODEL } });
++    expect(await tweetsDone()).toBe(true);
++    await setRevision({ tweets: { ...threadFor("tweets/5", hash), generator: CAPABLE_MODEL } });
++    expect(await tweetsDone()).toBe(false);
++  }, 30_000);
++});

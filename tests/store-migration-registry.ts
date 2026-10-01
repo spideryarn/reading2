@@ -2321,6 +2321,11 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 6 },
   "tests/term-lookup.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 3 },
+  /* Recorded 2026-10-01 (plan 261001p) when its Metadata block gained the
+     file's first mutation; it was a Postgres suite from birth, so "converted"
+     here means "carries evidence", which is what this record checks. */
+  "tests/store-tweets-stale.test.ts":
+    { date: "2026-10-01", stage: "261001p", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 2 },
   "tests/the-query-string-does-not-decide-the-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
   "tests/tweets.test.ts":

@@ -181,6 +181,18 @@ export function pickLogoAnimation(
      thirteen on the reading view at every window up to 1920px, and Greg
      reported the feature as missing (docs/postmortems/260915c-…). */
   const eligible = wordShown ? LOGO_ANIMATIONS : LOGO_ANIMATIONS.filter((a) => a.reach === "mark");
+  return pickFrom(eligible, previous);
+}
+
+/**
+ * The never-repeat draw itself, over any pool. `pickLogoAnimation` is this over
+ * what a hovered host can show; the loading wordmark (LogoLoader.tsx) is this
+ * over each of its two tracks.
+ */
+export function pickFrom(
+  eligible: readonly LogoAnimation[],
+  previous: string | null,
+): LogoAnimation | null {
   const pool = eligible.length > 1 ? eligible.filter((a) => a.id !== previous) : eligible;
   return pool[Math.floor(Math.random() * pool.length)] ?? null;
 }
