@@ -722,6 +722,26 @@ text of the blocks it cites and says, per paragraph, whether those passages cont
 It is Simple's alone; the other summary voices are not checked. The design, the review and the
 first real press are in [261001i](../plans/261001i-simple-fidelity-guard-built.md).
 
+**Simple is written on Opus for every article, and the guard stays** (since 2026-10-01,
+[261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md)). The writer was
+measured alone, guard off, on the PID paper and on two controls:
+
+| | Sonnet | Opus |
+|---|---:|---:|
+| "feedback loops" for recurrent, PID paper | 5 / 18 levels | 0 / 36 |
+| guard flags: PID · controls | 6 / 18 · 1 / 36 | 2 / 36 · 1 / 36 |
+| blind read, 27 levels each: major · minor faults | 3 · 2 | 0 · 1 |
+| a press, warm cache · cold | $0.05 · $0.09 | $0.10 · $0.18 |
+| a press, three levels, median | 17 s | 20 s |
+
+So the guard rarely fires on Opus and the ~15 s retry mostly goes away. It is kept because Opus
+still made a real fault on Gwern that only the guard caught. Opus states the trapped finding in 22
+levels of 36, every time correctly, by avoiding the paper's terms rather than naming the contrast,
+and it writes nearer the word targets. The switch is `ALWAYS_HIGH_POWER` in
+[`src/models.ts`](../../src/models.ts), which the step and `/api/models` both read; taking `simple`
+out returns it to the article's High-powered AI setting, and no stored summary goes stale either
+way.
+
 ## What this deliberately does not have
 
 **A length control.** See [above](#why-there-is-no-length-control). The two generated rungs and the
@@ -760,9 +780,12 @@ the granularity filter had already hidden — real money spent generating text n
 - **Simple can collapse two terms that the paper keeps distinct.** On the PID paper it calls the
   recurrent connections, which raise synergy, "feedback loops", borrowing the paper's term for the
   different kind that lowers it. This happened in 6 of 18 outputs across six fresh unchanged-prompt,
-  no-profile runs on 2026-10-01. Neither of two tested prompt wordings made the fault rare enough to
-  ship; the proposed guard checks each paragraph against the passages it cites —
-  [261001h](../plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md).
+  no-profile runs on 2026-10-01 on Sonnet. Neither of two tested prompt wordings made the fault rare
+  enough to ship ([261001h](../plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md)).
+  Two answers are built: [the fidelity guard](#the-fidelity-guard-since-2026-10-01), and writing
+  Simple on Opus, which made it in none of 36 levels. **Still open:** that is one paper; no second
+  article with a contrasting-terms trap has been measured, so how general either answer is remains
+  unknown.
 - **A browser check reported the hover card rendering behind the pills. It does not.** Recorded
   because it cost half an hour and would cost it again. The tooltip layer is `z-index: 100`
   (styles/tooltip.css § `.tooltip-anchor`), above the spine at 45, the band at 44 and the drawer at

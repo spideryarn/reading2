@@ -306,6 +306,7 @@ import type { Verifier, VerifyResult } from "../src/auth.js";
 import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UNEXPECTED_FAILURE } from "../src/messages.js";
+import { modelFor, powerFor } from "../src/models.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -2536,6 +2537,13 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
     it("finds a route that is there", async () => {
       const reply = await call("GET", "/api/models?fresh=1&x=2");
       expect(reply.status).toBe(200);
+    });
+
+    it("reports Simple on the model the step sends it to, not the standard one (plan 261001p)", async () => {
+      const reply = await call("GET", "/api/models");
+      const simple = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "simple");
+      expect(simple?.id).toBe(modelFor("simple", powerFor("simple", "standard")));
+      expect(simple?.id).toBe(modelFor("simple", "high"));
     });
 
     it("still refuses a method that is not, and quotes the raw URL back", async () => {

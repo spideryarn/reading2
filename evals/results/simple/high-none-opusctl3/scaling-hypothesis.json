@@ -1,0 +1,134 @@
+{
+  "arm": "high-none-opusctl3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:30:23.258Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "high",
+  "guard": false,
+  "wallMs": 22443,
+  "costUsd": 0.121454,
+  "tokens": {
+    "input": 5523,
+    "output": 4162,
+    "reasoning": 2554
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 199,
+  "fullerWords": 260,
+  "briefWords": 119,
+  "paragraphs": [
+    {
+      "text": "This essay by Gwern looks at GPT-3, a huge program OpenAI released in May 2020. GPT-3 is a neural network, a computer system that learns patterns from data. It was trained only to guess the next word in Internet text. The essay asks what its success means for building human-level AI.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "Gwern argues for the \"scaling hypothesis.\" It says that simply making these networks bigger, with more data and computing power, makes smarter behavior appear on its own. If true, it may be the road to human-level general AI. He also claims most AI experts have no real model of how progress happens and ignore their failed predictions.",
+      "ids": [
+        "spya-m3gtj6",
+        "spya-ewxv9q",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "GPT-3 was 117 times bigger than GPT-2, the version before it. It could pick up new tasks from a few examples, which the essay calls meta-learning, or learning to learn. Nobody built this in. Its gains also kept following a steady curve, with no sign of slowing.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "Why would guessing words build understanding? To predict text perfectly, a model must grasp logic, cause and effect, and people. The last, hardest improvements need the most intelligence. An appendix warns that such models may also learn to act like agents that pursue goals.",
+      "ids": [
+        "spya-g3b5y7",
+        "spya-kmyg3w",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long opinion essay about GPT-3, an AI program released by OpenAI in May 2020 that learned to write by predicting the next word in Internet text. The author uses it to argue for the scaling hypothesis: the idea that simple neural networks just get smarter as they are made bigger and trained on more data and computing power.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "It matters, the essay says, because GPT-3 surprised people. It is 117 times bigger than GPT-2, with 175 billion parameters, meaning the adjustable numbers the network tunes as it learns. It can pick up new tasks from a few examples, which the author calls meta-learning, or learning how to learn. Its gains kept following the predicted curve, and it was cheap by government or military budget standards.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663",
+        "spya-dfjr4c"
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": with neural networks, bigger and harder problems often work better. The author's guess is that a big network holds countless small sub-models. With enough varied data, memorizing every case gets too costly, so the general rule wins, such as real arithmetic.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "Why should next-word guessing teach anything? Easy patterns like spelling are learned first. The last bits of error, the gap to humans at about 0.7 bits per character, need reasoning, common sense, and understanding of people.",
+      "ids": [
+        "spya-h74fhr",
+        "spya-rjwfkb",
+        "spya-g3b5y7"
+      ]
+    },
+    {
+      "text": "The essay then argues that rival labs like DeepMind lack faith in scaling, and that expert critics made confident predictions that proved wrong. An appendix warns that such models may come to act like agents, meaning goal-seeking actors, even when trained on data not made by people.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-m9r8zx",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay is about GPT-3, a huge program that learned by guessing the next word in text. The author uses it to argue for the scaling hypothesis. That is the idea that bigger programs, given more data and computing, keep getting smarter.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-m3gtj6"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 surprised people. It could learn new tasks from just a few examples, though nobody built it to do that. The author thinks scaling may lead to human-level AI, and that most experts failed to predict this.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "One key idea: to guess the next word really well, a program must understand what the words mean. Easy patterns, like spelling, get learned first. The last, hardest bits of improvement need real reasoning about the world.",
+      "ids": [
+        "spya-h74fhr",
+        "spya-kmyg3w",
+        "spya-g3b5y7"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

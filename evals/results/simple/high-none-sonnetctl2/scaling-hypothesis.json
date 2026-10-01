@@ -1,0 +1,120 @@
+{
+  "arm": "high-none-sonnetctl2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:33:49.795Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 19972,
+  "costUsd": 0.059936,
+  "tokens": {
+    "input": 5517,
+    "output": 3278,
+    "reasoning": 1528
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 233,
+  "fullerWords": 281,
+  "briefWords": 170,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a giant computer program that predicts text, and what it means for artificial intelligence. GPT-3 was far bigger than any earlier model of its kind. The author argues this supports the \"scaling hypothesis\": the idea that if you keep making neural networks (brain-inspired learning programs) much bigger, and feed them much more data and computing power, they keep getting smarter, with no special new tricks needed.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 did something nobody expected: it learned how to follow instructions and pick up new tasks just from a few examples in its prompt, a skill called meta-learning, even though it was never specifically trained to do that. Standard test scores missed how surprising this was. The author says this hints that making models bigger could keep unlocking unexpected new abilities, with real consequences for how fast AI could advance.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-s8rx6n"
+      ]
+    },
+    {
+      "text": "The piece explains this through \"blessings of scale\": oddly, hard problems get easier for neural networks as they grow, not harder. A giant model works like a crowd of many smaller guesses at once; simple, lazy guesses dominate early on, but with enough data and size, only genuinely general strategies keep winning, which is why abilities like meta-learning emerge. The author also argues that most AI experts dismissed this scaling idea for years and were proven wrong, and that their confident predictions of failure deserve little trust going forward.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is an essay about GPT-3, a huge computer program released in 2020 that was trained to predict text, and about what its success means for artificial intelligence. It argues for the \"scaling hypothesis\": the idea that making neural networks (brain-like learning systems) much bigger, and feeding them much more data and computing power, is itself the path to real intelligence, without needing clever new designs.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The author says this matters because almost no one expected GPT-3's huge jump in size to keep paying off; many researchers thought returns would shrink. Instead GPT-3 showed \"meta-learning\": it could learn brand-new tasks just from a few examples in its prompt, something it was never specifically trained to do. The piece argues this suggests large, simply-trained models could become key building blocks for future AI, and that the 2020s will be a pivotal decade.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-fvqe70"
+      ]
+    },
+    {
+      "text": "A central idea is the \"blessings of scale\": unlike most research, where small problems are easy and big ones are hard, in deep learning big, difficult, varied problems often make learning easier, more stable, and more human-like. The essay suggests this happens because huge models act like a vast collection of smaller internal models, and simple memorized shortcuts get beaten out by genuinely general solutions once the data and model are large enough.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-uknzzk"
+      ]
+    },
+    {
+      "text": "The piece also compares how different research labs respond to this: OpenAI (which made GPT-3) is described as betting heavily on scaling, while others like DeepMind or Google Brain are portrayed as more skeptical or cautious. It closes by criticizing AI experts broadly, saying their past confident predictions that progress would stall were repeatedly wrong, and that their public reassurances carry little real evidence behind them.",
+      "ids": [
+        "spya-khnsat",
+        "spya-scr8jb",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a giant AI model that predicts text, and an idea called the \"scaling hypothesis.\" That idea says just making neural networks much bigger, with more data and computing power, can make them far more capable than expected. The piece is an essay arguing this is the real story behind recent AI progress.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-m3gtj6"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 did more than just learn more facts than earlier models. It learned to follow instructions and pick up brand-new tasks from just a few examples, something called meta-learning, even though it was never built to do that. The author says this kind of surprise ability shows that bigger scale alone can unlock new skills.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-fvqe70",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The key idea is the \"blessings of scale\": problems that stump small neural networks often become easy once the network, its training data, and its computing power all grow large enough. This leads to a bold claim: building ever-bigger networks, more than inventing clever new methods, may be the real path toward much smarter AI.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-m3gtj6",
+        "spya-emqjaa"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -156,6 +156,7 @@ import {
   generatorFor,
   type ModelPower,
   modelFor,
+  powerFor,
   STAGE_EFFORT,
 } from "./models.js";
 import { STEP_ORDER } from "./step-order.js";
@@ -3897,7 +3898,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
-        power: ctx.power,
+        /* Opus for every article, not the article's setting: `ALWAYS_HIGH_POWER`. */
+        power: powerFor("simple", ctx.power),
         cacheArticle: ctx.cacheArticle,
         profile: ctx.profile ?? null,
       });

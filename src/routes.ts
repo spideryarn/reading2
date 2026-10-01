@@ -387,6 +387,7 @@ import {
   articlePower,
   type ModelPower,
   NON_TASK_MODELS,
+  powerFor,
   type Provider,
   STAGE_EFFORT,
   TASK_TIER,
@@ -5723,9 +5724,10 @@ function modelsInUse(): { tasks: ModelReport[] } {
        the raw table would have printed `high` beside a stage running at
        `medium`. */
     const effort = task in STAGE_EFFORT ? effortFor(task as ArticleStage) : undefined;
-    /* `standard`: this page reports the app's configuration, not one
-       article's — High-powered AI is per article (plan 260930f). */
-    const { id, provider, source } = resolveModel(task, "standard");
+    /* A standard article: this page reports the app's configuration, not one
+       article's — High-powered AI is per article (plan 260930f). Through
+       `powerFor`, so a task on Opus for every article is reported as Opus. */
+    const { id, provider, source } = resolveModel(task, powerFor(task, "standard"));
     return {
       task,
       model: displayName(id),

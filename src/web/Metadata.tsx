@@ -1380,8 +1380,8 @@ function RerunSection({
       )}
       {/* **High-powered AI**, for the owner of the article — switching it on counts
           as one more article against their allowance (plan 260930k). First in
-          the section, above the rows it changes the model for: switching it
-          re-runs nothing, and the rows below are how you ask. */}
+          the section, above the rows it changes the model for (all but Simple):
+          switching it re-runs nothing, and the rows below are how you ask. */}
       <HighPowerSwitch slug={slug} since={provenance?.highPowerSince} onChanged={onFinished} />
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this
