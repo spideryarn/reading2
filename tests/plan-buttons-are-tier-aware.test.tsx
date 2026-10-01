@@ -127,7 +127,7 @@ const ON_RESEARCHER: BillingSummary = {
 
 /** Nobody has ever paid: both tiers, through the Checkout door. */
 const UNSUBSCRIBED: BillingSummary = {
-  plan: { kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, highPower: 0, atLimit: true },
+  plan: { kind: "free", limit: 3, used: 3, sharedHalfPrice: 0, highPower: 0, atLimit: true, remaining: 0 },
   manageable: false,
   purchase: { kind: "checkout", tiers: [READER, RESEARCHER] },
 };

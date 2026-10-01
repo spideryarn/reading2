@@ -573,6 +573,14 @@ The Portal then opens on no payment method and no invoices, which is the honest 
 that started to subscribe and stopped. Seen in the browser on 2026-09-03 and written down because it
 looks wrong for as long as it takes to remember why the mapping comes first.
 
+**The shelf says it too, to a Free reader, since 2026-10-01.** A compact box under the add box
+([library.md § The free-allowance box](library.md#the-free-allowance-box)) for the `free` and `lapsed`
+arms only: `describePlan`'s headline, the server's `remaining` (further *private* articles — never
+`limit − used`), and a collapsed *How free articles work* that links `/pricing` and `/profile`. It
+is the shelf's one `useBilling()`, and the read it makes is also what claims a waiting gift voucher
+(§ Gift vouchers below), so the box is where a new gift first shows — a gift icon by the count, the
+gift listed in the collapsed half, and a dismissible *has been added* line for seven days.
+
 ## We never touch a card
 
 Hosted Stripe Checkout and the hosted Customer Portal, both of which are redirects. Billing
@@ -968,6 +976,47 @@ only the request that reserved may release, and only after its enqueue has retur
 A failure releases its slot, so somebody who can reliably make expensive ingests *fail* can repeat
 for ever. True of every design considered, because the quota counts successes and that is the
 product rule. The answer when it matters is a daily attempt cap, not a change to any of the above.
+
+### Gift vouchers: extra free articles, given by email
+
+> I'd like to be able to give somebody a gift voucher (e.g. 20 free articles). … add a new page in
+> `/admin` where I can enter their email address (and if they log in or are already logged in with
+> that email address, it automatically & permanently increases their allotment of articles that
+> they can process while still on the Free pricing plan …
+>
+> — Greg, 2026-10-01
+
+A voucher is a row of `billing_vouchers`: an address, a number of articles (1–1000), a private note,
+who made it, and — once claimed — which account claimed it. Only the administrator makes or changes
+one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review are
+[261001m](../plans/261001m-gift-vouchers-for-free-articles.md). Four rules, each for a reason:
+
+- **It counts on Free only.** `freeEntitlement` in [`pg-billing.ts`](../../src/store/pg-billing.ts)
+  adds the claimed, unrevoked sum to every Free answer `entitlementFromRow` gives, and no paid
+  answer touches it. A lapsed reader is on Free, so they get it back. Because it is added at the
+  one place entitlement is decided, the wall, `/profile`, `/pricing` and `/admin/users` all agree.
+- **The claim binds it to an account, once, and only for a confirmed address.**
+  `GET /api/billing/usage` — what the homepage reads on arrival — first runs `claimVouchersFor`
+  ([`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): if a waiting voucher matches the JWT's
+  address (trimmed, lower-cased), it asks the Auth Admin API whether the account's own record has
+  that address **and** `email_confirmed_at`, and only then, in one transaction, creates the billing
+  anchor and stamps the voucher with `claimed_by`. Any doubt and it does not claim; the next visit
+  tries again. It is the one write in a GET, idempotent, and the response is `private, no-store`.
+  An address with no account yet simply waits.
+- **The sum is cast and checked.** Postgres returns `sum()` as a string unless told otherwise, and
+  `3 + "20"` is `"320"`. The subquery is `::int` *and* `.mapWith(Number)`, and `freeEntitlement`
+  throws on anything that is not a non-negative safe integer (GPT Sol, plan review F1).
+- **Lowering a gift takes the billing lock first.** A revoke or a smaller count on a claimed voucher
+  locks the claimant's `billing_accounts` row before the voucher — the house order — and
+  `lockBillingAccount` reads the bonus in a **second statement after** taking its lock, because a
+  subquery inside the locking statement answers from the snapshot taken before the wait, and would
+  miss a revoke that committed meanwhile (F2). `tests/billing-vouchers.test.ts` holds both halves as
+  held-transaction tests, beside twenty concurrent ingests on a 3+2 account admitting exactly five.
+
+What the reader is told is `ReaderPlan.gifts` — articles, the claim date and an opaque `noticeKey`,
+on the `free` and `lapsed` arms only, and **absent when there are none**, so no surface can mention a
+voucher to somebody without one. The note, the creator and the address never leave the admin
+routes. The copy says *3 free + 20 from a gift* rather than a bare 23 (`giftMakeup`).
 
 ## Billing is a Postgres feature
 

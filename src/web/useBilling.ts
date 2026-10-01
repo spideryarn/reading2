@@ -149,7 +149,26 @@ export function useBilling(): UseBilling {
   useEffect(() => {
     const found = new URLSearchParams(location.search).get("checkout");
     if (!found) return;
-    history.replaceState(null, "", location.pathname);
+    /* Remove only Checkout's own value. This hook also runs on the shelf now,
+       where the rest of the query string is the reader's search, sorting and
+       view state; clearing the whole string would reset the page around this
+       otherwise unrelated confirmation. Keep the raw spelling of every other
+       pair too — URLSearchParams serialisation would turn readable commas into
+       `%2C` — and preserve the fragment and the router's history state. */
+    const kept = location.search
+      .replace(/^\?/, "")
+      .split("&")
+      .filter((pair) => {
+        const equals = pair.indexOf("=");
+        const rawKey = equals < 0 ? pair : pair.slice(0, equals);
+        try {
+          return decodeURIComponent(rawKey.replace(/\+/g, " ")) !== "checkout";
+        } catch {
+          return true;
+        }
+      });
+    const search = kept.length > 0 ? `?${kept.join("&")}` : "";
+    history.replaceState(history.state, "", `${location.pathname}${search}${location.hash}`);
 
     if (found === "cancelled") {
       setCheckout({ kind: "cancelled" });

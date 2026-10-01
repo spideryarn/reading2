@@ -104,7 +104,12 @@
  *   POST   /api/jobs/:id/cancel
  *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
  *   POST   /api/jobs/:id/advance run the next step this job has not done yet
- *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought
+ *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought —
+ *                                and, first, claims any gift voucher waiting for the
+ *                                reader's confirmed address (the one write in a GET)
+ *   GET    /api/admin/vouchers   (admin) every gift voucher, with each claimant's usage
+ *   POST   /api/admin/vouchers   (admin) { email, articles, note? } → a voucher, waiting
+ *   PATCH  /api/admin/vouchers/:id (admin) { articles?, note?, email?, revoked? }
  *   POST   /api/billing/checkout { tierId, currency? } → a hosted Checkout, or the Portal
  *   POST   /api/billing/portal   → a hosted Customer Portal session
  *   POST   /api/billing/confirm  { sessionId } → prove a finished Checkout is yours, then sync
@@ -341,6 +346,14 @@ import {
   startCheckout,
 } from "./billing/checkout.js";
 import { readBillingSummary } from "./billing/summary.js";
+import {
+  claimVouchersFor,
+  createVoucher,
+  listVouchers,
+  parseNewVoucher,
+  parseVoucherPatch,
+  updateVoucher,
+} from "./store/pg-vouchers.js";
 import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
@@ -7044,6 +7057,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * patterns are.
  */
 const JOBS_PATH = "/api/jobs";
+/* Gift vouchers: GET lists, POST creates (261001m). */
+const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
 const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 /* Referee mode's criteria: the collection, and one row. `criteria` sits inside
@@ -7162,6 +7177,55 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          response states it. GPT Sol, 2026-08-27. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
+    },
+  },
+
+  /* **Gift vouchers** — `/admin/vouchers`. The only writes to
+     `billing_vouchers` bar the reader's own claim, and they are here, inside
+     the namespace gate above the table, so no reader can reach them.
+     docs/plans/261001m-gift-vouchers-for-free-articles.md;
+     src/store/pg-vouchers.ts. No hard delete: `revoked` is the invalidation. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: ADMIN_VOUCHERS_PATH,
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      /* Addresses and private notes about other people. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { vouchers: await listVouchers() });
+    },
+  },
+  {
+    kind: "exact",
+    method: "POST",
+    path: ADMIN_VOUCHERS_PATH,
+    article: "none",
+    handler: async ({ user, request: { req, res } }) => {
+      const parsed = parseNewVoucher(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 201, await createVoucher(parsed.value, user.id));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/admin\/vouchers\/([\w-]+)$/,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [, id = ""] = captures;
+      /* The shape in the pattern is not the rule; this is, before the store. */
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const parsed = parseVoucherPatch(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      const answer = await updateVoucher(id, parsed.value);
+      if (answer.kind === "not-found") throw httpError(404, "There is no such voucher.");
+      if (answer.kind === "claimed") {
+        throw httpError(409, "That voucher has been claimed, so its address can no longer change.");
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { ok: true });
     },
   },
 
@@ -9572,18 +9636,36 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
 
   /**
    * **What plan this reader is on, and what they have used.** The one billing
-   * route that is a read.
+   * route that is a read — **with one deliberate, idempotent write first**.
    *
    * It never reaches Stripe — see src/billing/summary.ts. A stored period that
    * has run out comes back as *we cannot say*, rather than as a guess or as
    * the 503 admission answers, because nothing is being decided here.
+   *
+   * **The write is the gift voucher claim** (`claimVouchersFor`,
+   * src/store/pg-vouchers.ts): a voucher waiting for this reader's confirmed
+   * address is bound to their account, so the plan read straight after
+   * includes it. It is here because this is what the homepage reads on
+   * arrival, which is where *"applied when they log in"* is said. Idempotent —
+   * a second call finds nothing waiting — and a failure is logged and the plan
+   * served anyway, because the next visit tries again. Hence `no-store`.
+   * docs/plans/261001m-gift-vouchers-for-free-articles.md (F5).
    */
   {
     kind: "exact",
     method: "GET",
     path: "/api/billing/usage",
     article: "none",
-    handler: async ({ request: { res } }) => {
+    handler: async ({ user, request: { res } }) => {
+      try {
+        await claimVouchersFor(user);
+      } catch (err) {
+        log("store").warn(
+          { err: err instanceof Error ? err.name : "unknown" },
+          "claiming a gift voucher failed — the plan is served without it, and the next visit tries again",
+        );
+      }
+      res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, await readBillingSummary(currentOwnerId()));
     },
   },

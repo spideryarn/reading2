@@ -2572,6 +2572,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      transaction it always rolls back. `pgReady`, its own two articles. */
   "tests/remember-one-thread-migration.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
+  /* 261001m: gift vouchers. `pgReady`, its own seeded owners minted per run,
+     and the Auth lookup replaced — nothing reaches GoTrue, so the private
+     clone is enough. */
+  "tests/billing-vouchers.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",

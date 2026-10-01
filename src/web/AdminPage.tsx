@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
+import { Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -44,6 +44,7 @@ import {
   ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
   ADMIN_USERS_HREF,
+  ADMIN_VOUCHERS_HREF,
   DESIGN_HREF,
   LIBRARY_HREF,
 } from "./router.js";
@@ -67,8 +68,12 @@ const EMPTY: AdminUser[] = [];
  */
 const idOf = (u: AdminUser) => u.id;
 
-/** The page shell both admin pages wear: the back-link, the heading, the width. */
-function Shell({
+/**
+ * The page shell every admin page wears: the back-link, the heading, the width.
+ * Exported for AdminVouchersPage.tsx, which is a file of its own because it is
+ * the one admin page with forms in it.
+ */
+export function Shell({
   title,
   children,
   back = { href: LIBRARY_HREF, label: "Back to your library" },
@@ -204,7 +209,8 @@ export function AdminHome() {
   return (
     <Shell title="Admin">
       <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
-        Everything on these pages reads across accounts. Nothing on them can change anything.
+        Everything on these pages reads across accounts. Only Gift vouchers can change anything,
+        and only a voucher.
       </p>
       <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
         <Entry
@@ -220,6 +226,12 @@ export function AdminHome() {
           }
           title="Feedback"
           blurb="Bug reports readers filed with the Feedback button, newest first"
+        />
+        <Entry
+          href={ADMIN_VOUCHERS_HREF}
+          icon={<Gift size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Gift vouchers"
+          blurb="Give an email address extra free articles, and see who has claimed theirs"
         />
         {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
             > Move the Design link on the logged-in Homepage into /admin
