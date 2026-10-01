@@ -645,8 +645,8 @@ interface Props {
   slug: string;
   /**
    * **One thing to hang after one block's prose**, or nothing — the open
-   * mode's door into the rest of the page. Trajectory's "Next stop ›" is the
-   * one user (TrajectoryPanel.tsx § TrajectoryDoor): after the current stop's
+   * mode's door into the rest of the page. Skim's "Next stop ›" is the
+   * one user (SkimPanel.tsx § SkimDoor): after the current stop's
    * block, where a reader who has just read it has their eyes and thumb.
    *
    * On the path `PdfFigureNotes` already takes — a sibling after `.prose`,
@@ -663,7 +663,7 @@ interface Props {
    * not the open mode's, which is why this is a second prop and not a wider
    * `afterBlock`: that one stays one mode's single slot, and a standing feature
    * of the article is braided into it by nothing. Drawn on the same path, a
-   * sibling after `.prose`, and **before** `afterBlock`, so in Trajectory the
+   * sibling after `.prose`, and **before** `afterBlock`, so in Skim the
    * question sits between the stop's passage and its door.
    * QuizInProse.tsx; SPIDERYARN-READING2-6V.
    *

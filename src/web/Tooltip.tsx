@@ -103,7 +103,7 @@ interface BaseProps {
    * **`false` keeps the wrapper and opens nothing.** For a trigger that has a
    * card only some of the time: wrapping it conditionally changes the element
    * type at that slot, so React remounts the trigger and a keyboard user's
-   * focus drops to `<body>` — a Trajectory row losing its card as it becomes
+   * focus drops to `<body>` — a Skim row losing its card as it becomes
    * current (plan 260928e). Default `true`.
    */
   enabled?: boolean;

@@ -1424,8 +1424,8 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "CitationsBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
-  trajectory: [
-    { label: "TrajectoryBand", as: "owner" },
+  skim: [
+    { label: "SkimBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
   faq: [
@@ -1464,7 +1464,7 @@ const NOTHING_AVAILABLE: PublicArtefacts = {
   tweets: false,
   timeline: false,
   sketch: false,
-  trajectory: false,
+  skim: false,
   faq: false,
   simpleSummary: false,
   citations: false,
@@ -1512,7 +1512,7 @@ describe("Marginalia's notes", () => {
     who.set(OWNER_A);
     experimentalSince = "2026-09-01T09:00:00.000Z";
     probe.throwAt = "MarginNotes";
-    await open("?mode=annotations");
+    await open("?margin=1");
 
     expect(probe.labelThrows, "the throwing mock never ran").toBeGreaterThan(0);
     expect(host.querySelector("[data-marg-note]"), "a note survived its own throw").toBeNull();

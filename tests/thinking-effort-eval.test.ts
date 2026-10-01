@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { ARM_NAMES, DEFAULT_ARMS, levelOf, seededShuffle } from "../evals/thinking-effort/arms.js";
 import { renderForJudging } from "../evals/hierarchy-structure/blind.js";
 import { ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
+import { assertTreeSound } from "../src/tree-invariants.js";
 import { qualityFromRanking, uStatistic, verdictOf } from "../evals/thinking-effort/tally.js";
 import {
   accountingFaults,
@@ -183,16 +184,49 @@ describe("the lineup", () => {
     ]);
   });
 
-  it("renders Hierarchy's sampled deep gists reproducibly", async () => {
-    const corpus = "evals/results/thinking-effort-smoke/corpus/cargocult-spya-rz663q";
-    const { blocks } = JSON.parse(await readFile(path.join(corpus, "blocks.json"), "utf-8")) as { blocks: Block[] };
-    const tree = JSON.parse(
-      await readFile(
-        "evals/results/hierarchy-structure/2026-10-01-17-39-07-incumbent+smart-off/trees/incumbent.cargocult-spya-rz663q.json",
-        "utf-8",
-      ),
-    ) as Tree;
-    expect(renderForJudging(blocks, tree, "W")).toBe(renderForJudging(blocks, tree, "W"));
+  it("renders Hierarchy's sampled deep gists reproducibly", () => {
+    /* Built here rather than read from a run's corpus: evals/results/ is
+       gitignored, so a test that read it passed only on the checkout where the
+       eval ran (docs/postmortems/261002a). Six deep gisted nodes, so the sample
+       of three is a real draw and not the whole pool. */
+    const blocks: Block[] = Array.from({ length: 12 }, (_, i) => {
+      const text = `Paragraph ${i} says one thing. Then another.`;
+      return {
+        id: `spya-b${String(i).padStart(5, "0")}`,
+        tag: "p",
+        kind: "text",
+        text,
+        words: text.split(/\s+/).length,
+        html: `<p>${text}</p>`,
+        gistable: true,
+      };
+    });
+    const id = (i: number) => blocks[i]!.id;
+    const nodes: Tree["nodes"] = {
+      root: { id: "root", depth: 0, parent: null, children: ["p0", "p1"], range: [id(0), id(11)], title: "Root", gist: "g" },
+    };
+    for (const p of [0, 1]) {
+      const deep = [0, 1, 2].map((d) => `p${p}d${d}`);
+      nodes[`p${p}`] = { id: `p${p}`, depth: 1, parent: "root", children: deep, range: [id(p * 6), id(p * 6 + 5)], title: `Part ${p}`, gist: `part ${p}` };
+      for (const [d, nid] of deep.entries()) {
+        const lo = p * 6 + d * 2;
+        const leaves = [0, 1].map((leaf) => `${nid}l${leaf}`);
+        nodes[nid] = { id: nid, depth: 2, parent: `p${p}`, children: leaves, range: [id(lo), id(lo + 1)], title: nid, gist: `deep gist ${nid}` };
+        for (const [leaf, leafId] of leaves.entries()) {
+          nodes[leafId] = { id: leafId, depth: 3, parent: nid, children: [], range: [id(lo + leaf), id(lo + leaf)], title: `${nid} leaf` };
+        }
+      }
+    }
+    const tree: Tree = { version: "v", generator: "test", slug: "s", rootId: "root", nodes };
+    expect(() => assertTreeSound(blocks, tree)).not.toThrow();
+
+    const once = renderForJudging(blocks, tree, "W");
+    expect(renderForJudging(blocks, tree, "W")).toBe(once);
+    expect(once.match(/^- gist: deep gist \S+$/gm)).toEqual([
+      "- gist: deep gist p0d2",
+      "- gist: deep gist p1d2",
+      "- gist: deep gist p0d0",
+    ]);
   });
 });
 

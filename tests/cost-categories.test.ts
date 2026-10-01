@@ -323,6 +323,16 @@ describe("placing every job the app can bill for", () => {
     );
   });
 
+  it("classifies a `trajectory` row with `skim`, because that was a rename and not a split", () => {
+    /* The mode was called Trajectory until 2026-10-01 (plan 261001r), and the
+       ledger is append-only, so its rows keep `job: "trajectory", step_name:
+       "trajectory"`. Unlike `summarise` above, nothing was split: the same
+       call, under a new name, so it lands where today's `skim` rows do. */
+    const legacy = costCategoryOf({ scopeKind: "job_step", job: "trajectory", stepName: "trajectory" });
+    expect(legacy).toBe(costCategoryOf({ scopeKind: "job_step", job: "skim", stepName: "skim" }));
+    expect(legacy).toBe("on-demand enrichment");
+  });
+
   it("keeps an eval overlay non-product whatever the job is", () => {
     /* An eval that exercises `chat` is recorded `job: "chat"`, and the scope is
        checked before the job for that reason. The disposition table must not

@@ -197,7 +197,7 @@ describe("FaqPanel", () => {
   });
 
   /* SPIDERYARN-READING2-62: the promise left the foot for an (i) at the end of
-     the order row, as Trajectory's did for 52 (plan 260930d); the (i) moved to
+     the order row, as Skim's did for 52 (plan 260930d); the (i) moved to
      the band's corner on 2026-10-01 (plan 261001m). */
   it("says the words are checked and the pairing is the model's reading, behind an (i) rather than on the page", async () => {
     await draw(owner());

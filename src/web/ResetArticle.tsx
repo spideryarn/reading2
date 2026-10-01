@@ -66,7 +66,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   tweets: "Thread",
   glossary: "Glossary",
   quotes: "Quotes",
-  trajectory: "Trajectory",
+  skim: "Skim",
   ideas: "Ideas",
   timeline: "Timeline",
   quiz: "Quiz",

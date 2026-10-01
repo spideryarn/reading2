@@ -255,7 +255,7 @@ So `description` is the mode in one fragment — it is also what the command bar
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
 the current modes that is almost always one of three things: **it reads something already built**
 (Structure), **its content is a model pass over the article, written once and
-stored** (Summary's plain-words levels, which a press on the bar does not yet start, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram's Sketch
+stored** (Summary's plain-words levels, which a press on the bar does not yet start, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
 or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining
@@ -351,7 +351,7 @@ Then the residue nothing refuses at compile time:
   stores what it generates shows the stored output to a visitor on a public article, and only
   *making* it is the owner's; `owners-only` is for a mode whose stored output is the reader's own
   writing (Chat, Remember, Referee). Four modes took `owners-only` as "a staging decision" and a
-  visitor was refused a Trajectory that had already been paid for —
+  visitor was refused a Skim that had already been paid for —
   [the postmortem](../postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md):
   [`public-reader.ts`](../../src/store/public-reader.ts) and
   [`src/public/dto.ts`](../../src/public/dto.ts).

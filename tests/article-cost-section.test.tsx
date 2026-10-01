@@ -264,7 +264,9 @@ describe("where the section is mounted", () => {
        tested above through the hook; this pins that it is the shut heading's. */
     const source = readFileSync("src/web/Metadata.tsx", "utf8");
     expect(source).toMatch(
-      /const failed = load\.kind === "failed";\s*return \(\s*<Section label="What it cost" collapsible=\{!failed\} aside=\{articleCostSummary\(load\)\}>\s*<ArticleCostBody load=\{load\} \/>/,
+      /* Props one per line since plan 261001s added `keywords` for the search
+         box; what this pins is still `collapsible={!failed}` and the aside. */
+      /const failed = load\.kind === "failed";\s*return \(\s*<Section\s+label="What it cost"\s+keywords="[^"]*"\s+collapsible=\{!failed\}\s+aside=\{articleCostSummary\(load\)\}\s*>\s*<ArticleCostBody load=\{load\} \/>/,
     );
   });
 });

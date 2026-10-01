@@ -222,7 +222,7 @@ describe("voices.css", () => {
       ".faq-quote",
       ".gloss-ask-found",
       ".tip-cite-text",
-      ".traj-words-tip",
+      ".skim-words-tip",
       ".dbt-claim-text",
       ".mir-quote:not(.mir-block-id)",
       ".ideas-quote:not(.ideas-quote-moved)",
@@ -259,8 +259,8 @@ describe("voices.css", () => {
       ".mir-placement-criterion",
       ".chat-live-line.reader .chat-live-words",
       ".chat-rename",
-      ".traj-purpose-text",
-      ".traj-purpose-tip p",
+      ".skim-purpose-text",
+      ".skim-purpose-tip p",
     ]) {
       expect(reader, selector).toContain(selector);
     }

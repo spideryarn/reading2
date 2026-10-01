@@ -91,7 +91,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   quotes: "a set of quotes",
   tweets: "a tweet thread",
   timeline: "a timeline",
-  trajectory: "a trajectory",
+  skim: "a skim route",
   faq: "an FAQ",
   simpleSummary: "a plain-words summary",
   citations: "a list of citations",
@@ -355,14 +355,14 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * Greg, SPIDERYARN-READING2-56: *"It's a public article, and the Trajectory
    * has already been generated, so it should show it."*
    *
-   * The visitor gets `VisitorTrajectoryBand`, which mounts no `useTrajectory`
+   * The visitor gets `VisitorSkimBand`, which mounts no `useSkim`
    * and so can neither read the owner's route nor plan one
-   * (src/web/modes/trajectory/TrajectoryMode.tsx). The route was planned for
+   * (src/web/modes/skim/SkimMode.tsx). The route was planned for
    * the owner, possibly shaped by their profile, on the same terms as the
    * glossary, ideas and quotes above — and `profileHash` does not cross.
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  trajectory: { kind: "artefact", key: "trajectory" },
+  skim: { kind: "artefact", key: "skim" },
   /**
    * **A mode since 2026-09-29**, and a visitor could already read a stored
    * thread on the page it replaced — so this row keeps what they had. The

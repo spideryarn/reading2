@@ -81,7 +81,7 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   /* 2026-09-16: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
   "faq",
-  /* Trajectory was here for most of 2026-09-28, a new mode on an unmeasured
+  /* Skim was here for most of 2026-09-28, a new mode on an unmeasured
      prompt; Greg took it out the same day ("take Trajectory and Quotes modes
      out of Experimental features") — docs/project/experimental-features.md. */
   /* Hierarchy was here from 2026-09-12 (SPIDERYARN-READING2-35) until it
@@ -377,7 +377,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
-  trajectory: false,
+  skim: false,
   faq: false,
   simpleSummary: false,
   citations: false,
@@ -391,7 +391,7 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
-  trajectory: true,
+  skim: true,
   faq: true,
   simpleSummary: true,
   citations: true,

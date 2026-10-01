@@ -53,7 +53,7 @@ the charge would have to ride the job.
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
   (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
-  trajectory, debate, citations) and the calls made while you read it (chat; explain — a comment's
+  skim, debate, citations) and the calls made while you read it (chat; explain — a comment's
   first answer and *Try again*, and the glossary's *Look up* box; search; quiz marking; referee;
   Citations' stand-alone *Look it up*; live conversation's search tool). A *Dig deeper* press does
   not move with it — the next point.

@@ -1,0 +1,55 @@
+{"root":{"title":"Ball Lightning Observations by Scientists","gist":"Well-documented reports from trained observers can guide fieldwork and help test theories of ball lightning.","question":"ball lightning — why do reports from trained observers matter for solving it? (a case compilation)","range":["spya-ncu3br","spya-rcbx2w"],"children":[
+
+{"title":"Publication Details and Abstract","gist":"This paper gathers 41 published and unpublished ball-lightning reports from trained observers across eight countries to inform theory, without claiming completeness.","question":"ball lightning reports — what does this compilation of 41 cases aim to achieve? (an abstract)","range":["spya-ncu3br","spya-wtg508"],"children":[
+{"title":"Journal publication notice","gist":"Journal, volume, and copyright license information.","range":["spya-ncu3br","spya-ncu3br"]},
+{"title":"Title, author, and submission details","gist":"Article title, author affiliation, correspondence address, and submission/acceptance dates.","range":["spya-a78j46","spya-wz5tp8"]},
+{"title":"Abstract","gist":"With many eyewitness accounts but almost no instrumental records, this review compiles 41 cases from trained observers in eight countries to support fieldwork and theory-testing.","range":["spya-wtg508","spya-wtg508"],"sourceHeading":"Abstract"}
+]},
+
+{"title":"1 Historical outline","gist":"Ball lightning has been documented since the 1800s as a brief, unexplained luminous phenomenon, yet it remains a poorly studied puzzle in atmospheric physics.","question":"ball lightning — why has it stayed a scientific puzzle despite centuries of sightings? (historical review)","range":["spya-duju25","spya-rjnzcc"],"sourceHeading":"1 Historical outline","children":[
+{"title":"Early sightings and definition","gist":"An 1841 Milan sighting and Arago's 1837 coinage of the term ball lightning frame it as a brief, unpredictable luminous phenomenon still lacking explanation.","range":["spya-duju25","spya-v4ps0c"]},
+{"title":"Reviews and the scientific consensus","gist":"Multiple monographs and thousands of references attest that ball lightning's reality is not doubted, yet no satisfactory theory exists and research remains what one critic called a fragmented science.","range":["spya-c4zvkj","spya-rjnzcc"]}
+]},
+
+{"title":"2 Methodology","gist":"Because instrumental recordings of ball lightning are scarce, the study draws on reports from scientists and trained professionals, including the author's own long-running European dataset.","question":"methodology — how can scarce direct recordings be supplemented to study ball lightning? (a case-collection approach)","range":["spya-zbq6a4","spya-nwxrm0"],"sourceHeading":"2 Methodology","children":[
+{"title":"Scope of the review","gist":"Since direct photographic capture of ball lightning is rare, the author compiles published and unpublished reports from trained observers into an admittedly incomplete but expandable case review.","range":["spya-zbq6a4","spya-fj8hm9"]},
+{"title":"The author's European dataset","gist":"Over 45 years the author gathered European ball lightning cases, and a 2018 correlation with lightning-detection networks found an unexpectedly high share of positive strokes and equal close and distant events.","range":["spya-nwxrm0","spya-nwxrm0"]}
+]},
+
+{"title":"3 Scientists as ball lightning observers","gist":"Natural scientists, engineers, and medical professionals across a century and a half describe encounters with ball lightning sharing recurring features of size, motion, and sound.","question":"trained scientists — what do their first-hand ball lightning sightings reveal about the phenomenon? (a case series)","range":["spya-ut726q","spya-qtga9m"],"sourceHeading":"3 Scientists as ball lightning observers","children":[
+{"title":"3.1 Natural scientists, technical, and medical professionals","gist":"From an 1868 Vienna sighting to a 2002 California report, scientists, engineers, and doctors describe ball lightning as compact luminous spheres lasting seconds, often tied to nearby lightning strikes and sometimes causing damage or injury.","range":["spya-ut726q","spya-qtga9m"],"sourceHeading":"3.1 Natural scientists, technical, and medical professionals"},
+{"title":"3.2 Childhood reports of later natural scientists","gist":"Several future scientists recalled, decades later, detailed childhood sightings of ball lightning, including one that fragmented into smaller glowing spheres leaving melted asphalt marks on the ground.","range":["spya-usdfft","spya-qtga9m"],"sourceHeading":"3.2 Childhood reports of later natural scientists"}
+]},
+
+{"title":"4 Other trained observers","gist":"Weather-station staff, coastguards, amateur astronomers, and military and business professionals also report ball lightning, though automation now threatens such high-quality sightings.","question":"non-scientist professionals — what do their observations add, and what risks losing them? (a case series plus a concern)","range":["spya-qtga9m","spya-k02vg9"],"sourceHeading":"4 Other trained observers","children":[
+{"title":"4.1 Weather observers and coastguards","gist":"Weather-station staff and coastguards from Pikes Peak to Fichtelberg describe ball lightning entering buildings through wires and windows, though automating these stations now risks losing such trained firsthand reports.","range":["spya-yt230r","spya-eyhaer"],"sourceHeading":"4.1 Weather observers and coastguards"},
+{"title":"4.2 Amateur astronomers, military, and economic experts","gist":"Amateur astronomers, a military colonel, and business professionals report ball lightning events whose color changes, trajectories, and lightning-network correlations resemble those seen elsewhere in the review.","range":["spya-qtqp22","spya-k02vg9"],"sourceHeading":"4.2 Amateur astronomers, military, and economic experts"}
+]},
+
+{"title":"5 Synopsis of cases","gist":"Pooling the 41 reports shows patterns in location, timing, size, and duration, but enough outliers that one uniform model of ball lightning seems unlikely.","question":"the case sample — what patterns and limits emerge from comparing 41 reports statistically? (a data summary)","range":["spya-k02vg9","spya-c2m4vk"],"sourceHeading":"5 Synopsis of cases","children":[
+{"title":"Sample overview","gist":"The 41 cases come mostly from Europe, with a few from the US, Spain, and Latvia, and span 1868 to 2020 with most reports concentrated after 1950.","range":["spya-k02vg9","spya-m284qy"]},
+{"title":"Seasonal and daily timing","gist":"Sightings cluster in the summer thunderstorm months of June through August and occur mostly from midday through midnight, matching the general timing of thunderstorms.","range":["spya-gzckgk","spya-a0h7qn"]},
+{"title":"Size, duration, and lightning links","gist":"Reported ball sizes mostly stay under 20 centimetres and durations under 3 seconds, skewing smaller and shorter than larger non-expert databases, while most cases coincide with a thunderstorm or nearby lightning strike.","range":["spya-hrcct6","spya-mj9yck"]},
+{"title":"Behaviour patterns and an open invitation","gist":"Beyond typical features like brightness, motion, and explosive endings, some cases show unusual effects such as paralysis or wall penetration, leading the author to resist defining one normal case and to invite further reports.","range":["spya-fkfh5m","spya-p9uvh9"]}
+]},
+
+{"title":"6 Other influential or notable cases","gist":"Six famous ball lightning cases, from an 18th-century fatality to modern triggered-lightning experiments, illustrate both the phenomenon's dangers and attempts at physical measurement.","question":"notable cases — what do history's most-cited ball lightning incidents show about evidence and risk? (six cases)","range":["spya-c2m4vk","spya-djjxkt"],"sourceHeading":"6 Other influential or notable cases","children":[
+{"title":"The Richmann myth","gist":"A famous 1753 electrocution long blamed on ball lightning was actually ordinary lightning striking an ungrounded conductor, yet the myth shaped ball lightning's popular image as deadly and destructive.","range":["spya-c2m4vk","spya-bbtuzu"]},
+{"title":"Charcot's patient D-cy","gist":"Neurologist Charcot examined a soldier struck by what he concluded was genuine ball lightning in 1889, distinguishing short-term paralysis from longer-lasting traumatic neurosis, a distinction still used in medicine today.","range":["spya-ugmxk8","spya-srxfmn"]},
+{"title":"Dorstone and Poughquag evidence","gist":"Physical traces from two cases, a boiled tub of water in 1936 and UV-fluorescent glass in 2008, let researchers estimate the energy density involved in each ball lightning event.","range":["spya-qxb4e2","spya-dtt3v9"]},
+{"title":"Modern instrumented investigations","gist":"Recent projects using triggered lightning, slit spectroscopy, and multi-camera triangulation in the US, China, and Russia have measured ball-lightning-like phenomena's composition, size, and movement with unprecedented precision.","range":["spya-mbqwhj","spya-djjxkt"]}
+]},
+
+{"title":"7 Conclusions","gist":"Ball lightning research remains fragmented and underfunded, but systematic documentation of trained-observer and physical-evidence cases could still build a database to test theories against.","question":"ball lightning research — how can a scattered field move toward testable theories? (a recommendation)","range":["spya-reyd2w","spya-zz7g2q"],"sourceHeading":"7 Conclusions","children":[
+{"title":"Framing the field's fragmentation","gist":"The 41 compiled observer reports and six evidence-rich cases are proposed as a way to coordinate fieldwork and test theories, overcoming what one researcher called ball lightning's fragmented science.","range":["spya-reyd2w","spya-jybqrk"]},
+{"title":"Toward a coordinated database","gist":"Unlike normal science, ball lightning research has stayed scattered and underfunded because the phenomenon is rare and hard to reproduce, but the author hopes coordinated projects and physical-evidence benchmarks can build a testable database.","range":["spya-yamst5","spya-zz7g2q"]}
+]},
+
+{"title":"Data, Funding, and Acknowledgements","gist":"Data availability, competing interests, acknowledgements, review statement, and references.","range":["spya-yp8uzp","spya-rcbx2w"],"children":[
+{"title":"Data availability statement","gist":"Lists which of the 41 case reports are published and accessible, and which come from the author's or a Russian database.","range":["spya-yp8uzp","spya-yp8uzp"]},
+{"title":"Competing interests and acknowledgements","gist":"Declares no conflict of interest and thanks contributors, pioneer researchers, and media who helped gather observer reports.","range":["spya-hmaju2","spya-uwwn77"]},
+{"title":"Review statement","gist":"Names the editor and notes anonymous peer review.","range":["spya-x4e2cg","spya-x4e2cg"]},
+{"title":"References list","gist":"The article's references.","range":["spya-rcbx2w","spya-rcbx2w"]}
+]}
+
+]}}

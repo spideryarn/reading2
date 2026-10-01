@@ -1,0 +1,1258 @@
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index f37d203f7..ecda6226c 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -287,7 +287,8 @@ import { useSession } from "./useSession.js";
+ import { ProfileBox } from "./ProfileBox.js";
+ import { useAutosavedText } from "./useAutosavedText.js";
+ import { GuessedSourceLink } from "./Masthead.js";
+-import { PageContents } from "./PageContents.js";
++import { flushSync } from "react-dom";
++import { PageContents, SECTION_REVEAL } from "./PageContents.js";
+ import { Button } from "@/components/ui/button";
+ import { HighPowerSwitch } from "./HighPowerSwitch.js";
+ import { JobProgress } from "./JobProgress.js";
+@@ -898,7 +899,12 @@ export function Metadata({
+           /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
+              *"we can have more of the sections be default collapsed, like
+              authors, export, delete"*. The count stays on the heading. */
+-          <Section label="Authors" aside={`${meta.authors.length}`} collapsible>
++          <Section
++            label="Authors"
++            aside={`${meta.authors.length}`}
++            keywords="names writers byline who wrote it affiliations"
++            collapsible
++          >
+             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
+               {meta.authors.map((author, i) => (
+                 // biome-ignore lint/suspicious/noArrayIndexKey: two authors can share a name; order is the identity
+@@ -1247,7 +1253,7 @@ function SharingSection({
+ }) {
+   if (!offer) return null;
+   return (
+-    <Section label="Access & sharing" landing>
++    <Section label="Access & sharing">
+       {/* **In a card, like every other section on this page**, since
+           2026-09-04. It was the one section whose contents sat straight on the
+           page background — Greg: *"the section should be inside a box like the
+@@ -1372,7 +1378,13 @@ function RerunSection({
+     /* **Collapsible only while nothing has gone wrong** — the rule the stage
+        rows brought with them from *Technical details* (`StageRecord` below):
+        a failed metadata request draws the section open, with the error first. */
+-    <Section label="AI processing" collapsible={!error} keepMounted aside={error ? null : aside}>
++    <Section
++      label="AI processing"
++      keywords="steps stages pipeline models summaries glossary structure hierarchy"
++      collapsible={!error}
++      keepMounted
++      aside={error ? null : aside}
++    >
+       {error && (
+         <p
+           className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
+@@ -1783,7 +1795,12 @@ function CostSection({ slug }: { slug: string }) {
+   const load = useArticleCost(slug);
+   const failed = load.kind === "failed";
+   return (
+-    <Section label="What it cost" collapsible={!failed} aside={articleCostSummary(load)}>
++    <Section
++      label="What it cost"
++      keywords="calls models tokens breakdown"
++      collapsible={!failed}
++      aside={articleCostSummary(load)}
++    >
+       <ArticleCostBody load={load} />
+     </Section>
+   );
+@@ -2292,7 +2309,11 @@ function TechnicalDetails({
+   rawSha256: string | undefined;
+ }) {
+   return (
+-    <Section label="Technical details" collapsible>
++    <Section
++      label="Technical details"
++      keywords="address url source original stored fingerprint hash slug id revision"
++      collapsible
++    >
+       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+           {/* **The slug, called what it is to the person reading.** "Slug" is
+@@ -3480,14 +3501,23 @@ function sectionId(label: string): string {
+ function Section({
+   label,
+   aside,
++  keywords,
+   collapsible,
+   keepMounted,
+-  landing,
+   children,
+ }: {
+   label: string;
+   /** One line answering the section's question, on the heading row. */
+   aside?: ReactNode;
++  /**
++   * **Words a reader might search for that the section does not print** — the
++   * search box above the contents list reads them (`data-keywords`,
++   * page-search.ts). Mostly for the sections that unmount their body when
++   * shut, whose words are otherwise not on the page to find. The synonyms
++   * every page shares live in page-search.ts § SYNONYMS; these are this
++   * section's own. Plan 261001s.
++   */
++  keywords?: string;
+   collapsible?: boolean;
+   /**
+    * **Shut hides the children rather than unmounting them.** For *AI
+@@ -3499,15 +3529,6 @@ function Section({
+    * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
+    */
+   keepMounted?: boolean;
+-  /**
+-   * **The heading can take focus from a script**, for a button elsewhere on the
+-   * page that sends the reader here — *Share…* in `TopActions`, which lands on
+-   * *Access & sharing*. The heading rather than the first control inside,
+-   * because that control changes with the card's state (a link box, *Share with
+-   * anyone…*, or nothing while it loads), and a landing that puts an action
+-   * under Enter is the wrong kind of arrival. GPT Sol, plan review, 2026-09-30.
+-   */
+-  landing?: boolean;
+   children: ReactNode;
+ }) {
+   /* Local state, not a URL parameter, and this page's own `at` two hundred
+@@ -3542,6 +3563,25 @@ function Section({
+    */
+   const [open, setOpen] = useState(false);
+   const showing = !collapsible || open;
++  /* **Opened from outside** — the contents list and its search box send
++     `SECTION_REVEAL` to the section they are taking the reader to
++     (PageContents.tsx § reveal; Greg, SPIDERYARN-READING2-7Y: *"expand that
++     section (if needed)"*). An event on this element rather than lifted state,
++     because lifting it would need a list of the page's sections — the second
++     list PageContents exists not to have. Opens, never shuts: a reveal of an
++     open section leaves it open. A section that is not collapsible is already
++     showing, and setting `open` on it changes nothing. */
++  const sectionEl = useRef<HTMLElement>(null);
++  useEffect(() => {
++    const el = sectionEl.current;
++    if (!el) return;
++    /* `flushSync` so the body is in the DOM when the event returns: the
++       sender scrolls next, and near the foot of the page a shut section may
++       not leave the scroll range to bring its heading up. Sol, plan review. */
++    const reveal = () => flushSync(() => setOpen(true));
++    el.addEventListener(SECTION_REVEAL, reveal);
++    return () => el.removeEventListener(SECTION_REVEAL, reveal);
++  }, []);
+   const head = (
+     <>
+       <span
+@@ -3561,9 +3601,24 @@ function Section({
+        the section the list then marks, and setting the two equal put that on a
+        knife edge that a browser lost. See the constant's docstring; if you
+        change this 24, that number has to stay above it. */
+-    <section id={sectionId(label)} data-section={label} className="tw:mt-8 tw:scroll-mt-24">
++    <section
++      ref={sectionEl}
++      id={sectionId(label)}
++      data-section={label}
++      {...(keywords ? { "data-keywords": keywords } : {})}
++      className="tw:mt-8 tw:scroll-mt-24"
++    >
++      {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
++          Tab stop), for whatever sends the reader here — *Share…* in
++          `TopActions`, which lands on *Access & sharing*, and the contents list
++          and its search box, which land on any section (PageContents.tsx §
++          reveal). The heading rather than the first control inside, because
++          that control changes with the card's state, and a landing that puts
++          an action under Enter is the wrong kind of arrival. GPT Sol, plan
++          reviews, 2026-09-30 and 261001s. It was one section's `landing` prop
++          until the contents list needed the same for all of them. */}
+       <h2
+-        {...(landing ? { tabIndex: -1 } : {})}
++        tabIndex={-1}
+         className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
+         {collapsible ? (
+           /* The heading itself is the control, so the target is the whole line
+@@ -3585,7 +3640,10 @@ function Section({
+         {/* Shown open or shut, and that is the point of it: shutting the
+             section must not take the answer away, only the detail. */}
+         {aside && (
+-          <span className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint">
++          <span
++            data-section-aside=""
++            className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint"
++          >
+             {aside}
+           </span>
+         )}
+diff --git a/src/web/PageContents.tsx b/src/web/PageContents.tsx
+index 3bd066267..6d744fe12 100644
+--- a/src/web/PageContents.tsx
++++ b/src/web/PageContents.tsx
+@@ -31,12 +31,109 @@
+  * that has gone past the top" is one comparison, it is what a reader means by
+  * the question, and it is stable. Measured inside `requestAnimationFrame` so
+  * the scroll handler itself never touches layout.
++ *
++ * ## A click opens, scrolls and flashes; and a search box finds the section
++ *
++ * Greg, 2026-10-01 (SPIDERYARN-READING2-7Y, then -83):
++ *
++ * > If I click on the Table of Contents in the left-hand of the Metadata page,
++ * > expand that section (if needed) and flash to show where it is in the page.
++ *
++ * > Add a Search box (above the left-hand table-of-contents) … and then should
++ * > scroll to the right place, expand the section, flash it, etc (reusing
++ * > machinery).
++ *
++ * Both go through one verb, `reveal`: tell the section to open
++ * (`SECTION_REVEAL`, which Metadata.tsx § Section listens for), scroll to it,
++ * and flash it once the scroll has stopped (flash.ts § flashElement, the
++ * reading view's flash). The search itself is page-search.ts, which reads the
++ * same `[data-section]` elements this list does, plus their `data-keywords`.
++ * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
+  */
+-import { useCallback, useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import type { RefObject } from "react";
++import { flashElement } from "./flash.js";
++import { searchSections, type SearchableSection } from "./page-search.js";
++import { reducedMotion } from "./scroll.js";
++
++/**
++ * The event a section listens for to open itself — sent to the `[data-section]`
++ * element by `reveal`. A DOM event rather than lifted state, because lifting it
++ * would need the list of sections this component reads off the page instead.
++ */
++export const SECTION_REVEAL = "section-reveal";
+ 
+-/** One entry: the section's `id` to scroll to, and the heading to print. */
+-type Entry = { id: string; label: string };
++/**
++ * **Flash when the scroll has stopped, not when it starts.** The wash holds for
++ * about a third of `FLASH_MS` and then fades; fired at the click, a smooth
++ * scroll across a long page would spend the hold travelling and land on the
++ * fade. There is no settle callback for `scrollIntoView`, and `scrollend` is
++ * not everywhere yet, so: wait until no scroll event has arrived for
++ * `SCROLL_IDLE_MS`. A section already in place never scrolls, and flashes after
++ * that one short wait. `SCROLL_MAX_MS` is the ceiling, for a scroll that keeps
++ * being nudged (an image loading above it, say).
++ */
++const SCROLL_IDLE_MS = 120;
++const SCROLL_MAX_MS = 1500;
++
++/**
++ * **The section with this id, inside `root` and nowhere else.** Two of these
++ * pages mounted at once (tests do) share section ids, because they are derived
++ * from labels. Not `root.querySelector("#id")`: jsdom answers an id selector
++ * from the document's id table — the *first* element with that id — and then
++ * checks it is inside `root`, so the second page's lookup came back empty. A
++ * browser does not do that, but the test that pins this property runs in
++ * jsdom, and walking the `[data-section]` elements is right in both.
++ */
++function sectionIn(root: HTMLElement | null, id: string): HTMLElement | null {
++  if (!root) return null;
++  for (const el of root.querySelectorAll<HTMLElement>("[data-section]")) {
++    if (el.id === id) return el;
++  }
++  return null;
++}
++
++/**
++ * Open the section, scroll to it, put focus on its heading, flash it. Resolved
++ * inside `root`, for the duplicate-ids reason the click handler below gives.
++ */
++function reveal(root: HTMLElement | null, id: string): void {
++  const el = sectionIn(root, id);
++  if (!el) return;
++  /* The section commits its open state synchronously on this event
++     (Metadata.tsx § Section, `flushSync`), so its body is in the DOM before the
++     scroll is asked for — near the foot of the page a shut section may not
++     leave the scroll range to bring its heading up. Sol, plan review. */
++  el.dispatchEvent(new CustomEvent(SECTION_REVEAL));
++  /* Optional-called: jsdom has none. */
++  el.scrollIntoView?.({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
++  /* **Focus follows the eye**: the heading, which every section makes
++     focusable from a script, without a second scroll. Otherwise a keyboard or
++     screen-reader user is left in the margin while the page has moved. */
++  el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
++  let idle = setTimeout(done, SCROLL_IDLE_MS);
++  const cap = setTimeout(done, SCROLL_MAX_MS);
++  function onScroll(): void {
++    clearTimeout(idle);
++    idle = setTimeout(done, SCROLL_IDLE_MS);
++  }
++  function done(): void {
++    clearTimeout(idle);
++    clearTimeout(cap);
++    window.removeEventListener("scroll", onScroll);
++    if (el?.isConnected) flashElement(el);
++  }
++  window.addEventListener("scroll", onScroll, { passive: true });
++}
++
++/**
++ * One entry: the section's `id` to scroll to, the heading to print, and the two
++ * other things the search box reads — its `data-keywords` and its heading's
++ * one-line answer (`[data-section-aside]`). Kept here, rather than read at
++ * search time, so a cost or a stage count that lands while a query is typed
++ * re-ranks the results without another keystroke.
++ */
++type Entry = SearchableSection;
+ 
+ /**
+  * How far below the top of the viewport a heading counts as reached.
+@@ -69,6 +166,7 @@ export function PageContents({
+ }) {
+   const [entries, setEntries] = useState<Entry[]>([]);
+   const [here, setHere] = useState<string | null>(null);
++  const [query, setQuery] = useState("");
+ 
+   /* Re-read the page's sections, now. Called on mount and on every mutation
+      inside the container, which is affordable because it is one
+@@ -82,10 +180,21 @@ export function PageContents({
+     const found = Array.from(root.querySelectorAll<HTMLElement>("[data-section]")).map((el) => ({
+       id: el.id,
+       label: el.dataset.section ?? "",
++      keywords: el.dataset.keywords ?? "",
++      aside: el.querySelector("[data-section-aside]")?.textContent ?? "",
+     }));
+     setEntries((was) =>
+       was.length === found.length &&
+-      was.every((e, i) => e.id === found[i]?.id && e.label === found[i]?.label)
++      was.every((e, i) => {
++        const f = found[i];
++        return (
++          f !== undefined &&
++          e.id === f.id &&
++          e.label === f.label &&
++          e.keywords === f.keywords &&
++          e.aside === f.aside
++        );
++      })
+         ? was
+         : found,
+     );
+@@ -96,7 +205,16 @@ export function PageContents({
+     const root = containerRef.current;
+     if (!root) return;
+     const watch = new MutationObserver(rescan);
+-    watch.observe(root, { childList: true, subtree: true });
++    /* `characterData` because an aside can change by its text node alone (a
++       cost arriving), and the keywords attribute because a section could
++       change its own. */
++    watch.observe(root, {
++      childList: true,
++      subtree: true,
++      characterData: true,
++      attributes: true,
++      attributeFilter: ["data-keywords", "data-section"],
++    });
+     return () => watch.disconnect();
+   }, [containerRef, rescan]);
+ 
+@@ -130,7 +248,7 @@ export function PageContents({
+            labels and therefore share ids, and a document-wide lookup hands the
+            second page's list the first page's sections. The scan is already
+            scoped; this is the half that was not. */
+-        const el = root?.querySelector<HTMLElement>(`#${CSS.escape(entry.id)}`);
++        const el = sectionIn(root, entry.id);
+         if (el && el.getBoundingClientRect().top <= REACHED_PX) current = entry.id;
+       }
+       /* Above the first heading, the first entry is still the honest answer —
+@@ -169,10 +287,21 @@ export function PageContents({
+     };
+   }, [entries, containerRef]);
+ 
++  /* **What the search box matched, best first; `null` while it is empty.**
++     Recomputed when the entries change too, so a section that arrives while a
++     query is typed joins the results. */
++  const matches = useMemo(() => {
++    if (query.trim() === "") return null;
++    const ids = searchSections(query, entries);
++    return ids.flatMap((id) => entries.filter((e) => e.id === id));
++  }, [query, entries]);
++
+   /* Nothing worth navigating. One entry is furniture rather than help, and an
+      empty list is the state before the metadata request has landed. */
+   if (entries.length < 2) return null;
+ 
++  const shown = matches ?? entries;
++
+   return (
+     /* **Fixed, in the margin — not a column beside the content.** As a flex
+        sibling it would push the prose column off centre on wide windows and
+@@ -184,14 +313,50 @@ export function PageContents({
+        at 1.5rem in. One breakpoint down there is not room, and a contents list
+        overlapping the prose is worse than no contents list.
+ 
+-       Vertically centred rather than pinned near the top, which is also what
+-       keeps it clear of the fixed corner wordmark (`.logo-home`). */
++       **A fixed top, not vertically centred** — centred it was until the
++       search box arrived (plan 261001s), and then every keystroke that
++       filtered the list shrank the box and moved the input under the
++       reader's cursor. 6rem down, level with the page's first sections; the
++       corner wordmark it once had to clear moved into the dock on 2026-09-06.
++       The list scrolls inside a column that stops short of the dock, so a
++       long page's contents never run under it. Sol, plan review. */
+     <nav
+       aria-label={label}
+-      className="tw:hidden tw:xl:block tw:fixed tw:left-6 tw:top-1/2 tw:z-10 tw:w-44 tw:-translate-y-1/2 tw:font-sans"
++      className="tw:hidden tw:xl:flex tw:xl:flex-col tw:fixed tw:left-6 tw:top-[calc(6rem_+_var(--safe-top))] tw:max-h-[calc(100vh_-_6rem_-_var(--safe-top)_-_var(--dock-space)_-_1rem)] tw:z-10 tw:w-44 tw:font-sans"
+     >
+-      <ul className="tw:m-0 tw:list-none tw:p-0">
+-        {entries.map((entry) => (
++      {/* **Above the list, in the same column** — where Greg asked for it.
++          Typing filters the list below to what matches, best first; Enter
++          takes you to the first; Escape empties the box and puts the whole
++          list back. `type="search"` for the platform's clear button and the
++          right on-screen keyboard. */}
++      <input
++        type="search"
++        value={query}
++        onChange={(e) => setQuery(e.target.value)}
++        onKeyDown={(e) => {
++          if (e.key === "Enter") {
++            e.preventDefault();
++            const first = matches?.[0];
++            if (first) reveal(containerRef.current, first.id);
++          } else if (e.key === "Escape" && query !== "") {
++            /* Only when there is something to clear, so an Escape in an empty
++               box still reaches whatever else on the page listens for it. */
++            e.preventDefault();
++            e.stopPropagation();
++            setQuery("");
++          }
++        }}
++        placeholder="Search this page"
++        aria-label="Search this page's sections"
++        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight tw:focus-visible:outline-none"
++      />
++      {matches !== null && matches.length === 0 && (
++        <p role="status" className="tw:m-0 tw:pl-3 tw:text-xs tw:text-ink-faint">
++          Nothing on this page matches.
++        </p>
++      )}
++      <ul className="tw:m-0 tw:min-h-0 tw:list-none tw:overflow-y-auto tw:p-0">
++        {shown.map((entry) => (
+           <li key={entry.id}>
+             {/* A button, not `<a href="#id">`. This app routes its own anchors
+                 (Link.tsx), and a bare hash href would both go through that and
+@@ -205,9 +370,7 @@ export function PageContents({
+                    ids are derived from headings, so two of these pages mounted
+                    at once carry duplicates and a document-wide lookup scrolls
+                    to the wrong one. */
+-                containerRef.current
+-                  ?.querySelector<HTMLElement>(`#${CSS.escape(entry.id)}`)
+-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
++                reveal(containerRef.current, entry.id);
+               }}
+               /* `aria-current` as well as the colour: the highlight is the
+                  answer to "where am I", and a screen reader is owed it too. */
+diff --git a/src/web/flash.ts b/src/web/flash.ts
+index 20692e5f5..3fae9c673 100644
+--- a/src/web/flash.ts
++++ b/src/web/flash.ts
+@@ -55,6 +55,10 @@ const STILL = "block-flash-still";
+ /** The same pair on a passage's own `mark.hit` fragments (prose.css § the flash). */
+ const PASSAGE_MOVING = "passage-flash";
+ const PASSAGE_STILL = "passage-flash-still";
++/** The same pair on any other element — a Metadata section (`flashElement`). */
++const ELEMENT_MOVING = "element-flash";
++const ELEMENT_STILL = "element-flash-still";
++const ALL = [MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL, ELEMENT_MOVING, ELEMENT_STILL];
+ 
+ /**
+  * **What to wash inside the block.** Omitted, the whole prose cell — every
+@@ -82,10 +86,25 @@ function proseCovered(): boolean {
+ function stop(): void {
+   if (!live) return;
+   clearTimeout(live.timer);
+-  for (const el of live.els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
++  for (const el of live.els) el.classList.remove(...ALL);
+   live = null;
+ }
+ 
++/**
++ * Put `cls` on `els` for `ms`, ending whatever was washing before.
++ * **Restartable**: take the class off, make the browser notice, put it back.
++ * Without the reflow the removal and the re-add land in one style pass and the
++ * animation does not start again, so a second click on the same link would look
++ * like nothing happened.
++ */
++function wash(els: HTMLElement[], cls: string, ms: number): void {
++  stop();
++  for (const el of els) el.classList.remove(...ALL);
++  void els[0]?.offsetWidth;
++  for (const el of els) el.classList.add(cls);
++  live = { els, timer: setTimeout(stop, ms) };
++}
++
+ export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
+   pending = null;
+   const cell = blockRow(id)?.querySelector<HTMLElement>("td.text") ?? null;
+@@ -94,20 +113,24 @@ export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
+     pending = { id, target };
+     return;
+   }
+-  stop();
+   const marks = target.passage ? passageMarks(cell, target.passage) : [];
+   const els = marks.length > 0 ? marks : [cell];
+   const still = reducedMotion();
+   const cls = marks.length > 0 ? (still ? PASSAGE_STILL : PASSAGE_MOVING) : still ? STILL : MOVING;
+-  /* **Restartable**: take the class off, make the browser notice, put it back.
+-     Without the reflow the removal and the re-add land in one style pass and
+-     the animation does not start again, so a second click on the same link
+-     would look like nothing happened. */
+-  for (const el of els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
+-  void cell.offsetWidth;
+-  for (const el of els) el.classList.add(cls);
+   const cited = marks.length > 0 && marks.every((m) => m.matches("mark.cite"));
+-  live = { els, timer: setTimeout(stop, cited ? CITE_FLASH_MS : FLASH_MS) };
++  wash(els, cls, cited ? CITE_FLASH_MS : FLASH_MS);
++}
++
++/**
++ * **The same flash on an element that is not a block** — a Metadata section
++ * its contents list or search box just took the reader to (PageContents.tsx;
++ * Greg, SPIDERYARN-READING2-7Y: *"expand that section (if needed) and flash to
++ * show where it is in the page"*). The block flash's colour, length and
++ * reduced-motion rule; none of its block machinery, because there is no band
++ * to hide behind and no passage to narrow to. prose.css § the flash on arrival.
++ */
++export function flashElement(el: HTMLElement): void {
++  wash([el], reducedMotion() ? ELEMENT_STILL : ELEMENT_MOVING, FLASH_MS);
+ }
+ 
+ /** The prose is exposed again: fire whatever was held for it. */
+diff --git a/src/web/page-search.ts b/src/web/page-search.ts
+new file mode 100644
+index 000000000..a92090024
+--- /dev/null
++++ b/src/web/page-search.ts
+@@ -0,0 +1,175 @@
++/**
++ * **Search a page of sections, without a model** — the box above the Metadata
++ * page's contents list (PageContents.tsx).
++ *
++ * Greg, SPIDERYARN-READING2-83, 2026-10-01:
++ *
++ * > Add a Search box (above the left-hand table-of-contents) to the Metadata
++ * > page (and make sure it does a good job of finding things, including
++ * > synonyms)
++ *
++ * A page with a dozen sections does not need an embedding or a model call per
++ * keystroke; it needs the words a reader types to reach the section that means
++ * them. Four things do that here, each pinned in tests/page-search.test.ts:
++ *
++ * - **A synonym table** (`SYNONYMS`), hand-written for the words this page is
++ *   about — *price* finds *What it cost*, *download* finds *Export*.
++ * - **A light stem** on both sides, so *costs*, *sharing* and *authored* meet
++ *   *cost*, *share* and *author*.
++ * - **Prefix match**, so the list narrows while you are still typing.
++ * - **Every word must hit** somewhere in a section, so a second word narrows
++ *   rather than widens.
++ *
++ * **Ranked by where the word was found first, and how second.** Each query
++ * word scores once, by its single best evidence: the section's own name, then
++ * the keywords the page wrote for it, then its heading's one-line answer; and
++ * within one place a whole word above a prefix above a synonym. The weights
++ * double per place and no factor falls to a half, so a synonym in the name
++ * still beats a whole word in the keywords. Ties keep page order.
++ *
++ * **Not the text inside a section.** A hit there would promise "the right
++ * place" (Greg's words) and then land on the section's heading, which for *AI
++ * processing* is screens above the line; and half the sections unmount their
++ * body when shut, so it would find some words and not others. Landing on the
++ * matching line is the deferred version, with a model or embedding for
++ * paraphrase after it. GPT Sol, plan review; plan 261001s § The search box.
++ */
++
++/** One section as the search sees it — read off the DOM by PageContents. */
++export interface SearchableSection {
++  id: string;
++  label: string;
++  /** The page's own extra words for it (`data-keywords`). */
++  keywords: string;
++  /** The heading's one-line answer, e.g. "$0.0123 · 12 calls". */
++  aside: string;
++}
++
++/**
++ * Words that mean the same thing **on this page**. Not a thesaurus: each group
++ * is the vocabulary a reader might bring to one of the page's questions. A word
++ * may sit in only one group — `GROUP_OF` below would silently keep the last.
++ */
++const SYNONYMS: readonly (readonly string[])[] = [
++  ["cost", "price", "spend", "spent", "money", "dollar", "bill", "expense", "charge", "paid", "usage"],
++  ["delete", "remove", "erase", "trash", "destroy", "bin", "purge"],
++  ["archive", "hide", "shelve", "shelf", "unshelve"],
++  ["share", "public", "private", "link", "visibility", "visible", "access", "publish", "permission"],
++  ["export", "download", "backup", "save", "copy", "json"],
++  ["rerun", "regenerate", "redo", "refresh", "retry", "rebuild", "again", "run", "restart", "processing"],
++  ["author", "writer", "byline", "wrote", "written", "who"],
++  ["reading", "progress", "read", "finished", "time"],
++  ["technical", "debug", "file", "storage", "raw", "slug", "internal"],
++  ["glance", "stat", "statistic", "overview", "count", "length", "word", "size"],
++  ["pdf", "scan", "ocr", "extraction", "quality"],
++  ["sentence", "summary", "gist", "tldr", "abstract"],
++];
++
++/**
++ * Lower-cased, accents off, a plural / -ing / -ed and then a final -e taken
++ * away — so *share*, *shares*, *sharing* and *shared* are all `shar`. Crude on
++ * purpose: both sides go through it, so it only has to be consistent, not
++ * right. Short words are left alone, or *is* and *as* would vanish.
++ */
++function stem(word: string): string {
++  let w = word;
++  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
++  if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
++  else if (w.length > 4 && w.endsWith("ed")) w = w.slice(0, -2);
++  if (w.length > 3 && w.endsWith("e")) w = w.slice(0, -1);
++  return w;
++}
++
++/** Words of a string, normalised and stemmed. Punctuation splits words. */
++function words(text: string): string[] {
++  return text
++    .normalize("NFD")
++    .replace(/\p{Diacritic}/gu, "")
++    .toLowerCase()
++    .split(/[^\p{L}\p{N}]+/u)
++    .filter(Boolean)
++    .map(stem);
++}
++
++const GROUP_OF = new Map<string, readonly string[]>();
++for (const group of SYNONYMS) {
++  const stems = group.map(stem);
++  for (const s of stems) GROUP_OF.set(s, stems);
++}
++
++/**
++ * **Words a question is made of rather than about**, dropped from a query that
++ * has anything else in it — so *how much did this cost* is a search for *cost*
++ * and not a search that fails because no section says *did*. A query of only
++ * these keeps them all, so *what it cost* still finds *What it cost*.
++ */
++const STOPWORDS = new Set(
++  [
++    "a", "an", "the", "of", "to", "in", "on", "for", "and", "or", "is", "are", "was", "it", "its",
++    "this", "that", "my", "me", "i", "how", "much", "many", "what", "which", "where", "when", "why",
++    "do", "does", "did", "can", "show", "see", "find", "about", "article", "page",
++  ].map(stem),
++);
++
++/** A query word shorter than this does not expand through the table by prefix. */
++const MIN_PREFIX_EXPAND = 3;
++
++/** The other words a query word stands for: its group's, or its prefix's groups'. */
++function synonymsOf(term: string): Set<string> {
++  const out = new Set<string>();
++  for (const [s, group] of GROUP_OF) {
++    if (s === term || (term.length >= MIN_PREFIX_EXPAND && s.startsWith(term))) {
++      for (const g of group) if (g !== term) out.add(g);
++    }
++  }
++  return out;
++}
++
++/** Where in a section a word was found, best first. */
++const FIELD_WEIGHT = { label: 8, keywords: 4, aside: 2 } as const;
++type Field = keyof typeof FIELD_WEIGHT;
++/** Above a half, so the place a word was found outranks how — see the top. */
++const PREFIX_FACTOR = 0.8;
++const SYNONYM_FACTOR = 0.6;
++
++/** How well one stemmed word set answers one query word: 0 for not at all. */
++function hit(term: string, synonyms: Set<string>, have: readonly string[]): number {
++  let best = 0;
++  for (const w of have) {
++    if (w === term) return 1;
++    if (w.startsWith(term)) best = Math.max(best, PREFIX_FACTOR);
++    else if (synonyms.has(w)) best = Math.max(best, SYNONYM_FACTOR);
++  }
++  return best;
++}
++
++/**
++ * The ids of the sections that answer `query`, best first. An empty query
++ * answers nothing, and the caller shows its whole list instead.
++ */
++export function searchSections(query: string, sections: readonly SearchableSection[]): string[] {
++  const all = words(query);
++  if (all.length === 0) return [];
++  const content = all.filter((t) => !STOPWORDS.has(t));
++  const terms = content.length > 0 ? content : all;
++  const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t) }));
++  const scored: { id: string; score: number; order: number }[] = [];
++  sections.forEach((section, order) => {
++    const fields: Record<Field, string[]> = {
++      label: words(section.label),
++      keywords: words(section.keywords),
++      aside: words(section.aside),
++    };
++    let score = 0;
++    for (const { term, synonyms } of expanded) {
++      let best = 0;
++      for (const field of Object.keys(FIELD_WEIGHT) as Field[]) {
++        best = Math.max(best, FIELD_WEIGHT[field] * hit(term, synonyms, fields[field]));
++      }
++      if (best === 0) return; // every word must hit somewhere
++      score += best;
++    }
++    scored.push({ id: section.id, score, order });
++  });
++  return scored.sort((a, b) => b.score - a.score || a.order - b.order).map((s) => s.id);
++}
+diff --git a/src/web/styles/prose.css b/src/web/styles/prose.css
+index 02b1f210c..fdc653103 100644
+--- a/src/web/styles/prose.css
++++ b/src/web/styles/prose.css
+@@ -143,6 +143,34 @@ tr.row-active td.text { background: var(--panel); }
+ td.text.block-flash { animation: block-flash var(--flash-ms) ease-out; }
+ td.text.block-flash-still { box-shadow: inset 0 0 0 100vmax var(--highlight-wash); }
+ 
++/* **The same flash on any element** — a Metadata section its contents list or
++   search box just took the reader to (flash.ts § flashElement).
++
++   **A translucent layer over the top, not the inset shadow the cell uses.** A
++   section is mostly cards with opaque backgrounds of their own, and an inset
++   shadow paints *under* its children, so the wash would show only in the gaps
++   between them. An `::after` above everything, letting clicks through, tints
++   the cards too. Same orange, same length, same hold-then-fade; reduced motion
++   gets it held still for the same time. */
++@keyframes element-flash {
++  0%, 35% { opacity: 0.22; }
++  100% { opacity: 0; }
++}
++.element-flash,
++.element-flash-still { position: relative; }
++.element-flash::after,
++.element-flash-still::after {
++  content: "";
++  position: absolute;
++  inset: -0.5rem;
++  border-radius: 0.75rem;
++  background: var(--spideryarn-orange);
++  pointer-events: none;
++  opacity: 0;
++}
++.element-flash::after { animation: element-flash var(--flash-ms) ease-out; }
++.element-flash-still::after { opacity: 0.22; }
++
+ /* Literal search paints its find-at-speed rail with this same property
+    (annotations.css § has-hit). Preserve it as a second shadow: an animation
+    otherwise wins the cascade while moving, and the later search rule wins the
+diff --git a/tests/block-flash.test.ts b/tests/block-flash.test.ts
+index feedf0ca7..1f9783c1e 100644
+--- a/tests/block-flash.test.ts
++++ b/tests/block-flash.test.ts
+@@ -14,7 +14,8 @@
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import { readFileSync } from "node:fs";
+ 
+-const { FLASH_MS, dropPendingFlash, flashBlock, flushPendingFlash, resetFlash } = await import(
++const { FLASH_MS, dropPendingFlash, flashBlock, flashElement, flushPendingFlash, resetFlash } =
++  await import(
+   "../src/web/flash.js"
+ );
+ 
+@@ -124,6 +125,33 @@ describe("flashBlock", () => {
+   });
+ });
+ 
++describe("flashElement — a Metadata section, plan 261001s", () => {
++  it("washes the element for the block flash's length, restartably", () => {
++    document.body.innerHTML = '<section id="a"></section><section id="b"></section>';
++    const a = document.getElementById("a") as HTMLElement;
++    const b = document.getElementById("b") as HTMLElement;
++    flashElement(a);
++    expect(a.classList.contains("element-flash")).toBe(true);
++    vi.advanceTimersByTime(FLASH_MS - 100);
++    flashElement(a);
++    vi.advanceTimersByTime(200);
++    expect(a.classList.contains("element-flash"), "still on the second clock").toBe(true);
++    flashElement(b);
++    expect(a.classList.contains("element-flash"), "the older one ends").toBe(false);
++    vi.advanceTimersByTime(FLASH_MS);
++    expect(b.classList.contains("element-flash")).toBe(false);
++  });
++
++  it("holds a still wash under reduced motion", () => {
++    reduceMotion(true);
++    document.body.innerHTML = '<section id="a"></section>';
++    const a = document.getElementById("a") as HTMLElement;
++    flashElement(a);
++    expect(a.classList.contains("element-flash-still")).toBe(true);
++    expect(a.classList.contains("element-flash")).toBe(false);
++  });
++});
++
+ describe("the flash stylesheet", () => {
+   const css = readFileSync("src/web/styles/prose.css", "utf8");
+ 
+diff --git a/tests/metadata-contents-reveal.test.tsx b/tests/metadata-contents-reveal.test.tsx
+new file mode 100644
+index 000000000..37e9a4fff
+--- /dev/null
++++ b/tests/metadata-contents-reveal.test.tsx
+@@ -0,0 +1,307 @@
++// @vitest-environment jsdom
++/**
++ * **The Metadata page's contents list opens, scrolls to and flashes a section,
++ * and the search box above it finds one** — PageContents.tsx § reveal, and
++ * Metadata.tsx § Section, which listens for `SECTION_REVEAL`.
++ *
++ * Greg, SPIDERYARN-READING2-7Y, 2026-10-01:
++ *
++ * > If I click on the Table of Contents in the left-hand of the Metadata page,
++ * > expand that section (if needed) and flash to show where it is in the page.
++ *
++ * And -83: a search box above that list, synonyms included, that does the same.
++ *
++ * Driven through the real page rather than a stand-in section, because the
++ * half most likely to break silently is the hand-off between the two files —
++ * an event sent to an element nobody listens on looks exactly like success
++ * from the sending side. docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Article } from "../src/types.js";
++
++vi.mock("../src/web/lib/supabase.js", () => ({
++  supabase: {
++    auth: {
++      getSession: async () => ({ data: { session: { access_token: "t" } } }),
++      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
++      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
++    },
++  },
++  googleSignInAvailable: false,
++}));
++
++/* The same two stubs as tests/metadata-page-order.test.tsx, for its reasons. */
++vi.mock("nuqs", async (importOriginal) => ({
++  ...(await importOriginal<typeof import("nuqs")>()),
++  useQueryState: () => [null, () => {}],
++}));
++vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
++
++const { Metadata } = await import("../src/web/Metadata.js");
++const { FLASH_MS } = await import("../src/web/flash.js");
++
++const SLUG = "temporal-context-reinstatement-spya-dhqkf9";
++const DIR = "spideryarn.article_revisions/e7efb065-b82d-4442-af7a-148d37895171/";
++
++function article(): Article {
++  return {
++    meta: { slug: SLUG, title: "Temporal context reinstatement" },
++    blocks: [
++      {
++        id: "spya-aaaaaa",
++        tag: "p",
++        kind: "text",
++        text: "A paragraph.",
++        words: 2,
++        html: "<p>A paragraph.</p>",
++        gistable: true,
++      },
++    ],
++    assets: undefined,
++    navLabelStatus: "ready",
++    highPowerSince: null,
++    sourceGuess: undefined,
++    tree: {
++      version: "t",
++      generator: "t",
++      slug: SLUG,
++      rootId: "n0",
++      nodes: {
++        n0: {
++          id: "n0",
++          depth: 0,
++          parent: null,
++          children: [],
++          range: ["spya-aaaaaa", "spya-aaaaaa"],
++          title: "Temporal context reinstatement",
++          gist: "Putting yourself back where you learned it helps you recall it.",
++        },
++      },
++    },
++  } as Article;
++}
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(async () => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  vi.stubGlobal("fetch", () =>
++    Promise.resolve(
++      new Response(
++        JSON.stringify({
++          slug: SLUG,
++          dir: DIR,
++          stages: [],
++          comments: 0,
++          profile: null,
++          purpose: null,
++          archivedAt: null,
++        }),
++        { status: 200, headers: { "content-type": "application/json" } },
++      ),
++    ),
++  );
++  await act(async () => {
++    root.render(
++      createElement(Metadata, {
++        slug: SLUG,
++        article: article(),
++        onRenamed: () => {},
++        onVisibility: () => {},
++      }),
++    );
++  });
++  /* After the mount, so the page's own requests resolved on real timers; from
++     here only the reveal's scroll-idle wait and the flash's timer are ours. */
++  vi.useFakeTimers();
++});
++
++afterEach(async () => {
++  vi.useRealTimers();
++  await act(async () => root.unmount());
++  host.remove();
++  vi.unstubAllGlobals();
++});
++
++const nav = () => host.querySelector<HTMLElement>('nav[aria-label="Sections of this page"]');
++const entries = () => [...(nav()?.querySelectorAll("li button") ?? [])].map((b) => b.textContent);
++const entry = (label: string) =>
++  [...(nav()?.querySelectorAll<HTMLButtonElement>("li button") ?? [])].find(
++    (b) => b.textContent === label,
++  );
++const section = (label: string) =>
++  host.querySelector<HTMLElement>(`main [data-section="${label}"]`);
++/** A collapsible section's own disclosure button — in `main`, not the nav. */
++const toggle = (label: string) => section(label)?.querySelector<HTMLButtonElement>("h2 button");
++const searchBox = () => nav()?.querySelector<HTMLInputElement>('input[type="search"]');
++
++async function type(text: string) {
++  const box = searchBox();
++  if (!box) throw new Error("no search box");
++  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
++  await act(async () => {
++    setter?.call(box, text);
++    box.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++}
++
++async function press(key: string) {
++  const box = searchBox();
++  await act(async () => {
++    box?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
++  });
++}
++
++/** Past the reveal's wait for the scroll to stop, into the flash. */
++async function settle() {
++  await act(async () => {
++    vi.advanceTimersByTime(200);
++  });
++}
++
++describe("clicking an entry in the contents list (7Y)", () => {
++  it("opens a shut section, then flashes it", async () => {
++    expect(toggle("Technical details")?.getAttribute("aria-expanded")).toBe("false");
++    expect(host.textContent).not.toContain(DIR);
++
++    await act(async () => entry("Technical details")?.click());
++
++    expect(toggle("Technical details")?.getAttribute("aria-expanded")).toBe("true");
++    expect(host.textContent).toContain(DIR);
++    await settle();
++    expect(section("Technical details")?.classList.contains("element-flash")).toBe(true);
++    await act(async () => {
++      vi.advanceTimersByTime(FLASH_MS);
++    });
++    expect(section("Technical details")?.classList.contains("element-flash")).toBe(false);
++  });
++
++  it("has the body open before it asks for the scroll, and lands focus on the heading", async () => {
++    /* Near the foot of the page a shut section may not leave the scroll range
++       to bring its heading up, so the open must be committed first — not
++       merely scheduled. jsdom has no scrollIntoView, so this one records what
++       the page looked like at the moment it was called. */
++    let bodyAtScroll: boolean | null = null;
++    const spy = vi.fn(function (this: HTMLElement) {
++      bodyAtScroll = (host.textContent ?? "").includes(DIR);
++    });
++    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
++      value: spy,
++      configurable: true,
++      writable: true,
++    });
++    try {
++      await act(async () => entry("Technical details")?.click());
++    } finally {
++      delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
++    }
++    expect(spy).toHaveBeenCalledOnce();
++    expect(spy.mock.contexts[0]).toBe(section("Technical details"));
++    expect(bodyAtScroll, "the body was in the DOM when the scroll was asked for").toBe(true);
++    expect(document.activeElement).toBe(section("Technical details")?.querySelector("h2"));
++  });
++
++  it("acts on its own page only, when two are mounted with the same ids", async () => {
++    /* Section ids are derived from labels, so a second page carries the same
++       ones; a document-wide lookup would open the first page's section. */
++    const host2 = document.createElement("div");
++    document.body.append(host2);
++    const root2 = createRoot(host2);
++    vi.useRealTimers();
++    await act(async () => {
++      root2.render(
++        createElement(Metadata, {
++          slug: SLUG,
++          article: article(),
++          onRenamed: () => {},
++          onVisibility: () => {},
++        }),
++      );
++    });
++    vi.useFakeTimers();
++    try {
++      const nav2 = host2.querySelector('nav[aria-label="Sections of this page"]');
++      const entry2 = [...(nav2?.querySelectorAll<HTMLButtonElement>("li button") ?? [])].find(
++        (b) => b.textContent === "Technical details",
++      );
++      expect(entry2, "the second page has its own contents entry").toBeTruthy();
++      await act(async () => entry2?.click());
++      const section2 = host2.querySelector('main [data-section="Technical details"]');
++      expect(section2?.querySelector("h2 button")?.getAttribute("aria-expanded")).toBe("true");
++      expect(toggle("Technical details")?.getAttribute("aria-expanded"), "the first page").toBe(
++        "false",
++      );
++      await settle();
++      expect(section2?.classList.contains("element-flash")).toBe(true);
++      expect(section("Technical details")?.classList.contains("element-flash")).toBe(false);
++    } finally {
++      await act(async () => root2.unmount());
++      host2.remove();
++    }
++  });
++
++  it("leaves an open section open, and flashes it all the same", async () => {
++    await act(async () => toggle("Export")?.click());
++    expect(toggle("Export")?.getAttribute("aria-expanded")).toBe("true");
++
++    await act(async () => entry("Export")?.click());
++
++    expect(toggle("Export")?.getAttribute("aria-expanded")).toBe("true");
++    await settle();
++    expect(section("Export")?.classList.contains("element-flash")).toBe(true);
++  });
++
++  it("flashes a section that cannot be shut", async () => {
++    await act(async () => entry("At a glance")?.click());
++    await settle();
++    expect(section("At a glance")?.classList.contains("element-flash")).toBe(true);
++  });
++});
++
++describe("the search box above it (83)", () => {
++  it("is there, above the list", () => {
++    const box = searchBox();
++    expect(box).toBeTruthy();
++    const list = nav()?.querySelector("ul");
++    expect(
++      box && list && box.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
++    ).toBeTruthy();
++  });
++
++  it("narrows the list to what matches, by a synonym, and Enter opens and flashes the first", async () => {
++    const all = entries();
++    await type("download");
++    expect(entries()[0]).toBe("Export");
++    expect(entries().length).toBeLessThan(all.length);
++
++    await press("Enter");
++    expect(toggle("Export")?.getAttribute("aria-expanded")).toBe("true");
++    await settle();
++    expect(section("Export")?.classList.contains("element-flash")).toBe(true);
++  });
++
++  it("finds a shut section by a word only its keywords carry", async () => {
++    /* Technical details unmounts its body while shut, so "fingerprint" is on
++       the page only in its `data-keywords`. */
++    expect(host.textContent?.toLowerCase()).not.toContain("fingerprint");
++    await type("fingerprint");
++    expect(entries()[0]).toBe("Technical details");
++  });
++
++  it("says so when nothing matches, and Escape puts the whole list back", async () => {
++    const all = entries();
++    await type("zebra");
++    expect(entries()).toEqual([]);
++    expect(nav()?.textContent).toContain("Nothing on this page matches");
++
++    await press("Escape");
++    expect(searchBox()?.value).toBe("");
++    expect(entries()).toEqual(all);
++  });
++});
+diff --git a/tests/page-search.test.ts b/tests/page-search.test.ts
+new file mode 100644
+index 000000000..4f16490a3
+--- /dev/null
++++ b/tests/page-search.test.ts
+@@ -0,0 +1,146 @@
++/**
++ * **The Metadata page's search box** — src/web/page-search.ts.
++ *
++ * Greg, SPIDERYARN-READING2-83, 2026-10-01:
++ *
++ * > make sure it does a good job of finding things, including synonyms
++ *
++ * No model call: a synonym table, light stemming, prefix match as you type, and
++ * a ranking where a section's own name beats the words inside it. Each rule
++ * here is one a reader would notice only as "search is bad", never as an error.
++ * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
++ */
++import { describe, expect, it } from "vitest";
++import { searchSections, type SearchableSection } from "../src/web/page-search.js";
++
++function section(
++  label: string,
++  { keywords = "", aside = "" }: Partial<SearchableSection> = {},
++): SearchableSection {
++  return { id: label, label, keywords, aside };
++}
++
++const PAGE: SearchableSection[] = [
++  section("Authors", { keywords: "names writers byline who wrote it affiliations", aside: "2" }),
++  section("At a glance"),
++  section("Your reading"),
++  section("Access & sharing"),
++  section("AI processing", { keywords: "rerun summaries glossary steps", aside: "9 of 9 stages" }),
++  section("What it cost", { keywords: "calls models tokens breakdown", aside: "$0.0123 · 12 calls" }),
++  section("Export"),
++  section("Technical details", { keywords: "slug files storage fingerprint" }),
++  section("Archive this article"),
++  section("Delete this article"),
++];
++
++const find = (q: string) => searchSections(q, PAGE);
++
++describe("searchSections", () => {
++  it("an empty or blank query matches nothing — the list shows itself whole", () => {
++    expect(find("")).toEqual([]);
++    expect(find("   ")).toEqual([]);
++  });
++
++  it("finds a section by its name, ignoring case", () => {
++    expect(find("export")[0]).toBe("Export");
++    expect(find("EXPORT")[0]).toBe("Export");
++  });
++
++  it("matches a prefix, so the list narrows while you type", () => {
++    expect(find("expo")[0]).toBe("Export");
++    expect(find("techn")[0]).toBe("Technical details");
++  });
++
++  it("finds a section by a synonym of its name", () => {
++    expect(find("price")[0]).toBe("What it cost");
++    expect(find("spend")[0]).toBe("What it cost");
++    expect(find("money")[0]).toBe("What it cost");
++    expect(find("remove")[0]).toBe("Delete this article");
++    expect(find("download")[0]).toBe("Export");
++    expect(find("public")[0]).toBe("Access & sharing");
++    expect(find("regenerate")[0]).toBe("AI processing");
++  });
++
++  it("strips a plural or -ing so a word finds its stem", () => {
++    expect(find("costs")[0]).toBe("What it cost");
++    expect(find("sharing")).toContain("Access & sharing");
++    expect(find("authored")[0]).toBe("Authors");
++  });
++
++  it("finds words the page wrote as a section's keywords, and its heading's aside", () => {
++    expect(find("slug")[0]).toBe("Technical details");
++    expect(find("fingerprint")[0]).toBe("Technical details");
++    expect(find("calls")[0]).toBe("What it cost");
++  });
++
++  it("does not search a section's body — there is no body in the index", () => {
++    /* The interface has no field for it; this pins that the label of one
++       section is not found through another's words. */
++    expect(find("leeds")).toEqual([]);
++  });
++
++  it("ranks by where the word was found before how", () => {
++    /* A synonym in the name beats a whole word in the keywords. */
++    const hits = searchSections("remove", [
++      section("Archive this article", { keywords: "remove" }),
++      section("Delete this article"),
++    ]);
++    expect(hits).toEqual(["Delete this article", "Archive this article"]);
++    /* A whole word in the keywords beats a whole word in the aside. */
++    expect(
++      searchSections("calls", [
++        section("Alpha", { aside: "12 calls" }),
++        section("Beta", { keywords: "calls" }),
++      ]),
++    ).toEqual(["Beta", "Alpha"]);
++  });
++
++  it("within one place, a whole word beats a prefix beats a synonym", () => {
++    expect(
++      searchSections("cost", [
++        section("Price"),
++        section("Costly"),
++        section("Cost"),
++      ]),
++    ).toEqual(["Cost", "Costly", "Price"]);
++  });
++
++  it("scores a word once, by its best evidence — repeating it does not climb", () => {
++    expect(
++      searchSections("glossary", [
++        section("Glossary"),
++        section("Other", { keywords: "glossary glossary glossary glossary glossary", aside: "glossary" }),
++      ])[0],
++    ).toBe("Glossary");
++  });
++
++  it("keeps page order for a tie", () => {
++    expect(
++      searchSections("note", [section("Note one"), section("Note two")]),
++    ).toEqual(["Note one", "Note two"]);
++  });
++
++  it("needs every word to hit somewhere — two words narrow rather than widen", () => {
++    expect(find("delete cost")).toEqual([]);
++    expect(find("technical slug")).toEqual(["Technical details"]);
++  });
++
++  it("drops the words a question is made of, so a question finds its answer", () => {
++    expect(find("how much did this cost")[0]).toBe("What it cost");
++    expect(find("where can I download it")[0]).toBe("Export");
++    expect(find("who wrote this")[0]).toBe("Authors");
++  });
++
++  it("keeps those words when they are all there is", () => {
++    expect(find("what it")[0]).toBe("What it cost");
++  });
++
++  it("matches nothing for a word nothing on the page has", () => {
++    expect(find("zebra")).toEqual([]);
++  });
++
++  it("ignores accents and punctuation", () => {
++    expect(find("café")).toEqual(searchSections("cafe", PAGE));
++    expect(find("what-it-cost")[0]).toBe("What it cost");
++  });
++});

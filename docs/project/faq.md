@@ -95,7 +95,7 @@ on 2026-10-01:
 
 > In FAQ mode, move this text […] into a tooltip, e.g. behind an `(i)` icon.
 
-— the move Trajectory made for its own promise (SPIDERYARN-READING2-52). Hover, focus or a tap opens
+— the move Skim made for its own promise (SPIDERYARN-READING2-52). Hover, focus or a tap opens
 it; no order row is drawn solely to hold the (i).
 
 - **The quoted words are the article's own, checked against it.** `verifyPassage` in

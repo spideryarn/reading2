@@ -38,13 +38,13 @@
  *
  * - **Quotes per top-level section** — the root's children, each spanning the
  *   blocks its `range` covers. "Content-bearing" = has body words (blocks not
- *   `treatment === "supplement"`), the rule scripts/trajectory-coverage.ts uses.
+ *   `treatment === "supplement"`), the rule scripts/skim-coverage.ts uses.
  * - **Idea ceiling, "in"** — share of stored Ideas with a quote on the same block
  *   as one of their occurrences.
  * - **Idea ceiling, "in or beside"** — also counting a quote whose nearest body,
  *   non-heading paragraph either side (never leaving its top-level section) holds
- *   an occurrence. The same walk as `trajectoryInput`'s `neighbour`
- *   (src/trajectory.ts), re-implemented here rather than imported because that
+ *   an occurrence. The same walk as `skimInput`'s `neighbour`
+ *   (src/skim.ts), re-implemented here rather than imported because that
  *   file is being edited concurrently.
  */
 import { randomInt } from "node:crypto";

@@ -1,9 +1,9 @@
-# Keyboard: ↑ / ↓ take the step; ← / → step Trajectory, Quiz and Structure
+# Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz and Structure
 
 > **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
 > steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
 > stepped a section, and a focused row in Structure's list stepped the list. **← / → step
-> Trajectory's stops, Quiz's questions, and Structure's lowest-level sections** (all three further
+> Skim's stops, Quiz's questions, and Structure's lowest-level sections** (all three further
 > down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
 > mode, removed on 2026-09-29
 > ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); everything here about
@@ -172,26 +172,26 @@ A zone declares itself with a `data-nav-depth` attribute and nothing else — `k
 with `closest()` from whatever is under the pointer. That is why the spine can join in from outside
 the table by adding one attribute, and why a new panel would too.
 
-## ← / → in Trajectory
+## ← / → in Skim
 
-**While Trajectory is the mode, ← / → step its stops instead of moving the stride** — the stops
+**While Skim is the mode, ← / → step its stops instead of moving the stride** — the stops
 of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
 through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
-they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Trajectory
+they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Skim
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:
 
 > It would maybe I can also use left and right to trigger the forward and backward buttons to jump
 > to the next sections.
 >
-> — Greg, 2026-09-28 ([trajectory.md](trajectory.md))
+> — Greg, 2026-09-28 ([skim.md](skim.md))
 
 The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/web/keynav.ts): a
-horizontal handler that `Reader` passes only while Trajectory is open, and that is the band's own
+horizontal handler that `Reader` passes only while Skim is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
-([`trajectory-route.ts`](../../src/web/trajectory-route.ts)), and each of them flashes the stop it
+([`skim-route.ts`](../../src/web/skim-route.ts)), and each of them flashes the stop it
 lands on and, on a narrow window, steps the band aside (since 2026-09-28,
-[trajectory.md](trajectory.md) § What shipped). It runs **after every guard** on this
+[skim.md](skim.md) § What shipped). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop
@@ -215,7 +215,7 @@ The band's ‹ › and the door's *Next stop ›* name their key on their cards 
 > — Greg, 2026-09-30, SPIDERYARN-READING2-71
 
 **While Remember's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
-same seam as Trajectory's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
+same seam as Skim's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
 `null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Remember — so
 it runs after every guard above, and Recall, or any other mode, leaves ← / → with the browser.
 
@@ -229,7 +229,7 @@ question. The box already keeps its own key presses
 pressed →; a click on a labelled button is a deliberate act and still moves. In each refused case
 the handler answers "took nothing", so the key goes back to the browser.
 
-**Neither Trajectory nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
+**Neither Skim nor Quiz hears a ← / → pressed inside a dialog** — `dialog` or
 `[role="dialog"]`, found from the key's own target. A comment's dialog focuses its Close button and
 has ‹ › of its own, so without this a press there stepped the band behind it. Scoped to the target
 rather than to "a dialog is open", because the comment dialog is modeless and a reader who clicks
@@ -250,12 +250,12 @@ back into the page means the page (`tests/keynav-horizontal.test.ts`).
 > — Greg, 2026-10-01, spya-b2wzjf
 
 **While Structure is the mode, ← / → step the lowest-level sections** — `sectionDepth`, the unit
-`?at=` stores and that ↓ stepped over the band until that day. Not a handler like Trajectory's and
+`?at=` stores and that ↓ stepped over the band until that day. Not a handler like Skim's and
 Quiz's but a second stride inside `useArrowNav` (`acrossDepth`), so it is ↑ / ↓'s own step: the same
 `stepTarget`, the same chain for rapid presses, every guard above, and the key back to the browser at
 either end. A handler, when a mode hands one in, wins; no mode does both.
 
-**← in the middle of a section goes to that section's start**, as ↑ does and as ← on Trajectory's
+**← in the middle of a section goes to that section's start**, as ↑ does and as ← on Skim's
 first stop does: the heading you are under is the previous heading in reading order. A second press
 goes to the one before. That was a choice, GPT Sol argued the other way in the plan review, and a
 strict "previous section" is one line in `useArrowNav`.

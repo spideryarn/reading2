@@ -57,6 +57,14 @@ describe("the diagnostics vocabularies", () => {
     }
   });
 
+  it("reads a stale tab's `trajectory` as Skim, for both the mode and the step", () => {
+    /* The mode was called Trajectory until 2026-10-01 (plan 261001r). A tab
+       loaded before that deploy still says the old word, and its report should
+       land under the mode's current name rather than lose the field. */
+    expect(parseFeedbackDiagnostics({ article: { mode: "trajectory" } })?.article?.mode).toBe("skim");
+    expect(stepOf("trajectory")).toBe("skim");
+  });
+
   it("returns null for a blob with nothing left in it", () => {
     /* Which is what keeps the database's `feedback_diagnostics_version` CHECK
        something nobody has to think about: a version standing beside an absent

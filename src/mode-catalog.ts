@@ -495,30 +495,32 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* A new mode on an unmeasured prompt — docs/project/experimental-features.md. */
     experimental: true,
   },
-  trajectory: {
+  skim: {
     description: "A route through the piece's quotes, a little deeper each time round",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "a short model pass over its quotes": the `trajectory` step reads the
+       - "a short model pass over its quotes": the `skim` step reads the
          stored Quotes, the tree and the profile; `renderPrompt` in
-         src/trajectory.ts sends each quote's words, section path and priority,
+         src/skim.ts sends each quote's words, section path and priority,
          and never the article's prose.
-       - "puts them in an order and a depth": `TrajectoryStop` is a quote id, a
+       - "puts them in an order and a depth": `SkimStop` is a quote id, a
          depth 1–3 and a role line, in array order (src/types.ts).
        - "for you, if you have said who you are": `profileSection(profile)` in
          the same prompt, and `routeProfileIsStale` marks the route outdated
          when the profile changes.
        - "chosen first when there are none": the step refuses without Quotes
-         (`TRAJECTORY_NO_QUOTES`), and the band asks for `quotes` before it
-         (`precededBy`, src/web/useTrajectory.ts).
+         (`SKIM_NO_QUOTES`), and the band asks for `quotes` before it
+         (`precededBy`, src/web/useSkim.ts).
        About the mode, not the press, and no price. */
     how: "A short model pass over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
-    /* The two words Greg used for it in the brief — docs/project/trajectory.md. */
-    aliases: ["spiral", "route"],
+    /* "spiral" and "route" are the two words Greg used for it in the brief —
+       docs/project/skim.md. `trajectory` was the mode's own word until
+       2026-10-01 (261001r), and Greg asked to keep it as a keyword. */
+    aliases: ["spiral", "route", "trajectory"],
     /* Behind the switch from 2026-09-28 until later that day, when Greg asked
-       for it in the mainstream: "take Trajectory and Quotes modes out of
+       for it in the mainstream: "take Skim and Quotes modes out of
        Experimental features" — docs/project/experimental-features.md. Still
-       owners-only (`POLICY.trajectory`, src/web/visitor.ts). */
+       owners-only (`POLICY.skim`, src/web/visitor.ts). */
     experimental: false,
   },
   tweets: {

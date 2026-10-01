@@ -214,8 +214,8 @@ export const MODES = [
      the experimental switch. Its stored output is public, while planning it
      remains owner-only.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
-     docs/project/trajectory.md. */
-  "trajectory",
+     docs/project/skim.md. */
+  "skim",
   /* 2026-09-29: the article as a numbered thread, each post linked to the
      passages it came from. A page of its own at `/read/<slug>/tweets` from
      2026-08-25 until Greg asked for it as a normal mode with a wide band beside
@@ -327,6 +327,9 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
   /* The gist columns, retired 2026-09-29; Structure draws the same tree.
      docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
   hierarchy: "structure",
+  /* `trajectory` was the mode's name until 2026-10-01, when it became Skim
+     (docs/plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md). */
+  trajectory: "skim",
 };
 
 /**

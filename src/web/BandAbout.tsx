@@ -12,7 +12,7 @@
  * Plans 261001l (the component) and 261001m (the corner); docs/project/mode.md
  * § No description line in the band says what goes in the card.
  *
- * Controlled, as Trajectory's *About this route* was, so a tap toggles it on a
+ * Controlled, as Skim's *About this route* was, so a tap toggles it on a
  * touch device with no hover; hover and focus open it too.
  */
 import { type ReactNode, useState } from "react";

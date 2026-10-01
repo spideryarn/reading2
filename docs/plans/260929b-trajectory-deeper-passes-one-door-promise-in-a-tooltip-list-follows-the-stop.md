@@ -1,7 +1,7 @@
 # Trajectory: deeper passes add detail, one door at the end, the promise in a tooltip, the list follows the stop
 
 Three of Greg's reports on Trajectory from production (build `43f99ecb`), 2026-09-29. The mode is
-[trajectory.md](../project/trajectory.md); its build history is
+[trajectory.md](../project/skim.md); its build history is
 [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md); the session before this one,
 fb4k, landed `013a0383` (compact marker, opening at stop 1, centring, and the end-of-pass door split
 into *Go round again* and *More detail ›*).

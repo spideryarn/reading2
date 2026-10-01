@@ -40,7 +40,7 @@ always the simpler-first version, not the end state.
    ▮   │ Structure (the tree)    │ ¶ … a ·glossary· term, a     │
    ▮   │ Summary                 │   quote's rule, a citation   │ ? What would have to be true
    ▯   │ Tweets                  │   mark, a cross-reference …  │   for this to hold?
-   ▯   │ (Diagram, Trajectory?)  │                              │
+   ▯   │ (Diagram, Skim?)  │                              │
    ▯   │                         │ ¶ …                          │ ⚑ Disputed — 2 replies  ▸
    ▯   │                         │                              │
    ▯   │                         │ ¶ …                          │ ↳ answers the objection
@@ -84,7 +84,7 @@ anchored, so placing it costs layout, not a model call.
 | Summary | the whole, linked to passages | left | yes, as a band |
 | Tweets | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
-| Trajectory | a route through quotes | left? it is walked, not read | yes, as a band |
+| Skim | a route through quotes | left? it is walked, not read | yes, as a band |
 | Search, Chat, Remember / Quiz, Referee, Comments | the reader's own actions | tools, not columns | — |
 
 The finding that matters: **most of the right-hand column's content is already made and already
@@ -156,7 +156,7 @@ These are the reasons to go carefully, each one already said by Greg in another 
 
 Each step is useful on its own, and none commits us to the next.
 
-1. **Rename Annotations to Marginalia**
+1. **Rename Annotations to Marginalia** — done, 2026-10-01
    ([261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md)).
 2. **One small trial of a note from data already stored** — Debate's `disputes` rows, or FAQ's
    answers — collapsed by default, one line each, opening to the stored content. No model call.

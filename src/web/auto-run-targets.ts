@@ -60,7 +60,7 @@ type StepAutoRunTarget = StepTarget<
   | "faq"
   /* The route through the Quotes, which asks for the Quotes first when there
      are none — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  | "trajectory"
+  | "skim"
   | "sketch"
   | "illustrated"
   /* The article as a numbered thread. Its own page rather than a band, and

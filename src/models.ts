@@ -608,8 +608,8 @@ export type Task =
   | "simple"
   /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      **Not article-reading**: it sends the quotes and never the article, so it
-     is no `ArticleStage` and its effort is a constant in src/trajectory.ts. */
-  | "trajectory"
+     is no `ArticleStage` and its effort is a constant in src/skim.ts. */
+  | "skim"
   | "explain"
   | "chat"
   /* **Marking a reader's answer, and its own job rather than a mode of `quiz`.**
@@ -990,7 +990,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   faq: "capable",
   crossrefs: "capable",
   simple: "capable",
-  trajectory: "capable",
+  skim: "capable",
   explain: "capable",
   chat: "capable",
   "quiz-mark": "capable",
@@ -1254,7 +1254,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   faq: "messages",
   crossrefs: "messages",
   simple: "messages",
-  trajectory: "messages",
+  skim: "messages",
   explain: "chat",
   chat: "chat",
   "quiz-mark": "chat",
@@ -1379,7 +1379,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   faq: null,
   crossrefs: null,
   simple: null,
-  trajectory: null,
+  skim: null,
   citations: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
      `REQUEST_PATH_TASKS` is derived from `TASK_WIRE`, and tests/models.test.ts
