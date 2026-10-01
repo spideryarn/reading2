@@ -55,8 +55,10 @@ One append-only NDJSON file, **`src/web/changelog-versions.ndjson`**, one line p
 first. NDJSON because the job only ever appends: a run adds lines to the end and never rewrites what
 is above, so two runs cannot lose each other's work and a diff shows exactly what a run decided.
 
-**The watermark is the last line's `sha`.** "Since the last time it was run" needs no separate state
-file: enumerate the production deploys, drop the ones whose sha already has a line, do the rest.
+**The watermark is the last line's `deployment_id`.** "Since the last time it was run" needs no
+separate state file: enumerate the production deploys, find the one the last line names, and do the
+ones after it. It is the deployment id rather than the sha because the same sha can be deployed twice
+(2026-08-27 shipped `903b33e6` twice), and keying on the sha would swallow the second.
 
 ```jsonc
 {
@@ -363,8 +365,10 @@ bookkeeping. Everything intermediate goes under `logs/changelog/`, which is giti
    citing eight commits and citing two.
 5. **`changelog.ts copy-inputs`**, then one Opus subagent per version, briefed from
    [`scripts/changelog/copy-brief.md`](../../scripts/changelog/copy-brief.md).
-6. **`changelog.ts write`** — validates and appends. It refuses rather than writing a bad file, and
-   it re-reads the result afterwards.
+6. **`changelog.ts write --trawl-model <name>`** — validates and appends. It refuses rather than
+   writing a bad file, and it re-reads the result afterwards. `<name>` is the model step 3's
+   subagents actually ran on (`sonnet`, or `opus` when Sonnet is rate-limited), and it is required,
+   because a default would record the wrong one without anyone noticing.
 7. **Commit and push them.** Nobody reads them first. Greg, 2026-09-10: *"I don't want there to be a
    human review/gate — just go live with them as part of the deploy."* The gates are Sol's review in
    step 4 and `write`'s checks in step 6; the lines ship with the next deploy of `dev`.
@@ -378,8 +382,10 @@ it reads *this file*), the fallback is production's own build stamp: `/build.jso
 name the sha that is serving now, token-free, and `main`'s first-parent history from the watermark
 to that sha is the set of candidate deploy points. Write **one** version for that range, from the
 watermark to the serving sha, named by the stamp's build time, and say in the line's `generated_by`
-and in the commit that it was enumerated from the build stamp rather than Vercel — a later run with
-Vercel access can split it. Never guess intermediate deploy points from git alone.
+and in the commit that it was enumerated from the build stamp rather than Vercel. A later run cannot
+split that line: the file is append-only and the next run starts after it, so this file does not
+retain the join to the real deploys inside it (`8cd2206..c7d67cb5` covers about seven). Never guess
+intermediate deploy points from git alone.
 
 **Not a step in [get-ready-to-deploy.md](../reusable/get-ready-to-deploy.md), and not in
 `npm run deploy`.** The obvious objection — that the deploy has not happened yet — is a

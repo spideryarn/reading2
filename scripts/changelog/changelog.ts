@@ -7,7 +7,7 @@
  *     npx tsx scripts/changelog/changelog.ts review-prompt [--day 2026-09-06]
  *     npx tsx scripts/changelog/changelog.ts verify
  *     npx tsx scripts/changelog/changelog.ts copy-inputs
- *     npx tsx scripts/changelog/changelog.ts write
+ *     npx tsx scripts/changelog/changelog.ts write --trawl-model sonnet
  *     npx tsx scripts/changelog/changelog.ts check
  *
  * The process is docs/project/changelog.md; § Running it is the order these go
@@ -184,11 +184,24 @@ const BANNED = [
 
 /**
  * Who wrote each stage, recorded on every line so a later reader can tell which
- * model's judgment a claim rests on. Constants rather than flags: changing the
- * model is a decision worth a diff, and a flag would let a run record the wrong
- * one by omission.
+ * model's judgment a claim rests on. Review and copy are constants: changing
+ * either is a decision worth a diff. The trawl is not, because the run picks it
+ * (Sonnet unless that login is rate-limited, as on 2026-09-11, when the run used
+ * Opus and had to hand-edit three lines to say so) — so `write` takes it as a
+ * **required** `--trawl-model`. A default would record the wrong one by
+ * omission and look fine doing it.
  */
-const GENERATED_BY = { trawl: "sonnet", review: "sol", copy: "opus" };
+const GENERATED_BY = { review: "sol", copy: "opus" };
+
+/** One lowercase word or model id; also what a flag swallowed by mistake is not. */
+const MODEL_NAME = /^[a-z][a-z0-9.-]*$/;
+
+function requiredTrawlModel(value: string | undefined): string {
+  if (value === undefined || !MODEL_NAME.test(value)) {
+    die("write needs --trawl-model <name>: the model the trawl subagents ran on, e.g. sonnet or opus");
+  }
+  return value;
+}
 
 // ---------------------------------------------------------------------------
 // Small shared machinery
@@ -1596,6 +1609,7 @@ export function buildLines(a: {
   inDir: string;
   outDir: string;
   generatedAt: string;
+  trawlModel: string;
 }): WriteReport {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -1639,7 +1653,7 @@ export function buildLines(a: {
       commit_count: v.commit_count,
       invisible,
       generated_at: a.generatedAt,
-      generated_by: GENERATED_BY,
+      generated_by: { trawl: a.trawlModel, ...GENERATED_BY },
       entries,
     });
   }
@@ -1700,7 +1714,13 @@ export function installAppend(
   }
 }
 
-function cmdWrite(root: string, work: string, force: boolean, target: string): void {
+function cmdWrite(
+  root: string,
+  work: string,
+  force: boolean,
+  target: string,
+  trawlModel: string,
+): void {
   const versions = JSON.parse(
     readFileSync(path.join(work, "assigned.json"), "utf8"),
   ) as AssignedVersion[];
@@ -1740,7 +1760,7 @@ function cmdWrite(root: string, work: string, force: boolean, target: string): v
     }
   }
 
-  const report = buildLines({ versions, inDir, outDir, generatedAt: nowStamp() });
+  const report = buildLines({ versions, inDir, outDir, generatedAt: nowStamp(), trawlModel });
 
   for (const [f, mtime] of copyOutMtimes(outDir)) {
     const was = beforeMtimes.get(f);
@@ -1823,7 +1843,9 @@ const USAGE = `changelog.ts — the deterministic stages of docs/project/changel
                                under verified/ without rewriting them, which is
                                what to run after acting on a review's regroup
   copy-inputs                  one copy-stage input per version with something to say
-  write                        validate the copy and append to ${CHANGELOG_FILE}
+  write --trawl-model <name>   validate the copy and append to ${CHANGELOG_FILE}.
+                               <name> is the model the trawl subagents ran on
+                               (sonnet, opus), recorded as generated_by.trawl
   check [--file <path>]        parse the committed file and say what is wrong with it
 
   --file <path>                read/append somewhere other than ${CHANGELOG_FILE},
@@ -1848,12 +1870,16 @@ export function main(argv: string[]): void {
       fresh: { type: "boolean" },
       "allow-unreviewed": { type: "boolean" },
       reassign: { type: "boolean" },
+      "trawl-model": { type: "string" },
     },
   });
 
+  const command = positionals[0];
+  /* Validate before even discovering the repository: a missing or flag-shaped
+     value must refuse before `write` reads any of the run's inputs. */
+  const trawlModel = command === "write" ? requiredTrawlModel(values["trawl-model"]) : "";
   const root = repoRoot();
   const work = path.resolve(root, values.work ?? DEFAULT_WORK);
-  const command = positionals[0];
 
   switch (command) {
     case "plan":
@@ -1876,7 +1902,7 @@ export function main(argv: string[]): void {
       cmdCopyInputs(work);
       break;
     case "write":
-      cmdWrite(root, work, values.force === true, changelogPath(root, values.file));
+      cmdWrite(root, work, values.force === true, changelogPath(root, values.file), trawlModel);
       break;
     case "check":
       cmdCheck(root, changelogPath(root, values.file));

@@ -266,6 +266,7 @@ function copyRun(a: { changes: unknown[]; entries: unknown[] }) {
     inDir,
     outDir,
     generatedAt: "2026-09-06T10:00:00Z",
+    trawlModel: "opus",
   });
 }
 
@@ -285,6 +286,32 @@ function copyEntry(over: Record<string, unknown> = {}): Record<string, unknown> 
 }
 
 describe("buildLines — the copy stage's output against the input it was given", () => {
+  /**
+   * **The trawl model is the run's, not a constant's.** It was hard-coded as
+   * Sonnet until 2026-10-01, and the 2026-09-11 run, on Opus because Sonnet was
+   * rate-limited, had to hand-edit three lines to say so.
+   */
+  it("records the trawl model it was given", () => {
+    const report = copyRun({ changes: [CHANGE_A], entries: [copyEntry()] });
+    expect(report.lines[0]?.generated_by).toEqual({ trawl: "opus", review: "sol", copy: "opus" });
+  });
+
+  /** A default would record the wrong model by omission, so there is none. */
+  it("refuses to write without --trawl-model, or with something that is not a model name", () => {
+    const cwd = process.cwd();
+    process.chdir(scratch());
+    try {
+      /* Proves the refusal happens before even `git rev-parse` discovers the
+         repository, not merely before `assigned.json` is read. */
+      expect(() => main(["write"])).toThrow(/--trawl-model/);
+    } finally {
+      process.chdir(cwd);
+    }
+    expect(() => main(["write", "--work", scratch(), "--trawl-model"])).toThrow(/--trawl-model/);
+    expect(() => main(["write", "--work", scratch(), "--trawl-model", "--force"])).toThrow(/--trawl-model/);
+    expect(() => main(["write", "--work", scratch(), "--trawl-model=--force"])).toThrow(/--trawl-model/);
+  });
+
   /**
    * **Nothing out of something is an error.** Five verified user-facing changes
    * in and `entries: []` back was a warning until 2026-09-06, and the line it
