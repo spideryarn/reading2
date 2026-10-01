@@ -22,8 +22,9 @@ per-browser preferences and dismissals — the referee card (`src/web/referee-ca
 columns (`src/web/shelf-hidden-columns.ts`), the add page's tick box (`src/web/auto-modes.ts`), the
 install and small-screen hints, the chosen microphone and its placement, the offline cache's
 partition, the `spya-perf` flag and the auth SDK's session (by `grep -rln localStorage src/web`,
-2026-10-01). Each wraps its access, because a private window throws. A new key says in its file's
-header why it is not in the URL and not a column.
+2026-10-01). Every direct access in our code is wrapped because a private window can throw; the auth
+SDK owns its own persistence. A new key says in its file's header why it is not in the URL and not a
+column.
 
 > Ideally, I would like to be able to remember the state. So if I, for example, scroll down to a
 > particular place in the doc for example (or changed something else, etc etc), that should update

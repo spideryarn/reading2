@@ -62,13 +62,11 @@ A signpost has two parts: an address that stays valid, and a reason to follow it
 
 ## The exceptions
 
-- **A quote is deliberately copied.** The person's exact words, attributed and dated, may appear
-  wherever they explain a decision. A quote is a record of what someone said on a date, so it cannot
-  go stale. It isn't a claim about what is true now.
-- **A count or a measurement can be repeated if it carries its source**: the command, what it
-  covered, and the date — [written-down-is-not-checked.md § What to actually do](written-down-is-not-checked.md#what-to-actually-do).
-  A bare number is a copy of the code that will go stale. Prefer naming the list and letting the
-  reader count it.
+- **A quote may be copied.** The person's exact words, attributed and dated, can appear wherever
+  they explain a decision: a quote records what someone said on a date, so it does not go stale.
+- **A count or a measurement may be repeated only with its source** — command, scope and date, as
+  [written-down-is-not-checked.md § What to actually do](written-down-is-not-checked.md#what-to-actually-do)
+  says. Better still, name the list and let the reader count it.
 - **A signpost may name its subject in a few words.** "The streaming helpers are
   `stream-run.ts` § `runStream` and `sse.ts` § `readAnswerStream`" counts as an address. Once it
   starts explaining the contract, it is a second home.
@@ -84,7 +82,8 @@ A habit decays and a test doesn't. The checks worth having, roughly in order of 
   of the right page and never looks broken. Check source comments as well as markdown.
 - **Every `file` § `symbol` citation names a symbol the file still has.** Also refuse line-number
   citations.
-- **Every doc has exactly one owner that links to it**, and it links back up.
+- **Every doc has one owner that links to it**, and it links back up
+  ([documentation-policy.md § Keep it navigable](documentation-policy.md#keep-it-navigable)).
 - **A count in prose is derived, or there isn't one.** If a number must appear, a test computes it
   from the code and fails when the prose disagrees. Usually it's cheaper to delete the number.
 - **When a fact can't be checked mechanically, test whether the signposts work.** Give a fresh agent

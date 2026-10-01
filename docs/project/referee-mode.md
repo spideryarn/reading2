@@ -805,9 +805,8 @@ citing [url-state.md](url-state.md): that was the flat version of a real rule ra
 View state — *how you are looking at an article* — goes in the URL because it has to survive a reload
 and travel when the address is pasted to somebody else. A per-device *"I have read this"* bit is
 neither: it is not about this article, and pasting it at somebody else would be pasting your own
-reading history at them. The install hint was already the exception; this is the second, and it is the
-same kind of thing rather than a new kind. The alternative considered and dropped was a
-reader-profile column, which is a migration for a checkbox.
+reading history at them. The install hint is the same kind of per-browser state. The alternative
+considered and dropped was a reader-profile column, which is a migration for a checkbox.
 
 **What the card is not** is a way to dismiss the confidentiality notice. That notice collapses, is
 never dismissed, remembers nothing, and starts shut on every visit — see § Confidentiality below.

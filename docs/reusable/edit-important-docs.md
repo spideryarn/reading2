@@ -63,7 +63,7 @@ below.
   loses — see [AGENTS.md § How we write docs here](../../AGENTS.md#how-we-write-docs-here).
 - **Signpost, don't duplicate.** Detail belongs in the doc that owns it; everywhere else gets a line
   and a link. Two copies of a rule become two different rules —
-  [signposting-and-single-source-of-truth.md](signposting-and-single-source-of-truth.md).
+  [signposting-and-single-source-of-truth.md § Signposting to it](signposting-and-single-source-of-truth.md#signposting-to-it).
 - **Fix the links in the same edit.** `npm test` runs
   [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), which checks the file *and* the anchor
   — a stale anchor lands silently at the top of the page and never looks broken.

@@ -450,8 +450,8 @@ nothing else has a copy of.
   already shared (`src/stream-run.ts` § `runStream` on the server, `src/web/lib/sse.ts` §
   `readAnswerStream` in the browser), so a new streaming endpoint is a generator and a route, not a
   project — and a stream can end by simply stopping, which looks exactly like finishing. Start from
-  [comments.md § streaming](docs/project/comments.md#streaming), which also says which older routes
-  are hand-rolled copies not to imitate. A batch call in the pipeline, which
+  [comments.md § streaming](docs/project/comments.md#streaming), which also says which older server
+  runners are hand-rolled copies not to imitate. A batch call in the pipeline, which
   nobody is watching, doesn't need this.
 - **Writing or changing a prompt?** Read [prompting-guide.md](docs/project/prompting-guide.md) first.
 - **Before writing any Anthropic SDK code**, load the `claude-api` skill for current model ids and

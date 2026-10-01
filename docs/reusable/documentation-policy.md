@@ -34,9 +34,7 @@ runbook somebody follows while building a machine. **Classify by reader, not by 
   whoever made them.
 - **Signposts** — to the other docs, and out to the code, both directions, deep-linked to a section
   or a stable symbol. *Up* to the doc that owns this one, *down* to the files that implement it, and
-  *across* to the doc that owns anything it mentions. And from the code back: a module that is the
-  one place for something says so in its header and names its doc, because an agent usually arrives
-  from a grep, not from the index.
+  *across* to the doc that owns anything it mentions.
 
 The test for a paragraph here is: *would a competent reader recover this by reading the code?* If yes,
 delete it and link to the code. If no — a rejected alternative, a constraint from outside the repo,
@@ -52,15 +50,14 @@ first — the reader cannot tell which of the dated sentences still holds.
 
 ### Shared code is part of the signposting
 
-The most expensive thing a missing signpost causes is a second copy of code that already exists.
-The canonical module says so in its header; the owning doc keeps a short list of its shared code —
+Before adding or documenting a helper that more than one area should reuse, follow
 [signposting-and-single-source-of-truth.md § Signposting to it](signposting-and-single-source-of-truth.md#signposting-to-it).
 
 ## One home per fact
 
 **Cite, don't restate.** Give every fact exactly one home, and link to it from everywhere else; two
 copies diverge silently and nothing goes red. How to choose the home, how to point at it, what to do
-with a duplicate, and the exceptions (dated quotes, counts with their source) are in
+with a duplicate, and the exceptions are in
 [signposting-and-single-source-of-truth.md](signposting-and-single-source-of-truth.md).
 
 **Record the source, the date and your confidence** for anything that is not cited from code. A doc
@@ -90,8 +87,8 @@ will read is not doing its job, however true it is.
 - **A doc may be linked from many places.** That is fine — one *owner*, many links.
 - **Every evergreen doc links back up to its owner**, near the top, so a reader who arrived mid-tree
   can find the rest of the area. Dated collections keep the directory-level convention above.
-- **An index line says when you would open the doc**, not a fact from inside it. "Open it for the
-  four dating states" lets a reader decide; "↑ / ↓ take the step" makes them open it to find out.
+- **Before writing an index line or cross-reference**, follow
+  [signposting-and-single-source-of-truth.md § Signposting to it](signposting-and-single-source-of-truth.md#signposting-to-it).
 - **An area with code gets a doc that owns it**, even a short one. Without one, its intent ends up
   as dated paragraphs in a parent index, and its code is signposted from nowhere.
 - **Enforce it with a test rather than a habit** — which checks are worth having is in
@@ -107,16 +104,12 @@ will read is not doing its job, however true it is.
   of the change, not a follow-up. **Removing a feature most of all**: grep the docs for its names and
   fix every hit in the same change. A removal done as "a line here and there" leaves the reference
   docs describing the thing that is gone, in the present tense, for weeks.
-- **A lesson goes where the mistake is made, not only where it was written up.** A postmortem is
-  read by whoever is looking for a pattern; the agent about to repeat the bug is reading the doc for
-  the thing they are changing. Put the warning there, one sentence and a link to the postmortem.
-- **A plan or a research doc is a record, not the documentation.** When a decision in one becomes how
-  the thing works, that fact moves into the doc that owns it, and any open question it settles gets
-  deleted; the plan keeps the history.
-- **An agent's own auto-memory is not where knowledge lives.** It is for that agent's preferences,
-  machine-local state, and a pointer to a thread left open. Anything a future reader would need — a
-  trap, a decision, a rule — goes in the doc that owns it, where everyone can see it. Write the doc
-  first; if you also keep a memory, make it a pointer to the doc.
+- **Found a lesson in a postmortem or review that should stop the next repetition?** Use
+  [signposting-and-single-source-of-truth.md § Signposting to it](signposting-and-single-source-of-truth.md#signposting-to-it)
+  before placing it.
+- **Moving a decision out of a plan or research note, or knowledge out of auto-memory?** Choose its
+  shared home with
+  [signposting-and-single-source-of-truth.md § Choosing the home](signposting-and-single-source-of-truth.md#choosing-the-home).
 - **A doc whose wording is a rule changes differently** — one approved set of changes at a time, with
   the before and after shown: [edit-important-docs.md](edit-important-docs.md). Signposting is not a
   rule, so adding a line for a new doc, or tweaking a pointer, needs no approval.

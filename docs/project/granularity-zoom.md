@@ -4,14 +4,15 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 **What this is now: the tree.** The article cut into nested sections, each with a label and a
 summary, which [Structure](structure.md) draws in the band and Summary, Diagram and the Spine read
-too. [§ The tree](#the-tree), [§ Generation](#generation) and [§ What would make this fail](#what-would-make-this-fail)
-are live; the stages that build it are [hierarchy.md](hierarchy.md), and the view is
-[structure.md](structure.md). Open this doc before changing the tree's shape or how it is generated.
-It was the first feature, and it is still a core one, but no longer the one everything else is read
-through.
+too. Open [§ The tree](#the-tree) and [§ Generation](#generation) before changing the tree's shape
+or how it is generated; the stages that build it are in [hierarchy.md](hierarchy.md), and the view
+is in [structure.md](structure.md). The live material later in this doc is in [Structure's two
+faces](#structures-two-faces-and-the-width-between-them), [the Spine](#the-spine-a-birds-eye-rail),
+[the Arc](#the-arc) and [tree validation](#validate-the-tree-always).
 
-**Everything else here is history**: [§ The tabular view](#the-tabular-view) and most of
-[§ Interaction](#interaction) describe the gist columns beside the prose, removed on 2026-09-29.
+The surrounding tabular-view and Interaction material is history: it describes the gist columns
+beside the prose, removed on 2026-09-29. The tree was the first feature, and is still a core one,
+but no longer the one everything else is read through.
 
 > **Status, 2026-09-29.** The **tree** is live and is what Structure, Summary, Diagram and the Spine
 > draw. The **tabular view** this doc describes — the gist columns beside the prose, the Hierarchy

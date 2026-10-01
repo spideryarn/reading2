@@ -143,7 +143,7 @@ That last section is the one people skip and the one people read.
 - **Duplicating the lesson into a rule doc and the postmortem both.** Give the fact one home: the
   postmortem keeps the incident and the reasoning; a rule that comes out of it moves into the doc
   that owns that rule, and links back —
-  [signposting-and-single-source-of-truth.md](signposting-and-single-source-of-truth.md).
+  [signposting-and-single-source-of-truth.md § Finding a duplicate](signposting-and-single-source-of-truth.md#finding-a-duplicate).
 
 ## See also
 

@@ -87,10 +87,9 @@ import { ModeSurface } from "../../ModeSurface.js";
  * the flat version of the rule rather than the rule.** It is banned for view
  * state, which is what the paragraph above is about; a per-device "I have read
  * this" bit is neither view state nor anything worth pasting to somebody else.
- * `InstallHint` was already the exception and the explainer card below is the
- * second — src/web/referee-card.ts draws the distinction in full. None of that
- * reaches this notice, which remembers nothing on purpose; see the collapse
- * paragraph at the end.
+ * src/web/referee-card.ts gives the card's reason for using browser storage in
+ * full. None of that reaches this notice, which remembers nothing on purpose;
+ * see the collapse paragraph at the end.
  *
  * **Not dismissible**, for the reason `SharedNotice` in src/web/PublicChrome.tsx
  * gives about itself: *it is what this page is, and a control to make it go away
