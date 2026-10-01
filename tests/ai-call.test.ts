@@ -1386,7 +1386,8 @@ describe("the upstream that is written down", () => {
   ];
   const NATIVE_TOOLS = [{ type: "openrouter:web_search", parameters: { max_results: 3 } }];
   /** The block `X-OpenRouter-Metadata: enabled` adds, cut to what is read. */
-  const metadata = (selected: string) => ({
+  const metadata = (selected: string, attempt = 1) => ({
+    attempt,
     summary: `available=2, selected=${selected}`,
     endpoints: {
       total: 10,
@@ -1445,6 +1446,29 @@ describe("the upstream that is written down", () => {
       frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 }, openrouter_metadata: metadata("Anthropic") }),
     );
     expect(upstream).toBe("Anthropic");
+  });
+
+  it("keeps earlier metadata authoritative when a provider frame follows it", async () => {
+    const { upstream } = await streamWith(
+      NATIVE_TOOLS,
+      frame({ openrouter_metadata: metadata("Anthropic"), choices: [] }),
+      frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 } }),
+    );
+    expect(upstream).toBe("Anthropic");
+  });
+
+  it("takes the last selected endpoint if several metadata blocks arrive", async () => {
+    const { upstream } = await streamWith(
+      EXA_TOOLS,
+      frame({ openrouter_metadata: metadata("Anthropic", 1), choices: [] }),
+      frame({
+        provider: "OpenAI",
+        openrouter_metadata: metadata("Amazon Bedrock", 2),
+        choices: [],
+      }),
+      frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 } }),
+    );
+    expect(upstream).toBe("Amazon Bedrock");
   });
 
   it("believes the selected endpoint over a body that says OpenAI, not streamed", async () => {

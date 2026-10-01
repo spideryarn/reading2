@@ -1337,10 +1337,12 @@ const ATTRIBUTION = {
  * `provider: "OpenAI"` on every frame, streamed or not, for a Claude model
  * pinned to Anthropic — and equally under a Bedrock-only pin, while
  * `only: ["openai"]` 404s. The routing is obeyed; the label is the server-tool
- * loop's. This header adds `openrouter_metadata` (once, on the usage chunk of a
- * stream), whose `endpoints.available[].selected` named Anthropic and Bedrock
- * correctly in every probe. Measured 2026-10-01:
- * docs/plans/261001g-exa-upstream-label.md. `Meter.sawRoute` reads it.
+ * loop's. This header adds `openrouter_metadata`, whose
+ * `endpoints.available[].selected` named Anthropic and Bedrock correctly in
+ * every probe. In each streamed probe it arrived once on the usage chunk;
+ * `Meter.sawRoute` nevertheless reads every chunk and does not depend on that
+ * observed ordering. Measured 2026-10-01:
+ * docs/plans/261001g-exa-upstream-label.md.
  */
 const ROUTE_METADATA = { "X-OpenRouter-Metadata": "enabled" } as const;
 

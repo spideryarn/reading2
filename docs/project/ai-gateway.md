@@ -467,12 +467,14 @@ So nothing in the routing, the money or the privacy promise above was wrong. Onl
 column was. Measured 2026-10-01 in
 [261001g-exa-upstream-label.md](../plans/261001g-exa-upstream-label.md).
 
-**The fix is in the recording.** Every chat-wire call now sends `X-OpenRouter-Metadata: enabled`,
-and the meter writes down the endpoint that `openrouter_metadata.endpoints.available[]` marks
-`selected`. Where that block is present it beats the frame's `provider`. If an explicit-Exa
-request comes back without it, the row says `null` ("not known") rather than `OpenAI`. Other calls
-fall back to the frame's `provider`, as before. The metadata is believed because it named
-Anthropic and Bedrock correctly in every probe. It is not documented as a billing record, and
+**The fix is in the recording.** Every chat-wire call now sends `X-OpenRouter-Metadata: enabled`.
+On a successful response, the meter writes down the endpoint that
+`openrouter_metadata.endpoints.available[]` marks `selected`; where that block is present it beats
+the frame's `provider`. A failed response is still drained and discarded before its route is read,
+so its existing `null` remains `null`. If a successful explicit-Exa request comes back without the
+block, the row likewise says `null` ("not known") rather than `OpenAI`. Other successful calls fall
+back to the frame's `provider`, as before. The metadata is believed because it named Anthropic and
+Bedrock correctly in every probe. It is not documented as a billing record, and
 `GET /api/v1/generation?id=…` remains the authority if a question ever turns on one call.
 
 **Rows written before this landed are wrong in one recognisable way**, and they were left as they

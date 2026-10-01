@@ -577,9 +577,10 @@ export interface StreamChunk {
    */
   provider?: string;
   /**
-   * Present only when the request sent `X-OpenRouter-Metadata: enabled`, and
-   * then once, on the usage chunk. Its selected endpoint is the true upstream
-   * where `provider` above is not — `ROUTE_METADATA` in src/ai-call.ts.
+   * Requested with `X-OpenRouter-Metadata: enabled`. It arrived once on the
+   * usage chunk in every streamed probe, but the collector deliberately makes
+   * no ordering promise: its selected endpoint is the true upstream where
+   * `provider` above is not — `ROUTE_METADATA` in src/ai-call.ts.
    */
   openrouter_metadata?: unknown;
   error?: { message: string };

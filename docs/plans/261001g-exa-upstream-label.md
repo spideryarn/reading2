@@ -51,12 +51,23 @@ and its raw output is [261001g-exa-upstream-probe-results.jsonl](261001g-exa-ups
 | default engine | json | `order:[anthropic]` | Anthropic | Anthropic | Anthropic |
 | none | json | `order:[anthropic]` | Anthropic | Anthropic | Anthropic |
 
-Non-streamed calls mislabel in the same way. The metadata arrives once, on the usage chunk, and its
-`pipeline` names the path (`mode: "sdk"`, `executed_engines: exa`). **So the built fix records the
-truth rather than `null`.** Both chat seams send the header. `Meter.sawRoute` takes the `selected`
-endpoint and, once it has one, ignores the frame's `provider`. The `null` rule below stays as the
-guard for an explicit-Exa reply that comes back without metadata. The header goes on `wire: "chat"`
-rows only, because the embeddings path was never probed with it.
+Non-streamed calls mislabel in the same way. In both streamed probes the metadata arrived once, on
+the usage chunk, and its `pipeline` names the path (`mode: "sdk"`, `executed_engines: exa`). That is
+an observation, not an ordering contract: the collector reads every chunk, keeps metadata
+authoritative if a provider frame follows it, and takes the last selected endpoint if several
+metadata blocks arrive. **So the built fix records the truth rather than `null`.** Both chat seams
+send the header.
+`Meter.sawRoute` takes the `selected` endpoint and, once it has one, ignores the frame's `provider`.
+The `null` rule below stays as the guard for an explicit-Exa reply that comes back without metadata.
+The header goes on `wire: "chat"` rows only, because the embeddings path was never probed with it.
+
+The probe is not a headed-versus-unheaded cache experiment: it has no otherwise-identical control
+and no warm repeat. It shows that headed requests still obeyed both pins, were priced at the selected
+endpoint's rates and still produced cache-write tokens. The stronger reason not to expect the header
+to change routing, inference cost or the prompt cache is OpenRouter's API contract: it is a
+[response-metadata opt-in](https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request),
+not a routing or prompt parameter. That distinction matters more than calling the absence of an
+observed change a measurement of no change.
 
 Sol's other findings: the coverage claim is narrowed to "explicit `engine: "exa"` on the chat wire".
 A default-engine search that falls back to Exa, the older `plugins` spelling, or Exa on the Messages
