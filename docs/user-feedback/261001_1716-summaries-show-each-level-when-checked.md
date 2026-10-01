@@ -1,6 +1,6 @@
 ---
 reports: none
-ending: awaiting
+ending: declined
 ---
 
 # Show each summary level as soon as it has passed its check
@@ -23,3 +23,5 @@ receives that stream, and that tab may not be the one showing the panel. Every r
 whichever tab the reader is looking at needs a job field, a partial artefact or a new channel, and
 the cheapest of those is about 550–700 lines. Recommendation: keep the press as built, unless Greg
 accepts the one-tab trade-off.
+
+**Greg chose A, 2026-10-01** ("Q-summaries-sooner A"): keep the press as built. Not built.
