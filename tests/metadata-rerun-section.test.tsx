@@ -452,15 +452,20 @@ describe("the Re-run AI processing section", () => {
   });
 
   /**
-   * `SKETCH_PRICE` and `SKETCH_WAIT`, beside the name and before any press:
+   * What the press is and `SKETCH_WAIT`, beside the name and before any press:
    * the confirm used to be the only place on this page that said them.
+   *
+   * **And no price.** It named `about $0.20` until 2026-09-30, when Greg ruled
+   * that what AI processing costs us is for the administrator alone —
+   * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md § 3.
    */
-  it("names the price and the wait on the sketch row before anything is pressed", async () => {
+  it("names the call and the wait on the sketch row, and no price, before anything is pressed", async () => {
     await open();
 
     const text = row("sketch")?.textContent ?? "";
-    expect(text).toContain("about $0.20");
+    expect(text).toContain("One model call");
     expect(text).toContain("about two minutes");
+    expect(text).not.toMatch(/[$£€]\s?\d/);
     expect(posts).toEqual([]);
   });
 
@@ -470,18 +475,17 @@ describe("the Re-run AI processing section", () => {
    * $0.20–0.40 for a completed run on a short article, rising with length
    * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § Stage 3½ § 1).
    *
-   * **The range, not the ceiling.** *Up to about $0.27* came from that spike's
-   * § The spend ceiling, which § Stage 3½ corrects further down: the probes
-   * carried no article, and a completed live run cost $0.3527 ⟨Sol, F12⟩.
+   * **That range is no longer shown.** It was, until 2026-09-30: what AI
+   * processing costs us is for the administrator alone (plan 260930k § 3). The
+   * row still says what the reader is waiting on.
    */
-  it("names up to two calls and the price range on the debate row", async () => {
+  it("names up to two calls on the debate row, and no price", async () => {
     await open();
 
     const text = row("debate")?.textContent ?? "";
     /* *Up to*: pass B runs only if pass A succeeded (src/debate.ts). */
-    expect(text).toContain("Up to two calls");
-    expect(text).toContain("$0.20–0.40 on a short article, more on a long one");
-    expect(text, "the debate row quotes the disproven ceiling").not.toContain("$0.27");
+    expect(text).toContain("Up to two model calls");
+    expect(text).not.toMatch(/[$£€]\s?\d/);
   });
 
   it("says Trajectory needs Quotes before anything is pressed", async () => {
@@ -499,9 +503,10 @@ describe("the Re-run AI processing section", () => {
         host.querySelector(`#rerun-note-${step}`) !== null,
         `${step}'s note`,
       ).toBe(noted.has(step));
-      expect((row(step)?.textContent ?? "").includes("$"), `${step}'s price`).toBe(
-        step === "sketch" || step === "debate",
-      );
+      /* No row names a price: what AI processing costs us is the
+         administrator's alone since 2026-09-30 (plan 260930k § 3). The sketch
+         and debate rows did until then. */
+      expect(row(step)?.textContent ?? "", `${step}'s price`).not.toMatch(/[$£€]\s?\d/);
     }
   });
 
@@ -510,16 +515,17 @@ describe("the Re-run AI processing section", () => {
    * resolved text rather than the attribute: an `aria-describedby` naming an id
    * that does not exist looks identical to a right one from outside. A sibling
    * `<span>` is not read to somebody reaching the button by keyboard, and with
-   * the confirm gone this is the only place the price is said. ⟨Sol, plan
-   * review F4, 2026-09-30.⟩
+   * the confirm gone this is the only place the note is said. ⟨Sol, plan
+   * review F4, 2026-09-30.⟩ It carried a price until later that day; it says
+   * what the press is now (plan 260930k § 3).
    */
-  it("describes the Run and Retry buttons with the note, so a screen reader hears the price", async () => {
+  it("describes the Run and Retry buttons with the note, so a screen reader hears it", async () => {
     await open();
     const run = button("debate", "Run it again");
     const ids = (run?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
     expect(ids, "Run is not described by anything").not.toEqual([]);
     const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
-    expect(described).toContain("$0.20–0.40");
+    expect(described).toContain("Up to two model calls");
     expect(button("quotes", "Run it again")?.hasAttribute("aria-describedby")).toBe(false);
 
     await press(run);
@@ -535,7 +541,7 @@ describe("the Re-run AI processing section", () => {
     const retryDescription = retryIds
       .map((id) => document.getElementById(id)?.textContent ?? "")
       .join(" ");
-    expect(retryDescription).toContain("$0.20–0.40");
+    expect(retryDescription).toContain("Up to two model calls");
   });
 
   /**

@@ -108,20 +108,37 @@ The two notices, and why each fires when it does:
   primary key hands the row to exactly one request across every instance, and that request sends
   the mail, after its route has answered ([`src/arrivals.ts`](../../src/arrivals.ts)). An email
   sign-up that is never confirmed is never announced. The migration backfilled every account that
-  existed, so shipping it announced nobody.
+  existed, so shipping it announced nobody — including the first real reader, who signed up five
+  minutes before that deploy began, which is why the admin heard nothing (SPIDERYARN-READING2-79,
+  [261001b](../plans/261001b-sign-up-mail-retried-when-a-send-fails.md)).
 - **An upgrade** is decided inside `syncSubscriptionFromStripe`, under the lock it already holds, by
   `planUpgrade` in [`src/billing/tiers.ts`](../../src/billing/tiers.ts): free → paid, or a smaller
   → larger plan. Renewals, recoveries from `past_due` or `unpaid`, downgrades and cancellations send
   nothing. Because the transition is read against the row it replaces, a redelivered webhook or the
   confirm route racing it cannot send twice — [billing.md](billing.md).
 
-**Both are best-effort.** A crash between the commit and the send, or Resend being down, loses that
-notice for good; it is logged, and `/admin` is the record.
+**Both are best-effort.** A crash between the commit and the send loses that notice for good; it is
+logged, and `/admin` is the record. A sign-up whose send fails (or finds no key in production) gives
+its ledger row back, so the reader's next request tries again — at the cost of a possible duplicate,
+and with two double faults still able to lose it
+([261001b](../plans/261001b-sign-up-mail-retried-when-a-send-fails.md)). An upgrade's failed send is
+not retried.
 
-**Neither carries the reader's address** — the account id and a link to `/admin`. A copy of the
-address in Resend's log, the forwarder and an inbox would be three more places an erasure has to
-reach, and the deployed server cannot read `auth.users` to get it anyway
-([admin-accounts.ts](../../src/store/admin-accounts.ts)).
+**Both carry the reader's address**, the account id, and a link to `/admin/users`, the page that
+lists every account. They did not until 2026-10-01:
+
+> Yes, please include the newly-signed-up user's email address in the email to me, and include a
+> link to the /admin page that lists all the users
+>
+> — Greg, 2026-10-01
+
+The cost that kept it out is still true — each copy in Resend's log, the forwarder and an inbox is
+one more place an erasure has to reach — so /privacy says we email ourselves the address. The
+sign-up takes it from the verified token; the upgrade asks the Auth Admin API, because the deployed
+server cannot read `auth.users` ([admin-accounts.ts](../../src/store/admin-accounts.ts)), and a
+failed lookup says so in the mail rather than stopping it. The address is the reader's own text, so
+it goes through `oneLine` in `src/email.ts` and never into a subject —
+[261001b](../plans/261001b-admin-sign-up-email-carries-the-address.md).
 
 ## See also
 

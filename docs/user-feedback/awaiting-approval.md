@@ -11,9 +11,7 @@ One line each: the date the report arrived, its Sentry short id, one sentence of
 proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
 in this directory records which, and the line comes off.
 
-- 2026-09-30 · SPIDERYARN-READING2-6C · **Shipped for the admin; the reader half waits.** High-powered AI (Opus for one article's Sonnet calls) is on `/metadata` for your own articles. Letting readers use it is billing: the plan recommends one extra article charge when first switched on (half for a public article), added to the ordinary ingest so the total is two private or one public, and proposes the `/pricing` and `/features` lines. Also one new clause on /privacy naming Opus, which a test required — published wording, yours to check · [260930f § Deferred](../plans/260930f-high-powered-ai-per-article.md)
 - 2026-09-30 · SPIDERYARN-READING2-5Z · **Shipped for owners; one defence edit waits.** Cross-reference links in the prose are on `dev`, drawn for the article's owner. The sanitiser half was approved and done on 2026-10-01 ([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md)). What is left: let visitors see the links through the public DTO, a listed defence · [260930f § Left for Greg](../plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md#left-for-greg-two-defence-edits)
-- 2026-10-01 · SPIDERYARN-READING2-5K (follow-up) · **Shipped; only the wording waits.** Admin trust now rests on the report's row in production (`feedback-reporter.ts --report-id`), never on the Sentry event, which anyone can forge through the public DSN. Seven edits to the pinned `feedback-reports.md` to say so, then a re-pin · [261001a § For Greg](../plans/261001a-unfakeable-admin-feedback-reports.md#for-greg-the-wording-in-feedback-reportsmd)
 
 ## Attempted abuse, not yet seen by Greg
 

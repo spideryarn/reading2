@@ -377,6 +377,14 @@ export interface AdminUser {
    * because nobody yet knows whether the article will be shared.
    */
   ingestsShared: number;
+  /**
+   * **Articles switched to High-powered AI** over the same window — one more
+   * article's worth each, not articles added, so not in `ingests`.
+   * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+   */
+  highPower: number;
+  /** How many of `highPower` are public now, and so count half. */
+  highPowerShared: number;
   /** What that count is measured against — the tier's row, or the free three. */
   ingestLimit: number;
   /**

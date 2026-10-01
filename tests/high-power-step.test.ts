@@ -9,8 +9,11 @@
  * is (the composition-root mutation, docs/postmortems on imaginary coverage):
  *
  * - an administrator's article with the column set is `high`;
- * - a reader's article with the column set is `standard` — a copied, restored or
- *   hand-edited row must not double what we spend before billing exists;
+ * - a reader's article with the column set is `high` too — since plan 260930k
+ *   (docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md,
+ *   decision 6) the column alone decides, because the only writer that sets it
+ *   for a reader charges them in the same transaction. Until then this case
+ *   asserted `standard`;
  * - an administrator's article with the column clear is `standard`;
  * - no row at all is a failure, never a quiet `standard`.
  */
@@ -70,8 +73,17 @@ describe("readStepPower", { timeout: 60_000 }, () => {
     expect(await readStepPower(jobFor(ADMINS, TEST_OWNER))).toBe("standard");
   });
 
-  it("is standard for a reader's article even with the column set (decision 4)", async () => {
+  it("is high for a reader's article with the column set (260930k decision 6)", async () => {
     await setColumn(readers!.articleId, true);
+    try {
+      expect(await readStepPower(jobFor(READERS, DEV_OWNER_ID))).toBe("high");
+    } finally {
+      await setColumn(readers!.articleId, false);
+    }
+  });
+
+  it("is standard for a reader's article with the column clear", async () => {
+    await setColumn(readers!.articleId, false);
     expect(await readStepPower(jobFor(READERS, DEV_OWNER_ID))).toBe("standard");
   });
 

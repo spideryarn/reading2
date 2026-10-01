@@ -1991,9 +1991,10 @@ describe("a signed-out browser on a shared document", () => {
 
     /* The honest sentence, and the whole of it. */
     expect(host.textContent).toContain("Nobody has drawn this one yet");
-    /* And none of the owner's invitation. `$0.20` and the wait are the two
-       halves of the price, and "Draw the argument" is the button. */
-    expect(host.textContent, "the price").not.toContain("costs one model call");
+    /* And none of the owner's invitation: its sentence about the call and the
+       wait (it named a price until 2026-09-30), and "Draw the argument", the
+       button. */
+    expect(host.textContent, "the invitation").not.toContain("never drawn until you ask");
     expect(
       [...host.querySelectorAll("button")].some(
         (b) => (b.textContent ?? "").includes("Draw the argument"),

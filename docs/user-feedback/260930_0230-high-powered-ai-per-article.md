@@ -35,24 +35,42 @@ account and could not read Sentry.
 > a doc you've made publicly shared, and it would cost a single doc, because the 0.5 multiplies by
 > the two.
 
-**Ending: Shipped** — on `dev`, not deployed. Resolve 6C (this session has no Sentry sign-in, so
-the next feedback sweep does the status write). The reader-facing half waits on Greg and has its line
-in [awaiting-approval.md](awaiting-approval.md).
+**Ending: Shipped**, in two halves, both on `dev` and not deployed. Resolve 6C: this session has
+no Sentry sign-in, so the next feedback sweep does the status write. The admin half is in commit
+`8784aeee` and nearby, [260930f](../plans/260930f-high-powered-ai-per-article.md). The reader half
+is in commit `3b515253` and the code-review commit after it, [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md),
+built on Greg's answers relayed by the Overseer around 23:00 on 2026-09-30.
 
-What we did: a **High-powered AI** switch per article, at the top of *Re-run AI processing* on
-`/metadata`, visible to the administrator only. Switched on, that article's capable-tier calls — the
-pipeline modes and chat, explain, search, quiz marking, referee, citations — go to Claude Opus 5.5
-instead of Sonnet 5, at twice the token price. Quick jobs, PDF reading, dictation and images do not
-move. Switching either way re-runs nothing; *Run it again* on a mode is how you redo it with Opus, and
-what Opus wrote stays current after you switch back. Checked end to end on the local stack: the
-ledger records Opus sent and answered, and switched off the same mode skips as already done.
+**What a reader gets.** A **High-powered AI** switch at the top of *Re-run AI processing* on
+`/metadata`, on their own articles. Switched on, that article's capable-tier calls go to Claude Opus
+instead of Sonnet: the pipeline modes, and chat, explain, search, quiz marking, referee and
+citations. Quick jobs, PDF reading, dictation and images do not move. Switching re-runs nothing;
+*Run it again* redoes a mode with Opus.
 
-**Not built, and why:** the two-docs charge (one if public), the refusal with one doc left, the
-import-time flag, and the `/pricing` and `/features` lines. That is slot accounting and published
-copy; the plan's § Deferred has the recommendation (a one-time charge of one extra article when first
-switched on, so private totals two and public one) and draft copy.
+**What it costs, read against billing** (Greg: *"it should double the processing cost
+per-article"*):
 
-**For Greg to look at:** one new clause on `/privacy` naming `claude-opus-5-5`, which the privacy
-test requires of every model the app can send.
+- **Private article:** switching on counts as one more article, so two in all with its ingest.
+- **Public article:** half of one more, so one in all.
+- **Charged once per article, in the period it is switched on.** Its age doesn't matter: an old
+  article switched on this month costs one article of this month's allowance.
+- **Switching off refunds nothing, and switching on again is free.** That closes *switch on, run
+  everything on Opus, switch off*.
+- **It must fit whole.** With less than that left, it is refused (`[pay-high-power]`).
+- **The administrator is exempt**, as with ingests.
 
-Plan: [260930f](../plans/260930f-high-powered-ai-per-article.md).
+`/pricing` has an answer for it, and `/features` a line. Both state the price in articles.
+
+**/privacy** now says "Opus or a similar frontier model", in Greg's words, and the test that every
+model is covered still holds, through an approved-wording table. It also now names Illustrated's
+image model, which had been missing from the model list altogether.
+
+**Report 68's rule, audited.** No AI cost figure reaches a non-admin. The ledger was already safe:
+the cost route is behind `/api/admin`, and no reader payload carries a cost field. **Five
+hand-written dollar figures were not safe**: Sketch "about $0.20", Illustrated "$0.40–$0.65", a
+debate re-run note, the reset dialog, and a `/changelog` entry. All five are gone, and
+`tests/no-ai-cost-for-readers.test.ts` fails if one comes back.
+
+**Not built:** the import-time flag. The first pass of an article is always Sonnet; switch on, then
+*Run it again*. That is the natural next step, and it needs its own plan, because the charge would
+have to ride the job.

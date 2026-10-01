@@ -2143,13 +2143,14 @@ to the hiding, not to the chain** — so the chain landed and the price did not.
 Each of the three refusal branches keeps its explanatory sentence and its "press
 the chip one to the left" route — a reader who would rather look at the Sketch
 before buying a painting is not doing anything wrong — and gains a *"Draw the
-Sketch, then paint"* button, sitting under `SKETCH_THEN_PAINT_COST`
+Sketch, then paint"* button, sitting under `SKETCH_THEN_PAINT`
 ([`IllustratedView.tsx`](../../src/web/IllustratedView.tsx)), which names both
-prices and both waits and says that Stop takes effect after the step that is
-running. It is built from `SKETCH_PRICE`/`SKETCH_WAIT` and
-`ILLUSTRATED_PRICE`/`ILLUSTRATED_WAIT` rather than from a fifth number, because
-only one of the two sentences is ever on screen at a time — nothing would show
-them disagreeing.
+steps and both waits and says that Stop takes effect after the step that is
+running. It is built from `SKETCH_WAIT` and `ILLUSTRATED_WORK`/`ILLUSTRATED_WAIT`
+rather than from new words, because only one of the two sentences is ever on
+screen at a time — nothing would show them disagreeing. It named both *prices*
+until 2026-09-30, when what AI processing costs us became the administrator's
+alone ([plan 260930k § 3](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md)).
 
 **The chain is the server's, not the browser's.** `drawThenPaint`
 ([`useIllustrated.ts`](../../src/web/useIllustrated.ts)) posts one job naming

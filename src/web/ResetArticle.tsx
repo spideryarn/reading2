@@ -366,7 +366,7 @@ function ResetConfirm({
           model call when you next open the reading view.
           {regenerate ? " Most extras cost roughly one model call each." : null}
           {regenerate && extras.includes("debate") ? " Debate uses two." : null}
-          {regenerate && extras.includes("sketch") ? " Sketch costs about $0.20." : null}
+          {regenerate && extras.includes("sketch") ? " Sketch takes about two minutes." : null}
           {regenerate && extras.includes("illustrated")
             ? " Illustrated uses a brief plus one image call per plate."
             : null}

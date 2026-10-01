@@ -86,7 +86,7 @@ import { allAccountSnapshots, entitlementFromRow, isPublicPrice } from "./pg-bil
 import type { AccountSnapshot } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import type { AccountRow } from "./account-row.js";
-import { gotruePages, listAccounts } from "./admin-accounts.js";
+import { authAdminEndpoint, gotruePages, listAccounts } from "./admin-accounts.js";
 import {
   type OwnerSpend,
   currentUtcMonth,
@@ -96,7 +96,6 @@ import type { AdminUser } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
-import { projectMismatch } from "./blobs.js";
 import {
   listFeedbackAcrossOwners,
   readFeedbackAcrossOwners,
@@ -145,6 +144,16 @@ export interface IngestTally {
   lifetimeShared: number;
   /** How many of `inPeriod` are. Never includes `inFlight` — see `planFacts`. */
   inPeriodShared: number;
+  /**
+   * **High-powered AI upgrades**, over the same two windows, and how many of
+   * each are public now. Counted apart from the ingests above because they are
+   * not articles added — one more article's worth each, on the ledger as
+   * `kind = 'high_power'`. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+   */
+  highPowerLifetime: number;
+  highPowerInPeriod: number;
+  highPowerLifetimeShared: number;
+  highPowerInPeriodShared: number;
 }
 
 /** Everything the merge needs, named so the call site reads as a sentence. */
@@ -195,7 +204,7 @@ function tally(rows: CountRow[]): Map<string, number> {
  */
 type PlanFacts = Pick<
   AdminUser,
-  "plan" | "ingests" | "ingestsShared" | "ingestLimit" | "ingestWindow"
+  "plan" | "ingests" | "ingestsShared" | "highPower" | "highPowerShared" | "ingestLimit" | "ingestWindow"
 > &
   Partial<Pick<AdminUser, "planStatus">>;
 
@@ -256,6 +265,15 @@ function planFacts(
      shared. src/billing/half-units.ts. */
   const lifetimeShared = counts?.lifetimeShared ?? 0;
   const inPeriodShared = counts?.inPeriodShared ?? 0;
+  /* Upgrades are born settled, so there is no in-flight term to add. */
+  const lifetimeUpgrades = {
+    highPower: counts?.highPowerLifetime ?? 0,
+    highPowerShared: counts?.highPowerLifetimeShared ?? 0,
+  };
+  const inPeriodUpgrades = {
+    highPower: counts?.highPowerInPeriod ?? 0,
+    highPowerShared: counts?.highPowerInPeriodShared ?? 0,
+  };
 
   const entitlement = entitlementFromRow(account, tiers, now);
 
@@ -269,6 +287,7 @@ function planFacts(
       ...(status === undefined ? {} : { planStatus: status }),
       ingests: lifetime,
       ingestsShared: lifetimeShared,
+      ...lifetimeUpgrades,
       ingestLimit: tier?.ingestsPerPeriod ?? FREE_LIFETIME_INGESTS,
       /* **Its own window, not `lifetime`.** The count and the limit are measured
          over different spans here and only the cell can say so — see
@@ -283,6 +302,7 @@ function planFacts(
         ...(status === undefined ? {} : { planStatus: status }),
         ingests: inPeriod,
         ingestsShared: inPeriodShared,
+        ...inPeriodUpgrades,
         ingestLimit: entitlement.limit,
         ingestWindow: "period",
       }
@@ -291,6 +311,7 @@ function planFacts(
         ...(status === undefined ? {} : { planStatus: status }),
         ingests: lifetime,
         ingestsShared: lifetimeShared,
+        ...lifetimeUpgrades,
         ingestLimit: entitlement.limit,
         ingestWindow: "lifetime",
       };
@@ -500,12 +521,12 @@ export function adminQueries(db: Db) {
     ingests: db
       .select({
         owner: ingestEvents.ownerId,
-        lifetime:
-          sql<number>`count(*) filter (where ${ingestEvents.succeededAt} is not null)`.mapWith(
-            Number,
-          ),
+        lifetime: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null)`.mapWith(
+          Number,
+        ),
         inPeriod: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is not null
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
               and ${billingAccounts.currentPeriodStart} is not null
               and ${billingAccounts.currentPeriodEnd} is not null
               and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
@@ -536,12 +557,36 @@ export function adminQueries(db: Db) {
            here for the same reason it is not discounted there: nobody knows yet.
            tests/admin-queries.test.ts § the ingest ledger's half-price split. */
         lifetimeShared: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is not null
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
               and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
           Number,
         ),
         inPeriodShared: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is not null
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}
+              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
+          Number,
+        ),
+        /* The same four windows for High-powered AI's upgrades, which are
+           settled at birth and so have no in-flight term. */
+        highPowerLifetime: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power')`.mapWith(Number),
+        highPowerInPeriod: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power'
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(Number),
+        highPowerLifetimeShared: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power'
+              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
+          Number,
+        ),
+        highPowerInPeriodShared: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power'
               and ${billingAccounts.currentPeriodStart} is not null
               and ${billingAccounts.currentPeriodEnd} is not null
               and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
@@ -560,29 +605,12 @@ export function adminQueries(db: Db) {
 /* ------------------------------------------------------------ the store --- */
 
 /**
- * Where the accounts come from, and the one thing that must be true of it.
- *
- * **The Auth project and the database must be the same project.** They are
- * chosen by two independent environment variables, and nothing else compares
- * them: point `SUPABASE_URL` at one project while `DATABASE_URL` names another
- * and this page lists the accounts of one and the articles of the other, giving
- * every person a row of zeros. Nothing errors. `projectMismatch` in blobs.ts is
- * the same check for the same reason on the Storage pair, and this reuses it
- * rather than growing a second opinion about what a project ref is.
+ * Where the accounts come from. The configuration and the same-project check
+ * are `authAdminEndpoint`'s (admin-accounts.ts), shared with the upgrade
+ * notice's one-account lookup since 2026-10-01.
  */
 function accountSource(): ReturnType<typeof gotruePages> {
-  const url = process.env.SUPABASE_URL?.trim();
-  /* `.trim()` on both, and empty is not configured: a `.env` line left as
-     `SUPABASE_SERVICE_ROLE_KEY=` gives a string that authenticates nothing. */
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) {
-    throw new Error(
-      "the admin page needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY: the accounts live in " +
-        "the Auth service, not in a table this server can read. See src/store/admin-accounts.ts.",
-    );
-  }
-  const mismatch = projectMismatch(process.env.DATABASE_URL, url);
-  if (mismatch) throw new Error(`the admin page would mix two projects: ${mismatch}`);
+  const { url, key } = authAdminEndpoint();
   return gotruePages(url, key);
 }
 

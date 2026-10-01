@@ -68,8 +68,9 @@ You answered that decision, relayed by the Overseer:
 > that it does? In other words, how can we close this so that the agents can tell
 > definitively/confidently/unfakeably which Feedback reports are indeed from me.
 
-**Ending: Shipped** on `dev` as 5170b6e8 and de9b5f8e, merged in d74bded7 (2026-10-01). **Only the
-wording for `feedback-reports.md` waits for you.**
+**Ending: Shipped** on `dev` as 5170b6e8 and de9b5f8e, merged in d74bded7 (2026-10-01). You
+approved the seven wording edits to `feedback-reports.md` the same day ("approve the 5K wording"),
+and they are applied. No re-pin was needed after a071f38e.
 
 - Sentry already carries your address twice, but every field in a Sentry event can be typed by
   whoever posts it, so adding more cannot prove anything.
@@ -80,7 +81,7 @@ wording for `feedback-reports.md` waits for you.**
   of the Sentry event. Exit 2 ("could not tell") is not trust. The old `--user-id` form now exits 2.
 - Measured on 5K itself: its row is yours, and its Sentry event id matches the row's.
 - [overseer.md](../project/overseer.md) now points the Overseer at the new check.
-- **For you:** seven wording edits to the pinned `feedback-reports.md`, then a re-pin —
+- [feedback-reports.md](../project/feedback-reports.md) now says so, in your approved wording —
   [261001a § For Greg](../plans/261001a-unfakeable-admin-feedback-reports.md#for-greg-the-wording-in-feedback-reportsmd).
 - Found along the way, and not fixed: 200 of 231 reports never recorded their Sentry event id,
   because the server's wait for Sentry's acknowledgement mostly times out.

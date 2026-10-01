@@ -315,6 +315,8 @@ export interface Draft {
   mentions: CitationPlace[];
   /** CitedWork § `entry`. */
   entry?: string;
+  /** The PDF entry before dehyphenation, used only to read identifiers safely. */
+  identifierEntry?: string;
   /** The PDF-list identity used only while folding; omitted from `CitedWork`. */
   entryNumber?: number;
 }
@@ -358,6 +360,20 @@ function claimedEntryNumber(raw: unknown): number | null {
         ? Number(raw)
         : NaN;
   return Number.isInteger(n) ? n : null;
+}
+
+/** The verified PDF entry with line-end provenance, when the splitter has it. */
+function identifierEntryFor(
+  list: NumberedReferenceList | null,
+  entryNumber: number | null,
+  entry: string | undefined,
+): string | undefined {
+  if (entryNumber === null) return undefined;
+  return list?.identifierEntries?.get(entryNumber) ?? entry;
+}
+
+function withIdentifierEntry(draft: Draft, identifierEntry: string | undefined): Draft {
+  return identifierEntry ? { ...draft, identifierEntry } : draft;
 }
 
 /**
@@ -554,13 +570,16 @@ function readDraft(
      claim must not merge otherwise-unrelated rows merely because both named
      the same number. */
   const entryNumber = located === null ? null : claimedEntryNumber(w.entry);
-  const entry = located === null ? undefined : capEntry(listed!);
+  /* Uncapped while a draft, so `linkFor` can read a DOI at the end of a long
+     entry; capped where the row is written (`buildCitations`). */
+  const entry = located === null ? undefined : listed!;
+  const identifierEntry = identifierEntryFor(list, entryNumber, entry);
   const fields = located ?? said;
   const authors = fields.authors ?? "";
   const year = fields.year ?? "";
   const relevance = scoreCounting(w.relevance, scores, "relevanceAbsent", "relevanceRejected");
   const influence = scoreCounting(w.influence, scores, "influenceAbsent", "influenceRejected");
-  return {
+  return withIdentifierEntry({
     title: clip(fields.title, TITLE_CAP, drops),
     ...(authors ? { authors: clip(authors, AUTHORS_CAP, drops) } : {}),
     ...(year && year.length <= 16 ? { year } : {}),
@@ -571,7 +590,7 @@ function readDraft(
     mentions,
     ...(entry ? { entry } : {}),
     ...(entryNumber === null ? {} : { entryNumber }),
-  };
+  }, identifierEntry);
 }
 
 /** The verified mentions, deduplicated, at most `MAX_MENTIONS`. */
@@ -707,6 +726,63 @@ export function identifiersIn(strings: readonly string[]): { dois: string[]; arx
     }
     for (const m of plain.matchAll(ARXIV_URL)) if (m[1]) arxivs.add(m[1].toLowerCase());
     for (const m of plain.matchAll(ARXIV_TEXT)) if (m[1]) arxivs.add(m[1].toLowerCase());
+  }
+  return { dois: [...dois.values()], arxivs: [...arxivs] };
+}
+
+/** `DOI`, but letting the suffix be empty: a line may break straight after the slash. */
+const DOI_OPEN = /\b(10\.\d{4,9}\/[^\s"'<>?#]*)/gi;
+
+/**
+ * **Every DOI and arXiv id in a PDF reference-list entry**, or `"unreadable"`
+ * when one is there but its end cannot be told (plan 261001a stage 4).
+ *
+ * For a PDF entry this reads the text before `dehyphenate`, so a line end is
+ * still visible. The reader-facing entry remains dehyphenated.
+ *
+ * - **A DOI that ends in `-`, `/` or `_` before a space** may have continued
+ *   on the next line, but those are also legal final suffix characters. Code
+ *   cannot choose, so the entry is `"unreadable"`; it never joins the next run
+ *   into an address the article did not contain.
+ * - **A DOI followed by a space and another DOI-shaped run** may likewise have
+ *   been cut by the line break. With no punctuation boundary it is unreadable,
+ *   including when that next run starts with a capital. After a stripped full
+ *   stop, a lowercase-or-digit run (`10.1016/j.cell. 2020.01.001`) is still
+ *   ambiguous; a capital is treated as the next sentence. A trailing sentence
+ *   period is stripped (`trimDoi`).
+ * - **An arXiv id followed by a digit**, with or without a space between, was
+ *   cut short, and is `"unreadable"` likewise.
+ *
+ * A wrong identifier is worse than a search, so every doubt gives up.
+ */
+export function entryIdentifiers(entry: string): { dois: string[]; arxivs: string[] } | "unreadable" {
+  /* Old-style arXiv ids can contain a hyphen in their category. If it falls at
+     a line end, dehyphenation cannot tell it from a typesetter-added hyphen.
+     Refuse the whole entry even if it also contains another usable id. */
+  if (/(?:\barxiv:\s?|arxiv\.org\/(?:abs|pdf|html)\/)[^\s"'<>?#]*-\r?\n(?=\S)/i.test(entry)) {
+    return "unreadable";
+  }
+  const dois = new Map<string, string>();
+  for (const m of entry.matchAll(DOI_OPEN)) {
+    const raw = m[1] ?? "";
+    const end = (m.index ?? 0) + m[0].length;
+    if (/[-/_]$/.test(raw) && /^\s(?=\S)/.test(entry.slice(end))) return "unreadable";
+    const doi = trimDoi(raw);
+    if (!doi || doi.endsWith("/")) continue;
+    const tail = raw.slice(doi.length);
+    const next = /^\s([^\s"'<>?#]+)/u.exec(entry.slice(end))?.[1];
+    if (next && (tail === "" || (tail === "." && /^[\p{Ll}\d]/u.test(next)))) {
+      return "unreadable";
+    }
+    dois.set(doi.toLowerCase(), doi);
+  }
+  const arxivs = new Set<string>();
+  for (const pattern of [ARXIV_URL, ARXIV_TEXT]) {
+    for (const m of entry.matchAll(pattern)) {
+      if (!m[1]) continue;
+      if (/^\s?\d/.test(entry.slice((m.index ?? 0) + m[0].length))) return "unreadable";
+      arxivs.add(m[1].toLowerCase());
+    }
   }
   return { dois: [...dois.values()], arxivs: [...arxivs] };
 }
@@ -941,7 +1017,8 @@ function fromAnchor(anchor: Anchor): { url: string; linkFrom: CitationLinkFrom }
  * failing that the note blocks among its mentions (a work found only inside a
  * footnote has its entry there).
  *
- * 1. **Exactly one DOI** in the entry's text and hrefs → `doi.org`.
+ * 1. **Exactly one DOI** in the entry's text and hrefs → `doi.org`. A PDF's
+ *    reference-list entry counts as entry text (`entryIdentifiers`).
  * 2. **No DOI and exactly one arXiv id** → `arxiv.org/abs`.
  *    Both only when **no other work in this run shares that entry block**:
  *    a gwern note naming three papers holds three identifiers, or one paper's
@@ -966,9 +1043,21 @@ export function linkFor(
   const entry = entryBlocks(draft, byId);
 
   const alone = entry.every((b) => (claims.get(b.id) ?? 0) <= 1);
-  if (alone && entry.length > 0) {
-    const strings = entry.flatMap((b) => [b.text, ...anchorsOf(b.html).flatMap((a) => a.urls)]);
-    const { dois, arxivs } = identifiersIn(strings);
+  /* A PDF's reference-list entry (plan 261001a stage 4): code split it from the
+     article's own text layer and `verifyEntry` paired it by number, so it is
+     the entry as much as a bibliography block is, and joins rule 1's strings.
+     Only one numbered entry reaches a work (`mergeInto` refuses two), so it is
+     never shared. `draft.entry` here is only ever that entry: a bibliography
+     block's text is attached after the link (`withBlockEntry`). */
+  const listed =
+    draft.entryNumber !== undefined && draft.entry
+      ? entryIdentifiers(draft.identifierEntry ?? draft.entry)
+      : null;
+  if (listed !== "unreadable" && ((alone && entry.length > 0) || listed !== null)) {
+    const strings = alone ? entry.flatMap((b) => [b.text, ...anchorsOf(b.html).flatMap((a) => a.urls)]) : [];
+    const fromBlocks = identifiersIn(strings);
+    const dois = distinct([...fromBlocks.dois, ...(listed?.dois ?? [])]);
+    const arxivs = distinct([...fromBlocks.arxivs, ...(listed?.arxivs ?? [])]);
     if (dois.length === 1 && dois[0]) return { url: doiUrl(dois[0]), linkFrom: "doi" };
     if (dois.length === 0 && arxivs.length === 1 && arxivs[0]) {
       return { url: arxivUrl(arxivs[0]), linkFrom: "arxiv" };
@@ -986,6 +1075,13 @@ export function linkFor(
   if (mentioned) return fromAnchor(mentioned);
 
   return { url: scholarUrl(draft.title, draft.authors), linkFrom: "search" };
+}
+
+/** Identifiers once each, compared as `identifiersIn` does — case-insensitively. */
+function distinct(ids: readonly string[]): string[] {
+  const out = new Map<string, string>();
+  for (const id of ids) if (!out.has(id.toLowerCase())) out.set(id.toLowerCase(), id);
+  return [...out.values()];
 }
 
 /** Rule 4: the one anchor in the mention blocks that IS a mention's own words, or nothing. */
@@ -1092,6 +1188,9 @@ function canonicalUrl(value: string): string {
   }
 }
 
+/** Private `idsByKey` entry: which old row uniquely had this metadata key. */
+const workOwnerKey = (workKey: string): string => `\0citation-work-owner:${workKey}`;
+
 /** Fold `b` into `a`: `a`'s fields win, `b` fills the gaps, the places are unioned. */
 function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
   if (a.entryNumber !== undefined && b.entryNumber !== undefined && a.entryNumber !== b.entryNumber) {
@@ -1110,6 +1209,7 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
   }
   const reference = a.reference ?? b.reference;
   const entry = a.entry ?? b.entry;
+  const identifierEntry = a.identifierEntry ?? b.identifierEntry;
   const entryNumber = a.entryNumber ?? b.entryNumber;
   const authors = a.authors ?? b.authors;
   const year = a.year ?? b.year;
@@ -1125,6 +1225,7 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
     ...(reference ? { reference } : {}),
     mentions,
     ...(entry ? { entry } : {}),
+    ...(identifierEntry ? { identifierEntry } : {}),
     ...(entryNumber === undefined ? {} : { entryNumber }),
   };
 }
@@ -1158,16 +1259,32 @@ function mergeBy<T extends { draft: Draft }>(
   return out;
 }
 
-/** Ids from the list this run replaces, by `key`. A key two old rows share lends nothing. */
+/**
+ * Ids from the list this run replaces, by `key`.
+ *
+ * A key two old rows share lends nothing. That includes a `workKey` held as
+ * one row's primary key while another, identifier-keyed row has the same
+ * title, author and year: the latter's primary key hides the collision, but it
+ * still means a later identifier row cannot tell which old work it is.
+ */
 export function idsByKey(onDisk: Citations | null): Map<string, string> {
   const seen = new Map<string, string>();
   const ambiguous = new Set<string>();
+  const workClaims = new Map<string, number>();
+  const workOwners = new Map<string, string>();
   for (const c of onDisk?.citations ?? []) {
     if (!c || typeof c.id !== "string" || typeof c.key !== "string") continue;
     if (seen.has(c.key)) ambiguous.add(c.key);
     else seen.set(c.key, c.id);
+    const { workKey } = keysOf(c);
+    workClaims.set(workKey, (workClaims.get(workKey) ?? 0) + 1);
+    if (!workOwners.has(workKey)) workOwners.set(workKey, c.id);
   }
   for (const key of ambiguous) seen.delete(key);
+  for (const [workKey, claims] of workClaims) {
+    if (claims > 1) seen.delete(workKey);
+    else seen.set(workOwnerKey(workKey), workOwners.get(workKey)!);
+  }
   return seen;
 }
 
@@ -1318,19 +1435,45 @@ export function buildCitations(
      would both claim the old id. */
   const keyed = works.map((w) => {
     const { idKey, workKey } = keysOf({ ...w.draft, url: w.url, linkFrom: w.linkFrom });
-    return { ...w, key: idKey ?? workKey };
+    return { ...w, key: idKey ?? workKey, idKey, workKey };
   });
   const counts = new Map<string, number>();
   for (const w of keyed) counts.set(w.key, (counts.get(w.key) ?? 0) + 1);
+  const workCounts = new Map<string, number>();
+  for (const w of keyed) workCounts.set(w.workKey, (workCounts.get(w.workKey) ?? 0) + 1);
   const taken = new Set<string>(opts.inherit?.values() ?? []);
+  /* **A work whose link improved keeps its id** (plan 261001a stage 4). A row
+     that was a Scholar search last run was keyed by its `workKey`; if this run
+     reads a DOI for it — a PDF entry's, now that those are read — its key is
+     `doi:…` and the lookup by key misses, which would orphan its stage-3 find,
+     lookup and investigation. So an identifier-keyed row with no id by its own
+     key takes the id its `workKey` had, when that `workKey` is unique in both
+     lists (`idsByKey` removes a previous-list collision even when the other
+     old row was identifier-keyed). `idsByKey` also records the unique old
+     owner of every metadata key: if a DOI key and a work key point to two
+     different old rows (including a two-work DOI swap), neither id is safe.
+     The current-list count also governs a search row's ordinary key lookup:
+     one search and one DOI row with the same metadata are just as ambiguous as
+     two DOI rows. The reverse, a DOI row falling back to a search, keys nothing
+     new and mints, as before. */
+  const inheritedBy = (w: (typeof keyed)[number]): string | undefined => {
+    if (w.idKey === null && workCounts.get(w.workKey) !== 1) return undefined;
+    const own = counts.get(w.key) === 1 ? opts.inherit?.get(w.key) : undefined;
+    const oldWorkOwner =
+      workCounts.get(w.workKey) === 1 ? opts.inherit?.get(workOwnerKey(w.workKey)) : undefined;
+    if (own !== undefined && oldWorkOwner !== undefined && own !== oldWorkOwner) return undefined;
+    if (own !== undefined || w.idKey === null || workCounts.get(w.workKey) !== 1) return own;
+    return opts.inherit?.get(w.workKey);
+  };
 
   const citations: CitedWork[] = keyed.map((w) => {
-    const old = counts.get(w.key) === 1 ? opts.inherit?.get(w.key) : undefined;
-    const { entryNumber: _entryNumber, ...draft } = w.draft;
+    const old = inheritedBy(w);
+    const { entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
     return {
       id: old ?? mintUniqueId(taken),
       key: w.key,
       ...draft,
+      ...(entry ? { entry: capEntry(entry) } : {}),
       ...placesOf(draft, blocks, position, markers),
       url: w.url,
       linkFrom: w.linkFrom,
