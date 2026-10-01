@@ -104,7 +104,9 @@ afterEach(async () => {
 });
 
 const jumps: BlockId[] = [];
-const ABOUT = '.gloss-sort-trail [aria-label="About these passages"]';
+/* The band's (i), in its corner since 2026-10-01 (spya-ucu35y, plan 261001m);
+   it was at the order row's end. Its card opens with the mode's catalog words. */
+const ABOUT = '.mode-band > .band-about[aria-label="About this mode"]';
 const about = () => host.querySelector<HTMLButtonElement>(ABOUT)!;
 const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
 const orders: FaqOrder[] = [];
@@ -195,7 +197,8 @@ describe("FaqPanel", () => {
   });
 
   /* SPIDERYARN-READING2-62: the promise left the foot for an (i) at the end of
-     the order row, as Trajectory's did for 52. Plan 260930d. */
+     the order row, as Trajectory's did for 52 (plan 260930d); the (i) moved to
+     the band's corner on 2026-10-01 (plan 261001m). */
   it("says the words are checked and the pairing is the model's reading, behind an (i) rather than on the page", async () => {
     await draw(owner());
     expect(FAQ_PROMISE).toContain("checked against it");
@@ -209,7 +212,7 @@ describe("FaqPanel", () => {
     expect(tip()).toBeNull();
     /* A tap — a click with no hover first — opens it: touch has no hover. */
     await act(async () => info.click());
-    expect(tip()).toBe(FAQ_PROMISE);
+    expect(tip()).toContain(FAQ_PROMISE);
     expect(info.getAttribute("aria-expanded")).toBe("true");
     await act(async () => info.click());
     expect(info.getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
@@ -230,11 +233,11 @@ describe("FaqPanel", () => {
     await drawAccess({ kind: "visitor", faq: { questions: [FRIDGE, ISOLATED] } });
     expect(host.textContent).not.toContain(FAQ_PROMISE);
     await act(async () => about().click());
-    expect(tip()).toBe(FAQ_PROMISE);
+    expect(tip()).toContain(FAQ_PROMISE);
     await act(async () => about().click());
   });
 
-  it("draws no order for a single question, only the (i)", async () => {
+  it("draws no order row for a single question, and keeps the (i) in the corner", async () => {
     await draw(owner({ faq: artefact([{ ...FRIDGE, difficulty: 0.5, centrality: 0.8 }]) }), { order: "difficulty" });
     expect(host.querySelector(".gloss-sort-group")).toBeNull();
     expect(host.querySelector("#faq-bar")).toBeNull();
@@ -246,9 +249,8 @@ describe("FaqPanel", () => {
     await draw(owner({ faq: artefact([FRIDGE], { ...NOTHING_DROPPED, unquoted: 2 }) }));
     expect(host.textContent).not.toContain("left out in checking");
     await act(async () => about().click());
-    expect(tip()).toBe(
-      `${FAQ_PROMISE}2 more questions or passages the model gave were left out in checking.`,
-    );
+    expect(tip()).toContain(FAQ_PROMISE);
+    expect(tip()).toContain("2 more questions or passages the model gave were left out in checking.");
     await act(async () => about().click());
   });
 
@@ -258,7 +260,11 @@ describe("FaqPanel", () => {
     expect(host.textContent).toContain(FAQ_NONE);
     expect(host.textContent).not.toContain("Find them again");
     expect(host.textContent).not.toContain(FAQ_PROMISE);
-    expect(host.querySelector(ABOUT)).toBeNull();
+    /* The band still has its (i) — every mode does — but no promise about
+       passages there are none of. */
+    await act(async () => about().click());
+    expect(tip()).not.toContain(FAQ_PROMISE);
+    await act(async () => about().click());
   });
 
   it("offers to find them when nobody has", async () => {
@@ -432,8 +438,8 @@ describe("the prioritised order", () => {
     ]) {
       await drawAccess(access);
       expect(questionsShown()).toEqual([ISOLATED.question, FRIDGE.question]);
-      /* The row is there for the (i) alone: no order to offer. */
-      expect(host.querySelector(".gloss-sort-group")).toBeNull();
+      /* No order to offer, so no row; the (i) is the band's, in its corner. */
+      expect(host.querySelector(".gloss-sort")).toBeNull();
       expect(host.querySelector(ABOUT)).not.toBeNull();
       expect(host.querySelector("#faq-bar")).toBeNull();
       expect(host.querySelector(".score-bars")).toBeNull();

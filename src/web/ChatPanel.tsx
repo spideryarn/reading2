@@ -474,6 +474,8 @@ export function ChatPanel({
        wants; see § mode band in styles.css. */
     <ModeSurface
       feature={`chat${remember ? " remember" : ""}`}
+      /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
+      mode={remember ? "remember" : "chat"}
       label={remember ? "Remember what you took from this article" : "Chat about this article"}
       head={
         <>

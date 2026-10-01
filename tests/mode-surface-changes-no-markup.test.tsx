@@ -401,18 +401,18 @@ const PLAIN_ATTRS = ["aria-label", "class"] as const;
 
 /** Search, baseline § "Search mode" — four children, no `.band-head`. */
 const SEARCH: BandShape = {
-  className: "mode-band srch",
+  className: "mode-band srch has-about",
   label: "Search this article",
   head: false,
-  children: ["div.srch-box", "div.srch-sort", "p.srch-legend", "ul.srch-hits"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.srch-box", "div.srch-sort", "p.srch-legend", "ul.srch-hits"],
 };
 
 /** Chat with a conversation open, baseline § "Chat mode". */
 const CHAT: BandShape = {
-  className: "mode-band chat",
+  className: "mode-band chat has-about",
   label: "Chat about this article",
   head: true,
-  children: ["div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title, `ArmedDelete` in its unarmed state, and the "All conversations"
      close. `subMode` renders nothing for this fixture. The header is the one
      part of the band the migration restructured — it went from inline JSX to a
@@ -430,10 +430,10 @@ const CHAT: BandShape = {
  * as the rest.
  */
 const REMEMBER: BandShape = {
-  className: "mode-band chat remember",
+  className: "mode-band chat remember has-about",
   label: "Remember what you took from this article",
   head: true,
-  children: ["div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title, `ArmedDelete` in its unarmed state, and the "All conversations"
      close. `subMode` renders nothing for this fixture. The header is the one
      part of the band the migration restructured — it went from inline JSX to a
@@ -461,10 +461,10 @@ const REMEMBER: BandShape = {
  * from that source; not measured in Chrome.
  */
 const SEARCH_VISITOR: BandShape = {
-  className: "mode-band srch",
+  className: "mode-band srch has-about",
   label: "Search this article",
   head: false,
-  children: ["div.srch-empty"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.srch-empty"],
 };
 
 /**
@@ -478,10 +478,10 @@ const SEARCH_VISITOR: BandShape = {
  * so it predates the migration. Read from that source; not measured in Chrome.
  */
 const CHAT_LIST: BandShape = {
-  className: "mode-band chat",
+  className: "mode-band chat has-about",
   label: "Chat about this article",
   head: true,
-  children: ["div.band-head", "ol.chat-threads", "form.chat-composer"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "ol.chat-threads", "form.chat-composer"],
   /* No `ArmedDelete` with nothing open — the header's third slot is the
      new-conversation button instead, and the delete is simply absent. */
   headChildren: ["h2", "button.chat-icon[title,type]"],
@@ -1674,27 +1674,29 @@ const VISITOR: BandShape = {
    draws the same two children with a sentence inside the scroller — so the
    empty tree is not a second shape. */
 const SUMMARY: BandShape = {
-  className: "mode-band summ",
+  className: "mode-band summ has-about",
   label: "Summary",
   head: false,
-  children: ["div.summ-controls", "div.summ-scroll"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.summ-controls", "div.summ-scroll"],
 };
 
 const GLOSSARY_SHAPE: BandShape = {
-  className: "mode-band gloss",
+  className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["div.band-head", "div.gloss-ask", "div.gloss-list", "div.gloss-foot"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-ask", "div.gloss-list", "div.gloss-foot"],
   /* `WrittenForYou` is in this row too and renders nothing for an owner who has
-     not run with a profile, which is this fixture. The count is the row. */
-  headChildren: ["span.gloss-count"],
+     not run with a profile, which is this fixture. The count used to be the row;
+     it moves into the (i) card since 2026-10-01, plan 261001m, so the row is empty. */
+  headChildren: [],
 };
 
 /**
  * **Glossary before the glossary has arrived — and the header is EMPTY.**
  *
  * Both of the header's children are gated on `glossary` being non-null
- * (`GlossaryPanel.tsx` — the `.gloss-count` span and `WrittenForYou`), so what
+ * (`GlossaryPanel.tsx` — the `.gloss-count` span (the (i) since 2026-10-01, plan
+ * 261001m) and `WrittenForYou`), so what
  * ships today in this state is `<div class="band-head"></div>` with nothing in
  * it. That is the exact inverse of the defect stage 1 fixed: `ModeSurface`
  * deliberately renders **no** header for an absent, null or boolean `head`, so
@@ -1706,10 +1708,10 @@ const GLOSSARY_SHAPE: BandShape = {
  * conditionals inside it.
  */
 const GLOSSARY_LOADING: BandShape = {
-  className: "mode-band gloss",
+  className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["div.band-head", "div.gloss-ask", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-ask", "p.gloss-quiet"],
   headChildren: [],
 };
 
@@ -1719,102 +1721,106 @@ const GLOSSARY_LOADING: BandShape = {
  * in the band's own children and therefore worth its own literal.
  */
 const GLOSSARY_VISITOR: BandShape = {
-  className: "mode-band gloss",
+  className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["div.band-head", "div.gloss-list"],
-  headChildren: ["span.gloss-count"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-list"],
+  headChildren: [],
 };
 
 const IDEAS_SHAPE: BandShape = {
-  className: "mode-band gloss ideas",
+  className: "mode-band gloss ideas has-about",
   label: "Ideas",
   head: true,
-  children: ["div.band-head", "div.ideas-scroll"],
-  headChildren: ["span.gloss-count"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.ideas-scroll"],
+  headChildren: [],
 };
 
 /** Empty header, for the same reason as Glossary's — both children are gated on
  *  `ideas`. And the body drops from three children to two. */
 const IDEAS_LOADING: BandShape = {
-  className: "mode-band gloss ideas",
+  className: "mode-band gloss ideas has-about",
   label: "Ideas",
   head: true,
-  children: ["div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.gloss-quiet"],
   headChildren: [],
 };
 
 const QUOTES_SHAPE: BandShape = {
-  className: "mode-band quotes",
+  className: "mode-band quotes has-about",
   label: "Quotes",
   head: true,
-  children: ["div.band-head", "div.quotes-list", "div.quotes-foot"],
-  headChildren: ["span.quotes-count"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.quotes-list", "div.quotes-foot"],
+  headChildren: [],
 };
 
 /** Empty header again. */
 const QUOTES_LOADING: BandShape = {
-  className: "mode-band quotes",
+  className: "mode-band quotes has-about",
   label: "Quotes",
   head: true,
-  children: ["div.band-head", "p.quotes-quiet"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.quotes-quiet"],
   headChildren: [],
 };
 
 const TIMELINE_SHAPE: BandShape = {
-  className: "mode-band gloss timeline",
+  className: "mode-band gloss timeline has-about",
   label: "Timeline",
   head: true,
-  children: ["div.band-head", "div.tl-scroll"],
-  headChildren: ["span.gloss-count"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.tl-scroll"],
+  headChildren: [],
 };
 
-/** Empty header again — the count is Timeline's only header child. */
+/** Empty header again — and the count that was Timeline's only header child is
+ *  in the (i) since 2026-10-01, plan 261001m. */
 const TIMELINE_LOADING: BandShape = {
-  className: "mode-band gloss timeline",
+  className: "mode-band gloss timeline has-about",
   label: "Timeline",
   head: true,
-  children: ["div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.gloss-quiet"],
   headChildren: [],
 };
 
 /* Tweets — see the note above `TWEET_THREAD`: these are what the band draws
    now, not a baseline. */
 const TWEETS_SHAPE: BandShape = {
-  className: "mode-band gloss tweets",
+  className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: true,
-  children: ["div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4", "div.tw:flex.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-2.tw:px-4.tw:py-2"],
+  /* No foot for a settled thread since 2026-10-01: who wrote it went into the
+     (i), first in the band (spya-ucu35y, plan 261001m). */
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
 /** No thread yet: no header, no footer, only the empty state. */
 const TWEETS_NONE: BandShape = {
-  className: "mode-band gloss tweets",
+  className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: false,
-  children: ["div.gloss-empty"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.gloss-empty"],
 };
 
 const TWEETS_LOADING: BandShape = {
-  className: "mode-band gloss tweets",
+  className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: false,
-  children: ["p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "p.gloss-quiet"],
 };
 
-/** A visitor has the counts and the posts, and no provenance footer. */
+/** A visitor has the posts and the (i), and no footer. */
 const TWEETS_VISITOR: BandShape = {
-  className: "mode-band gloss tweets",
+  className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: true,
-  children: ["div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
 /**
  * Debate, and its header is the one that **cannot** come out empty: the globe
- * and the `<h2>` are unconditional, and only the count is gated.
+ * and the `<h2>` are unconditional (the count that was gated moved into the (i)
+ * since 2026-10-01, plan 261001m).
  *
  * The icon's signature is long because `lucide-react` writes its presentation
  * attributes onto the `<svg>`. Recorded rather than trimmed — an icon that
@@ -1827,10 +1833,11 @@ const TWEETS_VISITOR: BandShape = {
  * anything. See `NameBar` in `src/web/DebatePanel.tsx`.
  */
 const DEBATE_SHAPE: BandShape = {
-  className: "mode-band gloss dbt",
+  className: "mode-band gloss dbt has-about",
   label: "Debate",
   head: true,
   children: [
+    "button.band-about[aria-expanded,aria-label,type]",
     "div.band-head",
     "p.dbt-frame",
     /* `.dbt-name` since 2026-09-29, when the relevance bar (`.dbt-rel`, drawn
@@ -1841,17 +1848,17 @@ const DEBATE_SHAPE: BandShape = {
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
     "h2",
-    "span.gloss-count",
   ],
 };
 
-/** The same header minus its count — not empty, which is what makes Debate the
+/** The same header, which no longer has a count either (the (i) since 2026-10-01,
+ *  plan 261001m) — not empty, which is what makes Debate the
  *  control for the five bands whose headers do empty out. */
 const DEBATE_LOADING: BandShape = {
-  className: "mode-band gloss dbt",
+  className: "mode-band gloss dbt has-about",
   label: "Debate",
   head: true,
-  children: ["div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.gloss-quiet"],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
     "h2",
@@ -1859,10 +1866,10 @@ const DEBATE_LOADING: BandShape = {
 };
 
 const QUIZ_SHAPE: BandShape = {
-  className: "mode-band gloss quiz",
+  className: "mode-band gloss quiz has-about",
   label: "Quiz",
   head: true,
-  children: ["div.band-head", "div.quiz-one"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.quiz-one"],
   headChildren: ["div.rmb-sub"],
 };
 
@@ -1882,20 +1889,20 @@ const QUIZ_SHAPE: BandShape = {
  * much a state the next refactor can create, which is what this file is for.
  */
 const QUIZ_NO_SUBMODE: BandShape = {
-  className: "mode-band gloss quiz",
+  className: "mode-band gloss quiz has-about",
   label: "Quiz",
   head: true,
-  children: ["div.band-head", "div.quiz-one"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.quiz-one"],
   headChildren: [],
 };
 
 /** No questions written yet: the one question and the rewrite footer are
  *  replaced by a single empty-state box. */
 const QUIZ_NONE: BandShape = {
-  className: "mode-band gloss quiz",
+  className: "mode-band gloss quiz has-about",
   label: "Quiz",
   head: true,
-  children: ["div.band-head", "div.gloss-empty"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-empty"],
   headChildren: ["div.rmb-sub"],
 };
 
@@ -1909,19 +1916,19 @@ const QUIZ_NONE: BandShape = {
  * empty in that ordinary state, 19px of nothing on a landscape phone.
  */
 const DIAGRAM_SHAPE: BandShape = {
-  className: "mode-band diag",
+  className: "mode-band diag has-about",
   label: "Diagram",
   head: false,
-  children: ["div.diag-kinds[aria-label,role]", "div.sk"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.diag-kinds[aria-label,role]", "div.sk"],
 };
 
 /** A visitor gets no picker at all — not a hidden one — so the band is one
  *  child rather than two. */
 const DIAGRAM_VISITOR: BandShape = {
-  className: "mode-band diag",
+  className: "mode-band diag has-about",
   label: "Diagram",
   head: false,
-  children: ["div.sk"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.sk"],
 };
 
 /**
@@ -1939,11 +1946,12 @@ const DIAGRAM_VISITOR: BandShape = {
  * be cut to one line to fit (OutlinePanel.tsx § `fit`).
  */
 const OUTLINE: BandShape = {
-  className: "mode-band outln",
+  className: "mode-band outln has-about",
   label: "Structure",
   head: false,
   attrs: ["aria-label", "class", "data-outline-clamp", "data-outline-rung"],
   children: [
+    "button.band-about[aria-expanded,aria-label,type]",
     "ol.outln-list[aria-activedescendant,aria-label,role,tabindex]",
     "div.outln-measure[aria-hidden]",
   ],
@@ -2149,7 +2157,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(OUTLINE);
   });
 
-  it("draws Tweets' band for the owner with a thread: header, posts, provenance footer", async () => {
+  it("draws Tweets' band for the owner with a thread: the (i), header and posts", async () => {
     await paint(mountTweets(tweetsOwner(TWEET_THREAD)));
     expectShape(TWEETS_SHAPE);
   });
@@ -2164,7 +2172,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(TWEETS_LOADING);
   });
 
-  it("draws Tweets' band for a visitor, with the counts and the posts and no footer", async () => {
+  it("draws Tweets' band for a visitor, with the (i) and the posts and no footer", async () => {
     await paint(mountVisitorTweets());
     expectShape(TWEETS_VISITOR);
   });

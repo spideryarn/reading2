@@ -513,7 +513,10 @@ describe("saying it is working, and offering a second try", () => {
   it("stops spinning once the embeddings have landed", async () => {
     mount("force");
     await settle();
-    expect(strip()?.querySelector(".cmt-spinner"), "still spinning after the answer").toBeNull();
+    expect(host.querySelector(".cmt-spinner"), "still spinning after the answer").toBeNull();
+    /* And the strip itself goes: the ready count is in the band's (i) since
+       2026-10-01 (spya-ucu35y), spoken by an `.sr-only` live region. */
+    expect(strip(), "the ready count is still a visible strip").toBeNull();
   });
 
   it("gives Force a way to ask again when the embeddings fail", async () => {
@@ -923,7 +926,11 @@ describe("what a scatter says about itself", () => {
         : new Response(JSON.stringify({ model: "m", blocks: 2, eligible: 2, omitted: 0, pairs: [] }), { status: 200 }),
     );
 
-  it("stands in the heading row, and the scatter grows no strip", async () => {
+  /* **In the band's (i) since 2026-10-01** (spya-ucu35y, plan 261001m). It
+     was an icon of its own in `.band-head`, kept there because that row cannot
+     wrap — the argument docs/project/diagram.md records. The band's (i) is out
+     of flow in the band's corner, so it costs no line in any row at all. */
+  it("is in the band's (i), and the scatter grows no strip", async () => {
     placedProjection();
     mount("drift");
     await settle();
@@ -932,32 +939,8 @@ describe("what a scatter says about itself", () => {
        is the whole of the change. Asserted as an absence because the height it
        used to take is exactly what a regression would hand back. */
     expect(host.querySelector(".diag-note"), "the scatter grew a strip again").toBeNull();
-    /* **Which row it is in, because that is the whole of the claim and jsdom
-       cannot check the rest of it.** This test was called "costs no line of its
-       own" and asserted only the two lines above — and no assertion it could
-       hold would have caught what was wrong, because jsdom has no layout and
-       wrapping is invisible to it. That is how three copies of a false claim got
-       past a green suite: the icon was on `.diag-opts`, which wraps, and at the
-       ideal band width Drift's two chip groups plus the icon do not fit on one
-       line. `.band-head` has no `flex-wrap`, so it cannot gain a flex line — and
-       `.band-head h2` now carries the one-line-cut four, so it cannot gain a
-       *text* line either, which was the fourth version of the same mistake.
-       tests/diagram-css.test.ts holds those four; docs/project/diagram.md
-       § Why the heading row and not the control row has the whole sequence.
-
-       So the honest name is where it lives, and the honest assertion is the
-       parent. This can go red — if the icon is moved back onto a wrapping row it
-       fails here — and it does not pretend to measure a height. The height was
-       measured elsewhere, on a throwaway preview page since deleted: 96 widths
-       from 180px to 560px on 2026-08-31, zero height cost at every one. ⟨Sol⟩
-       found the false claim; a browser sweep the same day found that the first
-       fix for it had not fixed it. */
-    const icon = host.querySelector(".diag-about");
-    expect(icon, "nothing says where the picture came from").not.toBeNull();
-    expect(
-      icon?.parentElement?.className,
-      "the caveat is back on a row that can wrap",
-    ).toBe("band-head");
+    expect(host.querySelector(".band-head"), "the caveat's old row came back").toBeNull();
+    expect(host.querySelector(".mode-band > .band-about"), "nothing says where the picture came from").not.toBeNull();
   });
 
   it("still says it out loud when the picture lands", async () => {
@@ -977,51 +960,30 @@ describe("what a scatter says about itself", () => {
     expect(live[0]?.className, "the sentence is visible again, taking the space it used to").toBe("sr-only");
   });
 
-  it("opens a card with both halves of what it has to say", { timeout: 20000 }, async () => {
-    /* **The other two tests pass on a control whose card never opens**, which
-       ⟨Sol⟩ named: they read the DOM around the button and the button's own
-       name, and a `<Tooltip>` whose content threw or whose trigger lost its
-       handlers would leave both of them green. So this one opens it and reads
-       it. The focus route rather than hover, for the reason the chip-card tests
-       above give: `Tooltip` includes `useFocus`, and a jsdom hover reaches
-       nothing.
-
-       The open-and-read dance is copied from `cardFor` above rather than
-       shared, because that helper lives inside a describe with its own fetch
-       stub and this one needs a projection that landed. Two short copies beat
-       one helper that has to take the stub as an argument. */
+  it("opens a card with both halves of what it has to say", async () => {
+    /* **The test above passes on a control whose card never opens**, which
+       ⟨Sol⟩ named: a `<Tooltip>` whose content threw or whose trigger lost its
+       handlers would leave it green. So this one opens it and reads it — a
+       tap, which is what the band's (i) answers on a touch device. */
     placedProjection();
     mount("drift");
     await settle();
-    const icon = host.querySelector<HTMLElement>(".diag-about");
+    const icon = host.querySelector<HTMLElement>(".mode-band > .band-about");
     expect(icon, "no control to open").not.toBeNull();
-    icon?.focus();
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => icon?.click());
     const cards = document.querySelectorAll('[role="tooltip"]');
-    expect(cards, "focusing the icon opened no card, or more than one").toHaveLength(1);
-    const card = cards[0];
-    expect(card?.querySelector(".tip-soon-head")?.textContent).toBe("What is drawn");
-    const body = card?.textContent ?? "";
+    expect(cards, "pressing the icon opened no card, or more than one").toHaveLength(1);
+    const body = cards[0]?.textContent ?? "";
     expect(body, "the counts are not in the card").toContain("2 paragraphs");
+    expect(body, "the left-out paragraphs are not in the card").toContain("3 too short");
     /* The second paragraph is the whole reason this is on screen: a percentage
        cannot say that the flattening is one-directional, and a card that had
        lost it would still look like a card. */
     expect(body, "the asymmetry is not in the card").toContain("Close-together dots");
     expect(body, "the model is not named").toContain("voyage-4");
-    icon?.blur();
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => icon?.click());
   });
-
-  it("names the counts on the control itself, not only inside the card", async () => {
-    /* "Info" is a noun, and a control whose whole accessible name is a noun is
-       one a screen reader cannot skim. The one hard number here — how much of
-       the article is not drawn — must not be reachable only by opening
-       something. */
-    placedProjection();
-    mount("drift");
-    await settle();
-    const name = host.querySelector(".diag-about")?.getAttribute("aria-label") ?? "";
-    expect(name).toContain("2 paragraphs");
-    expect(name).toContain("3 too short");
-  });
+  /* A fourth test held the counts in the old icon's own accessible name. The
+     band's (i) is named for the mode, the same in every band; the counts
+     reach a screen reader through the live region above instead. */
 });

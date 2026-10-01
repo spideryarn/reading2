@@ -585,7 +585,7 @@ export function StructurePanel({
   const nothing = proj.columnA.rows.length === 0;
 
   return (
-    <ModeSurface label="Structure" feature="struct" {...(surfaceRef ? { ref: surfaceRef } : {})}>
+    <ModeSurface label="Structure" feature="struct" mode="structure" {...(surfaceRef ? { ref: surfaceRef } : {})}>
       {nothing ? (
         /* **A sentence, not an error.** A piece with no parts is a real article
            — a short one the hierarchy stage put under a single root — so this

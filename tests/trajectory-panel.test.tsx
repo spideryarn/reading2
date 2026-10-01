@@ -626,19 +626,18 @@ describe("the panel", () => {
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.disabled).toBe(true);
   });
 
-  it("keeps the promise in the head's info tooltip, not the foot, and says how much of the Quotes Most walks (52)", async () => {
+  /* The (i) is the band's, in its corner, since 2026-10-01 (spya-ucu35y, plan
+     261001m); it was the head's own before that. */
+  it("keeps the promise in the band's info tooltip, not the foot, and says how much of the Quotes Most walks (52)", async () => {
     const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
-    const info = () => host.querySelector<HTMLButtonElement>('.band-head [aria-label="About this route"]')!;
+    const info = () => host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
     await draw(owner(), view());
     expect(host.querySelector(".traj-foot")?.textContent ?? "").not.toContain("Quotes");
     expect(info().hasAttribute("title"), "a tooltip, not a title").toBe(false);
-    const end = host.querySelector(".traj-head-end")!;
-    expect(end, "the depths-and-info group is last in the head").toBe(host.querySelector(".traj-head")!.lastElementChild);
-    expect(info(), "the info control follows the depths inside that group").toBe(end.lastElementChild);
     expect(tip()).toBeNull();
     /* A tap — a click, with no hover first — opens it: touch has no hover. */
     await act(async () => info().click());
-    expect(tip()).toBe(trajectoryPromise(false));
+    expect(tip()).toContain(trajectoryPromise(false));
     expect(info().getAttribute("aria-expanded")).toBe("true");
     await act(async () => info().click());
     expect(info().getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
@@ -1051,14 +1050,13 @@ describe("the step controls name their keys", () => {
     expect(tip()).toContain("On to the next stop along the route.");
   });
 
-  /* 73: the (i) rides with the depth buttons, so when the head is too narrow
-     for one row it breaks before them and never leaves the (i) alone on a row.
-     The width itself is a browser check (plan 260930h). */
-  it("keeps the info button in one group with the depth buttons", async () => {
+  /* 73 kept the head's own (i) in one group with the depth buttons. Since
+     2026-10-01 the (i) is the band's, so the head has none, and the depths
+     are the group's only content. */
+  it("leaves the head without an info button of its own", async () => {
     await draw(owner(), view());
-    const info = host.querySelector('.traj-head [aria-label="About this route"]')!;
-    expect(info.parentElement).toBe(host.querySelector(".traj-depths")!.parentElement);
-    expect(info.parentElement!.classList.contains("traj-head-end")).toBe(true);
+    expect(host.querySelector(".traj-head .band-about, .traj-head [aria-label=\"About this route\"]")).toBeNull();
+    expect(host.querySelector(".traj-depths")!.parentElement!.classList.contains("traj-head-end")).toBe(true);
   });
 });
 

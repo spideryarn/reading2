@@ -70,6 +70,7 @@ import {
 } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -364,26 +365,49 @@ export function TimelinePanel({
     />
   );
 
+  /* What the band's (i) adds after the mode's own words: how many events, how
+     many of them carry a date, and who read them out. Greg, 2026-10-01
+     (spya-ucu35y): *"how many X (of y) … what model was used"*; plan 261001m.
+     **Only the count and the provenance move** (GPT Sol's plan review, P1):
+     the year line and the thin-timeline note stay in the band, because the
+     rows are read through them. The provenance is the owner's artefact's — a
+     visitor's carries none (src/public-types.ts). */
+  const made = owner?.timeline ?? null;
+  const dated = events.filter((e) => e.dating.kind === "dated").length;
+  const about = timeline ? (
+    <>
+      <p>
+        {events.length === 1 ? "One event" : `${events.length} events`}
+        {events.length > 0 ? `, ${dated} of them with a date.` : "."}
+      </p>
+      {made && (
+        <AboutMade
+          verb="Read"
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
+  ) : null;
+
   return (
     <ModeSurface
       label="Timeline"
       feature="gloss timeline"
-      /* **A fragment, because the count is this row's only child.** Gated on
-          `timeline`, so the header is empty while the events are coming —
-          `head={timeline && …}` would hand the surface `null` and no
-          `.band-head` would be drawn at all. */
-      head={
-        <>
-          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the event count below it. */}
-          {timeline && (
-            <span className="gloss-count">
-              {events.length} {events.length === 1 ? "event" : "events"}
-            </span>
-          )}
-        </>
-      }
+      mode="timeline"
+      about={about}
+      /* **An empty row, kept on purpose for now.** The mode's name went on
+          2026-09-05 — the Dock says it (§ Stage 5 of
+          docs/plans/260905d-declutter-the-reading-view-top-bars.md) — and the
+          event count, its only child, on 2026-10-01 to the band's (i) (plan
+          261001m). It was a fragment so the row did not vanish while the
+          events were coming; it stays one so the (i) has a row to sit in
+          rather than lying over whichever of the band's many first rows
+          (loading, empty, stale, the year line) is drawn. Dropping it would
+          mean padding each of those clear of the (i) instead. */
+      head={<></>}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the

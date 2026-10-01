@@ -82,7 +82,6 @@ const {
   identificationEvidence,
   keptNote,
   leadNote,
-  searchedOn,
   sourcesNote,
 } = await import("../src/web/DebatePanel.js");
 
@@ -263,6 +262,17 @@ function press(el: Element | null | undefined) {
 }
 
 const text = () => host.textContent ?? "";
+
+/* **What the band's (i) says** — the count, the foot lines, the extracts-only
+   sentence and when it was searched moved there on 2026-10-01 (spya-ucu35y,
+   plan 261001m). Opens it, reads the card, and closes it again. */
+function card(): string {
+  const info = host.querySelector(".mode-band > .band-about");
+  press(info);
+  const said = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+  press(info);
+  return said;
+}
 
 beforeEach(() => {
   jumped.length = 0;
@@ -896,8 +906,8 @@ describe("the owner's foot lines", () => {
         }),
       }),
     );
-    expect(text()).toContain("9");
-    expect(text()).toContain("5");
+    expect(card()).toContain("9");
+    expect(card()).toContain("5");
   });
 
   /* **Both searches keep their own numbers under the one list.** The tempting
@@ -921,7 +931,7 @@ describe("the owner's foot lines", () => {
         }),
       }),
     );
-    const foot = host.querySelector(".dbt-foot")?.textContent ?? "";
+    const foot = card();
     expect(foot).toContain("what it claims");
     expect(foot).toContain("7");
     expect(foot).not.toContain("replies to this piece");
@@ -929,21 +939,19 @@ describe("the owner's foot lines", () => {
 });
 
 describe("searchedAt is displayed provenance, not staleness", () => {
-  /* The date is asserted through the panel's own formatter rather than as
-     `5 September 2026`: the browser's locale decides the word order, and a test
-     that hardcodes one is testing the box it runs on. */
+  /* In the band's (i) since 2026-10-01, in `AboutMade`'s words. The year is
+     the one part of the date no locale reorders. */
   it("says when the search ran, on an artefact that is perfectly current", () => {
     paint(owner());
-    expect(text()).toContain("Searched on");
-    expect(text()).toContain(searchedOn("2026-09-05T10:00:00.000Z"));
-    expect(searchedOn("2026-09-05T10:00:00.000Z")).toContain("2026");
+    expect(text()).not.toContain("Searched");
+    expect(card()).toMatch(/Searched by .*2026/);
   });
 
   it("says something different when the article has moved underneath it", () => {
     paint(owner({ stale: true }));
     /* Both, and they are not the same sentence: the search is still dated, and
        the article changing is a separate fact with its own banner. */
-    expect(text()).toContain("Searched on");
+    expect(card()).toContain("Searched by");
     expect(text()).toContain("The article has changed");
   });
 });
@@ -1103,9 +1111,9 @@ describe("the bar over how firmly a page identifies this article", () => {
   it("moves the head count with the bar, because it counts what is on screen", () => {
     /* `7 excerpts` over four rows is the same disagreement one line up. */
     paint(owner({ debate: artefact({ claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) } }) }), "named");
-    expect(host.querySelector(".gloss-count")?.textContent).toBe("1 excerpt");
+    expect(card()).toContain("1 excerpt on screen.");
     paint(owner({ debate: artefact({ claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) } }) }), null);
-    expect(host.querySelector(".gloss-count")?.textContent).toBe("0 excerpts");
+    expect(card()).toContain("0 excerpts on screen.");
   });
 
   it("hands the drag back as a word, and one stop left shows the row again", () => {
@@ -1192,7 +1200,7 @@ describe("the bar over how firmly a page identifies this article", () => {
       }),
       null,
     );
-    const foot = host.querySelector(".dbt-foot")?.textContent ?? "";
+    const foot = card();
     expect(foot).toContain("2 were kept");
     expect(foot).not.toContain("are shown");
     expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
@@ -1213,7 +1221,7 @@ describe("the bar over how firmly a page identifies this article", () => {
       }),
       null,
     );
-    expect(text()).toContain("returned evidence from 5 pages; 1 contributes to the rows shown");
+    expect(card()).toContain("returned evidence from 5 pages; 1 contributes to the rows shown");
   });
 });
 
@@ -1290,10 +1298,9 @@ describe("the order bar", () => {
     expect(ordered).toEqual(["stance"]);
   });
 
-  it("says what the order is, in the line under the date", () => {
+  it("says what the order is, in the line over the list", () => {
     paint(owner(), "named", "stance");
     const frame = host.querySelector(".dbt-frame")?.textContent ?? "";
-    expect(frame).toContain("Searched on");
     expect(frame).toContain(DEBATE_ORDER_STANCE);
     expect(frame).not.toContain(DEBATE_ORDER_BY_CLAIM);
   });
@@ -1430,7 +1437,7 @@ describe("the head count", () => {
         }),
       }),
     );
-    expect(host.querySelector(".gloss-count")?.textContent).toBe("2 excerpts from 1 page");
+    expect(card()).toContain("2 excerpts from 1 page on screen.");
   });
 });
 
@@ -1472,7 +1479,9 @@ describe("the lead sentence, said where it is true", () => {
 
   /* A finding about a search whose rows are not on screen, so after the list —
      but still said. */
-  it("comes after the rows, before the foot lines, when it hands over to nothing", () => {
+  /* The foot lines it used to sit above are in the band's (i) since
+     2026-10-01 (spya-ucu35y), so the scroller ends with it. */
+  it("comes after the rows, last in the scroller, when it hands over to nothing", () => {
     paint(
       owner({
         debate: artefact({
@@ -1484,10 +1493,9 @@ describe("the lead sentence, said where it is true", () => {
     const kids = [...(host.querySelector(".dbt-scroll")?.children ?? [])];
     const list = kids.findIndex((k) => k.querySelector(".dbt-item") !== null || k.matches("ol"));
     const lead = kids.findIndex((k) => (k.textContent ?? "").includes(DEBATE_CLAIMS_NONE));
-    const foot = kids.findIndex((k) => k.matches(".dbt-foot"));
     expect(list).toBeGreaterThanOrEqual(0);
     expect(lead).toBeGreaterThan(list);
-    expect(foot).toBeGreaterThan(lead);
+    expect(lead).toBe(kids.length - 1);
   });
 
   it("is the whole answer, at the top, when no search kept anything", () => {
@@ -1689,9 +1697,9 @@ describe("prioritised, and the relevance bar", () => {
     );
     /* The other bar's rows are untouched, and so is its count. */
     expect(host.querySelector(".dbt-name .dbt-bar-value")?.textContent).toBe("names it · 1 of 1");
-    expect(host.querySelector(".gloss-count")?.textContent).toBe("3 excerpts");
+    expect(card()).toContain("3 excerpts on screen.");
     /* The foot counts pages behind the rows drawn, not the ones hidden. */
-    expect(text()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
+    expect(card()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
     expect(host.querySelector(".dbt-rel .dbt-bar-reset")).not.toBeNull();
   });
 
@@ -1905,7 +1913,7 @@ describe("DebatePanel — threads", () => {
       "Showing 2 excerpts on “replication”",
     );
     /* The head count and the foot follow the thread, not only the list. */
-    expect(host.querySelector(".gloss-count")?.textContent).toBe("2 excerpts");
+    expect(card()).toContain("2 excerpts on screen.");
     act(() => (host.querySelector(".dbt-thread-all") as HTMLButtonElement).click());
     expect(threaded).toEqual([null]);
   });
@@ -1923,7 +1931,7 @@ describe("DebatePanel — threads", () => {
       synthesis: made,
     });
     paint(owner({ debate }), "named", "claim", new Map(), { thread: "spya-thm002" });
-    expect(text()).toContain(
+    expect(card()).toContain(
       "The search for answers to what it claims returned evidence from 3 pages; 2 contribute to the rows shown.",
     );
   });

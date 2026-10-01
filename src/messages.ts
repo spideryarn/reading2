@@ -4518,7 +4518,7 @@ export function debateWithheldOnSharedLink(search: string, n: number): string {
  * **What the order on screen is, said out loud — one sentence per order.**
  *
  * A reader looking at a list assumes its order carries a claim, so each order
- * says what it is, in the line after *"Searched on …"*. Since 2026-09-29 these
+ * says what it is, on the line over the list. Since 2026-09-29 these
  * replace `DEBATE_NO_RANKING` (*"no ranking … is applied"*), which became false
  * the day the list gained an order bar (SPIDERYARN-READING2-5P,
  * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F16).

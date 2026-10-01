@@ -49,13 +49,12 @@
  * Still no marks in the prose and no `?faq=` selection — `selectPassages`
  * answers `NOTHING` (src/web/reader/passages.ts).
  */
-import type { ReactNode } from "react";
 import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
-import { BandAbout } from "./BandAbout.js";
+import { AboutMade } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import {
   availableOrders,
@@ -182,6 +181,14 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
     <ModeSurface
       label="FAQ"
       feature="gloss faq"
+      mode="faq"
+      about={
+        <FaqAbout
+          count={questions.length}
+          dropped={dropped}
+          made={ready ? (owner?.faq ?? null) : null}
+        />
+      }
       /* **No head.** The Dock names the mode, and there is no count, order or
          control that needs a row of its own — so no `.band-head` at all, as
          Summary and Search have none. */
@@ -189,8 +196,8 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
          progress, Stop and failure here, including on an outdated list. No
          re-run otherwise — a fresh list offers none, the rule Greg set for the
          Glossary and Quotes; the stale banner carries it. The promise that
-         used to live here is behind the (i) in the order row since
-         SPIDERYARN-READING2-62 (`AboutPassages`). */
+         used to live here is behind the band's (i) since
+         SPIDERYARN-READING2-62 (`FaqAbout`). */
       foot={showJob ? <div className="faq-foot">{run("Find them again", true)}</div> : null}
     >
       {owner?.error && (
@@ -241,16 +248,10 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
           {/* The orders there is something to do with — none for a list from
               before `faq/4`, which has no scores, because a control that would
               visibly do nothing is worse than none (GlossaryPanel.tsx §
-              SortBar) — and, at the row's right-hand end, the promise behind
-              its (i). The row is drawn for the (i) alone when there are no
-              orders to offer. */}
-          {questions.length > 0 && (
-            <OrderBar
-              options={availableOrders(questions)}
-              order={order}
-              onOrder={onOrder}
-              about={<AboutPassages dropped={dropped} />}
-            />
+              SortBar). No orders, no row: the (i) that once kept it standing is
+              in the band's corner since 2026-10-01 (spya-ucu35y). */}
+          {questions.length > 0 && availableOrders(questions).length > 0 && (
+            <OrderBar options={availableOrders(questions)} order={order} onOrder={onOrder} />
           )}
 
           {/* Only in the order it belongs to. */}
@@ -292,21 +293,15 @@ const ORDER_BUTTON: Record<FaqOrder, { label: string; title: string }> = {
   },
 };
 
-/**
- * The order buttons, and at the right-hand end the (i). **The (i) is beside
- * the group, not in it**, for the reason GlossaryPanel.tsx § SortBar gives: the
- * group is what a screen reader announces as "Order the questions by".
- */
+/** The order buttons. Their (i) was at this row's end until it moved to the band's corner (261001m). */
 function OrderBar({
   options,
   order,
   onOrder,
-  about,
 }: {
   options: readonly FaqOrder[];
   order: FaqOrder;
   onOrder(order: FaqOrder): void;
-  about: ReactNode;
 }) {
   return (
     <div className="gloss-sort">
@@ -328,25 +323,41 @@ function OrderBar({
           ))}
         </div>
       )}
-      <span className="gloss-sort-trail">{about}</span>
     </div>
   );
 }
 
 /**
- * **The honest promise, behind an (i)** — Greg, 2026-09-30
+ * **The honest promise, behind the band's (i)** — Greg, 2026-09-30
  * (SPIDERYARN-READING2-62): *"move this text … into a tooltip, e.g. behind an
- * `(i)` icon"*. It was the band's foot. The words are unchanged, and both
- * halves still load-bearing; the dropped count, a footnote to the first half,
- * came with it. The (i) itself is `BandAbout`, shared with Citations since
- * plan 261001l.
+ * `(i)` icon"*. It was the band's foot, then the order row's (i), and since
+ * 2026-10-01 the band's corner (spya-ucu35y), after the mode's own words. The
+ * promise is unchanged and both halves still load-bearing; then how many
+ * questions, the dropped count (a footnote to the promise), and who wrote it.
  */
-function AboutPassages({ dropped }: { dropped: string | null }) {
+function FaqAbout({
+  count,
+  dropped,
+  made,
+}: {
+  count: number;
+  dropped: string | null;
+  made: { generator: string; version: string; generatedAt: string; elapsedMs: number } | null;
+}) {
   return (
-    <BandAbout label="About these passages">
-      <p>{FAQ_PROMISE}</p>
+    <>
+      {count > 0 && <p>{FAQ_PROMISE}</p>}
+      {count > 0 && <p>{count === 1 ? "One question." : `${count} questions.`}</p>}
       {dropped && <p>{dropped}</p>}
-    </BandAbout>
+      {made && (
+        <AboutMade
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
   );
 }
 

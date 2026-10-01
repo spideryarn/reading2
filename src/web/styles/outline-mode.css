@@ -54,6 +54,10 @@
   --outln-indent: 1.15rem;
   --outln-rail: 0.45rem;
 }
+/* Clear of the (i) in the band's corner (mode-band.css § `.mode-band > .band-about`).
+   On the shared inset, not on the list, so the measuring copies are laid out
+   at the same narrower width and the rung chosen still matches what is drawn. */
+.mode-band.outln.has-about { --outln-pad-r: calc(0.5rem + var(--band-about-room)); }
 
 .outln-list {
   list-style: none;
