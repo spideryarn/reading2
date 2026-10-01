@@ -6050,11 +6050,9 @@ export interface FeedbackDiagnostics {
  * response whose size is decided by whoever wrote the most, so the ceiling is
  * here rather than in the caller's good intentions.
  *
- * There is no pagination and that is deliberate for a v1 that expects tens of
- * rows: the page says *"showing the newest N"* when it is full, so the moment
- * this number starts hiding reports is a thing Greg can see rather than a thing
- * he has to suspect. docs/plans/260902l-admin-feedback-page.md § The simpler
- * options passed over.
+ * The inbox is keyset-paged. This is therefore a ceiling on one response, not
+ * on how many reports the administrator can reach; `AdminFeedbackPage.hasMore`
+ * says whether the store saw another row and `nextCursor` reaches it.
  */
 export const ADMIN_FEEDBACK_MAX = 500;
 
@@ -6237,6 +6235,33 @@ export function decodeFeedbackCursor(
   if (!isUuid(ownerId)) return "malformed";
   if (!isSpideryarnId(id)) return "malformed";
   return { createdAt, ownerId, id };
+}
+
+/**
+ * **Whose reports the inbox shows** — everyone's, or only the readers', which
+ * is everyone who is not an administrator (src/admin.ts § `ADMIN_USER_IDS`, the
+ * list `isAdmin` reads). Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
+ * filter to show only non-admin suggestions (i.e. suggestions from people other
+ * than me)."* docs/plans/261001l-….
+ *
+ * Applied by the store, not the browser: the inbox is paged, and a page of
+ * Greg's own reports filtered away in the browser would read *no reports,
+ * there are older ones*.
+ */
+export const FEEDBACK_FROM = ["everyone", "readers"] as const;
+export type FeedbackFrom = (typeof FEEDBACK_FROM)[number];
+
+/**
+ * `?from=` read back: absent is `"everyone"`, and anything else that is not one of
+ * the two is `"malformed"`, which the route turns into a 400 — never a quiet
+ * *everyone*, which would show Greg his own reports under a filter that says it
+ * hides them. The same three-answer shape as `decodeFeedbackCursor`.
+ */
+export function parseFeedbackFrom(raw: string | null | undefined): FeedbackFrom | "malformed" {
+  /* Only an *absent* parameter is everyone. `?from=` with nothing after it is
+     a caller that meant something and lost it — malformed. GPT Sol. */
+  if (raw === null || raw === undefined) return "everyone";
+  return (FEEDBACK_FROM as readonly string[]).includes(raw) ? (raw as FeedbackFrom) : "malformed";
 }
 
 /**

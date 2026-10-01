@@ -43,6 +43,9 @@ and the drawing.
 - **The hairline says what it is on hover**, since 2026-09-29, because Greg found it and could not
   tell what it meant (SPIDERYARN-READING2-4S). It is a `span.blk-read` with a `title`, last in the
   gutter, and its hover strip is zero wide on a row with no reading time. Nothing yet on touch.
+  **The line is drawn inside its own strip** since 2026-10-01: it used to sit 2px outside it, so
+  pointing at the line found nothing and Greg asked again (SPIDERYARN-READING2-84,
+  [261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md)).
   gutter.css § reading time;
   [260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md).
 - **The spine layer's place in the track is its correctness**: after the parts, before the section
