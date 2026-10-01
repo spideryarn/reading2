@@ -357,6 +357,12 @@ import {
   updateVoucher,
 } from "./store/pg-vouchers.js";
 import {
+  deliverReservedVoucherEmail,
+  reserveVoucherEmailRetry,
+  sendQueuedVoucherEmail,
+} from "./store/pg-voucher-emails.js";
+import type { VoucherCreated } from "./admin-vouchers.js";
+import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
   withIngestSlot,
@@ -7278,8 +7284,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ user, request: { req, res } }) => {
       const parsed = parseNewVoucher(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
+      /* The browser mints the id, so a replay is the same create (261001p). */
+      const answer = await createVoucher(parsed.value, user.id);
+      if (answer.kind === "conflict") throw httpError(409, "A different voucher already has that id.");
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 201, await createVoucher(parsed.value, user.id));
+      if (answer.kind === "replayed") {
+        send(res, 200, { id: answer.id, email: "replayed" } satisfies VoucherCreated);
+        return;
+      }
+      /* Registered only now, after the transaction committed: the recipient's
+         email goes after the response, and cannot fail it. */
+      const delivery = answer.delivery;
+      await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
+      send(res, 201, { id: answer.id, email: "queued" } satisfies VoucherCreated);
     },
   },
   {
@@ -7299,7 +7316,37 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         throw httpError(409, "That voucher has been claimed, so its address can no longer change.");
       }
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, { ok: true });
+      /* A real change of address queued the recipient's email to the new one. */
+      const delivery = answer.giftDelivery;
+      if (delivery) await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
+      send(res, 200, delivery ? { ok: true, email: "queued" } : { ok: true });
+    },
+  },
+  /* **Retry one voucher email** — the Status cell's button. Reserved here, so
+     the answer can say 404 or 409 in the server's words; sent after the
+     response. What may be retried is one SQL fragment, `RETRYABLE` in
+     src/store/pg-voucher-emails.ts, which also sets the list's `retryable`.
+     Under `/api/admin/`, so the namespace gate refuses everybody else. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/admin\/voucher-emails\/([\w-]+)\/retry$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const reserved = await reserveVoucherEmailRetry(id);
+      if (reserved.kind === "not-found") throw httpError(404, "There is no such voucher email.");
+      if (reserved.kind === "refused") {
+        throw httpError(
+          409,
+          "That email cannot be retried: it has been sent, or is being sent now, or its voucher has since been claimed, revoked or given another address.",
+        );
+      }
+      const attempts = reserved.attempts;
+      await afterResponse("voucher email: retry", () => deliverReservedVoucherEmail(id, attempts));
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 202, { id, email: "sending" });
     },
   },
 
@@ -9731,13 +9778,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     path: "/api/billing/usage",
     article: "none",
     handler: async ({ user, request: { res } }) => {
+      /* The claim and its creator notices commit together or not at all
+         (`claimVouchersFor`, step 4); the notices go after the response, one
+         task each, so one that fails does not stop the next (Sol F8). */
+      let deliveries: readonly string[] = [];
       try {
-        await claimVouchersFor(user);
+        deliveries = (await claimVouchersFor(user)).deliveries;
       } catch (err) {
         log("store").warn(
           { err: err instanceof Error ? err.name : "unknown" },
           "claiming a gift voucher failed — the plan is served without it, and the next visit tries again",
         );
+      }
+      for (const delivery of deliveries) {
+        await afterResponse("voucher email: claimed", () => sendQueuedVoucherEmail(delivery));
       }
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, await readBillingSummary(currentOwnerId()));

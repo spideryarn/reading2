@@ -77,6 +77,10 @@ export const PUBLIC_ORIGIN = "https://www.spideryarn.com";
 export const ADMIN_USERS_PATH = "/admin/users";
 export const ADMIN_USERS_URL = `${PUBLIC_ORIGIN}${ADMIN_USERS_PATH}`;
 
+/** **The gift vouchers page**, the same way: the router's `ADMIN_VOUCHERS_HREF`, and the claim notice's link. */
+export const ADMIN_VOUCHERS_PATH = "/admin/vouchers";
+export const ADMIN_VOUCHERS_URL = `${PUBLIC_ORIGIN}${ADMIN_VOUCHERS_PATH}`;
+
 /**
  * **Where this article lives on Spideryarn** — the link back, from anywhere.
  *
