@@ -67,6 +67,7 @@ import type {
   ChatThread,
   Comment,
   FeedbackCursor,
+  FeedbackFrom,
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
@@ -1537,7 +1538,16 @@ export interface AdminStore {
    * `limit` is capped by the implementation. This is the only table in the app
    * an ordinary account holder can add rows to.
    */
-  listFeedbackAcrossOwners(limit: number, cursor: FeedbackCursor | null): Promise<AdminFeedbackPage>;
+  /**
+   * `from` is `"readers"` to leave out the administrators' own reports
+   * (`FeedbackFrom` in src/types.ts); the cursor carries no filter, so a caller
+   * paging under one passes it on every page.
+   */
+  listFeedbackAcrossOwners(
+    limit: number,
+    cursor: FeedbackCursor | null,
+    from?: FeedbackFrom,
+  ): Promise<AdminFeedbackPage>;
   /**
    * **One report in full**, including the diagnostics blob the list leaves out
    * — `GET /api/admin/feedback/:ownerId/:id`.

@@ -118,7 +118,7 @@ different names. Counts are files, and approximate.
   around `src/web/useOrderedRead.ts` § `useOrderedRead`, `src/web/useStepJob.ts` § `useStepJob`
   and `src/web/useAutoRun.ts` § `useAutoRun`. jscpd: `useCitations` and `useTimeline` share 127
   lines, `useCitations` and `useDebate` 123.
-- `new-mode.md` names all three hooks well ("rather than a ninth copy"). The remaining repetition
+- `mode.md` names all three hooks well ("rather than a ninth copy"). The remaining repetition
   is the state glue between them. The value is real, but this is hard to do without a generic
   `useArtefact<T>` that every mode's quirks (profile, findNote, outdated) must fit, so weigh it
   carefully.

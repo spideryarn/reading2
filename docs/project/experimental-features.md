@@ -114,6 +114,12 @@ three inches to the left of it, and so are the four Diagram pictures.
 the only button in the bar that is about the app rather than about the article, which is why it is
 last.
 
+**Quiet when on.** The drawn track and knob are the whole on/off signal: filled in the button's own
+ink with the knob right for on, an outline with the knob left for off. It never wears the bar's
+orange *selected* look, which means *you are here* — Greg, 2026-10-01: *"when it's toggled on, it's
+too visible/emphasised somehow … Please de-emphasise."*
+[261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md).
+
 **The failure states are drawn, not swallowed.** A dead or lying switch is worse than no switch, so
 `toggleVariant` ([`Dock.tsx`](../../src/web/Dock.tsx)) turns the store's fields into exactly one of
 six appearances — working, waiting, saving, showing an offline copy, a load that failed, a save that
@@ -183,7 +189,7 @@ cannot be added without somebody deciding which side of the line it is on.
 **The table is the list, and nothing counts the modes.** Both halves used to be restated — a count
 in five source comments and two other docs, and the complement written out by name — so promoting
 one mode meant editing arithmetic in eight places, one of which had already drifted wrong and gone
-on passing ([new-mode.md § Moving a mode in or out](new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+on passing ([mode.md § Moving a mode in or out](mode.md#moving-a-mode-in-or-out-of-the-switch)).
 Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src/modes.ts)).
 
 | Mode | Why it is behind the switch |

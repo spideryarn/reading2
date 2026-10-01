@@ -13,7 +13,7 @@ bar, reviewed before any code").
 **The change under review is the uncommitted working tree against `3ac53baa`.** Get it with:
 
 ```
-git diff 3ac53baa -- src/web/Dock.tsx tests/client-imports.test.ts docs/project/new-mode.md docs/project/web-client.md docs/project/experimental-features.md src/modes.ts
+git diff 3ac53baa -- src/web/Dock.tsx tests/client-imports.test.ts docs/project/mode.md docs/project/web-client.md docs/project/experimental-features.md src/modes.ts
 ```
 
 Two files are **untracked** and will not appear in that diff. Read them directly:

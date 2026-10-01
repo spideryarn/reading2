@@ -1,7 +1,7 @@
 # FAQ mode stage 2 — GPT Sol code-review findings
 
 Review of commit `0e947eb4` against `docs/plans/260916d-faq-mode.md`,
-`docs/project/new-mode.md`, and the stage-1 contract in `301101e6`.
+`docs/project/mode.md`, and the stage-1 contract in `301101e6`.
 
 ## Findings
 
@@ -38,7 +38,7 @@ semantic level in the panel test.
 
 **Evidence:** `src/mode-catalog.ts:465-479` puts both *no answer is written* and the checked-words /
 model-pairing qualification in `how`; `src/web/FaqPanel.tsx:47-52,124-129` repeats that qualification
-in the band's foot. `docs/project/new-mode.md:147-150` explicitly says the card's second sentence
+in the band's foot. `docs/project/mode.md:147-150` explicitly says the card's second sentence
 must not restate what is already on screen.
 
 **Consequence:** on the reading-view surface, opening the card spends attention to repeat the band's

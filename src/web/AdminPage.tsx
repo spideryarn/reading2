@@ -23,13 +23,14 @@
  * Tailwind utilities rather than styles.css, like every other chrome page —
  * note the `tw:` prefix, without which the class does nothing.
  */
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
+import { FEEDBACK_FROM, type FeedbackFrom } from "../types.js";
 import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
@@ -398,11 +399,73 @@ export function AdminUsersPage() {
  */
 export function AdminFeedbackPage() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "feedback" }));
-  const { reports, error, loading, hasMore, reload, loadMore } = useAdminFeedback();
-  const now = useNow();
+  /* Not in the address bar yet: a reload goes back to everyone. Deferred until
+     it bites — docs/plans/261001l-…. */
+  const [from, setFrom] = useState<FeedbackFrom>("everyone");
 
   return (
     <Shell title="Feedback" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
+      <FeedbackFromToggle from={from} onChange={setFrom} />
+      {/* **Keyed on the filter**, so a switch is a fresh inbox — its own
+          request, cursor and in-flight guard — rather than a reload the old
+          one's *Load older* could race. useAdminFeedback.ts § `from`. */}
+      <FeedbackInbox key={from} from={from} />
+    </Shell>
+  );
+}
+
+const FROM_LABEL: Record<FeedbackFrom, { label: string; title: string }> = {
+  everyone: { label: "Everyone", title: "Every report, the administrators' own included" },
+  readers: {
+    label: "Readers only",
+    title: "Leave out the administrators' own reports — src/admin.ts says who they are",
+  },
+};
+
+/**
+ * **Whose reports** — Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
+ * filter to show only non-admin suggestions (i.e. suggestions from people other
+ * than me)."* Two buttons with `aria-pressed`, the shape the shelf's own
+ * two-way toggles take. The filtering is the server's (`?from=readers`).
+ */
+function FeedbackFromToggle({
+  from,
+  onChange,
+}: {
+  from: FeedbackFrom;
+  onChange: (next: FeedbackFrom) => void;
+}) {
+  return (
+    /* biome-ignore lint/a11y/useSemanticElements: toggle buttons rather than
+       form controls, for GlossaryPanel.tsx § the sort group's reason. */
+    <div role="group" aria-label="Whose reports" className="tw:mb-3 tw:flex tw:gap-1">
+      {FEEDBACK_FROM.map((value) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={from === value}
+          title={FROM_LABEL[value].title}
+          onClick={() => onChange(value)}
+          className={`tw:inline-flex tw:h-7 tw:items-center tw:rounded-full tw:border tw:px-3 tw:text-xs ${
+            from === value
+              ? "tw:border-highlight/50 tw:text-foreground"
+              : "tw:border-border tw:bg-transparent tw:text-muted-foreground tw:hover:text-foreground"
+          }`}
+        >
+          {FROM_LABEL[value].label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The inbox under one filter. Remounted when the filter changes — see above. */
+function FeedbackInbox({ from }: { from: FeedbackFrom }) {
+  const { reports, error, loading, hasMore, reload, loadMore } = useAdminFeedback(from);
+  const now = useNow();
+
+  return (
+    <>
       {error && (
         /* Same sentence-shape as the users page, and the distinction it draws
            matters more here: an empty inbox is an ordinary answer, so an error
@@ -441,7 +504,11 @@ export function AdminFeedbackPage() {
           ordinary answer here — unlike the users page, where it cannot be true
           — so it gets a plain sentence rather than an alarm. */}
       {reports === null ? null : reports.length === 0 ? (
-        <p className="tw:text-sm tw:text-muted-foreground">Nobody has filed a report yet.</p>
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {from === "readers"
+            ? "No reader other than an administrator has filed a report yet."
+            : "Nobody has filed a report yet."}
+        </p>
       ) : (
         <>
           <ul className="tw:m-0 tw:p-0">
@@ -465,6 +532,6 @@ export function AdminFeedbackPage() {
           )}
         </>
       )}
-    </Shell>
+    </>
   );
 }

@@ -105,7 +105,7 @@ occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching r
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
 
 What every band shares rather than the Glossary alone — the waiting and empty states, what a visitor
-sees, the checklist for changing a band — is in [new-mode.md](new-mode.md) and
+sees, the checklist for changing a band — is in [mode.md](mode.md) and
 [web-client.md § The waiting state](web-client.md#the-waiting-state).
 
 ## Where it lives, and why that cost nothing

@@ -42,7 +42,7 @@
  *
  * **No `.band-head`.** The documented default since 2026-09-05: the Dock at the
  * foot of the page is already saying which mode this is
- * (docs/project/new-mode.md § The band's chrome). Column B's header names the
+ * (docs/project/mode.md § The band's chrome). Column B's header names the
  * *part*, which is a different fact and belongs to the column rather than to the
  * band.
  */

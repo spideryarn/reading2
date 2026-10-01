@@ -86,7 +86,7 @@ The behavior-owning documentation must land with Stage 2. Stage 3’s new contro
 
 8. **Should — make experimental status an explicit total decision.**
 
-“Five rows gain `experimental: true`” suggests an optional flag. If so, a newly added mode that omits it silently becomes polished/default-visible, despite `new-mode.md` saying the author must decide.
+“Five rows gain `experimental: true`” suggests an optional flag. If so, a newly added mode that omits it silently becomes polished/default-visible, despite `mode.md` saying the author must decide.
 
 `ModesMissingFromDock` proves that every mode has a row; it does not prove that every row made an experimental-status decision. This is only truly compiler-checked if every row carries an explicit boolean or equivalent required classification.
 

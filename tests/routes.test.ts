@@ -47,6 +47,7 @@ import { articles, comments as commentsTable, readerProfiles } from "../src/db/s
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { originalUrl } from "../src/vercel.js";
+import { ADMIN_FEEDBACK_DEFAULT_LIMIT } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -79,7 +80,7 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { commentStore, readerStore, searchStore, shelfStore } = await import(
+const { adminStore, commentStore, readerStore, searchStore, shelfStore } = await import(
   "../src/store/index.js"
 );
 
@@ -2350,6 +2351,41 @@ describe("the admin gate", () => {
        docs/reusable/silent-success.md. */
     const r = await call("GET", "/api/admin/feedback?before=nonsense");
     expect(r.status).toBe(400);
+  });
+
+  /* **Readers only** (SPIDERYARN-READING2-87, docs/plans/261001l-…): the same
+     route under the same gate, one parameter more. An unknown value is a 400
+     rather than a quiet *everyone*, which would show the administrator's own
+     reports under a filter that says it hides them. */
+  it("takes ?from=readers, refuses an unknown ?from=, and keeps the gate", async () => {
+    /* Observe the seam as well as the HTTP shape. A 200 with `reports` would
+       still pass if the route parsed `readers` and then quietly called the
+       store's default-everyone form — exactly the failure this filter must not
+       disguise. The store's own test proves what these arguments do in SQL. */
+    const list = vi.spyOn(adminStore, "listFeedbackAcrossOwners");
+    try {
+      const ok = await call("GET", "/api/admin/feedback?from=readers");
+      expect(ok.status).toBe(200);
+      expect(ok.body).toHaveProperty("reports");
+      expect(list).toHaveBeenNthCalledWith(1, ADMIN_FEEDBACK_DEFAULT_LIMIT, null, "readers");
+
+      expect((await call("GET", "/api/admin/feedback?from=everyone")).status).toBe(200);
+      expect(list).toHaveBeenNthCalledWith(2, ADMIN_FEEDBACK_DEFAULT_LIMIT, null, "everyone");
+
+      for (const bad of ["", "admins", "Readers", "readers,everyone"]) {
+        const r = await call("GET", `/api/admin/feedback?from=${encodeURIComponent(bad)}`);
+        expect(r.status, bad).toBe(400);
+      }
+      /* Malformed values are refused before any cross-owner read. */
+      expect(list).toHaveBeenCalledTimes(2);
+
+      const refused = await call("GET", "/api/admin/feedback?from=readers", undefined, asSomebodyElse);
+      expect(refused.status).toBe(403);
+      expect(refused.body).not.toHaveProperty("reports");
+      expect(list).toHaveBeenCalledTimes(2);
+    } finally {
+      list.mockRestore();
+    }
   });
 
   it("does not match a report path with anything extra on the end", async () => {

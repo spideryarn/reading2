@@ -6,14 +6,14 @@
 
 4. **P2 — `tests/access-sharing.test.tsx:514`: old-server compatibility lacked the exact regression case.** `asArticleSharing` was already correctly limiting failure to the inventory rather than rejecting the sharing card. Added a partial old payload missing the new `debate` flag and proved the owner can still stop sharing.
 
-5. **P2 — stale public and internal copy.** Updated the sharing sentence, Privacy inventory and version date, mode documentation, counts/comments, and the plan’s as-built security contract. Principal locations: `src/messages.ts:3662`, `src/web/PrivacyPage.tsx:58`, `src/web/PrivacyPage.tsx:432`, `docs/project/reading-view-overview.md:31`, and `docs/project/new-mode.md:122`. The existing Debate empty-state copy was accurate.
+5. **P2 — stale public and internal copy.** Updated the sharing sentence, Privacy inventory and version date, mode documentation, counts/comments, and the plan’s as-built security contract. Principal locations: `src/messages.ts:3662`, `src/web/PrivacyPage.tsx:58`, `src/web/PrivacyPage.tsx:432`, `docs/project/reading-view-overview.md:31`, and `docs/project/mode.md:122`. The existing Debate empty-state copy was accurate.
 
 6. **P1 — `tests/public-network-trace.test.tsx:2313`: the requested conclusion is literally too broad for signed-in non-owners.** Initial loading intentionally sends authenticated GETs to `/api/article/:slug`, `/api/jobs`, and `/api/reader`; the background jobs poll may recur. I did not change that established architecture. After initial loading, mode presses and interactions remain in the public namespace, except for that account-owned jobs poll, and make no POSTs.
 
 Files edited:
 
 - `docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md`
-- `docs/project/new-mode.md`
+- `docs/project/mode.md`
 - `docs/project/reading-view-overview.md`
 - `src/messages.ts`
 - `src/modes.ts`

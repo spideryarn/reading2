@@ -126,7 +126,7 @@ Argument v1 should show:
 
 Later, if it earns the cost, evolve the artefact toward claims, support, objections, and omissions—the Argument view already named in the vision. Keep `arc.json` separate and range-joined as it is now ([arc.ts:27](../../src/arc.ts:27)).
 
-Do not create a duplicate `new-mode.md` checklist. The client and artefact checklists now exist in [web-client.md:108](../../docs/project/web-client.md:108) and [architecture.md:342](../../docs/project/architecture.md:342), and the universal registry was deliberately refused. Extend those signposts for Argument.
+Do not create a duplicate `mode.md` checklist. The client and artefact checklists now exist in [web-client.md:108](../../docs/project/web-client.md:108) and [architecture.md:342](../../docs/project/architecture.md:342), and the universal registry was deliberately refused. Extend those signposts for Argument.
 
 ## 7. Name
 

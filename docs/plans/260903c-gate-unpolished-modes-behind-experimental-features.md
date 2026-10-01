@@ -208,7 +208,7 @@ it must now pose a signed-in session, and that edit is part of this stage.
 - **Every** `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) gains a required
   `experimental: boolean` — not an optional flag on five rows. `ModesMissingFromDock` proves each
   mode has a row; only a required field proves each row made the decision, and
-  [new-mode.md](../project/new-mode.md) says the author must make it. (Sol, finding 8.)
+  [mode.md](../project/mode.md) says the author must make it. (Sol, finding 8.)
 - `Dock` gains a **required** `experimental` prop — the narrow slice of `ExperimentalSetting` it
   actually reads, widened in stage 3 to carry the failure states. `App.tsx`, `Metadata.tsx`,
   `Tweets.tsx` and `PublicPages.tsx` each call `useExperimental()` and pass it. See § *`Dock` is told
@@ -246,7 +246,7 @@ is never empty and exactly one radio is always checked.
 *Docs in this stage:* [experimental-features.md](../project/experimental-features.md) § *What is
 behind it today* stops saying "Nothing"; § *The three rules* gains the signed-out rule; § *Putting a
 feature behind it* loses the "before the first gate" paragraph, which this work has now done.
-[new-mode.md](../project/new-mode.md) and
+[mode.md](../project/mode.md) and
 [reading-view-overview.md](../project/reading-view-overview.md) gain the split.
 
 *Plus a real browser*, signed out, on a shared article.

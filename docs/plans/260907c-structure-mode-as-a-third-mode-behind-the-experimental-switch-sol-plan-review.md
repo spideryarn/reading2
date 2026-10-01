@@ -49,7 +49,7 @@ Also apply `paragraphLabelsReady`; Outline withholds the entire layer rather tha
 
 4. The checklist claim is incomplete, and Stage 1 as written is neither compiling nor fully truthful.
 
-Against `new-mode.md` as it stood at `b12a8fa1`, the plan answers every listed residue item. But the checklist itself misses a compiler-forced total:
+Against `mode.md` as it stood at `b12a8fa1`, the plan answers every listed residue item. But the checklist itself misses a compiler-forced total:
 
 - `GENERATES: Record<Mode, boolean>` lives in [command-bar.test.tsx:317](/home/greg/code/spideryarn2/.claude/worktrees/structure-third-mode/tests/command-bar.test.tsx:317). It needs `structure: false`.
 - The plan’s statement that “Nothing counts the modes” is false ([plan:230](/home/greg/code/spideryarn2/.claude/worktrees/structure-third-mode/docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md:230)). [page-head.test.ts:545](/home/greg/code/spideryarn2/.claude/worktrees/structure-third-mode/tests/page-head.test.ts:545) deliberately asserts 14 as a positive-control count.

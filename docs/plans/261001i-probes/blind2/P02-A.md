@@ -3,7 +3,7 @@
 ## 1. Docs opened, in order
 - `CLAUDE.md` (AGENTS.md) — signpost; pointed me at cost-tracking, new-mode, architecture. Helped.
 - `docs/project/cost-tracking.md` — the three rules for a new paid call (gateway, scope, article attribution); metadata page "What it cost" line. Very helpful.
-- `docs/project/new-mode.md` — "Adjacent shapes": a pipeline step with no band (a line on the Metadata page) takes only § The artefact and § Its cost; the full total-record list. Most helpful.
+- `docs/project/mode.md` — "Adjacent shapes": a pipeline step with no band (a line on the Metadata page) takes only § The artefact and § Its cost; the full total-record list. Most helpful.
 - `docs/project/architecture.md` (§ Stage ownership, § Shared code) — step table, helper list (`streamMessage`, `parseJsonAnswer`, `articleFingerprint`). Helped.
 - `docs/project/prompting-guide.md` (§ Where it lives) — `plainWords(...)`, `PLAIN_WORDS_EXEMPT`, coverage test. Helped.
 - Skimmed headings only of `docs/project/ai-gateway.md` and `database.md` (large; not needed beyond headings).
@@ -28,9 +28,9 @@
 - No new helper for the stream/refusal/truncation sequence: docs say none exists, copy the neighbour.
 
 ## 4. Rules to follow
-- Call through the gateway only; inside `runStep` so spend is attributed to the article and shows as its own line in "What it cost" (`cost-tracking.md`). New `AiJob` needs a `JOB_DISPOSITION` row (`new-mode.md` § Its cost).
+- Call through the gateway only; inside `runStep` so spend is attributed to the article and shows as its own line in "What it cost" (`cost-tracking.md`). New `AiJob` needs a `JOB_DISPOSITION` row (`mode.md` § Its cost).
 - Cost figures admin-only: no money in reader copy or in the metadata payload; `tests/no-ai-cost-for-readers.test.ts` guards (`cost-tracking.md`).
-- Pipeline step: total records the compiler demands, plus the residue (CHECK constraint migration, export put-chain, `PROMPT_VERSION` as one exported constant, bump on prompt change) (`new-mode.md`).
+- Pipeline step: total records the compiler demands, plus the residue (CHECK constraint migration, export put-chain, `PROMPT_VERSION` as one exported constant, bump on prompt change) (`mode.md`).
 - Cache on a content hash (`architecture.md` § Conventions); "once per article" = a freshness stamp.
 - Plain-words rule: `plainWords(...)` in the prompt, name it `…_SYSTEM`; `tests/plain-words-coverage.test.ts` (`prompting-guide.md`).
 - Block ids never shown in prose; reader copy rules (`copy.md`, not opened).
@@ -39,9 +39,9 @@
 - Streaming rule does not apply (batch pipeline step, nobody waiting).
 
 ## 5. Where I got lost
-- No doc says how the Metadata page gets its data or how to add a line to it; I inferred from `src/web/Metadata.tsx` and the `arc` wiring. `new-mode.md` mentions "a line on the Metadata page" only in passing.
+- No doc says how the Metadata page gets its data or how to add a line to it; I inferred from `src/web/Metadata.tsx` and the `arc` wiring. `mode.md` mentions "a line on the Metadata page" only in passing.
 - Unsure whether this should be a new artefact column at all or a field on `meta.json`/an existing artefact (simpler); no doc weighs that.
-- `arc` wiring is spread over ~12 files in `pg.ts`; the list in `new-mode.md` helped, but several `pg.ts` tables (projections, currency `case`) are not named there as a checklist.
+- `arc` wiring is spread over ~12 files in `pg.ts`; the list in `mode.md` helped, but several `pg.ts` tables (projections, currency `case`) are not named there as a checklist.
 - The "once per article" decision (in `DEFAULT_INGEST_STEPS` or not, i.e. paid on every import) is a product call to surface to Greg.
 - Did not read `ai-gateway.md` in full (1063 lines).
 

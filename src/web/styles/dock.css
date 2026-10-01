@@ -480,7 +480,14 @@
    Sized in px against the 15px glyph beside it, and never hidden by the fit
    ladder — the label goes first, and this is what is left saying "switch".
    Off: an outline in the button's own colour, knob left, so hover and `.soon`
-   move it with the button. On: the brand colour, knob right. */
+   move it with the button. On: filled in that same colour, knob right.
+
+   **Not the brand colour when on**, and the button never wears `.dock-btn.on`
+   either. Greg, 2026-10-01 (SPIDERYARN-READING2-80): *"the whole
+   "Experimental" button is orange, and the toggle is an even brighter orange.
+   Please de-emphasise."* Filled-and-right against outlined-and-left is the
+   whole signal and needs no hue; orange in this bar means *you are here*.
+   docs/plans/261001l-…. */
 .dock-switch {
   position: relative;
   flex: none;
@@ -502,8 +509,7 @@
   transition: transform 0.15s;
 }
 .dock-switch.is-on {
-  border-color: var(--highlight);
-  background: var(--highlight);
+  background: currentColor;
 }
 .dock-switch.is-on::after {
   background: var(--page);

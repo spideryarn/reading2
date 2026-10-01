@@ -22,7 +22,7 @@ the panel got the default control and the shape I pinned was the wrong one. The 
 literal and I rewrote it as a mount of its own. **Please check the replacement is actually testing
 what it says**, since the first one was not.
 
-**F26 — `new-mode.md` rewritten.** It no longer says "any conditional header child requires a
+**F26 — `mode.md` rewritten.** It no longer says "any conditional header child requires a
 fragment". It now poses the question: a row that must persist while its contents come and go takes an
 always-present fragment; a header that genuinely should not exist in a state takes the conditional
 directly and draws no row. It also now says four bands empty *while loading*, plus Diagram's ordinary

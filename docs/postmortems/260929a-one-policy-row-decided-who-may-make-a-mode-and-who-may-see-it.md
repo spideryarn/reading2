@@ -21,7 +21,7 @@ It was the natural choice each time, for a good reason and a cheap one:
   a mode that has not built its public projection yet cannot leak or spend by mistake.
 - **The cheap one:** `artefact` costs nine steps (a type, a projection column, a DTO, a flag, a
   visitor band, and their tests — [260904c § What every stage owes](../plans/260904c-more-modes-on-a-shared-link.md)),
-  and [new-mode.md](../project/new-mode.md) lists the public projection as optional (*"if a visitor
+  and [mode.md](../project/mode.md) lists the public projection as optional (*"if a visitor
   may read it"*). So a new mode's first commit took `owners-only`, wrote *"a staging decision"* in the
   comment, and moved on.
 

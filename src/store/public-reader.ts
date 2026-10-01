@@ -345,7 +345,7 @@ const PUBLIC_PROJECTIONS = {
     citations: articleRevisions.citations,
     /* **Simple, from the day it was built** (2026-09-30): generated output, so
        a visitor sees the stored one, and only making one is the owner's
-       (docs/project/new-mode.md § The artefact). No profile; the stamp is
+       (docs/project/mode.md § The artefact). No profile; the stamp is
        dropped by `publicSimpleSummary` in ../public/dto.ts.
        docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
     simpleSummary: articleRevisions.simpleSummary,

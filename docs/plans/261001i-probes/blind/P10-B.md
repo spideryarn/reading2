@@ -4,7 +4,7 @@
 - `AGENTS.md` / CLAUDE.md (in context) — pointed at reading-view-overview, web-client; helped.
 - `docs/project/glossary.md` — what the mode is; no loading-state detail, mild help.
 - `docs/project/web-client.md` (grep, then §§ shared helpers, "Empty is not the same as not asked yet", "The waiting state") — decisive: names `useSlow`, `LoaderCircle`/`cmt-spinner`, `role="status"`, 600ms rule, copy rule, tests pattern.
-- `docs/project/new-mode.md` (grep) — confirmed the waiting-state pointer.
+- `docs/project/mode.md` (grep) — confirmed the waiting-state pointer.
 
 ## 2. Code files you would edit
 - `src/web/GlossaryPanel.tsx` (line ~381, the `owner?.status === "loading"` branch).

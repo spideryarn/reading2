@@ -10,11 +10,11 @@ No unresolved findings. I found and fixed two containment defects.
 
    Visitor reset identity included sub-mode parameters visitors ignore. Changing `?diagram=` retried and re-reported a broken visitor Diagram even though visitors remain pinned to Sketch; Referee and Remember visitor bands had the same identity error. Sub-modes now enter the reset key only for owners. The new test failed with two additional render failures before the fix.
 
-3. Low — documentation accuracy — [plan inventory](/home/greg/code/spideryarn2/.claude/worktrees/contain-modes-inventory/docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md:313), [new-mode.md](/home/greg/code/spideryarn2/.claude/worktrees/contain-modes-inventory/docs/project/new-mode.md:43), [web-client.md](/home/greg/code/spideryarn2/.claude/worktrees/contain-modes-inventory/docs/project/web-client.md:153)
+3. Low — documentation accuracy — [plan inventory](/home/greg/code/spideryarn2/.claude/worktrees/contain-modes-inventory/docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md:313), [mode.md](/home/greg/code/spideryarn2/.claude/worktrees/contain-modes-inventory/docs/project/mode.md:43), [web-client.md](/home/greg/code/spideryarn2/.claude/worktrees/contain-modes-inventory/docs/project/web-client.md:153)
 
    The inventory omitted `VisitorBand`, used stale test/mode counts, and said no test pinned the chat handoff despite two existing suites doing so. I corrected those claims and made the parent-owned passage/mark computations explicit.
 
-   `new-mode.md` rule change:
+   `mode.md` rule change:
 
    - Before: one `WITNESS` entry naming the mode controller.
    - After: witnesses for every composition path—owner band, distinct available visitor band, and `VisitorBand` wherever `visitorGap` can replace it.

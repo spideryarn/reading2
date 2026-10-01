@@ -14,7 +14,7 @@ Start with these, but do not limit yourself to them:
 - `src/web/modes/trajectory/TrajectoryMode.tsx`, `src/web/TrajectoryPanel.tsx`,
   `src/web/useTrajectory.ts`, `src/web/useStepJob.ts`, the auto-run hook, `src/web/activation.ts`
 - `src/web/Dock.tsx` (`MODES_UI`), `src/mode-catalog.ts`, `src/web/visitor.ts`,
-  `docs/project/experimental-features.md`, `docs/project/new-mode.md`
+  `docs/project/experimental-features.md`, `docs/project/mode.md`
 - `src/web/stop-card.ts`, `src/web/useIdeas.ts`, `useFaq.ts`, `useTimeline.ts`, `useGlossary.ts`
 - the job route and `enqueue` in `src/jobs.ts`, `stepIsDone`, and whatever limits how many jobs
   an owner may have queued (docs/project/billing.md)

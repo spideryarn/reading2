@@ -94,7 +94,7 @@ Even a non-null string can be vacuous if read through raw `textContent`. The exi
 
 ### F7 — P2 — established: presentation is not currently “nothing”
 
-(a) [`new-mode.md`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/docs/project/new-mode.md:29>) already lists `BAND_SAYS` among the total, compiler-checked tables. Adding a fifteenth `Mode` already makes that test file fail typecheck. What is absent is **owner/controller presentation coverage**, not a presentation compile tripwire altogether.
+(a) [`mode.md`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/docs/project/mode.md:29>) already lists `BAND_SAYS` among the total, compiler-checked tables. Adding a fifteenth `Mode` already makes that test file fail typecheck. What is absent is **owner/controller presentation coverage**, not a presentation compile tripwire altogether.
 
 This matters because the plan otherwise risks claiming a new compile guarantee while only adding runtime coverage for the owner branch.
 
@@ -102,7 +102,7 @@ This matters because the plan otherwise risks claiming a new compile guarantee w
 
 > | Presentation | Visitor `BAND_SAYS` is already total; owner/controller presentation is untested | **compile tripwire exists; owner behaviour missing** |
 >
-> Update `new-mode.md` to distinguish the existing visitor-presentation total from the new owner/controller surface test. Do not describe presentation as newly compiler-checked; describe the deliverable as making the existing compile decision exercise the real owner controller.
+> Update `mode.md` to distinguish the existing visitor-presentation total from the new owner/controller surface test. Do not describe presentation as newly compiler-checked; describe the deliverable as making the existing compile decision exercise the real owner controller.
 
 ### F8 — P2 — established: the `no-raw-nul-bytes` migration target is stale
 
