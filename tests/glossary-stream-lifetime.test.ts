@@ -157,6 +157,16 @@ vi.mock("../src/explain.js", async (importOriginal) => ({
   },
 }));
 
+/* *Dig deeper*'s forced search (plan 261001p) runs before the lookup's
+   answer; stubbed to one search and no pages, so `explainStream` above is
+   still the only thing a case holds open. */
+vi.mock("../src/dig-deeper.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/dig-deeper.js")>()),
+  async searchFirst() {
+    return { sources: [], searches: 1, libraryQuery: null, library: [] };
+  },
+}));
+
 await pgReady({
   suite: "tests/glossary-stream-lifetime.test.ts",
   tables: ["spideryarn.revision_blocks", "spideryarn.glossary_lookups"],

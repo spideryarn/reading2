@@ -340,6 +340,10 @@ the model a search tool and lets it choose. The encouragement is a paragraph of 
 The count reports what it actually did, and the dialog prints it — "3 web searches" or "no web
 search needed". A claim about research that nobody can check is worth nothing.
 
+That decision is still the first answer's. **Dig deeper** is the reader overruling it for one
+comment: the search is run by code before the answer is asked for
+([§ pushing back](#pushing-back)).
+
 > [!WARNING]
 > **Prefer the server tool over the `plugins` form — but be precise about why.** This was written
 > first as `plugins: [{ id: "web", engine: "native" }]`. The *plain* `plugins: [{ id: "web" }]` form
@@ -551,7 +555,7 @@ Two shared shells have since been built on those pieces:
 - **Server: [`src/stream-run.ts`](../../src/stream-run.ts) § `runStream`** — one streamed call from
   the clocks to the verdict: the deadline, the stall clock, the `openRouterStream` loop, citations,
   usage and `classifyEnd`. What an ending *means* stays with the caller. `explainStream` and
-  Citations' *Investigate* ([`src/citation-investigate.ts`](../../src/citation-investigate.ts)) run on
+  Citations' *Dig deeper* ([`src/citation-investigate.ts`](../../src/citation-investigate.ts)) run on
   it.
 - **Client: [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) § `readAnswerStream`** — `begin`,
   `delta`s, then exactly one `done` or `error`, with a body that simply stops treated as a failure.
@@ -608,10 +612,25 @@ the value, since the bug all of this came from was a panel that said "thinking�
 
 Both from Greg, 2026-08-26, on the same weak answer.
 
-**"Search the web"** — *"maybe add the 'Web search' button to do a deeper web search"*. It re-asks
-with an extra instruction saying the reader has read an answer and asked you to go and look
-properly. It **replaces** the answer rather than adding one: a comment is one question and one
-answer, and a second would need a schema that can hold two and a panel that can show them.
+**Dig deeper** (*"Search the web"* until 2026-10-01) — *"maybe add the 'Web search' button to do a
+deeper web search"*. It used to re-ask with an instruction to go and look properly and leave the
+searching to the model. Since 2026-10-01 it is the glossary's and Citations' action too, under one
+name, and does what that name promises: a web search forced by code, the reader's other articles
+searched beside it, and the answer written by the high-power model whatever the article's switch
+says. What a press does, why, and Greg's words are in
+[glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term). It **replaces**
+the answer rather than adding one: a comment is one question and one answer, and a second would need
+a schema that can hold two and a panel that can show them.
+
+On this route the order is **the allowance, then the search, then the claim**: `answer()` in
+[`src/routes.ts`](../../src/routes.ts) takes the `dig-deeper` allowance and runs `searchFirst` before
+`beginAnswer` stamps the row `pending`. So a refusal or a failed search is an ordinary JSON answer
+with the stored answer untouched, and the search's own deadline never eats into the row's lease
+(`COMMENT_ANSWER_LEASE_MS`, sized for the model call). The wire field is still `{ deep: true }`. A
+first answer and *Try again* spend no allowance; only a Dig deeper press does. Two truly simultaneous
+presses can each buy a search and only one claims the row — accepted, at about a cent, over a new
+row state (Sol F12, overruled in the
+[plan](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md)).
 
 It is offered on a comment that has an answer — `done` or `error` — and on **no other**. It used to
 be offered on anything that was not `pending`, which included `status: "none"`: every bookmark and
@@ -623,19 +642,19 @@ diagnosing report 1X; `tests/comment-dialog-search-the-web.test.tsx` renders all
 narrowing it too far goes red as well.
 
 > [!WARNING]
-> **The extra instruction goes after the cache breakpoint, and the tool definition does not change at
-> all.** The cached prefix is *tools + system + article*. Putting the instruction in `SYSTEM` costs a
+> **The dig's instruction and its findings go after the cache breakpoint, and the tool definition
+> does not change at all.** The cached prefix is *tools + system + article*. Putting the instruction in `SYSTEM` costs a
 > second cache write of the whole article; changing `max_uses` on the tool is worse, because tools
 > render at position 0 and a tool edit invalidates all three tiers
 > ([prompt-caching.md](prompt-caching.md)). The first draft did the second of those while carefully
 > avoiding the first. The cap is now `MAX_SEARCHES` for everyone — a cap is not a quota, the model
-> still decides. `tests/explain.test.ts` pins the two tool arrays as **equal**, so the test fails on
+> still decides whether to search *again*; the search a dig promises is a separate call made first. `tests/explain.test.ts` pins the two tool arrays as **equal**, so the test fails on
 > the difference rather than on a number somebody might legitimately tune.
 
 The old answer stays on screen, dimmed, while the new one runs, and **comes back if the re-ask
 fails**. Losing a good answer to a failed attempt at a better one is the one outcome this button must
-not produce, and the server has overwritten the stored copy by then — the client's is the only one
-left.
+not produce. A failure before the claim leaves the stored copy alone; one after it — the answer
+itself failing — has overwritten it by then, and the client's is the only one left.
 
 **A follow-up box that opens a chat** — *"if the user enters text into it, it should automatically
 open up as a new chat (rather than making the [dialog] itself too complex)"*. Which is what keeps a
@@ -853,7 +872,8 @@ PATCH  /api/comments/:slug/:id/mark     { criterionId, valence } — the referee
                                         null; both null clears it.
 POST   /api/comments/:slug/:id/answer   {} or { deep: true } → **a stream**
                                         The legacy explanation path: Try again, and
-                                        Search the web properly. 409 on a bookmark.
+                                        Dig deeper ({ deep: true }). 409 on a bookmark;
+                                        429/503 when Dig deeper's allowance is spent.
 DELETE /api/comments/:slug/:id
 ```
 
@@ -931,7 +951,7 @@ own words. Greg decided they should go out:
 
 **What a visitor gets:** the passage, the reader's own words, the model's answer, and its citations.
 **What they may do with it:** read it, step through the list, and nothing else — no edit box, no
-delete, no retry, no *search the web*, and no follow-up composer. Absent, not disabled: a greyed-out
+delete, no retry, no *Dig deeper*, and no follow-up composer. Absent, not disabled: a greyed-out
 box that says "ask a follow-up" is an invitation to press it, and the press would spend the owner's
 money.
 
@@ -1054,9 +1074,11 @@ actually argue for. Chat is the one that had to earn its place; the argument is 
 
 ### And since 2026-08-26, a third caller of this same call
 
-The glossary's **"Check the web"** button ([glossary.md § Checking a term on the
-web](glossary.md#checking-a-term-on-the-web)) calls `explain` directly, with the term's name as the
-quote and the block it first appears in as the anchor. Not a copy of it — the function.
+The glossary's **Dig deeper** button ([glossary.md § Digging deeper into a
+term](glossary.md#digging-deeper-into-a-term)) calls `explainStream` directly, with the first
+matching glossary form — the name or an alias — as the quote, the first block it matches as the
+anchor, and the dig's findings. Not a copy of it — the function. Its *Look up* box calls the same
+stream without a dig, quoting the exact characters it matched.
 
 That is worth knowing here rather than only there, for two reasons. **A change to `SYSTEM` in
 [`src/explain.ts`](../../src/explain.ts) now changes what a glossary entry's checked answer says**,
@@ -1067,8 +1089,10 @@ glossary should be the same mechanism as comments with a different prompt, not a
 second half — one storage artefact, one anchor model — is still open.
 
 One practical consequence: because the article half of the prompt is one cached prefix
-([prompt-caching.md](prompt-caching.md)), a glossary lookup on a piece somebody has already asked a
-question about is a cache hit rather than a fresh read of the whole article.
+([prompt-caching.md](prompt-caching.md)), a call can reuse an earlier one's read of the whole
+article — but only on the same model. A typed *Look up* can reuse an ordinary comment's prefix; a
+*Dig deeper* press is always `DIG_DEEPER_MODEL`, so on a standard-power article the first dig writes
+that model's copy and later digs read it.
 
 ## See also
 

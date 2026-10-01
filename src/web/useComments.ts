@@ -363,7 +363,7 @@ export function useComments(slug: string): CommentsApi {
   const send = useCallback(
     (input: Comment, deep = false) => {
       /* What is on screen right now, kept so a failed re-ask can put it back.
-         Without this, pressing "Search the web properly" on a good answer and
+         Without this, pressing *Dig deeper* on a good answer and
          having the second call fail leaves the reader with an error where their
          answer used to be, and no way back to it. The server has already
          overwritten the stored one by then, so this copy is the only one left. */

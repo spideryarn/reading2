@@ -175,7 +175,7 @@ export function kindOfMessage(message: string): FailureKind | null {
  * There are five surfaces where a failure can appear, and three consult this.
  * The other two are not oversights:
  *
- * **The glossary's "Check the web".** It is the only control that term has ever
+ * **The glossary's *Dig deeper* (was "Check the web").** It is the only control that term has ever
  * had — it *is* the first attempt and the retry, because a failed lookup leaves
  * `entry.lookup` undefined and the button simply comes back. Hiding it would
  * take away the only route to a lookup for that term, permanently, on the
@@ -316,6 +316,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "cite-no-extract": "retry",
   "cite-unfinished": "retry",
   "cite-investigate-resting": "blocked",
+  /* *Dig deeper* — src/dig-deeper.ts. */
+  "dig-resting": "blocked",
+  "dig-no-search": "retry",
   "cite-lookup-failed": "retry",
   "cite-gone": "blocked",
   "guess-resting": "blocked",
@@ -371,7 +374,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
-  /* **The two refusals "Check the web" can give**, and the only `gl-` pair.
+  /* **The two refusals *Dig deeper* on a glossary entry can give**, and the only `gl-` pair.
      Neither is a model call and neither is a fault: one says the article never
      quotes the term, the other that the glossary no longer fits the article.
      `blocked` because both refuse again unchanged — see
@@ -1723,7 +1726,7 @@ export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
 /* -------------------------------------------------------------------- glossary -- */
 
 /**
- * **The two ways "Check the web" cannot run**, and they are not the same fact.
+ * **The two ways *Dig deeper* on a glossary entry cannot run**, and they are not the same fact.
  *
  * A lookup is [`explain`](explain.ts) with a different selection: it needs a
  * passage of the article to anchor the question to, and it finds one by walking
@@ -5402,7 +5405,7 @@ export const CITATION_INVESTIGATE_QUOTED: ReaderFacingFailure = {
   kind: "retry",
   message:
     "This answer tried to quote a source directly, which we can't check, so it was stopped and not kept. " +
-    "Investigating again usually gets one that says it in its own words. [cite-quoted]",
+    "Digging deeper again usually gets one that says it in its own words. [cite-quoted]",
 };
 
 /** The search came back with no extract to read, so an answer could only have been from memory. */
@@ -5424,16 +5427,54 @@ export const CITATION_INVESTIGATE_UNFINISHED: ReaderFacingFailure = {
     "a fresh one. [cite-unfinished]",
 };
 
-/** *Investigate* refused by its allowance (`INVESTIGATE_RATE_POLICY`) — one sentence per reason. */
+/**
+ * ***Dig deeper* refused by its allowance** (`DIG_DEEPER_RATE_POLICY`,
+ * src/dig-deeper.ts) — one sentence per reason, Investigate's three below in
+ * shape. Said of the action rather than of a glossary entry or a comment,
+ * because the one allowance covers both buttons. They say only that this
+ * request changed nothing: the first glossary press may have no earlier answer.
+ */
+export const DIG_DEEPER_BUSY =
+  "Another Dig deeper is still running. Wait for it to finish, then try this one.";
+export const DIG_DEEPER_LIMITED =
+  "You have dug deeper a lot recently. Try again in a while; this request did not change anything.";
+/** The 503 of the three, so it carries a code, as `CITATION_INVESTIGATE_RESTING` does. */
+export const DIG_DEEPER_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Dig deeper has done as many as it can for today, so asking again today will get the same " +
+    "answer. Try again tomorrow; this request did not change anything. [dig-resting]",
+};
+
+/**
+ * **The forced search did not happen, or nobody can say it did** — the search
+ * step's usage reported zero searches, or no count at all (src/dig-deeper.ts §
+ * `searchFirst`). The press stops before the answer, because an answer under a
+ * *from a web search* label with no search behind it is the one thing this
+ * action promises not to be.
+ */
+export const DIG_DEEPER_NO_SEARCH: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The web search this needs did not run, so nothing was asked and nothing changed. " +
+    "Trying again usually works. [dig-no-search]",
+};
+
+/**
+ * Citations' *Dig deeper* (was *Investigate*) refused by its allowance
+ * (`INVESTIGATE_RATE_POLICY`) — one sentence per reason. "On a cited work",
+ * because this allowance is not the glossary's and comments' one
+ * (`DIG_DEEPER_BUSY` above): a dig running there does not refuse this.
+ */
 export const CITATION_INVESTIGATE_BUSY =
-  "Another Investigate is still running. Wait for it to finish, then try this one.";
+  "Another Dig deeper on a cited work is still running. Wait for it to finish, then try this one.";
 export const CITATION_INVESTIGATE_LIMITED =
-  "You have investigated a lot of works recently. Try again in a while — the row's link is still there.";
+  "You have dug deeper into a lot of works recently. Try again in a while — the row's link is still there.";
 /** The 503 of the three, so it carries a code, as `CITATION_FIND_RESTING` does. */
 export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "Investigate has done as many as it can for today, so asking again today will get the same " +
+    "Dig deeper on cited works has done as many as it can for today, so asking again today will get the same " +
     "answer. Try again tomorrow — the row's link is still there. [cite-investigate-resting]",
 };
 

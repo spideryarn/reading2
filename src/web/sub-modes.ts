@@ -19,11 +19,10 @@
  * them. What a sub-mode *arms* is activation.ts § `subModeTarget`, next to the
  * mode table it extends.
  *
- * **Not a sub-mode, deliberately**: Summary's outline (`?summary=gists`), which
- * has no control of its own since 2026-10-01 — pressing Parts or Sections is
- * what chooses it, and the Summary mode row is the way there — and the
- * orderings inside a mode (Quotes' rank, Glossary's sort, Search's matcher),
- * which reorder a band rather than replace it.
+ * **Not a sub-mode, deliberately**: the orderings inside a mode (Quotes' rank,
+ * Glossary's sort, Search's matcher), which reorder a band rather than replace
+ * it. Summary's outline (`?summary=gists`) was the other, until it was removed
+ * on 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
  * docs/plans/261001d-command-bar-lists-sub-modes.md.
  */
 import type { Mode } from "../modes.js";
@@ -198,8 +197,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
  * writes these through nuqs (Reader.tsx), the metadata page builds an href from
  * them (Dock.tsx), so the two cannot land in different places.
  *
- * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch
- * and Criteria disappear from the address rather than leaving a redundant
+ * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch,
+ * Criteria and Simple disappear from the address rather than leaving a redundant
  * explicit default in metadata-page links. Remember's Quiz also clears `thread`: Remember's rule 1
  * (ConversationModes.tsx § RememberBand) — no frame in which the URL says both,
  * and one Back undoes the whole trip.
@@ -210,7 +209,7 @@ export interface SubModeParams {
   readonly thread?: null;
   readonly diagram?: DiagramKind | null;
   readonly referee?: RefereeView | null;
-  readonly summary?: SimpleLevel;
+  readonly summary?: SimpleLevel | null;
 }
 
 export function subModeParams(sub: SubMode): SubModeParams {
@@ -224,7 +223,7 @@ export function subModeParams(sub: SubMode): SubModeParams {
     case "referee":
       return { mode: "referee", referee: sub.view === "criteria" ? null : sub.view };
     case "summary":
-      return { mode: "summary", summary: sub.view };
+      return { mode: "summary", summary: sub.view === "simple" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

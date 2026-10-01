@@ -148,7 +148,14 @@ async function givenUsed(owner: string, n: number): Promise<void> {
 
 /** A voucher for `owner`'s address, unclaimed. */
 async function givenVoucher(owner: string, n: number, note: string | null = null): Promise<string> {
-  return (await createVoucher({ email: emailOf(owner), articles: n, note }, ADMIN_USER_ID_LOCAL)).id;
+  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note }, ADMIN_USER_ID_LOCAL);
+  if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
+  return made.id;
+}
+
+/** How many vouchers one claim bound. */
+async function claims(...args: Parameters<typeof claimVouchersFor>): Promise<number> {
+  return (await claimVouchersFor(...args)).claimed;
 }
 
 async function makePaid(owner: string, status = "active"): Promise<void> {
@@ -184,7 +191,7 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
     await givenUsed(READER, 3);
     await givenUsed(OTHER, 3);
     await givenVoucher(READER, 20);
-    expect(await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(1);
+    expect(await claims({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(1);
 
     const gifted = await reserveIngest(READER, undefined, PRICES);
     expect(gifted.kind).toBe("admitted");
@@ -205,12 +212,12 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
   it("does not claim a revoked voucher, and a revoke after the claim takes the gift back", async () => {
     const id = await givenVoucher(READER, 20);
     expect(await updateVoucher(id, { revoked: true })).toEqual({ kind: "updated" });
-    expect(await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(0);
+    expect(await claims({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(0);
     expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS);
 
     /* Restored, claimed, then revoked again. */
     await updateVoucher(id, { revoked: false });
-    expect(await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(1);
+    expect(await claims({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(1);
     await sweepReservations(READER);
     expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS + 20);
     await updateVoucher(id, { revoked: true });
@@ -220,7 +227,7 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
 
   it("does not claim a voucher addressed to somebody else", async () => {
     await givenVoucher(OTHER, 20);
-    expect(await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(0);
+    expect(await claims({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).toBe(0);
     expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS);
   });
 
@@ -233,7 +240,7 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
       /* Confirmed, but a different address: the JWT and the record disagree. */
       { kind: "confirmed", email: "someone-else@example.invalid" },
     ] as const) {
-      expect(await claimVouchersFor(user, { lookup: async () => answer })).toBe(0);
+      expect(await claims(user, { lookup: async () => answer })).toBe(0);
     }
     expect(await limitOf(READER)).toBe(FREE_LIFETIME_INGESTS);
   });
@@ -242,7 +249,7 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
     await givenVoucher(READER, 5);
     const shouted = `  ${emailOf(READER).toUpperCase()} `;
     expect(
-      await claimVouchersFor({ id: READER, email: shouted }, { lookup: async () => ({ kind: "confirmed", email: shouted }) }),
+      await claims({ id: READER, email: shouted }, { lookup: async () => ({ kind: "confirmed", email: shouted }) }),
     ).toBe(1);
   });
 
@@ -378,8 +385,9 @@ describe("concurrent admissions and revokes", () => {
 describe("the administrator's side", () => {
   it("refuses to change the address of a claimed voucher, and allows it before", async () => {
     const id = await givenVoucher(READER, 3);
-    expect(await updateVoucher(id, { email: emailOf(OTHER) })).toEqual({ kind: "updated" });
-    expect(await claimVouchersFor({ id: OTHER, email: emailOf(OTHER) }, { lookup: confirmed(OTHER) })).toBe(1);
+    /* A real change of address queues the recipient's email again (261001p). */
+    expect(await updateVoucher(id, { email: emailOf(OTHER) })).toEqual({ kind: "updated", giftDelivery: expect.any(String) });
+    expect(await claims({ id: OTHER, email: emailOf(OTHER) }, { lookup: confirmed(OTHER) })).toBe(1);
     expect(await updateVoucher(id, { email: emailOf(READER) })).toEqual({ kind: "claimed" });
     expect(await updateVoucher(id, { articles: 7, note: "raised" })).toEqual({ kind: "updated" });
     expect(await updateVoucher(randomUUID(), { articles: 7 })).toEqual({ kind: "not-found" });
@@ -400,10 +408,14 @@ describe("the administrator's side", () => {
   });
 
   it("validates a body strictly", () => {
-    expect(parseNewVoucher({ email: " A@B.example ", articles: 20 })).toEqual({
+    const id = randomUUID();
+    expect(parseNewVoucher({ id, email: " A@B.example ", articles: 20 })).toEqual({
       ok: true,
-      value: { email: "a@b.example", articles: 20, note: null },
+      value: { id, email: "a@b.example", articles: 20, note: null },
     });
+    /* The id is the browser's, and required: it is what makes a replay the same create. */
+    expect(parseNewVoucher({ email: "a@b.example", articles: 20 }).ok).toBe(false);
+    expect(parseNewVoucher({ id: "not-a-uuid", email: "a@b.example", articles: 20 }).ok).toBe(false);
     for (const bad of [
       { email: "a@b.example", articles: 0 },
       { email: "a@b.example", articles: 1001 },
@@ -430,8 +442,10 @@ describe("the routes", () => {
     const id = await givenVoucher(OTHER, 3);
     for (const [method, url, body] of [
       ["GET", "/api/admin/vouchers", ""],
-      ["POST", "/api/admin/vouchers", JSON.stringify({ email: emailOf(READER), articles: 1000 })],
+      ["POST", "/api/admin/vouchers", JSON.stringify({ id: randomUUID(), email: emailOf(READER), articles: 1000 })],
       ["PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ articles: 1000 })],
+      /* 261001p: the Retry, which can make Spideryarn email an address. */
+      ["POST", `/api/admin/voucher-emails/${randomUUID()}/retry`, ""],
     ] as const) {
       const reply = await drive(method, url, body, READER);
       expect(reply.status, `${method} ${url}`).toBe(403);
@@ -444,7 +458,7 @@ describe("the routes", () => {
     const created = await drive(
       "POST",
       "/api/admin/vouchers",
-      JSON.stringify({ email: emailOf(READER), articles: 20, note: "private" }),
+      JSON.stringify({ id: randomUUID(), email: emailOf(READER), articles: 20, note: "private" }),
       ADMIN_USER_ID_LOCAL,
     );
     expect(created.status).toBe(201);

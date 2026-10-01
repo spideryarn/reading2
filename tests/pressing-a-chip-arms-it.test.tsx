@@ -241,7 +241,7 @@ describe("Remember's Recall | Quiz toggle", () => {
 const { SummaryControls } = await import("../src/web/modes/summary/SummaryMode.js");
 
 /** `slug: null` is the visitor's slider, which must arm nothing. */
-function mountSummaryControls(value: "gists" | "brief" | "simple" | "fuller", slug: string | null = SLUG): string[] {
+function mountSummaryControls(value: "brief" | "simple" | "fuller", slug: string | null = SLUG): string[] {
   const changes: string[] = [];
   act(() => {
     root.render(
@@ -268,20 +268,20 @@ function slideTo(stop: number): void {
 
 describe("Summary's plain-words slider", () => {
   it("is a named range with three stops that says which level it is on", () => {
-    mountSummaryControls("gists");
+    mountSummaryControls("simple");
     const group = host.querySelector("fieldset.summ-slider");
     expect(group?.querySelector("legend")?.textContent).toBe("In plain words");
     expect(group?.querySelector("legend")?.className).toBe("sr-only");
     const input = slider();
     expect([input.min, input.max, input.step, input.value]).toEqual(["0", "2", "1", "1"]);
-    expect(input.getAttribute("aria-valuetext")).toBe("Simple (not showing)");
+    expect(input.getAttribute("aria-valuetext")).toBe("Simple");
     mountSummaryControls("fuller");
     expect(slider().value).toBe("2");
     expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
   });
 
   it("arms the run when moved to a level, and moves to it", () => {
-    const changes = mountSummaryControls("gists");
+    const changes = mountSummaryControls("simple");
     expect(armed("simple")).toBe(false);
     slideTo(0);
     expect(armed("simple")).toBe(true);
@@ -295,15 +295,23 @@ describe("Summary's plain-words slider", () => {
     expect(changes).toEqual(["fuller"]);
   });
 
-  it("opens the level it rests on when the idle slider is clicked", () => {
-    const changes = mountSummaryControls("gists");
-    click(".summ-slider input[type=range]");
+  it("goes to the end an icon names, and arms it", () => {
+    const changes = mountSummaryControls("simple");
+    const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider-end")];
+    expect(ends).toHaveLength(2);
+    expect(ends.map((end) => end.getAttribute("aria-label"))).toEqual([
+      "Show Brief summary",
+      "Show Fuller summary",
+    ]);
+    expect(ends.map((end) => end.tabIndex)).toEqual([0, 0]);
+    expect(ends.some((end) => end.hasAttribute("aria-hidden"))).toBe(false);
+    act(() => ends[0]?.click());
     expect(armed("simple")).toBe(true);
-    expect(changes).toEqual(["simple"]);
+    expect(changes).toEqual(["brief"]);
   });
 
   it("arms once when a pointer move emits both input and click", () => {
-    const changes = mountSummaryControls("gists");
+    const changes = mountSummaryControls("simple");
     const input = slider();
     act(() => {
       input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
@@ -339,8 +347,18 @@ describe("Summary's plain-words slider", () => {
   });
 
   it("arms nothing for a visitor, who still gets to move it", () => {
-    const changes = mountSummaryControls("gists", null);
+    const changes = mountSummaryControls("brief", null);
     slideTo(2);
+    expect(armed("simple")).toBe(false);
+    expect(changes).toEqual(["fuller"]);
+  });
+
+  it("arms nothing when a visitor uses an end button", () => {
+    const changes = mountSummaryControls("simple", null);
+    const fuller = host.querySelector<HTMLButtonElement>(
+      '.summ-slider-end[aria-label="Show Fuller summary"]',
+    );
+    act(() => fuller?.click());
     expect(armed("simple")).toBe(false);
     expect(changes).toEqual(["fuller"]);
   });

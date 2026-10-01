@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Article, Comment, Crossref, Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
+import { LogoLoader } from "../LogoLoader.js";
 import type { ArticleView } from "../router.js";
 import { Metadata } from "../Metadata.js";
 import { Reader } from "../reader/Reader.js";
@@ -178,14 +179,21 @@ export function ArticlePage({
       </>
     );
 
-  // Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
-  // then a line naming what is being waited for rather than "Loading…".
+  /* Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
+     then the wordmark as a spinner, with the sentence naming what is being
+     waited for kept for a screen reader and for reduced motion — LogoLoader.tsx,
+     docs/project/loading-spinner.md. Greg, 2026-10-01: *"Instead of 'Fetching
+     the article and its summaries', show an animated loading spinner."* */
   if (access.kind === "loading")
     return (
       <>
         <HomeLogo />
         <FeedbackTrigger variant="corner" />
-        <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>
+        {slow && (
+          <div className="tw:flex tw:min-h-[70dvh] tw:items-center tw:justify-center">
+            <LogoLoader label="Fetching the article and its summaries" />
+          </div>
+        )}
       </>
     );
 

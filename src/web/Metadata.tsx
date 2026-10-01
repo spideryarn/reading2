@@ -554,8 +554,7 @@ export function Metadata({
    * free, which is the same argument its `comments` count already makes.
    *
    * `saved === null` means "not seeded yet", so an empty box the reader has
-   * cleared is tellable from one that has not loaded. Same distinction
-   * `SummaryPanel` holds for its steer.
+   * cleared is tellable from one that has not loaded.
    *
    * The save is [`useAutosavedText`](./useAutosavedText.ts), shared with
    * `/profile` since 2026-10-01, when the box began saving itself after a pause
@@ -1383,8 +1382,8 @@ function RerunSection({
       )}
       {/* **High-powered AI**, for the owner of the article — switching it on counts
           as one more article against their allowance (plan 260930k). First in
-          the section, above the rows it changes the model for: switching it
-          re-runs nothing, and the rows below are how you ask. */}
+          the section, above the rows it changes the model for (all but Simple):
+          switching it re-runs nothing, and the rows below are how you ask. */}
       <HighPowerSwitch slug={slug} since={provenance?.highPowerSince} onChanged={onFinished} />
       {/* Two facts and no third. **It does not say anything is out of date** —
           nothing here can honestly tell you that, and the whole reason this

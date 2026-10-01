@@ -2429,7 +2429,12 @@ export type RateBucket =
   /* Citations' *Investigate* — a streamed, web-searching answer over the whole
      article, several times *Find it*'s cost a press, so its own allowance
      (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`). */
-  | "citation-investigate";
+  | "citation-investigate"
+  /* *Dig deeper* on a glossary entry or a comment — a forced web search and
+     an answer on the high-power model over the whole article, per press
+     (src/dig-deeper.ts § `DIG_DEEPER_RATE_POLICY`). One bucket for both
+     buttons, because it is one action. */
+  | "dig-deeper";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

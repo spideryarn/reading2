@@ -55,6 +55,10 @@ vi.mock("../src/web/lib/api.js", async () => {
 /** Every recogniser the hook has constructed, newest last. */
 let built: FakeRecognition[] = [];
 let gumCalls = 0;
+/** What each `getUserMedia` call asked for, in order. */
+let gumRequests: MediaStreamConstraints[] = [];
+/** The `"default"` input is listed but gone by the time it is opened. */
+let defaultVanishes = false;
 let gumRejects = false;
 /**
  * The machine's microphones, for the remembered-device cases (spya-k3q9mc).
@@ -64,7 +68,9 @@ let gumRejects = false;
  */
 let inputs: Array<{ deviceId: string; label: string }> = [];
 let defaultInput: { deviceId: string; label: string } | null = null;
-let holdEnumeration = false;
+let enumerationCalls = 0;
+/** One-based `enumerateDevices` call to hold, or null to let all of them finish. */
+let holdEnumerationAt: number | null = null;
 let releaseEnumeration: (() => void) | null = null;
 let tracksStopped = 0;
 /** `ended` handlers the hook installed on the track it opened. */
@@ -310,13 +316,16 @@ function install(Ctor: typeof FakeRecognition) {
     value: {
       getUserMedia: async (c: MediaStreamConstraints) => {
         gumCalls++;
+        gumRequests.push(c);
         if (gumRejects) throw new DOMException("denied", "NotAllowedError");
         const audio = c.audio;
         const exact =
           typeof audio === "object" && audio && typeof audio.deviceId === "object"
             ? (audio.deviceId as { exact?: string }).exact
             : undefined;
-        const device = exact ? inputs.find((d) => d.deviceId === exact) : defaultInput;
+        const device = exact
+          ? inputs.find((d) => d.deviceId === exact && !(defaultVanishes && exact === "default"))
+          : defaultInput;
         if (exact && !device) throw { name: "OverconstrainedError", constraint: "deviceId" };
         return {
           getAudioTracks: () => [fakeTrack(device ?? null)],
@@ -324,7 +333,8 @@ function install(Ctor: typeof FakeRecognition) {
         };
       },
       enumerateDevices: async () => {
-        if (holdEnumeration) {
+        enumerationCalls += 1;
+        if (enumerationCalls === holdEnumerationAt) {
           await new Promise<void>((release) => {
             releaseEnumeration = release;
           });
@@ -456,10 +466,13 @@ beforeEach(() => {
   resetMicrophoneLock();
   built = [];
   gumCalls = 0;
+  gumRequests = [];
+  defaultVanishes = false;
   gumRejects = false;
   inputs = [];
   defaultInput = null;
-  holdEnumeration = false;
+  enumerationCalls = 0;
+  holdEnumerationAt = null;
   releaseEnumeration = null;
   transcribeCalls = 0;
   transcribeFails = false;
@@ -1378,6 +1391,69 @@ describe("what reaches the textarea", () => {
  * available, and then worked. The id had stopped resolving; the device had
  * not gone. docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
  */
+/* Greg's Mac, spya-g8byyd: macOS's input was his webcam, Chrome's own choice
+   was another microphone, and `{ audio: true }` opens Chrome's choice. The
+   fake's `defaultInput` plays Chrome's choice here; the `"default"` row is the
+   operating system's. Plan 261001q. */
+describe("the system default", () => {
+  const SYSTEM = { deviceId: "default", label: "Default - Logitech BRIO" };
+  const BUILTIN = { deviceId: "builtin", label: "MacBook Pro Microphone (Built-in)" };
+
+  it("asks for the operating system's input by name when the browser lists one", async () => {
+    inputs = [SYSTEM, BUILTIN];
+    defaultInput = BUILTIN;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests[0]).toEqual({ audio: { deviceId: { exact: "default" } } });
+    expect(h.get().deviceLabel).toBe("Default - Logitech BRIO");
+    expect(h.get().deviceUnavailable).toBe(false);
+    h.unmount();
+  });
+
+  it("falls back to the browser's choice, without a warning, if the default is gone by the time it opens", async () => {
+    inputs = [SYSTEM, BUILTIN];
+    defaultInput = BUILTIN;
+    defaultVanishes = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests).toEqual([{ audio: { deviceId: { exact: "default" } } }, { audio: true }]);
+    expect(h.get().armed).toBe(true);
+    expect(h.get().deviceLabel).toBe("MacBook Pro Microphone (Built-in)");
+    expect(h.get().deviceUnavailable).toBe(false);
+    h.unmount();
+  });
+
+  it("asks plainly where the browser lists no default (Safari, Firefox)", async () => {
+    inputs = [BUILTIN];
+    defaultInput = BUILTIN;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests[0]).toEqual({ audio: true });
+    h.unmount();
+  });
+
+  it("does not open a microphone after the press is stopped while the default is being checked", async () => {
+    inputs = [SYSTEM, BUILTIN];
+    defaultInput = BUILTIN;
+    holdEnumerationAt = 1;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(releaseEnumeration, "the default-device check never began").not.toBeNull();
+    expect(gumRequests).toEqual([]);
+
+    act(() => h.get().toggle());
+    releaseEnumeration?.();
+    await settleCapture();
+
+    expect(gumRequests, "a stopped session opened the microphone after releasing its lock").toEqual([]);
+    h.unmount();
+  });
+});
+
 describe("the remembered microphone", () => {
   function store(entries: Record<string, string>) {
     const map = new Map(Object.entries(entries));
@@ -1390,6 +1466,20 @@ describe("the remembered microphone", () => {
   }
   const AIRPODS = { deviceId: "airpods-today", label: "AirPods Pro" };
   const PHONE = { deviceId: "phone-mic", label: "iPhone Microphone" };
+
+  it("marks the preference read for this press even when another microphone control changed it", async () => {
+    const saved = store({});
+    inputs = [AIRPODS];
+    const h = drive();
+    saved.set("spya.dictation.deviceId", "airpods-today");
+
+    act(() => h.get().toggle());
+    await settleCapture();
+
+    expect(gumRequests[0]).toEqual({ audio: { deviceId: { exact: "airpods-today" } } });
+    expect(h.get().deviceId, "the strip would call this the system default").toBe("airpods-today");
+    h.unmount();
+  });
 
   it("says nothing when the default that opened is the chosen one under a new id, and adopts the id", async () => {
     const saved = store({
@@ -1419,6 +1509,53 @@ describe("the remembered microphone", () => {
     act(() => h.get().toggle());
     await settleCapture();
     expect(h.get().deviceUnavailable).toEqual({ wanted: "AirPods Pro" });
+    h.unmount();
+  });
+
+  it("falls back from a missing choice to the named system default, not Chrome's choice", async () => {
+    store({
+      "spya.dictation.deviceId": "airpods-yesterday",
+      "spya.dictation.deviceLabel": "AirPods Pro",
+    });
+    const SYSTEM = { deviceId: "default", label: "Default - Logitech BRIO" };
+    const CHROME = { deviceId: "chrome-choice", label: "MacBook Pro Microphone (Built-in)" };
+    inputs = [SYSTEM, CHROME];
+    defaultInput = CHROME;
+
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+
+    expect(gumRequests).toEqual([
+      { audio: { deviceId: { exact: "airpods-yesterday" } } },
+      { audio: { deviceId: { exact: "default" } } },
+    ]);
+    expect(h.get().deviceLabel).toBe("Default - Logitech BRIO");
+    expect(h.get().deviceUnavailable).toEqual({ wanted: "AirPods Pro" });
+    h.unmount();
+  });
+
+  it("does not fall back after the press stops while the system default is being checked", async () => {
+    store({
+      "spya.dictation.deviceId": "airpods-yesterday",
+      "spya.dictation.deviceLabel": "AirPods Pro",
+    });
+    inputs = [{ deviceId: "default", label: "Default - Logitech BRIO" }];
+    holdEnumerationAt = 1;
+    const h = drive();
+
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests).toEqual([
+      { audio: { deviceId: { exact: "airpods-yesterday" } } },
+    ]);
+    expect(releaseEnumeration, "the fallback default-device check never began").not.toBeNull();
+
+    act(() => h.get().toggle());
+    releaseEnumeration?.();
+    await settleCapture();
+
+    expect(gumRequests, "a stopped fallback opened a microphone outside its released claim").toHaveLength(1);
     h.unmount();
   });
 
@@ -1456,7 +1593,9 @@ describe("the remembered microphone", () => {
     });
     inputs = [AIRPODS];
     defaultInput = AIRPODS;
-    holdEnumeration = true;
+    /* The first enumeration chooses the system-default fallback. Hold the
+       second, where the opened track is compared with the remembered choice. */
+    holdEnumerationAt = 2;
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();

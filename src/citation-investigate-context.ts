@@ -33,8 +33,13 @@ import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } 
  * **Bump when the prompt (`INVESTIGATE_SYSTEM`, src/citation-investigate.ts),
  * the second part's layout, or anything here changes what an answer would say**
  * — it is inside the fingerprint, so a bump detaches every stored answer.
+ *
+ * `/7` is *Dig deeper* (plan 261001p stage 2, Sol F6): a forced search's pages
+ * in the second part and Opus throughout. An answer from before had neither,
+ * and must not be drawn under the new name. The model alone could not detach
+ * it: Sonnet and Opus are one generation (`generationKey`).
  */
-export const CITATION_INVESTIGATE_VERSION = "citation-investigate/6";
+export const CITATION_INVESTIGATE_VERSION = "citation-investigate/7";
 
 /** Each citing passage sent, in characters — *Look it up*'s `PASSAGE_CAP`. */
 export const INVESTIGATE_PASSAGE_CAP = 1_200;
@@ -141,6 +146,9 @@ export function investigateArticleKey(
 /**
  * **The fingerprint** — the model asked for, not the one that answered, since
  * only the configured model is known at read time (as `lookupContextHash`).
+ * Since plan 261001p that is `DIG_DEEPER_MODEL` (src/dig-deeper.ts) on both
+ * sides — src/citation-investigate.ts writes with it and src/store/pg.ts reads
+ * with it — never `modelFor`, whose environment override could differ.
  * And its generation rather than its id, for `lookupContextHash`'s reason: a
  * toggle of High-powered AI must not detach the answer (plan 260930f, Sol F1).
  */

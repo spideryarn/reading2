@@ -100,7 +100,7 @@ import {
   generateSimpleSummary,
   inputFingerprint as simpleFingerprint,
   SIMPLE_LEVELS,
-  SIMPLE_VERSION,
+  SIMPLE_PROMPT_VERSION,
 } from "./simple-summary.js";
 import {
   generateDebate,
@@ -157,6 +157,7 @@ import {
   generatorFor,
   type ModelPower,
   modelFor,
+  powerFor,
   STAGE_EFFORT,
 } from "./models.js";
 import { STEP_ORDER } from "./step-order.js";
@@ -3962,7 +3963,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   },
   /* Stage 5r — Simple: a plain-words orientation, a sub-mode of Summary. Off
      DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; run by a press on the
-     Simple chip, or on Metadata. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+     plain-words controls, or on Metadata.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
 
      **No baseline read**, like `faq`: nothing addresses a paragraph, so a
      re-run replaces them. */
@@ -3985,7 +3987,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       return {
         inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
-        promptVersion: SIMPLE_VERSION,
+        promptVersion: SIMPLE_PROMPT_VERSION,
         model: CAPABLE_MODEL,
       };
     },
@@ -3994,7 +3996,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
-        power: ctx.power,
+        /* Opus for every article, not the article's setting: `ALWAYS_HIGH_POWER`. */
+        power: powerFor("simple", ctx.power),
         cacheArticle: ctx.cacheArticle,
         profile: ctx.profile ?? null,
       });

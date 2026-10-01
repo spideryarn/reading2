@@ -266,7 +266,8 @@ The layout the pipeline used to write, one directory per article, until 2026-09-
     summary.json    GONE 2026-08-31, along with stage 5e that wrote it and the
                     `article_revisions.summary` column that held it
                     (../plans/260831s-gist-only-summaries.md, drizzle/0036). Summary
-                    mode now draws the gists that were always on the tree. Files
+                    mode drew the tree's gists instead until 2026-10-01, and is
+                    now only the plain-words levels (summaries.md). Files
                     left in a `data/` directory are orphans and nothing reads
                     them.
     ideas.json      the propositions the piece needs you to hold — the ones it

@@ -296,7 +296,7 @@ describe("the asked stages still see the note", () => {
   it("explain", async () => {
     const { buildExplainMessages } = await import("../src/explain.js");
     const text = JSON.stringify(
-      buildExplainMessages(meta, blocks, "a quoted phrase", blocks[0]!.id, false),
+      buildExplainMessages(meta, blocks, "a quoted phrase", blocks[0]!.id, null),
     );
     expect(text).toContain(NOTE_WORD);
     expect(text).toContain(BODY_WORD);

@@ -689,9 +689,10 @@ export class StampDisagrees extends Error {
  * What the store recorded about this step's last run.
  *
  * **Two sources, and only one of them may answer.** `revision_step_runs` is the
- * row the run wrote; the artefact itself carries `sourceHash`, `version`,
- * `generator` and — only in `ideas` — `profileHash`, for which there is no
- * column at all. That is why the row cannot simply be ignored.
+ * row the run wrote; the artefact itself carries `sourceHash`, its prompt stamp
+ * (`version`, except Simple's separate `promptVersion`), `generator` and — only
+ * in `ideas` — `profileHash`, for which there is no column at all. That is why
+ * the row cannot simply be ignored.
  *
  * The rule, which a review corrected twice:
  *

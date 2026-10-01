@@ -174,7 +174,7 @@ async function mount(kind: "chat" | "remember", search: string): Promise<void> {
             slug: SLUG,
             blocks: new Map<string, string>(),
             onJump: () => {},
-            kind,
+            ...(kind === "chat" ? { kind, onScreen: () => [] } : { kind }),
           }),
         ),
       ),

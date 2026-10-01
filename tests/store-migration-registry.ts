@@ -497,6 +497,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * `chat-anchor-route.test.ts`, which is the entry after next, and it reaches
    * what it reaches by the same two doors.
    */
+  /**
+   * **Written 2026-10-01**, `static-only` for the same reason as the entry
+   * after it, whose harness it copies line for line.
+   */
+  "tests/chat-visible-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`visible` at the chat route: what the wire may carry, and the hedged on-screen line the " +
+      "request `converse` builds. Seeds through `scratchArticleInPg`; what it still reaches is the " +
+      "seeder's copy step and the ledger row the stubbed model call records.",
+  },
   "tests/chat-help-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -1883,6 +1896,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Postgres. Its reach into the condemned modules is the seeder's copy step and the spend " +
       "ledger, as for `tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/dig-deeper-comment.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Dig deeper, stage 1 (2026-10-01, plan 261001p). It " +
+      "seeds one article with `scratchArticleInPg`, gives one comment an answer in SQL, and " +
+      "drives `POST /api/comments/:slug/:id/answer` with `deep: true` through `handleApi`, with " +
+      "the allowance, the search and `explainStream` stubbed — no model is called and no ledger " +
+      "row is written. Its reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/comment-answer-stream-lifetime.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/source-guess-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2309,6 +2334,11 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 6 },
   "tests/term-lookup.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 3 },
+  /* Recorded 2026-10-01 (plan 261001p) when its Metadata block gained the
+     file's first mutation; it was a Postgres suite from birth, so "converted"
+     here means "carries evidence", which is what this record checks. */
+  "tests/store-tweets-stale.test.ts":
+    { date: "2026-10-01", stage: "261001p", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 2 },
   "tests/the-query-string-does-not-decide-the-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
   "tests/tweets.test.ts":
@@ -2584,6 +2614,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the Auth lookup replaced — nothing reaches GoTrue, so the private
      clone is enough. */
   "tests/billing-vouchers.test.ts": "private-postgres",
+  /* 261001p: the voucher emails' outbox. The same shape as the file above, with
+     a stem of its own; every send goes to an injected fetch, never Resend. */
+  "tests/billing-voucher-emails.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",
@@ -2622,6 +2655,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two
@@ -2653,6 +2687,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      Storage the way its neighbour above does, through `scratchArticleInPg`. */
   "tests/comment-answer-stream-lifetime.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",
+  /* Plan 261001p. Seeds one article and one answered comment, and reads the
+     row back after a refused Dig deeper to show it was left alone — a read
+     a neighbour answering the same slug could falsify. No model is called. */
+  "tests/dig-deeper-comment.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,

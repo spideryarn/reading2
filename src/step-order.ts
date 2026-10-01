@@ -126,7 +126,7 @@ export const STEP_ORDER = [
      renderer and the body-only evidence, so it is in the `ideas` … `sketch`
      cache group and this list keeps it contiguous. Off `DEFAULT_INGEST_STEPS`
      and in `FORCE_ONLY_WHEN_NAMED`: a model call over the whole article that a
-     reader asks for by pressing Summary's Simple chip.
+     reader asks for through Summary's plain-words controls.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   "simple",
   /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one

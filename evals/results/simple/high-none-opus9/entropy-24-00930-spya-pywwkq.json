@@ -1,0 +1,129 @@
+{
+  "arm": "high-none-opus9",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:24:22.835Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "high",
+  "guard": false,
+  "wallMs": 21754,
+  "costUsd": 0.1132974,
+  "tokens": {
+    "input": 5526,
+    "output": 4005,
+    "reasoning": 2509
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 184,
+  "fullerWords": 240,
+  "briefWords": 120,
+  "paragraphs": [
+    {
+      "text": "This review explains a math tool for studying how brain cells, called neurons, combine messages from other neurons. The tool is called partial information decomposition, or PID. The authors also describe their own experiments that used it.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article calls it a grand challenge to learn how brains \"process information.\" New tools can now record hundreds or thousands of neurons at once. But researchers still need ways to turn that flood of data into clear insights.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits what two input neurons tell us about a target neuron into parts. Redundant information can be learned from either input alone. Unique information comes from only one input. Synergy, the authors' main focus, appears only when both inputs are seen together. They treat it as a sign the target is doing real computation.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "In slices of mouse brain grown in dishes, synergy was common. Trios of neurons inside a \"rich club,\" the best-connected cluster of neurons, had 2.7 times more synergy than other trios. Synergy also rose when the two input neurons were linked to each other. In monkeys, redundancy rose sharply during a reaching movement.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how brain cells, or neurons, combine the signals they receive. It gives a beginner-friendly introduction to a math tool called partial information decomposition, or PID. It also summarizes the authors' own experiments that use it.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The authors call discovering how brains process information a grand challenge of neuroscience. Two things held this back: too little data and too few ways to analyze it. New recording tools can now track hundreds or thousands of neurons at once, and PID helps with the analysis.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "Picture two neurons that both feed into a third. PID splits what they tell us about the third neuron's firing into three parts. Redundant information is what either input alone reveals. Unique information comes from only one input. Synergistic information appears only when both inputs are seen together, and the authors treat it as a sign of real processing.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "In slices of mouse brain grown in a dish, synergy was about a quarter of the information flowing from inputs to target. A \"rich club\", a core of well-connected neurons tightly linked to each other, had 2.7 times more synergy per trio. Links between the two input neurons added synergy. Synergy peaked when the inputs were moderately similar.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "In monkeys doing a task, redundant information rose sharply during reaching movements. The authors warn that PID finds statistical patterns, not causes. It also becomes unworkable with many inputs: six inputs already give 7,828,354 parts.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-spdx0y",
+        "spya-aby2dp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review explains a math tool for studying how brain cells handle information. It is called partial information decomposition, or PID. Picture two cells sending signals to a third. PID splits what they tell it into parts: shared by both, from one only, or seen only together.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "The authors call learning how brains process information a grand challenge. Just tracking signals from one cell to the next cannot show how signals combine.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "The focus is synergy, the part seen only together, treated as a sign of real computing. In mouse brain slices grown in dishes, tight groups of busy cells, called rich clubs, had 2.7 times more synergy. In monkeys, repeated, shared information rose sharply while they reached and grabbed.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

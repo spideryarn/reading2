@@ -403,6 +403,20 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* ***Dig deeper*'s answer** (src/explain.ts with a `dig`, plan 261001p) —
+     **explain's row exactly, and it has to be.** The request is explain's:
+     the same system prompt and article part with the same breakpoint, sent
+     to the high-power model, so it shares its cached prefix with a
+     high-powered article's ordinary explain calls. The cache is keyed on the
+     model and the prefix bytes, not on our job name — this row exists for the
+     ledger — so the `order` pin that keeps explain landing on the provider
+     holding its prefix must be the same here, or a dug answer would write a
+     second copy of the article somewhere else. */
+  "dig-deeper": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   search: {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -590,6 +604,19 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
      `require_parameters` so an upstream cannot quietly drop the token ceiling
      or the low effort. */
   "simple-check": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
+  /* ***Dig deeper*'s forced search** (src/dig-deeper.ts) — `link-summary`'s
+     row, for both of its reasons: no `order`, because this is a quick-tier
+     OpenAI model and the Anthropic pin is wrong quietly there, and no cached
+     prefix to keep; and `require_parameters`, which here guards the point of
+     the call. An upstream that dropped `tool_choice` would let the model skip
+     the search, and one that dropped the Exa tool would answer from memory —
+     both caught downstream by the search-count witness, but only as a refusal
+     the reader sees, where this makes them a routing choice instead. */
+  "dig-deeper-search": {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { require_parameters: true },
@@ -871,6 +898,13 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Not measured, and the tightest ceiling of the whole-article calls (src/explain.ts). " +
       "Nothing has failed that we know of; the length warning below is what would say so.",
   },
+  /* Explain's decision, because it is explain's call. On the high-power model
+     a `providerDefault` row is sent as `high` (`wireEffort` below). */
+  "dig-deeper": {
+    providerDefault:
+      "Explain's call on the high-power model, so `high` on the wire (wireEffort). Not measured; " +
+      "a probe ran out at explain's 1,500, hence src/dig-deeper.ts § DIG_ANSWER_TOKENS.",
+  },
   search: {
     providerDefault:
       "Measured 2026-09-28 on an 8,290-word essay: 44 and 194 thinking tokens against a " +
@@ -921,6 +955,10 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   /* The effort plan 261001h measured at, through `link-summary`'s row: a
      verdict per paragraph, not a piece of writing. */
   "simple-check": { effort: "low" },
+  /* Low: it writes a search and a one-line keyword query. The reasoning floor
+     (`link-summary`'s note) still buys about a thousand tokens of thinking;
+     src/dig-deeper.ts § DIG_SEARCH_MAX_TOKENS is sized clear of it. */
+  "dig-deeper-search": { effort: "low" },
   "citations-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },

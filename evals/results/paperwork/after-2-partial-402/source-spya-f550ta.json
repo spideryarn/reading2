@@ -1,0 +1,25 @@
+{
+  "arm": "after-2",
+  "slug": "source-spya-f550ta",
+  "at": "2026-10-01T19:05:31.434Z",
+  "sourceSha256": {
+    "hierarchy.ts": "be8ec11b0875a55886eba9ec1b525753ee3627de1e11c2d559e3fbc9cca3a3f9",
+    "simple-summary.ts": "0b0501b333f9b6e9b604a8503cb90ef0b43c73aa0799a5d2f272c4622e75e22e",
+    "tweets.ts": "14a6167b8e17d64620d432cc06cee679695676d8aecb0b326f664f9f0e2a9a9c",
+    "paperwork.ts": "3eb8b4c90cd68cc9b50412f810f6646c998dbfe9a8e24a7bfe9ff89040da2961"
+  },
+  "versions": {
+    "toc": "toc/10",
+    "tweets": "tweets/6",
+    "simple": "simple/2"
+  },
+  "gists": {
+    "error": "402 {\"type\":\"error\",\"error\":{\"type\":\"billing_error\",\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"error_type\":\"payment_required\"},\"request_id\":\"gen-1790881531-6DDrMsLwvsyPPvBurDJ4\",\"metadata\":{\"reason\":\"in_flight_budget_exhausted\",\"limit_source\":\"openrouter_in_flight_budget\",\"remedy_hint\":\"Retry after your in-flight requests settle (see the Retry-After header). Adding credits at https://openrouter.ai/settings/credits raises your in-flight budget, up to a capped ceiling.\",\"headers\":{\"Retry-After\":\"120\"},\"provider_name\":null}}"
+  },
+  "simple": {
+    "error": "Anthropic SDK request failed, status 402. [ai-no-credit]"
+  },
+  "tweets": {
+    "error": "Anthropic SDK request failed, status 402. [ai-no-credit]"
+  }
+}

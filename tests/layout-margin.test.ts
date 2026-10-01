@@ -106,7 +106,7 @@ describe("the marginalia column", () => {
 
   /* **Beside a band**, since 2026-10-01 —
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
-  const SHAPES = ["standard", "structure", "wide"] as const;
+  const SHAPES = ["standard", "structure", "wide", "roomy"] as const;
   const BANDED = CASES.flatMap((c) => SHAPES.map((bandShape) => ({ ...c, bandShape })));
 
   it("draws the column beside an open band once the window is wide enough for all three", () => {

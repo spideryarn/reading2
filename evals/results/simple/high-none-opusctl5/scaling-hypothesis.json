@@ -1,0 +1,132 @@
+{
+  "arm": "high-none-opusctl5",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:31:24.752Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "high",
+  "guard": false,
+  "wallMs": 25974,
+  "costUsd": 0.106334,
+  "tokens": {
+    "input": 5523,
+    "output": 3406,
+    "reasoning": 1853
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 182,
+  "fullerWords": 242,
+  "briefWords": 130,
+  "paragraphs": [
+    {
+      "text": "This essay by Gwern is about GPT-3, an AI that OpenAI announced in May 2020. GPT-3 was trained only to guess the next word in Internet text. It is a neural network, a program loosely modeled on brain cells, with 175 billion adjustable settings.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "Gwern says it matters because size alone gave GPT-3 new skills. It can pick up a new task from just a few examples, which he calls meta-learning, though nobody built it for that. It was also cheap by government standards, so much bigger models could follow.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "This supports the scaling hypothesis: intelligence may be simple learning methods run at enormous scale. Gwern calls the benefits the blessings of scale. Bigger networks, given more data and computing power, learn faster, better and more steadily. GPT-3's results kept improving as forecast, with no sign yet of leveling off.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-sfkxh8",
+        "spya-yq9zuc"
+      ]
+    },
+    {
+      "text": "Why would guessing words make a program smart? Easy patterns like spelling are learned first. The last, hardest bits of accuracy need real reasoning and common sense. Gwern also criticizes experts who dismissed scaling but never made predictions that could be checked.",
+      "ids": [
+        "spya-h74fhr",
+        "spya-kmyg3w",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This essay is about GPT-3, a text-predicting program OpenAI released in May 2020. It was then the largest neural network ever trained, a computer system that learns patterns from data. Gwern uses it to argue for the \"scaling hypothesis\": that simply making these systems bigger may lead to general, human-like intelligence (AGI).",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-suzdvz"
+      ]
+    },
+    {
+      "text": "The author says this matters because GPT-3 kept improving as forecast, with no sign of hitting a wall. It is costly for AI research but cheap by government or military budgets, so much larger models look possible. He also argues that AI experts who said this could not work were wrong and have not admitted it.",
+      "ids": [
+        "spya-asr663",
+        "spya-ewxv9q",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": bigger networks, trained on more data, often learn better and more generally. GPT-3 showed \"meta-learning\", meaning it could pick up a new task from a few examples, though nobody built that in. Gwern guesses big networks hold many small sub-models, and hard, varied data pushes them past memorizing toward real rules.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-sfkxh8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "Why should predicting the next word teach anything deep? Human writing quietly relies on logic, cause and effect, and common sense. Once easy patterns are learned, the last small errors need real understanding, so \"the last bits are deepest\".",
+      "ids": [
+        "spya-h74fhr",
+        "spya-kmyg3w",
+        "spya-g3b5y7"
+      ]
+    },
+    {
+      "text": "Gwern doubts rival labs like DeepMind will copy this, since they do not believe the hypothesis. An appendix warns that such systems may act like agents, things that pursue goals, even if trained on non-human data.",
+      "ids": [
+        "spya-scr8jb",
+        "spya-vr9q2p",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay is about GPT-3, a huge computer program that learns by guessing the next word in internet text. The author uses it to argue for the scaling hypothesis. That is the idea that simple learning programs get smarter just by being made bigger and fed more data.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-m3gtj6"
+      ]
+    },
+    {
+      "text": "The author says this matters because much bigger versions look affordable for big companies or governments. So AI may grow far more capable soon. He warns that most experts did not predict this and have no clear picture of what comes next.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "One key idea is meta-learning, meaning learning how to learn. GPT-3 can pick up a new task from a few examples, though nobody built that in. Another idea: guessing the next word perfectly would take real understanding of the world.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-g3b5y7"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

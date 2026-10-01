@@ -62,7 +62,8 @@ The differences that matter to a reader:
   shape-checked and revalidated against the current page-integrity rules before reuse; a defective
   one is recovered without rebuying its valid neighbours. A recovered chunk is saved only after the
   final cross-chunk deduplication still leaves every witnessed page present. Re-running after a
-  *renderer* fix is free.
+  *renderer* fix reuses every valid stored transcription checkpoint; only an
+  uncheckpointed or unusable chunk, plus the small front-matter call, is bought again.
   A **prompt** change is deliberately not free: the key carries
   `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
   nothing between runs at all, because a command
@@ -224,6 +225,15 @@ The differences that matter to a reader:
   not by the prompt, so no import pays for it; a note whose marker it cannot pin down is listed
   unlinked, and an uncited note on page 1 (an affiliation, mostly) is left out —
   [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).
+- **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
+  as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
+  table was a caption over nothing, though the cells were transcribed and scored all
+  along (report spya-pawfwx). Rows are split on newlines and cells on `|`, which is what
+  the model writes rather than anything the prompt promises, so a literal `|` in a cell
+  splits it. The cells are gated by the check like prose (`CHECKED` in
+  [`src/pdf.ts`](../../src/pdf.ts)), unlike footnotes. Forward-only: an article changes
+  on re-extraction, and its table blocks get new ids then —
+  [261001q](../plans/261001q-pdf-tables-and-composite-figures.md).
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).

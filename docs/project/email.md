@@ -4,8 +4,10 @@ Up: [architecture.md](architecture.md)
 
 Spideryarn sends two kinds of email, both through Resend with one key and one domain: **auth
 email**, which Supabase sends over SMTP, and **the server's own**, which goes through
-[`src/email.ts`](../../src/email.ts) — today only notices to us about sign-ups and upgrades
-([§ Mail the server sends itself](#mail-the-server-sends-itself)). Anything new that sends mail
+[`src/email.ts`](../../src/email.ts) — notices to us about sign-ups and upgrades
+([§ Mail the server sends itself](#mail-the-server-sends-itself)), and since 2026-10-01 the two
+emails a gift voucher sends, the first we send to somebody who is not yet a reader
+([§ Gift voucher emails](#gift-voucher-emails)). Anything new that sends mail
 should go through `src/email.ts` rather than add a second way or a second provider.
 
 **Auth email — sign-up confirmations, password resets, magic links — goes out through
@@ -156,6 +158,60 @@ Supabase Auth holds it. The two paths are:
 Sending is `sendEmail` or `notifyAdmin` in `src/email.ts`. Their `SendResult` (`sent`, `skipped`,
 `failed`) lets each caller decide whether to retry; the sign-up notice's give-the-row-back retry
 above is the one worked example.
+
+## Gift voucher emails
+
+> The gift voucher should definitely email the recipient. And I want an email when they claim it.
+> No need for expiry.
+>
+> — Greg, 2026-10-01
+
+Two emails per voucher ([billing.md § Gift vouchers](billing.md); plan
+[261001p](../plans/261001p-voucher-emails-to-recipient-and-creator.md), and two rounds of GPT Sol
+review that reshaped it):
+
+- **To the recipient**, when the voucher is made and again when an unclaimed voucher's address
+  actually changes: *A gift of N free articles on Spideryarn*, HTML in the auth templates' shape plus
+  a plain-text part, with one link, `https://www.spideryarn.com/login`. The only value in it is N.
+  **Never the note or the creator.**
+- **To the voucher's creator**, when it is claimed: plain text, the claimant's address and account
+  id, the articles, and when. The address is `accountEmail(created_by)`; if that lookup fails,
+  **nothing is sent** (`failed: creator address unavailable`, retryable), because `hello@` is not
+  known to be the creator's. **Not the note** either: the page has it, and each copy in Resend, the
+  forwarder and an inbox is one more place it lives.
+
+**Each email is a row of `billing_voucher_emails`, queued in the transaction of its event** (the
+create, the claim, the address change), so the event and its email commit together and nothing about
+sending happens inside that transaction. The row **freezes the request**: recipient, subject and both
+bodies. A claim notice's recipient is filled once, on the first successful creator lookup. Sending
+reads only the row, after the response, in three steps in
+[`src/store/pg-voucher-emails.ts`](../../src/store/pg-voucher-emails.ts):
+
+1. **Reserve**: one `UPDATE … RETURNING attempts` moves it to `sending`, bumps `attempts` and stamps
+   `attempt_started_at`, so of any number of contenders one wins. The automatic send reserves only a
+   `queued` row; Retry may also take `failed`, `skipped`, or a `sending` whose attempt started over
+   ten minutes ago — **never `sent`**. Retry's predicate is one SQL fragment, which also gives the
+   page its `retryable` flag.
+2. **Send**, with `Idempotency-Key: voucher-email/<row id>`. Resend keeps a key for 24 hours and
+   answers a repeat with the first result, so retrying a send that Resend did accept (a timeout, a
+   crash before step 3) does not send it twice within that window. The same key with a different
+   body is `409 invalid_idempotent_request`, which is why the request is frozen.
+3. **Complete**, only if the row is still `sending` on this attempt.
+
+**What this costs.** The recipient's address is now in a second table, so the foreign key cascades on
+delete and an erasure of the voucher reaches it. A Retry more than a day after an ambiguous attempt
+can send a duplicate; the page says *may or may not have gone* on a stuck send. Revoking a voucher
+moves its still-queued gift email to `skipped: voucher revoked`. A replayed create is the same create:
+the browser mints the voucher's id, so a retried POST finds the voucher it made and queues nothing.
+
+**Click tracking is unverified.** The one link holds no secret, so a rewritten link would still land
+on `/login`, by way of Resend. Our key is send-only (`GET /domains` answers 401
+`restricted_api_key`), so whether tracking is off can only be read in Resend's dashboard (Domains →
+spideryarn.com → Configuration).
+
+**Proved once for real** on 2026-10-01: both messages, built by the code above, were sent through
+`sendEmail` with `SPIDERYARN_EMAIL_SEND=1` to `hello@spideryarn.com` only, and Resend accepted both
+(ids `01a0f8db-5dcd…` and `01a0f8db-5e8c…`). Arrival in the inbox was not checked from here.
 
 ## See also
 

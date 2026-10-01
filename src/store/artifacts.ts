@@ -829,7 +829,10 @@ export interface StepStamp {
    * is here as the place for it rather than as something to read today.
    */
   implementationVersion?: string;
-  /** The prompt that wrote it. On disk: `version`, e.g. `"glossary/2"`. */
+  /**
+   * The prompt that wrote it. Usually `version`, e.g. `"glossary/2"`; Simple
+   * has a separate `promptVersion` because its `version` is the stored shape.
+   */
   promptVersion?: string;
   /** The model that ran. On disk: `generator`, e.g. `"claude-sonnet-5"`. */
   model?: string;
@@ -968,14 +971,17 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
 /**
  * The stamp fields as they are spelled inside the artefact itself.
  *
- * Every stamped artefact in this project uses the same three names —
- * `sourceHash`, `version`, `generator` — because they all grew out of
- * src/tweets.ts. Reading them in one place is what lets `sameStamp` be one
- * comparison instead of the three near-identical `…IsCurrent` functions.
+ * Stamped artefacts normally use the same three names — `sourceHash`,
+ * `version`, `generator` — because they all grew out of src/tweets.ts. Simple
+ * is the deliberate exception: `version` is its stored-shape contract and
+ * `promptVersion` is the prompt's provenance. Reading both spellings here is
+ * what lets the pipeline store reject a contradiction without confusing those
+ * two meanings.
  */
 interface StampedArtefact {
   sourceHash?: unknown;
   version?: unknown;
+  promptVersion?: unknown;
   generator?: unknown;
   /** Only `ideas` compares this today — see `StepStamp.profileHash`. */
   profileHash?: unknown;
@@ -985,7 +991,8 @@ export function stampOf(artefact: unknown): StepStamp {
   const a = (artefact ?? {}) as StampedArtefact;
   const stamp: StepStamp = {};
   if (typeof a.sourceHash === "string") stamp.inputHash = a.sourceHash;
-  if (typeof a.version === "string") stamp.promptVersion = a.version;
+  if (typeof a.promptVersion === "string") stamp.promptVersion = a.promptVersion;
+  else if (typeof a.version === "string") stamp.promptVersion = a.version;
   if (typeof a.generator === "string") stamp.model = a.generator;
   /* `null` is carried across as `null` rather than dropped: it means "written
      deliberately without a profile", which is a real answer and has to compare

@@ -607,7 +607,7 @@ one thing that will make the rest of these files make sense.
       glossary-lookups.json Web lookups you asked for on a glossary term.
       citation-finds.json  Pages found on the web for cited works you asked about.
       citation-investigations.json
-                           What Investigate wrote about cited works you asked it to look into,
+                           What the Dig deeper action wrote about cited works you asked it to look into,
                            which search results it read, and what it read of each paper.
       reading-time.json    How many seconds you have spent on each block.
       ideas.json           Propositions the article takes as given.
@@ -793,7 +793,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/glossary-lookups.json": "Web lookups you asked for on a glossary term.",
   "augmentations/citation-finds.json": "Pages found on the web for cited works you asked about.",
   "augmentations/citation-investigations.json":
-    "What Investigate wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
+    "What the Dig deeper action wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",

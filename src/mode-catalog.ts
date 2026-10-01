@@ -281,14 +281,18 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   summary: {
-    description:
-      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
-    how: "The sentences are the tree's own, written when the article was ingested — a shorter summary of the same thing is a different level of the tree, not a second request. Its Simple view is the one part a model writes: a few plain-words paragraphs, written once and kept.",
+    description: "The piece in plain words, at the length you choose — brief, simple or fuller",
+    /* Checked against src/simple-summary.ts: one job writes every level (a
+       call each, side by side) and stores them together, and every paragraph
+       keeps one to three passage ids. Until 2026-10-01 this mode was the
+       tree's gists at Parts or Sections, written at ingest; that outline went
+       (plan 261001p), and Structure is where the gists are drawn now. */
+    how: "A model writes all three lengths in one go, the first time you ask, and they are kept. Each paragraph links to the passages it rests on — the article says it better.",
     /* Both spellings, because the reader's keyboard is not ours to choose.
-       `simple` was here for the plain-words sub-mode (plan 260930i) and opened
-       the outline instead; since 2026-10-01 the bar has a *Summary › Simple*
-       row that goes there (src/web/sub-modes.ts, plan 261001d). */
-    aliases: ["summarise", "summarize", "gist"],
+       `simple` is not here: the bar has a *Summary › Simple* row that goes
+       there (src/web/sub-modes.ts, plan 261001d). `gist` went with the outline
+       on 2026-10-01 — nothing in Summary is a gist any more. */
+    aliases: ["summarise", "summarize"],
     experimental: false,
   },
   diagram: {
@@ -416,7 +420,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        price — mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Investigate any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then it writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
+    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: ["references", "bibliography", "sources", "works cited"],

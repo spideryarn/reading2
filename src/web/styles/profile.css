@@ -233,19 +233,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The microphone's own name, as the browser gives it. Shown only on the quiet
-   line: while sound is arriving the bars have already answered the question and
-   this is noise. It can be long ("Microsoft Teams Audio Device (Virtual)"), so
-   it is the one thing in the row allowed to shrink and clip. */
-.prof-mic-device {
-  min-width: 0;
-  flex: 0 1 auto;
-  overflow: hidden;
+/* The microphone's own name, as the browser gives it, on a line of its own for
+   as long as it is open. It used to sit in the listening row and only once the
+   row went quiet, on the theory that moving bars had already answered the
+   question; they answer "is a microphone hearing sound", not "is it the one I
+   meant" (spya-g8byyd, plan 261001q). A name can be long ("Microsoft Teams
+   Audio Device (Virtual)"), so the line wraps rather than clipping it. */
+.prof-mic-line {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  line-height: 1.4;
   color: var(--ink-faint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
-.prof-mic-device::before { content: "· "; }
+.prof-mic-device { color: var(--ink); }
 
 .prof-mic-change {
   flex: none;

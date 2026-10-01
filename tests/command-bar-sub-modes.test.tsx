@@ -334,6 +334,16 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     expect(pendingActivation("a-piece", "sketch")).toBeNull();
   });
 
+  it("opens Summary at the level named and arms its one plain-words job", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("fuller");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("summary", { mode: "summary", view: "fuller" });
+    expect(pendingActivation("a-piece", "simple")).not.toBeNull();
+  });
+
   it("arms nothing for Recall", () => {
     const onMode = vi.fn();
     reading({ onMode });
@@ -392,7 +402,6 @@ describe("the registry's two answers agree", () => {
     diagram: "sketch",
     referee: "criteria",
     remember: "recall",
-    summary: "gists",
   } as const;
 
   it("a sub-mode row arms exactly the target the band that mounts would claim", () => {
@@ -414,6 +423,8 @@ describe("the registry's two answers agree", () => {
       { mode: "remember", view: "recall" },
       { mode: "diagram", view: "sketch" },
       { mode: "referee", view: "criteria" },
+      /* Simple, since the outline went and it became Summary's default (plan 261001p). */
+      { mode: "summary", view: "simple" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;
       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });

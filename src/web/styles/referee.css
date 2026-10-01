@@ -255,8 +255,8 @@
    earns. */
 .ref-scan-caveat { color: var(--ink-faint); }
 
-/* The sub-modes. Deliberately the same shape as the summary panel's depth
-   pills and the quotes panel's order buttons, because it is the same gesture:
+/* The sub-modes. Deliberately the same shape as the quotes panel's order
+   buttons, because it is the same gesture:
    one of these is on, you press another, the panel below changes. The markup is
    Diagram's — a `role="radiogroup"` of `role="radio"` buttons, each its own tab
    stop and none of them handling a key — so the styling has to carry the
@@ -1003,4 +1003,3 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
 .cnd-send:hover:not(:disabled) { border-color: var(--ink-faint); }
 .cnd-send:disabled { opacity: 0.6; cursor: default; }
 .cnd-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-

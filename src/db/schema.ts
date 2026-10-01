@@ -4997,6 +4997,81 @@ export const billingVouchers = spideryarn.table(
 );
 
 /**
+ * **One email about one gift voucher, and how far it got** — the recipient's
+ * (`gift`, on create and on each real change of address) or the creator's
+ * (`claimed`, when it is claimed). docs/plans/261001p-voucher-emails-to-recipient-and-creator.md;
+ * src/store/pg-voucher-emails.ts is the only writer.
+ *
+ * **A row is queued in the same transaction as its event**, so there is no event
+ * without its email and no email without its event. Sending happens after the
+ * response and cannot fail the event.
+ *
+ * **The provider request is frozen when it is queued**: `subject`, `body_text`
+ * and `body_html` are rendered in the event's transaction, and so is
+ * `recipient` for a gift (the voucher's address at that moment). A claim notice
+ * leaves `recipient` null until the first successful lookup of the creator's
+ * address sets it, once. After a provider call has been attempted the request
+ * never changes, so a retry under the same `Idempotency-Key`
+ * (`voucher-email/<id>`) is the same request, which Resend's idempotency needs.
+ * The send reads this row and nothing else.
+ *
+ * **At most once is reserve, send, complete.** A reservation is one `UPDATE …
+ * SET status = 'sending', attempts = attempts + 1, attempt_started_at = now()
+ * … RETURNING attempts`; a completion must match `attempts`.
+ * `attempt_started_at` is the lease: a `sending` row is stale ten minutes on.
+ *
+ * `detail` is a reason — a status code, an error name, `creator address
+ * unavailable` — and **never an address**. The addresses live in `recipient`
+ * and the rendered bodies, which is why a voucher's deletion cascades here.
+ */
+export const billingVoucherEmails = spideryarn.table(
+  "billing_voucher_emails",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    voucherId: uuid("voucher_id")
+      .notNull()
+      .references(() => billingVouchers.id, { onDelete: "cascade" }),
+    /** `gift` to the recipient; `claimed` to the creator. */
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("queued"),
+    /** Bumped by each reservation; the completion must match it. */
+    attempts: integer("attempts").notNull().default(0),
+    /** When the current attempt was reserved: the lease a stale `sending` is judged by. */
+    attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
+    detail: text("detail"),
+    /** Who it goes to: a gift's from its event, a claim notice's from the first lookup. */
+    recipient: text("recipient"),
+    subject: text("subject").notNull(),
+    bodyText: text("body_text").notNull(),
+    bodyHtml: text("body_html"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("billing_voucher_emails_kind", sql`${t.kind} in ('gift', 'claimed')`),
+    check(
+      "billing_voucher_emails_status",
+      sql`${t.status} in ('queued', 'sending', 'sent', 'skipped', 'failed')`,
+    ),
+    check("billing_voucher_emails_attempts", sql`${t.attempts} >= 0`),
+    check("billing_voucher_emails_detail_length", sql`${t.detail} is null or char_length(${t.detail}) <= 200`),
+    /* A gift knows its recipient from the moment it is queued. */
+    check("billing_voucher_emails_gift_has_recipient", sql`${t.kind} <> 'gift' or ${t.recipient} is not null`),
+    /* Reserved means a lease was taken. */
+    check(
+      "billing_voucher_emails_sending_has_lease",
+      sql`${t.status} <> 'sending' or ${t.attemptStartedAt} is not null`,
+    ),
+    /* The list's latest-of-each-kind. */
+    index("billing_voucher_emails_voucher").on(t.voucherId, t.kind, t.createdAt),
+    /* One claim notice per voucher, ever: a voucher is claimed once. */
+    uniqueIndex("billing_voucher_emails_one_claimed")
+      .on(t.voucherId)
+      .where(sql`${t.kind} = 'claimed'`),
+  ],
+);
+
+/**
  * **Every new ingest an owner is charged for, reserved before it runs and
  * settled when it ends** — and, since 2026-09-30, every High-powered AI upgrade,
  * born settled (`kind`). One row per *attempt to spend* — not per article, and
@@ -5219,7 +5294,7 @@ export const ingestEvents = spideryarn.table(
      * never deleted, so the reference never dangles. Two guards: the check
      * `ingest_events_superseded_shape` below holds the row it is on to a charged
      * minimal one, and the trigger `ingest_events_superseded_by_ingest`
-     * (drizzle/20261001182129_ingest_events_minimal.sql) holds the row it points
+     * (drizzle/20261001211225_bulk_import_minimal.sql) holds the row it points
      * at to a charged ingest of the same owner and the same article. Written by
      * `supersedeMinimal` in src/store/pg-billing.ts and nothing else.
      */
@@ -5664,7 +5739,7 @@ export const rateLimitEvents = spideryarn.table(
   (t) => [
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

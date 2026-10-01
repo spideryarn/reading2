@@ -93,9 +93,17 @@ ${PROFILE_RULES}`;
   `BLOCK_ID_NOTE` in [`src/article-prompt.ts`](../../src/article-prompt.ts) is printed in every
   `articleWithIds` article, so a prompt shown ids is told not to write "block 39" or "block
   spya-…" in prose, and a prompt shown none is not. The hierarchy prompts, which number their
-  own blocks, do not say it yet: their bytes are pinned to `toc/9`, so it waits for the next bump.
+  own blocks, do not say it yet: no leak has been seen there, and the note's wording does not fit
+  their numbered lines, so `toc/10` passed it by (`src/article-prompt.ts` says why).
   Why it is not in the core above:
   [260928c](../plans/260928c-block-refs-shown-to-readers.md).
+- **Summarising the whole piece? Leave its paperwork out.** `paperwork(kind)` in
+  [`src/paperwork.ts`](../../src/paperwork.ts) is a second shared section, beside `plainWords`: the
+  authors' list, affiliations, acknowledgements, funding and disclosures are paperwork when they
+  only record how the piece was produced, and content when the piece uses them. `"summary"` leaves
+  it out; `"structure"` keeps the node a table of contents must have and labels it. Summary, Tweets
+  and both hierarchy prompts carry it; the evidence is
+  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
   told to prefer common words is a transcriber invited to tidy.

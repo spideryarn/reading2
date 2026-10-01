@@ -1771,6 +1771,17 @@ export function mendSeamHyphens(
  * block, no marker and nothing to re-mint. That is v1's boundary rather than an
  * oversight; giving those a media block of their own is a separate decision.
  * GPT Sol, I-3.
+ *
+ * **A table's cells are written inside its `<figure>`, after the caption**,
+ * since 2026-10-01. Rule 7 of the prompt has always asked for them as
+ * `tabledata` records, and until then they were transcribed, scored and never
+ * shown: every table in every PDF was a caption over nothing (report
+ * spya-pawfwx). `tabledata` stays outside `RENDERED` because it is not prose in
+ * place, but `CHECKED` includes it: invented numbers and markup in visible cells
+ * gate like prose. `tableOwners` says which table a run of cells belongs to; a
+ * run with none is shown in a figure of its own rather than dropped. No prompt
+ * change, so no cached chunk goes stale.
+ * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
   records: PdfRecord[],
@@ -1788,7 +1799,31 @@ export function renderHtml(
      the figure. */
   const blocks: RenderBlock[] = [];
   const blockOf = new Map<number, number>();
+  const owners = tableOwners(records, targets);
   for (const [i, record] of records.entries()) {
+    if (record.type === "tabledata") {
+      const rows = tableRows(record.text);
+      if (rows.length === 0) continue;
+      const owner = owners[i] ?? i;
+      let into = blockOf.get(owner);
+      if (into === undefined) {
+        /* The table's caption made no block — the model gave it none — or the
+           run has no table at all. Its cells are still the author's. */
+        into = blocks.length;
+        blocks.push({
+          record: { ...record, type: "table", text: "" },
+          text: "",
+          uncertain: false,
+          pieces: [],
+          rows: [],
+        });
+        blockOf.set(owner, into);
+      }
+      const block = blocks[into]!;
+      block.rows = [...(block.rows ?? []), ...rows];
+      block.rowsUncertain ||= record.uncertain;
+      continue;
+    }
     if (!RENDERED.has(record.type)) continue;
     const target = targets[i];
     const into = target === null || target === undefined ? undefined : blockOf.get(target);
@@ -1825,7 +1860,7 @@ export function renderHtml(
      record skipped for having no text never had one. The ordinal is an input to
      the ref, so it has to mean the same thing here and in the manifest. */
   const ordinals = new Map<number, number>();
-  for (const [b, { record, text, uncertain }] of blocks.entries()) {
+  for (const [b, { record, text, uncertain, rows, rowsUncertain }] of blocks.entries()) {
     if (record.type === "listitem" && !list) {
       parts.push("<ul>");
       list = "ul";
@@ -1836,9 +1871,10 @@ export function renderHtml(
 
     const tag = ELEMENT[record.type];
     const cls = uncertain ? ' class="pdf-uncertain"' : "";
+    const caption = text ? `<figcaption>${escapeHtml(text)}</figcaption>` : "";
     const html =
       record.type === "figure" || record.type === "table"
-        ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}><figcaption>${escapeHtml(text)}</figcaption></figure>`
+        ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}>${caption}${tableHtml(rows ?? [], rowsUncertain ?? false)}</figure>`
         : `<${tag}${cls}>${withMarkers(text, markers.filter((m) => m.block === b))}</${tag}>`;
     parts.push(html);
   }
@@ -1864,6 +1900,81 @@ interface RenderBlock {
   text: string;
   uncertain: boolean;
   pieces: { page: number; start: number }[];
+  /** A table's cells, row by row — only on a `table` block. */
+  rows?: string[][];
+  /** Whether any of those rows came from a record the model marked `uncertain`. */
+  rowsUncertain?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────── the tables
+
+/**
+ * **Which `table` record each `tabledata` record belongs to**, by index — or
+ * `undefined` for cells with no table to belong to.
+ *
+ * Rule 7 asks for the caption and then the cells, so a run of cells belongs to
+ * the nearest table before it, **when nothing the reader sees lies between**:
+ * page furniture (a footer at a page turn, a footnote) may, and so may another
+ * table's own cells. Anything else — prose, a heading, a figure, a reference —
+ * ends the table, and cells after it are a new run with no caption.
+ *
+ * A continued caption stays with its first piece only when `targets` says those
+ * pieces really join. Raw `continues` is not enough: `continuationTargets`
+ * rejects page gaps and other barriers, and letting ownership disagree would
+ * emit the later caption in one figure while silently moving its cells into an
+ * earlier one.
+ */
+function tableOwners(
+  records: readonly PdfRecord[],
+  targets: readonly (number | null)[],
+): (number | undefined)[] {
+  const owners: (number | undefined)[] = [];
+  const tableOwner = new Map<number, number>();
+  let open: number | undefined;
+  let orphanRun: number | undefined;
+  for (const [i, record] of records.entries()) {
+    if (record.type === "table") {
+      const target = targets[i];
+      open = target === null || target === undefined ? i : (tableOwner.get(target) ?? i);
+      tableOwner.set(i, open);
+      orphanRun = undefined;
+    } else if (record.type === "tabledata") {
+      if (open === undefined) orphanRun ??= i;
+      owners[i] = open ?? orphanRun;
+    } else if (!PAGE_FURNITURE.has(record.type)) {
+      open = undefined;
+      orphanRun = undefined;
+    }
+  }
+  return owners;
+}
+
+/**
+ * One `tabledata` record as rows of cells: a row per line, a cell per `|`.
+ *
+ * The prompt does not name a separator, and on the eval corpus the model writes
+ * `a | b` unprompted, one row per record or several joined by newlines. A row
+ * with no `|` is one cell. A leading `|` is kept as an empty first cell — that
+ * is how a header row over the data columns comes out — and a row both opened
+ * and closed by one is markdown's spelling and loses both. A line that is only
+ * separators says nothing and is skipped.
+ */
+function tableRows(text: string): string[][] {
+  const rows: string[][] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    let line = raw.trim();
+    if (!line.replace(/\|/g, "").trim()) continue;
+    if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
+    rows.push(line.split("|").map((cell) => cell.trim()));
+  }
+  return rows;
+}
+
+/** The cells as a `<table>`, every one escaped; nothing at all for no rows. */
+function tableHtml(rows: readonly string[][], uncertain: boolean): string {
+  if (rows.length === 0) return "";
+  const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
+  return `<table${uncertain ? ' class="pdf-uncertain"' : ""}><tbody>${body}</tbody></table>`;
 }
 
 // ─────────────────────────────────────────────────────────── the notes

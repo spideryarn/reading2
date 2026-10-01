@@ -286,6 +286,11 @@ function harness(opts: {
         return { [termId]: lookup };
       },
     },
+    /* *Dig deeper*'s parts (plan 261001p), all admitting and all free: what
+       they decide is tests/dig-deeper-glossary.test.ts's business. */
+    allowance: { take: async () => ({ kind: "allowed", id: "lease" }), finish: async () => {} },
+    library: async () => ({ hits: [] }),
+    searchFirst: async () => ({ sources: [], searches: 1, libraryQuery: null, library: [] }),
     explainStream: async function* (req) {
       asked.push({ blockId: req.blockId, quote: req.quote });
       powers.push(req.power);

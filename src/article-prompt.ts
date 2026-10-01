@@ -127,9 +127,11 @@ function head(meta: Meta, identity: ArticleIdentity): string {
  * is shown ids, including one written next year, is told in the same breath,
  * and a prompt that is shown none (the glossary, the arc) is not. The
  * hierarchy prompts render their own numbered blocks (src/hierarchy-prompt.ts)
- * and are not told yet: their request bytes are pinned to `toc/9`, and a
- * sentence there is a version bump that regenerates every tree. No hierarchy
- * leak has been seen; add it at the next bump —
+ * and are not told yet. No hierarchy leak has been seen. It was to ride on the
+ * next bump, and `toc/10` (plan 261001p) passed it by on purpose: that bump was
+ * measured as one change, and this note's first line ("Each block below starts
+ * with its id") is not true of the hierarchy's `[i] id <tag>:` lines, so it
+ * would want its own wording there, not a copy —
  * docs/plans/260928c-block-refs-shown-to-readers.md.
  */
 export const BLOCK_ID_NOTE = `Each block below starts with its id. The ids are for these instructions, not
@@ -209,6 +211,25 @@ export function articleText(meta: Meta | null, blocks: Block[]): string {
  */
 export function readerPositionLine(blockId: string | undefined): string {
   return blockId ? `The reader is currently at block ${blockId}.` : "";
+}
+
+/**
+ * **What was on the reader's screen when they sent this**, as a line for the
+ * suffix, hedged — and it replaces `readerPositionLine` when it has anything to
+ * say, because one hedged line about position beside one plain one would undo
+ * the hedge.
+ *
+ * > But let's not overemphasize it. So maybe the prompt would include the
+ * > information along with a bit of a caveat, e.g. "by the way, here's what's
+ * > visible on the page, but it may or may not relate to the user's messages...".
+ * >
+ * > — Greg, 2026-10-01 (spya-ybnas5)
+ *
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export function visibleBlocksLine(blockIds: readonly string[]): string {
+  if (blockIds.length === 0) return "";
+  return `For context only: when they sent this, the reader's screen showed blocks ${blockIds.join(", ")}. If their message refers to what is on screen, these may help; otherwise ignore them.`;
 }
 
 /**
