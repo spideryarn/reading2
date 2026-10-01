@@ -107,4 +107,6 @@ overruled.
    expert so the pitch can move, three or four runs each. About 40 runs, $10–15.
 2. **Or take About you as best effort for now**, and let readers' feedback decide.
 
+**Greg chose 2, 2026-10-01** ("B for now"): no test run; About you stays best effort.
+
 Plan: [261001c](../plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md).
