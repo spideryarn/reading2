@@ -235,7 +235,7 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
 
   return (
     <tr className={`tw:border-b tw:border-border/60 tw:last:border-0 ${revoked ? "tw:text-muted-foreground" : ""}`}>
-      <td className={`${CELL} tw:break-all`}>
+      <td className={`${CELL} tw:min-w-48 tw:break-all`}>
         {editing && unclaimed ? (
           <input
             ref={firstField}
@@ -270,7 +270,7 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
           voucher.articles
         )}
       </td>
-      <td className={CELL}>
+      <td className={`${CELL} tw:min-w-32`}>
         {editing ? (
           <input
             type="text"
@@ -287,8 +287,8 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
         )}
       </td>
       <td className={`${CELL} tw:whitespace-nowrap`}>{readableDate(voucher.createdAt) ?? "—"}</td>
-      <td className={CELL}>{status(voucher)}</td>
-      <td className={CELL}>{usage(voucher)}</td>
+      <td className={`${CELL} tw:min-w-48`}>{status(voucher)}</td>
+      <td className={`${CELL} tw:min-w-56`}>{usage(voucher)}</td>
       <td className={CELL}>
         {refusal && (
           <p role="alert" className="tw:m-0 tw:mb-2 tw:text-xs tw:text-destructive">
@@ -363,7 +363,14 @@ export function AdminVouchersPage() {
       {vouchers === null ? null : vouchers.length === 0 ? (
         <p className="tw:text-sm tw:text-muted-foreground">No vouchers yet.</p>
       ) : (
-        <div className="tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
+        /* `relative` because the caption and the Actions header are `sr-only`,
+           which is `position: absolute`: with no positioned ancestor they were
+           laid out against the table's full width rather than clipped by this
+           box, and the whole page scrolled sideways by 336px at 390. The same
+           bug and fix as DataTable.tsx § the scroll box. The `min-w-*` on the
+           wordy columns are what make the table scroll in here rather than
+           squeezing an address to two characters a line. Plan 261001m. */
+        <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
           <table className="tw:w-full tw:border-collapse tw:text-sm">
             <caption className="tw:sr-only">Every gift voucher, newest first</caption>
             <thead>

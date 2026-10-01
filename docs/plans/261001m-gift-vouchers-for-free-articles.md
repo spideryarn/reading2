@@ -214,3 +214,16 @@ house pattern in database.md (app role only; no anon/authenticated access).
   - **The box mounts `useBilling` on the shelf**, which also reads `?checkout=` on mount. Stripe
     returns to `/profile`, so nothing sends that parameter to `/`, but if one ever arrived there it
     would be handled there and only that parameter would be cleared; the shelf's filters remain.
+- 2026-10-01: **stage 2 browser check (Playwright, 390 and 1280).** `/admin/vouchers` at 390 scrolled
+  the whole page sideways by 336px: the table's scroll box worked, but the `sr-only` caption and
+  Actions header are `position: absolute` and, with no positioned ancestor, were laid out against
+  the table's full width — the bug and fix DataTable met on 2026-09-28. The box is now `relative`,
+  and the email, note, status and usage cells have a `min-w-*` so the table scrolls inside its box
+  rather than squeezing an address to two characters a line. Measured `scrollWidth − clientWidth`
+  336 → 0 at 390 (0 at 1280 both times); pinned in `tests/admin-vouchers-page.test.tsx`, watched
+  red first. The *"Cannot update a component while rendering … App SignedIn"* error on arriving
+  from `/login` is not this branch: `SignedIn` called `navigate()` during render for `/login` since
+  22c733d03 (2026-08-26), and `dev` already replaced it with `<LeaveLogin />` in 073ac1513, so a
+  merge of `dev` clears it. The one-off *"Rendered more hooks"* has no cause in the code — every
+  hook in `AdminVouchersPage.tsx` and `FreeAllowance.tsx` is called unconditionally — so it was
+  most likely HMR while the D1–D7 review commit was editing the file.

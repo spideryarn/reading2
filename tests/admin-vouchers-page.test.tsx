@@ -152,6 +152,22 @@ describe("/admin/vouchers", () => {
     expect(rowFor("revoked@example.test")?.textContent).toContain("Revoked");
   });
 
+  /**
+   * The browser regression of 2026-10-01, the same class DataTable met on
+   * 2026-09-28 (src/web/lib/DataTable.tsx § the scroll box): the caption and
+   * the Actions header are `sr-only`, which is `position: absolute`, and with
+   * no positioned ancestor they were laid out against the table's full width
+   * instead of being clipped by the scroll box — so the *page* scrolled
+   * sideways by 336px at 390. jsdom has no layout, so this pins the class that
+   * fixes it; the Playwright measurement in plan 261001m's Log is the evidence.
+   */
+  it("keeps the table's scroll box positioned, so sr-only text cannot widen the page", async () => {
+    await mount();
+    const box = host.querySelector("table")?.parentElement;
+    expect(box?.className).toMatch(/\btw:overflow-x-auto\b/);
+    expect(box?.className).toMatch(/\btw:relative\b/);
+  });
+
   it("sends the right PATCH on Revoke, and reads the list again", async () => {
     await mount();
     const before = calls.length;
