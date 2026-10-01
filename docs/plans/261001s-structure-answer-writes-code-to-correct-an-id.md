@@ -1,17 +1,26 @@
-# A structure answer that writes code to correct an id
+# A structure answer that writes code to correct an id — and structured outputs for every JSON call
 
-**Status:** plan, revised after GPT Sol's read-only review
-([round 1](261001s-reviews/plan-review-sol-r1.md), verdict *rethink*) and the Overseer's
-evidence on Sketch and Ideas. Greg, to the Overseer, 2026-10-01 ~23:00:
+**Status:** plan, revision 3. It folds in GPT Sol's two read-only reviews
+([r1](261001s-reviews/plan-review-sol-r1.md) "rethink", [r2](261001s-reviews/plan-review-sol-r2.md)
+"revise before building"), the Overseer's evidence on Sketch and Ideas, and Greg's two follow-ups.
+Greg, to the Overseer, 2026-10-01 ~23:00:
 
 > yes let's address this properly. Maybe give it to GPT Sol with you as reviewer
 
-The roles are reversed, at Greg's request. **GPT Sol builds each stage, and Claude (Opus) reviews
-and runs the job**: Claude writes this plan, reads every hunk, runs the gates and commits.
+> don't these models have a JSON mode that ensures they produce valid JSON? Or what's the issue with
+> them producing broken output?
 
-Found by [261001p § Ledger](261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md),
-"A structure answer that writes JavaScript". Postmortem:
-[261001c](../postmortems/261001c-a-model-answer-patches-a-mistyped-id-with-code.md).
+> Ok, and if it turns out that this will help, let's ask that session to check all modes that
+> require structured output, and to add something to relevant docs (e.g. new-mode.md or docs about
+> calling AI) to ensure that we always do this going forwards. And then potentially if that works,
+> we can turn down the thinking level in some cases?
+
+The roles are reversed, at Greg's request: **GPT Sol builds each stage, and Claude (Opus) reviews
+and runs the job.** Claude writes this plan, reads every hunk, runs the gates, commits, and pushes
+each stage to `dev`.
+
+Found by [261001p § Ledger](261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
+Postmortem: [261001c](../postmortems/261001c-a-model-answer-patches-a-mistyped-id-with-code.md).
 
 ## What happens
 
@@ -23,162 +32,229 @@ string:
 "range":["spya-y09vju","spya-zhzzzz".replace("zhzzzz","jcpyd5"),],
 ```
 
-`parseJsonAnswer` (src/parse-json.ts) rejects the whole answer, so the stage fails. The reader
-gets a Retry button, and the structure call has still been paid for.
+`parseJsonAnswer` rejects it, so the stage fails. The reader gets a Retry button, and the call has
+still been billed. Ideas and Sketch break their JSON in other ways
+([research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md):
+1 in 16 each at today's effort, and Ideas 10 in 16 below `high`).
 
-## The evidence, checked rather than taken from the ledger
+## The evidence
 
-The kept raw answers hold **six** in-band edits across four failed answers. The first draft of
-this plan counted three; Sol found the other three. Each id was resolved against the article's
-body blocks with a scratch script.
+**Six in-band edits in four failed answers** (kept raw answers in
+`evals/results/paperwork/structure-parse/` and `…/after-2/`):
 
-| answer | field | expression | result |
-|---|---|---|---|
-| `toc9` analog #4 | **end** | `"spya-zhzzzz".replace("zhzzzz","jcpyd5")` | receiver invented; result index 57, the last block before the `h1` at 58 |
-| `toc10` analog #0 | **end** | `"spya-c5z6sr".replace("spya-c5z6sr","spya-c5z6sr")` | **a no-op**; index 9 under a start of 15, so the range runs backwards |
-| `toc10` analog #0 | **end** | `"spya-mrsvfu".replace("spya-mrsvfu","spya-qr9ra4")` | real to real: the model **changed its mind about a boundary**, it did not mend a typo |
-| `toc10` analog #0 | **end** | `"spya-p6hwth".replace("spya-p6hwth","spya-vp5h33")` | real to real |
-| `toc10` analog #2 | **end** | `"spya-zmnep5".replace("spya-zmnep5","spya-z6esvz")` | receiver invented |
-| `after-2` ball lightning | **start** | `"spya-qtqp22".replace("spya-qtqp22","spya-nezgpv")` | a start |
+| answer | field | expression | receiver | result |
+|---|---|---|---|---|
+| `toc9` analog #4 | end | `"spya-zhzzzz".replace("zhzzzz","jcpyd5")` | invented | real; the block before the next `h1` |
+| `toc10` analog #0 | end | `"spya-c5z6sr".replace("spya-c5z6sr","spya-c5z6sr")` | real | **a no-op**; the range runs backwards |
+| `toc10` analog #0 | end | `"spya-mrsvfu".replace("spya-mrsvfu","spya-qr9ra4")` | real | real: **a change of mind**, not a typo |
+| `toc10` analog #0 | end | `"spya-p6hwth".replace("spya-p6hwth","spya-vp5h33")` | real | real |
+| `toc10` analog #2 | end | `"spya-zmnep5".replace("spya-zmnep5","spya-z6esvz")` | invented | real |
+| `after-2` ball lightning | **start** | `"spya-qtqp22".replace("spya-qtqp22","spya-nezgpv")` | — | — |
 
-Five of the six are **range ends**. One is a start.
+Five of the six are range **ends**. Membership was checked for the first, second and fifth rows.
+The full per-event classification Sol asked for in round 1 (derived-boundary agreement, semantic
+plausibility) is **not needed for the decision**, because no parse repair is being built. It is
+left undone on purpose (r2 G8).
 
-**Production.** The jobs table only goes back to 2026-09-28, and the error the reader sees is
-redacted, so the rate cannot be read from it. Sentry has six `MalformedJson` issues in 90 days. The
-one inspected, SPIDERYARN-READING2-5S (2026-09-29), is the **quotes** stage; its shape is unknown,
-because the message is withheld by design. Trajectory had the same habit with quote ids
-([260928a](260928a-trajectory-mode-stage1-real-runs.md)).
+**Production.** Sentry has six `MalformedJson` issues in 90 days. The one inspected,
+SPIDERYARN-READING2-5S (2026-09-29), is the **quotes** stage, so this is not only Structure. The
+jobs table goes back only to 2026-09-28, and its error text is redacted.
 
-The Overseer's thinking-effort eval
-([research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md))
-found malformed JSON at today's effort in **1 of 16 Ideas and 1 of 16 Sketch** answers, in a
-different shape: `{"blockId": "spya-p4pyuy": "", …}`. Nothing retries those either.
+**Structured outputs on our wire, probed 2026-10-01** (`evals/paperwork/_probe-structured.ts`, not
+committed; the structure request for `entropy-24-00930`, Sonnet 5 via OpenRouter's Messages route):
+
+| request | result |
+|---|---|
+| `output_config.format` with a **recursive** `$ref` tree schema | **400**, upstream: *"Circular reference detected … Self-referencing … definitions are not supported."* So OpenRouter does pass the format through to Anthropic. |
+| a schema **unrolled to the prompt's three levels**, effort `low`, ×2 | 200, `end_turn`, parses. **Thinking tokens 0 and 0**, 50 s and 40 s, about 4,400 output tokens. Input +971 tokens (the schema). |
+| the **same request without a format** (control), effort `low`, ×2 | **Thinking tokens 7,829 and 6,737**, 107 s and 92 s, about 13,000 output tokens. |
+| the unrolled schema at effort **`high`**, ×2 | Thinking tokens 33,044 and 29,650; 313 s and 279 s. |
+
+So: it works on our wire with the models we use, and streaming and adaptive thinking both still
+work. **But at `low`, adapting to the schema, the model chose to skip thinking altogether, twice.**
+That is a quality risk, and it has to be measured rather than assumed in either direction. The
+thinking-effort eval found Structure with thinking *off* dropped far more of the author's headings.
+The structure call has no cache breakpoint, so nothing here tested caching. For stages that share a
+cached article (arc and tweets), the format is part of the request, and that has to be measured per
+group, as `effort` was ([prompt-caching.md](../project/prompt-caching.md)).
+
+**What a schema guarantees, and what it does not.** It guarantees syntax and shape: no
+`.replace(…)`, no stray value, every required field present. It does not guarantee that an id is
+right. Under a schema, a model that has started a wrong id can no longer write a correction, so it
+has to finish the string. The result is an invented id, which `index.get` refuses (a loud failure,
+and a whole failed article in Structure), or a wrong real id, which nothing can detect. **So every
+id-resolution check stays exactly as it is.** And no schema may constrain an id field with an
+`enum` of the article's ids: that would force a mistyped prefix to finish as *some* real id, which
+is exactly a wrong id let through silently.
 
 ## Root cause
 
-1. **In-band revision.** A model writing JSON token by token cannot take back what it has
-   written. When it decides an id is wrong, whether mistyped or a boundary it has reconsidered,
-   the only way out it knows is to write the edit as code.
-2. **The structure prompt asks for the field where that happens most.** The end of a section is
-   "the block before the next section's start". The model has to work that out and then copy it
-   from a paragraph it was not attending to. And the end is **redundant**: `planChildRanges`
-   believes starts and computes every end. It reads the model's end in only two places — as a
-   fallback split point when a start does not advance, and as the second claim in the
-   boundary-fault telemetry. The scoped expansion prompt (src/hierarchy-expand.ts) **already asks
-   for starts only** for exactly this reason. Its normaliser in src/hierarchy-cascade.ts says so,
-   and it has given up the end fallback on purpose.
-3. **One malformed answer is final.** The parser is all-or-nothing, which is right. But no stage
-   that has failed this way draws again, so a sampling accident becomes a failed step.
+1. **In-band revision.** A model writing JSON token by token cannot take back what it has written.
+   When it decides an id is wrong, whether mistyped or a boundary it has reconsidered, it writes the
+   edit as code.
+2. **We ask for JSON in prose, and nothing enforces it.** Three small steps already use strict
+   structured outputs (`src/pdf-figure-locate.ts`, `src/pdf-frontmatter.ts`,
+   `src/paper-metadata.ts`, on the chat-completions wire). The pipeline's big calls do not, and no
+   doc records a decision either way.
+3. **Structure asks for the field where the edit happens.** The end of a section is redundant: the
+   start is believed and the end is computed, as src/hierarchy-expand.ts already does. Yet it is the
+   hardest id to produce.
 
-**The class, named:** *an answer that edits itself in-band.* The model cannot backspace, so it
-writes its correction as code inside a data format. A strict parser with no second draw then
-turns a recoverable sampling slip into a failed step.
+**The class, named:** *an unconstrained JSON answer.* A model that cannot backspace writes its
+correction, or its slip, into a data format that nothing constrains, and a strict parser then
+turns a sampling accident into a failed step.
 
-## Options, and the decision
+## Decision
 
-| | what | verdict |
-|---|---|---|
-| **A. Parser repair** (evaluate `.replace`) | the first draft's choice | **Dropped.** Sol's F2: as a default it would make `{"text":"accurate".replace("accurate","invented")}` a valid tweet, with no block id involved. As an opt-in, the evidence still breaks it: one no-op landed on the wrong block, and two real-to-real edits are changes of mind, not repairs. Evaluating the edit would believe the model's second thought without knowing it was one. **No lenient repair, so no id can get through because of one.** |
-| **B. Ask for starts only** | the shape src/hierarchy-expand.ts already uses | **Taken.** It removes the field behind five of the six edits, and it reuses a rule the codebase already holds. The cost is the end fallback. That is measured before the prompt changes (stage 1), not assumed. |
-| **C. Labels or indices instead of ids** (Trajectory's fix) | | **Rejected.** It trades a sparse namespace for a dense one. Today a typo almost always names a block that does not exist, and is refused. An index typo names a different real block, and nothing can notice. That is a wrong id let through silently. |
-| **D. One automatic re-draw on `MalformedJson`** (the Overseer's first suggestion) | | **Taken, as a shared helper.** It covers the residual start-edit in Structure and the Ideas and Sketch shapes. It repairs nothing, so it cannot let a wrong id through: a second draw is a fresh answer, checked exactly like the first. |
-| **E. Structured outputs** (constrained decoding) | | **Not now.** Whether it works on our wire (OpenRouter's Messages route) is unverified, and it is its own piece of work. It is recorded as the next step if a re-draw proves not enough. |
-| **F. A prompt line saying "never write code"** | | **Not done.** A request is not a guarantee, and B removes most of the occasions for it. |
+| option | verdict |
+|---|---|
+| **Structured outputs** (`output_config.format`, strict JSON schema) | **The primary fix, for every JSON call that fits.** It removes the whole class at the source, for every shape (`.replace`, Ideas' stray value, Sketch's), with no repair code. It is measured on Structure first (stage 2), then surveyed and rolled out (stage 3). |
+| **Starts-only Structure** | **Taken, together with the schema.** Under a schema, an end that would have been corrected in-band becomes an invented id instead, and the whole article fails. Removing the end removes five of the six occasions. src/hierarchy-expand.ts already works this way. |
+| Parser repair (evaluate `.replace`) | **Dropped** (r1 F2, F3): as a default it would let a tweet's invented text through, and the evidence shows that a correction is sometimes a change of mind or a no-op. |
+| Labels or indices instead of ids | **Rejected**: a dense namespace turns a typo into a different real block, silently. |
+| One automatic re-draw on `MalformedJson` | **Not built.** A schema should make `MalformedJson` impossible except on a refusal or a truncation, and neither of those is a re-draw case. If stage 2 or 3 measures a residual, it comes back as its own stage with r2 G4 and G5 as its contract: return per-attempt usage, never checkpoint the first raw answer, an admission rule against `deadlineAt`, and observed size-dependent costs (a 142-page structure call is about $2 and 508 s, not $0.15). |
+| A prompt line saying "never write code" | Not done: a schema enforces what a line would only ask. |
 
-**Why nothing here can let a wrong or invented id through.** Nothing parses leniently. B changes
-what the model is asked for. Every start it writes is still resolved against the article's blocks
-by `index.get`, and an id that is not a block still refuses with the precise existing error. D
-draws a whole new answer and runs it through the same parse, build and `assertTreeSound`. The
-only id-bearing values that ever reach the tree are ones the model wrote as plain strings, which
-is true today.
-
-**What the re-draw covers, and what it leaves.** It covers Structure (wave 1), Ideas and Sketch:
-the three stages with measured failures. The helper is shared so that others can adopt it in one
-line each. Quotes and the other `parseJsonAnswer` callers are listed for that and not changed
-here. They have no measured rate, and every adoption is a per-stage cost decision: a second
-structure call is about $0.15 and two minutes.
+**What the safety claim is, stated narrowly** (r2 G2): no parser repair creates or accepts a
+value. A schema cannot invent an id either: every id is still resolved with `index.get`, and an
+invented start refuses with today's error. **A wrong-but-real start remains possible, exactly as it
+is today.** Only structural measurement and human review catch it, and nothing here makes it more
+likely. The one design that would make it more likely, an id `enum`, is forbidden above.
 
 ## Stages
 
-Sol builds stages 1–3 with `--sandbox workspace-write` in this worktree. Each brief carries this
-plan, the stage's scope and exclusions, red-first tests, the gates (`npm test` on the touched
-files, `npm run typecheck`) and the house rules (no git commands that discard work, no commits).
-Claude reviews every hunk, runs the gates, and commits.
+Each stage: Sol builds with `--sandbox workspace-write` in this worktree, briefed with this plan,
+the scope and its exclusions, red-first tests, the gates (`npm test` on the touched files,
+`npm run typecheck`) and the house rules (no git command that discards work, no commits). Claude
+reads every hunk, runs the gates, commits, merges `origin/dev`, and pushes. The cross-family
+check is Sol's build read by Claude, plus a read-only Sol review of anything Claude wrote or
+changed itself.
 
-### Stage 1 — a starts-only answer builds a tree (no prompt change)
+**Every paid eval opens `collectSpend`** with `scopeKind: "eval"` (r2 G3), as
+`evals/paperwork/run.ts` does, and records run id, calls, cost and unpriced state beside its
+results. The stage-0 before arm below ran without it, so its spend is missing from the ledger: about
+70 Sonnet structure calls, estimated at $10–15. That is said here rather than hidden.
 
-- `ModelNode.range`'s end becomes optional on the *answer* path, so that `planChildRanges` takes
-  a child with no end. In that case there is no end fallback and no end claim in the telemetry,
-  exactly as `normaliseExpansion` in src/hierarchy-cascade.ts already behaves. **One derivation,
-  not two:** reuse or share the cascade's rule rather than writing a third. Internal callers that
-  have real ends (src/hierarchy-deepen.ts turns trees back into nodes) keep passing them.
-- The root needs no range: it is the whole body.
-- **Free offline evidence, before any prompt changes.** Write a script that takes every stored
-  structure answer — the `hierarchy-structure` checkpoints in the local database (real answers,
-  all of which built), plus the raw answers that stage 0 below keeps — and builds each tree twice:
-  as today, and with every end deleted. Per answer, it reports children dropped, boundaries that
-  moved, how often the end fallback fired, and the repaired-block counts.
-  **Decision gate:** if deleting the ends drops or moves material numbers of sections, stop and
-  rethink before stage 2.
-- Tests, red first: a starts-only answer builds the same tree as a range answer whose ends agree
-  with it; a colliding start drops the child and counts it; an invented start still refuses with
-  the existing message.
+### Stage 0 (done, paid) — the `toc/10` before arm
 
-### Stage 0 (running now, paid) — the before arm
+`evals/paperwork/structure-parse.ts` keeps **every** raw answer now. Fresh `toc/10` draws: 40 on
+`analog-cognition` (labels `before-a1`–`a4`; a stress arm, never presented as a population rate)
+and 10 each on `entropy-24-00930`, `scaling-hypothesis` and `source-spya-f550ta` (`before-o`).
+**Result:** `analog-cognition` **2 in 40** answers malformed; the other three articles 0 in 28
+(the last two draws were still running when this was written). Both failures were `.replace` on a
+range **end** — `"spya-zj9hxx".replace("spya-zj9hxx","spya-dnv2tp")` and, again,
+`"spya-p6hwth".replace("spya-p6hwth","spya-vp5h33")` — so seven of the eight events seen so far are
+ends. Pooled with the 261001p runs, `toc/10` stands at 4 in 40 on `analog-cognition`
+(stress arm) and 1 in 40 elsewhere.
 
-`evals/paperwork/structure-parse.ts` now keeps **every** raw answer, not only failures.
-Fresh `toc/10` draws: 40 on `analog-cognition` (four jobs, labels `before-a1`–`a4`; this is where
-three of the four failures came from, so it is a stress arm and not a representative rate) and
-10 each on `entropy-24-00930`, `scaling-hypothesis` and `source-spya-f550ta` (`before-o`).
+### Stage 1 — structured outputs as a shared seam, plus Structure's starts-only converter (no prompt change)
 
-### Stage 2 — the prompt asks for starts (`toc/11`), then the after arm
+- **A shared helper for a strict JSON-schema format on the Messages wire**, in a new module beside
+  src/messages-stream.ts, so that no stage hand-writes `output_config`. It merges `format` with the
+  existing `effort` and never drops it; `messages-stream.ts` line ~477 already merges
+  `output_config` for the high-power model, and both have to compose. It validates at test time
+  that a schema has no `$ref` cycle and sets `additionalProperties: false` on every object, so the
+  upstream 400 is found in `npm test` and not in production. And it states the id rule: no `enum`
+  of block ids.
+- **Structure's starts-only answer type and converter** (r2 G1): `ModelNode.range` stays
+  `[string, string]`. A separate answer type (`root` with no range, children carrying `start`) is
+  converted at the `treeFrom` boundary: the root gets the body range, and every child's full range
+  is derived. The start-to-ranges kernel is **extracted from `normaliseExpansion`** and shared,
+  with the whole-document policy explicit where the two differ: an outside-parent start is clamped
+  here and refused there, and a one-child set collapses here and is refused there. The resulting
+  ordinary `ModelNode` goes to `buildTree`. Evals that parse structure answers
+  (`evals/hierarchy-structure/model-arms.ts`, `evals/paperwork/run.ts`, `evals/plain-words/run.ts`,
+  `evals/paperwork/structure-parse.ts`) call the same converter, never their own.
+- **The live `toc/10` path is unchanged, byte for byte**: the parity and hoist pins stay green, and
+  an existing ranged checkpoint replays to the identical tree.
+- **Offline replay, free:** every retained `toc/10` answer that builds today — the stage-0 raws and
+  the local database's `hierarchy-structure` checkpoints — is built twice: as today, and with its
+  ends deleted, through the converter. The gate is r2 G7's: zero newly unbuildable answers, zero
+  additional dropped children, zero lost authored headings, and an identical flattened
+  `(depth, title, range)` tree for ≥ 99 % of answers (with fewer than 100, zero unexplained
+  changes). Claude reads every tree that is not identical. **If it fails, stop and rethink.**
+- Tests, red first: the helper's schema checks; the converter on a starts-only answer gives the
+  same tree as an agreeing ranged answer; an invented start refuses with the existing message; a
+  colliding start drops and counts.
 
-- `SYSTEM`'s OUTPUT block in src/hierarchy.ts asks for `"start": "<blockId>"` per node, with the
-  wording src/hierarchy-expand.ts uses. `PROMPT_VERSION` becomes `toc/11`, with its history
-  comment. New articles only, as with every `toc/` bump.
-- Everything that reads the request's bytes moves with it: the parity test, the hoist pin, and the
-  eval arms that slice `SYSTEM`. Sol finds these; the list is part of the review.
-- **After arm:** the same draws as stage 0, on `toc/11`, separated in time by about an hour. Report
-  per article: parse failures (with Fisher's exact against stage 0, plus the stage-0 sample's
-  existing 48 answers as a second "before"), the shape of every remaining failure, dropped
-  children, dropped headings, depth-1 part counts and repaired blocks. **Read every changed
-  boundary by hand on two articles.** A tree that builds is not evidence that its boundaries are
-  right.
+### Stage 2 — Structure on `toc/11`: starts-only and schema-constrained, measured
 
-### Stage 3 — one re-draw on a malformed answer, shared
+- SYSTEM's OUTPUT asks for `start`, with src/hierarchy-expand.ts' wording. The request carries the
+  three-level unrolled schema via the stage-1 helper. `PROMPT_VERSION` becomes `toc/11`. Everything
+  pinned moves with it, and the plan names it (r2 G6): the parity test, the hoist pin and its digest,
+  `EXPANSION_PROMPT_STAMP` (`toc/10+expand/7` becomes `toc/11+expand/7`, so **every existing
+  deepening checkpoint misses once**, which is accepted), and a test that a `toc/10` structure
+  checkpoint is not resumed under `toc/11`.
+- **After arm, paid, with spend recorded:** the same 40/10/10/10 draws on `toc/11` at production
+  effort (`low`). Reported per article: parse failures (with exact intervals, and Fisher's test
+  against stage 0 as a description, not proof), invented-start refusals, dropped children, dropped
+  authored headings, depth-1 part counts, thinking tokens, cost and duration.
+  **Shipping gate:** zero invented-start failures and zero dropped children across the arm; any
+  occurrence stops shipping pending review.
+- **Quality, because the schema switched thinking off at `low`:** the thinking-effort harness on
+  dev (research 261001c, its quality panel) is run for Structure on `toc/11` against `toc/10` at
+  `low`. If `toc/11` at `low` is worse, the same panel runs `toc/11` at `medium`, and the
+  effort/quality/cost trade goes to Greg as numbers. **Production effort is not changed here
+  without Greg** (the Overseer's instruction). If `toc/11` at `low` holds quality, it ships at
+  `low`.
 
-- A small helper beside `parseJsonAnswer` (not inside it — the parser stays pure) that runs a
-  draw, parses it, and on `MalformedJson` only — never on a refusal, a truncation, an abort or a
-  call error — draws once more and parses that. Both calls are recorded and billed as ordinary
-  calls (they already are, by `streamMessage`). The re-draw is logged with the source and the
-  attempt number, and never the text. Feeding the parse error back to the model is **not** done:
-  a re-draw is one request instead of a multi-turn one, and the labels stage shows a plain retry
-  is enough for a sampling accident.
-- Adopted in Structure wave 1 (src/hierarchy.ts: the call, `treeFrom`, the checkpoint written only
-  after a draw that built, `structureUsage` summing both calls), Ideas, and Sketch.
-- Tests, red first, per adopting stage: the first draw malformed and the second good gives a
-  result and two recorded calls; both malformed gives `MalformedJson` exactly as today; a refusal
-  or a truncation is not re-drawn.
+### Stage 3 — survey every JSON call, and move each one that fits
 
-### Stage 4 — postmortem, docs, and the hand-off
+- Sol lists every model call that expects JSON back (all `parseJsonAnswer` / `parseJsonFrom`
+  callers, the chat-completions wire's `response_format` users, anything that `JSON.parse`s model
+  text), with: the wire, the model, whether the answer is streamed and parsed partially while it
+  arrives, cache-group membership, the shape (and whether it is recursive), any citations (which
+  are incompatible with a format), and an eval if one exists.
+- Each one that fits moves onto the stage-1 helper, with its own schema and a red-first test that
+  the request carries it. Each one that does not fit is named with its reason in this doc. Calls
+  that stream partial JSON to a reader (for example a summary that renders as it arrives) are
+  checked to still render as they arrive.
+- Where an eval exists — Ideas and Sketch (the effort harness), Quotes (trajectory's) — failure
+  rates before and after, paid, with spend recorded.
+- Cache groups (arc and tweets): measured, so that a format on one does not quietly cost the other
+  its cache read.
 
-The postmortem (the five things). A line under postmortems.md. hierarchy.md's prompt versions.
-The ledger entry in 261001p pointed here. Then the message to the Overseer.
+### Stage 4 — lower thinking, re-tested (paid, report only)
+
+Re-run the thinking-effort harness on dev (research 261001c) for the cases rejected **only because
+of broken JSON**, now with the schema: Ideas at `medium` and `low` (10 in 16 malformed before), plus
+any others the research doc names. Report validity, cost, duration and the quality panel's verdict
+against today's setting. **No production effort setting changes.** That is Greg's call on the
+numbers.
+
+### Stage 5 — the rule, the postmortem, the hand-off
+
+- **The rule, in one home** (docs/project/ai-gateway.md or prompting-guide.md, whichever owns *how
+  we call a model*; the other signposts it): every call that expects JSON uses a strict schema
+  through the helper; no `enum` of ids; ids are still resolved; recursion must be unrolled.
+- **docs/project/mode.md** (an entry-point rule doc): a checklist line. **Proposed only, as before
+  and after wording in the hand-off for Greg's approval**, not applied
+  ([edit-important-docs.md](../reusable/edit-important-docs.md)).
+- The postmortem's five things, a line under postmortems.md, the 261001p ledger pointed here, and
+  hierarchy.md's prompt versions.
+- The message to the Overseer, with the plain-words answer to Greg's question: yes there is a JSON
+  mode; why it was not used; what it fixes and what it does not.
 
 ## Done
 
-- Structure asks for starts only, measured: parse failures before and after on ≥140 fresh answers,
-  with no material loss of sections in the offline comparison or the after arm.
-- A malformed answer in Structure, Ideas or Sketch is drawn once more before the reader sees a
-  failure.
-- No lenient parse anywhere, so nothing can let a wrong or invented id through. Every id still
-  resolves against the blocks.
-- Sol reviews this plan before the build. At each stage Sol builds and Claude reviews.
+- Structure is on `toc/11`: starts-only and schema-constrained, measured before and after, quality
+  held or the trade put to Greg.
+- Every JSON call is on a schema or named with its reason. The rule is written in one home, and the
+  mode.md line is proposed.
+- The lower-thinking re-test is reported, with no production change.
+- No lenient parse anywhere. Ids are still resolved; no `enum` of ids.
+- Each stage committed and pushed to `dev` as it lands.
 
 ## Ledger
 
-- **Plan review, round 1 (Sol, read-only): rethink.** F1 (six events, not three, and one is a
-  start), F2 (a default repair lets a tweet's text through), F3 (logging is not a control, and the
-  end fallback can carry a wrong end into the tree) and F4 (B is cheaper than claimed: expansion
-  already does it) were all checked against the files and accepted. They are why A was dropped and
-  B taken. F5 (parser spec) is moot without A. F6 (measurement) is folded into stages 1 and 2.
+- **Plan review r1 (Sol): rethink.** F1–F4 checked and accepted: parser repair dropped, starts-only
+  taken.
+- **Plan review r2 (Sol): revise before building.** All eight accepted. G1 is the converter seam;
+  G2 narrows the safety claim; G3 is spend in evals (the stage-0 arm missed it, said above); G4 and
+  G5 become the re-draw contract if one is ever built; G6 is the pin list; G7 is the gates; G8 is
+  left undone on purpose.
+- **Scope widened** after r2 by Greg's questions (via the Overseer): structured outputs first, a
+  survey of every JSON call, the rule written down, and the lower-effort re-test. The probe above
+  is the evidence that structured outputs work on our wire. Revision 3 is reviewed read-only by
+  Sol before stage 1 is built. Per the two-rounds rule this is a review of new scope, not a third
+  round on the old.
