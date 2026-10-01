@@ -87,7 +87,8 @@ describe("verifyAuthors", () => {
 
   it("reads the markers off the PAGE, so a model that left them off the name still gets the affiliation trimmed", () => {
     /* The model wrote "Mei-jun Ou" (no marker); the page says Ou1, so the "1 " comes off. */
-    const verdict = verifyAuthors([one("Mei-jun Ou", ["1 Head and Neck Surgery Department"])], FRONTIERS_BYLINE, [
+    /* The byline cut to its first author: one name of five would now be a trailing author dropped (C4). */
+    const verdict = verifyAuthors([one("Mei-jun Ou", ["1 Head and Neck Surgery Department"])], "Mei-jun Ou1,", [
       FRONTIERS_AFFILIATIONS,
     ]);
     expect(verdict.authors?.[0]?.affiliations).toEqual(["Head and Neck Surgery Department"]);
@@ -118,6 +119,104 @@ describe("verifyAuthors", () => {
     /* A spaced marker between names is not a person: "Newman 1,* , Thomas". */
     const newman = "Ehren L. Newman 1,* , Thomas F. Varley 1,* and John M. Beggs 3";
     expect(verifyAuthors([one("Ehren L. Newman"), one("Thomas F. Varley"), one("John M. Beggs")], newman, [newman]).authors).toHaveLength(3);
+  });
+
+  describe("stacked bylines: an affiliation already verified, or an email, is not a skipped person (plan 261001l)", () => {
+    /* The NeurIPS shape: name / institution / email per author, which the
+       byline record reads as one run. Lu et al. on production was refused
+       whole and the reader got this run as the byline (260930e). */
+    const STACKED =
+      "Qihong Lu Princeton University qlu@princeton.edu Po-Hsuan Chen Princeton University pohsuan@princeton.edu Kenneth A. Norman Princeton University knorman@princeton.edu";
+    const lu = [
+      one("Qihong Lu", ["Princeton University"]),
+      one("Po-Hsuan Chen", ["Princeton University"]),
+      one("Kenneth A. Norman", ["Princeton University"]),
+    ];
+
+    it("takes a stacked byline whole", () => {
+      expect(verifyAuthors(lu, STACKED, [STACKED]).authors?.map((a) => a.name)).toEqual([
+        "Qihong Lu",
+        "Po-Hsuan Chen",
+        "Kenneth A. Norman",
+      ]);
+    });
+
+    it("still refuses a stacked byline with an author left out — in the middle or at the end", () => {
+      expect(verifyAuthors([lu[0]!, lu[2]!], STACKED, [STACKED]).authors).toBeNull();
+      expect(verifyAuthors([lu[0]!, lu[1]!], STACKED, [STACKED]).authors).toBeNull();
+    });
+
+    it("does not let an affiliation account for words before the author it belongs to", () => {
+      /* "Princeton University" is only accounting once some author printed
+         before the gap has verified it; author 1 has none here. */
+      const answer = [one("Qihong Lu"), one("Po-Hsuan Chen", ["Princeton University"]), one("Kenneth A. Norman")];
+      expect(verifyAuthors(answer, STACKED, [STACKED]).authors).toBeNull();
+    });
+
+    it("refuses a dropped author whose name and institution were passed off as the previous author's affiliation", () => {
+      /* GPT Sol, plan review P1-1: both "affiliations" are printed, so both
+         verify; the second email is what gives Bob away. */
+      const byline = "Alice Adams Acme University alice@acme.edu Bob Brown Beta Institute bob@beta.edu Carol Clark";
+      const answer = [one("Alice Adams", ["Acme University", "Bob Brown Beta Institute"]), one("Carol Clark")];
+      expect(verifyAuthors(answer, byline, [byline]).authors).toBeNull();
+      /* Nor the names alone, when an unrelated affiliation also fails. */
+      const namesOnly = [answer[0]!, one("Carol Clark", ["Nowhere Institute"])];
+      expect(verifyAuthors(namesOnly, byline, [byline])).toMatchObject({ authors: null, note: expect.stringMatching(/as printed/) });
+      /* The control: all three are taken. */
+      const all = [one("Alice Adams", ["Acme University"]), one("Bob Brown", ["Beta Institute"]), one("Carol Clark")];
+      expect(verifyAuthors(all, byline, [byline]).authors).toHaveLength(3);
+    });
+
+    it("takes names printed together and their institutions and addresses after — one address per author", () => {
+      const grid =
+        "Ashish Vaswani∗ Noam Shazeer∗ Google Brain Google Brain { avaswani,noam } @ google.com Niki Parmar∗ Google Research nikip@google.com";
+      const answer = [
+        one("Ashish Vaswani", ["Google Brain"]),
+        one("Noam Shazeer", ["Google Brain"]),
+        one("Niki Parmar", ["Google Research"]),
+      ];
+      expect(verifyAuthors(answer, grid, [grid]).authors?.map((a) => a.name)).toEqual([
+        "Ashish Vaswani",
+        "Noam Shazeer",
+        "Niki Parmar",
+      ]);
+      /* Without Noam, the braces hold two addresses for a block of one. */
+      expect(verifyAuthors([answer[0]!, answer[2]!], grid, [grid]).authors).toBeNull();
+      /* Fewer addresses than authors is not a block either: nothing delimits it. */
+      const shared = "Jason Wei Denny Zhou Google Research {jasonwei}@google.com";
+      expect(verifyAuthors([one("Jason Wei", ["Google Research"]), one("Denny Zhou", ["Google Research"])], shared, [shared]).authors).toBeNull();
+    });
+
+    it("refuses an affiliation printed after the addresses — a person without an address passed off as one", () => {
+      /* The eval's row-major Attention byline (plan 261001l). */
+      const rows = "Llion Jones Łukasz Kaiser Google Research Google Brain llion@google.com lukaszkaiser@google.com ∗ ‡ Illia Polosukhin";
+      const answer = [one("Llion Jones", ["Google Research"]), one("Łukasz Kaiser", ["Google Brain", "Illia Polosukhin"])];
+      expect(verifyAuthors(answer, rows, [rows]).authors).toBeNull();
+      expect(verifyAuthors([...answer.slice(0, 1), one("Łukasz Kaiser", ["Google Brain"]), one("Illia Polosukhin")], rows, [rows]).authors).toHaveLength(3);
+    });
+
+    it("an email address never swallows the name beside it", () => {
+      const spaced = "Qihong Lu Princeton University qlu@princeton.edu Po-Hsuan Chen";
+      expect(verifyAuthors([one("Qihong Lu", ["Princeton University"])], spaced, [spaced]).authors).toBeNull();
+      /* Fused: a greedy domain would read "eduDeepMind" as its top-level label. */
+      const fused = "Qihong Lu Princeton University qlu@princeton.eduDeepMind";
+      expect(verifyAuthors([one("Qihong Lu", ["Princeton University"])], fused, [fused]).authors).toBeNull();
+      /* The control: punctuation straight after the address is not a word. */
+      const comma = "Qihong Lu Princeton University qlu@princeton.edu, Po-Hsuan Chen Princeton University pchen@princeton.edu";
+      expect(verifyAuthors(lu.slice(0, 2), comma, [comma]).authors).toHaveLength(2);
+    });
+  });
+
+  it("refuses an ordinary list that leaves out an author printed after the last name it gives (260930e C4)", () => {
+    expect(verifyAuthors([one("Mei-jun Ou")], FRONTIERS_BYLINE, [FRONTIERS_BYLINE]).authors).toBeNull();
+    /* The control: an affiliation fused onto the byline record, led by the
+       marker the page printed on its author's name, is not a person. */
+    const verdict = verifyAuthors(
+      [one("Salim Rukhsar", ["Department of Electrical Engineering, IIT Jodhpur, 342037, India"]), one("Anil K. Tiwari")],
+      ARNN_BYLINE,
+      [ARNN_BYLINE],
+    );
+    expect(verdict.authors).toHaveLength(2);
   });
 
   it("says nothing when nothing was offered — the byline stands as printed, with no note", () => {
@@ -220,12 +319,13 @@ describe("verifyAuthors", () => {
 
   it("never cuts a LETTER off a name by rule — Costa keeps its a unless the model dropped it", () => {
     expect(trimName("Ana Costa")).toBe("Ana Costa");
-    expect(verifyAuthors([one("Salim Rukhsara")], ARNN_BYLINE, [ARNN_BYLINE]).authors?.[0]?.name).toBe("Salim Rukhsara");
+    expect(verifyAuthors([one("Salim Rukhsara")], "Salim Rukhsara,∗", ["Salim Rukhsara,∗"]).authors?.[0]?.name).toBe("Salim Rukhsara");
   });
 
   it("maps folded offsets through astral letters without extending the stored name", () => {
-    expect(verifyAuthors([one("𐐀")], "𐐀 Alice Doe", ["𐐀 Alice Doe"]).authors).toEqual([
+    expect(verifyAuthors([one("𐐀"), one("Alice Doe")], "𐐀 Alice Doe", ["𐐀 Alice Doe"]).authors).toEqual([
       { name: "𐐀", affiliations: [] },
+      { name: "Alice Doe", affiliations: [] },
     ]);
   });
 
@@ -238,7 +338,7 @@ describe("verifyAuthors", () => {
   it("stores the page's characters, so decoration the model added between the words is gone", () => {
     const verdict = verifyAuthors(
       [one("Mei-jun\n--- Ou", ["Head   and\nNeck ** Surgery Department"])],
-      FRONTIERS_BYLINE,
+      "Mei-jun Ou1,",
       [FRONTIERS_AFFILIATIONS],
     );
     expect(verdict.authors).toEqual([{ name: "Mei-jun Ou", affiliations: ["Head and Neck Surgery Department"] }]);
