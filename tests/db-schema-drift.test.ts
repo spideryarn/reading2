@@ -227,6 +227,7 @@ describe("declaredTables", () => {
       "billing_accounts",
       "billing_tier_prices",
       "billing_tiers",
+      "billing_vouchers",
       "block_identities",
       "chat_messages",
       "chat_threads",
@@ -334,7 +335,7 @@ describe("against a real database", () => {
          a second copy of the list above and it is deliberate: it is what makes a
          table that reaches the *schema* and not the *database* say so, which is
          the whole of the drift guard. */
-      expect(report.declaredTables).toBe(39);
+      expect(report.declaredTables).toBe(40);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

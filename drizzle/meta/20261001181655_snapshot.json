@@ -1,6 +1,6 @@
 {
-  "id": "dbef34b8-839c-4d70-bcec-ca08cd9cfda9",
-  "prevId": "301c6f46-524b-4121-9e2b-01254dccbb51",
+  "id": "35848ca0-aab2-4862-8afa-97283e4fcaa0",
+  "prevId": "428e189e-a64b-4d0f-a4ba-06b8fb887c6c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1648,6 +1648,146 @@
         "billing_tiers_id_format": {
           "name": "billing_tiers_id_format",
           "value": "\"spideryarn\".\"billing_tiers\".\"id\" ~ '^[a-z][a-z0-9_-]{1,30}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.billing_vouchers": {
+      "name": "billing_vouchers",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "articles": {
+          "name": "articles",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "claimed_by": {
+          "name": "claimed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "billing_vouchers_unclaimed_email": {
+          "name": "billing_vouchers_unclaimed_email",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"spideryarn\".\"billing_vouchers\".\"claimed_by\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "billing_vouchers_claimed_by": {
+          "name": "billing_vouchers_claimed_by",
+          "columns": [
+            {
+              "expression": "claimed_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "billing_vouchers_claimed_by_billing_accounts_owner_id_fk": {
+          "name": "billing_vouchers_claimed_by_billing_accounts_owner_id_fk",
+          "tableFrom": "billing_vouchers",
+          "tableTo": "billing_accounts",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "claimed_by"
+          ],
+          "columnsTo": [
+            "owner_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "billing_vouchers_email_normalised": {
+          "name": "billing_vouchers_email_normalised",
+          "value": "\"spideryarn\".\"billing_vouchers\".\"email\" = lower(btrim(\"spideryarn\".\"billing_vouchers\".\"email\")) and \"spideryarn\".\"billing_vouchers\".\"email\" like '%_@_%'"
+        },
+        "billing_vouchers_articles_range": {
+          "name": "billing_vouchers_articles_range",
+          "value": "\"spideryarn\".\"billing_vouchers\".\"articles\" between 1 and 1000"
+        },
+        "billing_vouchers_note_length": {
+          "name": "billing_vouchers_note_length",
+          "value": "\"spideryarn\".\"billing_vouchers\".\"note\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"note\") <= 500"
+        },
+        "billing_vouchers_claimed_together": {
+          "name": "billing_vouchers_claimed_together",
+          "value": "num_nonnulls(\"spideryarn\".\"billing_vouchers\".\"claimed_by\", \"spideryarn\".\"billing_vouchers\".\"claimed_at\") <> 1"
         }
       },
       "isRLSEnabled": false

@@ -844,7 +844,9 @@
      so the label sits in the middle of the taller box and the row is the only
      thing that grows. A one-line row goes 37px → 43px, a wrapped two-line row
      64px → 97px. That is real height in a band, and it is the trade the dock
-     already made in the axis that has room. */
+     already made in the axis that has room. **Since 2026-10-01 the row does not
+     wrap on a touch screen** — one line that scrolls sideways, Greg's choice —
+     in glossary.css § a touch screen (plan 261001o). */
   .gloss-sort-btn,
   .quotes-rank-btn {
     display: inline-flex;

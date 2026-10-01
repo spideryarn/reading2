@@ -83,6 +83,7 @@ import type { BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
+import { OrderGroup } from "./OrderGroup.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
 /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
@@ -1049,11 +1050,7 @@ function SortBar({
 }) {
   return (
     <div className="gloss-sort">
-      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
-          controls and wants a <legend>; these are toggle buttons that change
-          how a list is ordered, and `role="group"` with an accessible name is
-          exactly what ARIA has for that. */}
-      <div className="gloss-sort-group" role="group" aria-label="Order the terms by">
+      <OrderGroup label="Order the terms by" selected={sort}>
         {/* No "order" word in front since 2026-09-29 — Greg asked for it to go,
             and the group's `aria-label` still says it to a screen reader. */}
         {options.map((option) => (
@@ -1068,7 +1065,7 @@ function SortBar({
             {option.label}
           </button>
         ))}
-      </div>
+      </OrderGroup>
       {trailing && <span className="gloss-sort-trail">{trailing}</span>}
     </div>
   );

@@ -116,6 +116,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation.
+- **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
+  on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
+  (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.
 - **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
   `applyThreshold`** — "show the items above this score". The FAQ uses the component; the
   Glossary's `GateSlider` and the `BarSlider`s in Citations and Quotes draw the same row for

@@ -56,6 +56,7 @@ import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
 import { AboutMade } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
+import { OrderGroup } from "./OrderGroup.js";
 import {
   availableOrders,
   barMax,
@@ -306,9 +307,7 @@ function OrderBar({
   return (
     <div className="gloss-sort">
       {options.length > 0 && (
-        /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-           list, not form controls — GlossaryPanel.tsx § SortBar says why. */
-        <div className="gloss-sort-group" role="group" aria-label="Order the questions by">
+        <OrderGroup label="Order the questions by" selected={order}>
           {options.map((key) => (
             <button
               key={key}
@@ -321,7 +320,7 @@ function OrderBar({
               {ORDER_BUTTON[key].label}
             </button>
           ))}
-        </div>
+        </OrderGroup>
       )}
     </div>
   );

@@ -128,7 +128,7 @@ const RESEARCHER_OFFER = {
 
 /** A free account with one of its three articles gone. */
 const FREE: BillingSummary = {
-  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false },
+  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false, remaining: 2 },
   manageable: false,
   purchase: { kind: "checkout", tiers: [READER_OFFER, RESEARCHER_OFFER] },
 };
@@ -287,6 +287,15 @@ const ALICE = "aaaaaaaa-2222-4000-8000-000000000001";
 const BOB = "bbbbbbbb-2222-4000-8000-000000000002";
 
 describe("the pricing page's current-plan line", () => {
+  it("removes only checkout from the address, preserving the page's other state", async () => {
+    history.replaceState({ kept: true }, "", "/pricing?q=needle&checkout=cancelled#plans");
+
+    await show(ALICE, () => FREE);
+
+    expect(`${location.pathname}${location.search}${location.hash}`).toBe("/pricing?q=needle#plans");
+    expect(history.state).toEqual({ kept: true });
+  });
+
   it("tells a signed-in free reader what they are on, in describePlan's words", async () => {
     const page = await show(ALICE, () => FREE);
     /* The exact sentence from src/billing-plan.ts, not a paraphrase: a second
@@ -320,7 +329,7 @@ describe("the pricing page's current-plan line", () => {
        "Your plan has ended" is true of both a reader with two free slots left
        and one with none, and Greg asked what you are *on now*. `remaining`
        lives only in `detail`. */
-    expect(line).toContain("2 of 3");
+    expect(line).toContain("room for 2 further private articles");
     /* And the forbidden rendering is still impossible: `used` is not on this
        arm of the union, so no ratio wider than the limit can appear. */
     expect(line).not.toContain("of 3 articles used");

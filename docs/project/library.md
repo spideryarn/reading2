@@ -1003,6 +1003,30 @@ that nothing executes drifts from the pipeline silently. The stages are document
 [setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages), which is where they belong,
 and they still run by hand.
 
+## The free-allowance box
+
+> indicate somewhere on the logged-in Homepage for free users how many free articles used &
+> remaining, plus default-collapsed section … If they don't have a voucher, don't mention vouchers
+> at all
+>
+> — Greg, 2026-10-01
+
+Under the add box, for a reader whose plan is `free` or `lapsed` and nobody else:
+[`FreeAllowance.tsx`](../../src/web/FreeAllowance.tsx), the shelf's one `useBilling()`. One line —
+`describePlan`'s headline, the same words `/profile` prints, and the server's `remaining` — then a
+`<details>`, closed by default, saying the allowance is lifetime rather than monthly, that a public
+article counts half, that reading is never limited, and where to subscribe (`/pricing`) and manage
+(`/profile`). The rules behind the numbers are [billing.md § What a reader sees](billing.md#what-a-reader-sees);
+the one this box must not break is that it never prints `limit − used`.
+
+**Gifts appear only when the plan carries them**, and the server omits `gifts` when there are none:
+then a gift icon sits by the count, the collapsed half lists each one (*20 articles, a gift, added 1
+October 2026*), and for seven days after a claim a line says *A gift of 20 articles has been added to
+your free allowance*. Dismissing it is remembered per gift in `localStorage`
+(`spya.giftNotice.dismissed.<noticeKey>`), every access inside a `try`. Nothing is drawn until the
+plan arrives, and nothing if the read fails — `/profile` is where a failed read is explained.
+`tests/free-allowance-box.test.tsx` holds the four rules.
+
 ## `meta.json`, and the article's identity
 
 The shelf needs a title, a byline, a source and a date, and until now nothing wrote them down —
@@ -1079,6 +1103,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/IconButton.tsx`](../../src/web/IconButton.tsx) | the 28px icon-only button every row of them agrees on |
 | [`src/web/relative-time.ts`](../../src/web/relative-time.ts), [`src/web/useNow.ts`](../../src/web/useNow.ts) | "3 days ago", and the clock that keeps it true |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the add box and the progress list — [ingest-queue.md](ingest-queue.md) |
+| [`src/web/FreeAllowance.tsx`](../../src/web/FreeAllowance.tsx) | the free-allowance box under the add box — [§ The free-allowance box](#the-free-allowance-box) |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | where Add takes you: `/add/<a whole URL>` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |

@@ -5,7 +5,7 @@ You are reviewing AND fixing, in this worktree (branch `worktree-go-deeper`). Th
 changed with `git show --stat 2c7a61a8e` and `git show 2c7a61a8e -- <path>`. Start with
 `src/dig-deeper.ts`, `src/explain.ts`, `src/term-lookup.ts`, `src/routes.ts` (`answer()` and the
 glossary lookup route), `src/web/GlossaryPanel.tsx`, `src/web/CommentDialog.tsx`, the migration
-`drizzle/20261001171813_dig_deeper_bucket.sql`, and the new tests `tests/dig-deeper*.test.ts`,
+`drizzle/20261001171813_dig_deeper_bucket.sql (regenerated as 20261001181655 after merging dev)`, and the new tests `tests/dig-deeper*.test.ts`,
 `tests/glossary-dig-deeper-button.test.tsx`. That list does not limit scope.
 
 The plan is `docs/plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md` (stage 1, §
