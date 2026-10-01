@@ -186,6 +186,7 @@ import { readStoredSynthesis } from "../debate-synthesis.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
+import { OrderGroup } from "./OrderGroup.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
@@ -1532,9 +1533,7 @@ function OrderBar({
 }) {
   return (
     <div className="gloss-sort">
-      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
-      <div className="gloss-sort-group" role="group" aria-label="Order the sources by">
+      <OrderGroup label="Order the sources by" selected={order}>
         {options.map((key) => (
           <button
             key={key}
@@ -1547,7 +1546,7 @@ function OrderBar({
             {ORDER_OPTION[key].label}
           </button>
         ))}
-      </div>
+      </OrderGroup>
     </div>
   );
 }

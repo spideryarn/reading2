@@ -139,6 +139,7 @@ function paint(t: ChatThread): void {
         onDiscard: () => {},
         onRename: () => {},
         onDelete: () => {},
+        canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
         onStop: () => {},

@@ -93,6 +93,8 @@ function row(fields: Partial<AccountSnapshot>): AccountSnapshot {
        from the tier. src/billing/quota-adjustment.ts. */
     quotaLimitDelta: null,
     quotaPeriodStart: null,
+    /* No gift vouchers claimed — docs/project/billing.md § Gift vouchers. */
+    voucherArticles: 0,
     ...fields,
   };
 }

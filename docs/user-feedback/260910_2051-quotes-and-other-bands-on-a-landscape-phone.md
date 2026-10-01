@@ -27,3 +27,12 @@ trimmed, and why, is in the plan's stage 3, and the one product call — letting
 sideways on one line rather than wrap onto two touch-height lines — went to the Overseer as a
 recommendation.
 [261001l](../plans/261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md).
+
+**Follow-up, 2026-10-01 — the order rows, shipped.** Greg chose the recommendation (question
+`Q-landscape-orders`, option B): *"On touch screens only, keep it to one line and let it scroll
+sideways."* On a touch screen the order buttons in Quotes, Citations and Glossary (and Debate and
+FAQ, which draw the same row) now stay on one line and scroll sideways like the bottom bar, the
+count and profile badge pinned at the end, and the order in force is scrolled into view when the
+band opens. At 844×390 the row is 54px, down from 98; a mouse sees no change. On `dev`, not deployed
+(`7ce23c5d1`, review fixes and the browser pass in `fd6bf2ca7`).
+[261001o](../plans/261001o-order-buttons-one-sideways-scrolling-line-on-touch-screens.md).

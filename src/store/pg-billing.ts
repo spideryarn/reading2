@@ -99,6 +99,7 @@ import type { Articles, HalfUnits } from "../billing/half-units.js";
 import { limitForPeriod } from "../billing/quota-adjustment.js";
 import {
   FREE,
+  FREE_LIFETIME_INGESTS,
   entitlementForTier,
   isEntitledStatus,
   quotaRules,
@@ -315,6 +316,41 @@ export interface BillingRow {
    */
   readonly quotaLimitDelta: number | null;
   readonly quotaPeriodStart: Date | null;
+  /**
+   * **Extra free articles from gift vouchers** — the sum of this owner's
+   * claimed, unrevoked `billing_vouchers` rows, in whole articles. Zero for
+   * almost everybody.
+   *
+   * Read by every query that reads the row (`BILLING_COLUMNS`), so the wall,
+   * `/profile`, `/pricing` and `/admin/users` all add the same number. It counts
+   * **on Free only** — `freeEntitlement` below is where it is added, and no paid
+   * return touches it. docs/project/billing.md § *Gift vouchers*.
+   */
+  readonly voucherArticles: number;
+}
+
+/**
+ * **The Free entitlement for this row** — the lifetime three, plus whatever gift
+ * vouchers the account has claimed and not had revoked.
+ *
+ * **One function for every Free return in `entitlementFromRow`**, so no branch
+ * can come to answer the bare `FREE` while another adds the gift (GPT Sol, plan
+ * review F1).
+ *
+ * **The sum is checked, not trusted.** Postgres hands `sum()` back as a string
+ * unless told otherwise, and `3 + "20"` is `"320"` — an allowance of three
+ * hundred and twenty articles, silently. The column is cast in SQL and mapped
+ * to a number on the way out (`BILLING_COLUMNS`); this is the third guard, and
+ * it throws rather than defaulting, for the reason `usageOf` gives: a wrong
+ * allowance that looks right is the expensive failure.
+ */
+export function freeEntitlement(row: BillingRow | undefined): Entitlement {
+  const bonus: unknown = row?.voucherArticles ?? 0;
+  if (typeof bonus !== "number" || !Number.isSafeInteger(bonus) || bonus < 0) {
+    throw new Error(`the gift voucher sum came back as ${String(bonus)}, which is not a count of articles`);
+  }
+  if (bonus === 0) return FREE;
+  return { tier: "free", limit: inArticles(FREE_LIFETIME_INGESTS + bonus) };
 }
 
 /**
@@ -334,7 +370,7 @@ export function entitlementFromRow(
   tiers: readonly TierRow[],
   now: Date,
 ): Entitlement | Stale {
-  if (!row || !isEntitledStatus(row.status)) return FREE;
+  if (!row || !isEntitledStatus(row.status)) return freeEntitlement(row);
 
   const tier = tierForPrice(row.priceId, tiers);
   if (!tier) {
@@ -342,7 +378,7 @@ export function entitlementFromRow(
       { priceId: row.priceId, status: row.status },
       "an entitled subscription is on a price no tier sells — treating as free",
     );
-    return FREE;
+    return freeEntitlement(row);
   }
 
   const { currentPeriodStart: start, currentPeriodEnd: end } = row;
@@ -516,7 +552,21 @@ export async function usageFor(ownerId: string, entitlement: Entitlement): Promi
   return usageOf(await getDb().execute(usageSql(ownerId, entitlement)));
 }
 
-/** The columns the two questions below are decided from. One list, one shape. */
+/**
+ * The columns the two questions below are decided from. One list, one shape.
+ *
+ * **`voucherArticles` is a correlated subquery, not a column**, so that every
+ * read of the row carries the gift voucher bonus and none can forget it. Cast
+ * to `int` in SQL **and** mapped to a number here, because a bare `sum()` is a
+ * `bigint` and arrives as a string (GPT Sol, plan review F1) — `freeEntitlement`
+ * then refuses anything that is not a non-negative safe integer.
+ *
+ * **Never read in the statement that takes the lock.** Under `read committed`
+ * a subquery in a `FOR UPDATE` select answers from the snapshot taken *before*
+ * the wait for the lock, so a revoke that committed while this request waited
+ * would not be seen. `lockBillingAccount` locks first and reads these in a
+ * second statement (F2).
+ */
 const BILLING_COLUMNS = {
   status: billingAccounts.status,
   priceId: billingAccounts.priceId,
@@ -526,6 +576,11 @@ const BILLING_COLUMNS = {
   stripeCustomerId: billingAccounts.stripeCustomerId,
   quotaLimitDelta: billingAccounts.quotaLimitDelta,
   quotaPeriodStart: billingAccounts.quotaPeriodStart,
+  voucherArticles: sql<number>`(
+    select coalesce(sum(v.articles), 0)::int
+      from spideryarn.billing_vouchers v
+     where v.claimed_by = ${billingAccounts.ownerId}
+       and v.revoked_at is null)`.mapWith(Number),
 } as const;
 
 /**
@@ -859,12 +914,22 @@ export async function lockBillingAccount(
     .values({ ownerId })
     .onConflictDoNothing({ target: billingAccounts.ownerId });
 
-  const [row] = await tx
-    .select(BILLING_COLUMNS)
+  const [locked] = await tx
+    .select({ ownerId: billingAccounts.ownerId })
     .from(billingAccounts)
     .where(eq(billingAccounts.ownerId, ownerId))
     .for("update")
     .limit(1);
+  /* **And the row read again, in a statement of its own, after the lock is
+     held.** At `read committed` each statement takes a fresh snapshot, so this
+     one sees everything committed before the lock was granted — including a
+     voucher revoked or shrunk by src/store/pg-vouchers.ts, which takes this
+     same lock to do it. Read in the locking statement, the voucher subquery
+     would answer from the snapshot taken *before* the wait, and a revoke racing
+     an admission could be admitted past (GPT Sol, plan review F2). */
+  const [row] = locked
+    ? await tx.select(BILLING_COLUMNS).from(billingAccounts).where(eq(billingAccounts.ownerId, ownerId)).limit(1)
+    : [];
   if (!row) {
     /* Unreachable — the insert above guarantees a row and this transaction
        holds it. Loud rather than silent, because the only way here is the

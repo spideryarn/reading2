@@ -355,6 +355,17 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/users"],
   },
+  /* Gift vouchers, 261001m — the list and create share one literal. */
+  {
+    match: { kind: "literal", path: "/api/admin/vouchers" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/admin/vouchers"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/vouchers\\/([\\w-]+)$", flags: "" },
+    methods: ["PATCH"],
+    witnesses: ["/api/admin/vouchers/w1"],
+  },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
     methods: ["GET"],
@@ -839,8 +850,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 80;
-const EXPECTED_GUARD_COUNT = 97;
+const EXPECTED_MATCHER_COUNT = 82;
+const EXPECTED_GUARD_COUNT = 100;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1969,6 +1980,10 @@ describe("the authenticated API's route contract", () => {
       ).toEqual([
         // the top of the chain, from the admin routes to shelfOpen, 260911d
         "GET literal /api/admin/users",
+        // gift vouchers, 261001m — beside the users list
+        "GET literal /api/admin/vouchers",
+        "POST literal /api/admin/vouchers",
+        "PATCH regex /^\\/api\\/admin\\/vouchers\\/([\\w-]+)$/",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",

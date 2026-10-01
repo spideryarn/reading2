@@ -95,6 +95,44 @@
 }
 .gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
+/* **§ a touch screen: one line that scrolls sideways.** Greg, 2026-10-01
+   (Q-landscape-orders, option B): *"On touch screens only, keep it to one line
+   and let it scroll sideways. This saves about 49px, but orders past the edge
+   stay hidden until you swipe."* The 40px finger floor (narrow-window.css § a
+   coarse pointer) wrapped four orders onto two lines in a landscape phone's
+   band — 98px of 338 (plan 261001l). Plan 261001o.
+
+   `pointer: coarse` because the floor is: the wrap is the floor's, so it is
+   undone under the same query, and a mouse at any width is untouched.
+
+   **Here, not in narrow-window.css**, because that sheet loads before
+   quotes.css, and an equal-weight `.quotes-rank { flex-wrap: nowrap }` there
+   would lose to quotes.css's own `wrap` (GPT Sol, on the plan). Each row's
+   one-line rule sits in the sheet that owns the row, after its base rule; the
+   Quotes row's is in quotes.css.
+
+   The scrolling is the bottom bar's treatment, cited rather than shared —
+   dock.css § the floor under the bar's fit ladder; its rules are unconditional
+   and these are touch-only, so one selector list cannot hold both. The group
+   shrinks (`min-width: 0`, above) and the trail does not, so the count and the
+   badge stay pinned at the end while the orders scroll under them.
+   OrderGroup.tsx keeps the pressed order in view. The padding, given back by
+   the margin, is room for the focus ring a scrolling box would clip. */
+@media (pointer: coarse) {
+  .gloss-sort { flex-wrap: nowrap; }
+  .gloss-sort-group {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    padding: 3px;
+    margin: -3px;
+  }
+  .gloss-sort-group::-webkit-scrollbar { display: none; }
+  .gloss-sort-group > *,
+  .gloss-sort-trail { flex-shrink: 0; }
+}
+
 /* The threshold slider — the one control in this panel that sets a number
    rather than picking from a list. Shown only in `prioritised` order.
 
