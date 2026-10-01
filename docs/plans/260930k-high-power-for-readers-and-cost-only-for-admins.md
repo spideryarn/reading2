@@ -401,3 +401,24 @@ itself, each checked by hand afterwards:
 so it never ran the database tests. Run here, 17 went red: the raw driver returns `timestamptz` as
 text, and the fix called `toISOString` on a string. It is now parsed, and refused if it is not a
 time. 53 of 53 pass.
+
+## The migration, rebuilt on the merge
+
+Merging `origin/dev` forked the drizzle chain: dev had added `20260930232254_bibliographic_lookup`
+beside this branch's `20260930225042_ingest_events_kind`. Mine was unpublished, so it was rebuilt
+following [database.md § Repairing a fork](../project/database.md):
+
+- dev's journal taken whole;
+- the old `.sql` and snapshot deleted;
+- `npm run db:generate` re-run, which produced the same DDL;
+- the result made idempotent (`IF NOT EXISTS`, and drop-then-add for the two checks);
+- `npm run db:chain` green.
+
+It is now `20261001004017_ingest_events_kind`.
+
+The shared local database had the old one through its ledger, so `db:migrate` refused: one row
+belonged to no migration. That row (`created_at` 1790808642016) was the old migration's own `when`,
+and its effects are exactly what the rebuilt file reproduces. It was deleted, on the local database
+only. Then `npm run db:migrate` (`Target: postgresql://postgres@127.0.0.1:54362/postgres`) applied
+dev's migration and the rebuilt one. Production has not been touched; it gets both at the next
+deploy's migrate.

@@ -41,6 +41,7 @@ describe("referenceListFrom", () => {
       "1. Smith, T.A. et al. (2013) The context repetition effect: predicted events are remembered better, even when they don't happen. J. Exp. Psychol. Gen. 142, 1298–1308",
     );
     expect(list?.entries.get(5)).toContain("ongoing narrative processing");
+    expect(list?.identifierEntries?.get(5)).toContain("ongoing narra-\ntive processing");
     expect(list?.entries.get(6)).toContain("6. Cohn-Sheehy, B.I.");
   });
 

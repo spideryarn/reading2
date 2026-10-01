@@ -740,8 +740,15 @@
     {
       "idx": 105,
       "version": "7",
-      "when": 1790808642016,
-      "tag": "20260930225042_ingest_events_kind",
+      "when": 1790810574653,
+      "tag": "20260930232254_bibliographic_lookup",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790815217643,
+      "tag": "20261001004017_ingest_events_kind",
       "breakpoints": true
     }
   ]

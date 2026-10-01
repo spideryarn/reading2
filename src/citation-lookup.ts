@@ -181,7 +181,7 @@ export function lookupEvidenceHash(page: SearchEvidence): string {
 /* -------------------------------------------------------- the identity -- */
 
 /** Every letter-and-digit run, lower-cased — stopwords kept, since "for" separates two titles. */
-function tokens(value: string): string[] {
+export function tokens(value: string): string[] {
   return value
     .normalize("NFKC")
     .toLowerCase()
@@ -203,7 +203,7 @@ function decoded(url: string): string {
 }
 
 /** The first author's surname: "Kaplan, J." and "Jared Kaplan" both give "kaplan". */
-function surnameOf(authors: string | null): string | null {
+export function surnameOf(authors: string | null): string | null {
   const words = tokens(firstAuthor(authors ?? undefined)).filter((w) => w.length > 1);
   return words[words.length - 1] ?? null;
 }
@@ -267,7 +267,7 @@ function startsWith(have: readonly string[], want: readonly string[]): boolean {
  *   ..." names too many papers). A sibling paper can share that opening, so
  *   the caller also demands the first author's surname.
  */
-function titleNamesWork(pageTitle: string | undefined, workTitle: string): "whole" | "truncated" | null {
+export function titleNamesWork(pageTitle: string | undefined, workTitle: string): "whole" | "truncated" | null {
   if (!pageTitle) return null;
   const want = tokens(workTitle);
   const title = pageTitle.replace(BRACKETED_ID_START, "");

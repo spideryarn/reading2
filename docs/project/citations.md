@@ -100,6 +100,23 @@ yet. No list, a scan or an unreadable document never fails the step; the step's 
 **An HTML bibliography's entry is its block's text**, when the block is `role: "reference"` and no
 other work claims it — a shared footnote would show one work its neighbour's venue.
 
+**A PDF entry's DOI or arXiv id is the row's link** ([261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
+stage 4). The entry code split is the article's own text, so it joins rule 1 of `linkFor` as a
+bibliography block does: exactly one DOI, or no DOI and exactly one arXiv id, gives `doi.org` or
+`arxiv.org/abs` with the same `doi` / `arxiv` `linkFrom`. `entryIdentifiers` reads the entry
+conservatively from the entry before dehyphenation: a DOI or arXiv id spanning a line-end hyphen,
+a DOI ending in `-`, `/` or `_` before whitespace,
+one followed without punctuation by another DOI-shaped run, one ending in a full stop before a
+lowercase-or-digit run (`j.cell. 2020.01.001`), or an arXiv id followed by a digit might have been
+cut, so the row keeps its search. Code never joins two runs into an address. The entry shown to the
+reader is still dehyphenated, and the link is read from the whole entry, not the stored 400-character
+cut. **A row whose search becomes a DOI keeps its
+id** on the re-run — its old `workKey` is tried when its new `doi:` key finds nothing, only while no
+other row in either list has that `workKey`. If the new identifier key and metadata key point to two
+different old rows (a pair of works swapped their DOIs, for example), neither old id is used. Thus a
+clear upgrade keeps its *Look it up*, find and investigation, while an ambiguous one cannot transfer
+them to another work.
+
 **Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
 the article's own reference list, which we have not looked up; the prose hover card shows the entry
 in full, since a card is what a finger gets. `entry` is owner-only: `publicCitedWork` does not name
@@ -422,7 +439,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; a DOI or arXiv id in a PDF's entry used as the row's link; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

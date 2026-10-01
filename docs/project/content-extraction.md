@@ -217,6 +217,13 @@ The differences that matter to a reader:
   figure's ref is minted from the whole caption. `continuationTargets` in
   [`src/pdf-read.ts`](../../src/pdf-read.ts) is the one rule `renderHtml` and `mendSeamHyphens`
   share — [260930e](../plans/260930e-pdf-transcription-glitches.md).
+- **Footnotes are shown, in the web path's note shape.** Since 2026-09-30 `renderHtml` gathers the
+  `footnote` records into the same notes container `src/notes.ts` writes for a web page, and turns a
+  marker it can find in the prose (`nonphysicalists13`, `limits³.`) into the same link, so the hover
+  card, the Notes region and the way back all come free. Which digits are markers is decided in code,
+  not by the prompt, so no import pays for it; a note whose marker it cannot pin down is listed
+  unlinked, and an uncited note on page 1 (an affiliation, mostly) is left out —
+  [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).

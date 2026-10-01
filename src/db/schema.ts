@@ -5565,3 +5565,140 @@ export const linkSummaries = spideryarn.table(
     index("link_summaries_expires_at").on(t.expiresAt),
   ],
 );
+
+/* ------------------------------------------------------ bibliographic -- */
+
+/**
+ * **What Crossref or DataCite said about one identifier — one row each, shared
+ * by every caller.** The cache behind `lookupWork` in src/bibliographic.ts;
+ * docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md
+ * § Stage 1.
+ *
+ * **Global, not owner-scoped, on purpose.** A row is public metadata about a
+ * public identifier: no owner, no article, and nothing about who asked or when
+ * they asked it. So it cannot say that a given reader was reading a given
+ * paper — the question `link_previews` had to argue its way past. It is also why
+ * the cache is the main limiter on what we ask of two free services: a work is
+ * asked about once, by anybody.
+ *
+ * **A row is one of three things**, and `bibliographic_records_shape` keeps the
+ * columns in step with which:
+ *
+ * - `state` null — a claim and no answer yet: somebody is asking right now,
+ *   until `claimed_until`. An error on that ask deletes the row, so an error
+ *   stores nothing.
+ * - `found` — a record, fresh for 180 days from `fetched_at`.
+ * - `not-found` — neither registry has it, remembered for 7 days.
+ *
+ * A stale `found` or `not-found` row being refreshed keeps its old answer while
+ * `claimed_until` is set; freshness is decided on read from `fetched_at`, so a
+ * stale answer is never served.
+ *
+ * Authors are two parallel arrays rather than JSON (docs/project/sql.md): an
+ * organisation is a family name with a null given name.
+ */
+export const bibliographicRecords = spideryarn.table(
+  "bibliographic_records",
+  {
+    /** `doi:<lower-cased doi>` or `arxiv:<lower-cased versionless id>` — `WorkId` in src/bibliographic.ts. */
+    id: text("id").primaryKey(),
+    /** `found`, `not-found`, or null for a claim with no answer yet. */
+    state: text("state").$type<"found" | "not-found">(),
+    /** Which registry answered. Null on a claim and on a not-found. */
+    source: text("source").$type<"crossref" | "datacite">(),
+    title: text("title"),
+    authorsFamily: text("authors_family").array(),
+    authorsGiven: text("authors_given").array().$type<(string | null)[]>(),
+    year: integer("year"),
+    venue: text("venue"),
+    /** The DOI the registry gave the record — for an arXiv id, DataCite's `10.48550/arxiv.<id>`. */
+    doi: text("doi"),
+    /** When the answer was fetched. Null on a claim with no answer. */
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    /** The single-flight claim: somebody is asking until then. Null when nobody is. */
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      "bibliographic_records_id",
+      sql`length(${t.id}) <= 300 and ${t.id} = lower(${t.id}) and (
+            ${t.id} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'
+            or ${t.id} ~ '^arxiv:([0-9]{4}[.][0-9]{4,5}|[a-z-]+([.][a-z]{2})?/[0-9]{7})$'
+          )`,
+    ),
+    check("bibliographic_records_state", sql`${t.state} is null or ${t.state} in ('found', 'not-found')`),
+    check("bibliographic_records_source", sql`${t.source} is null or ${t.source} in ('crossref', 'datacite')`),
+    check("bibliographic_records_year", sql`${t.year} is null or ${t.year} between 1500 and 2100`),
+    /** Same length, at most 100, and a family name for every author. */
+    check(
+      "bibliographic_records_authors",
+      sql`coalesce(cardinality(${t.authorsFamily}), -1) = coalesce(cardinality(${t.authorsGiven}), -1)
+          and coalesce(cardinality(${t.authorsFamily}), 0) <= 100
+          and array_position(${t.authorsFamily}, null) is null`,
+    ),
+    /**
+     * **The three shapes, as a constraint** — `link_previews_shape`'s argument:
+     * a rule that lives in one writer is not a rule.
+     */
+    check(
+      "bibliographic_records_shape",
+      sql`case
+            when ${t.state} = 'found' then ${t.source} is not null and ${t.title} is not null
+              and length(${t.title}) between 1 and 1000
+              and ${t.authorsFamily} is not null and ${t.doi} is not null and ${t.fetchedAt} is not null
+            when ${t.state} = 'not-found' then ${t.fetchedAt} is not null
+              and num_nonnulls(${t.source}, ${t.title}, ${t.authorsFamily}, ${t.authorsGiven}, ${t.year}, ${t.venue}, ${t.doi}) = 0
+            else ${t.claimedUntil} is not null and ${t.fetchedAt} is null
+              and num_nonnulls(${t.source}, ${t.title}, ${t.authorsFamily}, ${t.authorsGiven}, ${t.year}, ${t.venue}, ${t.doi}) = 0
+          end`,
+    ),
+  ],
+);
+
+/**
+ * **One row per registry we ask: when the next request may start, and whether
+ * we have been told to stop.** Politeness held in the database rather than in
+ * process memory, because many server instances would each multiply a
+ * per-process limit (GPT Sol, P-4 in the plan above).
+ *
+ * - `next_start_at` — starts are spaced globally by one `update … set
+ *   next_start_at = greatest(next_start_at, now()) + spacing … returning`.
+ * - `cooldown_until` — a 429 or a 503 writes it (its `Retry-After`, else 60 s),
+ *   and nobody asks that service again until then.
+ *
+ * Seeded by its migration, one row each. A missing row is a bug, and
+ * src/store/pg-bibliographic.ts throws rather than calling it "busy".
+ */
+export const bibliographicServices = spideryarn.table(
+  "bibliographic_services",
+  {
+    service: text("service").$type<"crossref" | "datacite">().primaryKey(),
+    nextStartAt: timestamp("next_start_at", { withTimezone: true }).notNull().defaultNow(),
+    cooldownUntil: timestamp("cooldown_until", { withTimezone: true }),
+  },
+  (t) => [check("bibliographic_services_service", sql`${t.service} in ('crossref', 'datacite')`)],
+);
+
+/**
+ * **Leased slots, bounding how many requests are in flight to each registry
+ * across every instance** — 2 for Crossref (under its 3 concurrent), 1 for
+ * DataCite. Seeded by the migration. Taken with `for update skip locked`,
+ * leased for 20 s so a dead process cannot hold one for ever, freed in a
+ * `finally`.
+ */
+export const bibliographicServiceSlots = spideryarn.table(
+  "bibliographic_service_slots",
+  {
+    service: text("service")
+      .$type<"crossref" | "datacite">()
+      .notNull()
+      .references(() => bibliographicServices.service, { onDelete: "cascade" }),
+    slot: smallint("slot").notNull(),
+    /** Held until then; null or past means free. */
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.service, t.slot] }),
+    check("bibliographic_service_slots_slot", sql`${t.slot} >= 1`),
+  ],
+);

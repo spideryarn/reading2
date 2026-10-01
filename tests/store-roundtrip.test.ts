@@ -35,6 +35,7 @@ import { currentOwnerId } from "../src/owner.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
+import { sanitizeStoredBlocks } from "../src/sanitize.js";
 import { exportArticle, rawFileName } from "../src/store/export.js";
 import { sniffKind } from "../src/fetch.js";
 import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
@@ -102,6 +103,28 @@ function sorted(value: unknown): unknown {
  * record their position, so their order is a real promise and sorting them here
  * would hide the day it breaks.
  */
+/**
+ * **The original `blocks.json` as the export is entitled to return it**: cleaned
+ * by the current policy.
+ *
+ * The export writes blocks through `blocksArtefact`, which sanitises. The
+ * fixtures were cleaned by whatever policy was current when they were made (one
+ * is stamped 3, one has no stamp). For six bumps that made no difference to
+ * their html. The seventh did: since 2026-10-01 an article keeps only declared
+ * `data-*` names, so Noema's `data-note` (footnote text nothing ever displayed)
+ * goes. Comparing against the original *as today's policy leaves it* keeps the
+ * promise "every block comes back" without pinning a policy the export has
+ * outgrown. Only the expected side is cleaned, so an export that dropped or
+ * mangled anything else still fails.
+ * docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md
+ */
+function cleanedAsExported(artefact: string, value: unknown): unknown {
+  if (artefact !== "blocks.json" || !value || typeof value !== "object") return value;
+  const file = value as { blocks?: Array<{ html: string }> };
+  if (!Array.isArray(file.blocks)) return value;
+  return { ...file, blocks: sanitizeStoredBlocks(file.blocks, undefined).blocks };
+}
+
 function canonical(artefact: string, value: unknown): unknown {
   /* `blocks.json` carries a `sanitizer` stamp saying which version of the
      policy cleaned it (docs/project/security.md). The export re-stamps, because
@@ -550,7 +573,7 @@ describe("a round trip through Postgres", () => {
 
       expect(returned).toBeDefined();
       expect(sorted(canonical(artefact, returned))).toEqual(
-        sorted(canonical(artefact, original)),
+        sorted(canonical(artefact, cleanedAsExported(artefact, original))),
       );
     });
 

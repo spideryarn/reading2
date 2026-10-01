@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "30 September 2026";
+const LAST_UPDATED = "1 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -212,10 +212,10 @@ export function PrivacyPage() {
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
             articles</strong> — with experimental features on, a running total of the seconds each
-            passage has been on your screen, so that the article’s outline and margin can show you
-            where you have been. We keep the totals, not a history of your reading (our ordinary
-            server logs do show when an update arrived). It is not shown to anybody reading an
-            article you have shared, and it goes when the article does.
+            passage has been on your screen. Some of Spideryarn’s features use it — to show you
+            where you have been, for example. We keep the totals, not a history of your reading (our
+            ordinary server logs do show when an update arrived). It is not shown to anybody reading
+            an article you have shared, and it goes when the article does.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> — we keep
@@ -315,10 +315,18 @@ export function PrivacyPage() {
             account id and email address, so that a broken page has a person attached to it. Bug
             reports you file are copied here too.
           </Third>
+          {/* Live since 2026-09-03; until 2026-10-01 this still said "not
+              switched on yet". Checkout and the billing portal are Stripe's own
+              hosted pages. A completed-Checkout webhook can carry the billing
+              details entered there, so the promise below is that we do not keep
+              them, not that they never pass through this server. What we send is
+              in src/billing/checkout.ts; what we retain is in src/db/schema.ts §
+              billing. docs/project/privacy.md § Facts. */}
           <Third name="Stripe" href="https://stripe.com/privacy">
-            payments. <strong className="tw:text-foreground">Not switched on yet</strong> — named
-            here because it is coming. Stripe will handle the card; we will never see it, and this
-            page will say what we do keep before anybody is charged.
+            payments, if you subscribe. You enter your card and billing details on Stripe’s page;
+            we do not keep them. We send Stripe your account id and what you choose to buy. We keep
+            your plan, its allowance and how you have used it; the subscription’s status and dates;
+            and Stripe’s customer and subscription references.
           </Third>
         </ul>
         <p>

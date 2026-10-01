@@ -46,5 +46,25 @@ For Greg:
 
 Both are in the plan's § Left for Greg.
 
+## Follow-up, 2026-10-01: the sanitiser half is shipped
+
+Greg approved the sanitiser edit (relayed by the Overseer):
+
+> Yes to the filter fix (or any other fix that feels clean, general, robust, clean)
+
+**Ending: Shipped**, on `dev` and not deployed: `4b4790e5` (the policy) and `13f8266b` (review fixes
+and docs), landed with `56f5c479`. Instead of adding the missing names to the sanitiser's forbidden list, the list was turned
+round. An imported article now keeps only the `data-*` attributes and classes we declare, so every
+mark the app draws, including any added later, is out of an article's reach. That covers the
+`xref` mark, the block-preview card, and the click handlers' own classes.
+
+A read-only check of production found no article carrying a forged marking. The new rule applies
+whenever an article is rendered, so nothing stored needs rewriting.
+
+The visitor half (the public DTO) is still waiting, and is in
+[awaiting-approval.md](awaiting-approval.md).
+
+Plan: [261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md).
+
 Plan: [260930f](../plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md).
 Doc: [cross-references.md](../project/cross-references.md).

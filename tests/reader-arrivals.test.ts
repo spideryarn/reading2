@@ -3,9 +3,9 @@
  * existed before the ledger never is.** src/arrivals.ts and
  * drizzle/20260930144303_reader_arrivals.sql.
  *
- * Against a real database, because the whole of "exactly once" is the primary
- * key and `on conflict do nothing returning` — a fake `record` would be testing
- * itself.
+ * Against a real database, because one current claimant across the fleet is a
+ * property of the primary key and `on conflict do nothing returning` — a fake
+ * `record` would be testing itself.
  *
  * docs/plans/260930i-email-admin-on-sign-up-and-plan-upgrade.md.
  */
@@ -16,6 +16,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { forgetKnownArrivals, noteArrival } from "../src/arrivals.js";
 import type { Verifier } from "../src/auth.js";
+import type { SendResult } from "../src/email.js";
 import { loadEnvLocal } from "../src/env.js";
 import { handleApi } from "../src/routes.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -32,6 +33,15 @@ const { pool } = await pgReady({
 
 const NEWCOMER = "a441e0a1-0000-4000-8000-0000000000a1";
 const OLD_HAND = "a441e0a1-0000-4000-8000-0000000000a2";
+const SENT: SendResult = { kind: "sent", id: null };
+
+/** An `announce` that writes down whom it announced and answers `result`. */
+function announcer(into: string[], result: SendResult = SENT): (id: string) => Promise<SendResult> {
+  return async (id) => {
+    into.push(id);
+    return result;
+  };
+}
 
 beforeAll(async () => {
   if (!pool) return;
@@ -55,7 +65,7 @@ afterAll(async () => {
 describe.skipIf(!pool)("noteArrival", () => {
   it("announces an account's first request, and only that one", async () => {
     const announced: string[] = [];
-    const announce = async (id: string) => announced.push(id);
+    const announce = announcer(announced);
 
     await noteArrival(NEWCOMER, { announce });
     expect(announced).toEqual([NEWCOMER]);
@@ -70,14 +80,14 @@ describe.skipIf(!pool)("noteArrival", () => {
 
   it("two instances racing announce once", async () => {
     const announced: string[] = [];
-    const announce = async (id: string) => announced.push(id);
+    const announce = announcer(announced);
     await Promise.all([noteArrival(NEWCOMER, { announce }), noteArrival(NEWCOMER, { announce })]);
     expect(announced).toEqual([NEWCOMER]);
   });
 
   it("a failed insert neither throws nor is remembered, so the next request asks again", async () => {
     const announced: string[] = [];
-    const announce = async (id: string) => announced.push(id);
+    const announce = announcer(announced);
     await expect(
       noteArrival(NEWCOMER, {
         record: async () => {
@@ -101,6 +111,94 @@ describe.skipIf(!pool)("noteArrival", () => {
       }),
     ).resolves.toBeUndefined();
   });
+
+  /**
+   * **A mail that did not go out is tried again on the next request.**
+   * `sendEmail` never throws, so a Resend outage arrives as a value; ignoring it
+   * left the row in place and that reader was never announced.
+   * SPIDERYARN-READING2-79, docs/plans/261001b.
+   */
+  const undelivered: ReadonlyArray<[string, () => Promise<SendResult>]> = [
+    ["Resend fails", async () => ({ kind: "failed", reason: "Resend answered 503" })],
+    [
+      "the announcement throws",
+      async () => {
+        throw new Error("Resend down");
+      },
+    ],
+    ["production has no key", async () => ({ kind: "skipped", reason: "no RESEND_API_KEY" })],
+  ];
+  for (const [what, announceOnce] of undelivered) {
+    it(`gives the claim back when ${what}, so the next request announces`, async () => {
+      await noteArrival(NEWCOMER, { announce: announceOnce });
+      expect(await arrived()).toBe(false);
+
+      const announced: string[] = [];
+      await noteArrival(NEWCOMER, { announce: announcer(announced) });
+      expect(announced).toEqual([NEWCOMER]);
+      expect(await arrived()).toBe(true);
+    });
+  }
+
+  it("keeps the claim when the mail was skipped because this is not production", async () => {
+    const announced: string[] = [];
+    const announce = announcer(announced, { kind: "skipped", reason: "not production" });
+    await noteArrival(NEWCOMER, { announce });
+    forgetKnownArrivals();
+    await noteArrival(NEWCOMER, { announce });
+    expect(announced).toEqual([NEWCOMER]);
+  });
+
+  it("keeps overlapping requests cached until the failed announcement's claim is released", async () => {
+    let markReleaseStarted = () => {};
+    const releaseStarted = new Promise<void>((resolve) => {
+      markReleaseStarted = resolve;
+    });
+    let allowRelease = () => {};
+    const releaseAllowed = new Promise<void>((resolve) => {
+      allowRelease = resolve;
+    });
+
+    const first = noteArrival(NEWCOMER, {
+      announce: async () => ({ kind: "failed", reason: "Resend answered 503" }),
+      release: async (ownerId) => {
+        markReleaseStarted();
+        await releaseAllowed;
+        await pool!.query("delete from spideryarn.reader_arrivals where owner_id = $1", [ownerId]);
+      },
+    });
+    await releaseStarted;
+
+    /* This arrives while the failed sender still owns the ledger row. It must
+       not re-cache that row immediately before the release deletes it. */
+    const announced: string[] = [];
+    await noteArrival(NEWCOMER, { announce: announcer(announced) });
+    allowRelease();
+    await first;
+
+    await noteArrival(NEWCOMER, { announce: announcer(announced) });
+    expect(announced).toEqual([NEWCOMER]);
+  });
+
+  it("a release that fails does not throw", async () => {
+    await expect(
+      noteArrival(NEWCOMER, {
+        announce: async () => ({ kind: "failed", reason: "Resend answered 503" }),
+        release: async () => {
+          throw new Error("database down");
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    let askedAgain = false;
+    await noteArrival(NEWCOMER, {
+      record: async () => {
+        askedAgain = true;
+        return false;
+      },
+    });
+    expect(askedAgain).toBe(true);
+  });
 });
 
 describe.skipIf(!pool)("the migration's backfill", () => {
@@ -123,7 +221,7 @@ describe.skipIf(!pool)("the migration's backfill", () => {
     await pool!.query(backfill);
 
     const announced: string[] = [];
-    await noteArrival(OLD_HAND, { announce: async (id) => announced.push(id) });
+    await noteArrival(OLD_HAND, { announce: announcer(announced) });
     expect(announced).toEqual([]);
     const { rows } = await pool!.query(
       "select first_seen_at from spideryarn.reader_arrivals where owner_id = $1",

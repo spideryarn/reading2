@@ -2530,6 +2530,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      race the test is measuring the only race in it. No GoTrue and no bucket. */
   "tests/article-delete-pg.test.ts": "private-postgres",
   "tests/article-rows-snapshot.test.ts": "private-postgres",
+  /* 261001a stage 1: the bibliographic cache and its politeness rows. Those
+     tables are ownerless and this file resets all three between cases, which a
+     shared database must never have done to it mid-run. */
+  "tests/bibliographic-pg.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
   /* Stage 3b's, arriving from this worktree rather than from `dev`, and caught

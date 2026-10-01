@@ -21,6 +21,16 @@ facts that only a real purchase can establish are written down.
 The **reader-facing surface** landed the same day — see [What a reader sees](#what-a-reader-sees).
 What is not built is marked *not built* below rather than described in the present tense.
 
+
+**Live voice has no allowance on any paid plan**, and it is the dearest thing we serve — about
+$0.08–0.13 a minute, so a handful of full conversations a month can cost more than a Reader
+subscription brings in. The only limits are the browser's own (5 minutes silent, 20 in all), which
+nothing on the server enforces. Greg, 2026-10-01: *"worth noting … but let's not worry about it until
+we have more users."* When it matters: read real minutes per reader from the cost ledger
+([cost-tracking.md](cost-tracking.md)) first; a check at session start is easy to get round, so a
+real limit means server-side reservation ([live-conversation.md](live-conversation.md)). Raised in
+[260929g](../plans/260929g-bring-your-own-ai-subscription.md).
+
 ## What we sell, and the one promise
 
 | | ingests | USD | GBP | EUR |

@@ -241,6 +241,12 @@ lists both files, and an unattended run does not edit a defence.
    **`data-block-link`, `data-block-preview` and `data-block-missing` are not forbidden today**.
    So an article can already forge a genuine block-preview card on words it chooses. That gap
    predates this plan, and v1 does not widen it. The same edit should close it.
+
+   **Done 2026-10-01, and done more widely than written here.** Greg approved it, and asked for the
+   class of bug to be closed rather than these names added. The sanitiser now keeps only the
+   `data-*` attributes and classes it declares, so the `xref` mark, the three block-link attributes
+   and every later marking are dropped from imported markup without anyone having to list them.
+   See [261001a](261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md).
 2. **Let visitors see cross-refs** (`src/public/dto.ts`, the allowlist). This means a `crossrefs`
    key in `PUBLIC_PROJECTIONS`, the DTO and the visitor capability, omitted when stale, plus a test
    that an anonymous request cannot tell a private slug from an absent one. Until then, a visitor

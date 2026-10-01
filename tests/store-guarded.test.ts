@@ -342,6 +342,10 @@ describe("no Postgres store is selected without a guard", () => {
       "createPgSourceStore",
       "pgAdminStore",
       "pgArticleReader",
+      /* The bibliographic cache, 2026-10-01 (261001a stage 1): its parameters
+         are public identifiers, but a guard is every adapter's, not a verdict
+         on what it binds. */
+      "pgBibliographicStore",
       "pgChatStore",
       "pgCitationFindStore",
       /* Citations' *Investigate*, 2026-09-30: its parameters are an answer

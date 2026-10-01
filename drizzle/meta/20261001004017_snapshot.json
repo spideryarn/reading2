@@ -1,6 +1,6 @@
 {
-  "id": "f4a869ba-ce85-4b32-b8b7-384680428d54",
-  "prevId": "d06e1ee8-c237-4fe6-b65f-5f052b9d8e70",
+  "id": "f0af1b6e-db8e-443a-a0b0-9e36049c3456",
+  "prevId": "e2531b93-b181-4c04-b0f7-6c8ecaa0b43c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1140,6 +1140,206 @@
         "articles_visibility": {
           "name": "articles_visibility",
           "value": "\"spideryarn\".\"articles\".\"visibility\" in ('private','public')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.bibliographic_records": {
+      "name": "bibliographic_records",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authors_family": {
+          "name": "authors_family",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authors_given": {
+          "name": "authors_given",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "venue": {
+          "name": "venue",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "doi": {
+          "name": "doi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bibliographic_records_id": {
+          "name": "bibliographic_records_id",
+          "value": "length(\"spideryarn\".\"bibliographic_records\".\"id\") <= 300 and \"spideryarn\".\"bibliographic_records\".\"id\" = lower(\"spideryarn\".\"bibliographic_records\".\"id\") and (\n            \"spideryarn\".\"bibliographic_records\".\"id\" ~ '^doi:10[.][0-9]{4,9}/[^[:space:]\"''<>?#]+$'\n            or \"spideryarn\".\"bibliographic_records\".\"id\" ~ '^arxiv:([0-9]{4}[.][0-9]{4,5}|[a-z-]+([.][a-z]{2})?/[0-9]{7})$'\n          )"
+        },
+        "bibliographic_records_state": {
+          "name": "bibliographic_records_state",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"state\" is null or \"spideryarn\".\"bibliographic_records\".\"state\" in ('found', 'not-found')"
+        },
+        "bibliographic_records_source": {
+          "name": "bibliographic_records_source",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"source\" is null or \"spideryarn\".\"bibliographic_records\".\"source\" in ('crossref', 'datacite')"
+        },
+        "bibliographic_records_year": {
+          "name": "bibliographic_records_year",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"year\" is null or \"spideryarn\".\"bibliographic_records\".\"year\" between 1500 and 2100"
+        },
+        "bibliographic_records_authors": {
+          "name": "bibliographic_records_authors",
+          "value": "coalesce(cardinality(\"spideryarn\".\"bibliographic_records\".\"authors_family\"), -1) = coalesce(cardinality(\"spideryarn\".\"bibliographic_records\".\"authors_given\"), -1)\n          and coalesce(cardinality(\"spideryarn\".\"bibliographic_records\".\"authors_family\"), 0) <= 100\n          and array_position(\"spideryarn\".\"bibliographic_records\".\"authors_family\", null) is null"
+        },
+        "bibliographic_records_shape": {
+          "name": "bibliographic_records_shape",
+          "value": "case\n            when \"spideryarn\".\"bibliographic_records\".\"state\" = 'found' then \"spideryarn\".\"bibliographic_records\".\"source\" is not null and \"spideryarn\".\"bibliographic_records\".\"title\" is not null\n              and length(\"spideryarn\".\"bibliographic_records\".\"title\") between 1 and 1000\n              and \"spideryarn\".\"bibliographic_records\".\"authors_family\" is not null and \"spideryarn\".\"bibliographic_records\".\"doi\" is not null and \"spideryarn\".\"bibliographic_records\".\"fetched_at\" is not null\n            when \"spideryarn\".\"bibliographic_records\".\"state\" = 'not-found' then \"spideryarn\".\"bibliographic_records\".\"fetched_at\" is not null\n              and num_nonnulls(\"spideryarn\".\"bibliographic_records\".\"source\", \"spideryarn\".\"bibliographic_records\".\"title\", \"spideryarn\".\"bibliographic_records\".\"authors_family\", \"spideryarn\".\"bibliographic_records\".\"authors_given\", \"spideryarn\".\"bibliographic_records\".\"year\", \"spideryarn\".\"bibliographic_records\".\"venue\", \"spideryarn\".\"bibliographic_records\".\"doi\") = 0\n            else \"spideryarn\".\"bibliographic_records\".\"claimed_until\" is not null and \"spideryarn\".\"bibliographic_records\".\"fetched_at\" is null\n              and num_nonnulls(\"spideryarn\".\"bibliographic_records\".\"source\", \"spideryarn\".\"bibliographic_records\".\"title\", \"spideryarn\".\"bibliographic_records\".\"authors_family\", \"spideryarn\".\"bibliographic_records\".\"authors_given\", \"spideryarn\".\"bibliographic_records\".\"year\", \"spideryarn\".\"bibliographic_records\".\"venue\", \"spideryarn\".\"bibliographic_records\".\"doi\") = 0\n          end"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.bibliographic_service_slots": {
+      "name": "bibliographic_service_slots",
+      "schema": "spideryarn",
+      "columns": {
+        "service": {
+          "name": "service",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "bibliographic_service_slots_service_bibliographic_services_service_fk": {
+          "name": "bibliographic_service_slots_service_bibliographic_services_service_fk",
+          "tableFrom": "bibliographic_service_slots",
+          "tableTo": "bibliographic_services",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "service"
+          ],
+          "columnsTo": [
+            "service"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "bibliographic_service_slots_service_slot_pk": {
+          "name": "bibliographic_service_slots_service_slot_pk",
+          "columns": [
+            "service",
+            "slot"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bibliographic_service_slots_slot": {
+          "name": "bibliographic_service_slots_slot",
+          "value": "\"spideryarn\".\"bibliographic_service_slots\".\"slot\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.bibliographic_services": {
+      "name": "bibliographic_services",
+      "schema": "spideryarn",
+      "columns": {
+        "service": {
+          "name": "service",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "next_start_at": {
+          "name": "next_start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "cooldown_until": {
+          "name": "cooldown_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bibliographic_services_service": {
+          "name": "bibliographic_services_service",
+          "value": "\"spideryarn\".\"bibliographic_services\".\"service\" in ('crossref', 'datacite')"
         }
       },
       "isRLSEnabled": false

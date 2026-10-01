@@ -51,9 +51,13 @@ Asked, on the day, because none of them could be read off the code:
    being told. What the page rules out instead is the part that would actually offend: selling it,
    publishing it, training on it.
 4. **Facts**: the database is Supabase `eu-west-2` (London); Vercel's functions are pinned to
-   `lhr1` (`vercel.json`). Stripe is named although payments are **not switched on yet** — Greg,
-   *"let's include it anyway, because hopefully it will be soon"* — and the page says out loud that
-   it is off, which is what keeps that honest rather than premature.
+   `lhr1` (`vercel.json`). Stripe was named before payments were live — Greg, *"let's include it
+   anyway, because hopefully it will be soon"* — with the page saying out loud that it was off.
+   Payments went live on 2026-09-03 ([billing.md](billing.md)) and the page went on saying "not
+   switched on yet" until 2026-10-01 (Greg: *"fix"*). The replacement distinguishes details entered
+   on Stripe's hosted pages from what we retain, and names the account id and purchase information
+   we send. The sources of truth are `src/billing/checkout.ts`, `src/billing/webhook.ts` and the
+   billing tables in `src/db/schema.ts`; changing any of those means re-reading the Stripe entry.
 
 ## What the cross-family review changed, and what is still open
 
@@ -407,9 +411,20 @@ It goes with the article (a cascade through `block_identities`), and is in both 
 
 **Since 2026-09-30 the quiz reads it too** — [quiz.md § Only what you have read](quiz.md#only-what-you-have-read)
 — in the browser, to choose which questions to show and to say how much of the piece is read. Nothing
-new is stored or sent. The page's bullet still gives only the outline-and-margin purpose; a wording
-that adds the quiz is proposed to Greg in
-[260930e § Privacy wording for Greg](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).
+new is stored or sent. So on 2026-10-01 the bullet stopped naming its uses: it now says *"Some of
+Spideryarn's features use it — to show you where you have been, for example"*, and `LAST_UPDATED`
+moved.
+
+> Perhaps just remove some of the low-level detail, because the user doesn't really care *exactly
+> which modes* use it - so just say that some modes might?
+>
+> — Greg, 2026-10-01
+
+**A new owner-only feature that uses the totals only in memory needs no change here**, whether that
+happens in the browser or on our server. Reconsider the bullet before storing anything new from the
+totals, showing them or a conclusion drawn from them to a shared link's reader, or sending either
+outside Spideryarn — to a model, for example. The plan is
+[261001a](../plans/261001a-privacy-reading-time-wording.md).
 
 ## Shelf topics
 
