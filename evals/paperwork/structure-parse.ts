@@ -10,8 +10,8 @@
  * Only the whole-document structure call, `draws` times per article, parsed
  * with production's own `parseJsonAnswer` (what src/hierarchy.ts § `parseJson`
  * calls). Each answer is one line in `evals/results/paperwork/structure-parse/<label>.jsonl`
- * — the stamp it was sent under, ok or the parse error — and a failure's raw
- * answer is kept beside it. Like evals/paperwork/run.ts the arms are separated
+ * — the stamp it was sent under, ok or the parse error — and every raw answer
+ * is kept beside it (only failures were, before 261001s). Like evals/paperwork/run.ts the arms are separated
  * in time: run a label on the commit whose prompt it measures.
  */
 
@@ -43,12 +43,14 @@ async function run(label: string, draws: number, slugs: string[]): Promise<void>
           try {
             const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
             const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+            /* Every answer is kept, not only the failures: 261001s rescores them
+               offline under a second normalisation, which needs the good ones too. */
+            const kept = path.join(OUT, `${label}-${slug}-${i}.raw.txt`);
+            fs.writeFileSync(kept, raw);
             try {
               parseJsonAnswer<{ root: unknown }>(raw, "structure answer");
-              row = { ...row, ok: true, stop: message.stop_reason };
+              row = { ...row, ok: true, stop: message.stop_reason, kept: path.basename(kept) };
             } catch (err) {
-              const kept = path.join(OUT, `${label}-${slug}-${i}.raw.txt`);
-              fs.writeFileSync(kept, raw);
               row = { ...row, ok: false, parse: true, stop: message.stop_reason, error: String(err), kept: path.basename(kept) };
             }
           } catch (err) {
