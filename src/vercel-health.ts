@@ -1214,9 +1214,9 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
 
   const url = process.env.DATABASE_URL;
 
-  /* Three answers, not two, and the middle one — encrypted but unverified — is
-     the one worth seeing. `why` carries the path it looked for, which is the
-     whole diagnosis when the certificate did not make it into the bundle. */
+  /* Local is disabled; the remote is verified or throws. `why` names the CA
+     path on success, and the caught error is the diagnosis when the certificate
+     did not make it into the bundle or the URL tried to override TLS. */
   let ssl: { mode: string; why: string } | { error: string };
   if (!url) {
     ssl = { error: "DATABASE_URL is not set" };

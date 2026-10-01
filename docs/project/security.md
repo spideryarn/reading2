@@ -1123,9 +1123,10 @@ looks identical, and hands every reader's articles and notes to a machine in the
 asks it. Until 2026-10-01 it had an `encrypted-unverified` answer — returned against the remote when
 the CA file was missing — and the runtime only logged a warning. And `pg` let the connection string
 override its decision: any of `ssl`, `sslmode`, `sslrootcert`, `sslcert`, `sslkey` or
-`sslnegotiation` in `DATABASE_URL` replaces the `ssl` object we hand it, so `?sslmode=no-verify` or
-`?ssl=no-verify` turned checking off while we reported "verified". Greg approved closing it on
-2026-10-01:
+`sslnegotiation=direct` in `DATABASE_URL` replaces the `ssl` object we hand it, so
+`?sslmode=no-verify` or `?ssl=no-verify` turned checking off while we reported "verified". Every
+`sslnegotiation` value is refused with the rest of that policy class, rather than sorted into safe
+and unsafe values. Greg approved closing it on 2026-10-01:
 
 > as long as the cure isn't worse than the disease
 

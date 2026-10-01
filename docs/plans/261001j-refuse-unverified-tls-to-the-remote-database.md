@@ -20,8 +20,8 @@ decision to `pg`'s own `ConnectionParameters` — [tests/db-ssl.test.ts](../../t
    scripts print to stderr.
 2. **The URL carries a TLS setting.** `pg` merges the parsed connection string *over* the config it
    is given, and `pg-connection-string` builds a fresh `ssl` object whenever the URL has
-   `sslmode`, `sslrootcert`, `sslcert` or `sslkey` (and `ssl=` / `sslnegotiation=` set it too). Our
-   `ca` is dropped while we report "verified". Silent-unverified outcomes: `sslmode=no-verify`,
+   `sslmode`, `sslrootcert`, `sslcert` or `sslkey` (and `ssl=` / `sslnegotiation=direct` set it too).
+   Our `ca` is dropped while we report "verified". Silent-unverified outcomes: `sslmode=no-verify`,
    `sslmode=prefer`, `uselibpqcompat=true&sslmode=require`, `ssl=no-verify`. Plaintext:
    `sslmode=disable`, `ssl=0` (Supabase enforces TLS, so refused loudly by the server). The others
    drop our CA and fall back to Node's public roots, which fail loudly — or, with `sslrootcert`,

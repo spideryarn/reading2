@@ -60,8 +60,8 @@ export type SslDecision =
  * `pg` merges the parsed connection string **over** the config it is given,
  * and `pg-connection-string` builds a fresh `ssl` object whenever the URL
  * carries `sslmode`, `sslrootcert`, `sslcert` or `sslkey` (`ssl=` and
- * `sslnegotiation=` set it too). So the CA decided here is dropped while the
- * decision still says "verified" — and `?sslmode=no-verify` or
+ * `sslnegotiation=direct` set it too). So the CA decided here is dropped while
+ * the decision still says "verified" — and `?sslmode=no-verify` or
  * `?ssl=no-verify` turns verification off outright. `uselibpqcompat` changes
  * what the others mean. Measured against the installed pg, not argued:
  * tests/db-ssl.test.ts.

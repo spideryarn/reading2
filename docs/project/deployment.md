@@ -681,7 +681,7 @@ Not every variable is required, deliberately. `breaks: null` means one of two th
 
 - **Nothing needs it.** `LOG_LEVEL` has a default in [`src/log.ts`](../../src/log.ts).
 - **Something else already says it better.** A missing `DATABASE_URL` is reported by the `ssl` block
-  with its reason attached; a missing `PGSSLROOTCERT` surfaces as `TLS mode is …, not verified`,
+  with its reason attached; a missing CA surfaces as `ssl.error` plus a `TLS refused` warning,
   which is the truer statement, since the certificate can also be present and unused. `EXPECTED` has
   had no entry for `SPIDERYARN_STORE` since 2026-09-05, and there is nothing left to report about it
   at all since 2026-09-06.

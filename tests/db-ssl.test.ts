@@ -14,13 +14,13 @@
  * No database needed.
  */
 
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
+import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 const LOCAL = "postgresql://postgres:postgres@127.0.0.1:54362/postgres";
 const REMOTE = "postgresql://postgres.abc:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres";
@@ -160,6 +160,213 @@ function effectiveSsl(url: string, ssl: unknown): unknown {
   return new ConnectionParameters({ connectionString: url, ssl }).ssl;
 }
 
+function identifierName(node: AstNode | undefined): string | undefined {
+  return node?.type === "Identifier" ? (node.name as string) : undefined;
+}
+
+function propertyName(node: AstNode | undefined): string | undefined {
+  if (node?.type === "Identifier") return node.name as string;
+  if (node?.type === "StringLiteral") return node.value as string;
+  return undefined;
+}
+
+function unwrapExpression(node: AstNode | undefined): AstNode | undefined {
+  let current = node;
+  while (
+    current &&
+    (current.type === "TSAsExpression" ||
+      current.type === "TSTypeAssertion" ||
+      current.type === "TSNonNullExpression" ||
+      current.type === "ParenthesizedExpression" ||
+      current.type === "AwaitExpression")
+  ) {
+    current = (current.expression ?? current.argument) as AstNode | undefined;
+  }
+  return current;
+}
+
+function importedModule(node: AstNode | undefined): string | undefined {
+  const current = unwrapExpression(node);
+  if (!current) return undefined;
+  if (current.type === "CallExpression") {
+    const callee = current.callee as AstNode | undefined;
+    const argument = (current.arguments as AstNode[] | undefined)?.[0];
+    if (callee?.type === "Import" && argument?.type === "StringLiteral") {
+      return argument.value as string;
+    }
+    if (
+      callee?.type === "Identifier" &&
+      callee.name === "require" &&
+      argument?.type === "StringLiteral"
+    ) {
+      return argument.value as string;
+    }
+  }
+  if (current.type === "ImportExpression") {
+    const source = current.source as AstNode | undefined;
+    if (source?.type === "StringLiteral") return source.value as string;
+  }
+  if (current.type === "MemberExpression" && propertyName(current.property as AstNode) === "default") {
+    return importedModule(current.object as AstNode | undefined);
+  }
+  return undefined;
+}
+
+function callName(node: AstNode | undefined): string | undefined {
+  const current = unwrapExpression(node);
+  if (current?.type !== "CallExpression") return undefined;
+  return identifierName(unwrapExpression(current.callee as AstNode | undefined));
+}
+
+function memberParts(node: AstNode | undefined): string[] | undefined {
+  const current = unwrapExpression(node);
+  if (!current) return undefined;
+  if (current.type === "Identifier") return [current.name as string];
+  if (current.type !== "MemberExpression") return undefined;
+  const object = memberParts(current.object as AstNode | undefined);
+  const property = propertyName(current.property as AstNode | undefined);
+  return object && property ? [...object, property] : undefined;
+}
+
+interface ConstructorScan {
+  seen: number;
+  unguarded: string[];
+}
+
+interface ConstructorBindings {
+  pgConstructors: Set<string>;
+  pgNamespaces: Set<string>;
+  sslDecisionFunctions: Set<string>;
+  sslDecisions: Set<string>;
+}
+
+function sourceFilesUnder(root: string, directory: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
+    const relative = path.posix.join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...sourceFilesUnder(root, relative));
+    else if (entry.isFile() && /\.(?:[cm]?[jt]s|tsx)$/.test(entry.name)) found.push(relative);
+  }
+  return found;
+}
+
+function collectImportBindings(node: AstNode, bindings: ConstructorBindings): void {
+  const module = (node.source as AstNode | undefined)?.value;
+  for (const specifier of (node.specifiers as AstNode[] | undefined) ?? []) {
+    const local = identifierName(specifier.local as AstNode | undefined);
+    if (!local || specifier.importKind === "type") continue;
+    if (module === "pg") {
+      if (specifier.type === "ImportDefaultSpecifier" || specifier.type === "ImportNamespaceSpecifier") {
+        bindings.pgNamespaces.add(local);
+      } else if (
+        specifier.type === "ImportSpecifier" &&
+        ["Pool", "Client"].includes(propertyName(specifier.imported as AstNode | undefined) ?? "")
+      ) {
+        bindings.pgConstructors.add(local);
+      }
+    }
+    if (
+      typeof module === "string" &&
+      (/(?:^|\/)db\/ssl\.(?:js|ts)$/.test(module) || module === "./ssl.js") &&
+      specifier.type === "ImportSpecifier" &&
+      propertyName(specifier.imported as AstNode | undefined) === "sslDecisionFor"
+    ) {
+      bindings.sslDecisionFunctions.add(local);
+    }
+  }
+}
+
+function collectVariableBindings(node: AstNode, bindings: ConstructorBindings): void {
+  const module = importedModule(node.init as AstNode | undefined);
+  if (module === "pg" && (node.id as AstNode | undefined)?.type === "ObjectPattern") {
+    for (const property of ((node.id as AstNode).properties as AstNode[] | undefined) ?? []) {
+      if (property.type !== "ObjectProperty") continue;
+      if (!["Pool", "Client"].includes(propertyName(property.key as AstNode | undefined) ?? "")) continue;
+      const imported = identifierName(property.value as AstNode | undefined);
+      if (imported) bindings.pgConstructors.add(imported);
+    }
+  }
+  const local = identifierName(node.id as AstNode | undefined);
+  if (!local) return;
+  if (module === "pg") bindings.pgNamespaces.add(local);
+  if (bindings.sslDecisionFunctions.has(callName(node.init as AstNode | undefined) ?? "")) {
+    bindings.sslDecisions.add(local);
+  }
+}
+
+/**
+ * Find every constructor whose identity comes from `pg`, including renamed
+ * named imports, namespace/default imports, and the dynamic-default import used
+ * by db-reown. A regex over `new Pool(` cannot know any of those identities.
+ */
+function scanPgConstructors(file: string, source: string): ConstructorScan {
+  const ast = parseSource(source);
+  const bindings: ConstructorBindings = {
+    pgConstructors: new Set(),
+    pgNamespaces: new Set(),
+    sslDecisionFunctions: new Set(),
+    sslDecisions: new Set(),
+  };
+
+  walkAst(ast.program, (node) => {
+    if (node.type === "ImportDeclaration") collectImportBindings(node, bindings);
+    else if (node.type === "VariableDeclarator") collectVariableBindings(node, bindings);
+  });
+
+  const unguarded: string[] = (ast.errors ?? []).map(
+    (error) => `${file}:${error.loc?.line ?? 0} (source did not parse)`,
+  );
+  let seen = 0;
+  walkAst(ast.program, (node) => {
+    if (node.type !== "NewExpression") return;
+    const callee = unwrapExpression(node.callee as AstNode | undefined);
+    const direct = identifierName(callee);
+    const member = memberParts(callee);
+    const isPgConstructor =
+      (direct !== undefined && bindings.pgConstructors.has(direct)) ||
+      (member?.length === 2 &&
+        bindings.pgNamespaces.has(member[0] ?? "") &&
+        (member[1] === "Pool" || member[1] === "Client"));
+    if (!isPgConstructor) return;
+    seen += 1;
+
+    const argument = unwrapExpression((node.arguments as AstNode[] | undefined)?.[0]);
+    let guarded = false;
+    if (argument?.type === "ObjectExpression") {
+      const sslProperty = ((argument.properties as AstNode[] | undefined) ?? []).find(
+        (property) =>
+          (property.type === "ObjectProperty" || property.type === "ObjectMethod") &&
+          propertyName(property.key as AstNode | undefined) === "ssl",
+      );
+      const value = unwrapExpression(sslProperty?.value as AstNode | undefined);
+      const sslObject =
+        value?.type === "MemberExpression" && propertyName(value.property as AstNode | undefined) === "ssl"
+          ? unwrapExpression(value.object as AstNode | undefined)
+          : undefined;
+      guarded =
+        (sslObject?.type === "Identifier" && bindings.sslDecisions.has(sslObject.name as string)) ||
+        bindings.sslDecisionFunctions.has(callName(sslObject) ?? "");
+    }
+
+    /* feedback-reporter first turns the URL into a config in
+       `productionConnection`, whose unit tests assert its verified `ssl`, and
+       then hands that exact config to Client. Keep this one named exception;
+       accepting arbitrary config variables would let `new Pool(config)` go
+       green without proving what `config` contains. */
+    if (
+      file === "scripts/feedback-reporter.ts" &&
+      member?.[1] === "Client" &&
+      memberParts(argument)?.join(".") === "connection.config"
+    ) {
+      guarded = true;
+    }
+
+    if (!guarded) unguarded.push(`${file}:${lineOf(node)}`);
+  });
+
+  return { seen, unguarded };
+}
+
 describe("the remote is verified or refused, never quietly unverified", () => {
   it("hands pg our CA with verification on, for a plain remote URL", () => {
     const decision = sslDecisionFor(REMOTE, { defaultCaPath: REAL_CA });
@@ -211,35 +418,47 @@ describe("the remote is verified or refused, never quietly unverified", () => {
   });
 
   /* The refusal only guards connections that ask it. A Pool or Client built
-     without an `ssl` option takes pg's defaults instead — PGSSLMODE and the
+     without `sslDecisionFor` takes pg's defaults instead — PGSSLMODE and the
      URL's own TLS keys — so every constructor in the shipped code and scripts
-     must pass one. Three did not, found by GPT Sol in plan review. */
+     must pass its answer. Four did not, found by GPT Sol in plan review. */
   it("is asked by every pg connection in src/ and scripts/", () => {
     const root = path.resolve(import.meta.dirname, "..");
-    const files = execFileSync("git", ["ls-files", "src", "scripts"], { cwd: root, encoding: "utf8" })
-      .split("\n")
-      .filter((f) => /\.(ts|tsx|js|mjs)$/.test(f));
+    const files = [...sourceFilesUnder(root, "src"), ...sourceFilesUnder(root, "scripts")];
     const unguarded: string[] = [];
     let seen = 0;
     for (const file of files) {
-      const text = readFileSync(path.join(root, file), "utf8");
-      for (const m of text.matchAll(/new (?:pg\.)?(?:Pool|Client)\(/g)) {
-        seen += 1;
-        // The constructor's argument, to its closing parenthesis at depth 0.
-        let depth = 0;
-        let end = m.index + m[0].length - 1;
-        for (; end < text.length; end++) {
-          if (text[end] === "(") depth++;
-          else if (text[end] === ")" && --depth === 0) break;
-        }
-        const args = text.slice(m.index, end);
-        // feedback-reporter.ts hands over a config whose `ssl` it sets last, from the decision.
-        if (/\bssl\s*:/.test(args) || /connection\.config/.test(args)) continue;
-        unguarded.push(`${file}:${text.slice(0, m.index).split("\n").length}`);
-      }
+      const result = scanPgConstructors(file, readFileSync(path.join(root, file), "utf8"));
+      seen += result.seen;
+      unguarded.push(...result.unguarded);
     }
     expect(seen).toBeGreaterThan(10); // positive control: the scan finds constructors at all
     expect(unguarded).toEqual([]);
+  });
+
+  it("the constructor scan sees aliases, namespaces, config variables, and fake ssl", () => {
+    const fixtures = [
+      `import { Pool as DatabasePool } from "pg";
+       import { sslDecisionFor as decide } from "../src/db/ssl.js";
+       const decision = decide(url);
+       new DatabasePool({ connectionString: url, ssl: decision.ssl });`,
+      `import postgres from "pg";
+       const config = { connectionString: url };
+       new postgres.Pool(config);`,
+      `import * as postgres from "pg";
+       new postgres.Client({ connectionString: url, ssl: false });`,
+      `const { Pool: DatabasePool } = require("pg");
+       new DatabasePool({ connectionString: url });`,
+    ];
+    expect(scanPgConstructors("src/fixture.ts", fixtures[0] ?? "")).toEqual({ seen: 1, unguarded: [] });
+    expect(scanPgConstructors("src/fixture.ts", fixtures[1] ?? "").unguarded).toEqual([
+      "src/fixture.ts:3",
+    ]);
+    expect(scanPgConstructors("src/fixture.ts", fixtures[2] ?? "").unguarded).toEqual([
+      "src/fixture.ts:2",
+    ]);
+    expect(scanPgConstructors("src/fixture.ts", fixtures[3] ?? "").unguarded).toEqual([
+      "src/fixture.ts:2",
+    ]);
   });
 
   it("refuses the remote when there is no certificate, rather than encrypting unverified", () => {
