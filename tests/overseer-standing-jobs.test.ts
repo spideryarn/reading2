@@ -109,6 +109,12 @@ describe("the standing jobs, as this checkout would actually run them", () => {
       if (authorisation.kind !== "unauthorised") return;
       expect(authorisation.authorised).toBe(AUTHORISED_HASHES[id as keyof typeof AUTHORISED_HASHES]);
       expect(authorisation.why).toContain(`authorised as ${job.authorisedHash} and now fingerprints as ${behaviourHash(job.definition.behaviour)}`);
+      // feedback-reports.md may drift from its pinned digest. Greg, 2026-10-01: "Re
+      // feedback-reports.md - I'm ok to relax that guard so that we aren't so careful
+      // about whether the pin matches." The job is unauthorised here either way, and
+      // the live sweep is a tmux loop that never reads this pin, so a drifted digest
+      // only ever turned this line red and blocked a deploy on a doc edit.
+      if (id === "feedback-sweep") continue;
       expect(documentDrift(job.authorisedDocuments, job.definition.behaviour.documents), id).toEqual([]);
     }
     expect(Object.keys(AUTHORISED_HASHES).sort()).toEqual(["feedback-sweep", "get-ready-to-deploy", "schedule-fixture"]);
@@ -178,7 +184,8 @@ describe("per-document pins, the dispatch mode, and the fixture (plan 260910e)",
         // THE DOCUMENTS ARE EXACTLY AS PINNED; the hash is not, because the run
         // spec is new and unauthorised. Both halves, so this cannot pass by the
         // documents having moved instead.
-        expect(job.authorisedDocuments, behaviour.id).toEqual(behaviour.documents);
+        // Except feedback-reports.md, whose digest may drift (Greg, 2026-10-01; above).
+        if (behaviour.id !== "feedback-sweep") expect(job.authorisedDocuments, behaviour.id).toEqual(behaviour.documents);
         expect(`${behaviour.id} ${rebuilt}`).not.toBe(`${behaviour.id} ${job.authorisedHash}`);
       } else {
         expect(`${behaviour.id} ${rebuilt}`).toBe(`${behaviour.id} ${job.authorisedHash}`);

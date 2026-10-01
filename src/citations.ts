@@ -613,7 +613,8 @@ const MARKER = new RegExp(`${REF_ATTR}="([^"]+)"`, "g");
  *
  * Read off the html with a pattern rather than a parse: the attribute is ours,
  * stamped by stage 2 after `scrubReserved` took every forged copy off the page
- * (src/notes.ts), so its spelling is known exactly.
+ * (src/notes.ts), or by the PDF renderer into HTML it builds itself
+ * (src/pdf-read.ts § `renderNotes`), so its spelling is known exactly.
  */
 export function noteMarkers(blocks: readonly Block[]): Map<string, BlockId[]> {
   const out = new Map<string, BlockId[]>();

@@ -42,8 +42,8 @@ describe("the committed map", () => {
     expect(shippedFeedbackIds().length).toBeGreaterThan(100);
     /* SPIDERYARN-READING2-3R, the Earlier tab itself — shipped 2026-09-16. */
     expect(isFeedbackShipped("spya-gxzbuj")).toBe(true);
-    /* SPIDERYARN-READING2-5J, parked on Greg. */
-    expect(FEEDBACK_NOTE_ENDINGS["spya-ddpn5x"]).toBe("awaiting");
+    /* SPIDERYARN-READING2-5J, parked on Greg, then declined by him 2026-10-01. */
+    expect(FEEDBACK_NOTE_ENDINGS["spya-ddpn5x"]).toBe("declined");
     expect(isFeedbackShipped("spya-ddpn5x")).toBe(false);
   });
 

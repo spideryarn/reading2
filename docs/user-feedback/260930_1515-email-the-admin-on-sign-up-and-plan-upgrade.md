@@ -1,3 +1,7 @@
+---
+reports: spya-ewbgcx
+ending: shipped
+---
 # Email the admin on each sign-up and plan upgrade
 
 [SPIDERYARN-READING2-6T](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6T), a suggestion
