@@ -9,19 +9,20 @@
  * was blamed on the figures first; it was never them.
  *
  * Only a browser can see a line break, so this is one Chrome and `setContent`
- * with the reader sheets inlined, after tests/mark-sign-in-chrome.test.ts. The
- * masthead is the real component rendered to markup, because the missing
- * whitespace between the spans is the component's own and a literal could
- * drift from it.
+ * with the root tokens and reader sheets inlined, after
+ * tests/mark-sign-in-chrome.test.ts. The masthead is the real component
+ * rendered to markup, because the missing whitespace between the spans is the
+ * component's own and a literal could drift from it.
  *
  * Skipped where there is no Chrome; the box and Greg's Mac both have one.
  */
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { chromePath } from "../scripts/browser-sign-in.js";
-import type { Article, TreeNode } from "../src/types.js";
+import type { Article, Author, TreeNode } from "../src/types.js";
 import { readerCss } from "./helpers/stylesheets.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -45,12 +46,22 @@ const chrome = (() => {
   }
 })();
 
-const CSS = readerCss();
+/* `readerCss()` deliberately excludes the repo-root brand/token sheet. Include
+   it so `--font-ui` resolves to the real system fallback stack; only Geist's
+   package-owned @font-face rules remain absent. */
+const CSS = `${readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8")}\n${readerCss()}`;
 const SLUG = "antikythera-mechanism";
 const WIDTH = 390;
+const AUTHORS: Author[] = [
+  { name: "A Very Long First Author Name", affiliations: [] },
+  { name: "A Similarly Long Second Author Name", affiliations: [] },
+  { name: "A Third Long Author Name", affiliations: [] },
+  { name: "A Fourth Author", affiliations: [] },
+  { name: "A Fifth Author", affiliations: [] },
+];
 
 /** The antikythera facts: its byline, its site name, 11,688 words, 9 parts, 31 sections. */
-function article(siteName: string): Article {
+function article(siteName: string, authors?: Author[]): Article {
   const nodes: Record<string, TreeNode> = {
     n0: { id: "n0", depth: 0, parent: null, children: [], range: ["spya-aaaaaa", "spya-aaaaaa"], title: "Antikythera mechanism" },
   };
@@ -62,7 +73,13 @@ function article(siteName: string): Article {
   }
   return {
     highPowerSince: null,
-    meta: { slug: SLUG, title: "Antikythera mechanism", byline: "Contributors to Wikimedia projects", siteName },
+    meta: {
+      slug: SLUG,
+      title: "Antikythera mechanism",
+      byline: "Contributors to Wikimedia projects",
+      siteName,
+      ...(authors ? { authors } : {}),
+    },
     blocks: [
       { id: "spya-aaaaaa", tag: "p", kind: "text", text: "A paragraph.", words: 11688, html: "<p>A paragraph.</p>", gistable: true },
     ],
@@ -73,9 +90,15 @@ function article(siteName: string): Article {
   };
 }
 
-const page = (siteName: string, extraCss = "") =>
+const page = (siteName: string, extraCss = "", authors?: Author[]) =>
   `<style>${CSS}${extraCss}</style><div class="reader">${renderToStaticMarkup(
-    createElement(Masthead, { article: article(siteName), slug: SLUG }),
+    createElement(Masthead, {
+      article: article(siteName, authors),
+      slug: SLUG,
+      /* An owner gets author links rather than focusable spans. That is the
+         only owner/visitor difference inside the facts line. */
+      ...(authors ? { onRenamed: () => {} } : {}),
+    }),
   )}</div>`;
 
 /** The rule this file exists to stop coming back: each fact inline and nowrap. */
@@ -104,6 +127,8 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
               rights: facts.map((el) => el.getBoundingClientRect().right),
               texts: facts.map((el) => el.textContent ?? ""),
               lines: facts.map(lines),
+              authorLinks: document.querySelectorAll(".facts > span:first-child a.author-name").length,
+              moreAuthors: document.querySelector<HTMLButtonElement>(".facts > span:first-child button")?.textContent ?? null,
             };
           }),
         );
@@ -128,11 +153,23 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
       /* Plan 260929d's guarantee: "9 / parts" never splits across a wrap. */
       expect(fixed.lines.slice(1), "a fact split across a line break").toEqual([1, 1, 1, 1, 1]);
 
-      /* One fact wider than the whole column wraps inside itself rather than
-         overflowing — what `nowrap` could not do. */
+      /* A multi-word fact wider than the whole column wraps at its spaces
+         rather than overflowing — what `nowrap` could not do. */
       const long = await look(page("The Proceedings of the National Academy of Sciences of the United States of America"));
       expect(long.scrollWidth, "a long site name pushes the page sideways").toBeLessThanOrEqual(WIDTH);
       for (const right of long.rights) expect(right).toBeLessThanOrEqual(WIDTH);
+      expect(long.lines[1], "the long site name was clipped instead of wrapping").toBeGreaterThan(1);
+
+      /* The other shape of the first fact is an author list: nested spans and
+         an interactive "+ N more". Exercise the owner's linked version, since
+         the plain byline fixture above is already the visitor's masthead. */
+      const authored = await look(page("Nature", "", AUTHORS));
+      expect(authored.authorLinks).toBe(3);
+      expect(authored.moreAuthors).toBe("+ 2 more");
+      expect(authored.lines[0], "the author list did not exercise wrapping").toBeGreaterThan(1);
+      expect(authored.scrollWidth, "an author list pushes the page sideways").toBeLessThanOrEqual(WIDTH);
+      for (const right of authored.rights) expect(right).toBeLessThanOrEqual(WIDTH);
+      expect(authored.lines.slice(1), "a fact after the author list split across a line break").toEqual([1, 1, 1, 1, 1]);
     } finally {
       await browser.close().catch(() => {});
     }

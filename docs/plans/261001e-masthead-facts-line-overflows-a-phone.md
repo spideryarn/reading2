@@ -50,12 +50,14 @@ One declaration in `src/web/styles/shell.css`, replacing the `nowrap`:
 ```
 
 An inline-block is an atomic inline, and CSS Text § 5.5 requires a soft-wrap opportunity before and
-after one, so the line wraps *between* facts. It also keeps each fact whole, without `nowrap`: an
-inline-block's width is its shrink-to-fit width against the whole column, not against what is left
-of the line, so "9 parts" does not fit at the end of a line and goes to the next one whole — what
-260929d wanted. And unlike `nowrap`, a single fact wider than the entire column (a very long site
-name — Sol's finding) wraps inside its own box instead of overflowing. The first span (byline or
-author list) stays inline and wraps freely.
+after one, so the line wraps *between* facts. It also keeps each later fact whole, without
+`nowrap`: an inline-block's width is its shrink-to-fit width against the whole column, not against
+what is left of the line, so "9 parts" does not fit at the end of a line and goes to the next one
+whole — what 260929d wanted. And unlike `nowrap`, a multi-word fact wider than the entire column (a
+very long site name — Sol's finding) can wrap at its spaces inside its own box instead of
+overflowing. An unbroken token remains unbreakable; this change does not add `overflow-wrap`. The
+first span stays inline and wraps freely; normally it is the byline or author list, though the
+metadata fields are optional and the first remaining fact takes that position when they are absent.
 
 **What it costs.** A wrapped line starts with the dot (`· 9 parts`), since the dot lives inside the
 span it precedes. Accepted: moving the separator would mean changing the markup and the
@@ -100,23 +102,25 @@ Screenshots: [before, 390](261001e-before-390.png), [after, 390](261001e-after-3
 ## Test
 
 `tests/masthead-facts-wrap-in-chrome.test.tsx`, after `mark-sign-in-chrome.test.ts`'s pattern
-(real Chrome, `setContent`, the reader stylesheets inlined, skipped where there is no Chrome). It
-renders the **real `Masthead`** with `renderToStaticMarkup` — so the missing whitespace between the
-spans is the component's own, not a literal that could drift — inside a `<div class="reader">`
-(the masthead's width and phone padding come from custom properties `.reader` declares), with the
-antikythera facts (byline, site name, ~11,688 words, 9 parts, 31 sections), into a 390px viewport,
-and asserts:
+(real Chrome, `setContent`, the root token sheet and reader stylesheets inlined, skipped where there
+is no Chrome). It renders the **real `Masthead`** with `renderToStaticMarkup` — so the missing
+whitespace between the spans is the component's own, not a literal that could drift — inside a
+`<div class="reader">` (the masthead's width and phone padding come from custom properties `.reader`
+declares), with the antikythera facts (byline, site name, ~11,688 words, 9 parts, 31 sections), into a
+390px viewport, and asserts:
 
 1. `document.documentElement.scrollWidth <= 390`, and every `.facts` child's right edge is within
    the viewport;
 2. no measurement is split across lines — a `Range` over each span's text has client rects on one
    line only (a span's own `getClientRects()` is one box once it is an inline-block, so it would
    prove nothing);
-3. a site name longer than the column does not overflow either;
+3. a multi-word site name longer than the column wraps at its spaces and does not overflow either;
 4. **a control**: the same page with the old rule forced back (`display: inline; white-space:
-   nowrap`) *does* overflow, so the fixture still exercises the bug. The test inlines the reader
-   sheets without Geist's `@font-face`, so this is what proves a fallback font has not quietly
-   made the run fit.
+   nowrap`) *does* overflow, so the fixture still exercises the bug. The test has the real
+   `--font-ui` fallback stack but not Geist's package-owned `@font-face`, so this is what proves the
+   fallback font has not quietly made the run fit;
+5. the owner's other facts-line shape — an `AuthorNames` first span containing linked nested spans
+   and a `+ 2 more` button — wraps without overflow while every following fact stays whole.
 
 Red before the fix (1 fails), green after.
 
@@ -135,4 +139,10 @@ Red before the fix (1 fails), green after.
 - [x] Test red (538 > 390, control and premise green), fix, test green. Mutation: with
   `display: inline` and no `nowrap` it goes red on the split check (`[2,1,1,1,2]`)
 - [x] Browser sweep, table above
-- [ ] Sol code review, commit, push to dev
+- [x] Sol code review ([261001e-code-review-sol.md](261001e-code-review-sol.md)): approved; it
+  added the real `--font-ui` token sheet, the owner's author-list shape and a check that a long
+  site name really wraps, and corrected two overclaims. Its sandbox could not launch Chrome, so I
+  re-ran the test in Chrome afterwards: green, and red again (637 > 390) with `nowrap` put back.
+- [x] Full `npm test`: the only reds are the five a fresh worktree always has (no `api-dist/`, no
+  fleet build: `cold-start-lazy-imports`, `pdf-bundle-trace`, three `fleet-*`).
+- [x] Commit, push to dev
