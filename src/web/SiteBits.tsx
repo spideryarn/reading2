@@ -42,7 +42,7 @@ import { libraryHomeTitle } from "./library-home-title.js";
 import { Link } from "./Link.js";
 import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { useLogoAnimation } from "./logo-animation.js";
-import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF, loginHref } from "./router.js";
 import type { Shot as ShotRecord } from "./shots.js";
 
 /** The width the page shell runs to. Prose inside it stays much narrower. */
@@ -161,8 +161,11 @@ export function SiteNav({
    * as "am I pricing?" had to become "am I one of the pages this entry names?",
    * which is the question they were always asking. The values match the route
    * kinds in router.ts so a reader can grep one string.
+   *
+   * `login` is the sign-in page (SignInPage.tsx), and what drops for it is
+   * *Sign in* — the link to the page under the reader's feet.
    */
-  here: "home" | "features" | "pricing" | "public-library";
+  here: "home" | "features" | "pricing" | "public-library" | "login";
   /** Whether the reader looking at this bar already has an account open. */
   signedIn: boolean;
 }) {
@@ -255,56 +258,37 @@ export function SiteNav({
           <Link href={PRIVACY_HREF} className={secondary}>
             Privacy
           </Link>
-          {/* The panel it jumps to only exists on the landing page, so from
-              `/features` this needs the path as well as the fragment. As a bare
-              `#sign-in` it was a link that visibly did nothing — cross-family
-              review, finding 3.
+          {/* **The sign-in page, since 2026-10-01** — Greg, report spya-p6s5a4:
+              *"let's create a separate sign-in page and signpost to it at the
+              top and bottom"*. Until then this jumped to a panel on `/` or
+              `/pricing`, and getting that fragment right on every page took two
+              dead links to find (cross-family review finding 3, stage 2 code
+              review finding 1); `tests/site-nav-sign-in.test.tsx` keeps the
+              rule that came out of it.
 
-              A plain `<a>`, deliberately, not `Link`: `navigate()` in router.ts
-              ends with `window.scrollTo({ top: 0 })` and never looks at the
-              hash, so routing this in-page would land a reader at the top of the
-              home page — a link that goes to the right document and the wrong
-              place, which is the harder version of the bug to notice. A whole
-              page load, once, is the honest answer.
+              **`next` from the two pages where where-you-were matters.** The
+              landing page is drawn at addresses that are not its own — an
+              unshared `/read/<slug>`, `/add/…`, `/profile` — and that address is
+              the one the reader should come back to. `/pricing` brings them back
+              to the plans, where a tier pressed before signing in is picked up
+              (buy-intent.ts). From `/features` and `/read/public` the shelf is
+              the better landing, which is where `/login` goes anyway.
+              docs/plans/261001m.
 
-              **`/pricing` has a panel of its own since 2026-09-04**, and that
-              is why it stays on the page rather than joining `/features` in the
-              `else`. It is not cosmetic: the whole buy path for a stranger is
-              *press Get Reader here, sign in here, come back here*, because
-              `SignInControls` remembers the address it was standing on
-              (PricingPage.tsx). Sending them to `/#sign-in` would hand the
-              continuation to the landing page and lose the tier they pressed.
-
-              **And it is drawn only for a stranger, because for anybody else
-              both spellings of it go nowhere.** `/features` and `/pricing` are
-              mounted signed in too (App.tsx), and there the panel this points
-              at does not exist: on `/pricing` `#sign-in` names nothing, because
-              the anchor lives in `PlansForAStranger`; from `/features`,
-              `/#sign-in` lands on the shelf, which is what `/` is once you are
-              signed in, and the shelf has no such panel either. Two dead links,
-              of which the `/features` one predates this stage. GPT Sol
-              reproduced the `/pricing` half in a mounted test — stage 2 code
-              review, finding 1 — and `tests/site-nav-sign-in.test.tsx` is that
-              reproduction kept.
-
-              **Nothing replaces it.** The always-on link to the left is already
-              *Home*, which for a signed-in reader is their shelf, so a second
-              way there would be the dead-control rule broken the other way
-              round. */}
-          {/* **The condition is now *does this page have a panel*, and that is
-              the same correction one level along.** It read `here === "features"`
-              — a list of the pages that *lack* one, which has to be extended
-              every time a page joins this bar, and forgetting is a link that
-              scrolls nowhere rather than an error. `/read/public` joined on
-              2026-09-04 and has no panel, so it takes `/#sign-in` like
-              `/features`; the two that do are the landing page and `/pricing`. */}
-          {!signedIn && (
-            <a
-              href={here === "home" || here === "pricing" ? "#sign-in" : "/#sign-in"}
+              **And it is drawn only for a stranger**, because for anybody else
+              it goes nowhere: App.tsx answers a signed-in `/login` with the
+              shelf. */}
+          {!signedIn && here !== "login" && (
+            <Link
+              href={loginHref(
+                here === "home" || here === "pricing"
+                  ? { next: location.pathname + location.search }
+                  : {},
+              )}
               className={link}
             >
               Sign in
-            </a>
+            </Link>
           )}
           {/* **Feedback, last, and only signed in** — the slot *Sign in* holds
               for a stranger. It was the fixed corner button until 2026-10-01,
@@ -318,13 +302,19 @@ export function SiteNav({
   );
 }
 
-/** The orange button. One per page, and it is the only filled thing on it. */
+/**
+ * The orange button. One per page, and it is the only filled thing on it.
+ *
+ * A `Link` since 2026-10-01, when it stopped jumping to a fragment on its own
+ * page and started going to `/login` (docs/plans/261001m). It was a plain `<a>`
+ * because `navigate()` ignores the hash.
+ */
 export function PrimaryCta({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <a href={href} className="site-cta site-cta-primary">
+    <Link href={href} className="site-cta site-cta-primary">
       {children}
       <ArrowRight size={16} />
-    </a>
+    </Link>
   );
 }
 

@@ -7,7 +7,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isSafeReturn, rememberReturn, takeReturn } from "../src/web/auth-return.js";
+import {
+  forgetReturn,
+  isSafeReturn,
+  loginNext,
+  rememberReturn,
+  takeReturn,
+} from "../src/web/auth-return.js";
 
 const CALLBACK = "/auth/callback";
 
@@ -210,5 +216,49 @@ describe("the address-bar rewrites on boot", () => {
     const line = source.split("\n").find((l) => l.includes("const onCallback")) ?? "";
     expect(line).toContain("CALLBACK_HREF");
     expect(line).not.toMatch(/["']\/auth/);
+  });
+});
+
+/**
+ * **`/login?next=…`**, docs/plans/261001m. The address is only a *candidate*:
+ * it is validated here, written through `rememberReturn` when the reader
+ * actually signs in, and never obeyed on its own.
+ */
+describe("loginNext", () => {
+  beforeEach(() => stubBrowser());
+
+  it("gives back a path on our own site", () => {
+    expect(loginNext("?next=%2Fread%2Fan-essay%3Fat%3Dspya-k3m9qt", CALLBACK)).toBe(
+      "/read/an-essay?at=spya-k3m9qt",
+    );
+    expect(loginNext("?new&next=%2Fpricing", CALLBACK)).toBe("/pricing");
+  });
+
+  it("has nothing to say when there is no next", () => {
+    expect(loginNext("", CALLBACK)).toBeNull();
+    expect(loginNext("?new", CALLBACK)).toBeNull();
+  });
+
+  it("refuses anywhere that is not ours, the callback, and the sign-in page itself", () => {
+    for (const next of [
+      "//evil.example",
+      "https://evil.example/read/x",
+      "/auth/callback",
+      "/login",
+      "/login/",
+      "/login?next=%2Fread%2Fx",
+      "read/x",
+    ]) {
+      expect(loginNext(`?next=${encodeURIComponent(next)}`, CALLBACK), next).toBeNull();
+    }
+  });
+});
+
+describe("forgetReturn", () => {
+  it("drops a remembered destination, so a failed start cannot steer the next sign-in", () => {
+    stubBrowser();
+    rememberReturn("/read/an-essay");
+    forgetReturn();
+    expect(takeReturn(CALLBACK)).toBeNull();
   });
 });
