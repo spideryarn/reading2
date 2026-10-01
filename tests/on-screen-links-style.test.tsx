@@ -21,8 +21,28 @@ const C = "spya-cccccc";
 let root: Root;
 let host: HTMLDivElement;
 let table: HTMLTableElement;
+let observers: FakeResizeObserver[];
 /** Each row's box, by id — changed to simulate a scroll. */
 const boxes = new Map<string, [number, number]>();
+
+class FakeResizeObserver {
+  readonly callback: ResizeObserverCallback;
+  readonly observed: Element[] = [];
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    observers.push(this);
+  }
+
+  observe(target: Element) {
+    this.observed.push(target);
+  }
+  disconnect() {}
+
+  fire() {
+    if (this.observed.length > 0) this.callback([], this as unknown as ResizeObserver);
+  }
+}
 
 function mountRows(ids: string[]) {
   table = document.createElement("table");
@@ -54,6 +74,8 @@ async function frame() {
 beforeEach(() => {
   Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
   dock = 0;
+  observers = [];
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   boxes.clear();
   boxes.set(A, [0, 400]);
   boxes.set(B, [400, 790]);
@@ -68,6 +90,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   table.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("OnScreenLinksStyle", () => {
@@ -107,7 +130,42 @@ describe("OnScreenLinksStyle", () => {
     expect(css()).not.toContain(A);
   });
 
-  it("writes nothing while it is off", async () => {
+  it("measures again when the article table itself reflows", async () => {
+    await act(async () => root.render(createElement(OnScreenLinksStyle, { enabled: true, layoutKey: "k" })));
+    expect(observers[0]?.observed).toEqual([table]);
+    boxes.set(A, [-800, -400]);
+    boxes.set(B, [-400, -10]);
+    boxes.set(C, [-10, 400]);
+    observers[0]?.fire();
+    await frame();
+    expect(css()).toContain(C);
+    expect(css()).not.toContain(A);
+  });
+
+  it("does not schedule work from a ResizeObserver callback delivered after cleanup", async () => {
+    const raf = vi.spyOn(window, "requestAnimationFrame");
+    await act(async () => root.render(createElement(OnScreenLinksStyle, { enabled: true, layoutKey: "k" })));
+    const observer = observers[0];
+    raf.mockClear();
+    act(() => root.unmount());
+    observer?.fire();
+    expect(raf).not.toHaveBeenCalled();
+    raf.mockRestore();
+    root = createRoot(host);
+  });
+
+  it("does not turn whitespace in an invalid row id into valid link selectors", async () => {
+    table.remove();
+    const invalid = `${A} ${B}`;
+    boxes.set(invalid, [0, 400]);
+    mountRows([invalid]);
+    await act(async () => root.render(createElement(OnScreenLinksStyle, { enabled: true, layoutKey: "k" })));
+    expect(css()).toBeNull();
+  });
+
+  it("removes the rule when it is turned off", async () => {
+    await act(async () => root.render(createElement(OnScreenLinksStyle, { enabled: true, layoutKey: "k" })));
+    expect(css()).not.toBeNull();
     await act(async () => root.render(createElement(OnScreenLinksStyle, { enabled: false, layoutKey: "k" })));
     expect(css()).toBeNull();
   });

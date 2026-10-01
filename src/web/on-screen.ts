@@ -88,7 +88,9 @@ export function onScreenIds(rows: readonly RowBox[], viewTop: number, viewBottom
  * which the link card already listens for, so every mode gets it without a
  * change to its panel. Scoped to `.mode-band`: a link in the prose or in the
  * passage Chat dialog lighting up because its own paragraph is on screen would
- * be noise (Greg asked for it "in such modes").
+ * be noise (Greg asked for it "in such modes"). A missing reference is a
+ * non-interactive span and is excluded explicitly, so this unlayered runtime
+ * rule can never brighten it over `.block-ref-missing`'s deliberately dim look.
  *
  * The declarations are here rather than in a stylesheet because a generated
  * rule has to carry at least one, and CSS has no way to make a custom property
@@ -103,5 +105,5 @@ export function onScreenIds(rows: readonly RowBox[], viewTop: number, viewBottom
 export function onScreenLinkCss(ids: readonly BlockId[]): string {
   const selectors = ids.filter((id) => SAFE_ID.test(id)).map((id) => `[data-block-link="${id}"]`);
   if (selectors.length === 0) return "";
-  return `.mode-band :is(${selectors.join(",")}){background-color:var(--block-link-on-screen);opacity:1;border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}`;
+  return `.mode-band :is(${selectors.join(",")}):not(.block-ref-missing){background-color:var(--block-link-on-screen);opacity:1;border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}`;
 }

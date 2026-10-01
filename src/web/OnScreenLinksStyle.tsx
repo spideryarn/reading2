@@ -31,26 +31,34 @@ interface Props {
 }
 
 function OnScreenLinksStyleInner({ enabled, layoutKey }: Props) {
-  /* The sorted ids, joined: an unchanged screenful is an equal string and no render. */
-  const [key, setKey] = useState("");
+  /* The complete rule as a string: an unchanged screenful is an equal value and
+     no render. Keeping the filtered rule, rather than joining ids and splitting
+     them again during render, also means an invalid id containing whitespace
+     can never be turned into two valid selectors after `SAFE_ID` has checked it. */
+  const [css, setCss] = useState("");
 
   // `layoutKey` is a re-run trigger, not a value the effect reads — useColumnContext.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger
   useEffect(() => {
     if (!enabled) {
-      setKey("");
+      setCss("");
       return;
     }
     const rows = rowCache();
     let frame = 0;
+    /* A ResizeObserver notification may already be queued when `disconnect()`
+       runs. Keep that late callback from scheduling a fresh frame after this
+       component has unmounted. */
+    let live = true;
     const measure = () => {
       frame = 0;
+      if (!live) return;
       const top = stickyOffset();
       const bottom = window.innerHeight - dockOffset();
-      setKey(onScreenIds(rowsOnScreen(rows(Date.now()), top, bottom), top, bottom).join(" "));
+      setCss(onScreenLinkCss(onScreenIds(rowsOnScreen(rows(Date.now()), top, bottom), top, bottom)));
     };
     const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
+      if (live && !frame) frame = requestAnimationFrame(measure);
     };
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
@@ -59,6 +67,7 @@ function OnScreenLinksStyleInner({ enabled, layoutKey }: Props) {
     if (table && ro) ro.observe(table);
     measure();
     return () => {
+      live = false;
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       ro?.disconnect();
@@ -66,7 +75,6 @@ function OnScreenLinksStyleInner({ enabled, layoutKey }: Props) {
     };
   }, [enabled, layoutKey]);
 
-  const css = key === "" ? "" : onScreenLinkCss(key.split(" "));
   return css ? <style data-on-screen-links="">{css}</style> : null;
 }
 
