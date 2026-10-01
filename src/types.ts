@@ -3388,6 +3388,14 @@ export type ThreadKind = "chat" | "remember" | "candidates";
  */
 export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
 
+/**
+ * The most block ids one chat question may say were on screen. A screenful is a
+ * few dozen even of one-line blocks on a tall monitor; this bounds a request,
+ * and the client trims to it rather than having Send refused.
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export const MAX_VISIBLE_BLOCKS = 100;
+
 /** Is this one of the three? Used by both stores' normalisers and by the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
   return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);

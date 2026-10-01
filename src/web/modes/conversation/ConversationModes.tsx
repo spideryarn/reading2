@@ -306,10 +306,19 @@ export function ConversationBand({
   subMode,
   handoff,
   onHandoffTaken,
+  onScreen,
 }: {
   slug: string;
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
+  /**
+   * The blocks on screen now, read when the reader presses Send or Save and sent
+   * with the question — chat mode only. Reader owns it because Reader knows
+   * whether the band is lying over the prose, in which case it answers `[]`.
+   * Remember is given none: its prompt is not to guess how far the reader has
+   * got. docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+   */
+  onScreen?: (() => readonly BlockId[]) | undefined;
   /**
    * A question to open a fresh conversation with, unsent — see `ChatHandoff`.
    * Only chat mode is handed one.
@@ -718,6 +727,7 @@ export function ConversationBand({
         const id = send(current, question, at, {
           onThreadId: (corrected) => void setThread(corrected),
           kind,
+          ...(onScreen ? { visible: onScreen() } : {}),
           ...(kind === "remember" ? { stance } : {}),
         });
         if (id !== current) void setThread(id);
@@ -736,6 +746,7 @@ export function ConversationBand({
         const id = send(null, question, at, {
           onThreadId: (corrected) => void setThread(corrected),
           kind,
+          ...(onScreen ? { visible: onScreen() } : {}),
           ...(kind === "remember" ? { stance } : {}),
         });
         void setThread(id);
@@ -776,7 +787,9 @@ export function ConversationBand({
          back is the one it was given. `current` is non-null wherever these can
          be pressed — the conversation view is what renders them. */
       onRetry={(messageId) => current && retry(current, messageId)}
-      onEdit={(messageId, question) => current && edit(current, messageId, question, at)}
+      onEdit={(messageId, question) =>
+        current && edit(current, messageId, question, at, onScreen?.())
+      }
       onStop={(messageId) => current && stop(current, messageId)}
       onJump={onJump}
       recovering={recovering}

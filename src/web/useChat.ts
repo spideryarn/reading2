@@ -36,6 +36,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type {
+  BlockId,
   ChatAnchor,
   ChatMessage,
   ChatThread,
@@ -175,6 +176,13 @@ export interface SendOptions {
    * docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography.
    */
   sourceCommentId?: string;
+  /**
+   * The blocks on the reader's screen when they pressed Send — chat mode only,
+   * read once by the caller (`blocksOnScreenNow` in on-screen.ts). The server
+   * keeps the ids the article has and hands them to the prompt as a hedged
+   * line. Omitted when empty. docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+   */
+  visible?: readonly BlockId[];
 }
 
 export interface ChatApi {
@@ -266,7 +274,14 @@ export interface ChatApi {
    * *operation* draws, so a server that refuses the edit puts every one of
    * those turns back by having the operation dropped.
    */
-  edit(threadId: string, messageId: string, question: string, at: string | null): void;
+  edit(
+    threadId: string,
+    messageId: string,
+    question: string,
+    at: string | null,
+    /** What was on screen at Save — `SendOptions.visible`, for an edit. */
+    visible?: readonly BlockId[],
+  ): void;
   /**
    * Stop an answer that is still arriving. What has already appeared is kept.
    *
@@ -640,7 +655,7 @@ export function useChat(slug: string): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, kind, stance, help, sourceCommentId } = opts;
+      const { onThreadId, anchor, kind, stance, help, sourceCommentId, visible } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -726,6 +741,7 @@ export function useChat(slug: string): ChatApi {
           payload: {
             question,
             at,
+            ...(visible && visible.length > 0 ? { visible } : {}),
             ...(useProfile ? {} : { useProfile: false }),
             ...(anchor ? { anchor } : {}),
             /* Sent for every kind but the default. A body with no `kind` means
@@ -815,7 +831,13 @@ export function useChat(slug: string): ChatApi {
   );
 
   const edit = useCallback(
-    (threadId: string, messageId: string, question: string, at: string | null) => {
+    (
+      threadId: string,
+      messageId: string,
+      question: string,
+      at: string | null,
+      visible?: readonly BlockId[],
+    ) => {
       const now = new Date().toISOString();
       const replyId = mintId();
       /* Read **before** anything is drawn, which is the whole point: this is
@@ -875,7 +897,13 @@ export function useChat(slug: string): ChatApi {
           began: false,
           attempt: null,
         },
-        payload: { edit: messageId, question, at, ...(expectedTailId ? { expectedTailId } : {}) },
+        payload: {
+          edit: messageId,
+          question,
+          at,
+          ...(visible && visible.length > 0 ? { visible } : {}),
+          ...(expectedTailId ? { expectedTailId } : {}),
+        },
       });
     },
     [controller],

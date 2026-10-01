@@ -452,7 +452,7 @@ import type {
 import { isMicPlacement, MIC_PLACEMENTS } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
-import { isThreadKind, THREAD_KINDS } from "./types.js";
+import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
@@ -2709,6 +2709,17 @@ function sweepChat(slug: string): Promise<ChatThread[]> {
  *    text so far when it throws, and that partial answer is stored with the
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
+/**
+ * The on-screen ids a chat body sent, kept only where the article has them and
+ * put in article order — the order a reader saw them in. Already shape-checked
+ * by `streamChat`.
+ */
+export function onScreenOf(visible: readonly string[] | undefined, blocks: readonly Block[]): string[] {
+  if (!visible || visible.length === 0) return [];
+  const wanted = new Set(visible);
+  return blocks.filter((b) => wanted.has(b.id)).map((b) => b.id);
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -2723,6 +2734,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     stance,
     help,
     sourceCommentId,
+    visible,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **Validated, never coerced.** An unknown value is a 400 rather than a
@@ -2809,6 +2821,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if ((wantsRetry || wantsEdit) && help !== undefined) {
     throw httpError(400, "A retry or an edit takes its help flag from the stored question");
   }
+  /* **What was on the reader's screen** — context for "this" and "here",
+     hedged in the prompt (`visibleBlocksLine`). A list of block ids, at most
+     `MAX_VISIBLE_BLOCKS`, on an ask or an edit; a retry re-asks a stored
+     question and has no screen of its own to report, so it is refused one, as
+     it is refused a kind. Something that is not an id is refused; an id the
+     article does not have is dropped below instead, because a tab left open
+     across a re-extraction should not lose chat over one stale id.
+     docs/plans/261001q-chat-knows-the-blocks-on-screen.md. */
+  if (visible !== undefined) {
+    if (wantsRetry) throw httpError(400, "A retry takes no visible blocks");
+    if (
+      !Array.isArray(visible) ||
+      !visible.every((id) => typeof id === "string" && isSpideryarnId(id))
+    ) {
+      throw httpError(400, "visible must be a list of block ids");
+    }
+    if (visible.length > MAX_VISIBLE_BLOCKS) {
+      throw httpError(400, `visible may name at most ${MAX_VISIBLE_BLOCKS} blocks`);
+    }
+  }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
@@ -2826,6 +2858,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
+  /* **Chat only.** Remember's prompt tells the model not to guess how far the
+     reader has got, and a screenful is exactly that guess; Candidates sends no
+     position at all. The thread's kind decides, as it does for the cap below. */
+  if (visible !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
+    throw httpError(400, "visible only applies to a chat");
+  }
   const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
@@ -3220,6 +3258,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       history: thread.messages.slice(0, -2), // everything before this turn
       question: asked,
       at: typeof at === "string" ? at : undefined,
+      visible: onScreenOf(visible as string[] | undefined, article.blocks),
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,

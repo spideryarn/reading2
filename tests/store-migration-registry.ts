@@ -497,6 +497,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * `chat-anchor-route.test.ts`, which is the entry after next, and it reaches
    * what it reaches by the same two doors.
    */
+  /**
+   * **Written 2026-10-01**, `static-only` for the same reason as the entry
+   * after it, whose harness it copies line for line.
+   */
+  "tests/chat-visible-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`visible` at the chat route: what the wire may carry, and the hedged on-screen line the " +
+      "request `converse` builds. Seeds through `scratchArticleInPg`; what it still reaches is the " +
+      "seeder's copy step and the ledger row the stubbed model call records.",
+  },
   "tests/chat-help-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2626,6 +2639,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two
