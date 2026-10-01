@@ -315,15 +315,7 @@ export function GlossaryPanel({
                (SPIDERYARN-READING2-55); re-running is in Metadata. A job or
                a failure still shows. Plan 260929c. */
             more={!owner.outdated}
-            /* **In the list's own recorded setting**, not the current profile.
-               `existingFor` refuses to append across a profile difference, so
-               asking a plain list's Find more for the profile would *rewrite*
-               it — dropping every term the model did not return again — under
-               a button that says "more". The *Use your profile* checkbox used
-               to carry this, seeded from the list; since it went on 2026-09-13
-               the list's `profiled` is passed directly. useGlossary.ts § `more`;
-               tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
-            onMore={() => owner.more(owner.profiled)}
+            onMore={() => owner.more()}
             onCancel={owner.cancel}
           />
         ) : null

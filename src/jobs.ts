@@ -86,6 +86,7 @@ import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { processSingleton } from "./process-state.js";
+import { isPersonalStep } from "./profile.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
@@ -958,6 +959,52 @@ function stillForced(step: JobStep): boolean {
 type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
 
 /**
+ * **The one place a step's `StepContext` is built** — out of `runStep` so a
+ * test can ask what each step is handed without running it
+ * (tests/step-context-profile.test.ts).
+ */
+export function stepContextFor(
+  job: Job,
+  step: JobStep,
+  signal: AbortSignal,
+  /** When this claimant stops — `StepContext.deadlineAt`. */
+  deadlineAt: number,
+  power: ModelPower,
+): StepContext {
+  return {
+    slug: job.slug,
+    ...(job.url ? { url: job.url } : {}),
+    ...(job.upload ? { upload: job.upload } : {}),
+    // In memory only. Persisting at this rate would be two writes a second
+    // per running job, to record something nobody reads afterwards.
+    report: (detail: string) => {
+      step.detail = detail;
+    },
+    signal,
+    /* The same instant the abort timer is set for, passed rather than
+       recomputed: a step that can decline to start work it cannot finish needs
+       to know *when*, not only *that*. See `StepContext.deadlineAt`. */
+    deadlineAt,
+    /* Mark the article when any *other* step of this job is in the same cache
+       group — in either direction. The list used to be `slice(i + 1)`, later
+       steps only, which marked the stage that writes the entry and never the one
+       that reads it; the reader is the last member of its group by construction,
+       so it sent no breakpoint and read nothing. Both halves of the reasoning are
+       on `cacheArticleForStep`, which now owns the argument shape precisely so
+       that it is testable without a job. docs/project/prompt-caching.md. */
+    cacheArticle: cacheArticleForStep(
+      job.steps.map((s) => s.name),
+      job.steps.indexOf(step),
+    ),
+    /* **Only a personal step sees the profile** — `PERSONAL_STEPS` in
+       src/profile.ts. Every shared stage reads `ctx.profile ?? null`, so this
+       is what keeps a stranger's profile out of what a visitor reads. */
+    ...(job.profile !== undefined && isPersonalStep(step.name) && { profile: job.profile }),
+    power,
+  };
+}
+
+/**
  * Run — or skip — exactly one step, recording all of it on the job.
  *
  * The single implementation of "do this step", shared by the two things that
@@ -1025,34 +1072,13 @@ async function runStep(
      nothing downstream read either one. Both went with the filesystem store;
      a step is told where its artefacts go by the `ArtifactStore` it is handed
      and by nothing else. */
-  const ctx: StepContext = {
-    slug: job.slug,
-    ...(job.url ? { url: job.url } : {}),
-    ...(job.upload ? { upload: job.upload } : {}),
-    // In memory only. Persisting at this rate would be two writes a second
-    // per running job, to record something nobody reads afterwards.
-    report: (detail: string) => {
-      step.detail = detail;
-    },
-    signal: controller.signal,
-    /* The same instant the abort timer above is set for, passed rather than
-       recomputed: a step that can decline to start work it cannot finish needs
-       to know *when*, not only *that*. See `StepContext.deadlineAt`. */
+  const ctx = stepContextFor(
+    job,
+    step,
+    controller.signal,
     deadlineAt,
-    /* Mark the article when any *other* step of this job is in the same cache
-       group — in either direction. The list used to be `slice(i + 1)`, later
-       steps only, which marked the stage that writes the entry and never the one
-       that reads it; the reader is the last member of its group by construction,
-       so it sent no breakpoint and read nothing. Both halves of the reasoning are
-       on `cacheArticleForStep`, which now owns the argument shape precisely so
-       that it is testable without a job. docs/project/prompt-caching.md. */
-    cacheArticle: cacheArticleForStep(
-      job.steps.map((s) => s.name),
-      job.steps.indexOf(step),
-    ),
-    ...(job.profile !== undefined && { profile: job.profile }),
-    power: powerRead.ok ? powerRead.power : "standard",
-  };
+    powerRead.ok ? powerRead.power : "standard",
+  );
 
   /* `session.reads`, not the store directly. The preflight and the run phase
      have to ask the same store, or a step decides whether to skip by looking at

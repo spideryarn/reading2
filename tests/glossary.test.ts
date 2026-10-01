@@ -1332,11 +1332,37 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
       existingFor({ ...current, profileHash: HASH }, "deadbeefdeadbeef", HASH),
     ).not.toBeNull();
 
-    // Every mismatch refuses, including in both directions across `null`.
+    // Two different profiles refuse, and so does a profiled run onto a plain
+    // list — that would stamp terms written for nobody with somebody's hash.
     expect(existingFor({ ...current, profileHash: HASH }, "deadbeefdeadbeef", OTHER)).toBeNull();
-    expect(existingFor({ ...current, profileHash: HASH }, "deadbeefdeadbeef", null)).toBeNull();
     expect(existingFor({ ...current, profileHash: null }, "deadbeefdeadbeef", HASH)).toBeNull();
     expect(existingFor(current, "deadbeefdeadbeef", HASH)).toBeNull();
+  });
+
+  it("appends an unprofiled top-up to a legacy profiled list, and keeps its stamp", () => {
+    /* Plan 261001m: the glossary is a shared step now, so every run arrives
+       with no profile. On a list written for a profile before that, refusing
+       here would turn *Find more* into a rewrite. So it appends — and the list
+       keeps its old stamp, the rule quotes already uses (src/quotes.ts §
+       buildQuotes), because most of it is still that profile's and the
+       make-public dialog must go on saying so. */
+    const HASH = "0123456789abcdef";
+    const opts = { slug: "a-slug", blocks: [], sourceHash: "deadbeefdeadbeef", elapsedMs: 1, power: "standard" as const };
+    const stored: Glossary = {
+      ...buildGlossary({ entries: [{ name: "Seth", gloss: "The author." }] }, opts),
+      profileHash: HASH,
+    };
+    const existing = existingFor(stored, "deadbeefdeadbeef", null);
+    expect(existing).toBe(stored);
+    const topped = buildGlossary({ entries: [{ name: "Qualia", gloss: "Raw feels." }] }, {
+      ...opts,
+      existing,
+      profile: null,
+    });
+    expect(topped.entries.map((e) => e.name).sort()).toEqual(["Qualia", "Seth"]);
+    expect(topped.entries.find((e) => e.name === "Seth")?.id).toBe(stored.entries[0]?.id);
+    expect(topped.passes).toBe(2);
+    expect(topped.profileHash).toBe(HASH);
   });
 
   it("carries the ids across the rewrite, which is what refusing forgot", () => {

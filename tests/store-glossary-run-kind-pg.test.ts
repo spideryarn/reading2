@@ -5,12 +5,12 @@
  *
  * The unit test (tests/glossary-run-kind.test.ts) holds the decision to
  * `existingFor`. What it cannot see is whether `articleMetadata` hands it the
- * *same* source fingerprint and profile the glossary job will: the page builds
- * its fingerprint from the revision's stored metadata columns, and the job from
+ * *same* source fingerprint the glossary job will: the page builds its
+ * fingerprint from the revision's stored metadata columns, and the job from
  * `tryReadArticle` (src/article-input.ts). So the list here is stamped the way
- * the job would stamp it — from `tryReadArticle`, and from the owner's profile
- * rendered as `resolveProfile` renders it — and the page must call it `append`.
- * A page fingerprint or profile that drifted from the job's reads `rewrite`.
+ * the job would stamp it, and the page must call it `append`. A page
+ * fingerprint that drifted from the job's reads `rewrite`. The job carries no
+ * profile since plan 261001m, so the reader's profile no longer moves it.
  */
 import { randomUUID } from "node:crypto";
 
@@ -138,28 +138,14 @@ describe("ArticleMetadata.glossaryRun", () => {
     expect(await verdict()).toBe("append");
   }, 30_000);
 
-  it("is append for a profiled list when the reader's profile is the one it was written from", async () => {
-    await as(() => pgReaderStore.writeProfile("A physicist."));
-    const purpose = (await as(() => pgArticleReader.articleMetadata(SLUG))).purpose;
-    /* `resolveProfile`'s rendering, over the same two boxes. */
-    const rendered = renderProfile({ profile: "A physicist.", purpose });
-    await publishGlossary(listFor({ profileHash: runProfileHash(rendered) }));
-    expect(await verdict()).toBe("append");
-  }, 30_000);
-
-  it("includes this article's purpose in the profile the job will use", async () => {
-    await as(() => pgShelfStore.patch(SLUG, { purpose: "To check the evidence." }));
-    const rendered = renderProfile({ profile: null, purpose: "To check the evidence." });
-    await publishGlossary(listFor({ profileHash: runProfileHash(rendered) }));
-    expect(await verdict()).toBe("append");
-  }, 30_000);
-
-  it("is rewrite once the reader's profile has moved on", async () => {
-    await as(() => pgReaderStore.writeProfile("A physicist."));
+  it("is append for a legacy profiled list, whatever the reader's profile says now", async () => {
+    /* Plan 261001m: a glossary job carries no profile, and an unprofiled run
+       appends to a list written for one (src/glossary.ts § existingFor). So the
+       reader's current profile, changed or not, cannot make this a rewrite. */
+    await as(() => pgReaderStore.writeProfile("A historian."));
     const rendered = renderProfile({ profile: "A physicist.", purpose: null });
     await publishGlossary(listFor({ profileHash: runProfileHash(rendered) }));
-    await as(() => pgReaderStore.writeProfile("A historian."));
-    expect(await verdict()).toBe("rewrite");
+    expect(await verdict()).toBe("append");
   }, 30_000);
 
   it("is rewrite for a list written from another version of the article", async () => {

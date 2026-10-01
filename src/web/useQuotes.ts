@@ -177,14 +177,12 @@ export interface UseQuotes {
    * current list would skip;
    * `quotes` is in FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
    *
-   * @param useProfile defaults to true. **Find more passes the list's own
-   *   `profiled`**, so an append is asked the way the list was written — an
-   *   append keeps the first pass's stamp, and a profiled pass under a plain
-   *   stamp would be provenance written falsely. *Choose them again* passes
-   *   nothing: it writes a list of its own, and every list is now written for
-   *   the profile (the *Use your profile* checkbox went on 2026-09-13).
+   * No profile either way: quotes are shared with anyone the article is public
+   * to, so the server never profiles them (plan 261001m, src/profile.ts §
+   * PERSONAL_STEPS). Find more used to pass the list's own `profiled`; an
+   * append still keeps the first pass's stamp (src/quotes.ts § buildQuotes).
    */
-  regenerate(useProfile?: boolean): Promise<void>;
+  regenerate(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -306,8 +304,8 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     [queue],
   );
   const regenerate = useCallback(
-    async (useProfile = true) => {
-      await queue.start({ force: true, useProfile });
+    async () => {
+      await queue.start({ force: true });
     },
     [queue],
   );

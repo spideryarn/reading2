@@ -229,7 +229,8 @@ the reading view's rename. That is a shelf override no generator reads; GPT Sol 
 2026-08-31.)
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
-**The profile, in the stamp rather than merely recorded.** Other artefacts record a `profileHash` and
+**The profile, in the stamp rather than merely recorded** — and since 2026-10-01 always `null` for a
+new run (below, and [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md)). Other artefacts record a `profileHash` and
 the read path shows a banner; nothing makes the step re-run. For a glossary that is arguable — a
 profile changes which terms are worth an entry. Here it changes what *"assumed" means*: a physicist
 reading a physics essay brings everything it assumes, and the same essay for a lay reader is three
@@ -267,9 +268,10 @@ the request goes out. The two verbs exist for the same reason: `ensure` is unfor
 request and two keys are two paid jobs; `regenerate` is forced and is the *Find them again* button beside a
 result that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
-An automatic run uses the reader's profile, as every ideas run does. The *Use your profile* checkbox,
-and the *Using your profile* sentence an automatic run showed in its place, were removed on
-2026-09-13 ([reader-profile.md § No control, one label](reader-profile.md#no-control-one-label)).
+Since 2026-10-01 no ideas run uses the reader's profile: the list is public with its article, so it
+is written for a general reader (`profileHash: null`) — [reader-profile.md § Only the personal steps get it](reader-profile.md#only-the-personal-steps-get-it). A legacy profiled list no
+longer matches the expected stamp, so the next ideas job writes it again unprofiled. (Before that,
+every run used the profile; the *Use your profile* checkbox went on 2026-09-13.)
 
 
 **Ids are still inherited across a regeneration, and the promise is weaker than the glossary's.**

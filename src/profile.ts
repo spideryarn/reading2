@@ -40,6 +40,8 @@
  */
 import { createHash } from "node:crypto";
 
+import type { StepName } from "./types.js";
+
 /* The caps live in src/types.ts, not here, and re-exported so that everything
    about a profile is still reachable from this module. The reason is
    tests/client-imports.test.ts: both pages with a profile box show a live
@@ -277,3 +279,40 @@ export function profileIsStale(
   return recorded !== now;
 }
 
+
+/**
+ * **The only steps that may be handed the reader's profile.** Every other step
+ * runs as if there were none: the job runner builds `StepContext` with
+ * `profile` only for these (src/jobs.ts § `stepContextFor`), and the jobs
+ * route resolves a profile only when a job contains one of them.
+ *
+ * Why: whatever a visitor to a public article can see must be written for
+ * nobody in particular — a glossary pitched at its owner shows a stranger what
+ * the owner said about themselves. So the shared artefacts (tweets, glossary,
+ * quotes, ideas, sketch, …) are not here, and the personal layer goes on top
+ * of them instead. docs/plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md.
+ *
+ * - `quiz` — owner-only, and personal by nature.
+ * - `simple`, `trajectory` — public, but still profiled until Greg decides
+ *   whether they become shared (261001m, open question 1). Moving them out of
+ *   this set is the whole of that change on the server.
+ * - `illustrated` — its prompt already gets `null`; it needs the profile only
+ *   for the `wrong-profile` refusal against a legacy profiled Sketch
+ *   (src/pipeline.ts § illustrated). Without it, `profileIsStale(hash, null)`
+ *   is false and an old profiled Sketch would be painted.
+ *
+ * Typed against `StepName`, so a misspelt member fails the compiler.
+ */
+export const PERSONAL_STEPS = [
+  "quiz",
+  "simple",
+  "trajectory",
+  "illustrated",
+] as const satisfies readonly StepName[];
+
+const PERSONAL: ReadonlySet<StepName> = new Set(PERSONAL_STEPS);
+
+/** Is this step allowed the reader's profile? `PERSONAL_STEPS`. */
+export function isPersonalStep(name: StepName): boolean {
+  return PERSONAL.has(name);
+}

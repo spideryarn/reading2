@@ -1106,7 +1106,7 @@ wrong". Three things had made that argument weaker than it reads.
   than grouping — one gesture, no model call
   ([260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md)).
 - **Some recovery survives**, because `existingFor` refuses to append when the source hash, the
-  prompt version or the profile differs. An edit, a prompt bump or a changed profile therefore
+  prompt version or (until 261001m) the profile differs. An edit, a prompt bump or a changed profile therefore
   rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's `?term=` links
   survive it. (This listed the *use my profile* checkbox too, until the checkbox was removed on
   2026-09-13 — [reader-profile.md](reader-profile.md#no-control-one-label).)
@@ -1160,9 +1160,13 @@ a piece that no longer exists and folding new ones in would produce a list half-
 decision is one line in `generateGlossary` and it is the line to read if the behaviour ever looks
 wrong.
 
-**Metadata says which, before the press.** Its Glossary row re-runs with the reader's current
-profile, so it can rewrite where the panel's *Find more* (which keeps the list's own setting) would
-append. `glossaryRunKind`, built on `existingFor`, gives the page that verdict through
+**Since 2026-10-01 the glossary is written for a general reader**, never the reader's profile,
+because it is public with its article — [reader-profile.md § Only the personal steps get it](reader-profile.md#only-the-personal-steps-get-it). *Find more* on a legacy profiled list appends
+and keeps the list's old stamp (`existingFor`, `buildGlossary`); a per-reader *for you* layer on
+top is [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md) stage 2.
+
+**Metadata says which, before the press.** Its Glossary row and the panel's *Find more* send the same
+unprofiled run, so they append or rewrite alike. `glossaryRunKind`, built on `existingFor`, gives the page that verdict through
 `ArticleMetadata.glossaryRun`, and the row says *Find more terms* or *writes a new list* accordingly —
 [261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md) § 3.
 

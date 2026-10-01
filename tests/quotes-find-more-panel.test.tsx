@@ -131,27 +131,21 @@ describe("the foot", () => {
     expect(buttons().some((b) => /choose them again/i.test(b))).toBe(false);
   });
 
-  it("sends the forced run with the LIST's own profile setting, and shows no checkbox", async () => {
-    /* Find more continues the list rather than choosing it for somebody else:
-       src/quotes.ts § existingFor keeps the first pass's stamp, so the pass
-       has to be asked the way the list was. */
-    const regenerate = vi.fn(async () => {});
-    await mount(owner(list({ profileHash: "p" }), { profiled: true, regenerate }));
-    expect(foot()?.querySelector('input[type="checkbox"]')).toBeNull();
-    const find = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /find more/i.test(b.textContent ?? ""));
-    expect(find).toBeDefined();
-    await act(async () => find?.click());
-    expect(regenerate).toHaveBeenCalledWith(true);
+  it("sends the forced run with no profile setting, plain list or profiled, and shows no checkbox", async () => {
+    /* Quotes are a shared step since plan 261001m: the server never profiles
+       them, and an append keeps the first pass's stamp (src/quotes.ts §
+       buildQuotes). So Find more no longer passes the list's `profiled`. */
+    for (const profiled of [true, false]) {
+      const regenerate = vi.fn(async () => {});
+      await mount(owner(list(profiled ? { profileHash: "p" } : {}), { profiled, regenerate }));
+      expect(foot()?.querySelector('input[type="checkbox"]')).toBeNull();
+      const find = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /find more/i.test(b.textContent ?? ""));
+      expect(find).toBeDefined();
+      await act(async () => find?.click());
+      expect(regenerate.mock.calls).toEqual([[]]);
+    }
     /* And nothing about the profile beside it, since 2026-09-13. */
     expect(host.querySelector(".prof-row")).toBeNull();
-  });
-
-  it("sends a plain list's Find more plainly", async () => {
-    const regenerate = vi.fn(async () => {});
-    await mount(owner(list(), { profiled: false, regenerate }));
-    const find = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /find more/i.test(b.textContent ?? ""));
-    await act(async () => find?.click());
-    expect(regenerate.mock.calls).toEqual([[false]]);
   });
 
   it("says so when the last Find more added nothing, rather than looking like a dead button", async () => {
@@ -206,10 +200,9 @@ describe("the banners", () => {
     expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
   });
 
-  it("Choose them again writes a list of its own, for the profile, whatever the old list was", async () => {
-    /* No argument, so `useProfile` defaults to yes: this replaces the list
-       rather than continuing it, and since the *Use your profile* checkbox went
-       on 2026-09-13 every new list is written for the profile. */
+  it("Choose them again writes a list of its own, whatever the old list was", async () => {
+    /* No argument: this replaces the list rather than continuing it, and since
+       plan 261001m every new list is written for a general reader. */
     const regenerate = vi.fn(async () => {});
     await mount(owner(list(), { stale: true, profiled: false, regenerate }));
     const again = [...(banner()?.querySelectorAll("button") ?? [])].find((b) =>

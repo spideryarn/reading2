@@ -397,12 +397,12 @@ function toEntries(
  * keeps the reader's `?term=` links alive across the change. Found by GPT Sol's
  * review of docs/plans/260826t-reader-profile.md, 2026-08-26.
  *
- * Note this is a stricter test than `profileIsStale`: there, `null` never
- * counts as stale, because a reader who asked for a plain glossary should not
- * be nagged. Here any difference matters, including `null` against a hash — the
- * question is not "should we warn them" but "may these two lists be merged",
- * and entries written for a physicist may not be merged with entries written
- * for nobody in particular.
+ * **Since plan 261001m, one direction is allowed.** The glossary no longer
+ * receives a profile (src/profile.ts § PERSONAL_STEPS), so an unprofiled run
+ * appends to a legacy profiled list, and `buildGlossary` keeps that list's
+ * old stamp — the rule quotes uses. The other direction, a profiled run onto a
+ * plain list or a different profile's, still refuses: it should not arise any
+ * more, and if it does it must not stamp plain terms with somebody's hash.
  */
 export function existingFor(
   onDisk: Glossary | null,
@@ -412,10 +412,14 @@ export function existingFor(
 ): Glossary | null {
   if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
   if (onDisk.version !== PROMPT_VERSION) return null;
-  /* `?? null` so that a list written before the field existed compares equal to
-     one written without a profile. Those two really are the same thing to
-     merge: neither was written for anybody in particular. */
-  if ((onDisk.profileHash ?? null) !== profileHash) return null;
+  /* **An unprofiled run appends to anything** — plan 261001m. The glossary is a
+     shared step now (src/profile.ts § PERSONAL_STEPS), so every run arrives
+     with `null`, and refusing a legacy profiled list would turn *Find more*
+     into a rewrite. `buildGlossary` keeps the list's own stamp, as quotes does.
+     A profiled run should no longer reach here; if one does, any difference
+     still refuses rather than stamping plain terms with somebody's hash.
+     `?? null` so a list from before the field existed counts as plain. */
+  if (profileHash !== null && (onDisk.profileHash ?? null) !== profileHash) return null;
   return onDisk;
 }
 
@@ -440,18 +444,17 @@ export function runProfileHash(profile: string | null): string | null {
  *
  * Built **on** `existingFor` rather than beside it, so the page and the run
  * cannot reach two verdicts. The inputs have to be the run's too: the source is
- * `articleFingerprint`, and the profile is the rendered string the job will
- * carry — for Metadata's press, `resolveProfile` in src/routes.ts, which is
- * `renderProfile` over the reader's two boxes. tests/glossary-run-kind.test.ts.
+ * `articleFingerprint`, and the profile is none — the glossary is a shared step
+ * and its job never carries one (plan 261001m, src/profile.ts §
+ * PERSONAL_STEPS). tests/glossary-run-kind.test.ts.
  */
 export function glossaryRunKind(
   onDisk: Glossary | null,
   sourceHash: string | null,
-  profile: string | null,
 ): "first" | "append" | "rewrite" | null {
   if (!onDisk) return "first";
   if (sourceHash === null) return null;
-  return existingFor(onDisk, sourceHash, runProfileHash(profile)) ? "append" : "rewrite";
+  return existingFor(onDisk, sourceHash, null) ? "append" : "rewrite";
 }
 
 /**
@@ -782,8 +785,17 @@ export function buildGlossary(
        here. Absent means "written before this existed"; `null` means "written
        deliberately without a profile", and the panel needs to tell those two
        apart to decide whether its checkbox starts ticked.
-       src/profile.ts § profileIsStale. */
-    profileHash: runProfileHash(opts.profile ?? null),
+       src/profile.ts § profileIsStale.
+
+       **On an append, the list's own stamp is kept** — the rule
+       src/quotes.ts § buildQuotes already uses. Since plan 261001m the only
+       append across a difference is an unprofiled top-up onto a legacy
+       profiled list (`existingFor`), and that list is still mostly the old
+       profile's: restamping `null` would take the make-public dialog's
+       warning down over it. */
+    profileHash: opts.existing
+      ? (opts.existing.profileHash ?? null)
+      : runProfileHash(opts.profile ?? null),
     entries: inDocumentOrder(located, opts.blocks),
     passes: (opts.existing?.passes ?? 0) + 1,
     generatedAt: new Date().toISOString(),

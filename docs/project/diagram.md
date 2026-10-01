@@ -1555,7 +1555,8 @@ recorded as "real work and not slice 1a's", and it turned out to be a prop:
 
 `article_revisions.sketch` crosses as `PublicSketch` — `title`, `caption`, `scenes`, and none of
 `version`, `generator`, `slug`, `sourceHash` or **`profileHash`**, that last being *who the picture
-was drawn for* and so a fact about a person rather than about the article.
+was drawn for* and so a fact about a person rather than about the article. Since 2026-10-01 a new
+Sketch is drawn for no profile at all, because a visitor can see it — [reader-profile.md § Only the personal steps get it](reader-profile.md#only-the-personal-steps-get-it).
 
 **`useSketch` is mounted in exactly one place**, `OwnerSketch`, and that is the boundary rather than
 a tidy-up: the hook carries the auto-runner, so **mounting it is the decision to spend**.

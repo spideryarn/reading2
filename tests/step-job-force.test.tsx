@@ -207,28 +207,13 @@ describe("ideas", () => {
 });
 
 /**
- * **Find more is the one run that may still ask for a plain artefact**, and it
- * asks only when the list it continues was plain: an append across a profile
- * difference would rewrite the glossary (src/glossary.ts § existingFor) or
- * stamp quotes falsely (src/quotes.ts § existingFor). The panels' half — that
- * Find more passes the list's own `profiled` — is
- * tests/glossary-find-more-keeps-the-lists-profile.test.tsx and
- * tests/quotes-find-more-panel.test.tsx.
+ * **Find more sends no profile setting either** — plan 261001m. Until then it
+ * was the one run that could ask for a plain artefact, passing the list's own
+ * `profiled`; the glossary and quotes are shared steps now and the server
+ * never profiles them, so the flag went from the browser.
  */
 describe("`useProfile` on the wire", () => {
-  it("is sent as false only when Find more is asked for a plain list", async () => {
-    await act(async () => {
-      await glossary?.more(false);
-    });
-    expect(only().useProfile).toBe(false);
-    posted.length = 0;
-    await act(async () => {
-      await quotes?.regenerate(false);
-    });
-    expect(only().useProfile).toBe(false);
-  });
-
-  it("is absent — meaning yes — everywhere else", async () => {
+  it("is absent from Find more on the glossary and the quotes, and from the first run", async () => {
     await act(async () => {
       await glossary?.more();
     });

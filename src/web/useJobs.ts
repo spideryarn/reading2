@@ -141,15 +141,8 @@ export interface UseJobs {
     slug: string;
     steps: StepName[];
     force?: StepName[];
-    /**
-     * Whether this run should use the reader's profile. Absent means yes.
-     *
-     * A boolean, never the text: the server resolves who the reader is from its
-     * own store, and a client that could supply the string could put arbitrary
-     * prose into a prompt that writes an artefact. src/routes.ts §
-     * parseJobRequest.
-     */
-    useProfile?: boolean;
+    /* No `useProfile`: nothing in the browser sends it since plan 261001m
+       (useStepJob.ts § StepRun). The route still accepts it. */
   }): Promise<Job | null>;
   /**
    * **Start an article again** — `POST /api/article/:slug/reset`, the import

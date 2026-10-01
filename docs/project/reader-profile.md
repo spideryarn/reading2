@@ -114,6 +114,24 @@ lose, because both halves of the move compile and nothing anywhere goes red.
 A `jobs.guidance` column and a `guidance` inside older stored summaries both survive, unread.
 Dropping the column is a migration against real readers' work, which is Greg's call every time.
 
+## Only the personal steps get it
+
+**Since 2026-10-01, anything a visitor to a public article can read is written for nobody in
+particular.** A glossary pitched at its owner shows a stranger what the owner said about themselves.
+So the pipeline hands the profile only to the steps in `PERSONAL_STEPS`
+([`src/profile.ts`](../../src/profile.ts)): `quiz`; `simple` and `trajectory`, which stay profiled
+until Greg decides whether they become shared; and `illustrated`, for its *wrong-profile* check alone.
+Tweets, glossary, quotes, ideas, sketch and every other step get no profile, write `profileHash:
+null`, and send no `WHO IS READING` section. The per-reader layer goes **on top** of the shared
+artefact instead, starting with the glossary —
+[261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md), stage 2.
+
+Two places enforce it: the job runner builds `StepContext` with `profile` only for a personal step
+(`stepContextFor` in [`src/jobs.ts`](../../src/jobs.ts)), and the jobs route resolves a profile only
+for a job that contains one, so a profile edit does not defeat dedup on a glossary job.
+`tests/step-context-profile.test.ts` walks every step. Artefacts written before this keep their
+stamp, and the make-public dialog goes on naming them until they are written again.
+
 ## Where it goes in the prompt
 
 **After the breakpoint, in the last user part, everywhere.** The obvious alternative — the system
@@ -125,8 +143,8 @@ article never changes. [prompt-caching.md](prompt-caching.md) records the same m
 |---|---|---|
 | `explain` | user part 1, breakpoint on it | user part 2, with the quote |
 | `converse` | user message 2, breakpoint on it | the final user message, with the question |
-| `glossary` | `system[0]`, breakpoint on it | the user message |
-| `tweets` | `system[0]`, breakpoint on it | the user message |
+| `glossary` | `system[0]`, breakpoint on it | nowhere since 261001m (the slot is still in the prompt) |
+| `tweets` | `system[0]`, breakpoint on it | nowhere since 261001m (the slot is still in the prompt) |
 | `quiz` | `system[0]`, breakpoint on it | the user message, after the skeleton |
 | `summarise` | the user prompt — not cached, on purpose | near the top, with the other framing |
 
@@ -164,7 +182,8 @@ not more prompt.
 
 `PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to all seven profiled system prompts —
 explain, converse (twice), glossary, sketch, summarise, ideas and tweets —
-**whether or not the reader has a profile**. Two reasons, and the second decided it: `SYSTEM` sits
+**whether or not the reader has a profile** — and since 261001m glossary, sketch, ideas and tweets
+always have none (§ [Only the personal steps get it](#only-the-personal-steps-get-it)). Two reasons, and the second decided it: `SYSTEM` sits
 ahead of the article in explain and converse, so a varying one would split the cache in two and
 re-write the whole article whenever the reader toggled; and a rule that only appears alongside the
 thing it constrains is a rule somebody will one day interpolate the profile *into*. So every clause
@@ -190,6 +209,12 @@ personal.
 
 It is also why `profileHash` is not bookkeeping: a difficulty score written for last month's profile
 is **wrong**, not merely old.
+
+**And it is why the glossary went first when that stopped** (261001m). A glossary is public with its
+article, so since 2026-10-01 it is written for a general reader, and the per-reader part — a few
+terms marked *for you*, with a line each on why — is coming as a separate, owner-only layer on top
+of it: [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md),
+stage 2.
 
 ## Provenance: what was this written with, and is it still true
 
@@ -270,12 +295,14 @@ measured the loaded case. The full reasoning is in
 would have left top-up untouched: new profiled terms appended to old unprofiled ones, and the whole
 list then stamped with the new hash. A lie about provenance, written by us, into a file.
 
-So `existingFor` takes the incoming profile hash and refuses on any difference, which sends the run
-down the rewrite path where `idsByTerm` keeps the reader's `?term=` links alive. Note it is
-**stricter than `profileIsStale`**: there, `null` never counts, because a reader should not be
-nagged. Here any difference counts, because the question is not "should we warn them" but "may these
-two lists be merged" — and entries written for a physicist may not be merged with entries written for
-nobody in particular.
+So `existingFor` takes the incoming profile hash and refuses a profiled run onto a list it was not
+written for, which sends the run down the rewrite path where `idsByTerm` keeps the reader's `?term=`
+links alive.
+
+**Since 261001m an unprofiled run appends to anything**, because a glossary run never carries a
+profile now: refusing a legacy profiled list would turn *Find more* into a rewrite. The list keeps
+its old stamp, the rule quotes already used — most of it is still that profile's, and the make-public
+dialog must go on saying so.
 
 ### One profile per job, frozen at the start
 
@@ -286,6 +313,8 @@ otherwise get one artefact written from two profiles and stamped with whichever 
 
 It is also part of `sameWork` in [`src/jobs.ts`](../../src/jobs.ts). Unticking the box and pressing
 the button again is a request for a *different artefact*, not a retry of the one already running.
+Which is why the route resolves a profile only for a job with a personal step in it: on a shared job
+it would change nothing the step sees, and still split the dedup.
 
 Chat and explain resolve it **per turn** instead, and the difference is deliberate: a turn is one
 call, so there is no window in which half an answer could be written to each.
@@ -296,11 +325,11 @@ The API takes `useProfile: boolean`, never the profile text. Absent means **yes*
 offered. A client that could supply the text would be a way to spend tokens on a string of its
 choosing and a way to put arbitrary text into a prompt that writes an artefact.
 
-**Since 2026-09-13 the client sends `false` in exactly two places**, neither of them a control:
-*Find more* on a plain glossary or quotes list, continuing it in its own recorded setting
-(§ [No control, one label](#no-control-one-label)); and `CandidatesPanel`, whose list of articles to
-read next must not be pitched at the reader. Every other request sends nothing. The API still takes
-`false` from anyone, because both of those need it and jobs' `sameWork` keys on it.
+**Since 261001m the client sends `false` in one place**, and it is not a control: `CandidatesPanel`,
+whose list of articles to read next must not be pitched at the reader. *Find more* on the glossary
+and quotes used to send the list's own setting; they are shared steps now, so it went. Every other
+request sends nothing. The API still takes `false` from anyone, because the personal steps and jobs'
+`sameWork` can still use it.
 
 Note this is the mirror of `deep` on explain, and the asymmetry is on purpose: deep search is an
 extra you ask for, so absent means no; the profile is the default this app now writes with.
@@ -313,7 +342,8 @@ extra you ask for, so absent means no; the profile is the default this app now w
 >
 > — Greg, 2026-09-12, from an iPad, reading an article in summary mode
 
-**Every new run uses the profile, and nothing in a reading view offers to change that.** The one
+**Every new run of a personal step uses the profile, and nothing in a reading view offers to change
+that** (the shared steps never do — § [Only the personal steps get it](#only-the-personal-steps-get-it)). The one
 thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
 ([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
 below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
@@ -330,23 +360,17 @@ is a real loss of control, and it is the one Greg asked for.
   └────────────────────────────────────────────────────────────┘     the spend
 ```
 
-### Find more continues the list in its own setting
+### Find more continues the list, and keeps its stamp
 
-**The one exception is Find more**, on the glossary and on the quotes, and it is not a control
-either: it passes the list's own recorded setting (`profiled`, from `profileHash != null`), so a
-plain list is topped up plainly and a profiled one for the profile. Always sending the profile would
-have been simpler and wrong, for a different reason on each stage (GPT Sol's review of
-[260913a](../plans/260913a-drop-the-use-your-profile-checkbox.md)):
+From 2026-09-13 until 261001m, *Find more* on the glossary and the quotes passed the list's own
+recorded setting (`profiled`), so a plain list was topped up plainly — always sending the profile
+would have rewritten a plain glossary (`existingFor` refused) or put profiled quotes under a plain
+stamp (GPT Sol's review of [260913a](../plans/260913a-drop-the-use-your-profile-checkbox.md)).
 
-- **Glossary** — `existingFor` refuses to append across a profile difference, so a profiled Find
-  more on a plain list would **rewrite** it, dropping every term the model did not return again,
-  under a button that says "more".
-- **Quotes** — an append keeps the stamp of the pass that started the list
-  ([quotes.md § Find more appends](quotes.md)), so a profiled pass onto a plain list would sit under
-  a stamp saying it was not profiled.
-
-*Find them again*, *Choose them again*, *Write it again* and every first run write a list of their
-own, and those always use the profile.
+Both are shared steps now and never see a profile, so the flag is gone. Find more on a legacy
+profiled list appends unprofiled terms or quotes and keeps the list's old stamp, which the label and
+the make-public dialog go on reading. *Find them again*, *Choose them again* and every first run of
+a shared step are written for a general reader.
 
 ### What was here before, and why it went
 

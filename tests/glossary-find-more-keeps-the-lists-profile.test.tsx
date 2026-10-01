@@ -1,22 +1,18 @@
 // @vitest-environment jsdom
 /**
- * **The glossary's Find more continues the list in the setting it was written
- * with — not in whatever the current profile is.**
+ * **The glossary's Find more asks nothing about the profile.**
  *
- * Until 2026-09-13 the foot carried a *Use your profile* checkbox seeded from
- * the list on screen, so a plain list was topped up plainly unless the reader
- * ticked it. When the checkbox went (Greg, 2026-09-12: *"Just always have it
- * as on"*) the obvious simplification — always send the profile — would have
- * broken this: `existingFor` refuses to append across a profile difference
- * (src/glossary.ts), so Find more on a plain list would **rewrite** it,
- * dropping every term the model did not happen to return again, under a
- * button that says "more". GPT Sol's review of
- * docs/plans/260913a-drop-the-use-your-profile-checkbox.md, F2.
+ * From 2026-09-13 until plan 261001m the foot handed `more` the list's own
+ * `profiled`, because `existingFor` refused to append across a profile
+ * difference and an always-profiled Find more would have *rewritten* a plain
+ * list under a button that says "more" (GPT Sol's review of
+ * docs/plans/260913a-drop-the-use-your-profile-checkbox.md, F2).
  *
- * So the foot hands `more` the list's own `profiled`, and this pins both
- * directions. The first was watched fail against the always-profile version.
- * The stage's half — that `more(false)` reaches the request as
- * `useProfile: false` — is tests/step-job-force.test.tsx.
+ * Since 261001m the glossary is a shared step: the server never hands it a
+ * profile, and an unprofiled run appends to a legacy profiled list under that
+ * list's own stamp (src/glossary.ts § existingFor, tests/glossary.test.ts). So
+ * the flag is dead, and the name of this file now means only that: the list
+ * keeps its stamp, and the press carries no setting.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -141,18 +137,13 @@ afterEach(() => {
 });
 
 describe("Find more in the glossary's foot", () => {
-  it("tops a plain list up plainly", async () => {
-    const more = vi.fn(async () => {});
-    await mount(owner(glossary(null), { more }));
-    await pressFindMore();
-    expect(more.mock.calls).toEqual([[false]]);
-  });
-
-  it("tops a list written for the profile up for the profile", async () => {
-    const more = vi.fn(async () => {});
-    await mount(owner(glossary("the-profile"), { more }));
-    await pressFindMore();
-    expect(more.mock.calls).toEqual([[true]]);
+  it("tops a list up, plain or profiled, without a profile setting", async () => {
+    for (const hash of [null, "the-profile"]) {
+      const more = vi.fn(async () => {});
+      await mount(owner(glossary(hash), { more }));
+      await pressFindMore();
+      expect(more.mock.calls).toEqual([[]]);
+    }
   });
 
   it("offers no profile control of any kind beside it", async () => {

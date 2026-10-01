@@ -3271,14 +3271,9 @@ const rawPgArticleReader: ArticleReader = {
       highPowerSince: found.article.highPowerSince?.toISOString() ?? null,
       /* **The run's own verdict, from the run's own inputs** — plan 261001i § 3.
          `articleHash` is the `articleFingerprint` the glossary stamps (its
-         `isCurrent` arm above reads the same), and the profile is
-         `renderProfile` over the same two boxes `resolveProfile` joins for
-         Metadata's press in src/routes.ts. No query: all three are in hand. */
-      glossaryRun: glossaryRunKind(
-        revision.glossary as Glossary | null,
-        articleHash,
-        renderProfile({ profile, purpose: shelfFrom(found.article).purpose ?? null }),
-      ),
+         `isCurrent` arm above reads the same), and there is no profile: a
+         glossary job never carries one (plan 261001m). No query. */
+      glossaryRun: glossaryRunKind(revision.glossary as Glossary | null, articleHash),
 
       /* **Free, and that is why all three are here rather than behind a second
          endpoint.** `currentRevisionQuery` selects `articles` whole — the row

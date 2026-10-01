@@ -443,24 +443,20 @@ export interface UseGlossary {
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
   /**
-   * Write the list — always for the reader's profile, if they have one. The
-   * *Use your profile* checkbox that could ask for a plain list was removed on
-   * 2026-09-13 (docs/plans/260913a-drop-the-use-your-profile-checkbox.md). The
-   * artefact still records what it was run with: `profileHash`, src/profile.ts.
+   * Write the list — for a general reader, never the reader's profile: the
+   * glossary is shared with anyone the article is public to (plan 261001m,
+   * src/profile.ts § PERSONAL_STEPS). An older list may still carry a
+   * `profileHash` from before that.
    */
   find(): Promise<void>;
   /**
-   * Top the list up — the forced run, which **appends** to a list written with
-   * the same source, prompt and profile (src/glossary.ts § existingFor).
-   *
-   * @param useProfile defaults to true. **Find more passes the list's own
-   *   `profiled`**, so a plain list is topped up plainly. Asked with the
-   *   profile instead, `existingFor` would refuse the append and the run would
-   *   *rewrite* the list — dropping every term the model did not happen to
-   *   return again — under a button that says "more". GPT Sol's review of
-   *   260913a.
+   * Top the list up — the forced run, which **appends** to a list written from
+   * the same source by the same prompt (src/glossary.ts § existingFor),
+   * including a legacy profiled one, which keeps its stamp. Until plan 261001m
+   * this passed the list's own `profiled` so as not to rewrite across a profile
+   * difference; the server no longer profiles the glossary, so it is gone.
    */
-  more(useProfile?: boolean): Promise<void>;
+  more(): Promise<void>;
   cancel(id: string): void;
   /** Check one term on the web. Resolves when the answer is in `glossary`. */
   look(id: string): Promise<void>;
@@ -567,10 +563,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      src/web/useOrderedRead.ts and all eight now pass `refresh` here. */
   const queue = useStepJob(slug, "glossary", refresh, "watches-queue");
 
-  const run = useCallback(
-    (force: boolean, useProfile = true) => queue.start({ force, useProfile }),
-    [queue],
-  );
+  const run = useCallback((force: boolean) => queue.start({ force }), [queue]);
 
   /**
    * `find` is already the unforced verb, so it is already `ensure`.
@@ -583,7 +576,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * this button does, without anything having to be changed to make it true.
    */
   const find = useCallback(() => run(false), [run]);
-  const more = useCallback((useProfile = true) => run(true, useProfile), [run]);
+  const more = useCallback(() => run(true), [run]);
 
   /* `reload` rather than `refresh`: the way out of a failed read is to read
      again, and `reload` joins a request already in flight rather than making a

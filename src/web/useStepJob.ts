@@ -113,19 +113,10 @@ interface StepRun<S extends StepName> {
    * `tweets` being last in `STEP_ORDER` rather than a rule.)
    */
   force?: boolean;
-  /**
-   * Whether this run uses the reader's profile. Defaults to yes.
-   *
-   * Sent **only when it is `false`**, so the ordinary request is the same bytes
-   * it has always been and absent goes on meaning yes — the server reads it the
-   * same way, src/routes.ts § `parseJobRequest`.
-   *
-   * **Only Find more sets it now**, passing the list's own recorded setting so
-   * a top-up is asked the way the list was written (useGlossary.ts § `more`,
-   * useQuotes.ts § `regenerate`). The *Use your profile* checkbox that set it
-   * everywhere else went on 2026-09-13.
-   */
-  useProfile?: boolean;
+  /* **No `useProfile` here since plan 261001m.** Only Find more on the
+     glossary and quotes ever set it, to top a list up the way it was written;
+     those are shared steps now and the server never profiles them. The route
+     still accepts the field (src/routes.ts § `parseJobRequest`). */
   /**
    * **Steps this one needs run first, in the same job.**
    *
@@ -552,7 +543,7 @@ export function useStepJob<S extends StepName>(
   }, [queue.jobs, watchedId]);
 
   const start = useCallback(
-    async ({ force = false, useProfile = true, precededBy }: StepRun<S> = {}) => {
+    async ({ force = false, precededBy }: StepRun<S> = {}) => {
       setWatchedId(null);
       /* Before the `await`, so the button is gone for the whole of the round
          trip rather than from whenever it comes back. */
@@ -568,7 +559,6 @@ export function useStepJob<S extends StepName>(
         /* The step named, never a positional force — see `force` on `StepRun`
            for both halves of why. */
         ...(force ? { force: [step] } : {}),
-        ...(useProfile ? {} : { useProfile: false }),
       });
       /* **The reason is taken here, and kept.** See `failed` below: the two
          obvious places to read it from are both wrong, and this is the one

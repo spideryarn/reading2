@@ -570,8 +570,9 @@ result that is already there — and, on a stale one, *Choose them again* (§ Fi
 appends).
 [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
-An automatic run uses the reader's profile, as does *Choose them again*; only **Find more** asks in
-the list's own recorded setting (§ Find more appends, below). The *Use your profile* checkbox, and
+Since 2026-10-01 no quotes run uses the reader's profile — quotes are public with their article —
+[reader-profile.md § Only the personal steps get it](reader-profile.md#only-the-personal-steps-get-it). Before that an automatic run and *Choose them again* used it, and only **Find more** asked
+in the list's own recorded setting. The *Use your profile* checkbox, and
 the *Using your profile* sentence an automatic run showed in its place, were removed on 2026-09-13
 ([reader-profile.md § No control, one label](reader-profile.md#no-control-one-label)).
 
@@ -622,8 +623,10 @@ while a Find more is queued turns it into a rewrite, which is the exposure a sta
 had (an article re-extracted between click and run). Closing it needs the verb in the request —
 260924d § GPT Sol's plan review, F1.
 
-**A different profile does not refuse, made honest at the stamp rather than by refusing.** Find more
-sends the list's own profile setting and the artefact keeps the `profileHash` of the pass that
+**A different profile does not refuse, made honest at the stamp rather than by refusing.** (Since
+[261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md) Find more sends no profile setting and every run is unprofiled; a legacy profiled list
+is appended to under its old stamp, which is the case below.) Find more sent the list's own profile
+setting and the artefact keeps the `profileHash` of the pass that
 started it, so the only way two profiles' choices meet in one list is a reader who changed or
 deleted theirs since — the one state where the badge already says the list was written for a
 profile that is not theirs now, and the kept stamp keeps it saying so. **Deletion counts as a change

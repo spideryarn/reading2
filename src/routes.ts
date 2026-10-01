@@ -379,8 +379,8 @@ import { authoredSentence, sayToReader } from "./reader-sentence.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
-import { isStepName, type StepName } from "./pipeline.js";
-import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
+import { hashProfile, isPersonalStep, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { routeProfileIsStale } from "./trajectory.js";
 import {
   type ArticleStage,
@@ -9361,9 +9361,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          correctly. GPT Sol's review of the built code, 2026-08-26.
 
          `=== false`, so absent means yes: a client that has never heard of this
-         field gets the profiled run, which is the default the panel offers. */
+         field gets the profiled run, which is the default the panel offers.
+
+         **And only when the job has a personal step in it** (`PERSONAL_STEPS`,
+         src/profile.ts). The runner hands a shared step no profile anyway, but
+         one on the row is in the work key, so every profile edit would defeat
+         dedup on a glossary job it cannot change — and the row would carry
+         private text for nothing. Absent `steps` is `DEFAULT_INGEST_STEPS`,
+         as `enqueue` reads it. Plan 261001m, GPT Sol's finding 7. */
+      const personal = (request.steps ?? DEFAULT_INGEST_STEPS).some(isPersonalStep);
       const profile =
-        request.url !== undefined || request.useProfile === false
+        request.url !== undefined || request.useProfile === false || !personal
           ? null
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;

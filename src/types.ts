@@ -2478,8 +2478,8 @@ export interface ArticleMetadata {
    * finds** — `glossaryRunKind` in src/glossary.ts, which is `existingFor` read
    * for a person: `append` (a *Find more terms*), `rewrite` (a new list in
    * place of this one), `first` (there is none), or `null` when the server
-   * cannot tell. Judged against the reader's current profile, because that is
-   * what Metadata's press sends.
+   * cannot tell. Judged with no profile, because a glossary job never carries
+   * one (plan 261001m).
    * docs/plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md § 3.
    *
    * Optional for the same reason `sharing` is: a fabricated body in a test, or

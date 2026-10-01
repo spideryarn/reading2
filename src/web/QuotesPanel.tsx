@@ -643,15 +643,8 @@ export function QuotesPanel({
    * 2026-09-10: *"Remove the "Choose them again" button, and add a "Find more"
    * button"*.
    *
-   * **In the list's own recorded setting, not the current profile**, unlike
-   * `rerun`, which always uses the profile: Find more continues the list the
-   * reader has rather than choosing it for somebody else, and an append keeps
-   * the stamp of the pass that started the list (src/quotes.ts §
-   * existingFor), so a profiled pass onto a plain list would sit under a stamp
-   * that says it was not. That held when there was a *Use your profile*
-   * checkbox beside `rerun`, and it still holds now that there is not
-   * (docs/plans/260913a-drop-the-use-your-profile-checkbox.md, GPT Sol's
-   * review).
+   * No profile setting: quotes are a shared step and the server never
+   * profiles them (plan 261001m). It used to pass the list's own `profiled`.
    */
   const findMore = (
     <div className="quotes-run">
@@ -660,7 +653,7 @@ export function QuotesPanel({
         starting={owner?.starting ?? false}
         failed={owner?.failed ?? null}
         stalled={owner?.stalled ?? false}
-        onRun={() => owner?.regenerate(owner.profiled) ?? Promise.resolve()}
+        onRun={() => owner?.regenerate() ?? Promise.resolve()}
         onCancel={(id) => owner?.cancel(id)}
         label="Find more"
         runningLabel="Finding more…"

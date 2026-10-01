@@ -123,3 +123,23 @@ describe("POST /api/jobs for a quiz", () => {
     expect(await profileOfJob(String(reply.body.id))).toBeNull();
   });
 });
+
+/* **A shared step's job carries no profile at all** — plan 261001m, GPT Sol's
+   finding 7. The runner would strip it anyway (src/jobs.ts §
+   `stepContextFor`), but a profile on the row is still in the work key, so
+   every edit to the profile would defeat dedup on a job it cannot change, and
+   the row would hold private text for nothing. The quiz cases above are the
+   control: the same article, the same purpose, and there it does arrive. */
+describe("POST /api/jobs for a shared step", () => {
+  it("attaches no profile to a glossary-only job", async () => {
+    const reply = await post("/api/jobs", { slug: SLUG, steps: ["glossary"], force: ["glossary"] });
+    expect(reply.status).toBe(202);
+    expect(await profileOfJob(String(reply.body.id))).toBeNull();
+  });
+
+  it("attaches it when a personal step rides in the same job", async () => {
+    const reply = await post("/api/jobs", { slug: SLUG, steps: ["glossary", "quiz"], force: ["quiz"] });
+    expect(reply.status).toBe(202);
+    expect(await profileOfJob(String(reply.body.id))).toContain(PURPOSE);
+  });
+});

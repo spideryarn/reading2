@@ -33,32 +33,26 @@ const list = (over: Partial<Glossary> = {}): Glossary => ({
 
 describe("glossaryRunKind", () => {
   it("is first when there is no list", () => {
-    expect(glossaryRunKind(null, SOURCE, null)).toBe("first");
+    expect(glossaryRunKind(null, SOURCE)).toBe("first");
   });
 
-  it("is append for a list of this source, this prompt and this profile", () => {
-    expect(glossaryRunKind(list(), SOURCE, null)).toBe("append");
-    expect(glossaryRunKind(list({ profileHash: hashProfile(PROFILE) }), SOURCE, PROFILE)).toBe(
-      "append",
-    );
+  it("is append for a list of this source and this prompt", () => {
+    expect(glossaryRunKind(list(), SOURCE)).toBe("append");
     /* Written before the field existed: the same as written without one. */
     const { profileHash: _gone, ...old } = list();
-    expect(glossaryRunKind(old, SOURCE, null)).toBe("append");
+    expect(glossaryRunKind(old, SOURCE)).toBe("append");
+    /* A legacy profiled list too: the run carries no profile since plan
+       261001m, and an unprofiled run appends to it under its old stamp. */
+    expect(glossaryRunKind(list({ profileHash: hashProfile(PROFILE) }), SOURCE)).toBe("append");
   });
 
-  it("is rewrite when the article, the prompt or the profile has moved", () => {
-    expect(glossaryRunKind(list(), "another-source", null)).toBe("rewrite");
-    expect(glossaryRunKind(list({ version: "glossary/1" }), SOURCE, null)).toBe("rewrite");
-    /* A plain list, and the reader has written a profile since. */
-    expect(glossaryRunKind(list(), SOURCE, PROFILE)).toBe("rewrite");
-    /* A profiled list, and the reader has emptied the box since. */
-    expect(glossaryRunKind(list({ profileHash: hashProfile(PROFILE) }), SOURCE, null)).toBe(
-      "rewrite",
-    );
+  it("is rewrite when the article or the prompt has moved", () => {
+    expect(glossaryRunKind(list(), "another-source")).toBe("rewrite");
+    expect(glossaryRunKind(list({ version: "glossary/1" }), SOURCE)).toBe("rewrite");
   });
 
   it("cannot tell without a source fingerprint, unless there is no list at all", () => {
-    expect(glossaryRunKind(list(), null, null)).toBeNull();
-    expect(glossaryRunKind(null, null, null)).toBe("first");
+    expect(glossaryRunKind(list(), null)).toBeNull();
+    expect(glossaryRunKind(null, null)).toBe("first");
   });
 });
