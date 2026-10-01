@@ -7,6 +7,8 @@
 import { readFileSync } from "node:fs";
 import { Client } from "pg";
 
+import { sslDecisionFor } from "../src/db/ssl.js";
+
 const [, , file, secondsRaw] = process.argv;
 if (!file) throw new Error("usage: spike-hold-singleton.ts <file-with-url> <seconds>");
 const seconds = Number(secondsRaw ?? 30);
@@ -14,7 +16,7 @@ const seconds = Number(secondsRaw ?? 30);
 const url = readFileSync(file, "utf8").trim();
 const name = new URL(url).pathname.slice(1);
 
-const client = new Client({ connectionString: url });
+const client = new Client({ connectionString: url, ssl: sslDecisionFor(url).ssl });
 await client.connect();
 await client.query("begin");
 await client.query("select 1 from spideryarn.queue_state where id = 1 for update");

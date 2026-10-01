@@ -14,6 +14,7 @@
  */
 import { Client } from "pg";
 
+import { sslDecisionFor } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 import { expectClaimed } from "../tests/helpers/expect-claimed.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
@@ -31,7 +32,7 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL unset");
   console.log(`target: ${url.replace(/:[^:@]*@/, ":***@")}`);
 
-  const holder = new Client({ connectionString: url });
+  const holder = new Client({ connectionString: url, ssl: sslDecisionFor(url).ssl });
   await holder.connect();
   await holder.query("begin");
   await holder.query("select 1 from spideryarn.queue_state where id = 1 for update");

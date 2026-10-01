@@ -58,7 +58,6 @@ console.log(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a pa
 console.log(`Window: the last ${days} day(s)`);
 
 const ssl = sslDecisionFor(url);
-if (ssl.mode === "encrypted-unverified") console.warn(`⚠ ${ssl.why}`);
 const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl, application_name: "spideryarn simple-check-report (read-only)" });
 const db = drizzle(pool);
 

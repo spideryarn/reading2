@@ -118,6 +118,7 @@ import {
 } from "./mic-devices.js";
 import { type MicRecording, type MicTape, type TapeEvents, extFor, recordTrack } from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
+import { useQuietChime } from "./quiet-chime.js";
 
 /**
  * The tape lost audio part-way — one of its recorders failed, never finished,
@@ -365,6 +366,26 @@ export interface UseDictation {
    * Does nothing when {@link canRetry} is false.
    */
   retry(): void;
+  /**
+   * **Which thing the line under the box is about**, as a number that moves
+   * whenever something new could appear there: a new dictation, a Retry, a
+   * recovered recording, a discard. Read it at the moment that matters and
+   * hand it back to {@link dismiss}.
+   */
+  artifact(): number;
+  /**
+   * Clear the error and everything kept from the last dictation — the audio,
+   * the Retry offer, the device copy — **if it is still the artifact `seen`
+   * and nothing is running**. Otherwise nothing.
+   *
+   * For a box whose draft is finished: the Feedback dialog calls it when a
+   * report is filed, because it is mounted for the life of the page and a
+   * `[mic-silent]` otherwise greeted every later opening (SPIDERYARN-READING2-7Z).
+   * The `seen` check is because a send can land after the reader has started
+   * something newer, which is theirs and not the report's. GPT Sol's plan
+   * review, F1; plan 261001k.
+   */
+  dismiss(seen: number): void;
 }
 
 /**
@@ -615,6 +636,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(() => rememberedDevice());
   const [recording, setRecording] = useState<DictationRecording | null>(null);
+  /** See {@link UseDictation.artifact}. A ref: it is read in a click, never rendered. */
+  const artifactSeq = useRef(0);
+  /** `phase` as of the last render, for `dismiss`, which is called from outside a render. */
+  const phaseNow = useRef(phase);
+  phaseNow.current = phase;
   /**
    * The recording behind `recording` **and where it was going**, held for a
    * retry.
@@ -659,6 +685,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const mounted = useRef(true);
 
   const measured = useAudioLevel(track, ctx);
+  /* The chime that goes with the strip's quiet warning, through the same
+     context the meter reads from — the one the press created inside its
+     gesture. `startedAt` is the dictation it belongs to. Plan 261001k. */
+  useQuietChime(measured.quiet, startedAt, ctx);
   const detectedLevel = useRef(0);
   /* One or the other, never a blend. `measured.measuring` only goes true once
      samples are genuinely flowing from a running context, so the fallback is
@@ -1434,6 +1464,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     retryable.current = null;
     setCanRetry(false);
     retryGeneration.current++;
+    artifactSeq.current++;
     /* Its device copy is released rather than forgotten: moving on is not the
        same as throwing it away, so it comes back the next time this box is. */
     holdKept(null);
@@ -1622,8 +1653,33 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     retryable.current = null;
     setCanRetry(false);
     forgetHeld();
+    artifactSeq.current++;
+    /* **And the sentence that pointed at it.** Every error that sits beside a
+       recording is about that recording — silent, failed, broken, recovered —
+       so *"the audio is below"* over no audio is a sentence about nothing.
+       Plan 261001k. */
+    setError(null);
     setPhase("idle");
   }, [forgetHeld]);
+
+  const artifact = useCallback(() => artifactSeq.current, []);
+
+  const dismiss = useCallback(
+    (seen: number) => {
+      if (seen !== artifactSeq.current) return;
+      /* A live microphone, a transcript on its way, or a retry in flight is not
+         "the last dictation" — and `clearRecording` would drop it to `idle`.
+         `phaseNow` is render state: immediately after `start()` or `retry()` it
+         can still say `idle`. The refs are written synchronously, so they close
+         that render gap; `phaseNow` covers the transcript-draining interval,
+         whose session has already been removed. Each operation also moved
+         `artifactSeq`, so this is the second lock on the door rather than the
+         first. */
+      if (session.current || retryUpload.current || phaseNow.current !== "idle") return;
+      clearRecording();
+    },
+    [clearRecording],
+  );
 
   /**
    * Send the kept recording up again.
@@ -1655,6 +1711,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        which would drop a *live* dictation back to `idle` from underneath a
        reader who had started one. Same reason `newest` exists for sessions. */
     const mine = ++retryGeneration.current;
+    artifactSeq.current++;
     /* Aborted by the unmount effect below. The `mounted` guard already stops a
        gone component writing state; this stops the *request* — and the paid
        model call behind it — outliving the page. GPT Sol's code review, R3. */
@@ -1679,6 +1736,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          that is genuinely open, and `transcribed.current?.()` would splice a
          stale transcript into the middle of a live dictation's span. */
       if (!mounted.current || retryGeneration.current !== mine || session.current) return;
+      retryUpload.current = null;
       setPhase("idle");
       if (results.some((r) => !r.ok && "abandoned" in r)) return;
       /* What came back this time is kept for the next go, whatever happens to
@@ -1769,6 +1827,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
             })),
           };
           holdKept(found.tape);
+          /* Something new on the strip, so a send that did not see it cannot
+             dismiss it. GPT Sol's plan review, F5. */
+          artifactSeq.current++;
           setRecording(recorded);
           setError(found.complete ? RECOVERED : RECOVERED_CUT);
           if (!found.broken) {
@@ -1854,6 +1915,8 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     clearRecording,
     canRetry,
     retry,
+    artifact,
+    dismiss,
   };
 }
 

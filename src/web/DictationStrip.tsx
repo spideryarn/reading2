@@ -301,9 +301,17 @@ export function DictationStrip({
       </p>
 
       {busy && (
-        <p className="prof-listening">
+        /* **`quiet` looks like a warning**, because the faint grey it used to
+           share with "Listening" was not something anybody noticed. The words
+           stay an observation rather than a diagnosis — `audio-level.ts` says
+           why — and the warm colour is `.prof-mic-warn`'s: a fact worth
+           knowing, not a failure. Greg, SPIDERYARN-READING2-7Z; plan 261001k. */
+        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}`}>
           {dictation.armed && (
             <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
+          )}
+          {dictation.quiet && (
+            <TriangleAlert size={13} className="prof-quiet-icon" aria-hidden="true" />
           )}
           {dictation.transcribing && <Loader2 size={13} className="spin" aria-hidden="true" />}
           {/* The live region above is already saying this. */}

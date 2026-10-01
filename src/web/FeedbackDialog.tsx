@@ -640,6 +640,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
    * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
   const dictationBusy = dictate.dictation.armed || dictate.readOnly;
+  /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
+  const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
 
   /**
    * **What the reader can see of the screen, while this is on it.**
@@ -780,6 +782,9 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
      * the durable id above.
      */
     const mine = reportId;
+    /* What the line under the box is about *now*, so a filed report clears that
+       and not something the reader started while it was away. Plan 261001k. */
+    const dictated = dictationArtifact();
     const attempt = ++attempts.current;
     const openingAtSend = opening.current;
     const stillMine = () => mine === reportIdRef.current && attempt === attempts.current;
@@ -851,7 +856,15 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
          was away. Its success still files that report, advances its id and keeps
          any newer words, but it must not close the opening they are using now. */
       closeOpening(openingAtSend);
-      discard(bodyRef.current !== body);
+      const finished = bodyRef.current === body;
+      discard(!finished);
+      /* **The dictation's message goes with the report it was about.** This
+         dialog is mounted for the life of the page, and so is its dictation, so
+         a `[mic-silent]` from a dictation that caught nothing used to greet every
+         later opening — after the report had been sent by typing. Greg,
+         SPIDERYARN-READING2-7Z. Only when the draft is finished: words added
+         after Send are a new draft, and what the strip says belongs to it. */
+      if (finished) dismissDictation(dictated);
       toastCount.current += 1;
       setToast({ id: toastCount.current, text: THANKS[kind ?? "none"] });
     } catch {
@@ -873,6 +886,8 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
     where,
     shot,
     dictationBusy,
+    dictationArtifact,
+    dismissDictation,
     showSendFailure,
     closeOpening,
     discard,

@@ -61,6 +61,8 @@ vi.mock("../src/web/useDictationField.js", () => ({
         clearRecording: () => {},
         canRetry: false,
         retry: () => {},
+        artifact: () => 0,
+        dismiss: () => {},
       },
     };
   },

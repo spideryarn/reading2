@@ -1492,7 +1492,84 @@ describe("the notes beside a band", () => {
     await atWidth(800, "?mode=glossary&margin=1");
     expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
     expect(notes()).toBe(0);
-    expect(line()).toContain("panel closed");
+    expect(line()).toContain("swap them in for the panel");
+  }, PHASE_MS);
+
+  /* Greg, 7P: *"whichever has been activated most recently trumps/swaps out
+     the other"*. Pressing a band already wins; this is pressing the notes
+     (261001k). */
+  it("swaps the band out for the notes when Annotations is pressed below 900px", async () => {
+    await atWidth(800, "?mode=glossary");
+    await press("annotations");
+    for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
+    const query = new URLSearchParams(location.search);
+    expect(query.get("margin")).toBe("1");
+    expect(query.get("mode")).toBeNull();
+    expect(host.querySelector(".mode-band"), "the band should have closed").toBeNull();
+    expect(notes(), "no notes after the swap").toBeGreaterThan(0);
+  }, PHASE_MS);
+
+  it("undoes the combined swap with one Back step", async () => {
+    await atWidth(800, "?mode=glossary");
+    await press("annotations");
+    expect(location.search).toContain("margin=1");
+
+    await act(async () => history.back());
+    for (let i = 0; i < 40 && new URLSearchParams(location.search).get("mode") !== "glossary"; i++)
+      await settle(1);
+
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode")).toBe("glossary");
+    expect(query.get("margin"), "Back restored an intermediate half of the swap").toBeNull();
+    expect(host.querySelector(".mode-band"), "Back did not restore the band").not.toBeNull();
+  }, PHASE_MS);
+
+  it("brings back notes hidden behind a band rather than turning them off", async () => {
+    await atWidth(800, "?mode=glossary&margin=1");
+    expect(notes()).toBe(0);
+    await press("annotations");
+    for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
+    expect(new URLSearchParams(location.search).get("margin")).toBe("1");
+    expect(host.querySelector(".mode-band")).toBeNull();
+    expect(notes()).toBeGreaterThan(0);
+  }, PHASE_MS);
+
+  it("leaves the band open where both fit", async () => {
+    await atWidth(1024, "?mode=glossary");
+    await press("annotations");
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode")).toBe("glossary");
+    expect(query.get("margin")).toBe("1");
+    expect(host.querySelector(".mode-band")).not.toBeNull();
+    expect(notes()).toBeGreaterThan(0);
+  }, PHASE_MS);
+
+  /* The whole back-and-forth, one history entry a press (GPT Sol on the plan,
+     finding 5): the swap writes `mode` and `margin` together. */
+  it("swaps each way on each press, one history entry each", async () => {
+    await atWidth(800, "?mode=glossary");
+    const url = () => {
+      const q = new URLSearchParams(location.search);
+      return `${q.get("mode") ?? "plain"}/${q.get("margin") ?? "-"}`;
+    };
+    const step = async (mode: Mode, want: string) => {
+      const before = history.length;
+      await act(async () => modeButton(mode).click());
+      for (let i = 0; i < 40 && url() !== want; i++) await settle(1);
+      expect(url(), `after ${mode}`).toBe(want);
+      expect(history.length - before, `entries for ${mode}`).toBe(1);
+    };
+    await step("annotations", "plain/1");
+    await step("glossary", "glossary/1");
+    await step("annotations", "plain/1");
+    await step("annotations", "plain/-");
+  }, PHASE_MS);
+
+  it("leaves a phone's band open, where the notes do not fit even alone", async () => {
+    await atWidth(390, "?mode=glossary");
+    await press("annotations");
+    await settle();
+    expect(host.querySelector(".mode-band"), "the band closed for nothing").not.toBeNull();
   }, PHASE_MS);
 
   it("draws no line over a band that covers the window", async () => {
