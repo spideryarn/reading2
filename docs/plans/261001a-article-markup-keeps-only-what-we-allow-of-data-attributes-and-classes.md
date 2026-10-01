@@ -181,8 +181,10 @@ review (`…-code-review-sol.md`, approve, no P0–P2).
 
 - **Production evidence.** The forged-marking queries returned 0 rows for both attributes and
   classes. The controls, using the same pattern shapes on names known to be present, returned
-  1,563 and 123 rows. The script was `data/survey-5z.mjs`, gitignored; its queries are summarised
-  under § Evidence.
+  1,563 and 123 rows. The script is
+  [261001a-article-markup-allowlist-production-survey.mjs](261001a-article-markup-allowlist-production-survey.mjs),
+  read-only. Run it from the repo root with an env file; the review prompts call it by its working
+  name, `data/survey-5z.mjs`.
 - **Red, then green.** The new tests went red against the old policy with ten failures: every
   forgery survived. They went green after the change.
 - **Mutation-checked.** Each of three plants turned the intended test red, and each was then
