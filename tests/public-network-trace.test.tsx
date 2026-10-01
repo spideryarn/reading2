@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHARED_WITH_YOU } from "../src/messages.js";
-import type { Arc, Article, ChatThread, SourceGuess, ThreadSummary } from "../src/types.js";
+import type { Arc, Article, BlockId, ChatThread, SourceGuess, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
@@ -1487,6 +1487,89 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent).not.toContain("Search again");
     expect(host.textContent).not.toContain("Nobody has asked the web about this one yet");
     expect(host.textContent).not.toContain("Try again");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **The threads and the relevance judgement reach a visitor** — plan 261001b
+   * (SPIDERYARN-READING2-6M, 5P), Greg's approval of 2026-10-01. Two works on
+   * the payload, one theme across both, each row judged; the band draws the
+   * threads box and the rows' relevance words, from the payload alone.
+   */
+  it("draws a stored debate's threads and relevance from the payload, asking nothing", async () => {
+    await remount();
+    const claim = (id: string, url: string, title: string, bears: "directly" | "partly") => ({
+      id,
+      url,
+      title,
+      sourceQuote: `${title} says something about it.`,
+      relation: "qualifies" as const,
+      lean: "neither" as const,
+      applies: "It narrows the claim.",
+      claimQuote: "an argument made elsewhere",
+      blockId: "spya-cccccc" as BlockId,
+      bears,
+    });
+    served = {
+      ...ARTICLE,
+      debate: {
+        searchedAt: "2026-09-20T10:00:00.000Z",
+        direct: { rows: [], sourceNotPublishable: 0 },
+        claims: {
+          rows: [
+            claim("spya-dbt003", "https://one.example.org/a", "A first work on attention", "directly"),
+            claim("spya-dbt004", "https://two.example.net/b", "A second work, a replication", "partly"),
+          ],
+          sourceNotPublishable: 0,
+        },
+        synthesis: {
+          kind: "made",
+          themes: [
+            {
+              id: "spya-thmaaa",
+              label: "Attention narrows",
+              gist: "Both find the effect smaller than claimed.",
+              rowIds: ["spya-dbt003", "spya-dbt004"],
+            },
+          ],
+          key: [],
+        },
+      },
+    };
+    await open("?mode=debate");
+
+    const band = host.querySelector(".mode-band");
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    const threads = band?.querySelector(".dbt-threads");
+    expect(threads, "the visitor's threads box").not.toBeNull();
+    expect(readable(threads as Element)).toContain("Attention narrows");
+    expect(readable(band as Element)).toContain("bears directly");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
+   * **Cross-references are drawn in a visitor's prose from the payload** —
+   * plan 261001b (SPIDERYARN-READING2-5Z). The whole path: the served
+   * payload → `access.ts` → `VisitorArticle` → the capability → `Reader` →
+   * the mark. In `plain`, which has no band, so the mark is the article's own.
+   * And no request: the owner's `useCrossrefs` is never mounted for a visitor.
+   */
+  it("draws a visitor's cross-references in the prose, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      crossrefs: {
+        links: [
+          { from: "spya-cccccc" as BlockId, phrase: "made elsewhere", to: "spya-bbbbbb" as BlockId },
+        ],
+      },
+    };
+    await open("?mode=plain");
+    const marks = host.querySelectorAll("mark.xref");
+    expect(marks.length, "the visitor's cross-reference is not drawn").toBeGreaterThan(0);
+    expect(readable(marks[0] as Element)).toContain("made elsewhere");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });

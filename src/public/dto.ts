@@ -56,6 +56,7 @@ import type {
   Arc,
   ArcEntry,
   Block,
+  BlockId,
   BlockKind,
   Citation,
   CitationPlace,
@@ -63,6 +64,8 @@ import type {
   CitedWork,
   ClaimDebateRow,
   Comment,
+  Crossref,
+  Crossrefs,
   Debate,
   DirectDebateRow,
   Faq,
@@ -90,13 +93,23 @@ import type {
   Tweet,
   TweetThread,
 } from "../types.js";
-import { anchorFields, identifiesOf, isUsableSimpleSummary, readStoredLean } from "../types.js";
+import {
+  anchorFields,
+  identifiesOf,
+  isUsableSimpleSummary,
+  readStoredBears,
+  readStoredLean,
+} from "../types.js";
+import type { DebateSynthesis } from "../types.js";
+import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
+import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../debate-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import type {
   PublicArticle,
   PublicBlock,
   PublicCitations,
   PublicCitedWork,
+  PublicCrossrefs,
   PublicCitationRegistry,
   PublicClaimDebateRow,
   PublicDebate,
@@ -547,7 +560,7 @@ function publicPlace(place: CitationPlace): CitationPlace {
  * `key` and `found` are not named, so they do not cross. src/public-types.ts §
  * `PublicCitedWork` has why for each.
  */
-function publicCitedWork(work: CitedWork): PublicCitedWork {
+function publicCitedWork(work: CitedWork, blockText: ReadonlyMap<string, string>): PublicCitedWork {
   /* A named const, so the shorthand `{ url }` below ties the key to it —
      `publicMeta`'s idiom, since `opt()` copies a field and this computes one. */
   const ownerFound = work.linkFrom === "web";
@@ -563,6 +576,7 @@ function publicCitedWork(work: CitedWork): PublicCitedWork {
     ...opt(work, "relevance"),
     ...opt(work, "influence"),
     ...(work.reference === undefined ? {} : { reference: publicPlace(work.reference) }),
+    ...publicEntry(work, blockText),
     mentions: work.mentions.map(publicPlace),
     citedAt: [...work.citedAt],
     firstCited: work.firstCited,
@@ -585,12 +599,38 @@ function publicCitationRegistry(registry: unknown): { registry?: PublicCitationR
 }
 
 /**
- * **The Citations list** — the works, and `capped` because the panel prints it.
- * src/public-types.ts § `PublicCitations`.
+ * **A work's entry, only when it is its own bibliography block's text** —
+ * since 2026-10-01 (plan 261001b, SPIDERYARN-READING2-6K).
+ *
+ * The test is equality with `entryOfText` of the `reference` block's text, the
+ * same function the stage built a block entry with (src/citation-entry.ts), and
+ * the block must be in this payload. Then the entry adds no character a visitor
+ * could not already read. **An entry read from a PDF's text layer fails it**,
+ * because a PDF's bibliography is not rendered as blocks, and that is the
+ * point: such an entry can hold a publisher's one-page "Downloaded by …" stamp
+ * that the furniture filter missed (GPT Sol, plan review P1). It stays
+ * owner-only. A value that is not a string within the cap fails too, since
+ * JSONB arrives unchecked (Sol P2).
  */
-function publicCitationList(citations: Citations): PublicCitations {
+function publicEntry(work: CitedWork, blockText: ReadonlyMap<string, string>): { entry?: string } {
+  const entry: unknown = work.entry;
+  if (typeof entry !== "string" || entry.length > ENTRY_CAP) return {};
+  const at: unknown = work.reference?.blockId;
+  const text = typeof at === "string" ? blockText.get(at) : undefined;
+  return text !== undefined && entryOfText(text) === entry ? { entry } : {};
+}
+
+/**
+ * **The Citations list** — the works, and `capped` because the panel prints it.
+ * src/public-types.ts § `PublicCitations`. `blockText` is this payload's own
+ * blocks, which `publicEntry` checks an entry against.
+ */
+function publicCitationList(
+  citations: Citations,
+  blockText: ReadonlyMap<string, string>,
+): PublicCitations {
   return {
-    citations: citations.citations.map(publicCitedWork),
+    citations: citations.citations.map((work) => publicCitedWork(work, blockText)),
     capped: citations.capped,
   };
 }
@@ -676,11 +716,70 @@ function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
     claims.push({ ...publicDebateRowBase(row, url), claimQuote: row.claimQuote, blockId: row.blockId });
   }
 
+  const synthesis = publicSynthesis(
+    debate,
+    [...direct, ...claims],
+    directWithheld + claimsWithheld > 0,
+    carriesRefused,
+  );
   return {
     searchedAt: debate.searchedAt,
     direct: { rows: direct, sourceNotPublishable: directWithheld },
     claims: { rows: claims, sourceNotPublishable: claimsWithheld },
+    ...(synthesis === undefined ? {} : { synthesis }),
   };
+}
+
+/**
+ * **The threads and key sources, as a visitor may have them** — since
+ * 2026-10-01 (plan 261001b, SPIDERYARN-READING2-6M).
+ *
+ * Read through `readStoredSynthesis` first, all rows, exactly as the owner's
+ * panel reads it, so a visitor never gets a synthesis the owner would not.
+ * Then:
+ *
+ * - `failed` and `too-few` cross as they are: no prose, and `rows` is a count.
+ * - **`made` does not cross at all if any row was withheld.** The call saw
+ *   every row, so a theme kept over two published rows can still describe a
+ *   withheld one in its gist without containing its address, and nothing here
+ *   can see that (GPT Sol, plan review P1). Absent is honest: the visitor's
+ *   foot line already says rows were withheld.
+ * - Otherwise every label, gist and why is asked `carriesRefused`, as the rows'
+ *   words are — the article's own refused address can still be quoted with no
+ *   row withheld — and an item that carries one is dropped. What is left is
+ *   re-settled against the **published** rows by `settleSynthesis`, the one
+ *   rule set both readers share, so every row id named is one this payload
+ *   carries and a theme still spans two works. Settled to nothing, it stays
+ *   `made` with empty lists rather than becoming `failed`: the call did not
+ *   fail, this boundary took its answer.
+ */
+function publicSynthesis(
+  debate: Debate,
+  published: readonly SynthesisRow[],
+  withheld: boolean,
+  carriesRefused: (texts: readonly unknown[]) => boolean,
+): DebateSynthesis | undefined {
+  const stored = readStoredSynthesis(debate);
+  if (stored === null) return undefined;
+  switch (stored.kind) {
+    case "failed":
+      return { kind: "failed" };
+    case "too-few":
+      return { kind: "too-few", rows: stored.rows };
+    case "made": {
+      if (withheld) return undefined;
+      const settled = settleSynthesis(
+        stored.themes.filter((t) => !carriesRefused([t.label, t.gist])),
+        stored.key.filter((k) => !carriesRefused([k.why])),
+        published,
+      );
+      return { kind: "made", themes: settled.themes, key: settled.key };
+    }
+    default: {
+      const unreachable: never = stored;
+      return unreachable;
+    }
+  }
 }
 
 /**
@@ -792,6 +891,9 @@ function publicDebateRowBase(
     lean: readStoredLean(row),
     applies: row.applies,
     ...(typeof row.limits === "string" ? { limits: row.limits } : {}),
+    /* The relevance stop, since 2026-10-01 (plan 261001b, 5P): one of three
+       closed words, through `readStoredBears` so anything else is absent. */
+    ...bearsOf(row),
     ...publicRegistryWork(row.registry),
   };
 }
@@ -800,6 +902,11 @@ function publicDebateRowBase(
 function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
   const read = readRegistryWork(registry);
   return read === null ? {} : { registry: read };
+}
+
+function bearsOf(row: DirectDebateRow | ClaimDebateRow): Pick<PublicClaimDebateRow, "bears"> {
+  const bears = readStoredBears(row);
+  return bears === null ? {} : { bears };
 }
 
 /**
@@ -956,6 +1063,57 @@ function publicIdeas(ideas: Ideas): PublicIdeas {
   };
 }
 
+/**
+ * **The cross-references, link by link** — since 2026-10-01 (plan 261001b,
+ * SPIDERYARN-READING2-5Z).
+ *
+ * `fresh` is the reader's answer to `isStale` (src/crossrefs-fingerprint.ts),
+ * the owner's own question asked of the same inputs; this function projects
+ * and does not hash, for `stale`'s reason in `publicSearches`. Not fresh, a
+ * document for another slug, or no `links` array: no key at all, which is what
+ * the owner's hook draws in those cases too (src/web/useCrossrefs.ts).
+ *
+ * **Each link is checked, not copied**, because JSONB arrives unchecked (GPT
+ * Sol, plan review P2): a record of three strings, both ends blocks of this
+ * payload and not the same block, and a phrase whose exact characters are
+ * already present in its public source block. Freshness authenticates the
+ * article inputs, not the stored model output: without the phrase check, a
+ * malformed JSONB row could put arbitrary private text on the public wire while
+ * carrying a current `sourceHash`. Anything else is dropped. `dropped`, the
+ * counts, and the stamp stay behind.
+ */
+function publicCrossrefs(
+  crossrefs: Crossrefs,
+  fresh: boolean,
+  slug: string,
+  blocks: ReadonlyMap<string, PublicBlock>,
+): PublicCrossrefs | undefined {
+  const doc: unknown = crossrefs;
+  if (!fresh || !isRecord(doc) || doc.slug !== slug || !Array.isArray(doc.links)) return undefined;
+  const links: Crossref[] = [];
+  for (const link of doc.links as unknown[]) {
+    if (!isRecord(link)) continue;
+    const { from, phrase, to } = link;
+    if (typeof from !== "string" || typeof phrase !== "string" || typeof to !== "string") continue;
+    const source = blocks.get(from);
+    if (
+      phrase.trim() === "" ||
+      from === to ||
+      source === undefined ||
+      !blocks.has(to) ||
+      (!source.text.includes(phrase) && !source.html.includes(phrase))
+    ) {
+      continue;
+    }
+    links.push({ from: from as BlockId, phrase, to: to as BlockId });
+  }
+  return { links };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** The thread, rebuilt post by post. `limit` crosses; the provenance does not. */
 function publicTweets(thread: TweetThread): PublicTweets {
   return {
@@ -1012,15 +1170,30 @@ export function publicArticle(row: {
   simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
+  /** The stored cross-references, or `null` for none built. */
+  crossrefs: Crossrefs | null;
+  /**
+   * Whether `crossrefs` still describes this revision — the reader's `isStale`,
+   * inverted. Required rather than defaulted, so a caller that forgot to ask
+   * is a type error rather than links drawn over an article that moved.
+   */
+  crossrefsFresh: boolean;
   comments: readonly Comment[];
   searches: readonly (SearchRun & { stale: boolean })[];
   sketch: Sketch | null;
   /** Where the paragraph nav labels are — the column, `not null`, so no `| null`. */
   navLabelStatus: NavLabelStatus;
 }): PublicArticle {
+  const blocks = row.blocks.map(publicBlock);
+  const blocksById = new Map(blocks.map((block): [string, PublicBlock] => [block.id, block]));
+  const blockText = new Map(blocks.map((block): [string, string] => [block.id, block.text]));
+  const crossrefs =
+    row.crossrefs === null
+      ? undefined
+      : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
   return {
     meta: publicMeta(row),
-    blocks: row.blocks.map(publicBlock),
+    blocks,
     tree: publicTree(row.tree),
     ...(row.arc ? { arc: publicArc(row.arc) } : {}),
     /* **Named, not spread**, and passed through whole rather than rebuilt field
@@ -1063,12 +1236,13 @@ export function publicArticle(row: {
     ...(isUsableSimpleSummary(row.simpleSummary)
       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
       : {}),
-    ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),
+    ...(row.citations !== null ? { citations: publicCitationList(row.citations, blockText) } : {}),
     /* The article's own address goes in with it: a direct row can carry it in
        its witness and its `linked` signal, and it is judged there by the policy
        `publicMeta` above applies to it. */
     ...(row.debate !== null ? { debate: publicDebate(row.debate, row.finalUrl) } : {}),
     ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
+    ...(crossrefs === undefined ? {} : { crossrefs }),
     /* **A required key, so leaving this line out is a type error** — unlike the
        artefacts above it, where an absent key is the meaning. An article with
        no comments crosses as `[]`. See PublicArticle.comments. */

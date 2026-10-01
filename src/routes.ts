@@ -8107,8 +8107,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      GET only, and no DELETE: the step replaces, so asking again is
      POST /api/jobs { slug, steps: ["crossrefs"] }. This route never spends.
      **Owner-authenticated like every artefact route here, with no anonymous
-     twin** (Sol F1): a visitor's read goes through the public DTO, and adding
-     it there is a defence edit left for Greg (the plan's § Left for Greg). */
+     twin** (Sol F1): a visitor's links arrive inside the public article
+     payload, fresh ones only (plan 261001b). */
   {
     kind: "pattern",
     method: "GET",

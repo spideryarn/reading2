@@ -92,7 +92,7 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
   investigation?: CitedWork["investigation"];
   /** Already an article here, the reader's or a public one (plan 260930b). A public row cannot carry one. */
   inSpideryarn?: CitedWork["inSpideryarn"];
-  /** The work's entry as the article gives it (plan 260930i). Not in the public projection. */
+  /** The work's entry as the article gives it (plan 260930i); public only when it is its reference block's text. */
   entry?: CitedWork["entry"];
   /**
    * The registry's record (plan 261001a stage 5). A visitor's row carries only

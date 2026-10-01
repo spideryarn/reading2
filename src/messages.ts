@@ -4030,7 +4030,7 @@ export const ALWAYS_SHARED = [
     label: "The article's text",
     detail:
       "Every paragraph, heading, list and footnote we extracted, in full, with its formatting and " +
-      "its links — not a summary of it.",
+      "its links — not a summary of it — and the links we drew between its own passages, where there are any.",
   },
   {
     key: "pictures",

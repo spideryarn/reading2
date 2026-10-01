@@ -53,6 +53,7 @@ import { REF_ATTR } from "./notes.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
 import { type NumberedReferenceList, referenceListText } from "./citation-reference-list.js";
+import { capEntry, entryOfText } from "./citation-entry.js";
 import {
   articleWithIdsFingerprint,
   type BlockFingerprint,
@@ -97,8 +98,9 @@ export const TITLE_CAP = 120;
 export const WHY_CAP = 160;
 export const AUTHORS_CAP = 120;
 export const QUOTE_CAP = 120;
-/** A work's `entry` as stored and shown: the article's own characters, whitespace collapsed (plan 260930i). */
-export const ENTRY_CAP = 400;
+/* `ENTRY_CAP` and the entry's shape moved to a pure leaf on 2026-10-01, so the
+   public DTO can tell a block's entry from a PDF list's by the same rule (plan 261001b). */
+export { ENTRY_CAP } from "./citation-entry.js";
 
 /**
  * `medium`, as a constant here rather than a row in `STAGE_EFFORT`, because this
@@ -458,13 +460,7 @@ function locateInEntry(
 
 /** A reference block's text as its `entry`: whitespace collapsed, capped. */
 function entryOfBlock(block: Block | undefined): string | undefined {
-  const t = block?.text.replace(/\s+/g, " ").trim();
-  if (!t) return undefined;
-  return capEntry(t);
-}
-
-function capEntry(t: string): string {
-  return t.length <= ENTRY_CAP ? t : `${t.slice(0, ENTRY_CAP - 1)}…`;
+  return block === undefined ? undefined : entryOfText(block.text);
 }
 
 /**

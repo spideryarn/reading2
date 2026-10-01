@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Article, Comment, Visibility } from "../../types.js";
+import type { Article, Comment, Crossref, Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
 import type { ArticleView } from "../router.js";
@@ -209,6 +209,7 @@ export function ArticlePage({
           available={access.available}
           comments={access.comments}
           searches={access.searches}
+          crossrefs={access.crossrefs}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
           view={view}
@@ -552,6 +553,7 @@ function VisitorArticle({
   available,
   comments,
   searches,
+  crossrefs,
   signedIn,
   sessionUnconfirmed,
   view,
@@ -565,6 +567,8 @@ function VisitorArticle({
   comments: Comment[];
   /** The owner's saved searches, read-only. reader-capability.ts § searches. */
   searches: SavedSearch[];
+  /** The cross-references the prose may draw. reader-capability.ts § crossrefs. */
+  crossrefs: readonly Crossref[] | null;
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
   /**
@@ -596,6 +600,7 @@ function VisitorArticle({
         available,
         comments,
         searches,
+        crossrefs,
         signedIn,
         sessionUnconfirmed,
       }}

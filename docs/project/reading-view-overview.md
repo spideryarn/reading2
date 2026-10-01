@@ -129,8 +129,9 @@ readers never are.
   re-judged at the boundary and a refused row withheld and counted — only running a search is the
   owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
   Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
-  as filters above the list, owner-only for now
-  ([260930j](../plans/260930j-debate-themes-and-key-sources.md)).
+  as filters above the list ([260930j](../plans/260930j-debate-themes-and-key-sources.md)); since
+  2026-10-01 a visitor sees those and each row's relevance too, unless the boundary withheld a row
+  ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
   Since 2026-10-01 a source whose address carries a DOI or arXiv id (`doi.org`, `arxiv.org`, or a
   publisher's `/doi/10.…` path) gets Crossref's or DataCite's authors and year, kept only when the
   record's title agrees with the page's; the by-line and the date order prefer them and say where

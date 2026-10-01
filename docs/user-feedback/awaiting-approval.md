@@ -11,8 +11,6 @@ One line each: the date the report arrived, its Sentry short id, one sentence of
 proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
 in this directory records which, and the line comes off.
 
-- 2026-09-30 · SPIDERYARN-READING2-5Z · **Shipped for owners; one defence edit waits.** Cross-reference links in the prose are on `dev`, drawn for the article's owner. The sanitiser half was approved and done on 2026-10-01 ([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md)). What is left: let visitors see the links through the public DTO, a listed defence · [260930f § Left for Greg](../plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md#left-for-greg-two-defence-edits)
-
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,
@@ -68,7 +66,7 @@ paragraph is the part still worth acting on.
 
 | report | the decision left | where it is set out |
 |---|---|---|
-| [5P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5P) — Debate rows lead with the title; orders and a relevance bar | Two decisions. **(1) Authors and year.** You asked for them. The page text the search returns almost never carries them (1 row in 11 verified), so the only reliable source is a bibliographic lookup: DOI or arXiv id from the address, else an OpenAlex title search. That is a new outside service. Whether to build it is yours to decide; the byline and date order are built and waiting. **(2) The public DTO.** The relevance judgment does not reach visitors, because `src/public/dto.ts` is a defence and this was an unattended run | [note](260929_2025-debate-mode-says-what-each-source-is.md) · [plan 260929h § Deferred](../plans/260929h-debate-mode-clearer-sources-and-orders.md) |
+| [5P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5P) — Debate rows lead with the title; orders and a relevance bar | One decision. **Authors and year.** You asked for them. The page text the search returns almost never carries them (1 row in 11 verified), so the only reliable source is a bibliographic lookup: DOI or arXiv id from the address, else an OpenAlex title search. That is a new outside service. Whether to build it is yours to decide; the byline and date order are built and waiting. (The visitor half shipped on 2026-10-01, plan 261001b.) | [note](260929_2025-debate-mode-says-what-each-source-is.md) · [plan 260929h § Deferred](../plans/260929h-debate-mode-clearer-sources-and-orders.md) |
 | [5K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5K) — feedback from people other than you: eligible bugs fixed, visible behaviour changes and nuanced suggestions brought to you, minor clear-cut suggestions built, abuse attempts listed above | Whether admin trust should now wait on the report's `feedback` row in Postgres, not only the Sentry issue. A forged admin report used to buy at most a push to `dev`; since the Overseer deploys `dev` (2026-09-29) it can reach production. The run could not read production to check, and did not change the rule. | [note](260929_2025-feedback-from-other-people-trust-tiers.md) · [plan 260930a § For Greg](../plans/260930a-feedback-from-others-trust-tiers.md#for-greg) |
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
