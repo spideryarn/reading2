@@ -67,7 +67,12 @@ paragraph is the part still worth acting on.
 | report | the decision left | where it is set out |
 |---|---|---|
 | [5P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5P) — Debate rows lead with the title; orders and a relevance bar | One decision. **Authors and year.** You asked for them. The page text the search returns almost never carries them (1 row in 11 verified), so the only reliable source is a bibliographic lookup: DOI or arXiv id from the address, else an OpenAlex title search. That is a new outside service. Whether to build it is yours to decide; the byline and date order are built and waiting. (The visitor half shipped on 2026-10-01, plan 261001b.) | [note](260929_2025-debate-mode-says-what-each-source-is.md) · [plan 260929h § Deferred](../plans/260929h-debate-mode-clearer-sources-and-orders.md) |
-| [5K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5K) — feedback from people other than you: eligible bugs fixed, visible behaviour changes and nuanced suggestions brought to you, minor clear-cut suggestions built, abuse attempts listed above | Whether admin trust should now wait on the report's `feedback` row in Postgres, not only the Sentry issue. A forged admin report used to buy at most a push to `dev`; since the Overseer deploys `dev` (2026-09-29) it can reach production. The run could not read production to check, and did not change the rule. | [note](260929_2025-feedback-from-other-people-trust-tiers.md) · [plan 260930a § For Greg](../plans/260930a-feedback-from-others-trust-tiers.md#for-greg) |
+
+**The 5K row came off on 2026-10-01.** Greg answered it himself that day, asking that agents tell
+*"definitively/confidently/unfakeably"* which reports are his. Admin trust now waits on the
+production `feedback` row, through `scripts/feedback-reporter.ts`:
+[261001a](../plans/261001a-unfakeable-admin-feedback-reports.md), on `dev` as `5170b6e8` and
+`de9b5f8e`. Removed by the feedback sweep.
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic
