@@ -420,6 +420,28 @@ export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
 export const SHELF_TOPICS_MODEL = "openai/gpt-6-luna";
 
 /**
+ * **What reads a paper's title, authors, abstract and DOI off its first two
+ * pages** when it arrives in a batch and is not AI-processed
+ * (src/paper-metadata.ts). Not on a tier: one cheap, fixed model chosen for
+ * price and for a zero-retention route, not for how much it reasons.
+ *
+ * Greg's choice, 2026-10-01: *"use DeepSeek v4.1 Flash or similar (i.e. very
+ * cheap, but still pretty modern and smart for its price) via OpenRouter for
+ * this (but via a ZDR provider, e.g. Fireworks)."* Checked live that day: on
+ * OpenRouter's ZDR list through `fireworks`, $0.22 in and $0.66 out per
+ * million tokens. The route that keeps it on zero-retention upstreams is `paper-metadata` in
+ * src/ai-call.ts, and only Fireworks, DeepInfra and Together may serve it, so a
+ * model put here must be one they serve. The bar it was held to is Luna's, on the 13-PDF eval:
+ * evals/pdf/minimal-metadata/score.mts, with the results in
+ * evals/results/paper-metadata-2026-10-01.md.
+ *
+ * No `SPIDERYARN_*_MODEL` override, like every other model on no tier: the
+ * eval passes its model directly, and an override naming a model those three
+ * do not serve would only be refused by the route.
+ */
+export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
@@ -781,7 +803,10 @@ export type NonTaskAiJob =
      `Task`, for the PDF reader's reason: a tier is a judgment about how much
      reasoning a job needs, and this job's model was chosen by an eval rather
      than by a tier (`SHELF_TOPICS_MODEL` below). */
-  | "shelf-topics";
+  | "shelf-topics"
+  /* **A batch-added paper's title, authors and abstract** —
+     src/paper-metadata.ts, on `PAPER_METADATA_MODEL` below. */
+  | "paper-metadata";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -1236,6 +1261,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "pdf-figure-locate": "chat",
   /* A strict JSON schema back, on chat/completions like the eval that chose it. */
   "shelf-topics": "chat",
+  /* A strict JSON schema back, on chat/completions. src/paper-metadata.ts. */
+  "paper-metadata": "chat",
   dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
@@ -1459,6 +1486,8 @@ export const DISPLAY_NAME: Record<string, string> = {
      until plan 260930k — so /privacy was never required to name it. */
   "google/gemini-3.1-flash-image": "gemini-3.1-flash-image",
   "openai/gpt-6-luna": "gpt-6-luna",
+  /* The batch import's metadata reader, `PAPER_METADATA_MODEL`. */
+  "deepseek/deepseek-v4.1-flash": "deepseek-v4.1-flash",
 };
 
 /**
@@ -1491,6 +1520,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
+  { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
 ];
 
 /**

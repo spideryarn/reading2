@@ -657,6 +657,70 @@ export async function countPdfPages(
   }
 }
 
+/**
+ * **The text layer of the first few pages, and nothing else** — for the bulk
+ * import's metadata step (src/paper-metadata.ts), which wants a paper's title,
+ * authors and abstract off its first two pages and must not pay for `pass0`'s
+ * walk of every page.
+ *
+ * `countPdfPages`'s discipline exactly: a copy of the bytes (pdf.js detaches
+ * the buffer it is given), the signal checked before and after loading, and
+ * `destroy` on every path. Sideways runs are dropped for `pass0`'s reason
+ * (`isSideways`): arXiv's margin stamp would otherwise sit in the middle of the
+ * title. Items are joined as `pass0` joins them; runs of spaces and tabs are
+ * collapsed, newlines kept.
+ *
+ * `maxChars` stops joining runs once that many characters are in hand, and the
+ * result is cut to it. pdf.js still has to decode the page's text content before
+ * it hands over the item array, so this bounds our output and concatenation,
+ * not the library's work on a pathological PDF; the caller's signal is the
+ * operation-wide bound.
+ */
+export async function firstPagesText(
+  source: Uint8Array,
+  opts: { pages: number; maxChars: number; signal?: AbortSignal | undefined },
+): Promise<string> {
+  const { signal } = opts;
+  signal?.throwIfAborted();
+  const data = new Uint8Array(source);
+  const pdfjs = await loadPdfjs();
+  signal?.throwIfAborted();
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
+  const giveUp = () => {
+    void loadingTask.destroy();
+  };
+  signal?.addEventListener("abort", giveUp, { once: true });
+  try {
+    const doc = await loadingTask.promise;
+    const parts: string[] = [];
+    let chars = 0;
+    for (let n = 1; n <= Math.min(opts.pages, doc.numPages) && chars < opts.maxChars; n++) {
+      signal?.throwIfAborted();
+      const content = await (await doc.getPage(n)).getTextContent();
+      let text = "";
+      for (const item of content.items) {
+        if (!("str" in item) || isSideways(item.transform)) continue;
+        text += item.str + (item.hasEOL ? "\n" : "");
+        if (chars + text.length >= opts.maxChars) break;
+      }
+      const tidied = text.replace(/[ \t]+/g, " ").trim();
+      parts.push(tidied);
+      chars += tidied.length + 2;
+    }
+    return parts.join("\n\n").slice(0, opts.maxChars);
+  } catch (err) {
+    signal?.throwIfAborted();
+    throw err;
+  } finally {
+    signal?.removeEventListener("abort", giveUp);
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Being abandoned anyway; see `countPdfPages`. */
+    }
+  }
+}
+
 export async function pass0(
   source: string | Uint8Array,
   opts: Pass0Options = {},

@@ -311,6 +311,7 @@ drifted a version behind.
 | **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter, and not a *tier* — see below |
 | **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter, and not a *tier* either — `PDF_READER_MODEL` |
 | **PDF figure locator** | Gemini 3 Flash — `google/gemini-3-flash-preview` | OpenRouter, not a tier — `PDF_FIGURE_LOCATOR_MODEL`. Asked only about a figure the other routes refused ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md) § Stage 2) |
+| **paper metadata** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | OpenRouter, restricted to three zero-data-retention providers and preferring Fireworks, not a tier — `PAPER_METADATA_MODEL`. Reads a batch-added PDF's title, authors, abstract and DOI off its first two pages (`src/paper-metadata.ts`; chosen against Luna in [evals/results/paper-metadata-2026-10-01.md](../../evals/results/paper-metadata-2026-10-01.md)) |
 | **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. The one job not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 
 **This table names the models; it is not the inventory, and it has fallen behind before.** The
