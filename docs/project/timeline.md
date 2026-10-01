@@ -1,5 +1,7 @@
 # Timeline — when the piece *says* these things happened
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The eleventh mode in the band between the spine and the prose, beside
 [ideas.md](ideas.md). Greg asked for it on 2026-08-31:
 

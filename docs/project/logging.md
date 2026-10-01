@@ -1,5 +1,7 @@
 # Logging
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 ```bash
 npm run dev            # JSON to stdout
 npm run dev:pretty     # the same, piped through pino-pretty for a human

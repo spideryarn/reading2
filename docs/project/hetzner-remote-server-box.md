@@ -1,5 +1,7 @@
 # The Hetzner remote server box, and `gjd-remote`
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 A Hetzner server that runs Claude Code sessions in tmux so they keep working when the laptop sleeps.
 You drive it from **[`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts)**, and if you read one
 thing here, make it `gjd-remote --help`, which is the reference and stays current.

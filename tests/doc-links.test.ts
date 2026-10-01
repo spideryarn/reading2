@@ -427,7 +427,43 @@ describe("docs have exactly one owner", () => {
     }
     expect(unlinked).toEqual([]);
   });
+
+  /**
+   * The other direction: each doc links back up to the entry point that owns
+   * it. An agent usually lands mid-tree — from a grep, a source comment, a
+   * link in a plan — and the way to the rest of the area is up. Sixteen docs
+   * had no link to any entry point when this was added (2026-10-01,
+   * docs/plans/261001i-docs-and-signposting-sweep.md), and 42 none to their
+   * own owner; the downward check above was green over all of them.
+   */
+  it("links each claimed doc back up to its owner", () => {
+    const orphanedUp: string[] = [];
+    for (const [owner, children] of owned) {
+      const up = linksToOwner(owner);
+      for (const child of children) {
+        if (!up.test(readFileSync(path.join("docs/project", child), "utf8"))) {
+          orphanedUp.push(`${child} → ${owner}`);
+        }
+      }
+    }
+    expect(orphanedUp).toEqual([]);
+  });
+
+  it("recognises a link up to an owner, and nothing else", () => {
+    const up = linksToOwner("architecture.md");
+    expect(up.test("see [architecture.md](architecture.md).")).toBe(true);
+    expect(up.test("[the pipeline](architecture.md#pipeline)")).toBe(true);
+    expect(up.test("[x](./architecture.md)")).toBe(true);
+    // A mention is not a link; nor is a different doc whose name ends the same.
+    expect(up.test("as `architecture.md` says")).toBe(false);
+    expect(up.test("[x](not-architecture.md)")).toBe(false);
+  });
 });
+
+/** A markdown link to `owner`, from a sibling in `docs/project/`. */
+function linksToOwner(owner: string): RegExp {
+  return new RegExp(`\\]\\((?:\\./)?${owner.replace(".", "\\.")}[)#]`);
+}
 
 /**
  * The third thing this file checks: that an evergreen doc never cites a line

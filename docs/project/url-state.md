@@ -1,5 +1,7 @@
 # URL state
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 Everything about *how you are looking at an article* lives in the query string — and, since
 2026-08-26, everything about how you are looking at **the shelf** does too
 ([§ The library's own five](#the-librarys-own-five)). Nothing the reader

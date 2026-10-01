@@ -1,5 +1,7 @@
 # Glossary — the terms this piece uses, and where it uses them
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
 between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
 pointing at one shows its entry without opening the band at all.

@@ -1,5 +1,7 @@
 # Setup and dev commands
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 **New here? The quickstart below is the whole of it** — an empty checkout to an app you are signed
 into. Everything after it is depth: what each secret is for, which model does
 which job, how to run one pipeline stage on its own. You do not need any of that to start.

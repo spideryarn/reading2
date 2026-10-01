@@ -1,5 +1,7 @@
 # Testing it in a browser
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 The reading view has no DOM tests and won't for a while — see
 [testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). Until it
 does, **looking at it in a browser is the test harness for stage 6**, and that makes it worth

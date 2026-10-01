@@ -1,5 +1,7 @@
 # The public shelf
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 `/read/public` — every article anybody has shared, listed for anybody, signed in or not.
 
 > create a `/read/public/` page that lists Public-readable pages (reusing some of the

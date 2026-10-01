@@ -1,5 +1,7 @@
 # Diagram mode
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The article as a picture, in the middle band — four of them, one toggle, and the
 reader's position marked on every one. Three are geometry over the article's own
 tree; the fourth is [a model's drawing](#sketch), and it is the only one that is

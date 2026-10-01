@@ -1,5 +1,7 @@
 # Static analysis
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 What the machine can tell you about this codebase without running it, and — more usefully — the
 several tools that look perfect for this repo and are quietly wrong about it.
 

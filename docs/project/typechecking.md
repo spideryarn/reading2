@@ -1,5 +1,7 @@
 # Type-checking
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 ```bash
 npm run typecheck             # every project, plus the checks that the checking happened
 npm run typecheck:committed   # ...but against what is in git, which is what the build reads

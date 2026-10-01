@@ -1,5 +1,7 @@
 # Ideas — the propositions this piece needs you to hold
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The **glossary** answers *what does this word mean*. This answers *what do I have to understand* —
 the ideas an article leans on without stating, and the ideas it puts forward. A mode in the band
 between the spine and the prose, beside [Glossary](glossary.md).

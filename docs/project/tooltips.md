@@ -1,5 +1,7 @@
 # Tooltips
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 > In the left-most column, add a nice hover-tooltip to show more detail somehow.
 >
 > — Greg, 2026-08-25

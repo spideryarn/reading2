@@ -1,5 +1,7 @@
 # Search — finding a passage by its words, or by what it says
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **Built 2026-08-26.** One box in the mode band, two ways of matching behind it, and the passages
 that match get marked in the article beside it. Greg's ask:
 

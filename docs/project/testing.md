@@ -1,5 +1,7 @@
 # Testing
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 > Start with deterministic TypeScript tests.
 >
 > — Greg, 2026-08-24

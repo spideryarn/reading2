@@ -1,5 +1,7 @@
 # Granularity zoom
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The first feature. Read [vision.md](vision.md) first — this is one concrete expression of it.
 
 > **Status, 2026-09-29.** The **tree** is live and is what Structure, Summary, Diagram and the Spine

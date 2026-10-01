@@ -1,5 +1,7 @@
 # Linting
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 ```bash
 npm run lint         # Biome over everything biome.jsonc's `includes` allows
 npm run lint:fix     # the same, applying the fixes Biome considers safe

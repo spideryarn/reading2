@@ -1,5 +1,7 @@
 # The AI gateway: one vendor, two wires
 
+Up: [architecture.md](architecture.md)
+
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
 *recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation and the PDF
 reader alike.

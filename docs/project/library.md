@@ -1,5 +1,7 @@
 # The library
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The homepage: every article you have run through the pipeline, on one shelf, each one a click away
 from the reading view.
 

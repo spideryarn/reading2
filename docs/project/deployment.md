@@ -1,5 +1,7 @@
 # Deployment
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 Spideryarn on Vercel: how it gets there, what is live, and the five things that
 break without saying so.
 
