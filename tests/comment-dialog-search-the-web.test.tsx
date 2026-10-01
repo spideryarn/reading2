@@ -89,7 +89,7 @@ async function deepenOffered(status: ClientComment["status"]): Promise<boolean> 
   return container.querySelector(".cmt-deepen") !== null;
 }
 
-describe("the Search the web button", () => {
+describe("the Dig deeper button (was Search the web)", () => {
   it("is NOT offered on a free comment, which the server refuses with a 409", async () => {
     expect(
       await deepenOffered("none"),
@@ -110,6 +110,47 @@ describe("the Search the web button", () => {
     /* Two overlapping re-asks race to write the same row — the reason the
        original condition existed at all. */
     expect(await deepenOffered("pending")).toBe(false);
+  });
+
+  it("is called Dig deeper, the glossary's name for the same press (plan 261001p)", async () => {
+    await deepenOffered("done");
+    expect(container.querySelector(".cmt-deepen")?.textContent).toBe("Dig deeper");
+  });
+});
+
+describe("the search badge", () => {
+  it("says the sources were found, not cited", async () => {
+    /* Plan 261001p § What the sources list means: a dug answer's list is
+       everything its search returned, and a plain-text answer cannot say which
+       of them it leaned on. */
+    await act(async () => {
+      root.render(
+        createElement(CommentDialog, {
+          comment: {
+            ...comment("done"),
+            searches: 2,
+            citations: [
+              { url: "https://example.org/a" },
+              { url: "https://example.org/b" },
+              { url: "https://example.org/c" },
+            ],
+          },
+          position: 1,
+          total: 1,
+          hasPrev: false,
+          hasNext: false,
+          onPrev: () => {},
+          onNext: () => {},
+          onClose: () => {},
+          access: { kind: "visitor" as const },
+        }),
+      );
+    });
+    const badge = container.querySelector<HTMLElement>(".cmt-search");
+    await act(async () => badge?.focus());
+    const card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(card?.textContent).toContain("found 3 sources");
+    expect(card?.textContent).not.toContain("cited");
   });
 });
 

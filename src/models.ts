@@ -754,6 +754,16 @@ export type Task =
    * job so the ledger shows what reading the paper adds to a press; no tools.
    */
   | "citation-paper-passages"
+  /**
+   * ***Dig deeper*'s forced search** (src/dig-deeper.ts, plan 261001p): one
+   * web search with `tool_choice: "required"`, run before the answer because
+   * the high-power model that writes the answer cannot be made to search. It
+   * reads nothing back to the reader — it keeps the search's results and writes
+   * a keyword query for the reader's library — so it is born on the quick tier.
+   * Its own job so the ledger shows what forcing the search costs beside the
+   * answer it feeds.
+   */
+  | "dig-deeper-search"
   | "link-summary";
 
 /**
@@ -781,7 +791,15 @@ export type NonTaskAiJob =
      `Task`, for the PDF reader's reason: a tier is a judgment about how much
      reasoning a job needs, and this job's model was chosen by an eval rather
      than by a tier (`SHELF_TOPICS_MODEL` below). */
-  | "shelf-topics";
+  | "shelf-topics"
+  /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
+     (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
+     is not a tier decision and must not be overridable. It is always the
+     high-power model (`DIG_DEEPER_MODEL`), and a `Task` would bring a
+     `MODEL_ENV_VAR` row that could quietly put it back on Sonnet — Sol's F2
+     on the plan. Its own job, apart from `explain`, so the ledger can say
+     what a dug answer costs; its search step is the `dig-deeper-search` task. */
+  | "dig-deeper";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -951,6 +969,10 @@ export const TASK_TIER: Record<Task, Tier> = {
   "quiz-mark": "capable",
   "quiz-verdict": "quick",
   "simple-check": "quick",
+  /* Quick by judgment, at birth (setup-dev.md § the quick tier): it writes a
+     search query and a keyword line, never words a reader reads. Measured on
+     2026-10-01 against Sonnet: the same five sources at a third of the price. */
+  "dig-deeper-search": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
@@ -1209,6 +1231,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citation-investigate": "chat",
   /* Chat, the wire of the press it runs inside; no tools, one JSON answer. */
   "citation-paper-passages": "chat",
+  /* Chat, for `citations-find`'s reason — the web-search server tool — and
+     the quick tier's only wire. */
+  "dig-deeper-search": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1236,6 +1261,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "pdf-figure-locate": "chat",
   /* A strict JSON schema back, on chat/completions like the eval that chose it. */
   "shelf-topics": "chat",
+  /* Explain's wire: it is an explain call with a different job name. */
+  "dig-deeper": "chat",
   dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
@@ -1323,6 +1350,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      measured on the quick tier's model, and a different one is a new
      measurement. */
   "simple-check": "SPIDERYARN_SIMPLE_CHECK_MODEL",
+  /* For a comparison run: does another model write as good a search, for the
+     price. The answer the reader reads is not this — it is `DIG_DEEPER_MODEL`. */
+  "dig-deeper-search": "SPIDERYARN_DIG_DEEPER_SEARCH_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
@@ -1491,6 +1521,9 @@ export const NON_TASK_MODELS: readonly {
   { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
+  /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
+     by its source because that file imports this one. */
+  { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },
 ];
 
 /**

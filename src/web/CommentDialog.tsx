@@ -601,18 +601,22 @@ export function CommentDialog({
             had never asked anything. The refusal is right; the button was the
             bug. Found while diagnosing report 1X, 2026-09-05;
             tests/comment-dialog-search-the-web.test.tsx renders all four
-            statuses so that narrowing this too far goes red as well. */}
+            statuses so that narrowing this too far goes red as well.
+
+            **Dig deeper since 2026-10-01** (plan 261001p): the same press as
+            the glossary's, so the same name — a forced web search, then the
+            answer from a stronger model. */}
         {own && comment.status !== "pending" && comment.status !== "none" && (
           <Tooltip
             content={
               <>
-                <strong>Search the web properly.</strong> Replaces this answer with one that goes
-                and looks, rather than answering from what the model already knew.
+                <strong>Dig deeper.</strong> Searches the web and asks a stronger model about this
+                one thing. It takes longer than the first answer, and replaces it.
               </>
             }
           >
             <button type="button" className="linky cmt-deepen" onClick={own.onDeepen}>
-              Search the web
+              Dig deeper
             </button>
           </Tooltip>
         )}
@@ -658,7 +662,10 @@ function SearchBadge({ comment }: { comment: ClientComment }) {
           <>
             <strong>Checked the web.</strong> The model ran{" "}
             {comment.searches === 1 ? "one search" : `${comment.searches} searches`}
-            {sources > 0 && ` and cited ${sources === 1 ? "one source" : `${sources} sources`}`},
+            {/* *Found*, not *cited* — plan 261001p § What the sources list
+                means: a dug answer's list is everything its search returned,
+                and a plain-text answer cannot say which it leaned on. */}
+            {sources > 0 && ` and found ${sources === 1 ? "one source" : `${sources} sources`}`},
             listed above.
           </>
         ) : (

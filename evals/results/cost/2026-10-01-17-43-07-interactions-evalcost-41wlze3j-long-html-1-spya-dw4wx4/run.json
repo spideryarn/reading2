@@ -1,0 +1,129 @@
+{
+  "startedAt": "2026-10-01T17:43:07.971Z",
+  "slug": "evalcost-41wlze3j-long-html-1-spya-dw4wx4",
+  "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+  "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+  "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+  "node": "v26.8.1",
+  "article": {
+    "blocks": 186,
+    "words": 16855
+  },
+  "notes": [
+    "Per-interaction costs and per-article costs must never be added together. An article is paid for once; an interaction is paid for every time somebody presses something.",
+    "`expected` says whether the round was meant to be cold or warm; `cache` says what it was, read off the calls. A read counts as pre-existing when no earlier call in the round wrote a cache — so chat's tool loop reading its own first call is still a cold round. A round that was not what it was labelled is a finding about the measurement, not a price, and no cold/warm ratio is taken from it.",
+    "Every call here is made under scopeKind `eval` and ownerId EVAL_OWNER_ID, so none of it lands in `npm run cost`'s Product bucket (scripts/ai-cost.ts defines Product as scopeKind !== \"eval\") and every row resolves to the eval owner's article rather than to a null article_id under the environment owner.",
+    "`referee-claims` and `embeddings` are ARTICLE costs measured here only because they are not pipeline steps and so cannot be draws in run.ts. `referee-mirror` is NOT one of them — it stores nothing and is re-paid on every press and every reload, which makes it a repeated reader cost. It was classified the other way until 2026-09-03.",
+    "`referee-candidates` runs two turns that do different work — the fit brief, then the names — so both numbers are real and their ratio means nothing. It is the most expensive turn in the app by design: 12k output tokens and up to 30 web search results.",
+    "Unpriced calls are unknown, not zero: a total carrying them is short by an unknown amount.",
+    "The same goes for token counts. `tokens.cacheRead` and the rest are sums that read a missing count as zero, and the model dictation is on since 2026-09-07 reports none of them — `openai/gpt-transcribe` on the `transcription` wire, whose usage came back `{seconds, cost}` on both calls anybody has measured. Read the row's `cache` field, not its zeros: `unknown` there means nobody told us, and the terminal line prints NOT REPORTED rather than a number. The token line has the same hazard and is not yet guarded the same way — a zero there may be a real zero or a missing count, and only the `transcription` rows are suspect today."
+  ],
+  "taskNotes": {
+    "explain": "One explanation of a selection, through `explain`. It has a real per-article cache breakpoint, so round 2 explains a *different* quote from the same article and should read the prefix warm. No `dig` — *Dig deeper* is the glossary-lookup row below, on the high-power model with a forced search first, so it is priced there.",
+    "glossary-lookup": "One glossary term dug into, through the production `lookUpTerm` (src/term-lookup.ts) — *Dig deeper* since plan 261001p: a forced quick-tier search (`dig-deeper-search`), then `explain` with the findings on the high-power model, billed as its own `dig-deeper` job. So this is no longer explain's number: it is the search step plus an Opus answer, and the point of running it is the plan's cost line. The allowance always admits and the library finds nothing, because this run is not the article's reader. The glossary entry is fabricated rather than generated: a term is a name plus the block it appears in, so a real word out of a real block is a real anchor, and running the `glossary` mode here would put an article cost inside an interaction. The store it writes to is a sink, so the eval owner's article is left as it was found."
+  },
+  "rounds": [
+    {
+      "task": "explain",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 108345500,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41878,
+        "output": 369,
+        "cacheRead": 0,
+        "cacheWrite": 41799,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 5190,
+      "detail": "1078 chars, 0 web search(es), 0 citation(s)"
+    },
+    {
+      "task": "explain",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 41799
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 12117800,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41878,
+        "output": 360,
+        "cacheRead": 41799,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 4902,
+      "detail": "1107 chars, 0 web search(es), 0 citation(s)"
+    },
+    {
+      "task": "glossary-lookup",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 2,
+      "nanos": 255761700,
+      "unpriced": 0,
+      "tokens": {
+        "input": 47148,
+        "output": 1739,
+        "cacheRead": 0,
+        "cacheWrite": 44965,
+        "reasoning": 1065
+      },
+      "models": [
+        "openai/gpt-5.6-luna",
+        "anthropic/claude-opus-5.5"
+      ],
+      "elapsedMs": 26915,
+      "detail": "\"learning\" — 2009 chars, 1 web search(es)"
+    },
+    {
+      "task": "glossary-lookup",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 41731
+      },
+      "asLabelled": false,
+      "calls": 2,
+      "nanos": 46661150,
+      "unpriced": 0,
+      "tokens": {
+        "input": 47537,
+        "output": 1347,
+        "cacheRead": 41731,
+        "cacheWrite": 3251,
+        "reasoning": 795
+      },
+      "models": [
+        "openai/gpt-5.6-luna",
+        "anthropic/claude-opus-5.5"
+      ],
+      "elapsedMs": 20363,
+      "detail": "\"learning\" — 1553 chars, 1 web search(es)"
+    }
+  ]
+}

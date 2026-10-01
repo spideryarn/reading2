@@ -162,6 +162,7 @@ import {
   guessSource,
   loadTimeline,
   loadTweets,
+  fetchAllowanceStore,
 } from "./store/index.js";
 import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
 /* **Pure functions only**, and that is the whole reason this import survived
@@ -273,6 +274,7 @@ import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
+import { type DigFindings, admitDig, searchFirst } from "./dig-deeper.js";
 import { markAnswerStream } from "./quiz-mark.js";
 import { withOldClientBands } from "./quiz.js";
 import { similarBlocks } from "./similar.js";
@@ -1590,8 +1592,9 @@ const MAX_QUOTE_CHARS = 2000;
  * Answer a **legacy explanation** a few words at a time, and store the answer.
  *
  * Reached only as `POST /api/comments/:slug/:id/answer`, and only by *Try
- * again* and *Search the web properly* on a comment that already has an answer
- * or an error. Since 2026-08-26 a selection opens a conversation rather than
+ * again* and *Dig deeper* (was *Search the web*) on a comment that already has
+ * an answer or an error — and by the first answer to a comment whose "Also ask
+ * the AI" box was ticked. Since 2026-08-26 a selection opens a conversation rather than
  * buying one of these, and since 2026-08-28 it makes a free comment; nothing
  * creates a new explanation, and this route cannot.
  *
@@ -1609,6 +1612,16 @@ const MAX_QUOTE_CHARS = 2000;
  * the disk and the reader can never disagree. A model failure is a `done` frame
  * carrying a comment whose status is `error` — the request *did* succeed at what
  * it was for; the dialog shows the failure and offers a retry.
+ *
+ * **A *Dig deeper* press (`deep: true`) does two more things before the row is
+ * claimed** (plan 261001p): it takes the `dig-deeper` allowance, and it runs
+ * the forced search (src/dig-deeper.ts § `searchFirst`). Both before
+ * `beginAnswer` on purpose. A refusal or a failed search is then an ordinary
+ * JSON answer and the stored answer is untouched — the client already puts the
+ * previous answer back on any failure before the stream. And the search's
+ * twenty seconds never eat into the row's lease, which is sized for the model
+ * call alone (`COMMENT_ANSWER_LEASE_MS`). A first answer and *Try again* spend
+ * no allowance.
  *
  * Frames: one `begin`, then any number of `delta`, then exactly one `done`.
  */
@@ -1657,17 +1670,61 @@ async function answer(
      stream and be recorded as a failed answer on the reader's own question. */
   const profile = wantsProfile ? await resolveProfile(slug) : null;
 
-  /* Throws `NotAnExplanation` for an unknown id and for a bookmark, which
-     `serveApi`'s error mapping turns into a 404 and a 409. The anchor comes
-     back off the stored row — the request never gets to name one. */
-  const { comment, attempt } = await commentStore.beginAnswer(slug, id);
-  const { blockId, quote } = comment;
-  /* **Unreachable, and written as a guard rather than a `!`.** `beginAnswer`
-     refuses a `status: "none"` row, and `comments_whole_block_is_free` keeps
-     every quote-less row at `none` — so a whole-block bookmark cannot get here.
-     If either of those ever changes, this says so instead of asking the model
-     about the empty string. */
-  if (quote === undefined) throw httpError(409, "A whole-block bookmark was never a question");
+  /* **Dig deeper: the allowance, then the search, then the claim.** The row is
+     read first so that every press `beginAnswer` would refuse — an unknown id,
+     a bookmark — is refused by it below for free, with nothing spent: only a
+     row it would accept takes the allowance. */
+  let dig: DigFindings | undefined;
+  let freeDig: (() => Promise<void>) | null = null;
+  if (deeper) {
+    const stored = (await commentStore.load(slug)).find((c) => c.id === id);
+    if (stored && stored.status !== "none" && stored.quote !== undefined) {
+      freeDig = await admitDig(fetchAllowanceStore);
+      try {
+        dig = await searchFirst({
+          slug,
+          /* The words the reader selected are the thing they want dug into. */
+          subject: stored.quote,
+          article: {
+            title: article.meta.title,
+            author: article.meta.byline,
+            date: article.meta.publishedAt,
+          },
+          context: article.blocks.find((b) => b.id === stored.blockId)?.text,
+          library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
+        });
+      } catch (err) {
+        await freeDig();
+        throw err;
+      }
+    }
+  }
+
+  let claimed: Awaited<ReturnType<typeof commentStore.beginAnswer>>;
+  try {
+    /* Throws `NotAnExplanation` for an unknown id and for a bookmark, which
+       `serveApi`'s error mapping turns into a 404 and a 409. The anchor comes
+       back off the stored row — the request never gets to name one. */
+    claimed = await commentStore.beginAnswer(slug, id);
+    /* **Unreachable, and written as a guard rather than a `!`.** `beginAnswer`
+       refuses a `status: "none"` row, and `comments_whole_block_is_free` keeps
+       every quote-less row at `none` — so a whole-block bookmark cannot get here.
+       If either of those ever changes, this says so instead of asking the model
+       about the empty string. */
+    if (claimed.comment.quote === undefined) {
+      throw httpError(409, "A whole-block bookmark was never a question");
+    }
+    /* The same unreachable-by-construction shape for a dig: a row that passed
+       `beginAnswer` passed the check above, unless it changed in between. A
+       press that asked for a dig never gets a plain answer instead. */
+    if (deeper && !dig) throw httpError(409, "This comment changed while it was being dug into");
+  } catch (err) {
+    await freeDig?.();
+    throw err;
+  }
+  const { comment, attempt } = claimed;
+  const { blockId } = comment;
+  const quote: string = comment.quote;
   const key = `${slug}/${comment.id}`;
   const release = beganAnswering(key);
 
@@ -1722,7 +1779,7 @@ async function answer(
       blocks: article.blocks,
       blockId,
       quote,
-      deep: deeper,
+      dig,
       profile,
     })) {
       if (event.type === "delta") {
@@ -1776,6 +1833,7 @@ async function answer(
   } finally {
     release();
     res.end();
+    await freeDig?.();
   }
 }
 
@@ -1906,11 +1964,13 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
 }
 
 /**
- * **Check one glossary entry on the web, a few words at a time, and keep the
- * answer** — `POST /api/glossary/:slug/:id/lookup`, SSE out.
+ * ***Dig deeper* into one glossary entry, a few words at a time, and keep the
+ * answer** — `POST /api/glossary/:slug/:id/lookup`, SSE out. (The path keeps
+ * its old name: it is a URL, not copy.)
  *
- * `streamAskedTerm`'s shape: the 404 and the two 409s are decided by
- * `lookUpTerm` before a header is written, then any number of `delta` and
+ * `streamAskedTerm`'s shape: the 404, the two 409s and the allowance's 429/503
+ * are decided by `lookUpTerm` before a header is written, then any number of
+ * `delta` and
  * exactly one `done` (`{ entry }`, the JSON route's old body) or `error`.
  * **`done` is written only after the lookup is stored** — a save that fails
  * after the words arrived is an `error`, so the panel never draws an answer as
@@ -1927,10 +1987,11 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
  * same reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
 async function streamTermLookup(slug: string, termId: string, res: ServerResponse): Promise<void> {
-  const { stream } = await lookUpTerm(slug, termId);
+  const { stream, release } = await lookUpTerm(slug, termId);
 
-  const { frame } = sse(res);
+  let frame: ReturnType<typeof sse>["frame"] | null = null;
   try {
+    frame = sse(res).frame;
     for await (const event of stream()) {
       if (event.type === "delta") {
         frame("delta", { text: event.text });
@@ -1940,9 +2001,15 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
     }
   } catch (err) {
     captureFailure(err, { route: "glossary-lookup", slug });
-    frame("error", { error: sayToReader(err, { route: "glossary-lookup", slug }) });
+    frame?.("error", { error: sayToReader(err, { route: "glossary-lookup", slug }) });
   } finally {
-    res.end();
+    /* The stream frees the allowance itself when it ends; this is for the
+       path where it never started. Idempotent. */
+    try {
+      await release();
+    } finally {
+      res.end();
+    }
   }
 }
 

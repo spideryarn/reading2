@@ -157,7 +157,7 @@ a safe stopping point with its own limit.
 - **The allowance (Sol F5):** a `dig-deeper` `RateBucket` (one additive migration widening
   `rate_limit_events`' bucket check), taken after ownership and input checks, before any mutation,
   SSE or model call, freed in `finally`; its lease covers the search deadline plus explain's.
-  Proposed: 30 an hour, 100 a day, 2 at a time, global fuse from the measured budget. Comment
+  20 an hour, 60 a day, 2 at a time, a global fuse of 100 a day — § The cost line. Comment
   *first* answers (the tick-box) stay outside it; only Dig deeper presses spend it.
 - `term-lookup.ts` `makeLookUpTerm` and `routes.ts` `answer()` (wire field `deep: true` unchanged)
   go through it.
@@ -205,9 +205,29 @@ answer names the article by title.
 
 ## The cost line
 
-To be measured in stage 1 and 2 on real presses (`spideryarn.ai_calls`, local), and stated here:
-per press, before → after, for a short and a long article, cache cold and warm. Expected from the
-probes: the search step ~$0.007; the answer at Opus prices (about twice Sonnet's per token).
+Measured 2026-10-01 with `npm run eval:cost:interactions -- --slug
+evalcost-41wlze3j-long-html-1-spya-dw4wx4 --task explain --task glossary-lookup` — a local article of
+186 blocks, 16,855 words, ~42k prompt tokens; results in
+`evals/results/cost/2026-10-01-17-43-07-interactions-…/run.json`. *Before* is the explain row: the
+same call the old *Check the web* and comment buttons made (Sonnet, the model choosing whether to
+search — it chose not to, both times). *After* is the glossary row, now a dig.
+
+| per press | first on the article (cold) | prefix cached (warm) | wall clock |
+|---|---|---|---|
+| before — Sonnet, model decides | $0.108 | $0.012 | ~5 s |
+| after — forced search (Luna) + Opus | **$0.256** | **$0.047** | 20–27 s |
+
+The search step alone is ~$0.008 and ~4.7 s (two live calls). Opus spent ~800–1,100 reasoning
+tokens and ~1,350–1,750 output tokens in all, under the 4,000 ceiling. The eval exits 1 because its
+warm round's cache read was written by its own cold round; the 41,731 cached tokens read are what
+matter here. **So a dig costs about 2.4× a first explain and 4× a warm one**, and a cold press
+scales with the article: a 100k-token paper is about $0.60.
+
+**What covers it:** the ledger records both calls with no extra work (`dig-deeper-search` and
+`dig-deeper`, both "interactive request work", attributed to the article by the route), and
+`DIG_DEEPER_RATE_POLICY` bounds it — 20 an hour, 60 a day per reader, two at once, and a global fuse
+of 100 presses a day (~$60 at the very worst, $5–25 mostly warm). The glossary and comment presses
+had no limit at all before this.
 
 ## Simpler options passed over
 

@@ -1701,7 +1701,7 @@ function AskATerm({
  * one day, and a lookup from a month ago is a different object from one from a
  * minute ago.
  */
-function Looked({
+export function Looked({
   entry,
   look,
   looking,
@@ -1729,20 +1729,27 @@ function Looked({
   unquoted: boolean;
   /** **Not a `StepFailure`.** A web lookup is a request, not a job — there is
       nothing on the queue to retry and the only control the term has ever had
-      is the Check-the-web button itself, which simply comes back. See
+      is the Dig deeper button itself, which simply comes back. See
       `worthRetrying` in src/messages.ts § The two places that deliberately do
       not ask. */
   failed: string | null;
 }) {
   const lookup = entry.lookup;
 
-  if (!lookup) {
-    /* **Nothing at all for a visitor**, rather than a disabled button. The
-       marked-not-hidden rule is about controls a reader would otherwise go
-       looking for; this one they have never seen, and a dead globe on every row
-       of a list they can read perfectly well is furniture. The band's own
-       sentence already tells them what a shared link does not carry. */
-    if (!look) return null;
+  /* **Nothing at all for a visitor**, rather than a disabled button. The
+     marked-not-hidden rule is about controls a reader would otherwise go
+     looking for; this one they have never seen, and a dead globe on every row
+     of a list they can read perfectly well is furniture. The band's own
+     sentence already tells them what a shared link does not carry. */
+  if (!look) return lookup ? <LookupAnswer lookup={lookup} /> : null;
+
+  /* **Dig deeper again, under an answer already there** (plan 261001p, Sol
+     F10). Without it an entry checked before Dig deeper existed — perhaps one
+     that says *no web search* — could never be dug into, because the button
+     was drawn only while there was no answer. The old answer stays on screen
+     while the new one arrives under it, and stays if the new one fails: only
+     the stream's `done`, after the save, replaces it (the store upserts). */
+  const control = (() => {
     /* **A term the article never quotes cannot be checked, and the button now
        says so before it is pressed rather than after.** A lookup is `explain`
        with a different selection: it needs a passage of the piece to anchor the
@@ -1776,13 +1783,13 @@ function Looked({
           disabled={busy || unquoted}
           title={
             unquoted
-              ? "A check on the web is anchored to a passage of the article, and this term is named rather than quoted anywhere in it."
-              : "One model call, with a web search if it decides it needs one. Kept afterwards."
+              ? "Dig deeper starts from a passage of the article, and this term is named rather than quoted anywhere in it."
+              : "Searches the web and asks a stronger model about this one thing. It takes longer than the first answer."
           }
           onClick={() => void look(entry.id)}
         >
           {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}
-          {looking ? "Checking…" : "Check the web"}
+          {looking ? "Digging deeper…" : lookup ? "Dig deeper again" : "Dig deeper"}
         </button>
         {/* The wait needs saying, not just spinning through. This call sends the
             whole article and may run a web search on top, so it can sit for the
@@ -1808,9 +1815,9 @@ function Looked({
             the words are the progress. */}
         {looking && !draft && !failed && (
           <p className="gloss-look-wait">
-            The whole piece goes to the model, and it may search the web as well, so this can take
-            up to a minute. You can carry on reading — the answer is saved against this term either
-            way.
+            This searches the web first, then the whole piece goes to a stronger model, so it can
+            take a minute or more. You can carry on reading — the answer is saved against this term
+            either way.
           </p>
         )}
         {/* The failure first, then what arrived under it — the box's order,
@@ -1826,9 +1833,16 @@ function Looked({
         )}
       </div>
     );
-  }
+  })();
 
-  return <LookupAnswer lookup={lookup} />;
+  return lookup ? (
+    <>
+      <LookupAnswer lookup={lookup} />
+      {control}
+    </>
+  ) : (
+    control
+  );
 }
 
 /**
@@ -1868,9 +1882,13 @@ export function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
                 <strong>Searched the web.</strong> {lookup.searches}{" "}
                 {lookup.searches === 1 ? "search" : "searches"} on{" "}
                 {new Date(lookup.at).toLocaleDateString()}, by {lookup.model}.{" "}
+                {/* *Found*, not *cited* (plan 261001p § What the sources list
+                    means): a dug answer's list includes everything its search
+                    step returned, and a plain-text answer cannot say which of
+                    those it leaned on. True of older answers too. */}
                 {sources.length > 0
-                  ? "The sources below are what it cited."
-                  : "It cited no sources, so there are none to link to."}
+                  ? "The sources below are what it found."
+                  : "It found no sources, so there are none to link to."}
               </>
             ) : (
               <>

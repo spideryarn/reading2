@@ -404,7 +404,7 @@ describe("the reader profile rides after the breakpoint", () => {
 
   it("leaves explain's cached part untouched", () => {
     const without = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote");
-    const with_ = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, profile);
+    const with_ = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", null, profile);
     expect(cachedText(with_)).toBe(cachedText(without));
     // …and it really did arrive, rather than being dropped on the floor.
     expect(partText(with_[1]!.content, 1)).toContain("rusty on information theory");
@@ -422,8 +422,8 @@ describe("the reader profile rides after the breakpoint", () => {
        edited their box, must share the article's cache entry — otherwise the
        feature quietly multiplies the cost of every article by the number of
        profiles it has ever been read under. */
-    const a = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, profile);
-    const b = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, other);
+    const a = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", null, profile);
+    const b = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", null, other);
     expect(cachedText(a)).toBe(cachedText(b));
   });
 
