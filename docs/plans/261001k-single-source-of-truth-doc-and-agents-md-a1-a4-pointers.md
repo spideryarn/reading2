@@ -117,3 +117,11 @@ exception list into a file nobody re-checks.
 
 `npx vitest run tests/doc-links.test.ts`, `npm test` for docs suites, one GPT Sol review of the
 whole diff for introduced duplication and broken pointers. Merge `origin/dev` before pushing.
+
+## Shipped
+
+On `dev`, 2026-10-01: `06255b9d` (the work) and `89b97a91` (GPT Sol's code-review fixes, two of
+them overridden — the A4 blurb keeps its "what goes wrong", and the quote exception stays in the new
+doc). Plan review and code review were both GPT Sol. Gates: typecheck, `tests/doc-links.test.ts`
+and the six suites that read these docs; the full `npm test` was not run, since the only source
+changes are comments.
