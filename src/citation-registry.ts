@@ -7,10 +7,12 @@
  * at most `MAX_REGISTRY_LOOKUPS`, two at a time, the cache first because
  * `lookupWork` reads it first. What it may add, and nothing else:
  *
- * - **`found`** — the registry's title agrees with the article's title for the
- *   work, by stage 2's rule (`registryTitleAgrees`, src/paper-evidence.ts), and
- *   is distinctive enough to establish identity, so a mistyped DOI cannot
- *   lend a row somebody else's authors;
+ * - **`found`** — the registry's record names the article's work, by stage 2's
+ *   rule (`registryIdentifiesCitation`, src/paper-evidence.ts: the titles agree,
+ *   or an author–year label's author and year match and the article's own
+ *   reference entry also contains the registry title), and its title is
+ *   distinctive enough to establish identity, so a mistyped DOI cannot lend a
+ *   row somebody else's authors;
  * - **`conflict`** — it does not: the article's identifier points at a
  *   different work, and the row says so;
  * - **nothing** — not found, unavailable, ambiguous, over the cap or time
@@ -27,7 +29,7 @@
  */
 import { doiFor, lookupWork, parseWorkId, type LookupResult, type WorkId } from "./bibliographic.js";
 import { tokens } from "./citation-lookup.js";
-import { registryTitleAgrees } from "./paper-evidence.js";
+import { registryIdentifiesCitation } from "./paper-evidence.js";
 import { registryWorkOf } from "./registry-work.js";
 import type { CitationRegistry, Citations, CitedWork } from "./types.js";
 
@@ -121,10 +123,23 @@ export function titlesDifferByObjectQualifier(a: string, b: string): boolean {
 }
 
 /** What one answer puts on the row, judged against the article's own title. */
-export function registryFor(work: Pick<CitedWork, "title">, result: LookupResult): CitationRegistry | null {
+export function registryFor(
+  work: Pick<CitedWork, "title" | "year" | "reference" | "entry">,
+  result: LookupResult,
+): CitationRegistry | null {
   if (result.kind !== "found") return null;
-  if (!registryTitleAgrees(result.record.title, work.title)) {
-    return { kind: "conflict", source: result.record.source };
+  const agreed = registryIdentifiesCitation(result.record, {
+    title: work.title,
+    ...(work.year !== undefined ? { year: work.year } : {}),
+    reference: work.entry ?? work.reference?.quote ?? null,
+  });
+  if (agreed === null) return { kind: "conflict", source: result.record.source };
+  if (agreed === "label-unconfirmed") return null;
+  /* An author–year label has no words to be weak or qualified: the record's
+     first author and year matched it, and the record's own title must still
+     be distinctive enough to lend the row. */
+  if (agreed === "label") {
+    return registryTitleIsDistinctive(result.record.title) ? { kind: "found", ...registryWorkOf(result.record) } : null;
   }
   /* A weak exact title is not a disagreement, so it gets no alarming conflict
      message; it is simply not enough evidence to lend metadata to the row. */

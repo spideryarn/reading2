@@ -87,6 +87,14 @@ export interface PaperPage {
   /** 1-based, the PDF's own page index. */
   page: number;
   lines: string[];
+  /**
+   * **Page 1 only: its lines with the running headers and footers kept.** A
+   * conference template repeats the paper's title as a running header, so
+   * `pass0` calls it furniture and `lines` loses the title from the top of
+   * page 1 too. The identity check (src/paper-evidence.ts § confirmIdentity)
+   * reads these; everything chunked, sent, hashed or searched reads `lines`.
+   */
+  linesWithFurniture?: string[];
 }
 
 export type PaperText =
@@ -273,7 +281,16 @@ async function pdfText(bytes: Uint8Array, signal: AbortSignal): Promise<PdfOutco
   /* `isScan` judges the content pages and needs more than one of them; a
      one-page scan (or a file of blank pages) is caught by the total. */
   if (pass.isScan || words < SCAN_WORDS_PER_PAGE) return { ok: false, why: "scan", detail: `${words} words` };
-  return { ok: true, text, words, pages: pass.pages.map((p) => ({ page: p.page, lines: pageLines(pass, p.page) })) };
+  return {
+    ok: true,
+    text,
+    words,
+    pages: pass.pages.map((p, i) => ({
+      page: p.page,
+      lines: pageLines(pass, p.page),
+      ...(i === 0 ? { linesWithFurniture: p.text.split("\n").filter((line) => line.trim()) } : {}),
+    })),
+  };
 }
 
 /** The first DOI-shaped string in a meta value — `doi:10…`, `https://doi.org/10…` and a bare `10…` all qualify. */

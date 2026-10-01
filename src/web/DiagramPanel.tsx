@@ -90,6 +90,7 @@ import { useRenderCount } from "./perf.js";
 import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
+import { DIAGRAM_SUB_MODES } from "./sub-modes.js";
 /* The bar's own rule for a control behind the experimental-features switch —
    `visibleKinds` below is this file's caller. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
@@ -251,12 +252,12 @@ const KIND_UI: Record<
      it is *for*, because unlike the tree it is not showing the reader something
      they could have worked out from the contents page. */
   force: {
-    label: "Force",
+    label: DIAGRAM_SUB_MODES.force.label,
     icon: Waypoints,
     /* Behind the switch since 2026-09-04, with Drift, Trail and Illustrated. It
        was the picture Diagram opened on until then; what changed is not the
        picture but who is shown a chip for it. */
-    experimental: true,
+    experimental: DIAGRAM_SUB_MODES.force.experimental,
     blurb:
       "Sections as bubbles, settled by physics: ones that talk about the same things pull together, while down the page stays reading order.",
     how: "The solid lines are free — reading order, containment, and words two sections share. The dotted ones cost one model call, and say the two passages mean something similar.",
@@ -265,17 +266,17 @@ const KIND_UI: Record<
      placed by what the paragraph is about (src/web/scatter.ts). They are the
      only two pictures here whose axes came out of a model. */
   drift: {
-    label: "Drift",
+    label: DIAGRAM_SUB_MODES.drift.label,
     icon: ChartScatter,
-    experimental: true,
+    experimental: DIAGRAM_SUB_MODES.drift.experimental,
     blurb:
       "One dot per paragraph: down the page is still the article, sideways is what it is talking about — so a subject the piece returns to is a second cluster far below the first.",
     how: "Costs one model call the first time, which reads every paragraph. Sideways is either one sliding scale or a column per topic — the Sideways control switches between them.",
   },
   trail: {
-    label: "Trail",
+    label: DIAGRAM_SUB_MODES.trail.label,
     icon: Route,
-    experimental: true,
+    experimental: DIAGRAM_SUB_MODES.trail.experimental,
     blurb:
       "The same dots with both axes spent on meaning, joined in reading order — so you can see whether the piece travels through its subject or circles back over it.",
     how: "Shares Drift's model call, so opening one pays for both. This is the only picture here where down the page is not later in the article; colour by Progress if you need that back.",
@@ -285,13 +286,13 @@ const KIND_UI: Record<
      drawing. Its `how` leads with the price because it is the only picture here
      that costs two minutes and cannot be redrawn for free. */
   sketch: {
-    label: "Sketch",
+    label: DIAGRAM_SUB_MODES.sketch.label,
     icon: PenLine,
     /* **The one that is good enough for everybody**, and therefore the default
        (`diagramParam` in params.ts). It is also the only one here whose empty
        state is a real invitation — SketchView.tsx draws what it costs and what
        it takes, and draws nothing until asked. */
-    experimental: false,
+    experimental: DIAGRAM_SUB_MODES.sketch.experimental,
     blurb:
       "A model reads the article, works out what shape the argument is — three supports converging, a ladder, a spine with asides — and draws that. The only picture here that is not the same shape for every article.",
     /* **Both promises here were stronger than the artefact.** The picture is
@@ -311,11 +312,11 @@ const KIND_UI: Record<
      is measured (evals/results/illustrated-2026-09-03/README.md) rather than
      estimated. */
   illustrated: {
-    label: "Illustrated",
+    label: DIAGRAM_SUB_MODES.illustrated.label,
     icon: Brush,
     /* The dearest and slowest thing in the app, and the newest. Behind the
        switch on both counts. */
-    experimental: true,
+    experimental: DIAGRAM_SUB_MODES.illustrated.experimental,
     blurb:
       "The same argument as the Sketch, painted — an antique map or an illuminated page, drawn from passages the article actually contains. An interpretation of the shape, not a diagram of it.",
     /* **"the list under it is both" said checked, and only half of it is.** The

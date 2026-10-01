@@ -34,7 +34,7 @@ import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } 
  * the second part's layout, or anything here changes what an answer would say**
  * — it is inside the fingerprint, so a bump detaches every stored answer.
  */
-export const CITATION_INVESTIGATE_VERSION = "citation-investigate/5";
+export const CITATION_INVESTIGATE_VERSION = "citation-investigate/6";
 
 /** Each citing passage sent, in characters — *Look it up*'s `PASSAGE_CAP`. */
 export const INVESTIGATE_PASSAGE_CAP = 1_200;
@@ -88,7 +88,7 @@ export function matchedPageOf(work: CitedWork, find: CitationFind | null): Match
 
 type WorkFields = Pick<
   CitedWork,
-  "title" | "authors" | "year" | "reference" | "url" | "linkFrom" | "why" | "firstCited" | "citedAt"
+  "title" | "authors" | "year" | "reference" | "entry" | "url" | "linkFrom" | "why" | "firstCited" | "citedAt"
 >;
 
 /**
@@ -111,7 +111,11 @@ export function investigateContext(
     title: work.title,
     authors: work.authors ?? null,
     year: work.year ?? null,
-    reference: work.reference ? work.reference.quote.slice(0, INVESTIGATE_REFERENCE_CAP) : null,
+    /* `entry` is the whole article-owned reference-list entry, including the
+       PDF list that has no rendered block. It is stronger identity evidence
+       than the shorter citation place, and was already the intended meaning
+       of this context field. */
+    reference: (work.entry ?? work.reference?.quote ?? null)?.slice(0, INVESTIGATE_REFERENCE_CAP) ?? null,
     url: work.url,
     linkFrom: work.linkFrom,
     why: work.why,

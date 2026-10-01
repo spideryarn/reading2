@@ -31,7 +31,27 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { ArticleCostBody, lineName } = await import("../src/web/ArticleCost.js");
+const { ArticleCostBody, articleCostSummary, lineName, useArticleCost } = await import(
+  "../src/web/ArticleCost.js"
+);
+
+/* What `CostSection` in Metadata.tsx does — one read, handed to both the shut
+   heading's line and the body — without the rest of that page. */
+const rendered: { slug: string; summary: string | null }[] = [];
+function Harness({ slug }: { slug: string }) {
+  const load = useArticleCost(slug);
+  rendered.push({ slug, summary: articleCostSummary(load) });
+  return (
+    <>
+      <span data-testid="summary">{articleCostSummary(load) ?? "(none)"}</span>
+      <ArticleCostBody load={load} />
+    </>
+  );
+}
+
+function summary(): string | null | undefined {
+  return host.querySelector("[data-testid=summary]")?.textContent;
+}
 
 function line(over: Partial<ArticleCostLine>): ArticleCostLine {
   return {
@@ -64,7 +84,7 @@ function answer(status: number, body: unknown): void {
 
 async function mount(slug = "an-article-spya-abc123"): Promise<void> {
   await act(async () => {
-    root.render(<ArticleCostBody slug={slug} />);
+    root.render(<Harness slug={slug} />);
   });
   /* The fetch, then the JSON, then the state update. */
   for (let i = 0; i < 5; i++) {
@@ -114,6 +134,8 @@ describe("the article cost section", () => {
     expect(host.textContent).toContain("over 6 calls");
     const rows = [...host.querySelectorAll("tbody tr")].map((r) => r.firstChild?.textContent);
     expect(rows).toEqual(["hierarchy", "hierarchy · labels", "chat"]);
+    /* The shut heading says the same total as the body. */
+    expect(summary()).toBe("$0.1030 · 6 calls");
     /* Nothing is unpriced, so the total is not called a floor. */
     expect(host.textContent).not.toContain("at least");
     expect(host.textContent).not.toContain("reported no cost");
@@ -144,6 +166,20 @@ describe("the article cost section", () => {
     expect(host.textContent).toContain("2 calls reported no cost");
     expect(host.textContent).toContain("1 live conversation connected and never reported usage");
     expect(host.querySelector("tbody td:last-child")?.textContent).toBe("$0.0100+");
+    expect(summary()).toBe("At least $0.0100 · 3 calls");
+  });
+
+  it("calls the heading's total a floor when a live conversation went unreported", async () => {
+    answer(200, {
+      slug: "a",
+      lines: [line({ creditsNanos: 10_000_000, calls: 3 })],
+      silentLiveSessions: 2,
+    } satisfies ArticleCost);
+    await mount();
+    expect(host.querySelector("[data-testid=article-cost-total]")?.textContent).toContain(
+      "At least $0.0100",
+    );
+    expect(summary()).toBe("At least $0.0100 · 3 calls");
   });
 
   it("says so when nothing has been recorded", async () => {
@@ -151,6 +187,7 @@ describe("the article cost section", () => {
     await mount();
     expect(host.textContent).toContain("No model calls are recorded against this article.");
     expect(host.textContent).toContain("Only what was recorded and tied to this article");
+    expect(summary()).toBe("none recorded");
   });
 
   it("does not hide a silent live conversation when there are no ledger rows", async () => {
@@ -158,6 +195,29 @@ describe("the article cost section", () => {
     await mount();
     expect(host.textContent).toContain("No model calls are recorded against this article.");
     expect(host.textContent).toContain("1 live conversation connected and never reported usage");
+    expect(summary()).toBe("none priced · 1 live conversation unreported");
+  });
+
+  it("does not show one article's total under another's slug", async () => {
+    answer(200, {
+      slug: "a",
+      lines: [line({ creditsNanos: 10_000_000, calls: 3 })],
+      silentLiveSessions: 0,
+    } satisfies ArticleCost);
+    await mount("first-spya-aaaaaa");
+    expect(summary()).toBe("$0.0100 · 3 calls");
+    /* Every render, not the DOM after `act`: the effect resets the state
+       before `act` returns, so the frame that showed the first article's
+       figure under the second's slug is only visible from inside. */
+    fetchSpy.mockReturnValue(new Promise(() => {}));
+    rendered.length = 0;
+    await act(async () => {
+      root.render(<Harness slug="second-spya-bbbbbb" />);
+    });
+    const second = rendered.filter((r) => r.slug === "second-spya-bbbbbb");
+    expect(second.length).toBeGreaterThan(0);
+    expect(second.map((r) => r.summary)).not.toContain("$0.0100 · 3 calls");
+    expect(summary()).toBe("…");
   });
 
   it("shows a refusal as an error rather than as a zero", async () => {
@@ -167,6 +227,9 @@ describe("the article cost section", () => {
       "Could not read what this article cost",
     );
     expect(host.textContent).not.toContain("$0");
+    /* No figure on the heading either: the section refuses to shut over a
+       failure (Metadata.tsx § CostSection), so the alert is what shows. */
+    expect(summary()).toBe("(none)");
   });
 });
 
@@ -185,8 +248,23 @@ describe("where the section is mounted", () => {
        or refused What-it-cost section. Mounting all of Metadata here would
        replace this one assertion with every fetch and store on that page. */
     const source = readFileSync("src/web/Metadata.tsx", "utf8");
+    expect(source).toMatch(/\{isAdmin\(user\?\.id\) && <CostSection slug=\{slug\} \/>\}/);
+    /* The guarded occurrence is the only mount; otherwise the assertion above
+       could stay green while a second, unguarded section rendered and read. */
+    expect(source.match(/<CostSection\b/g)).toHaveLength(1);
+    /* …and the read lives inside that component, so it is behind the check too. */
     expect(source).toMatch(
-      /\{isAdmin\(user\?\.id\) && \(\s*<Section label="What it cost">\s*<ArticleCostBody slug=\{slug\} \/>/,
+      /function CostSection\(\{ slug \}: \{ slug: string \}\) \{\s*const load = useArticleCost\(slug\);/,
+    );
+    expect(source.match(/useArticleCost\(/g)).toHaveLength(1);
+  });
+
+  it("is shut by default with the total on its heading, and open over a failure", () => {
+    /* Greg, 2026-10-01 (SPIDERYARN-READING2-7G). The summary line itself is
+       tested above through the hook; this pins that it is the shut heading's. */
+    const source = readFileSync("src/web/Metadata.tsx", "utf8");
+    expect(source).toMatch(
+      /const failed = load\.kind === "failed";\s*return \(\s*<Section label="What it cost" collapsible=\{!failed\} aside=\{articleCostSummary\(load\)\}>\s*<ArticleCostBody load=\{load\} \/>/,
     );
   });
 });

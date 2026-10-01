@@ -1,0 +1,14 @@
+PASS  1 no profile unchanged
+      old-none-1: GOAL 2/18, part7 1, OVERALL 1, SUPPORT 3; old-none-2: GOAL 3/20, part7 1, OVERALL 0, SUPPORT 4; new-none-1: GOAL 5/20, part7 2, OVERALL 2, SUPPORT 4; new-none-2: GOAL 1/14, part7 0, OVERALL 1, SUPPORT 3
+FAIL  2 About moves the pitch
+      old-none-1 3, old-none-2 4, new-none-1 2, new-none-2 2, old-aboutA-1 0, old-aboutA-2 0, r2-aboutA-1 0, r2-aboutA-2 0
+FAIL  3 About moves the parts
+      old-none-1 33%, old-none-2 35%, new-none-1 50%, new-none-2 36%, old-aboutA-1 56%, old-aboutA-2 58%, r2-aboutA-1 47%, r2-aboutA-2 55%
+PASS  4 goal moves the kind
+      old-none-1 11%, old-none-2 15%, new-none-1 20%, new-none-2 7%, old-goal-1 50%, old-goal-2 69%, r2-goal-1 53%, r2-goal-2 55%
+FAIL  5 goal not weaker
+      old-goal-1 12/20 60%, old-goal-2 13/16 81%, old-bothA-1 14/19 74%, old-bothA-2 13/17 76%, old-bothB-1 10/16 63%, old-bothB-2 12/19 63%, r2-goal-1 12/19 63%, r2-goal-2 14/20 70%, r2-bothA-1 15/19 79%, r2-bothA-2 11/18 61%, r2-bothB-1 15/19 79%, r2-bothB-2 14/19 74%
+FAIL  6 reason leads, About chooses within
+      FORMAL among GOAL-on: old-bothA-1 50%, old-bothA-2 54%, old-bothB-1 40%, old-bothB-2 58%, r2-bothA-1 53%, r2-bothA-2 55%, r2-bothB-1 53%, r2-bothB-2 50%; pooled gap new -2% vs old -2%
+FAIL  7 the balance
+      old-goal-1 O1+S1, old-goal-2 O0+S0, old-bothA-1 O1+S2, old-bothA-2 O0+S0, old-bothB-1 O0+S0, old-bothB-2 O1+S0, r2-goal-1 O1+S0, r2-goal-2 O1+S1, r2-bothA-1 O1+S1, r2-bothA-2 O1+S1, r2-bothB-1 O1+S0, r2-bothB-2 O0+S1

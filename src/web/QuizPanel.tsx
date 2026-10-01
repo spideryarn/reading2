@@ -101,6 +101,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
+import { REMEMBER_SUB_MODES } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -208,7 +209,7 @@ export function RememberSubModeToggle({
             if (value !== view) onChange(view);
           }}
         >
-          {view === "recall" ? "Recall" : "Quiz"}
+          {REMEMBER_SUB_MODES[view].label}
         </button>
       ))}
     </div>

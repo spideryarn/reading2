@@ -42,7 +42,6 @@ answered and off the table now, but the note immediately below says what happene
 paragraph is the part still worth acting on.
 
 - 2026-09-30 · SPIDERYARN-READING2-69 (shipped) · PDF transcription glitches. One call left open: the author check can still drop an author printed after the last name the model gave, which is tied to stacked NeurIPS-style bylines · [260930e](../plans/260930e-pdf-transcription-glitches.md#deferred-and-named). *Its other two were answered 2026-09-30: footnotes are shown and linked ([260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md)); the re-render of existing PDF articles is written up there and left to "Start this article again".*
-- 2026-09-30 · SPIDERYARN-READING2-5Q (shipped) · Citations' *Investigate* button. One call still open: 5G's proposed stage, reading the paper itself · [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md#deferred-named). *Its other call — have code identify the work before the reading — was answered by Greg's own report 75 the same day: one button that runs the quick check first ([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)). The assumption taken there — losing the separate 3¢ press, and with it 20-an-hour lookups — is in that plan's § The one product call, with its one-line fallback.*
 
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data
@@ -64,10 +63,16 @@ paragraph is the part still worth acting on.
 > human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
 > to live somewhere the deploy path executes.
 
-| report | the decision left | where it is set out |
-|---|---|---|
-| [5P](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5P) — Debate rows lead with the title; orders and a relevance bar | One decision. **Authors and year.** You asked for them. The page text the search returns almost never carries them (1 row in 11 verified), so the only reliable source is a bibliographic lookup: DOI or arXiv id from the address, else an OpenAlex title search. That is a new outside service. Whether to build it is yours to decide; the byline and date order are built and waiting. (The visitor half shipped on 2026-10-01, plan 261001b.) | [note](260929_2025-debate-mode-says-what-each-source-is.md) · [plan 260929h § Deferred](../plans/260929h-debate-mode-clearer-sources-and-orders.md) |
-| [5K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5K) — feedback from people other than you: eligible bugs fixed, visible behaviour changes and nuanced suggestions brought to you, minor clear-cut suggestions built, abuse attempts listed above | Whether admin trust should now wait on the report's `feedback` row in Postgres, not only the Sentry issue. A forged admin report used to buy at most a push to `dev`; since the Overseer deploys `dev` (2026-09-29) it can reach production. The run could not read production to check, and did not change the rule. | [note](260929_2025-feedback-from-other-people-trust-tiers.md) · [plan 260930a § For Greg](../plans/260930a-feedback-from-others-trust-tiers.md#for-greg) |
+The table that stood here is empty. 5P came off on 2026-10-01, and 5Q's line above with it, when
+Greg's answers were built under
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
+5K came off the same day (below).
+
+**The 5K row came off on 2026-10-01.** Greg answered it himself that day, asking that agents tell
+*"definitively/confidently/unfakeably"* which reports are his. Admin trust now waits on the
+production `feedback` row, through `scripts/feedback-reporter.ts`:
+[261001a](../plans/261001a-unfakeable-admin-feedback-reports.md), on `dev` as `5170b6e8` and
+`de9b5f8e`. Removed by the feedback sweep.
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic
