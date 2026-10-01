@@ -6,6 +6,7 @@
  * Swept rather than spot-checked, across widths, both rails and three roots,
  * because the claims are inequalities about every window.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   fitView,
@@ -23,6 +24,12 @@ const CASES = WIDTHS.flatMap((windowWidth) =>
   ),
 );
 
+const SHELL_CSS = readFileSync(new URL("../src/web/styles/shell.css", import.meta.url), "utf8");
+const NARROW_CSS = readFileSync(
+  new URL("../src/web/styles/narrow-window.css", import.meta.url),
+  "utf8",
+);
+
 /** Where the table's left edge lands: centred in `.reader`'s content box. */
 function tableLeft(fit: ReturnType<typeof fitView>, windowWidth: number): number {
   const spine = fit.spine === "on" ? SPINE_W : 0;
@@ -31,6 +38,19 @@ function tableLeft(fit: ReturnType<typeof fitView>, windowWidth: number): number
 }
 
 describe("the annotations column", () => {
+  it("moves the fixed head with the top bar instead of jumping to its new edge", () => {
+    const transitionRule =
+      SHELL_CSS.match(/([^{}]+)\{\s*transition:\s*top 0\.18s ease;\s*\}/)?.[1] ?? "";
+    expect(transitionRule).toContain(".marg-head");
+    expect(NARROW_CSS).toContain("  .marg-head,");
+  });
+
+  it("hides the panel-only small-screen advice when Annotations keeps the prose visible", () => {
+    expect(NARROW_CSS).toContain(
+      ".reader.band-covers:has(.mode-band, .marg-narrow) .small-screen-hint { display: none; }",
+    );
+  });
+
   it("never runs off the right of the window, and starts at the table's right edge", () => {
     for (const c of CASES) {
       const fit = fitView({ ...c, margin: true });

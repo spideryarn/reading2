@@ -2,7 +2,7 @@
  * **What Annotations mode puts beside which block** — the pure half.
  *
  * Everything here is drawn from what the article already has: the Socratic
- * question the structure call wrote on the root and each top-level part
+ * question the structure call wrote on each top-level part
  * (src/hierarchy.ts § `questionFor`), the arc, and the ideas where the reader
  * has made them. Nothing is generated for this mode.
  *
@@ -35,7 +35,7 @@ export const PARAGRAPH_MIN_WORDS = 12;
 /**
  * The notes for every block that has any, in the order they are drawn.
  *
- * Questions first, root before part, then ideas in the artefact's own order
+ * The part's question first, then ideas in the artefact's own order
  * (assumed first — src/types.ts § `Ideas.ideas`), each once, beside the first
  * block it occurs in. A node or occurrence naming a block this article no
  * longer has is skipped, so a stale artefact cannot place a note nowhere.

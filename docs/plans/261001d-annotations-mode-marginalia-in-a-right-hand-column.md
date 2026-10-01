@@ -1,6 +1,6 @@
 # Annotations mode: marginalia in a right-hand column
 
-**Status:** planned 2026-10-01. Two of Greg's reports, one mode:
+**Status:** stage 1 built and landed 2026-10-01 (§ Status, below). Two of Greg's reports, one mode:
 SPIDERYARN-READING2-7E (report `spya-u3dgk7`) and SPIDERYARN-READING2-7K (report `spya-w2kgha`),
 both from `/read/dongetal25-spya-vfmvmm`. Experimental, behind the switch
 ([experimental-features.md](../project/experimental-features.md)), built to
@@ -109,8 +109,8 @@ where it sits.
   the arc sentence for the part you are in. Without an arc (a visitor, or before it is written) it
   is the path alone, and looks complete.
 - **Notes, per block**:
-  - the **Socratic question** of each depth-1 part beside its first block, and the article's own
-    (the root's) beside the first block;
+  - the **Socratic question** of each depth-1 part beside its first paragraph (the article's own,
+    the root's, was dropped in the design pass below);
   - **Ideas**, if the reader has already made them: beside the first block each idea occurs in, a small
     stamp — *assumes* or *introduces* — and the idea's short name; the full statement in a tooltip.
     Annotations never starts the Ideas job.
@@ -199,6 +199,28 @@ channel-budget constraints. Its eight points, and what happened to each:
 | 6 | idea stamps look like incidental prose | **Yes**: an 11px semibold uppercase stamp, the name dashed |
 | 7 | three different left edges | **Yes**: one edge, `--marg-gap` past the table; the question's rule hangs in the gap |
 | 8 | cards cover the passage; the narrow notice floats over prose | **Cards open below**, over the column. **The notice stays** a floating line above the dock: a dock row is a change to the dock for one experimental mode |
+
+## GPT Sol's code review
+
+Write-capable, on `1a60d690..07ef6ce6` (`logs/fb7e/code-review-sol.md` in the worktree, not
+committed). Verdict **land**. It fixed two P2s itself, each with a test seen red first, and
+reported one P3:
+
+- **C1, fixed** — the head did not share the shell's `top` transition, so it jumped when a
+  visitor's controls bar slid away (shell.css and narrow-window.css's reduced-motion list).
+- **C2, fixed** — on a narrow window the generic small-screen banner ("a panel covers the
+  article") showed beside the mode's own "needs a wider window" line, and was false.
+- **C3, P3, fixed by me** — comments here and in notes.ts still said the article's own question
+  was drawn after the design pass dropped it.
+
+It checked and passed: the collision pass's triggers and cleanup (StrictMode-safe, no observer
+loop), the owner's ideas read (no loop, cleared on teardown, never on the visitor path), every
+consumer of the `bandOpen` split, the arithmetic with safe-area insets, focus and stacking, and
+the catalog card's claims against the code.
+
+## Status
+
+**Stage 1 landed on `dev`, 2026-10-01.** Stage 2 (relation words) is proposed, not built.
 
 ## Stages
 

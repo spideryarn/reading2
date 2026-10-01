@@ -621,6 +621,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    columns, on 2026-09-29.) */
 .spine,
 .mode-band,
+.marg-head, /* Annotations' fixed head follows the same bar-bottom edge. */
 .mode-herald-slot, /* the band's own box, so it has to travel with it — mode-band.css § the herald */
 .reader:has(table.zoom.overflowing)::after {
   transition: top 0.18s ease;
@@ -772,4 +773,3 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    spot it used to occupy. Note the comment further up this file (§ `.about`)
    still warns that `.provenance` is "taken" — it is not any more, but the reason
    that class was the wrong name for a masthead list stands on its own. */
-
