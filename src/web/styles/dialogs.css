@@ -411,6 +411,17 @@
   overflow-y: auto;
   min-height: 0;
 }
+/* **With a conversation in it, the transcript is the scroller, not the body.**
+   Otherwise the body scrolled the composer away with the turns, `.chat-scroll`
+   never scrolled at all, and the "Latest" pill — which watches `.chat-scroll` —
+   could never appear. A column, so the pill takes a row between the transcript
+   and the composer as it does in the band. Drafts and errors stay ordinary
+   scrolling blocks. 261001f, from GPT Sol's plan review. */
+.chat-dialog-body:has(> .chat-scroll) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 .chat-dialog-quote {
   margin: 0.55rem 0 0.6rem;

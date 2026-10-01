@@ -1,0 +1,164 @@
+diff --git a/src/web/styles/chat-actions.css b/src/web/styles/chat-actions.css
+index fd884ee9..18424e57 100644
+--- a/src/web/styles/chat-actions.css
++++ b/src/web/styles/chat-actions.css
+@@ -160,21 +160,25 @@
+   color: var(--highlight-ink);
+ }
+ 
+-/* Jump to the latest. Outside the scroller — see ChatPanel.tsx — so it is
+-   positioned against the panel and sits just above the composer. */
++/* Jump to the latest. Outside the scroller — see ChatPanel.tsx — and **in
++   flow**, a centred row of its own between the transcript and the composer, so
++   it covers nothing. It was `position: absolute; bottom: 3.6rem`, a guess at the
++   composer's height, which grows with the textarea, wraps, and starts six rows
++   tall in Remember: it straddled the two and hid a line of the transcript —
++   the last one, on a phone. While it shows, the scroller is a row shorter;
++   `scrollTop` is untouched, so nothing moves, and it cannot flicker, because
++   showing it only takes the reader further from the bottom. 2026-10-01,
++   docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md. */
+ .chat-to-bottom {
+-  position: absolute;
+-  bottom: 3.6rem;
+-  left: 50%;
+-  transform: translateX(-50%);
++  flex: none;
++  align-self: center;
++  margin: 0.3rem auto;
+   display: inline-flex;
+   align-items: center;
+   gap: 0.25rem;
+   padding: 0.2rem 0.55rem;
+   border: 1px solid var(--rule-strong);
+   border-radius: 999px;
+-  /* Opaque, not translucent: it sits over prose, and text behind text at this
+-     size is unreadable rather than subtle. */
+   background: var(--surface-raised);
+   color: var(--ink-soft);
+   font-family: var(--font-ui);
+diff --git a/src/web/styles/dialogs.css b/src/web/styles/dialogs.css
+index 8facecd8..bbc8879d 100644
+--- a/src/web/styles/dialogs.css
++++ b/src/web/styles/dialogs.css
+@@ -411,6 +411,17 @@
+   overflow-y: auto;
+   min-height: 0;
+ }
++/* **With a conversation in it, the transcript is the scroller, not the body.**
++   Otherwise the body scrolled the composer away with the turns, `.chat-scroll`
++   never scrolled at all, and the "Latest" pill — which watches `.chat-scroll` —
++   could never appear. A column, so the pill takes a row between the transcript
++   and the composer as it does in the band. Drafts and errors stay ordinary
++   scrolling blocks. 261001f, from GPT Sol's plan review. */
++.chat-dialog-body:has(> .chat-scroll) {
++  display: flex;
++  flex-direction: column;
++  overflow: hidden;
++}
+ 
+ .chat-dialog-quote {
+   margin: 0.55rem 0 0.6rem;
+diff --git a/src/web/styles/prose.css b/src/web/styles/prose.css
+index f37cbdd4..01f337a2 100644
+--- a/src/web/styles/prose.css
++++ b/src/web/styles/prose.css
+@@ -706,8 +706,13 @@ td.text.kind-callout .prose::before {
+ .prose pre code { font-size: inherit; }
+ /* Long URLs and unbroken identifiers are the one thing that can still push the
+    column wider than its measure, and unlike a table they have nowhere to
+-   scroll. Break them mid-word rather than let one link widen the article. */
+-.prose a { overflow-wrap: break-word; }
++   scroll. Break them mid-word rather than let one widen the article — on
++   `.prose`, not `.prose a`: a URL from a scan or a PDF is often plain text, and
++   the `a`-only rule let one push a 390px page 25px sideways (2026-10-01,
++   docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md).
++   `break-word`, not `anywhere`: it leaves min-content widths alone, so a data
++   table's cells still refuse to wrap and the table scrolls instead. */
++.prose { overflow-wrap: break-word; }
+ 
+ /* Media, captions and rules — present, but never competing with the argument. */
+ td.text.opaque { background: var(--muted); }
+diff --git a/tests/chat-latest-pill-in-flow.test.ts b/tests/chat-latest-pill-in-flow.test.ts
+new file mode 100644
+index 00000000..f7c477a5
+--- /dev/null
++++ b/tests/chat-latest-pill-in-flow.test.ts
+@@ -0,0 +1,48 @@
++/**
++ * **Chat's "Latest" pill takes its own room rather than floating over text.**
++ *
++ * It was `position: absolute; bottom: 3.6rem` against the band or the dialog —
++ * a guess at the composer's height, which grows with the textarea, wraps, and
++ * starts six rows tall in Remember. Measured 2026-10-01 it straddled the
++ * transcript and the composer at every width and hid the conversation's last
++ * line on a phone (docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md).
++ * In normal flow, between the scroller and the composer, it covers nothing.
++ *
++ * Geometry is for the browser; this pins that the rule no longer floats.
++ */
++import { describe, expect, it } from "vitest";
++import { readerCssNoComments } from "./helpers/stylesheets.js";
++
++const CSS = readerCssNoComments();
++
++describe("the jump-to-latest pill", () => {
++  const rules = [...CSS.matchAll(/\.chat-to-bottom\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
++
++  it("has a rule to check", () => {
++    expect(rules.length).toBeGreaterThan(0);
++  });
++
++  it("is never positioned or offset, so nothing can float it over the text", () => {
++    for (const body of rules) {
++      expect(body).not.toMatch(/position:\s*(absolute|fixed|relative|sticky)/);
++      expect(body).not.toMatch(/(^|[\s;])(top|bottom|left|right|inset|transform|translate):/);
++    }
++  });
++
++  it("is a centred row that does not shrink", () => {
++    const all = rules.join(";");
++    expect(all).toMatch(/flex:\s*none/);
++    expect(all).toMatch(/align-self:\s*center/);
++  });
++
++  it("the dialog makes its conversation a column, so the transcript is the scroller", () => {
++    const m = CSS.match(/\.chat-dialog-body:has\(>\s*\.chat-scroll\)\s*\{([^}]*)\}/);
++    expect(m).not.toBeNull();
++    expect(m?.[1]).toMatch(/display:\s*flex/);
++    expect(m?.[1]).toMatch(/flex-direction:\s*column/);
++    expect(m?.[1]).toMatch(/overflow:\s*hidden/);
++    const scroll = [...CSS.matchAll(/(?:^|[}\s])\.chat-scroll\s*\{([^}]*)\}/g)].map((r) => r[1] ?? "").join(";");
++    expect(scroll).toMatch(/overflow-y:\s*auto/);
++    expect(scroll).toMatch(/min-height:\s*0/);
++  });
++});
+diff --git a/tests/prose-long-words-wrap.test.ts b/tests/prose-long-words-wrap.test.ts
+new file mode 100644
+index 00000000..9eb30927
+--- /dev/null
++++ b/tests/prose-long-words-wrap.test.ts
+@@ -0,0 +1,24 @@
++/**
++ * **A word too long for the column breaks, whether or not it is a link.**
++ *
++ * `.prose a` had `overflow-wrap: break-word` and nothing else did, so a URL the
++ * extractor left as plain text — common from a scan or a PDF — pushed a 390px
++ * page 25px sideways (`fowler-phrenology`'s "Persistent URL" line, 2026-10-01,
++ * docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md).
++ * The declaration belongs on `.prose` itself, where every block inherits it.
++ *
++ * Only the browser can see the wrap; this pins the rule that makes it.
++ */
++import { describe, expect, it } from "vitest";
++import { readerCssNoComments } from "./helpers/stylesheets.js";
++
++const CSS = readerCssNoComments();
++
++describe("long words in the prose", () => {
++  it("`.prose` itself declares overflow-wrap: break-word (not anywhere, which would let table cells wrap), so bare text breaks as links do", () => {
++    // `.prose {` exactly — not `.prose a`, `.prose pre`, or a compound selector.
++    const rules = [...CSS.matchAll(/(?:^|[}\s])\.prose\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
++    expect(rules.length).toBeGreaterThan(0);
++    expect(rules.some((body) => /overflow-wrap:\s*break-word/.test(body))).toBe(true);
++  });
++});
