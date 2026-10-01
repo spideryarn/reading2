@@ -156,17 +156,8 @@ export function judgeLocatedBox(input: LocateInput): LocateVerdict {
   const sent = input.sent.find((s) => s.page === answer.page);
   if (!sent) return refuse("page-not-sent");
 
-  /* box_2d runs from the top left of the image we rendered, which is the page's
-     view box — its own origin, not (0, 0) on a cropped page. */
   const { view } = sent;
-  const w = view.x1 - view.x0;
-  const h = view.y1 - view.y0;
-  const box: PageBox = {
-    x0: view.x0 + (xmin / 1000) * w,
-    x1: view.x0 + (xmax / 1000) * w,
-    y0: view.y1 - (ymax / 1000) * h,
-    y1: view.y1 - (ymin / 1000) * h,
-  };
+  const box = boxOnPage(answer.box, view);
   const boxArea = area(box);
 
   /* What of each paint shows: the page and the clip, and nothing at all for a
@@ -227,6 +218,49 @@ export function judgeLocatedBox(input: LocateInput): LocateVerdict {
 }
 
 const EMPTY: PageBox = { x0: 0, y0: 0, x1: 0, y1: 0 };
+
+/**
+ * `box_2d` as page points. It runs from the top left of the image we rendered,
+ * which is the page's view box — its own origin, not (0, 0) on a cropped page.
+ */
+function boxOnPage([ymin, xmin, ymax, xmax]: readonly [number, number, number, number], view: PageBox): PageBox {
+  const w = view.x1 - view.x0;
+  const h = view.y1 - view.y0;
+  return {
+    x0: view.x0 + (xmin / 1000) * w,
+    x1: view.x0 + (xmax / 1000) * w,
+    y0: view.y1 - (ymax / 1000) * h,
+    y1: view.y1 - (ymin / 1000) * h,
+  };
+}
+
+/**
+ * **The answer's page and box, for the composite route** — read and checked
+ * exactly as `judgeLocatedBox` reads them (rule 1), or `null`. The composite
+ * route (`judgeLocatedRegion`, src/pdf-figure-region.ts) is asked only after
+ * `judgeLocatedBox` refused for what was *in* the box, so a `null` here never
+ * happens in practice; it is the same check, not a second one.
+ */
+export function answeredBox(answer: unknown, sent: readonly SentPage[]): { page: number; box: PageBox } | null {
+  const read = readAnswer(answer);
+  if (read === "unreadable" || read === "none") return null;
+  const [ymin, xmin, ymax, xmax] = read.box;
+  if (![ymin, xmin, ymax, xmax].every((n) => n >= 0 && n <= 1000) || ymin >= ymax || xmin >= xmax) return null;
+  const page = sent.find((s) => s.page === read.page);
+  return page ? { page: page.page, box: boxOnPage(read.box, page.view) } : null;
+}
+
+/**
+ * The refusals that are about **what is in the box** rather than about the
+ * answer or the picture — several pictures, a picture with neighbours, a
+ * drawing with no picture at all. For these the box may still be right, and
+ * the composite route is asked to render it. docs/plans/261001q § Stage 2.
+ */
+export const COMPOSITE_REFUSALS: ReadonlySet<LocateRefusal> = new Set<LocateRefusal>([
+  "not-one-picture",
+  "assembly",
+  "unmeasured-image",
+]);
 
 /**
  * Whether every side on which `shown` is smaller than `onPage` is cut within
