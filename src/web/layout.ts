@@ -369,7 +369,7 @@ export interface Fit {
    */
   alone: boolean;
   /**
-   * **The annotations column's width, right of the prose** — `0` when there is
+   * **The marginalia column's width, right of the prose** — `0` when there is
    * no column, and also when one was asked for and the window has no room for
    * it (`fitMargin`). Written as `--marg-w` on `.reader`.
    */
@@ -475,14 +475,14 @@ export interface FitInput {
    */
   bandShape?: BandShape;
   /**
-   * True when the annotations column is wanted to the right of the prose —
+   * True when the marginalia column is wanted to the right of the prose —
    * `fitMargin` alone, `fitBoth` beside a band (since 2026-10-01).
    */
   margin?: boolean;
 }
 
 /**
- * **The annotations column's width**: ~20 characters of note at its
+ * **The marginalia column's width**: ~20 characters of note at its
  * narrowest, ~36 at its widest. Notes are a step smaller than the prose
  * (marginalia.css), so these are much narrower than a band.
  */
@@ -490,7 +490,7 @@ export const MARG_MIN = 200; // 12.5rem
 export const MARG_IDEAL = 288; // 18rem
 
 /**
- * **The prose with a column of notes to its right** — Annotations mode.
+ * **The prose with a column of notes to its right** — Marginalia mode.
  * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
  *
  * Three rules, in the order they bind as the window narrows:
@@ -547,7 +547,7 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
 }
 
 /**
- * **A band on the left and the annotations column on the right** — since
+ * **A band on the left and the marginalia column on the right** — since
  * 2026-10-01, docs/plans/261001i-annotations-column-beside-a-band-mode.md.
  *
  *  - **The column takes its room first, then band and prose share the rest

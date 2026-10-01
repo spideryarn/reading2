@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* The Annotations head's path: the part and the section each on a line of
+/* The Marginalia head's path: the part and the section each on a line of
    their own, never cut to one line — Greg, 7M: "the text is truncated too
    much". jsdom lays nothing out, so this checks the shape that lets each title
    wrap; the browser check in the plan is what saw it wrap.
@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { AnnotationsHead } from "../src/web/annotations/AnnotationsColumn.js";
+import { MarginaliaHead } from "../src/web/marginalia/MarginaliaColumn.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -26,7 +26,7 @@ function draw(path: string[]): HTMLElement {
   document.body.append(host);
   const nextRoot = createRoot(host);
   root = nextRoot;
-  act(() => nextRoot.render(<AnnotationsHead room path={path} arc={null} />));
+  act(() => nextRoot.render(<MarginaliaHead room path={path} arc={null} />));
   return host;
 }
 

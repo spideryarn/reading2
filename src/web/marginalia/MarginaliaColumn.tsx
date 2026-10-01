@@ -1,5 +1,5 @@
 /**
- * **Annotations mode's column** — the notes right of the prose, and the head
+ * **Marginalia's column** — the notes right of the prose, and the head
  * pinned at the top of it.
  *
  * The column is not one element. Each block's notes are drawn **inside that
@@ -28,7 +28,7 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
-import { type AnnotationNote, layoutNotes } from "./notes.js";
+import { type MarginaliaNote, layoutNotes } from "./notes.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
@@ -46,7 +46,7 @@ const PROVENANCE_TIP = {
  * instead and reports once: the reader loses a note, not the prose. GPT Sol,
  * F3 on the plan.
  */
-export function MarginNotesSlot({ notes }: { notes: readonly AnnotationNote[] }) {
+export function MarginNotesSlot({ notes }: { notes: readonly MarginaliaNote[] }) {
   return (
     <NoteBoundary>
       <MarginNotes notes={notes} />
@@ -66,7 +66,7 @@ class NoteBoundary extends Component<{ children: ReactNode }, { broken: boolean 
        machine — the feature's name, and the error's own name for the ring
        buffer. */
     void info;
-    captureClientFailure(error, { boundary: "feature", feature: "Annotations" });
+    captureClientFailure(error, { boundary: "feature", feature: "Marginalia" });
     recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
@@ -89,7 +89,7 @@ const QUESTION_TIP = (depth: number): string =>
 
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
-function MarginNotes({ notes }: { notes: readonly AnnotationNote[] }) {
+function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
   useRenderCount("MarginNotes");
   return (
     <div className="marg-note" data-marg-note="">
@@ -117,7 +117,7 @@ function MarginNotes({ notes }: { notes: readonly AnnotationNote[] }) {
  * own click handler selecting the row (TableView excludes buttons). The card
  * is controlled for that reason — Tooltip.tsx § OpenState.
  */
-function IdeaStamp({ note }: { note: Extract<AnnotationNote, { kind: "idea" }> }) {
+function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }) {
   const [open, setOpen] = useState(false);
   return (
     <Tooltip
@@ -153,7 +153,7 @@ function IdeaStamp({ note }: { note: Extract<AnnotationNote, { kind: "idea" }> }
  * lines — a mode that silently drew nothing would look broken, and a sentence
  * about why is an empty state, not a description.
  */
-export function AnnotationsHead({
+export function MarginaliaHead({
   room,
   beside = false,
   path,
@@ -167,13 +167,13 @@ export function AnnotationsHead({
   path: readonly string[];
   arc: string | null;
 }) {
-  useRenderCount("AnnotationsHead");
+  useRenderCount("MarginaliaHead");
   if (!room) {
     return (
-      <aside className="marg-narrow" aria-label="Annotations">
+      <aside className="marg-narrow" aria-label="Marginalia">
         <p>
           {beside
-            ? "The notes need a wider window — press Annotations again to swap them in for the panel."
+            ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
             : "The notes need a wider window — they sit to the right of the text."}
         </p>
       </aside>
@@ -258,7 +258,7 @@ function ArcLine({ arc }: { arc: string }) {
 
 /**
  * **The owner's ideas, read and never made.** A component of its own so the
- * read happens only while Annotations is open — `useIdeasRead`, not `useIdeas`,
+ * read happens only while Marginalia is open — `useIdeasRead`, not `useIdeas`,
  * which would arm the auto-run and could spend. A stale list (the article moved
  * under it) is not drawn: its blocks may not be these. Owner only: a visitor's
  * ideas are in their payload.

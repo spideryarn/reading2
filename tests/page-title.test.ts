@@ -107,7 +107,7 @@ describe("an article", () => {
       faq: "FAQ",
       trajectory: "Trajectory",
       tweets: "Tweets",
-      annotations: "Annotations",
+      marginalia: "Marginalia",
     };
     for (const mode of BAND_MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });

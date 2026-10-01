@@ -4308,7 +4308,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      part, the arc, and the ideas where they have been made. So the row names
      those, and says they sit beside the text — the one thing this mode adds is
      where they are put. */
-  annotations:
+  marginalia:
     "Notes beside the text: the question each part answers, where the argument has got to, and " +
     "the ideas the piece assumes, where those have been made.",
 };

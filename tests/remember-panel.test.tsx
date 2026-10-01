@@ -72,6 +72,7 @@ function paint(thread: ChatThread, kind: "chat" | "remember" = "remember", stanc
         onDiscard: () => {},
         onRename: () => {},
         onDelete: () => {},
+        canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
         onStop: () => {},
@@ -177,44 +178,148 @@ describe("an answer says which stance produced it", () => {
   });
 });
 
-describe("the shared thread list says which kind a row is", () => {
-  it("tags a Remember turn and leaves a chat alone", () => {
-    const remember = rememberThread();
-    const chat: ChatThread = { ...rememberThread(), id: "spya-p7w2dn", kind: "chat", title: "A question" };
-    act(() => {
-      root.render(
-        createElement(ChatPanel, {
-          slug: "a-piece",
-          kind: "chat" as const,
-          stance: "balanced" as const,
-          onStance: () => {},
-          loaded: true,
-          loadFailed: false,
-          threads: [remember, chat],
-          // The LIST, not a conversation.
-          threadId: null,
-          onThread: () => {},
-          onSend: () => {},
-          onNew: () => {},
-          onSendNew: () => {},
-          onDiscard: () => {},
-          onRename: () => {},
-          onDelete: () => {},
-          onRetry: () => {},
-          onEdit: () => {},
-          onStop: () => {},
-          onJump: () => {},
-          recovering: new Set<string>(),
-          blocks: new Map<string, string>(),
-          focusNonce: 0,
-          error: null,
-        }),
-      );
-    });
-    const tags = [...host.querySelectorAll(".chat-thread")].map(
-      (r) => r.querySelector(".chat-thread-kind")?.textContent ?? null,
+/** Every prop `ChatPanel` needs, for the tests below that paint something other than one open thread. */
+function props(over: Record<string, unknown>) {
+  return {
+    slug: "a-piece",
+    kind: "remember" as const,
+    stance: "balanced" as const,
+    onStance: () => {},
+    loaded: true,
+    loadFailed: false,
+    threads: [] as ChatThread[],
+    threadId: null as string | null,
+    onThread: () => {},
+    onSend: () => {},
+    onNew: () => {},
+    onSendNew: () => {},
+    onDiscard: () => {},
+    onRename: () => {},
+    onDelete: () => {},
+    canStartOver: true,
+    onRetry: () => {},
+    onEdit: () => {},
+    onStop: () => {},
+    onJump: () => {},
+    recovering: new Set<string>(),
+    blocks: new Map<string, string>(),
+    focusNonce: 0,
+    error: null,
+    ...over,
+  };
+}
+
+/**
+ * **Remember is one conversation, and its panel has nothing for choosing
+ * another.** Report `spya-peszam`; docs/plans/261001m-remember-is-its-own-single-thread.md
+ * § Design 4. Until 2026-10-01 these tests pinned the opposite — a list shared
+ * with chat, with Remember rows tagged — and that product decision is gone.
+ */
+describe("Remember's panel is one conversation", () => {
+  it("never draws a list or the list's composer, even when handed no open thread", () => {
+    act(() => root.render(createElement(ChatPanel, props({ threads: [rememberThread()], threadId: null }))));
+    expect(host.querySelector(".chat-threads")).toBeNull();
+    expect(host.querySelector(".chat-empty")).toBeNull();
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
+  });
+
+  it("says Remember in the header, and offers Start over but no close, new or rename", () => {
+    paint(rememberThread());
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector('button[title="All conversations"]')).toBeNull();
+    expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
+    expect(host.querySelector('button[title^="Rename"]')).toBeNull();
+    const startOver = host.querySelector<HTMLButtonElement>("button.chat-icon.danger");
+    expect(startOver?.title).toMatch(/^Start over/);
+  });
+
+  /* The band decides it (`settled` in useChat.ts) and the panel only obeys:
+     an empty, unnamed or still-answering conversation has no Start over, so
+     its DELETE can never be held waiting for a name. Plan 261001m. */
+  it("draws no Start over when the band says the conversation is not settled", () => {
+    const open = rememberThread();
+    act(() =>
+      root.render(createElement(ChatPanel, props({ threads: [open], threadId: open.id, canStartOver: false }))),
     );
-    expect(tags).toContain("remember");
-    expect(tags).toContain(null);
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector("button.chat-icon.danger")).toBeNull();
+  });
+
+  it("leaves chat's header as it was", () => {
+    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("What I took from it");
+    expect(host.querySelector('button[title="All conversations"]')).not.toBeNull();
+  });
+});
+
+describe("chat's list has no Remember tag any more", () => {
+  it("draws no kind tag on a row", () => {
+    const chat: ChatThread = { ...rememberThread(), id: "spya-p7w2dn", kind: "chat", title: "A question" };
+    act(() => root.render(createElement(ChatPanel, props({ kind: "chat", threads: [chat] }))));
+    expect(host.querySelectorAll(".chat-thread")).toHaveLength(1);
+    expect(host.querySelector(".chat-thread-kind")).toBeNull();
+  });
+});
+
+/**
+ * **A short band gets a short box.** On a landscape phone the band is about
+ * 338px tall and six rows at rest took 280 of it. Plan 261001m § 5.
+ */
+describe("the Remember composer on a short viewport", () => {
+  const real = window.matchMedia;
+  const realInnerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+  const realScrollHeight = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "scrollHeight");
+  afterEach(() => {
+    window.matchMedia = real;
+    if (realInnerHeight) Object.defineProperty(window, "innerHeight", realInnerHeight);
+    else Reflect.deleteProperty(window, "innerHeight");
+    if (realScrollHeight) {
+      Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", realScrollHeight);
+    } else {
+      Reflect.deleteProperty(HTMLTextAreaElement.prototype, "scrollHeight");
+    }
+  });
+
+  function viewport(short: boolean) {
+    window.matchMedia = ((query: string) => ({
+      matches: short && query.includes("max-height: 500px"),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  }
+
+  it("is two rows at rest when the viewport is short", () => {
+    viewport(true);
+    paint(rememberThread());
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(2);
+  });
+
+  it("caps a growing short-viewport box at 30% of the viewport height", () => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 390 });
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 1_000,
+    });
+    viewport(true);
+    paint(rememberThread());
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.style.height).toBe("117px");
+  });
+
+  it("is still six rows on a tall one", () => {
+    viewport(false);
+    paint(rememberThread());
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(6);
+  });
+
+  it("leaves chat's one row alone either way", () => {
+    viewport(true);
+    paint({ ...rememberThread(), kind: "chat" }, "chat");
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);
   });
 });
