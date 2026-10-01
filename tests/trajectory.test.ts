@@ -865,7 +865,7 @@ describe("the labels the model answers in", () => {
 describe("registration", () => {
   it("sits after quotes and ideas, off the default ingest, and is not swept in by an earlier forced step", () => {
     /* After both things it reads, so `precededBy: ["quotes", "ideas"]` is
-       legal and runs them first — and after the whole `ideas` … `sketch`
+       legal and runs them first — and after the whole `ideas` … `simple`
        cache group rather than inside it (tests/article-cache-group.test.ts). */
     const at = STEP_ORDER.indexOf("trajectory");
     expect(at).toBeGreaterThan(STEP_ORDER.indexOf("quotes"));

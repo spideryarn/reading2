@@ -367,6 +367,20 @@ describe("parseStructureResponse", () => {
     expect(score.validity.gistProblems).toBe(0); // this answer wrote its gists
   });
 
+  /* Production reads this answer with `parseJsonAnswer` (src/hierarchy.ts §
+     parseJson), which takes a sentence of prose before the JSON in its stride.
+     The harness used `stripFence` + `parseJsonFrom` — production's recipe
+     before 2026-09-03 — and so refused a thinking-off answer production
+     accepts, which nearly decided plan 261001p's Hierarchy result on a parser
+     nothing ships. GPT Sol, decision review D1. */
+  it("accepts a prose preamble before the JSON, as production does", () => {
+    const blocks = Array.from({ length: 6 }, () => block());
+    const raw =
+      "Looking at this structure, I'll trace the natural argument flow:\n\n" + answer(blocks, [[0, 2], [3, 5]]);
+    const tree = parseStructureResponse(raw, blocks, "preamble");
+    expect(scoreTree(blocks, tree).parts.count).toBe(2);
+  });
+
   it("refuses an answer the pipeline refuses - the arm is judged on the pipeline's rules", () => {
     /* **The fixture has been walked back twice, by the same argument each
        time**, and the claim under test survived both: an arm is judged on

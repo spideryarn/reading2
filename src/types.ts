@@ -2878,10 +2878,12 @@ export type StepName =
      and the passages where the piece responds — docs/plans/260916d-faq-mode.md.
      Beside `quiz` for the same reason `quiz` is beside `timeline`:
      `articleWithIds` over the body at `high` effort, so it joins the
-     `ideas`/`timeline`/`quiz`/`sketch` cached article prefix. */
+     `ideas`/`timeline`/`quiz` cached article prefix. */
   | "faq"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
-     Nothing reads what it writes except the one below. */
+     Nothing reads what it writes except the one below. The same bytes as
+     `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
+     (src/models.ts § STAGE_EFFORT). */
   | "sketch"
   /* The same argument painted, docs/project/diagram.md § Illustrated. **The only
      step here whose input is another step's artefact rather than the article**,

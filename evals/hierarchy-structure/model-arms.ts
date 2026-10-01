@@ -40,9 +40,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { declaredFetch, withDeclaredExternalCall } from "../declared-spend.js";
 import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
-import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
+import { parseJsonAnswer, stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
-import { buildTree, structureRequest, type BuildReport, type ModelNode } from "../../src/hierarchy.js";
+import { buildTree, parseStructureAnswer, structureRequest, type BuildReport, type ModelNode } from "../../src/hierarchy.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
 import type { Block, Tree } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
@@ -788,17 +788,24 @@ export function assembleTree(
   return tree;
 }
 
-/** A raw answer through `assembleTree`: fence stripped, JSON parsed, then the pipeline's rules. */
+/**
+ * A raw answer through `assembleTree`, read by production's own function.
+ *
+ * `parseStructureAnswer` from src/hierarchy.ts — called, not copied — so fence,
+ * preamble and sign-off are tolerated exactly as the pipeline tolerates them.
+ * This was `stripFence` + `parseJsonFrom` until
+ * 2026-10-01: production's recipe before 2026-09-03, copied here and never moved
+ * when production did, so every arm since was refused answers the pipeline
+ * would have accepted. It surfaced as a thinking-off arm "failing" on a sentence
+ * of prose (plan 261001p, GPT Sol decision review D1).
+ */
 export function parseStructureResponse(
   raw: string,
   blocks: Block[],
   slug: string,
   report?: BuildReport,
 ): Tree {
-  const { root } = parseJsonFrom<{ root: ModelNode }>(
-    stripFence(raw),
-    "the structure-arm response",
-  );
+  const { root } = parseStructureAnswer(raw);
   return assembleTree(root, blocks, slug, report);
 }
 
@@ -836,7 +843,7 @@ const senderFor = (model: string): MessagesSend =>
   model.startsWith("anthropic/") ? sendMessages : sendChat;
 
 function parseWave(raw: string, what: string): ModelNode {
-  const { root } = parseJsonFrom<{ root: ModelNode }>(stripFence(raw), what);
+  const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, what);
   return root;
 }
 

@@ -31,23 +31,23 @@
 | article | chars | arm | thinking (mean) | output (mean) | $ (mean) | latency s (mean) |
 |---|---:|---|---:|---:|---:|---:|
 | replication-crisis-spya-hrjamq | 149817 | base | 22517 | 28945 | 0.362 | 265 |
-| replication-crisis-spya-hrjamq | 149817 | low | 4316 | 10868 | 0.182 | 101 |
+| replication-crisis-spya-hrjamq | 149817 | medium | 10904 | 17281 | 0.246 | 162 |
 | entropy-24-00930-spya-pywwkq | 56536 | base | 21591 | 28025 | 0.332 | 252 |
-| entropy-24-00930-spya-pywwkq | 56536 | low | 1439 | 7359 | 0.125 | 68 |
+| entropy-24-00930-spya-pywwkq | 56536 | medium | 8700 | 14767 | 0.199 | 134 |
 | noema-mythology-of-conscious-ai | 52573 | base | 21946 | 28518 | 0.332 | 262 |
-| noema-mythology-of-conscious-ai | 52573 | low | 3261 | 8589 | 0.133 | 77 |
+| noema-mythology-of-conscious-ai | 52573 | medium | 7550 | 13396 | 0.181 | 122 |
 | towards-a-theory-of-bugs-the-ruliology-of-the-unexpected | 46808 | base | 26663 | 33474 | 0.382 | 295 |
-| towards-a-theory-of-bugs-the-ruliology-of-the-unexpected | 46808 | low | 2960 | 9577 | 0.143 | 86 |
+| towards-a-theory-of-bugs-the-ruliology-of-the-unexpected | 46808 | medium | 8784 | 15539 | 0.203 | 139 |
 | analog-cognition-and-consciousness-4-28-26-spya-f03kqf | 45461 | base | 19345 | 26057 | 0.310 | 226 |
-| analog-cognition-and-consciousness-4-28-26-spya-f03kqf | 45461 | low | 2077 | 8719 | 0.137 | 82 |
+| analog-cognition-and-consciousness-4-28-26-spya-f03kqf | 45461 | medium | 5749 | 12440 | 0.174 | 112 |
 | after-work-we-ll-have-each-other-spya-we6h75 | 34272 | base | 22795 | 29098 | 0.328 | 259 |
-| after-work-we-ll-have-each-other-spya-we6h75 | 34272 | low | 1798 | 7256 | 0.109 | 70 |
+| after-work-we-ll-have-each-other-spya-we6h75 | 34272 | medium | 6220 | 12280 | 0.160 | 111 |
 | spider-silk-spya-ge30uz | 62920 | base | 20593 | 27027 | 0.311 | 240 |
-| spider-silk-spya-ge30uz | 62920 | low | 109 | 5289 | 0.094 | 49 |
+| spider-silk-spya-ge30uz | 62920 | medium | 6372 | 12583 | 0.167 | 112 |
 | cargocult-spya-rz663q | 21195 | base | 11541 | 17716 | 0.203 | 157 |
-| cargocult-spya-rz663q | 21195 | low | 1012 | 6260 | 0.089 | 55 |
+| cargocult-spya-rz663q | 21195 | medium | 4482 | 9816 | 0.124 | 83 |
 
-**Median thinking reduction, articles under 100k characters**: 91% (gate: ≥ 33%)
-**Invalid draws**: spider-silk-spya-ge30uz low-a
+**Median thinking reduction, articles under 100k characters**: 67% (gate: ≥ 33%)
+**Invalid draws**: none
 
-**Hard gates**: literal (no invalid candidate draw) FAIL; compared (candidate 1 invalid ≤ base 0) FAIL
+**Hard gates**: literal (no invalid candidate draw) pass; compared (candidate 0 invalid ≤ base 0) pass

@@ -1671,24 +1671,35 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      See `ARTICLE_RENDERER` below, which is what stops that mistake being made
      by the code as well as by the comment. */
   ideas: "high",
-  /* `high`, and for a reason that is not "it is a hard stage". This one has to
-     hold a whole geometry in its head — every box's position against every
-     other box's, on a canvas it cannot see — while also deciding what the
-     argument's shape *is*. Getting the second right and the first wrong
-     produces a picture that is true and unreadable, which is the failure this
-     stage is most prone to.
+  /* **`low`, MEASURED 2026-10-01, against the `high` it had shipped with.**
+     Eight articles, two draws per arm, two blind judges — GPT Sol ranking,
+     Opus scoring — and no visible loss: mean U 1.56 and 1.69, where 2.0 is no
+     difference. Not "as good everywhere": the per-article verdicts point both
+     ways, and no direction holds. It is 58% cheaper and about four times faster
+     per call ($0.235 → $0.100, 176 s → 42 s), and validity was the same at both
+     levels, 1 malformed draw in 16.
+     docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md
+     § Sketch.
 
-     **It shares a cached prefix with `ideas` and with nothing else**, which is
-     worth stating because the obvious sentence — "it shares nothing, like
-     ideas" — was written here first and is false: `sharesArticleCache` groups
-     on effort AND renderer, and these two now agree on both (`high`, `ids`).
-     That is a real saving when a reader opens both on one article, and it is a
-     constraint: moving either stage's effort breaks it silently. GPT Sol,
-     2026-08-30. */
-  sketch: "high",
-  /* `high`, and it is the third member of that group rather than a fourth
-     cache: same effort, same `ids` renderer, so `timeline` shares a cached
-     article with `ideas` and `sketch`.
+     The argument this comment used to make for `high` — the stage has to hold a
+     whole geometry in its head while deciding what the argument's shape is — is
+     superseded by that measurement: it was a reason, never a number, and two
+     blind judges did not find `low` worse. A loss too small for them to see on
+     eight articles may still exist, and Opus (high-powered AI) runs at `low`
+     too, untested — that doc's § What this does not show.
+
+     **It leaves the `ids` + `high` cache group** (`ideas`, `timeline`, `quiz`,
+     `faq`, `simple`, `tweets`) and is alone at `ids` + `low`, so it shares a
+     cached article with nothing. That costs close to nothing today, because each
+     mode is its own job and two jobs share no cache
+     (docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
+     It is a constraint on plan 261001o's caching options, which assumed one
+     effort per group. */
+  sketch: "low",
+  /* `high`, and it joins `ideas`' group rather than starting a cache of its
+     own: same effort, same `ids` renderer, so `timeline` shares a cached
+     article with `ideas`, and with `quiz`, `faq`, `simple` and `tweets`,
+     which joined later.
 
      The judgment it is being paid for is the sequence — putting a piece that
      recounts the same three months three times, once per participant, back into
@@ -1699,9 +1710,9 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      downstream to correct it. Untested, like every effort choice that has not
      been through evals/results/effort-vs-quality.md. */
   timeline: "high",
-  /* `high`, and it is the fourth member of that group rather than a fifth
-     cache: same effort, same `ids` renderer, so `quiz` shares a cached article
-     with `ideas`, `sketch` and `timeline`.
+  /* `high`, and it is another member of that group rather than a cache of its
+     own: same effort, same `ids` renderer, so `quiz` shares a cached article
+     with `ideas` and `timeline`.
 
      The judgment it is being paid for is the `hard` band — a question whose
      answer is a move the argument makes across several passages, which is
@@ -1712,9 +1723,9 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      Untested, like every effort choice that has not been through
      evals/results/effort-vs-quality.md. */
   quiz: "high",
-  /* `high`, the fifth member of the `ids` group: same effort, same renderer,
-     same body-only evidence, so `faq` shares a cached article with `ideas`,
-     `sketch`, `timeline` and `quiz`. What it is paid for is reading the
+  /* `high`, a member of the `ids` group: same effort, same renderer, same
+     body-only evidence, so `faq` shares a cached article with `ideas`,
+     `timeline` and `quiz`. What it is paid for is reading the
      argument closely enough to feel where a careful reader would push back.
      Untested, like every effort choice not yet through
      evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
@@ -1784,7 +1795,7 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      do not, goes in the *user* prompt rather than into the head
      `articleWithIds` writes. That is deliberate: a date in the head would be
      different bytes for the same article and would cost this stage the share
-     with `ideas` and `sketch` on every article, to save nothing.
+     with `ideas` on every article, to save nothing.
      src/timeline.ts § `renderPrompt`. */
   timeline: "ids",
   /* Every piece of evidence names a block id — that is what ties a reference

@@ -108,9 +108,12 @@ async function main(): Promise<void> {
   const results = argv[argv.indexOf("--results") + 1];
   const mode = argv[argv.indexOf("--mode") + 1];
   if (!results || !mode || argv.indexOf("--results") < 0 || argv.indexOf("--mode") < 0) {
-    throw new Error("usage: tally.ts --results <dir> --mode <mode>");
+    throw new Error("usage: tally.ts --results <dir> --mode <mode> [--judging <subdir>]");
   }
-  const dir = path.join(results, "judging", mode);
+  /* `--judging <subdir>` for a second round kept beside the first, e.g.
+     `judging/illustrated-low/` next to the medium round's `judging/illustrated/`. */
+  const judgingAt = argv.indexOf("--judging");
+  const dir = path.join(results, "judging", judgingAt >= 0 ? (argv[judgingAt + 1] ?? mode) : mode);
   const out: Record<string, unknown> = { mode };
   const lines: string[] = [`# ${mode}`, ""];
 
@@ -186,9 +189,17 @@ async function main(): Promise<void> {
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l) as Row)
     .filter((r) => r.mode === mode);
+  /* The candidate level is whatever the judged lineups held — read off their
+     keys, never guessed from which rows exist: the JSONL keeps every round, so
+     "any low rows → low" reported low's cost under the medium round's verdict
+     (GPT Sol, decision review D2). */
+  const someKey = await keyFor(dir, (await readJson<RankVerdict>(path.join(dir, "verdict-rank.json"))).articles[0]?.slug ?? "");
+  const candidateArms = Object.values(someKey).filter((a) => !a.startsWith("base-"));
+  const candPrefix = candidateArms[0]?.replace(/-[ab]$/, "-") ?? "low-";
+  const judgedArms = new Set(Object.values(someKey));
   const bySlug = new Map<string, Row[]>();
-  for (const r of rows) bySlug.set(r.slug, [...(bySlug.get(r.slug) ?? []), r]);
-  const invalid = rows.filter((r) => !r.valid).map((r) => `${r.slug} ${r.arm}`);
+  for (const r of rows.filter((x) => judgedArms.has(x.arm))) bySlug.set(r.slug, [...(bySlug.get(r.slug) ?? []), r]);
+  const invalid = rows.filter((r) => !r.valid && judgedArms.has(r.arm)).map((r) => `${r.slug} ${r.arm}`);
   const mean = (xs: (number | null)[]): number | null =>
     xs.some((x) => x == null) || xs.length === 0 ? null : (xs as number[]).reduce((a, b) => a + b, 0) / xs.length;
   lines.push("| article | chars | arm | thinking (mean) | output (mean) | $ (mean) | latency s (mean) |", "|---|---:|---|---:|---:|---:|---:|");
@@ -196,7 +207,7 @@ async function main(): Promise<void> {
   const perArticle: unknown[] = [];
   for (const [slug, rs] of bySlug) {
     const group = (p: string) => rs.filter((r) => r.arm.startsWith(p));
-    const cand = rs.some((r) => r.arm.startsWith("low-")) ? "low-" : "medium-";
+    const cand = candPrefix;
     const stats = (p: string) => {
       const g = group(p);
       return {

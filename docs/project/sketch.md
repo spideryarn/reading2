@@ -101,6 +101,17 @@ else would show it.
 
 ## What it costs, and what that decides
 
+**The effort is `low` since 2026-10-01**, down from `high`. Eight articles, two
+draws per arm, two blind judges (GPT Sol ranking, Opus scoring): no visible loss
+(mean U 1.56 and 1.69, where 2.0 is no difference), and a call went from $0.235
+to $0.100 and from 176 s to 42 s on average. Validity was 1 malformed draw in 16
+at both levels. It also took the Sketch out of the `ids` cache group — see
+[prompt-caching.md](prompt-caching.md).
+[261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)
+has the lineups and what the judges said. The figures in the next paragraph are
+from the `high` era; the consequences below are weaker at a quarter of the time,
+but none has been undone.
+
 **One model call, 121–194 seconds, about $0.20** — measured over seven draws of
 five articles. That is the slowest single thing in the app and four times the
 glossary, and three consequences follow from it rather than from taste:

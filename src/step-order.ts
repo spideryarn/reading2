@@ -87,18 +87,18 @@ export const STEP_ORDER = [
   /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
      the two send byte-identical article bytes at the same effort and the same
      `ids` renderer, so a job asking for BOTH pays for the article once
-     (src/models.ts § ARTICLE_RENDERER, § STAGE_EFFORT). `ideas`, `timeline` and
-     `sketch` are one cache group and are contiguous for that reason.
+     (src/models.ts § ARTICLE_RENDERER, § STAGE_EFFORT). `ideas` and `timeline`
+     are one cache group and are contiguous for that reason.
 
      Off `DEFAULT_INGEST_STEPS`, like the four before it: it costs a model call
      over the whole article and it is a mode somebody goes to. */
   "timeline",
   /* Beside `timeline`, for the third time and the same argument: `high` effort
-     and the `ids` renderer, so `ideas`, `timeline`, `quiz` and `sketch` (and,
-     since 2026-09-16, `faq`) are one
+     and the `ids` renderer, so `ideas`, `timeline` and `quiz` (and, since
+     2026-09-16, `faq`) are one
      cache group and this list keeps them contiguous. A `quiz` placed anywhere
      else in this array would still work and would quietly stop sharing the
-     cached article prefix with the three stages it is identical to — the
+     cached article prefix with the stages it is identical to — the
      failure `sharesArticleCache` exists to prevent, and the one nothing throws
      about (tests/article-cache-group.test.ts).
 
@@ -107,23 +107,26 @@ export const STEP_ORDER = [
      docs/plans/260831al-review-quiz-sub-mode.md. */
   "quiz",
   /* Beside `quiz`, a fourth time for the same argument: `high` effort, the
-     `ids` renderer and the body-only evidence, so `ideas`, `timeline`, `quiz`,
-     `faq` and `sketch` are one cache group and this list keeps them contiguous.
+     `ids` renderer and the body-only evidence, so `ideas`, `timeline`, `quiz`
+     and `faq` are one cache group and this list keeps them contiguous.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call
      over the whole article that a reader asks for by opening the mode.
      docs/plans/260916d-faq-mode.md. */
   "faq",
   /* Beside `faq`, a fifth time for the same argument: `high` effort (measured
      against `medium` in stage 1, src/models.ts § STAGE_EFFORT), the `ids`
-     renderer and the body-only evidence, so it is in the `ideas` … `sketch`
+     renderer and the body-only evidence, so it is in the `ideas` … `faq`
      cache group and this list keeps it contiguous. Off `DEFAULT_INGEST_STEPS`
      and in `FORCE_ONLY_WHEN_NAMED`: a model call over the whole article that a
      reader asks for by pressing Summary's Simple chip.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   "simple",
   /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
-     below, and it is the slowest single model call in the app at 121–194
-     seconds measured. docs/project/diagram.md § Sketch. */
+     below. Straight after the `ideas` … `simple` cache group and in none: it
+     sends the same bytes but at `low` effort since 2026-10-01 (src/models.ts §
+     STAGE_EFFORT), so its place breaks no contiguity. It was the slowest
+     single model call in the app at 121–194 seconds measured at `high`; about
+     42 s at `low`. docs/project/diagram.md § Sketch. */
   "sketch",
   /* **Last, and after `sketch` for a reason no other pair here has**: this is
      the only step whose input is another step's artefact. The order does not
@@ -139,7 +142,7 @@ export const STEP_ORDER = [
      ideas before it routes through them. It sat straight after `quotes` until
      stage 6 of plan 260928a gave it the Ideas.
 
-     **After the whole `ideas` … `sketch` cache group, not inside it**: it sends
+     **After the whole `ideas` … `simple` cache group, not inside it**: it sends
      the quotes and never the article, so its bytes match no other stage's, and
      a place between `ideas` and `timeline` would break that group's contiguity
      (tests/article-cache-group.test.ts). After `illustrated` too, so that step
@@ -151,8 +154,8 @@ export const STEP_ORDER = [
   /* **Last, and it depends on nothing in this list.** Every other name here
      reads an artefact something before it wrote; this one goes to the open web
      and comes back with pages that answer the piece. It is last because it has
-     no place it must be — putting it between `faq` and `sketch` would break the
-     `ideas`/`timeline`/`quiz`/`faq`/`sketch` cache group's contiguity for nothing, and
+     no place it must be — putting it between `ideas` and `simple` would break
+     the `ideas`/`timeline`/`quiz`/`faq`/`simple` cache group's contiguity for nothing, and
      putting it before `illustrated` would separate that step from the `sketch`
      it paints.
 

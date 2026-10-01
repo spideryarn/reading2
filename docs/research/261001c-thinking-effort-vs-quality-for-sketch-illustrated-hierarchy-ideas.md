@@ -1,10 +1,20 @@
 # Thinking effort vs quality: Sketch, Illustrated, Hierarchy and Ideas
 
-2026-10-01. Worktree `thinking-effort-eval`. The plan, with the method and the decision rule fixed
-before the results, is [261001p](../plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md);
-every number below is from `evals/results/thinking-effort-261001/` (Sketch, Ideas, Illustrated) and
-`evals/results/thinking-effort-smoke/` plus `evals/results/hierarchy-structure/2026-10-01-17-*` (the
-Hierarchy smoke), produced by `evals/thinking-effort/`.
+2026-10-01. Worktree `thinking-effort-eval`. The plan is
+[261001p](../plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+**What was fixed before the results, and what was not:**
+- The quality thresholds (U, the clear and possible loss bands, the worse judge counts), the
+  savings gate, and "a possible loss still adopts" were all in the plan before the first full-run
+  draw (commit `61f78bb1d`).
+- The validity gate was amended mid-run, after base itself failed. That note is in the plan,
+  timestamped.
+- The standardising clause was overridden after the results, as a product-policy reading of Greg's
+  words ([below](#the-answer-in-plain-words)).
+
+Every number is from these files, produced by `evals/thinking-effort/`:
+- `evals/results/thinking-effort-261001/` — Sketch, Ideas and Illustrated;
+- `evals/results/thinking-effort-smoke/` — the smoke runs;
+- `evals/results/hierarchy-structure/` — Hierarchy (§ Hierarchy names the run).
 
 Why it was run: [research 261001b](261001b-cost-per-article-and-the-cross-mode-article-cache/README.md)
 found thinking is about a quarter of a normal article's Claude bill, and these four modes are
@@ -23,17 +33,17 @@ less valuable to him.
 
 | mode | today | decided | why |
 |---|---|---|---|
-| **Sketch** | `high` | **`low`** | Neither judge sees a loss (mean U 1.56 and 1.69 against a no-difference 2.0). Each call is 57% cheaper and four times faster. |
+| **Sketch** | `high` | **`low`** | Neither judge sees a loss (mean U 1.56 and 1.69 against a no-difference 2.0). Each call is 58% cheaper and four times faster. |
 | **Illustrated** | `high` (implicit) | **stays `high`** | Both judges find `low` clearly worse (mean U 1.06 and 0.31). The brief stops choosing a style from the article, and its captions become riddles. At `medium` the judges split (1.56 and 1.06); the rule takes the worse of the two, and a close call keeps today's effort. |
 | **Ideas** | `high` | **stays `high`** | Below `high` it writes broken JSON most of the time: 10 of 16 draws at `medium` and at `low`, against 1 of 16 at `high`. |
-| **Hierarchy** | `low` | **stays `low`** | It is already at the bottom of the effort ladder. With thinking off, both draws put a sentence of prose before the JSON, and the shipping parser refused them. |
+| **Hierarchy** | `low` | **stays `low`** | It is already at the bottom of the effort ladder; the only cheaper setting is thinking off. With thinking off, 5 of 16 draws failed outright (internal nodes with no gist, or malformed JSON), against 0 of 16 at `low`, and the trees that did build dropped far more of the author's headings. |
 
-**What it saves.** Sketch at `low` costs 57% less per call ($0.235 → $0.100), and its picture
+**What it saves.** Sketch at `low` costs 58% less per call ($0.235 → $0.100), and its picture
 arrives in about 40 seconds instead of about three minutes.
 
 Across the 44 normal articles in 261001b's 30 days, Sketch spent about $4.66 (its $6.77 total, less
-the book's $2.11). 57% of that is about $2.66, which comes to **about 6¢ a normal article, roughly
-5% of the mean normal article's Claude bill** ($48.52 over 44 articles, $1.10 each).
+the book's $2.11). 58% of that is about $2.69, which comes to **about 6¢ a normal article, roughly
+5.5% of the mean normal article's Claude bill** ($48.52 over 44 articles, $1.10 each).
 
 That is about half the 9–10% the plan hoped for. The hope assumed all four modes could halve their
 thinking, and only one could.
@@ -51,8 +61,9 @@ said the two would end on the higher level each passes. Read literally, Illustra
 So each mode takes its own result. If Greg wants them on one level regardless, it is one line, and
 he can say so.
 
-And one finding nobody asked for: **today's `high` also writes broken JSON**, in 1 of 16 Ideas
-draws and 1 of 16 Sketch draws. Nothing retries a malformed answer, so the reader gets a failed card
+And one finding nobody asked for: **today's `high` also writes broken JSON**. The eval saw it in 1
+of 16 Ideas draws and 1 of 16 Sketch draws — a count, not a rate; one in sixteen is consistent with
+anything up to about 30%. Nothing retries a malformed answer, so the reader gets a failed card
 and a Retry button, and the failed call is still billed ([below](#a-finding-on-the-side-broken-json-at-todays-effort)).
 
 ## Method, briefly
@@ -184,18 +195,43 @@ quality.
 ## Hierarchy: stays `low`
 
 Hierarchy has run at `low` since 2026-09-04, so the only cheaper setting on the same model is
-thinking off (`thinking: {type: "disabled"}`, no `output_config`). On `cargocult`, both draws with
-thinking off honoured the setting: zero thinking tokens, `end_turn`, $0.065 against the incumbent's
-$0.085. But both answers began with a sentence of prose — *"Looking at this structure, I'll trace the
-natural argument flow: …"* — before the JSON, and the shipping parser refused them. That is the
-known failure of turning thinking off: the reasoning moves into the visible answer. The harness gate
-that a draw must validate stopped it there, so the 32-draw panel was not bought. The refused answers
-are in `evals/results/hierarchy-structure/2026-10-01-17-41-52-smart-off/trees/`.
+thinking off (`thinking: {type: "disabled"}`, no `output_config`). The panel ran four arms on all
+eight articles: `low` twice (`incumbent`, `incumbent-repeat`) and thinking off twice (`smart-off`,
+`smart-off-repeat`). The runs are `evals/results/hierarchy-structure/2026-10-01-21-08-5{4,5,6,8}-…`,
+four parallel jobs of two articles each.
 
-Reopening it would take a production change first — a parser that skips a leading preamble, or
-structured outputs again — and the saving is small: about 4,000 thinking tokens a call, roughly 2¢.
-Greg's question, *"I'm not convinced the problem it's solving needs a really high effort level"*,
-has the answer that it already runs at the lowest one.
+**A first, wrong answer, corrected.** The smoke run on `cargocult` first reported both thinking-off
+draws as refused by "the shipping parser", because each began with a sentence of prose (*"Looking at
+this structure, I'll trace the natural argument flow: …"*). That was false. The eval harness parsed
+with production's recipe from before 2026-09-03, which is stricter than the `parseJsonAnswer`
+production uses now, and production accepts that preamble. GPT Sol's decision review caught it. The
+harness now calls production's own `parseStructureAnswer`, and the panel below ran through it.
+[Postmortem 261001b](../postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md).
+
+**The plan's structural gates, per article and never pooled:**
+
+| | `low` (16 draws) | thinking off (16 draws) |
+|---|---:|---:|
+| **hard failures** (the tree is refused) | **0** | **5** |
+| of which: an internal node with no gist | 0 | 4 |
+| of which: malformed JSON | 0 | 1 |
+| author's headings dropped, worst draw | 2 | 38 |
+| repaired boundaries, range across draws | 0–19 | 0–21 |
+| thinking tokens, mean | 6,334 | 0 |
+| cost per call, mean | $0.148 | $0.096 |
+| wall clock, mean | 91 s | 50 s |
+
+- **A missing gist is exactly the zero-tolerance class.** The plan rules out any hard failure, any
+  missing gist and any dropped section. A node with no gist has *"nothing to render at its level"*,
+  so Structure and the zoom break there.
+- **Five failures in sixteen fail the gate outright**, so the quality panel was not needed. (The
+  failures were spread over four articles: after-work 2, entropy 1, noema 1, cargocult 1.)
+
+So Hierarchy stays at `low`, the lowest effort there is. Greg's question, *"I'm not convinced the
+problem it's solving needs a really high effort level"*, has the answer that it already runs at the
+lowest one, and below it the tree breaks. Note too that `low` itself sometimes thinks not at all
+(both noema draws: 0 thinking tokens) and still builds a valid tree. The difference is that it may
+think when it needs to.
 
 ## Illustrated: stays `high`
 
@@ -251,7 +287,8 @@ At `high`, 1 of 16 Ideas draws and 1 of 16 Sketch draws were malformed JSON. In 
 - reaches the reader as a failed card with the generic "gave up" sentence and a Retry button, which
   makes a fresh draw.
 
-So roughly one Sketch or Ideas press in sixteen fails for the reader today. Two fixes fit, cheapest
+So some Sketch and Ideas presses fail for the reader today; how many, this sample cannot say (one in
+sixteen observed, consistent with anything up to about 30%). Two fixes fit, cheapest
 first: one automatic retry with the parse error fed back (the
 [labels stage already does this](../postmortems/260924a-a-malformed-label-pair-kills-the-step-without-a-retry.md)),
 or structured outputs. Either is its own piece of work; neither was done here.
@@ -280,16 +317,33 @@ assumed one effort per group.
 
 ## What it cost
 
-**About $22.30 in API spend**, all through OpenRouter: 138 generation calls in this harness
-(including the smoke, the medium rounds and the 4 stopped validity draws), the three Hierarchy smoke
-calls ($0.22), and three smoke plates ($0.20). The judges ran on Codex and Claude subscriptions.
+**$26.44 in API spend in all**, through OpenRouter. The Hierarchy panel was $3.90, plus $0.30 for one
+cell of a serial run stopped and relaunched as four parallel jobs. Before the panel it was $22.24,
+reconciled from the JSONL rows by GPT Sol's decision review:
 
-Partway through, on 2026-10-01 at about 20:30, the OpenRouter **account** (shared by the dev and prod
-keys) ran out of credit, at $309.13 of $310. Three Illustrated calls came back
-`402 ai-no-credit`, and the harness stopped itself rather than record them as answers. The account
-was topped up to $410 in total (the Overseer relayed it), and those three cells were re-run; the failed rows are kept in
-`evals/results/thinking-effort-261001/outage-402/`. This eval was about $17 of the dev key's
-$50.89 that day.
+| item | spend |
+|---|---:|
+| main runs (128 generation calls) | $20.43 |
+| smoke | $0.70 |
+| the 4 stopped validity draws | $0.69 |
+| the three Hierarchy smoke calls | $0.22 |
+| three smoke plates | $0.20 |
+
+The three 402 attempts are excluded: they were refused, not billed. The Hierarchy panel's spend is
+in § Hierarchy. The judges ran on Codex and Claude subscriptions.
+
+Partway through, at about 20:30 on 2026-10-01, the OpenRouter **account** ran out of credit; the
+dev and prod keys share it.
+
+- The harness got `402 ai-no-credit` on three Illustrated calls and stopped itself rather than
+  record them as answers.
+- The balance was then read from OpenRouter's `GET /api/v1/credits` (total credits $310, total usage
+  $309.13), and each key's own usage from `GET /api/v1/key` (dev $50.89 that day). The figures are
+  in this session's transcript and are not saved as files.
+- The Overseer verified the balance independently and told Greg.
+- The account was topped up to $410 in total (relayed by the Overseer), and the three cells were
+  re-run. The failed rows are kept in `evals/results/thinking-effort-261001/outage-402/`.
+- This eval was about $17 of the dev key's spend that day.
 
 ## What this does not show
 

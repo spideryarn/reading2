@@ -334,11 +334,10 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
-  const { questionFor, structureRequest } = await import("../../src/hierarchy.js");
+  const { parseStructureAnswer, questionFor, structureRequest } = await import("../../src/hierarchy.js");
   const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/hierarchy-prompt.js");
   const { splitBlocks } = await import("../../src/supplement.js");
   const { streamMessage } = await import("../../src/messages-stream.js");
-  const { parseJsonFrom, stripFence } = await import("../../src/parse-json.js");
   const { generateGlossary, PROMPT_VERSION: GLOSSARY_VERSION } = await import("../../src/glossary.js");
   const sourceSha256 = Object.fromEntries(
     ["hierarchy.ts", "glossary.ts"].map((file) => [
@@ -378,7 +377,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         const { params } = structureRequest(body);
         const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
         const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-        const { root } = parseJsonFrom<{ root: ModelNode }>(stripFence(raw), "plain-words structure answer");
+        const { root } = parseStructureAnswer(raw); // production's own parse, not a copy of it
         return flatten(root, 0, []);
       };
       const glossary = async (): Promise<Entry[]> => {

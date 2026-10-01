@@ -185,12 +185,12 @@
           "latency": 264.6895
         },
         "candidate": {
-          "thinking": 4315.5,
-          "output": 10868,
-          "usd": 0.181532,
-          "latency": 100.5655
+          "thinking": 10904,
+          "output": 17281,
+          "usd": 0.245662,
+          "latency": 161.6375
         },
-        "thinkingReduction": 0.8083405502631403
+        "thinkingReduction": 0.5157329069793263
       },
       {
         "slug": "entropy-24-00930-spya-pywwkq",
@@ -202,12 +202,12 @@
           "latency": 252.336
         },
         "candidate": {
-          "thinking": 1439,
-          "output": 7358.5,
-          "usd": 0.125305,
-          "latency": 68.36
+          "thinking": 8699.5,
+          "output": 14767,
+          "usd": 0.19939,
+          "latency": 134.08499999999998
         },
-        "thinkingReduction": 0.9333518595711175
+        "thinkingReduction": 0.5970774859895327
       },
       {
         "slug": "noema-mythology-of-conscious-ai",
@@ -219,12 +219,12 @@
           "latency": 261.978
         },
         "candidate": {
-          "thinking": 3260.5,
-          "output": 8588.5,
-          "usd": 0.132953,
-          "latency": 77.1755
+          "thinking": 7549.5,
+          "output": 13395.5,
+          "usd": 0.181023,
+          "latency": 121.756
         },
-        "thinkingReduction": 0.8514307846532397
+        "thinkingReduction": 0.6559965369543425
       },
       {
         "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
@@ -236,12 +236,12 @@
           "latency": 294.858
         },
         "candidate": {
-          "thinking": 2960,
-          "output": 9577,
-          "usd": 0.14318999999999998,
-          "latency": 86.419
+          "thinking": 8783.5,
+          "output": 15539,
+          "usd": 0.20281,
+          "latency": 139.306
         },
-        "thinkingReduction": 0.8889847354011177
+        "thinkingReduction": 0.6705734538499044
       },
       {
         "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
@@ -253,12 +253,12 @@
           "latency": 226.3555
         },
         "candidate": {
-          "thinking": 2076.5,
-          "output": 8718.5,
-          "usd": 0.13658900000000002,
-          "latency": 82.4045
+          "thinking": 5749,
+          "output": 12439.5,
+          "usd": 0.173799,
+          "latency": 112.09899999999999
         },
-        "thinkingReduction": 0.8926596019643319
+        "thinkingReduction": 0.702817265443267
       },
       {
         "slug": "after-work-we-ll-have-each-other-spya-we6h75",
@@ -270,12 +270,12 @@
           "latency": 259.0335
         },
         "candidate": {
-          "thinking": 1797.5,
-          "output": 7256,
-          "usd": 0.10930000000000001,
-          "latency": 69.653
+          "thinking": 6219.5,
+          "output": 12280,
+          "usd": 0.15954000000000002,
+          "latency": 111.2685
         },
-        "thinkingReduction": 0.9211449879359509
+        "thinkingReduction": 0.7271550778679535
       },
       {
         "slug": "spider-silk-spya-ge30uz",
@@ -287,12 +287,12 @@
           "latency": 239.55
         },
         "candidate": {
-          "thinking": 108.5,
-          "output": 5289,
-          "usd": 0.093892,
-          "latency": 49.0025
+          "thinking": 6372,
+          "output": 12582.5,
+          "usd": 0.166827,
+          "latency": 112.23500000000001
         },
-        "thinkingReduction": 0.9947312193463799
+        "thinkingReduction": 0.6905744670519108
       },
       {
         "slug": "cargocult-spya-rz663q",
@@ -304,23 +304,21 @@
           "latency": 157.24149999999997
         },
         "candidate": {
-          "thinking": 1011.5,
-          "output": 6260,
-          "usd": 0.08884800000000001,
-          "latency": 54.548500000000004
+          "thinking": 4482,
+          "output": 9815.5,
+          "usd": 0.124403,
+          "latency": 82.8115
         },
-        "thinkingReduction": 0.9123559483580279
+        "thinkingReduction": 0.6116454380036391
       }
     ],
-    "medianTypicalThinkingReduction": 0.9123559483580279,
-    "invalid": [
-      "spider-silk-spya-ge30uz low-a"
-    ]
+    "medianTypicalThinkingReduction": 0.6705734538499044,
+    "invalid": []
   },
   "gatesPass": {
-    "literal": false,
-    "compared": false,
-    "invalidCandidate": 1,
+    "literal": true,
+    "compared": true,
+    "invalidCandidate": 0,
     "invalidBase": 0
   }
 }

@@ -46,7 +46,7 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was four: the big `ids` group (tweets, ideas, sketch, timeline, quiz, faq, simple), glossary with quotes, and arc and crossrefs each alone. **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
+| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was five: the big `ids` group (tweets, ideas, timeline, quiz, faq, simple), glossary with quotes, and arc, crossrefs and sketch each alone — sketch since it moved to `low` effort that day, [measured](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see
@@ -114,6 +114,12 @@ values — arc at `medium` loses 11 points of vocabulary retention on one articl
 `high` gets markedly more formulaic on the other while spending 4,558 more output tokens. No value
 wins, so aligning would mean paying in writing quality to win a cache. The settings on disk were
 chosen for what each stage writes, and that is the right reason to choose them.
+
+The same choice was measured for four more modes on 2026-10-01 — Sketch, Illustrated, Hierarchy and
+Ideas, eight articles and two blind judges —
+[261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+Only Sketch moved, from `high` to `low`, which took it out of the `ids` group: it chose quality and
+price over a cache share that production almost never collects ([below](#what-production-actually-does)).
 
 The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `CAPABLE_MODEL`, because both
 are part of the cache key, and **that table is half the cache grouping** — `sharesArticleCache` in

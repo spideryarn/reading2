@@ -4,6 +4,14 @@
 findings, folded in below — [the review](../../evals/thinking-effort/reviews/plan-review-sol-r1.md)).
 Stage 1 (the harness) built and smoked on `cargocult` for $1.12.
 
+**Stage 4, 22:40.** GPT Sol's decision review agreed with Sketch, Illustrated and Ideas, and found
+the Hierarchy result false (D1): the harness parsed with production's pre-2026-09-03 recipe, stricter
+than today's. Fixed (production now exports `parseStructureAnswer` and the evals call it;
+[postmortem 261001b](../postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md)),
+and the full Hierarchy panel was run: thinking off failed 5 of 16 trees (missing gists, malformed
+JSON) against 0 of 16 at `low`, so **Hierarchy stays `low`**, now on sound evidence. Sketch's change
+to `low` is made, with the reader copy's wait corrected to "about a minute". Total spend $26.44.
+
 **Stages 2–3 done, 22:00.** Decided, by the rule below: **Sketch `low`; Illustrated, Ideas and
 Hierarchy unchanged.** Illustrated failed `low` (both judges) and `medium` (Opus, 1.06 against the
 1.1 line). The standardising rule was set aside — Greg's leaning was "if it makes them cheaper", and
@@ -256,6 +264,14 @@ of the time, a 20% one about 3%. If it fails, the `medium` round runs under the 
 Sketch and Illustrated standardise on the higher level each passes. The literal result (1 vs 0,
 fail) is reported alongside. A transport or 402 error is re-run and does not count. (Arbitrated by
 Opus, which recommended this over both the literal reading and passing it on the statistics.)
+
+*Corrected by GPT Sol's decision review (D5).* The false-fail figure above holds only at a 3% true
+rate. At 4% it is 13.5%, and at the pooled `high` rate observed here (2 of 48) it is 14.7%.
+
+On timing: this paragraph was written before the validity draws began, but it was **committed**
+after four of them, so git alone does not prove it came first. The test was stopped after those four
+(all valid, $0.69), because both quality judges had found `low` clearly worse, which decided
+Illustrated regardless.
 
 ### Cache groups — what a change would move
 

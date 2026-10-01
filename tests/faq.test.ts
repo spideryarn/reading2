@@ -448,13 +448,15 @@ describe("the request", () => {
     expect(run.faq.questions).toHaveLength(1);
   });
 
-  it("is in the ids cache group with ideas, timeline, quiz, sketch and tweets, and no other", () => {
+  it("is in the ids cache group with ideas, timeline, quiz, simple and tweets, and no other", () => {
     expect(sharesArticleCache("faq", ["ideas"])).toBe(true);
     expect(sharesArticleCache("quiz", ["faq"])).toBe(true);
     /* Tweets joined on 2026-09-29: `tweets/5` sends `articleWithIds` so each
        post can name its passages (plan 260929f). */
     expect(sharesArticleCache("faq", ["tweets"])).toBe(true);
     expect(sharesArticleCache("faq", ["arc", "glossary", "quotes"])).toBe(false);
+    /* Sketch left on 2026-10-01 for `low` effort: same bytes, different key. */
+    expect(sharesArticleCache("faq", ["sketch"])).toBe(false);
     /* And contiguous with them in `STEP_ORDER`. */
     const at = (s: (typeof STEP_ORDER)[number]) => STEP_ORDER.indexOf(s);
     expect(at("faq")).toBe(at("quiz") + 1);

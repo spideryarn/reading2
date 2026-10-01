@@ -1,7 +1,7 @@
 /**
  * **How long a Sketch takes, in exactly one place.**
  *
- * *One model call, 121–194 seconds, about $0.20 — measured over seven draws of
+ * *One model call, 121–194 seconds, about $0.20 — measured at effort `high` over seven draws of
  * five articles* (docs/project/diagram.md § What it costs). A constant rather
  * than prose because three surfaces have to say it: the Sketch panel itself,
  * Illustrated's *"Draw the Sketch, then paint"* button, and the Metadata page's
@@ -27,10 +27,13 @@
  * from there would have put the whole Sketch panel — its hook, its scene
  * validator, its painter — into the graph of a page that draws no diagram.
  *
- * `SKETCH_WAIT` keeps the wording the panel has always shown rather than the
- * measured range: *about two minutes* is what a reader has been told since the
- * mode shipped, and widening it to *two to three* is a copy change nobody has
- * asked for. The measurement is one link away, above.
+ * `SKETCH_WAIT` is a rounded wording, not the measured range. It said *about
+ * two minutes* from the day the mode shipped (measured 121–194 s at `high`)
+ * until 2026-10-01, when the stage moved to effort `low` and the wait fell to
+ * 30–101 s, about 42 s on average over sixteen draws on eight articles —
+ * docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md.
+ * A reader told two minutes and served in forty seconds is not harmed, but the
+ * sentence would no longer be true.
  */
-/** Measured 121–194 s; the wording is the panel's own. See the header. */
-export const SKETCH_WAIT = "about two minutes";
+/** Measured 30–101 s at `low` (2026-10-01); the wording is rounded. See the header. */
+export const SKETCH_WAIT = "about a minute";

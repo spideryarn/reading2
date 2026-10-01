@@ -1313,5 +1313,7 @@ four siblings, and would be useless at telling five adjacent paragraphs apart.
 - [block-ids.md](block-ids.md) — the id contract these ranges are built on
 - [granularity-zoom.md](granularity-zoom.md) — the same tree, rendered as text instead of navigation
 - [architecture.md](architecture.md) — where stage 4 sits in the pipeline
+- [261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — effort vs quality for the structure call: `low` stays,
+  because with thinking off 5 of 16 trees failed (internal nodes with no gist), against 0 of 16 at `low`
 - [`src/types.ts`](../../src/types.ts) — the canonical schema
 - [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts)

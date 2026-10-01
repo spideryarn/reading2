@@ -94,6 +94,7 @@ import { DIAGRAM_SUB_MODES } from "./sub-modes.js";
    `visibleKinds` below is this file's caller. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { PublicSketch } from "../public-types.js";
+import { SKETCH_WAIT } from "./sketch-cost.js";
 import { SketchView } from "./SketchView.js";
 import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
@@ -283,7 +284,7 @@ const KIND_UI: Record<
   /* The odd one out, and the card has to say so before it is pressed: the three
      above are geometry over the article's own tree, and this one is a model's
      drawing. Its `how` leads with the price because it is the only picture here
-     that costs two minutes and cannot be redrawn for free. */
+     that costs a model call and a minute's wait, and cannot be redrawn for free. */
   sketch: {
     label: DIAGRAM_SUB_MODES.sketch.label,
     icon: PenLine,
@@ -300,7 +301,7 @@ const KIND_UI: Record<
        `MIN_LINKED_SHARE` 0.5 (src/sketch-scene.ts) — so "down the page is
        reading order" and "click a box to jump there" were describing the good
        case as the guarantee. ⟨Sol⟩, 2026-08-30. */
-    how: "Costs one model call and about two minutes, and is never drawn until you ask. It mostly runs down the page with the article, and nothing is to scale. Boxes that point at a passage jump there when clicked; not all of them do.",
+    how: `Costs one model call and ${SKETCH_WAIT}, and is never drawn until you ask. It mostly runs down the page with the article, and nothing is to scale. Boxes that point at a passage jump there when clicked; not all of them do.`,
   },
   /* The fifth, and the only one whose input is another picture rather than the
      article. Its `blurb` has to say that it is an *interpretation* before the

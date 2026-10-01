@@ -1,0 +1,1605 @@
+{
+  "version": "toc/9",
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0016",
+        "n0023",
+        "n0031",
+        "n0041",
+        "n0050",
+        "n0072",
+        "n0082",
+        "n0098",
+        "n0111"
+      ],
+      "range": [
+        "spya-ac3022",
+        "spya-sq6h79"
+      ],
+      "title": "Analog Cognition and Consciousness",
+      "gist": "Cognition and consciousness arise when brain-wide electrical waves organize neuron firing through analog computation, not just synaptic connections.",
+      "question": "Cognition and consciousness — what physical process coordinates billions of neurons so fast? (a wave-based theory)"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0013"
+      ],
+      "range": [
+        "spya-ac3022",
+        "spya-d238cn"
+      ],
+      "title": "Paper Overview and Abstract",
+      "gist": "The paper proposes that brain waves, not just synapses, give the brain flexible, executive-like control over neuron firing, producing cognition and consciousness.",
+      "question": "Brain waves — what role might they play beyond reflecting neuron activity? (a proposal)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012"
+      ],
+      "range": [
+        "spya-ac3022",
+        "spya-rmrvzr"
+      ],
+      "title": "Title and Authorship",
+      "gist": "This paper, by Earl Miller, Scott Brincat, and Jefferson Roy at MIT, proposes a new theory linking brain-wide electrical waves to cognition and consciousness."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-ac3022",
+        "spya-ac3022"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-a4brsd",
+        "spya-a4brsd"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-xjmw8e",
+        "spya-xjmw8e"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-fptvt6",
+        "spya-fptvt6"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-c65bhn",
+        "spya-c65bhn"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-jzm2f5",
+        "spya-jzm2f5"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-nvcvg4",
+        "spya-nvcvg4"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-pd4bk8",
+        "spya-pd4bk8"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-rmrvzr",
+        "spya-rmrvzr"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0014",
+        "n0015"
+      ],
+      "range": [
+        "spya-c5z6sr",
+        "spya-d238cn"
+      ],
+      "title": "Brain waves enable flexible cognition",
+      "gist": "While synapses store memories, large-scale brain waves act like an executive controller, organizing millions of neurons into coordinated, meaningful patterns that generate flexible thought and unified awareness.",
+      "sourceHeading": "Abstract"
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-c5z6sr",
+        "spya-c5z6sr"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-d238cn",
+        "spya-d238cn"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0017",
+        "n0020"
+      ],
+      "range": [
+        "spya-f6m6jv",
+        "spya-z9g2s3"
+      ],
+      "title": "Introduction",
+      "gist": "Flexible top-down cognitive control needs a system that can coordinate hundreds of millions of neurons within fractions of a second, which synapse-based models struggle to explain.",
+      "question": "Top-down control — what mechanism could coordinate neurons fast enough? (a candidate: brain waves)"
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0018",
+        "n0019"
+      ],
+      "range": [
+        "spya-f6m6jv",
+        "spya-k6n9n8"
+      ],
+      "title": "Cognition needs fast coordination",
+      "gist": "Cognition depends on top-down feedback that filters sensory input, guides action, and retrieves memory, requiring a control system able to organize huge numbers of neurons almost instantly."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-f6m6jv",
+        "spya-f6m6jv"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-k6n9n8",
+        "spya-k6n9n8"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0021",
+        "n0022"
+      ],
+      "range": [
+        "spya-d73kfb",
+        "spya-z9g2s3"
+      ],
+      "title": "Why synapses alone cannot explain control",
+      "gist": "Explaining flexible control purely through synaptic rewiring would require a system that constantly tracks and recoordinates specific neurons and connections within fractions of a second, which seems implausible, pointing instead toward brain-wide electrical oscillations as the likely mechanism."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-d73kfb",
+        "spya-d73kfb"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-z9g2s3",
+        "spya-z9g2s3"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0024",
+        "n0029"
+      ],
+      "range": [
+        "spya-k046f6",
+        "spya-amx5qf"
+      ],
+      "title": "20th century neuroscience: The classical model of neural information processing",
+      "gist": "The classical connectionist view, in which fixed, specialized neurons pass information through a feedforward hierarchy, explains sensory processing well but cannot account for how prefrontal neurons multiplex many functions at once.",
+      "question": "Connectionist models — why do they fall short for higher cognition? (an anomaly)"
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0023",
+      "children": [
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028"
+      ],
+      "range": [
+        "spya-k046f6",
+        "spya-p6hwth"
+      ],
+      "title": "The connectionist view of cortical processing",
+      "gist": "Classical models describe hierarchical feedforward circuits where each neuron has a stable, specialized meaning, so that decoding every neuron's fixed message would, in principle, explain the whole brain."
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-k046f6",
+        "spya-k046f6"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-gj263p",
+        "spya-gj263p"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-hec5rz",
+        "spya-hec5rz"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-p6hwth",
+        "spya-p6hwth"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 2,
+      "parent": "n0023",
+      "children": [
+        "n0030"
+      ],
+      "range": [
+        "spya-amx5qf",
+        "spya-amx5qf"
+      ],
+      "title": "Limits of the classical model",
+      "gist": "If each neuron served one fixed function, the brain could only support a few dozen cognitive tasks before running out of neurons, yet many cortical neurons turn out to multiplex several kinds of information at once, a pattern called mixed selectivity."
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-amx5qf",
+        "spya-amx5qf"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0032",
+        "n0037"
+      ],
+      "range": [
+        "spya-v0gbwq",
+        "spya-dtnkkk"
+      ],
+      "title": "Mixed Selectivity: Multifunctional neurons enable flexible cognition",
+      "gist": "Many prefrontal neurons do not respond to single fixed features but combine variables nonlinearly, a property called mixed selectivity that expands computing and memory capacity and demands a flexible routing system beyond fixed synaptic weights.",
+      "question": "Mixed selectivity — how do multifunctional neurons support flexible thought? (an experimental example)"
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 2,
+      "parent": "n0031",
+      "children": [
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036"
+      ],
+      "range": [
+        "spya-v0gbwq",
+        "spya-x5m34h"
+      ],
+      "title": "Pure versus mixed selectivity",
+      "gist": "In a task requiring memory for two objects and their order, neurons did not simply track identity alone, as pure selectivity predicts, but instead combined object identity with sequence context nonlinearly, the signature of mixed selectivity."
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-v0gbwq",
+        "spya-v0gbwq"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-d6h3pv",
+        "spya-d6h3pv"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-x7vunr",
+        "spya-x7vunr"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-x5m34h",
+        "spya-x5m34h"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 2,
+      "parent": "n0031",
+      "children": [
+        "n0038",
+        "n0039",
+        "n0040"
+      ],
+      "range": [
+        "spya-njs6ff",
+        "spya-dtnkkk"
+      ],
+      "title": "Why mixed selectivity matters",
+      "gist": "Mixed-selectivity neurons expand a network's representational power and storage capacity and appear throughout cortex, meaning neurons overlap across many functional networks, so routing signals through this shared web requires more than synaptic weight changes alone."
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-njs6ff",
+        "spya-njs6ff"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-fnm872",
+        "spya-fnm872"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0037",
+      "children": [],
+      "range": [
+        "spya-dtnkkk",
+        "spya-dtnkkk"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0042",
+        "n0045"
+      ],
+      "range": [
+        "spya-jnp59d",
+        "spya-f59f0p"
+      ],
+      "title": "Oscillations as Neural Control",
+      "gist": "Rhythmic brain waves actively organize and route spiking activity across millimeter-to-centimeter scales, and can influence neurons directly through electric fields rather than only through synapses.",
+      "question": "Brain waves — how could they control which neurons fire and when? (two proposed mechanisms)"
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0043",
+        "n0044"
+      ],
+      "range": [
+        "spya-jnp59d",
+        "spya-trb3jf"
+      ],
+      "title": "Oscillations organize neural information",
+      "gist": "Rhythmic brain waves actively shape, rather than merely reflect, neuron firing by segregating spikes into oscillation phases and opening timed windows that route information between brain regions, with feedforward and feedback signals riding distinct frequency bands."
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-jnp59d",
+        "spya-jnp59d"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-trb3jf",
+        "spya-trb3jf"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049"
+      ],
+      "range": [
+        "spya-mapqhv",
+        "spya-f59f0p"
+      ],
+      "title": "Oscillations directly influence spiking via ephaptic coupling",
+      "gist": "Electric fields generated by neuron firing can directly nudge nearby neurons' voltages without using synapses, a process called ephaptic coupling, and because fields spread fast and broadly while spikes are brief and local, waves offer a faster, large-scale way to coordinate activity."
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-mapqhv",
+        "spya-mapqhv"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-bzqaf5",
+        "spya-bzqaf5"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-j7k4hu",
+        "spya-j7k4hu"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-f59f0p",
+        "spya-f59f0p"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0051",
+        "n0060",
+        "n0064"
+      ],
+      "range": [
+        "spya-qck2sw",
+        "spya-qsz9ur"
+      ],
+      "title": "Spatial Computing: A theory of oscillatory control of neural information",
+      "gist": "A theory called Spatial Computing proposes that spatially patterned alpha/beta waves act as inhibitory templates that gate where faster gamma-band spiking occurs, explaining both mixed selectivity and low-dimensional population coding.",
+      "question": "Spatial Computing — how do slow and fast waves jointly control what the cortex represents? (a mechanistic theory)"
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0050",
+      "children": [
+        "n0052",
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059"
+      ],
+      "range": [
+        "spya-qck2sw",
+        "spya-q606tk"
+      ],
+      "title": "Spatial Computing theory",
+      "gist": "Spatially patterned alpha/beta waves act like temporary inhibitory stencils across the cortex, suppressing fast gamma-band spiking in some locations while leaving others open, so where information appears depends on the interplay of goal-driven alpha/beta patterns and incoming sensory signals."
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-qck2sw",
+        "spya-qck2sw"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-hcav4k",
+        "spya-hcav4k"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-thnz7b",
+        "spya-thnz7b"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-vzew3p",
+        "spya-vzew3p"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-gkfdys",
+        "spya-gkfdys"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-gxyg0d",
+        "spya-gxyg0d"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-azz3c8",
+        "spya-azz3c8"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-q606tk",
+        "spya-q606tk"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 2,
+      "parent": "n0050",
+      "children": [
+        "n0061",
+        "n0062",
+        "n0063"
+      ],
+      "range": [
+        "spya-zmknun",
+        "spya-ee45vr"
+      ],
+      "title": "Explaining mixed selectivity with spatial computing",
+      "gist": "Because each goal or context creates its own alpha/beta inhibitory pattern, the same neuron can fall inside the suppressed zone in one context and outside it in another, making its apparent selectivity change with context without needing specialized context neurons.",
+      "sourceHeading": "Explaining mixed selectivity with spatial computing"
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-zmknun",
+        "spya-zmknun"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-ectcj5",
+        "spya-ectcj5"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-ee45vr",
+        "spya-ee45vr"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 2,
+      "parent": "n0050",
+      "children": [
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071"
+      ],
+      "range": [
+        "spya-m63zb9",
+        "spya-qsz9ur"
+      ],
+      "title": "Explaining subspace coding with spatial computing",
+      "gist": "Because mixed-selectivity neurons are correlated rather than independent, population activity occupies a lower-dimensional subspace, and alpha/beta control signals can explain this by segregating overlapping neuron subsets into distinct, interference-minimizing patterns of coordinated activity.",
+      "sourceHeading": "Explaining subspace coding with spatial computing"
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-m63zb9",
+        "spya-m63zb9"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-xphb7u",
+        "spya-xphb7u"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-az9405",
+        "spya-az9405"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-sye2jf",
+        "spya-sye2jf"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-ns23sq",
+        "spya-ns23sq"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-ah94dx",
+        "spya-ah94dx"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-qsz9ur",
+        "spya-qsz9ur"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0073",
+        "n0077"
+      ],
+      "range": [
+        "spya-y09vju",
+        "spya-jcpyd5"
+      ],
+      "title": "Traveling Waves and Representational Change",
+      "gist": "Brain waves often sweep across cortex as traveling waves, and alpha/beta traveling waves in particular may drive the brain's shift from one pattern of neural coding to another.",
+      "question": "Traveling waves — how might moving waves change what the brain represents? (a proposed mechanism)"
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [
+        "n0074",
+        "n0075",
+        "n0076"
+      ],
+      "range": [
+        "spya-y09vju",
+        "spya-qr9ra4"
+      ],
+      "title": "Traveling waves across cortex",
+      "gist": "Brain waves frequently sweep across the cortical surface as traveling waves spanning a wide range of frequencies, and evidence links them to perception, attention, memory, and movement, including beta waves that act like a brake on motor action."
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-y09vju",
+        "spya-y09vju"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-uqt5yf",
+        "spya-uqt5yf"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-qr9ra4",
+        "spya-qr9ra4"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0072",
+      "children": [
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081"
+      ],
+      "range": [
+        "spya-mrsvfu",
+        "spya-jcpyd5"
+      ],
+      "title": "Waves as drivers of representational change",
+      "gist": "Alpha/beta traveling waves may actively shift which neurons can fire and how they correlate, effectively moving cortical activity from one coding pattern to another, while slower theta waves may coordinate this process over larger spatial and temporal scales."
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-mrsvfu",
+        "spya-mrsvfu"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-gbpnax",
+        "spya-gbpnax"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-qaza0y",
+        "spya-qaza0y"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-jcpyd5",
+        "spya-jcpyd5"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0083",
+        "n0088",
+        "n0092"
+      ],
+      "range": [
+        "spya-h5qjz4",
+        "spya-xf7ap4"
+      ],
+      "title": "Analog Computation with Waves",
+      "gist": "Brain waves may perform actual computation, not just organization, because overlapping waves add, cancel, and combine like analog machines, offering an energy-efficient way to generate new patterns of neural activity.",
+      "question": "Wave interactions — can waves themselves compute, not merely coordinate? (an analogy to analog machines)",
+      "sourceHeading": "Analog Computation with Waves"
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087"
+      ],
+      "range": [
+        "spya-h5qjz4",
+        "spya-vp5h33"
+      ],
+      "title": "Waves as analog computers",
+      "gist": "Analog computing uses continuous physical quantities like voltage to solve problems directly, and when brain waves overlap they add, cancel, or interfere in ways that can perform computation, much like historical mechanical analog machines did with physical motion."
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-h5qjz4",
+        "spya-h5qjz4"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-tkruda",
+        "spya-tkruda"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-evzx4h",
+        "spya-evzx4h"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-vp5h33",
+        "spya-vp5h33"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0089",
+        "n0090",
+        "n0091"
+      ],
+      "range": [
+        "spya-szhg6f",
+        "spya-mgnqxk"
+      ],
+      "title": "Efficiency of wave-based computing",
+      "gist": "Analog computation is efficient because an entire physical medium evolves at once, solving a problem in parallel rather than stepping through it sequentially, and brain-inspired neuromorphic hardware shows this can cut energy use by more than tenfold compared to digital systems."
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-szhg6f",
+        "spya-szhg6f"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-wa647r",
+        "spya-wa647r"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-mgnqxk",
+        "spya-mgnqxk"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 2,
+      "parent": "n0082",
+      "children": [
+        "n0093",
+        "n0094",
+        "n0095",
+        "n0096",
+        "n0097"
+      ],
+      "range": [
+        "spya-z5qnp2",
+        "spya-xf7ap4"
+      ],
+      "title": "Combining signals through wave summation",
+      "gist": "Overlapping cortical waves of different frequencies could combine distinct contextual signals by summing into unique spatial patterns, letting the brain represent complex combinations of context, continuous quantities, or mental constructs at only about 20 watts of power."
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-z5qnp2",
+        "spya-z5qnp2"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-prykb8",
+        "spya-prykb8"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-fp5844",
+        "spya-fp5844"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-jbtup9",
+        "spya-jbtup9"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-xf7ap4",
+        "spya-xf7ap4"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0099",
+        "n0104"
+      ],
+      "range": [
+        "spya-uvev07",
+        "spya-tdqde5"
+      ],
+      "title": "Altered Waves and the Hybrid Framework",
+      "gist": "Anesthesia disrupts consciousness by collapsing diverse cortical waves into slow, desynchronized patterns regardless of drug type, supporting a hybrid model where synapses store information but waves determine what is currently active and conscious.",
+      "question": "Anesthesia and hybrid control — what does loss of consciousness reveal about waves' role? (converging evidence)"
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 2,
+      "parent": "n0098",
+      "children": [
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103"
+      ],
+      "range": [
+        "spya-uvev07",
+        "spya-k02vdw"
+      ],
+      "title": "Altered Cortical Waves and Unconsciousness",
+      "gist": "Chemically distinct anesthetic drugs acting on different molecular targets all converge on the same large-scale effect, slow, desynchronized cortical waves, suggesting consciousness depends on the integrity of large-scale wave organization rather than any specific receptor or cell type.",
+      "sourceHeading": "Altered Cortical Waves and Unconsciousness"
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-uvev07",
+        "spya-uvev07"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-m57373",
+        "spya-m57373"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-wnqgmn",
+        "spya-wnqgmn"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-k02vdw",
+        "spya-k02vdw"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 2,
+      "parent": "n0098",
+      "children": [
+        "n0105",
+        "n0106",
+        "n0107",
+        "n0108",
+        "n0109",
+        "n0110"
+      ],
+      "range": [
+        "spya-dnv2tp",
+        "spya-tdqde5"
+      ],
+      "title": "A Hybrid Synapse/Wave Framework for Cognition and Consciousness",
+      "gist": "Synapses store long-term knowledge while electric fields from spiking feed back through ephaptic coupling to generate waves, and these waves, especially slower alpha/beta and theta rhythms, determine which stored representations become active, binding distributed activity into a unified conscious state.",
+      "sourceHeading": "A Hybrid Synapse/Wave Framework for Cognition and Consciousness"
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-dnv2tp",
+        "spya-dnv2tp"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-k062r7",
+        "spya-k062r7"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-f0dqyd",
+        "spya-f0dqyd"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-e9rw5j",
+        "spya-e9rw5j"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-z6esvz",
+        "spya-z6esvz"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0104",
+      "children": [],
+      "range": [
+        "spya-tdqde5",
+        "spya-tdqde5"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0112",
+        "n0118",
+        "n0123"
+      ],
+      "range": [
+        "spya-xn7mdj",
+        "spya-sq6h79"
+      ],
+      "title": "Comparison, Conclusion, and Acknowledgements",
+      "gist": "This wave-based theory shares goals with major theories of consciousness and executive control but locates the key mechanism in large-scale, energy-efficient analog wave dynamics rather than discrete signaling between neurons.",
+      "question": "Rival theories of consciousness — how does this wave account compare and what follows from it? (a synthesis)"
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 2,
+      "parent": "n0111",
+      "children": [
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117"
+      ],
+      "range": [
+        "spya-xn7mdj",
+        "spya-j6qfz4"
+      ],
+      "title": "Comparison to other theories of consciousness and executive control",
+      "gist": "This analog wave theory shares the idea of distributed, flexible integration with Global Workspace, Integrated Information, and Higher-Order theories, but differs by locating the mechanism in large-scale oscillatory field dynamics rather than discrete broadcasting, spikes, or a dedicated observer system.",
+      "sourceHeading": "Comparison to other theories of consciousness and executive control"
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0112",
+      "children": [],
+      "range": [
+        "spya-xn7mdj",
+        "spya-xn7mdj"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0112",
+      "children": [],
+      "range": [
+        "spya-xnpbyc",
+        "spya-xnpbyc"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0112",
+      "children": [],
+      "range": [
+        "spya-m3dn2u",
+        "spya-m3dn2u"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0112",
+      "children": [],
+      "range": [
+        "spya-nkg5v2",
+        "spya-nkg5v2"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0112",
+      "children": [],
+      "range": [
+        "spya-j6qfz4",
+        "spya-j6qfz4"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 2,
+      "parent": "n0111",
+      "children": [
+        "n0119",
+        "n0120",
+        "n0121",
+        "n0122"
+      ],
+      "range": [
+        "spya-smkrcs",
+        "spya-m8bzur"
+      ],
+      "title": "Conclusion",
+      "gist": "Rather than describing cognition mainly through discrete neurons and circuits, this framework treats brain-wide wave dynamics as the organizing principle that binds populations into coherent states and carries out efficient, biologically plausible analog computation across the cortex."
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-smkrcs",
+        "spya-smkrcs"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-wwp9xb",
+        "spya-wwp9xb"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-m9exy5",
+        "spya-m9exy5"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-m8bzur",
+        "spya-m8bzur"
+      ],
+      "title": ""
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 2,
+      "parent": "n0111",
+      "children": [
+        "n0124",
+        "n0125",
+        "n0126"
+      ],
+      "range": [
+        "spya-yqq2ck",
+        "spya-sq6h79"
+      ],
+      "title": "Acknowledgements and References",
+      "gist": "The work was funded by several research grants and foundations supporting the Picower Institute for Learning and Memory and related programs."
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-yqq2ck",
+        "spya-yqq2ck"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-dxrj27",
+        "spya-dxrj27"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-sq6h79",
+        "spya-sq6h79"
+      ],
+      "title": ""
+    }
+  }
+}

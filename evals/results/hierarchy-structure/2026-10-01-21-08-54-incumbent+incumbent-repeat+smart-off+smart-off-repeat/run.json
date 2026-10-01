@@ -1,0 +1,1107 @@
+{
+  "startedAt": "2026-10-01T21:08:54.529Z",
+  "commit": "59fc48a0491882d78cab14acda66ae4d166872b0",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent-repeat",
+      "kind": "one-call",
+      "comparison": "noise-floor",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off-repeat",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "incumbent",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "cargocult-spya-rz663q"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "replication-crisis-spya-hrjamq",
+      "run": 1,
+      "callOrder": 1,
+      "elapsedMs": 89745,
+      "blocksSha256": {
+        "measured": "95ca164f169c4b3739061190a9af458a44f8a203ef387fc1dab700c16c28f5a6",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "replication-crisis-spya-hrjamq",
+        "blocks": 551,
+        "bodyBlocks": 274,
+        "headingBlocks": 37,
+        "fragmentBlocks": 40,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 265
+        },
+        "parts": {
+          "count": 9,
+          "words": [
+            1371,
+            1363,
+            982,
+            1436,
+            3151,
+            1774,
+            1424,
+            677,
+            1126
+          ],
+          "balanceCv": 0.4468817999713795
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.074074074074074,
+          "max": 26,
+          "within5to9": 0.5
+        },
+        "headings": {
+          "boundaries": 43,
+          "boundariesOnHeadings": 0.6744186046511628,
+          "headingsCut": 0.8055555555555556,
+          "l1OnHeadings": 0.625,
+          "sourceHeadingShare": 0.5740740740740741,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 53,
+            "words": 2732
+          }
+        },
+        "titles": {
+          "count": 54,
+          "meanWords": 3.5555555555555554,
+          "within2to6": 1,
+          "copiedHeadings": 0,
+          "retention": 0.8796296296296295
+        },
+        "gists": {
+          "count": 54,
+          "coverage": 1,
+          "meanWords": 28.055555555555557,
+          "multiSentence": 0,
+          "templateRepetition": 0.037037037037037035,
+          "retention": 0.5532865348752976
+        }
+      },
+      "calls": [
+        {
+          "ms": 89690,
+          "inputTokens": 34986,
+          "outputTokens": 9867,
+          "reasoningTokens": 3014,
+          "generationId": "gen-1790888935-4tHxoN8T8jzLJY7S1ry4",
+          "costUsd": 0.168642,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 2,
+          "endedOffsetMs": 89692,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 19,
+        "blocks": 68,
+        "largest": 11,
+        "where": [
+          "root (short, 6)",
+          "root > child 2 (gap, 11)",
+          "root > child 3 (gap, 2)",
+          "root > child 5 (gap, 4)",
+          "root > child 7 (gap, 9)",
+          "root > child 9 (short, 6)",
+          "root > child 1 > child 5 (short, 11)",
+          "root > child 2 > child 5 (short, 2)",
+          "root > child 3 > child 3 (gap, 1)",
+          "root > child 4 > child 5 (over, 6)",
+          "root > child 5 > child 5 (gap, 4)",
+          "root > child 6 > child 4 (short, 6)",
+          "root > child 6 > child 2 (heading, 1)",
+          "root > child 6 > child 3 (heading, 1)",
+          "root > child 7 > child 1 (gap, 3)",
+          "root > child 8 > child 1 (gap, 1)",
+          "root > child 8 > child 3 (gap, 1)",
+          "root > child 9 > child 1 (gap, 2)",
+          "root > child 9 > child 5 (short, 6)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": [
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 1 > child 4",
+          "root > child 1 > child 5",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 2 > child 4",
+          "root > child 2 > child 5",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 3 > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4",
+          "root > child 5 > child 5",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 6 > child 3",
+          "root > child 6 > child 4",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 7 > child 3",
+          "root > child 7 > child 4",
+          "root > child 7 > child 5",
+          "root > child 7 > child 6",
+          "root > child 7 > child 7",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2",
+          "root > child 8 > child 3",
+          "root > child 8 > child 4",
+          "root > child 9 > child 1",
+          "root > child 9 > child 2",
+          "root > child 9 > child 3",
+          "root > child 9 > child 4",
+          "root > child 9 > child 5"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 9,
+        "partCountB": 9,
+        "l1Boundaries": 0.3333333333333333,
+        "allBoundaries": 0.6140350877192983,
+        "boundaryDistance": {
+          "mean": 0.6413043478260869,
+          "within1Block": 0.9130434782608695
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "replication-crisis-spya-hrjamq",
+      "run": 1,
+      "callOrder": 2,
+      "elapsedMs": 222058,
+      "blocksSha256": {
+        "measured": "95ca164f169c4b3739061190a9af458a44f8a203ef387fc1dab700c16c28f5a6",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "replication-crisis-spya-hrjamq",
+        "blocks": 551,
+        "bodyBlocks": 274,
+        "headingBlocks": 37,
+        "fragmentBlocks": 40,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 265
+        },
+        "parts": {
+          "count": 9,
+          "words": [
+            1371,
+            1363,
+            982,
+            5886,
+            471,
+            1428,
+            677,
+            844,
+            282
+          ],
+          "balanceCv": 1.085938128299741
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.169811320754717,
+          "max": 46,
+          "within5to9": 0.37735849056603776
+        },
+        "headings": {
+          "boundaries": 42,
+          "boundariesOnHeadings": 0.6666666666666666,
+          "headingsCut": 0.7777777777777778,
+          "l1OnHeadings": 0.625,
+          "sourceHeadingShare": 0.5094339622641509,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 53,
+            "words": 2732
+          }
+        },
+        "titles": {
+          "count": 53,
+          "meanWords": 3.509433962264151,
+          "within2to6": 0.9433962264150944,
+          "copiedHeadings": 30,
+          "retention": 0.5833333333333333
+        },
+        "gists": {
+          "count": 53,
+          "coverage": 1,
+          "meanWords": 25.358490566037737,
+          "multiSentence": 0,
+          "templateRepetition": 0.07547169811320754,
+          "retention": 0.5549205701884014
+        }
+      },
+      "calls": [
+        {
+          "ms": 222019,
+          "inputTokens": 34986,
+          "outputTokens": 26075,
+          "reasoningTokens": 19930,
+          "generationId": "gen-1790889024-A6nCSu0KSHdvYOjIpBw0",
+          "costUsd": 0.330722,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 222019,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 9,
+        "partCountB": 9,
+        "l1Boundaries": 0.6,
+        "allBoundaries": 0.625,
+        "boundaryDistance": {
+          "mean": 1.2527472527472527,
+          "within1Block": 0.8571428571428571
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "replication-crisis-spya-hrjamq",
+      "run": 1,
+      "callOrder": 3,
+      "elapsedMs": 54490,
+      "blocksSha256": {
+        "measured": "95ca164f169c4b3739061190a9af458a44f8a203ef387fc1dab700c16c28f5a6",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "replication-crisis-spya-hrjamq",
+        "blocks": 551,
+        "bodyBlocks": 274,
+        "headingBlocks": 37,
+        "fragmentBlocks": 40,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 265
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            1371,
+            610,
+            1735,
+            4587,
+            1400,
+            3601
+          ],
+          "balanceCv": 0.6305921581009893
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 7.85,
+          "max": 28,
+          "within5to9": 0.475
+        },
+        "headings": {
+          "boundaries": 32,
+          "boundariesOnHeadings": 0.625,
+          "headingsCut": 0.5555555555555556,
+          "l1OnHeadings": 0.4,
+          "sourceHeadingShare": 0.6,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 53,
+            "words": 2732
+          }
+        },
+        "titles": {
+          "count": 40,
+          "meanWords": 3.575,
+          "within2to6": 1,
+          "copiedHeadings": 4,
+          "retention": 0.7037037037037037
+        },
+        "gists": {
+          "count": 40,
+          "coverage": 1,
+          "meanWords": 29.475,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5710006098456764
+        }
+      },
+      "calls": [
+        {
+          "ms": 54332,
+          "inputTokens": 34986,
+          "outputTokens": 5582,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889247-ddRdvORlpAfODPiycsBy",
+          "costUsd": 0.125792,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 54333,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 11,
+        "blocks": 17,
+        "largest": 6,
+        "where": [
+          "root (short, 6)",
+          "root > child 6 (gap, 2)",
+          "root > child 6 (short, 6)",
+          "root > child 3 > child 5 (gap, 1)",
+          "root > child 4 > child 1 (gap, 1)",
+          "root > child 5 > child 3 (short, 2)",
+          "root > child 5 > child 2 (heading, 1)",
+          "root > child 5 > child 3 (heading, 1)",
+          "root > child 6 > child 2 (gap, 2)",
+          "root > child 6 > child 7 (short, 6)",
+          "root > child 6 > child 5 (heading, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 1 > child 4",
+          "root > child 1 > child 5",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 3 > child 6",
+          "root > child 6 > child 7"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 6,
+        "partCountB": 9,
+        "l1Boundaries": 0.18181818181818182,
+        "allBoundaries": 0.5,
+        "boundaryDistance": {
+          "mean": 1.4444444444444444,
+          "within1Block": 0.7160493827160493
+        }
+      }
+    },
+    {
+      "arm": "smart-off-repeat",
+      "comparison": "isolated",
+      "slug": "replication-crisis-spya-hrjamq",
+      "run": 1,
+      "callOrder": 4,
+      "elapsedMs": 52548,
+      "blocksSha256": {
+        "measured": "95ca164f169c4b3739061190a9af458a44f8a203ef387fc1dab700c16c28f5a6",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "replication-crisis-spya-hrjamq",
+        "blocks": 551,
+        "bodyBlocks": 274,
+        "headingBlocks": 37,
+        "fragmentBlocks": 40,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 265
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1320,
+            739,
+            1657,
+            5781,
+            352,
+            2329,
+            1126
+          ],
+          "balanceCv": 0.8890338840796496
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 7.682926829268292,
+          "max": 26,
+          "within5to9": 0.4878048780487805
+        },
+        "headings": {
+          "boundaries": 32,
+          "boundariesOnHeadings": 0.53125,
+          "headingsCut": 0.4722222222222222,
+          "l1OnHeadings": 0.16666666666666666,
+          "sourceHeadingShare": 0.5121951219512195,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 53,
+            "words": 2732
+          }
+        },
+        "titles": {
+          "count": 41,
+          "meanWords": 3.658536585365854,
+          "within2to6": 1,
+          "copiedHeadings": 5,
+          "retention": 0.6912037037037039
+        },
+        "gists": {
+          "count": 41,
+          "coverage": 1,
+          "meanWords": 27.097560975609756,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5629973341972545
+        }
+      },
+      "calls": [
+        {
+          "ms": 52507,
+          "inputTokens": 34986,
+          "outputTokens": 5517,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889301-plK0JQy2rePI5SMFQgr8",
+          "costUsd": 0.125142,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 52507,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 17,
+        "blocks": 28,
+        "largest": 6,
+        "where": [
+          "root > child 7 (short, 6)",
+          "root > child 4 > child 1 (gap, 1)",
+          "root > child 4 > child 3 (overlap, 1)",
+          "root > child 4 > child 5 (overlap, 1)",
+          "root > child 4 > child 6 (overlap, 1)",
+          "root > child 4 > child 7 (overlap, 1)",
+          "root > child 4 > child 8 (overlap, 6)",
+          "root > child 4 > child 11 (overlap, 1)",
+          "root > child 4 > child 10 (heading, 1)",
+          "root > child 6 > child 3 (gap, 2)",
+          "root > child 6 > child 2 (heading, 1)",
+          "root > child 6 > child 4 (heading, 1)",
+          "root > child 6 > child 5 (heading, 1)",
+          "root > child 7 > child 1 (gap, 2)",
+          "root > child 7 > child 5 (short, 6)",
+          "root > child 7 > child 2 (heading, 1)",
+          "root > child 7 > child 3 (heading, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 4 > child 5",
+          "root > child 6 > child 1"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 7,
+        "partCountB": 9,
+        "l1Boundaries": 0.07692307692307693,
+        "allBoundaries": 0.35,
+        "boundaryDistance": {
+          "mean": 1.4691358024691359,
+          "within1Block": 0.7160493827160493
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 5,
+      "elapsedMs": 61891,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "cargocult-spya-rz663q",
+        "blocks": 41,
+        "bodyBlocks": 41,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 41
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            1039,
+            791,
+            276,
+            915,
+            801
+          ],
+          "balanceCv": 0.3404715971638352
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.6666666666666665,
+          "max": 5,
+          "within5to9": 0.08333333333333333
+        },
+        "headings": {
+          "boundaries": 17,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.041666666666666664,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 40,
+            "words": 3819
+          }
+        },
+        "titles": {
+          "count": 24,
+          "meanWords": 3.5,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": 0.5108695652173914
+        },
+        "gists": {
+          "count": 24,
+          "coverage": 1,
+          "meanWords": 23.458333333333332,
+          "multiSentence": 0,
+          "templateRepetition": 0.08333333333333333,
+          "retention": 0.3272212347192998
+        }
+      },
+      "calls": [
+        {
+          "ms": 61875,
+          "inputTokens": 9886,
+          "outputTokens": 7255,
+          "reasoningTokens": 4616,
+          "generationId": "gen-1790889354-Fz5WvV4RXDpPkTwICWgv",
+          "costUsd": 0.092322,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 3,
+          "endedOffsetMs": 61878,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 2,
+        "blocks": 7,
+        "largest": 6,
+        "where": [
+          "root > child 2 (overlap, 1)",
+          "root > child 5 (overlap, 6)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 2 > child 1"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 0.3333333333333333,
+        "allBoundaries": 0.6666666666666666,
+        "boundaryDistance": {
+          "mean": 0.22857142857142856,
+          "within1Block": 0.9714285714285714
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 6,
+      "elapsedMs": 39243,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "cargocult-spya-rz663q",
+        "blocks": 41,
+        "bodyBlocks": 41,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 41
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            1199,
+            631,
+            276,
+            509,
+            1104,
+            103
+          ],
+          "balanceCv": 0.629847323227011
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.975609756097561
+        },
+        "fanout": {
+          "mean": 2.739130434782609,
+          "max": 6,
+          "within5to9": 0.17391304347826086
+        },
+        "headings": {
+          "boundaries": 16,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.043478260869565216,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 40,
+            "words": 3819
+          }
+        },
+        "titles": {
+          "count": 23,
+          "meanWords": 3.6956521739130435,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": 0.5984848484848485
+        },
+        "gists": {
+          "count": 23,
+          "coverage": 1,
+          "meanWords": 28.608695652173914,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.4251465306647933
+        }
+      },
+      "calls": [
+        {
+          "ms": 39235,
+          "inputTokens": 9886,
+          "outputTokens": 3991,
+          "reasoningTokens": 1215,
+          "generationId": "gen-1790889416-jbrJLqyKhmH1ry2DkwQd",
+          "costUsd": 0.059682,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 2,
+          "endedOffsetMs": 39237,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 1,
+        "largest": 1,
+        "where": [
+          "root > child 6 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1 > child 5"
+        ],
+        "collapsedRungs": [
+          "root > child 6 > child 1"
+        ],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 6,
+        "partCountB": 5,
+        "l1Boundaries": 0.2857142857142857,
+        "allBoundaries": 0.7,
+        "boundaryDistance": {
+          "mean": 0.20588235294117646,
+          "within1Block": 0.9705882352941176
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 7,
+      "elapsedMs": 34229,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "cargocult-spya-rz663q",
+        "blocks": 41,
+        "bodyBlocks": 41,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 41
+        },
+        "parts": {
+          "count": 10,
+          "words": [
+            11,
+            16,
+            924,
+            456,
+            423,
+            276,
+            509,
+            772,
+            332,
+            103
+          ],
+          "balanceCv": 0.7548408964970822
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.6585365853658537
+        },
+        "fanout": {
+          "mean": 2.739130434782609,
+          "max": 10,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 17,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.043478260869565216,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 40,
+            "words": 3819
+          }
+        },
+        "titles": {
+          "count": 23,
+          "meanWords": 4.478260869565218,
+          "within2to6": 0.9565217391304348,
+          "copiedHeadings": 1,
+          "retention": 0.4492424242424242
+        },
+        "gists": {
+          "count": 23,
+          "coverage": 1,
+          "meanWords": 25.434782608695652,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.3785843231266572
+        }
+      },
+      "calls": [
+        {
+          "ms": 34225,
+          "inputTokens": 9886,
+          "outputTokens": 3565,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889455-j6CL3KQWFZ5aR0LQ12Jx",
+          "costUsd": 0.055422,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 34226,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 7,
+        "largest": 3,
+        "where": [
+          "root > child 6 (overlap, 3)",
+          "root > child 7 (gap, 1)",
+          "root > child 5 > child 3 (over, 3)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 2",
+          "root > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 4",
+          "root > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 6",
+          "root > child 7",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 7 > child 3",
+          "root > child 8",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2",
+          "root > child 8 > child 3",
+          "root > child 9",
+          "root > child 10"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": [
+          "root > child 1",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 7 > child 3",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2",
+          "root > child 8 > child 3"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 10,
+        "partCountB": 5,
+        "l1Boundaries": 0.3,
+        "allBoundaries": 0.5217391304347826,
+        "boundaryDistance": {
+          "mean": 0.3142857142857143,
+          "within1Block": 1
+        }
+      }
+    },
+    {
+      "arm": "smart-off-repeat",
+      "comparison": "isolated",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 8,
+      "elapsedMs": 48868,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "the table-of-contents response is not valid JSON: 15601 characters",
+      "calls": [
+        {
+          "ms": 48862,
+          "inputTokens": 9886,
+          "outputTokens": 5376,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889489-uYr5dRHfvf0XLKx9vHCt",
+          "costUsd": 0.073532,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 48862,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-10-01T21:18:58.791Z"
+}
