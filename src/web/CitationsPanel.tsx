@@ -505,10 +505,10 @@ export const CITE_PAGE_FOUND = "We found a web page matching its title, but have
 export function citeReadAssessed(words: number, host: string): string {
   return `We have not read the work itself, only a search engine's extract of a page matching it (${words} ${words === 1 ? "word" : "words"}, from ${host}).`;
 }
-/** *Investigate* read the paper's own text (plan 261001a): a PDF code confirmed is this work. */
+/** *Dig deeper* (was *Investigate*) read the paper's own text (plan 261001a): a PDF code confirmed is this work. */
 export function citeReadPaper(words: number, host: string, readAt: string): string {
   const day = new Date(readAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work (Investigate).`;
+  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work (Dig deeper).`;
 }
 /** `no-extract`: a page, and nothing of it to read. Never drawn as `not-in-extract`. */
 export function citeReadNoExtract(host: string): string {

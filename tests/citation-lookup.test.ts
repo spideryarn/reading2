@@ -23,6 +23,7 @@ import {
   verifyQuote,
 } from "../src/citation-lookup.js";
 import { attachLookups } from "../src/citations.js";
+import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
 import { lookupColumns, lookupFromRow } from "../src/store/citation-lookup-row.js";
 import type { BlockId, CitationFind, CitationLookup, Citations, CitedWork, SearchEvidence } from "../src/types.js";
 
@@ -538,6 +539,28 @@ describe("attachLookups — on every row, and only to the list it was made again
       lookup: lookupFor(work(), "an-older-model"),
     };
     expect(attachLookups(list([work()]), new Map([[work().id, find]]), hashOf).citations[0]?.lookup).toBeUndefined();
+  });
+
+  it("attaches a Dig deeper lookup even when standalone Find has a model override", () => {
+    const row = work();
+    const find: CitationFind = {
+      url: PAPER,
+      host: "arxiv.org",
+      searches: 1,
+      model: DIG_DEEPER_MODEL,
+      at: "t",
+      lookup: lookupFor(row, DIG_DEEPER_MODEL),
+    };
+    const hashesOf = (current: CitedWork) => {
+      const currentContext = lookupContext(current, textOf);
+      return [
+        lookupContextHash(currentContext, "test/standalone-find-override"),
+        lookupContextHash(currentContext, DIG_DEEPER_MODEL),
+      ];
+    };
+    expect(attachLookups(list([row]), new Map([[row.id, find]]), hashesOf).citations[0]?.lookup?.state).toBe(
+      "assessed",
+    );
   });
 });
 

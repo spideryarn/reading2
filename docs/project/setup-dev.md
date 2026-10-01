@@ -439,10 +439,10 @@ That distinction is the whole of the policy: a new job may be born on the quick 
 and writing down what it cost**. Greg, 2026-08-26 — *"use your judgment about which tasks to use for
 which (default to capable-model for now)."*
 
-What that one job measured, which is all this repository knows about the tier: $0.00015 a call, 2–5
-seconds, and **no reasoning tokens reported at all** at `effort: "low"` — the 1,024-token floor the
-paragraph below warns about did not appear on the upstream that served it. That is one week's
-evidence from one job, not a general fact.
+What `link-summary` measured: $0.00015 a call, 2–5 seconds, and **no reasoning tokens reported at
+all** at `effort: "low"` — the 1,024-token floor the paragraph below warns about did not appear on
+the upstream that served it. That is evidence for that job, not a general fact about the tier; the
+later quick-tier jobs carry their own measurements beside their rows in `TASK_TIER`.
 
 **Changing a row is not the whole of moving a job**, and the file carries the list: the completion
 ceilings were sized for a model that does not spend a reasoning allocation out of them, the
@@ -460,26 +460,24 @@ rewrite of the call rather than a config change. The error the guard throws was 
 reason — *"only reachable through OpenRouter"*, now true of everything and therefore saying
 nothing — and was rewritten the same day to name the wire instead.
 
-**And the one on that list that has no guard at all: the provider pin.** All three request-path
-calls send `provider: { order: ["anthropic"] }` ([`PROVIDER_ORDER`](../../src/openrouter-stream.ts)),
-which exists so repeat calls land on the upstream holding the prompt cache. It is an ordered
-*preference*, not `allow_fallbacks: false`, and that is the right call — an Anthropic outage should
-cost a reader a cache miss, not the feature. But it means that pointing a request-path task at an
-OpenAI model leaves an Anthropic preference on a request no Anthropic upstream can serve, and
-OpenRouter simply falls through to the real provider and answers. **Nothing raises, nothing logs,
-and the answer is correct** — you would only ever find it in the bill. The pin has to become a
-function of the model id before any request-path row goes to `quick`; today it is a constant, and
-this paragraph is the only thing standing between the two. See
-[silent-success.md](../reusable/silent-success.md), which is the shape of it.
+**And the one on that list that has no guard at all: the provider pin.** Request-path routing is
+per job, in `AI_JOB_ROUTE` ([`src/ai-call.ts`](../../src/ai-call.ts)). The cached capable jobs send
+`provider: { order: ["anthropic"] }` so repeat calls land on the upstream holding the prompt cache —
+an ordered *preference*, not `allow_fallbacks: false`, so an Anthropic outage costs a reader a
+cache miss, not the feature. The quick jobs (`link-summary`, `dig-deeper-search` and the rest) omit
+it and keep `require_parameters`. The trap is a job moved without its route: an Anthropic
+preference left on a request no Anthropic upstream can serve, and OpenRouter simply falls through
+to the real provider and answers. **Nothing raises, nothing logs, and the answer is correct** — you
+would only ever find it in the bill. So a new or moved job copies the route whose request shape it
+matches. See [silent-success.md](../reusable/silent-success.md), which is the shape of it.
 
 **Still true, and now true on both wires.** The Messages wire has a pin of its own —
 `MESSAGES_PROVIDER` in [`src/messages-stream.ts`](../../src/messages-stream.ts) — which is the same
 constant shape and would be wrong in the same silent way if a pipeline stage were pointed at a
 non-Anthropic model. That half is covered, because the load-time check above stops the row being
-flipped at all. The request-path half is not. Two differences between the two pins are worth knowing:
-`MESSAGES_PROVIDER` also sends `require_parameters: true`, which stops a fallback upstream serving
-the request having quietly dropped `cache_control` or `thinking`, and `PROVIDER_ORDER` does not.
-`DICTATION_MODEL` deliberately sends no pin at all, for exactly the reason this paragraph gives — it
+flipped at all. The request-path half is not. Both wires now also send `require_parameters: true`,
+which stops a fallback upstream serving the request having quietly dropped `cache_control` or
+`thinking`. `DICTATION_MODEL` deliberately sends no pin at all, for exactly the reason this paragraph gives — it
 is a Gemini model.
 
 Four things that file will tell you and this one will not: why the two spellings are not derived
@@ -487,14 +485,15 @@ from each other, why the quick tier has no Messages-wire spelling *and cannot ha
 provider pin and the cache breakpoint have to move with the model, and why editing the capable
 model marks stored tweet threads stale.
 
-Per-call overrides, for a one-off comparison run. These take a model id, not a tier, and they
-bypass the tier table entirely — but **not** the reporting: `resolveModel` reads them, so `/profile`
+Per-call overrides, for a one-off comparison run — most of them; the *Dig deeper* rows below name
+the exceptions, whose variables `/profile` still reports but which no longer control what a reader
+triggers. These take a model id, not a tier, and they bypass the tier table entirely — but **not** the reporting: `resolveModel` reads them, so `/profile`
 shows the model you actually set and marks the row *set in the environment*. Remember that
 `.env.local` beats the shell, so these go in the file rather than in front of the command.
 
 | Variable | Overrides |
 |---|---|
-| `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call |
+| `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call — but not a *Dig deeper* answer, which is always the high-power model ([glossary.md](glossary.md#digging-deeper-into-a-term)) |
 | `SPIDERYARN_CHAT_MODEL` | the chat |
 | `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
 | `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in Remember's quiz |
@@ -502,10 +501,10 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
-| `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — one of the **two jobs on the quick tier**, so this is a variable for asking whether the cheap model is good enough |
-| `SPIDERYARN_CITATIONS_FIND_MODEL` | Citations mode's *Look it up* (was *Find it*), the one call with web search for a cited work: picks which result, if any, is its own page, and reads that result's search extract ([citations.md](citations.md#look-it-up-on-the-web)); inside *Investigate*, the call that picks the cited paper's checked passages uses this same model |
+| `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — one of the jobs `TASK_TIER` puts on the **quick tier**, so this is a variable for asking whether the cheap model is good enough |
+| `SPIDERYARN_CITATIONS_FIND_MODEL` | Citations mode's *Look it up* (was *Find it*), the one call with web search for a cited work: picks which result, if any, is its own page, and reads that result's search extract ([citations.md](citations.md#look-it-up-on-the-web)). Since *Dig deeper* (2026-10-01) a press ignores it — the quick check and the call that picks the cited paper's checked passages are always `DIG_DEEPER_MODEL` (`src/citation-investigate.ts`) — and a lookup a press stored still attaches while it is set, because the read accepts either model's fingerprint (`src/store/pg.ts`). The stand-alone `POST …/find` still uses it |
 | `SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL` | The same search for an uploaded paper itself, once, to guess where it lives on the web ([ingest-queue.md](ingest-queue.md#a-guessed-web-address-looked-for-once)) |
-| `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Investigate*: one streamed answer about one cited work, written with a few web searches over the whole article (explain's tier) |
+| `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Dig deeper* (was *Investigate*) used to take its model from this. Since 2026-10-01 the answer is always the high-power model (`DIG_DEEPER_MODEL`), so this changes what `/profile` reports for the task and nothing a reader triggers ([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)) |
 | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
 | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |

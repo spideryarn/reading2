@@ -103,6 +103,7 @@ import {
   investigateContextHash,
   matchedPageOf,
 } from "../citation-investigate-context.js";
+import { DIG_DEEPER_MODEL } from "../dig-deeper.js";
 import { investigationFromRow } from "./citation-investigation-row.js";
 import { renderProfile } from "../profile.js";
 import {
@@ -3826,13 +3827,19 @@ const rawPgArticleReader: ArticleReader = {
        `lookupContext` the call built its prompt from. Before `attachFinds`, so
        the row it sees is the artefact's, not the upgraded one. */
     const text = new Map(blocks.map((b) => [b.id as string, b.text]));
-    /* `standard` whatever the article's power: the fingerprint hashes the
-       model's generation, so a lookup made at either power attaches (plan
-       260930f, Sol F1). */
-    const model = modelFor("citations-find", "standard");
-    const withLookups = attachLookups(citations, finds, (work) =>
-      lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
-    );
+    /* Standalone Find keeps its configured standard model, including an eval
+       override. Dig deeper deliberately ignores that override and writes its
+       lookup with `DIG_DEEPER_MODEL`, so accept both current policies here.
+       In production Sonnet and Opus share a generation and these are the same
+       hash; the second matters only while a Find-only override is active. */
+    const standaloneFindModel = modelFor("citations-find", "standard");
+    const withLookups = attachLookups(citations, finds, (work) => {
+      const context = lookupContext(work, (id) => text.get(id));
+      return [
+        lookupContextHash(context, standaloneFindModel),
+        lookupContextHash(context, DIG_DEEPER_MODEL),
+      ];
+    });
     const withFinds = attachFinds(withLookups, finds);
     /* **Investigate's answers, the same way and after `attachFinds`** — the
        row the call was made from is the upgraded one, so that is the row the
@@ -3866,8 +3873,10 @@ const rawPgArticleReader: ArticleReader = {
         shelfFrom(found.article),
       );
       const articleKey = investigateArticleKey(promptMeta, blocks);
-      /* `standard` for `model`'s reason above. */
-      const investigateModel = modelFor("citation-investigate", "standard");
+      /* **Dig deeper's model, the very constant the press writes with** (plan
+         261001p stage 2, Sol F2) — not `modelFor`, whose environment override
+         would make this side hash another model and hide every kept answer. */
+      const investigateModel = DIG_DEEPER_MODEL;
       withInvestigations = attachInvestigations(
         withFinds,
         new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),

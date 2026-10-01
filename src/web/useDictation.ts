@@ -107,6 +107,8 @@ import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js
 import { verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
+  defaultInputListed,
+  deviceMissing,
   judgeFallback,
   labelled,
   listInputs,
@@ -311,7 +313,7 @@ export interface UseDictation {
    * verbatim rather than tidied. Null on the binary path, where we open nothing.
    */
   deviceLabel: string | null;
-  /** The remembered choice, for marking the picker. Null means "the browser's default". */
+  /** The remembered choice, for marking the picker. Null means the system default. */
   deviceId: string | null;
   /**
    * A microphone was chosen and we could not open it, so something else is
@@ -1471,6 +1473,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
 
     const preferred = rememberedDevice();
     const preferredLabel = rememberedDeviceLabel();
+    /* Another microphone surface (Live) can change the shared preference while
+       this hook stays mounted. The strip must describe the preference this
+       press actually read, rather than the value from this hook's first render. */
+    setDeviceId(preferred);
     void (async () => {
       /* **Before `getUserMedia`, and that is the whole point** — the gap this
          closes is between one instance opening a device and another instance
@@ -1955,8 +1961,8 @@ type CaptureOutcome =
       /**
        * We opened the microphone the reader asked for.
        *
-       * False whenever a preference existed and the track did not come from
-       * that exact device.
+       * False whenever an exact chosen/default request had to fall back to a
+       * different route.
        */
       honoured: boolean;
     }
@@ -2144,6 +2150,10 @@ async function beginCapture(
      is a `false` rather than a refusal. The track still opens, the recorder
      still runs, and the transcript is still what the reader gets. */
   const live = Ctor && r ? await probeTrackOverload(Ctor, r) : false;
+  /* The probe can wait for an old recogniser to release. A stopped session has
+     already released its page-wide claim by then, so it must not go on to open
+     a device outside that claim. */
+  if (!stillWanted()) return { kind: "failed" };
   if (!navigator.mediaDevices?.getUserMedia) return { kind: "failed" };
 
   let track: MediaStreamTrack | null = null;
@@ -2151,40 +2161,57 @@ async function beginCapture(
      the `exact` request itself succeeded, so a fallback and a refusal both
      report false rather than being told apart by inspecting a track we may not
      have. */
-  let honoured = preferred === null;
-  /**
-   * Only a *missing device* earns a second attempt on the browser's default.
-   *
-   * Retrying on any failure at all would quietly turn a refused permission into
-   * a start on some other microphone with nothing on screen saying so — the
-   * silent substitution this whole area exists to end.
-   */
-  const deviceMissing = (err: unknown) => {
-    /* Read off the object rather than through `instanceof Error`. What
-       `getUserMedia` rejects with here is an `OverconstrainedError`, which is
-       **not** reliably an `Error` subclass — it is its own interface carrying a
-       `constraint` property, and the check that assumed otherwise silently
-       never fell back at all. */
-    const name = (err as { name?: unknown } | null)?.name;
-    return name === "OverconstrainedError" || name === "NotFoundError";
-  };
+  let honoured = false;
+  /* The system default by name where the browser lists one
+     (mic-devices.ts § audioConstraint). Only a *missing device* earns another
+     attempt (§ deviceMissing): a missing choice takes the system-default route,
+     and a named default which then disappears takes the final unconstrained
+     route. Retrying on any failure at all would quietly turn refused permission
+     into a start on some other microphone with nothing on screen saying so —
+     the silent substitution this whole area exists to end. */
+  const defaultListed = preferred === null && (await defaultInputListed());
+  /* `enumerateDevices` is another await before capture. As above, stopping in
+     this gap releases the claim; opening afterwards would overlap whoever took
+     the microphone next. */
+  if (!stillWanted()) return { kind: "failed" };
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred));
+    const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred, defaultListed));
     track = stream.getAudioTracks()[0] ?? null;
     if (track) honoured = true;
   } catch (err) {
     /* The remembered microphone is gone — unplugged, or its id rotated when
        site data was cleared. `exact` rejects rather than substituting, which is
-       what we want, and this is the one place that then asks plainly instead.
-       **The preference is not forgotten**: a headset unplugged for an afternoon
-       should still be the choice when it comes back. */
-    if (preferred && deviceMissing(err)) {
+       what we want, and this is the one place that then asks for the system
+       default instead. **The preference is not forgotten**: a headset unplugged
+       for an afternoon should still be the choice when it comes back. */
+    if ((preferred || defaultListed) && deviceMissing(err)) {
+      /* A missing reader choice falls back to the same system-default route as
+         choosing "System default" in the picker. We did not enumerate before a
+         chosen-device request—the common path should not pay for it—so do that
+         now, and re-check ownership before touching the device. */
+      const fallbackDefaultListed = preferred !== null && (await defaultInputListed());
+      if (!stillWanted()) return { kind: "failed" };
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia(
+          audioConstraint(null, fallbackDefaultListed),
+        );
         track = stream.getAudioTracks()[0] ?? null;
-      } catch {
-        track = null;
+      } catch (fallbackError) {
+        if (!stillWanted()) return { kind: "failed" };
+        /* Chromium's named default can disappear between enumeration and open,
+           just like a chosen device. Only that missing-device failure earns the
+           final unconstrained attempt. */
+        if (fallbackDefaultListed && deviceMissing(fallbackError)) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(null));
+            track = stream.getAudioTracks()[0] ?? null;
+          } catch {
+            track = null;
+          }
+        } else {
+          track = null;
+        }
       }
     } else {
       track = null;

@@ -1,5 +1,5 @@
 /**
- * **Citations' *Investigate*, on the client** — the button, the answer as it
+ * **Citations' *Dig deeper* (was *Investigate*), on the client** — the button, the answer as it
  * streams, the kept answer, and the sentence that says what was read.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § UI; the
  * server is src/citation-investigate.ts and the hook half is
@@ -57,7 +57,10 @@ export const INVESTIGATION_LABEL_PAPER_ONLY = "the AI's reading of parts of the 
 export const PAPER_PASSAGES_LABEL =
   "The paper's own words, found by code in the text we read; each one's bearing is the AI's reading";
 
-/** While the press's first step looks for the work's own page (plan 260930d). */
+/** While *Dig deeper*'s forced web search runs, before anything else (plan 261001p stage 2). */
+export const INVESTIGATE_SEARCHING = "Searching the web…";
+
+/** While the press looks for the work's own page (plan 260930d). */
 export const INVESTIGATE_FINDING = "Finding the work…";
 
 /** While the press reads the paper itself and picks its passages (plan 261001a stage 3). */
@@ -67,7 +70,7 @@ export const INVESTIGATE_READING_PAPER = "Reading the paper itself, if we can ge
 export const INVESTIGATE_WAIT =
   "It searches the web, tries to read the paper, and then writes, which can take a minute or two. If it finishes, the answer is kept on this row even if you leave.";
 
-/** Sol Q-4: a failed *Investigate again* replaced nothing, and says so. */
+/** Sol Q-4: a failed *Dig deeper again* replaced nothing, and says so. */
 export const INVESTIGATE_PREVIOUS_KEPT = "The new investigation was not kept; the previous one is still shown.";
 
 /** Plan 260930d P-4: the first step found and kept a page, and the reading after it failed. */
@@ -173,7 +176,7 @@ function sourceHosts(sources: readonly { url: string }[]): string[] {
  *
  * **The identity line has three answers** (plan 260930d P-4):
  *
- * - the first check's page was among this answer's own extracts
+ * - the first check's page was among the extracts shown to this answer
  *   (`matchedHost` non-null, which only the server can say);
  * - the first check matched a page, but this search did not return an extract
  *   from it — `matchedHost` is null and the row's `lookup` identified a page
@@ -318,7 +321,9 @@ export interface InvestigateFailureHere {
  */
 export type InvestigationView =
   | { kind: "none" }
-  /** Pressed, and the first step is looking for the work's own page (plan 260930d). */
+  /** Pressed, and the forced web search is running (plan 261001p stage 2). */
+  | { kind: "searching" }
+  /** Pressed, and the press is looking for the work's own page (plan 260930d). */
   | { kind: "finding" }
   /** Pressed, and the press is reading the paper itself (plan 261001a stage 3). */
   | { kind: "reading-paper" }
@@ -347,6 +352,7 @@ export function investigationViewOf(
 ): InvestigationView {
   if (here.running) {
     if (here.draft) return { kind: "arriving", text: here.draft };
+    if (here.stage === "searching") return { kind: "searching" };
     if (here.stage === "finding") return { kind: "finding" };
     if (here.stage === "reading-paper") return { kind: "reading-paper" };
     return { kind: "waiting" };
@@ -367,7 +373,8 @@ export function investigationViewOf(
 /* ------------------------------------------------------------ the button -- */
 
 /**
- * ***Investigate***, on every owner row — the one button since plan 260930d,
+ * ***Dig deeper*** (*Investigate* until plan 261001p stage 2; the internal
+ * names stay), on every owner row — the one button since plan 260930d,
  * which merged *Look it up* into it as its first step. `aria-disabled` and a
  * guard in the handler, not `disabled`: the card saying what a press costs
  * must stay readable in the state where the button will not go (a `disabled`
@@ -390,7 +397,7 @@ export function InvestigateButton({
   busy: boolean;
   onInvestigate(id: string): void;
 }) {
-  const label = again ? "Investigate again" : "Investigate";
+  const label = again ? "Dig deeper again" : "Dig deeper";
   /* A finger's first tap opens the card, its second presses — a press costs
      money, and the card is what says so (useTapReveal.ts). */
   const reveal = useTapReveal(!busy);
@@ -404,15 +411,19 @@ export function InvestigateButton({
       content={
         <ControlTip
           head={label}
-          /* Each clause bounded by what the code does (plan 260930d): the
-             first step is *Look it up* (src/citation-find.ts), skipped only
+          /* Each clause bounded by what the code does. Plan 261001p stage 2:
+             the opening sentence is Dig deeper's promise, the glossary's
+             tooltip in other words — a forced search (src/dig-deeper.ts §
+             `searchFirst`) and Opus for every call the reader reads; "a
+             stronger model" rather than its name, which moves. Plan 260930d:
+             then *Look it up* (src/citation-find.ts), skipped only
              for a current assessed lookup — "a current checked reading";
              "passages code found" is `verifyQuote`; no search count is
              promised (the provider's); what is read is extracts, and — plan
              261001a stage 3 — the paper's PDF only when src/paper-evidence.ts
              confirms it, its passages only via `verifyPassage`; the profile part is the prompt's *For you*,
              only with a profile; both are stored per row. */
-          what="First it searches the web for this work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Next it tries to read the paper itself. Then it writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
+          what="It searches the web for this work and asks a stronger model about it. First it looks for the work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Next it tries to read the paper itself. Then the stronger model writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
           how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper. It also tries to fetch the paper's PDF: the AI is shown it only when code has checked it is this work, and then only its opening and the parts closest to what the article cites it for. Passages of it are shown here only where code found them in that text. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. When the quick check finds a matching page, its result is kept on this row. The longer reading is kept on this row when it finishes; a new one replaces the old one only then."
           tap={reveal.tap}
         />
@@ -431,7 +442,7 @@ export function InvestigateButton({
         }}
       >
         <Microscope size={11} aria-hidden="true" />
-        {running ? "Investigating…" : label}
+        {running ? "Digging deeper…" : label}
       </button>
     </Tooltip>
   );
@@ -440,7 +451,7 @@ export function InvestigateButton({
 /* ------------------------------------------------------------- the block -- */
 
 /**
- * Everything *Investigate* draws under a row: the wait, the words arriving,
+ * Everything *Dig deeper* draws under a row: the wait, the words arriving,
  * the failure, or the kept answer. Nothing for `none`.
  */
 export function InvestigationBlock({
@@ -476,13 +487,19 @@ export function InvestigationBlock({
         onInvestigate(id);
       }}
     >
-      Investigate again
+      Dig deeper again
     </button>
   );
 
   switch (view.kind) {
     case "none":
       return null;
+    case "searching":
+      return (
+        <p className="cite-inv-wait" role="status">
+          {INVESTIGATE_SEARCHING}
+        </p>
+      );
     case "finding":
       return (
         <p className="cite-inv-wait" role="status">
@@ -555,7 +572,7 @@ export function InvestigationBlock({
 /**
  * **A kept answer.** Folded: the label and the first part, with a toggle, so
  * the list stays a list. Open: every part, what was read, the sources, the
- * date and *Investigate again*.
+ * date and *Dig deeper again*.
  */
 function Kept({
   investigation,
@@ -609,7 +626,7 @@ function Kept({
             </ul>
           )}
           <p className="cite-inv-foot">
-            Investigated {new Date(investigation.at).toLocaleDateString()} · {again}
+            Researched {new Date(investigation.at).toLocaleDateString()} · {again}
           </p>
         </>
       )}

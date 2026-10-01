@@ -573,6 +573,10 @@ export const investigateCitationDeps = {
   finds: citationFindStore,
   investigations: citationInvestigationStore,
   allowance: fetchAllowanceStore,
+  /* *Dig deeper*'s forced search looks in the reader's other articles too
+     (plan 261001p stage 2) — the glossary's seam, read when this line runs,
+     so below `librarySearch`. */
+  library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
   /* The cited paper itself, read through stage 2 with stage 1's registry
      (plan 261001a stage 3). tests/citation-investigate-wiring.test.ts holds
      this to the real function. */

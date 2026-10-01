@@ -931,19 +931,26 @@ export function attachFinds(citations: Citations, finds: ReadonlyMap<string, Cit
  * A lookup attaches **only while its context fingerprint matches the row as
  * the list now has it** (R-4): `contextHashOf` recomputes it from the current
  * list and the article's blocks (src/citation-lookup.ts §
- * `lookupContextHash`). A list made again with a different `why`, passage or
- * reference drops the reading; the found link, if any, stays.
+ * `lookupContextHash`). A caller may supply more than one current hash where
+ * two routes deliberately use different model policies (standalone Find and
+ * Dig deeper); matching either attaches the same stored reading. A list made
+ * again with a different `why`, passage or reference drops it under every
+ * model hash; the found link, if any, stays.
  */
 export function attachLookups(
   citations: Citations,
   finds: ReadonlyMap<string, CitationFind>,
-  contextHashOf: (work: CitedWork) => string,
+  contextHashOf: (work: CitedWork) => string | readonly string[],
 ): Citations {
   if (finds.size === 0) return citations;
   let changed = false;
   const works = citations.citations.map((work) => {
     const lookup = finds.get(work.id)?.lookup;
-    if (!lookup || lookup.contextHash !== contextHashOf(work)) return work;
+    if (!lookup) return work;
+    const expected = contextHashOf(work);
+    const matches =
+      typeof expected === "string" ? lookup.contextHash === expected : expected.includes(lookup.contextHash);
+    if (!matches) return work;
     changed = true;
     return { ...work, lookup };
   });

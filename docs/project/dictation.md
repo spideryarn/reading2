@@ -620,6 +620,17 @@ the Feedback draft itself is the next step, and is named in the plan.
    wondered whether the clean-up step had run: it had — every one of those dictations reached
    `openai/gpt-transcribe` and came back `ok`, and on Safari, which has no live words, the text in
    the box *is* that transcript. There is no separate rewrite after it (§ The ums come out).
+9. **`{ audio: true }` is the browser's microphone, not the system's.** Greg, 2026-10-01, with his
+   webcam as the Mac's input: *"It seems to be working fine when I use another voice microphone app
+   … So I almost wonder whether we're not using the default microphone for the system somehow."*
+   Chrome keeps its own default microphone (its settings page, and the device chooser in its
+   permission prompt), and `{ audio: true }` opens that, so it can sit on a different device for
+   as long as nobody looks. So with no pick we ask Chromium for its `"default"` input by `exact`
+   id — `ideal` loses to Chrome's own choice, measured — and **name the device for as long as
+   dictation is on**, adding `(your choice)` when a pick of ours is in force. Whether Greg's
+   press was Chrome's choice or an old pick of ours was not established.
+   [`mic-devices.ts` § `audioConstraint`](../../src/web/mic-devices.ts),
+   [261001q](../plans/261001q-mic-follows-the-system-default-and-says-which.md).
 
 ## The codes
 

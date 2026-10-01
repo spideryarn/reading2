@@ -120,6 +120,7 @@ import {
   cachedText,
   readerPositionLine,
   underCacheFloor,
+  visibleBlocksLine,
 } from "./article-prompt.js";
 
 /**
@@ -948,6 +949,13 @@ export interface ConverseRequest {
    */
   at?: string | undefined;
   /**
+   * The blocks on the reader's screen when they sent this, in article order and
+   * already checked against `blocks` — the route does both. Sent instead of the
+   * `at` line when there are any, and hedged: see `visibleBlocksLine`.
+   * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+   */
+  visible?: readonly string[] | undefined;
+  /**
    * The article's slug, so the tools know which library entry the reader has
    * open — see src/chat-tools.ts § ToolContext.
    *
@@ -1147,6 +1155,8 @@ export function buildConverseMessages(opts: {
   history: ChatMessage[];
   question: string;
   at?: string;
+  /** What was on screen — `ConverseRequest.visible`. Wins over `at` when non-empty. */
+  visible?: readonly string[];
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -1196,7 +1206,10 @@ export function buildConverseMessages(opts: {
   help?: boolean;
 }): OpenRouterMessage[] {
   const kind = opts.kind ?? "chat";
-  const position = readerPositionLine(opts.at);
+  const position =
+    opts.visible && opts.visible.length > 0
+      ? visibleBlocksLine(opts.visible)
+      : readerPositionLine(opts.at);
   const who = profileSection(opts.profile ?? null);
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
   /* After the anchor and before the stance: the reader is told *which* passage
@@ -1443,6 +1456,7 @@ export async function* converse({
   history,
   question,
   at,
+  visible,
   slug,
   profile = null,
   useTools = true,
@@ -1494,6 +1508,7 @@ export async function* converse({
     history,
     question,
     ...(at && { at }),
+    ...(visible && visible.length > 0 && { visible }),
     profile,
     kind,
     /* Conditional spread rather than `stance`, because

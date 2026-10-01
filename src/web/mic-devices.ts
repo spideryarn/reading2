@@ -21,12 +21,17 @@
  *
  * ## What this deliberately does not do
  *
- * **It does not guess.** No preferring `'default'`, no skipping devices whose
- * label matches `/virtual|teams|zoom/i`. Both would override a choice the
- * reader made in their browser's own settings on the strength of an assumption
- * about what they meant, and both are wrong for anybody who genuinely dictates
+ * **It does not guess.** No skipping devices whose label matches
+ * `/virtual|teams|zoom/i`: that is wrong for anybody who genuinely dictates
  * through a conferencing device. We say what we opened and offer the list; the
  * decision stays theirs.
+ *
+ * **It does follow the system default, by name, on Chromium** — see
+ * `audioConstraint`. That used to be on this list too, as overriding a choice
+ * made in the browser's own settings. Greg's own Mac is why it moved: twice the
+ * browser's choice was not the input macOS was set to (the Teams loopback
+ * above, and his webcam in spya-g8byyd), and what he asked for was the system
+ * default. A different microphone is still one pick away, in our picker.
  *
  * ## The two things that fail quietly
  *
@@ -164,9 +169,56 @@ export function judgeFallback(
  * device when the named one is missing, which is precisely the class of
  * quiet-wrong-device failure this whole file is a response to; `exact` rejects
  * with `OverconstrainedError` and lets the caller decide out loud.
+ *
+ * **With no pick, the system default — asked for by name where there is one.**
+ * Chromium lists a virtual input whose id is `"default"` and which follows the
+ * operating system's input. `{ audio: true }` does *not*: it opens Chromium's
+ * own choice, from its microphone setting or the device chooser in its
+ * permission prompt, and that can be a different device for as long as nobody
+ * looks (spya-g8byyd). Measured on Chrome with fake devices, with Chrome's
+ * default microphone set to "Fake Audio Input 1": `{ audio: true }` and
+ * `{ deviceId: { ideal: "default" } }` both opened Input 1, and only `exact`
+ * opened the default (plan 261001q). Safari and Firefox list no such id, and
+ * there unconstrained capture is already the system microphone.
+ *
+ * `"default"` is Chromium's convention, not the standard's, which is why it is
+ * asked for only when the browser has listed it.
  */
-export function audioConstraint(preferred: string | null): MediaStreamConstraints {
-  return preferred ? { audio: { deviceId: { exact: preferred } } } : { audio: true };
+export function audioConstraint(preferred: string | null, defaultListed = false): MediaStreamConstraints {
+  if (preferred) return { audio: { deviceId: { exact: preferred } } };
+  return defaultListed ? { audio: { deviceId: { exact: "default" } } } : { audio: true };
+}
+
+/**
+ * Whether the browser lists an input with the id `"default"` — Chromium's
+ * system-default input, for `audioConstraint`.
+ *
+ * Read off the unfiltered list, because the label does not matter here. Before
+ * the page has ever been granted the microphone, Chromium hides every id, so
+ * the very first press asks plainly and every press after it by name. False on
+ * any browser without `enumerateDevices`, or that throws from it.
+ */
+export async function defaultInputListed(): Promise<boolean> {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) return false;
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all.some((d) => d.kind === "audioinput" && d.deviceId === "default");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a `getUserMedia` rejection means "that device is not there" — the
+ * one failure that earns a second, unconstrained attempt.
+ *
+ * Read off the object rather than through `instanceof`: `OverconstrainedError`
+ * is its own interface and is **not** reliably an `Error` or a `DOMException`,
+ * and the check that assumed otherwise silently never fell back at all.
+ */
+export function deviceMissing(err: unknown): boolean {
+  const name = (err as { name?: unknown } | null)?.name;
+  return name === "OverconstrainedError" || name === "NotFoundError";
 }
 
 /**
