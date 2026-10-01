@@ -258,6 +258,15 @@ So it is **deliberately not done**, by Greg's rule for caching — sparingly, an
 the design that was reviewed and dropped, and why. **Revisit** when the audit's SQL, re-run on
 post-2026-09-30 data, shows the import pairs worth materially more than a dollar a month.
 
+**Per article, and with every mode sharing one prefix** (Greg's follow-up, same day): a normal
+article costs about a dollar, and a perfectly shared article cache would take at most about 15–16%
+off it. What can be built without changing any mode's output is about 4%, because every cold call pays
+the write. Thinking is about a quarter of the bill. The article's real size in a prompt is about 0.35 tokens per character, not the
+quarter the audit assumed. Measured in
+[261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md); the
+options, waiting on Greg, are in
+[261001o](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md).
+
 **Where caching does pay, it is inside one call site that fans out over one article** — and there
 the coordination is in-process and exact. Simple's three levels are the worked example
 ([261001j](../plans/261001j-simple-press-cost-and-latency.md)): the slowest level goes first with the

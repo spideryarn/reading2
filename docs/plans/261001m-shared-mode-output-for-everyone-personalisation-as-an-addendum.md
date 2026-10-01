@@ -1,7 +1,60 @@
 # Shared mode output for everyone; personalisation as an addendum on top
 
 Report: spya-j5f7yv (Greg's own, from production). Owner entry point:
-[reader-profile.md](../project/reader-profile.md). Status: **plan, not built.**
+[reader-profile.md](../project/reader-profile.md).
+
+**Status: deferred — someday maybe. Nothing from it is on `dev` except this doc.** Greg, 2026-10-01,
+answering the question below (relayed by the Overseer):
+
+> I have vacillated about this a lot. I really don't know what's best. I would say that at the
+> moment, making things be really personalized and relevant for the reader is the most important
+> thing. Because if it's not valuable for individual readers, then nobody's going to end up using
+> enough to bother sharing anything. ... Obviously in an ideal world we try and get the best of both
+> worlds, so we try and make it be really personalised for the reader who owns the article and make
+> it be more generically useful perhaps for the public version. I think I'm hesitating to suggest
+> that we do that for now because A, it adds complexity and B, there's even an argument that maybe
+> if I'm sharing something because I think the whatever summaries and everything else are really
+> good, it might be a surprise. To find that what I've shared does not look like what I'm seeing.
+> I'm less fussed about that second point but it does rankle. And so maybe you could imagine for
+> each of these modes that are personalised as a way to switch the personalisation on and off, but
+> it all just seems like a lot more complexity than it's worth for now. So I'm saying let's just
+> optimise for the individual reader and add this somewhere as a 'someday maybe' set of
+> improvements.
+>
+> — Greg, 2026-10-01
+
+So everything stays personalised for the owner, as before, and the make-public dialog keeps naming
+the artefacts written for the owner's profile. What is below is kept as the design to pick up if
+this comes back, with two additions from the answer:
+
+- **A per-mode on/off switch for personalisation** is the other shape Greg named. It is close to
+  what existed until 2026-09-13 (the *Use your profile* checkbox,
+  [reader-profile.md § What was here before](../project/reader-profile.md#what-was-here-before-and-why-it-went))
+  and would bring back its problems: a control beside every button that spends, and regenerate-and-wait
+  to see the other version.
+- **Greg's second worry cuts against this design**: a sharer who likes what they see would find the
+  public page different from their own view. The addendum shape softens that (the shared text is the
+  same, only the marks are missing) but does not remove it.
+
+**The built code is parked, not lost.** Stages 1 and 2 below were built and tested in a worktree
+before the answer arrived, and are on the branch `parked/261001m-shared-output-addendum` (tip
+`0007ee1ae`; not merged, not reviewed by Sol at code stage, and its migration
+`20261001145857_glossary_for_you` was undone on the local database so it does not jump the migration
+watermark). What it holds:
+
+- **Stage 1** (`86ec4a181`): `PERSONAL_STEPS` in `src/profile.ts` (quiz, simple, trajectory,
+  illustrated); `stepContextFor` in `src/jobs.ts` hands the profile only to those; `POST /api/jobs`
+  resolves a profile only when a personal step is present; a glossary top-up onto a legacy profiled
+  list keeps its stamp; Find more stops sending `useProfile`. Simple and Trajectory were left
+  profiled pending the answer.
+- **Stage 2** (`5aa44ead4`): the owner-only `glossaryForYou` step (`src/glossary-for-you.ts`), a
+  `glossary_for_you` revision column classified `carry` and absent from every public projection,
+  `MarkedForYou` in the glossary band with *Mark again*, the make-public dialog excluding it, reset
+  skipping it without a profile. A failed marks call is recorded rather than thrown so it cannot
+  sink the glossary it shares a job with. Two real calls (~$0.002) showed notes that tend to restate
+  the definition rather than bridge from the reader's background — the prompt needs work.
+- Picking it up means merging `dev` into that branch (expect conflicts; `src/web/GlossaryPanel.tsx`
+  and `drizzle/meta` already conflicted once), regenerating the migration, and a Sol code review.
 
 > These two things, having public documents and personalizing, are somewhat in tension because if
 > it's personalized, then if I make it public, then it, you know, may not suit everybody. And so I
@@ -150,7 +203,7 @@ warning). The client's `profiled` flag on Find more becomes dead and is removed.
   items are more useful and keep the shared text authoritative. Kept as the shape for summaries in
   v2 (open question 1).
 
-## Open questions for Greg (sent via the Overseer before building)
+## The questions put to Greg (answered: neither — see the top)
 
 1. **Plain-words summaries and the trajectory lose their tailoring in v1.** Recommended: accept it
    for v1; v2 adds a postscript to Simple (*"for your purpose, ¶2 and ¶4 matter most, because…"*)
