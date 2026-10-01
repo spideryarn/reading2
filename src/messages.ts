@@ -4246,6 +4246,13 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
      mode and the sweep over `MODES` started listing it. */
   tweets: "The article rewritten as a numbered thread, each post linked to where it came from.",
+  /* What the column draws is all built elsewhere: the tree's question for each
+     part, the arc, and the ideas where they have been made. So the row names
+     those, and says they sit beside the text — the one thing this mode adds is
+     where they are put. */
+  annotations:
+    "Notes beside the text: the question each part answers, where the argument has got to, and " +
+    "the ideas the piece assumes, where those have been made.",
 };
 
 /* ---------------------------------------------------------------- timeline --

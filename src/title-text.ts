@@ -250,4 +250,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   faq: "FAQ",
   trajectory: "Trajectory",
   tweets: "Tweets",
+  annotations: "Annotations",
 };

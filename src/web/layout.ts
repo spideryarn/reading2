@@ -368,6 +368,24 @@ export interface Fit {
    * margins in styles.css § plain, centred come in.
    */
   alone: boolean;
+  /**
+   * **The annotations column's width, right of the prose** — `0` when there is
+   * no column, and also when one was asked for and the window has no room for
+   * it (`fitMargin`). Written as `--marg-w` on `.reader`.
+   */
+  margW: number;
+  /**
+   * **How much of the window's right-hand side `.reader` keeps clear for the
+   * column**, as padding — `--marg-reserve`. Often `0` even with a column,
+   * because the centred prose already leaves room beside it; see `fitMargin`.
+   */
+  margReserve: number;
+  /**
+   * **Where the column starts**, in px from `.reader`'s left padding edge less
+   * the notch — the table's right edge. Only the head needs it: the notes find
+   * their place from their cells, but the head is `position: fixed`.
+   */
+  margLeft: number;
 }
 
 function spineWidth(mode: SpineMode): number {
@@ -456,6 +474,76 @@ export interface FitInput {
    * band.
    */
   bandShape?: BandShape;
+  /**
+   * True when the annotations column is wanted to the right of the prose —
+   * `fitMargin`. Ignored when `modeBand` is set: one side at a time, for now.
+   */
+  margin?: boolean;
+}
+
+/**
+ * **The annotations column's width**: ~20 characters of note at its
+ * narrowest, ~36 at its widest. Notes are a step smaller than the prose
+ * (marginalia.css), so these are much narrower than a band.
+ */
+export const MARG_MIN = 200; // 12.5rem
+export const MARG_IDEAL = 288; // 18rem
+
+/**
+ * **The prose with a column of notes to its right** — Annotations mode.
+ * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
+ *
+ * Three rules, in the order they bind as the window narrows:
+ *
+ *  1. **The prose stays where Plain puts it** — centred, at the Plain cap —
+ *     while the room left beside it already holds the column. Nothing is
+ *     reserved then (`margReserve` 0), so turning the mode on does not move a
+ *     word of the article.
+ *  2. **Then the column pushes the centred prose left**, by reserving room on
+ *     `.reader`'s right: the table is centred (`.text-alone`) in a content box
+ *     `avail − margReserve` wide, so its right edge sits at
+ *     `(avail − margReserve + proseW) / 2` past the rail, and the column fits
+ *     after it exactly when `margReserve ≥ 2·margW + proseW − avail`.
+ *  3. **Then the prose narrows**, the column shrinking first from `MARG_IDEAL`
+ *     to `MARG_MIN` while the prose holds `PROSE_MIN`, and the prose giving
+ *     way after that down to `MODE_PROSE_FLOOR` — the same floor a band
+ *     respects, for the same reason.
+ *
+ * Below that floor there is no column (`margW` 0) and the page is Plain's.
+ */
+function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: number): Fit {
+  const spine = modeSpine(showSpine);
+  const avail = Math.max(0, windowWidth - spineWidth(spine));
+  const plainW = Math.min(avail, proseAloneMaxPx(rootFontPx));
+  if (avail - MARG_MIN < MODE_PROSE_FLOOR) {
+    return {
+      widths: [plainW],
+      tableW: plainW,
+      overflowing: false,
+      minWidth: spineWidth(spine) + plainW,
+      spine,
+      modeW: 0,
+      alone: true,
+      margW: 0,
+      margReserve: 0,
+      margLeft: 0,
+    };
+  }
+  const margW = clamp(avail - PROSE_MIN, MARG_MIN, MARG_IDEAL);
+  const proseW = Math.min(plainW, avail - margW);
+  const margReserve = Math.max(0, 2 * margW + proseW - avail);
+  return {
+    widths: [proseW],
+    tableW: proseW,
+    overflowing: false,
+    minWidth: spineWidth(spine) + proseW + margReserve,
+    spine,
+    modeW: 0,
+    alone: true,
+    margW,
+    margReserve,
+    margLeft: spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW,
+  };
 }
 
 /**
@@ -483,8 +571,10 @@ export function fitView({
   showSpine = null,
   rootFontPx = DEFAULT_ROOT_PX,
   bandShape = "standard",
+  margin = false,
 }: FitInput): Fit {
   if (modeBand) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
+  if (margin) return fitMargin(windowWidth, showSpine, rootFontPx);
   const spine: SpineMode = modeSpine(showSpine);
   const avail = Math.max(0, windowWidth - spineWidth(spine));
   const proseW = Math.min(avail, proseAloneMaxPx(rootFontPx));
@@ -496,6 +586,9 @@ export function fitView({
     spine,
     modeW: 0,
     alone: true,
+    margW: 0,
+    margReserve: 0,
+    margLeft: 0,
   };
 }
 
@@ -615,6 +708,9 @@ function fitMode(
          it, but it is there, and nothing about this page is the article on its
          own. See `Fit.alone`. */
       alone: false,
+      margW: 0,
+      margReserve: 0,
+      margLeft: 0,
     };
   }
 
@@ -640,6 +736,9 @@ function fitMode(
     spine,
     modeW,
     alone: false,
+    margW: 0,
+    margReserve: 0,
+    margLeft: 0,
   };
 }
 

@@ -122,6 +122,10 @@ const SILENT: Mode[] = [
      not a selection, and a Tweets band that marked every post's passages would
      mark most of the article. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   "tweets",
+  /* Earned: its notes sit beside their blocks in a column of their own and
+     mark nothing in the prose; dashed underlines for ideas are deferred —
+     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+  "annotations",
 ];
 
 describe("selectPassages", () => {

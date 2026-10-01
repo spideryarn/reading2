@@ -222,6 +222,14 @@ export const MODES = [
      the text (SPIDERYARN-READING2-5A); the old address redirects here.
      docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   "tweets",
+  /* **Annotations, 2026-10-01** — the first mode drawn to the RIGHT of the
+     prose: notes level with the blocks they belong to, scrolling with the
+     page, and no left band at all. Greg (SPIDERYARN-READING2-7K): "left-hand-
+     column (if displayed) would be stuff that's unanchored to the text, middle
+     column for the text itself, and right-hand-column (if displayed) for
+     annotations anchored to the blocks". Behind the experimental switch.
+     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+  "annotations",
 ] as const;
 export type Mode = (typeof MODES)[number];
 
