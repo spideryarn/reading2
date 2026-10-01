@@ -66,6 +66,7 @@ export function modelNodeFromStarts(
   const built = report ?? {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],

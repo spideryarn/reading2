@@ -473,6 +473,7 @@ export function readExpansion(opts: {
   const report: BuildReport = {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],
@@ -2278,7 +2279,7 @@ interface WaveReading {
 }
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
 }
 
 /**
@@ -2311,6 +2312,7 @@ function readWaveAnswers(opts: {
   for (const call of wave.calls) {
     report.repairs.push(...call.reading.report.repairs);
     report.droppedChildren.push(...call.reading.report.droppedChildren);
+    report.rangelessChildren.push(...call.reading.report.rangelessChildren);
     report.droppedHeadings.push(...call.reading.report.droppedHeadings);
     report.collapsedRungs.push(...call.reading.report.collapsedRungs);
     report.droppedQuestions.push(...call.reading.report.droppedQuestions);
