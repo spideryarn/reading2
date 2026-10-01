@@ -96,6 +96,7 @@ export function plainWords(...kinds: PlainKind[]): string {
  */
 export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/quiz-verdict.ts": "writes one word — right, wrong or unclear — that no reader sees",
+  "src/simple-check.ts": "writes a verdict per paragraph — ok or contradicts — that no reader sees",
   "src/source-guess-run.ts": "no prompt of its own: it sends citation-find.ts's, whose answer is a URL or null",
   "src/pdf-frontmatter.ts": "writes block ids",
   "src/pdf-authors.ts":

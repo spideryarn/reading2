@@ -4728,7 +4728,93 @@ export interface SimpleSummary {
   profileHash: string | null;
   /** Every level, always — validation stores all of them or none. */
   levels: Record<SimpleLevel, SimpleParagraph[]>;
+  /**
+   * What the fidelity guard said about each stored level (src/simple-check.ts,
+   * plan 261001i). **Absent on a row written before the guard, or with it
+   * switched off** — that is how the two are told apart, so it is optional and
+   * not part of the usability check. Never sent to a visitor
+   * (`publicSimpleSummary`, src/public/dto.ts).
+   */
+  check?: SimpleCheck;
 }
+
+/** The guard's record for one artefact: which checker, and each level's outcome. */
+export interface SimpleCheck {
+  /** The checker prompt's version, `SIMPLE_CHECK_VERSION`. */
+  checker: string;
+  /**
+   * The model the checks were asked of. Which one answered each call is in
+   * `ai_calls.answered_model`, rows of purpose `simple-check`.
+   */
+  requestedModel: string;
+  levels: Record<SimpleLevel, SimpleLevelCheck>;
+}
+
+/** Is this a well-formed `check` record, about a stored level of this length? */
+export function isSimpleCheck(value: unknown, levels: Record<SimpleLevel, SimpleParagraph[]>): value is SimpleCheck {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const c = value as Partial<Record<keyof SimpleCheck, unknown>>;
+  if (typeof c.checker !== "string" || !c.checker || typeof c.requestedModel !== "string" || !c.requestedModel) return false;
+  const byLevel = c.levels;
+  if (typeof byLevel !== "object" || byLevel === null) return false;
+  return SIMPLE_LEVELS.every((level) =>
+    isLevelCheck((byLevel as Record<string, unknown>)[level], levels[level].length),
+  );
+}
+
+function isLevelCheck(value: unknown, paragraphs: number): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const attemptsOk =
+    (v.attempts === 1 && v.retriedAfterFlag === false && v.stored === 1) ||
+    (v.attempts === 2 && typeof v.retriedAfterFlag === "boolean" && (v.stored === 2 || (v.stored === 1 && v.retriedAfterFlag)));
+  if (!attemptsOk) return false;
+  if (v.result === "passed") return true;
+  if (v.result === "unchecked") return v.failure === "call" || v.failure === "unreadable";
+  if (v.result !== "flagged" || !Array.isArray(v.flags) || v.flags.length === 0) return false;
+  return v.flags.every((f: unknown) => {
+    const flag = f as Partial<SimpleCheckFlag> | null;
+    return (
+      typeof flag === "object" &&
+      flag !== null &&
+      Number.isInteger(flag.paragraph) &&
+      (flag.paragraph as number) >= 0 &&
+      (flag.paragraph as number) < paragraphs &&
+      typeof flag.why === "string"
+    );
+  });
+}
+
+/** A paragraph of the stored level the checker said its passages contradict. */
+export interface SimpleCheckFlag {
+  /** Index into the stored level's paragraphs, from 0. */
+  paragraph: number;
+  /** The checker's one sentence — for a person auditing it. Never logged. */
+  why: string;
+}
+
+/** Why a level was stored unchecked: the call failed, or its answer could not be read. */
+export type SimpleCheckFailure = "call" | "unreadable";
+
+/**
+ * One level's outcome, **about the text that was stored**.
+ *
+ * - `attempts` is writer calls for the level (validation retries included).
+ * - `retriedAfterFlag`: the first valid attempt was flagged, and that bought
+ *   another writer call.
+ * - `stored` is which attempt's text was kept. Usually the last; `1` after a
+ *   retry is the retry having failed, and the flagged first attempt kept,
+ *   because the guard never costs a press.
+ * - `flagged` with `attempts: 2` and no `retriedAfterFlag` is the spent-budget
+ *   case — validation used the first attempt, so a flag could not buy another.
+ */
+export type SimpleCheckAttempts =
+  | { attempts: 1; retriedAfterFlag: false; stored: 1 }
+  | { attempts: 2; retriedAfterFlag: boolean; stored: 1 | 2 };
+export type SimpleLevelCheck =
+  | ({ result: "passed" } & SimpleCheckAttempts)
+  | ({ result: "flagged"; flags: SimpleCheckFlag[] } & SimpleCheckAttempts)
+  | ({ result: "unchecked"; failure: SimpleCheckFailure } & SimpleCheckAttempts);
 
 /**
  * **Is this a complete, current-shape Simple artefact?** One answer for every
@@ -4753,7 +4839,9 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
     Number.isFinite(simple.elapsedMs) &&
     simple.elapsedMs >= 0 &&
     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
-    isSimpleLevels(simple.levels)
+    isSimpleLevels(simple.levels) &&
+    /* Absent is a row from before the guard, or with it off; present must be whole. */
+    (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))
   );
 }
 

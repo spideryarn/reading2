@@ -611,6 +611,13 @@ export type Task =
      Quick tier, and it can be: it never sees the article. The mark it reads has
      already done the comparing, with citations. */
   | "quiz-verdict"
+  /* **Simple's fidelity guard** (src/simple-check.ts, plan 261001i): each
+     written level's paragraphs beside the passages they cite, one verdict
+     each. Its own job so the ledger can count the checks, their failures and
+     their cost apart from the writing — the step's spend would otherwise hide a
+     second tier inside it. Quick tier, as measured in plan 261001h; it never
+     sees the whole article. */
+  | "simple-check"
   | "search"
   /* The model reading a referee's own notes rather than the paper —
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
@@ -946,6 +953,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   chat: "capable",
   "quiz-mark": "capable",
   "quiz-verdict": "quick",
+  "simple-check": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
@@ -1179,6 +1187,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
   chat: "chat",
   "quiz-mark": "chat",
   "quiz-verdict": "chat",
+  /* Inside the `simple` step, but on the chat wire: the request plan 261001h
+     measured, through the quick tier's only wire. */
+  "simple-check": "chat",
   search: "chat",
   "referee-mirror": "chat",
   "referee-criteria": "chat",
@@ -1311,6 +1322,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
   "quiz-verdict": "SPIDERYARN_QUIZ_VERDICT_MODEL",
+  /* For a comparison run only: the checker's rates (plan 261001h) were
+     measured on the quick tier's model, and a different one is a new
+     measurement. */
+  "simple-check": "SPIDERYARN_SIMPLE_CHECK_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm

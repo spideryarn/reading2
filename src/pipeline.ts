@@ -3927,6 +3927,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           /* Counts only — never the prose. `unanchored` and `unknownIds` are
              the ones to watch: a paragraph the piece does not back. */
           ...run.dropped,
+          /* The fidelity guard (plan 261001i): its calls and chat-wire tokens,
+             kept apart from the writer's, and each level's outcome as
+             "passed/flagged/unchecked" in the slider's order. Never the
+             checker's reasons, which quote the article's claims. */
+          checkCalls: run.checkCalls,
+          checkInputTokens: run.checkInputTokens,
+          checkOutputTokens: run.checkOutputTokens,
+          ...(run.simpleSummary.check
+            ? { checks: SIMPLE_LEVELS.map((level) => run.simpleSummary.check?.levels[level].result).join("/") }
+            : {}),
         },
         `simple ${ctx.slug}: ${counts} paragraphs, ${words} words`,
       );

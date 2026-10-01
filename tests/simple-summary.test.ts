@@ -27,7 +27,14 @@ import {
   inputFingerprint,
   renderPrompt,
 } from "../src/simple-summary.js";
-import { HIGH_POWER_MODEL, STAGE_EFFORT } from "../src/models.js";
+import { HIGH_POWER_MODEL, modelFor, STAGE_EFFORT } from "../src/models.js";
+import {
+  parseCheckVerdicts,
+  SIMPLE_CHECK_ENABLED,
+  SIMPLE_CHECK_SYSTEM,
+  SIMPLE_CHECK_VERSION,
+} from "../src/simple-check.js";
+import { isUsableSimpleSummary } from "../src/types.js";
 import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -100,7 +107,49 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
   };
 });
 
+/* ----------------------------------------------------- the stubbed checker -- */
+
+/**
+ * What the checker says to one call, given the user message it was sent: a
+ * string is the answer's content, an Error is the call itself failing. The
+ * default passes every paragraph, so the cases above are about the writer.
+ */
+let checkerReply: (user: string) => string | Error = (user) => okFor(user);
+const checks: { job: string; body: unknown; signal: AbortSignal | undefined }[] = [];
+
+/** How many paragraphs one checker message carries. */
+const paragraphsIn = (user: string) => (user.match(/^PARAGRAPH \d+$/gm) ?? []).length;
+const verdicts = (...v: ("ok" | "contradicts")[]) =>
+  JSON.stringify({
+    verdicts: v.map((verdict, i) => ({ n: i + 1, verdict, ...(verdict === "contradicts" ? { why: `turned round ${i + 1}` } : {}) })),
+  });
+const okFor = (user: string) => verdicts(...Array.from({ length: paragraphsIn(user) }, () => "ok" as const));
+/** Flags the first paragraph, and passes the rest. */
+const flagFirst = (user: string) =>
+  verdicts("contradicts", ...Array.from({ length: paragraphsIn(user) - 1 }, () => "ok" as const));
+
+vi.mock("../src/ai-call.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/ai-call.js")>();
+  return {
+    ...real,
+    openRouterJson: async (job: string, body: unknown, options?: { signal?: AbortSignal }) => {
+      checks.push({ job, body: JSON.parse(JSON.stringify(body)), signal: options?.signal });
+      const user = (body as { messages: { role: string; content: string }[] }).messages.find((m) => m.role === "user")
+        ?.content;
+      const reply = checkerReply(user ?? "");
+      if (reply instanceof Error) throw reply;
+      return {
+        json: { choices: [{ message: { content: reply } }], usage: { prompt_tokens: 100, completion_tokens: 10 } },
+        answeredBy: "stub-checker",
+        generationId: null,
+      };
+    },
+  };
+});
+
 beforeEach(() => {
+  checkerReply = okFor;
+  checks.length = 0;
   answer = "";
   stop = "end_turn";
   waitForAbort = null;
@@ -538,5 +587,241 @@ describe("the request", () => {
     expect(SIMPLE_SYSTEMS.fuller).toContain("eighteen-year-old");
     expect(SIMPLE_SYSTEMS.simple).not.toContain("eighteen-year-old");
     for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
+  });
+});
+
+/* ------------------------------------------------------ the fidelity guard -- */
+
+describe("the fidelity guard (plan 261001i)", () => {
+  const article = (): Article => ({ ...example, slug: "simple-test", blocks: BLOCKS });
+  const run = (extra: { guard?: boolean; signal?: AbortSignal } = {}) =>
+    generateSimpleSummary({ power: "standard", article: article(), profile: null, ...extra });
+  const messagesOf = (i: number) =>
+    (checks[i]?.body as { messages?: { role: string; content: string }[] } | undefined)?.messages ?? [];
+  const userOf = (i: number) => messagesOf(i).find((m) => m.role === "user")?.content ?? "";
+  const isBrief = (user: string) => user.includes("Can a model read?") || user.includes("Could a model learn");
+  const writerCalls = (level: SimpleLevel) => sent.filter((c) => levelOf(c.body) === level).length;
+  /** A second Brief that a checker can tell from the first. */
+  const BRIEF_AGAIN = [para("Could a model learn to read?", INTRO.id), para("It read faster.", RESULT.id)];
+  const passed = { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 };
+  /* A good answer at every level unless the case says otherwise. */
+  beforeEach(() => {
+    answer = {};
+  });
+
+  it("checks every level once, on its own job, each paragraph with only its own cited passages", async () => {
+    const out = await run();
+    expect(checks).toHaveLength(3);
+    expect(checks.map((c) => c.job)).toEqual(["simple-check", "simple-check", "simple-check"]);
+    for (const c of checks) expect((c.body as { model: string }).model).toBe(modelFor("simple-check", "standard"));
+    expect(messagesOf(0)[0]).toEqual({
+      role: "system",
+      content: SIMPLE_CHECK_SYSTEM,
+    });
+    const brief = checks.map((_, i) => userOf(i)).find(isBrief) ?? "";
+    /* BRIEF cites INTRO and RESULT: their words go, and nothing else's. */
+    expect(brief).toContain(`PARAGRAPH 1\nCan a model read?\n\nITS PASSAGES\n[${INTRO.id}] ${INTRO.text}`);
+    expect(brief).toContain(`PARAGRAPH 2\nIt read faster.\n\nITS PASSAGES\n[${RESULT.id}] ${RESULT.text}`);
+    expect(brief).not.toContain(WHY.text);
+    expect(brief).not.toContain(METHOD.text);
+    expect(out.simpleSummary.check).toEqual({
+      checker: SIMPLE_CHECK_VERSION,
+      requestedModel: modelFor("simple-check", "standard"),
+      levels: { brief: passed, simple: passed, fuller: passed },
+    });
+    expect(sent).toHaveLength(3);
+  });
+
+  it("asks a flagged level again and stores the second when it passes", async () => {
+    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
+    checkerReply = (user) => (user.includes("Can a model read?") ? flagFirst(user) : okFor(user));
+    const out = await run();
+    expect(writerCalls("brief")).toBe(2);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({ result: "passed", attempts: 2, retriedAfterFlag: true, stored: 2 });
+    expect(out.simpleSummary.check?.levels.simple).toEqual(passed);
+    expect(checks).toHaveLength(4);
+    expect(out.calls).toBe(4);
+  });
+
+  it("stores the second attempt when it is flagged too, and records its flags — the press is not lost", async () => {
+    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
+    checkerReply = (user) => (isBrief(user) ? flagFirst(user) : okFor(user));
+    const out = await run();
+    expect(writerCalls("brief")).toBe(2);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({
+      result: "flagged",
+      attempts: 2,
+      retriedAfterFlag: true,
+      stored: 2,
+      flags: [{ paragraph: 0, why: "turned round 1" }],
+    });
+  });
+
+  it("does not buy a third writer call when validation spent the first attempt", async () => {
+    const overCeiling = answerOf([para(words(SIMPLE_LIMITS.brief.maxWords + 1), INTRO.id), para("Two.", WHY.id)]);
+    answer = { brief: [JSON.stringify(overCeiling), JSON.stringify(answerOf(BRIEF))] };
+    checkerReply = (user) => (isBrief(user) ? flagFirst(user) : okFor(user));
+    const out = await run();
+    expect(writerCalls("brief")).toBe(2);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({
+      result: "flagged",
+      attempts: 2,
+      retriedAfterFlag: false,
+      stored: 2,
+      flags: [{ paragraph: 0, why: "turned round 1" }],
+    });
+    /* The invalid answer was never checked: only valid text is. */
+    expect(checks).toHaveLength(3);
+  });
+
+  it("stores a level unchecked when the checker call fails, and does not spend the writer retry", async () => {
+    checkerReply = (user) => (isBrief(user) ? new Error("upstream 502") : okFor(user));
+    const out = await run();
+    expect(writerCalls("brief")).toBe(1);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({
+      result: "unchecked",
+      attempts: 1,
+      retriedAfterFlag: false,
+      stored: 1,
+      failure: "call",
+    });
+    expect(out.simpleSummary.check?.levels.fuller).toEqual(passed);
+  });
+
+  it.each([
+    ["prose", () => "Looks fine to me."],
+    ["too few verdicts", () => verdicts("ok")],
+    ["a verdict it does not know", (user: string) => okFor(user).replace('"ok"', '"maybe"')],
+    ["an empty answer", () => ""],
+  ])("treats an unreadable answer (%s) as a checker failure, not a pass", async (_, reply) => {
+    checkerReply = (user) => (isBrief(user) ? reply(user) : okFor(user));
+    const out = await run();
+    expect(writerCalls("brief")).toBe(1);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({
+      result: "unchecked",
+      attempts: 1,
+      retriedAfterFlag: false,
+      stored: 1,
+      failure: "unreadable",
+    });
+  });
+
+  it("records an unchecked retry after a flag as unchecked, and says a flag bought it", async () => {
+    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
+    checkerReply = (user) =>
+      user.includes("Can a model read?") ? flagFirst(user) : isBrief(user) ? new Error("timeout") : okFor(user);
+    const out = await run();
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({
+      result: "unchecked",
+      attempts: 2,
+      retriedAfterFlag: true,
+      stored: 2,
+      failure: "call",
+    });
+  });
+
+  it("keeps the flagged first attempt when the retry it bought fails validation — the press is not lost", async () => {
+    answer = { brief: [JSON.stringify(answerOf(BRIEF)), "{ not json"] };
+    checkerReply = (user) => (isBrief(user) ? flagFirst(user) : okFor(user));
+    const out = await run();
+    expect(writerCalls("brief")).toBe(2);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
+    expect(out.simpleSummary.check?.levels.brief).toEqual({
+      result: "flagged",
+      attempts: 2,
+      retriedAfterFlag: true,
+      stored: 1,
+      flags: [{ paragraph: 0, why: "turned round 1" }],
+    });
+  });
+
+  it("keeps the flagged first attempt when the retry's call is refused", async () => {
+    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
+    checkerReply = (user) => {
+      if (isBrief(user)) stop = "refusal";
+      return isBrief(user) ? flagFirst(user) : okFor(user);
+    };
+    const out = await run();
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
+    expect(out.simpleSummary.check?.levels.brief).toMatchObject({ result: "flagged", stored: 1, retriedAfterFlag: true });
+  });
+
+  it("switched off: no checker call, no retry for a flag, and no record", async () => {
+    checkerReply = flagFirst;
+    const out = await run({ guard: false });
+    expect(checks).toHaveLength(0);
+    expect(sent).toHaveLength(3);
+    expect("check" in out.simpleSummary).toBe(false);
+    expect(out.checkCalls).toBe(0);
+  });
+
+  it("is on unless switched off", () => {
+    expect(SIMPLE_CHECK_ENABLED).toBe(true);
+  });
+
+  it("reports the checker's calls and tokens beside the writer's, never summed into them", async () => {
+    const out = await run();
+    expect(out.calls).toBe(3);
+    expect(out.outputTokens).toBe(3);
+    expect(out.checkCalls).toBe(3);
+    expect(out.checkInputTokens).toBe(300);
+    expect(out.checkOutputTokens).toBe(30);
+  });
+
+  it("an aborted job stops at the check rather than storing an unchecked level", async () => {
+    const job = new AbortController();
+    checkerReply = (user) => {
+      job.abort();
+      return new Error(`aborted ${paragraphsIn(user)}`);
+    };
+    await expect(run({ signal: job.signal })).rejects.toThrow();
+  });
+
+  it("hands the checker the job's signal, so a cancelled press stops checking", async () => {
+    const job = new AbortController();
+    await run({ signal: job.signal });
+    job.abort();
+    expect(checks).toHaveLength(3);
+    for (const c of checks) expect(c.signal?.aborted).toBe(true);
+  });
+
+  it("reads a row with no record as usable — written before the guard, or with it off", async () => {
+    const out = await run({ guard: false });
+    expect(isUsableSimpleSummary(out.simpleSummary)).toBe(true);
+    const checked = await run();
+    expect(isUsableSimpleSummary(checked.simpleSummary)).toBe(true);
+  });
+});
+
+describe("parseCheckVerdicts", () => {
+  it("reads one verdict per paragraph, in order, and the reason for a flag", () => {
+    expect(parseCheckVerdicts(verdicts("ok", "contradicts", "ok"), 3)).toEqual([
+      { verdict: "ok" },
+      { verdict: "contradicts", why: "turned round 2" },
+      { verdict: "ok" },
+    ]);
+  });
+
+  it("finds the JSON inside a fence or a sentence", () => {
+    expect(parseCheckVerdicts(`Here:\n\`\`\`json\n${verdicts("ok")}\n\`\`\``, 1)).toEqual([{ verdict: "ok" }]);
+  });
+
+  it("refuses a count that does not match, an unknown verdict, numbering out of order, and non-JSON", () => {
+    expect(parseCheckVerdicts(verdicts("ok"), 2)).toBeNull();
+    expect(parseCheckVerdicts('{"verdicts":[{"n":1,"verdict":"fine"}]}', 1)).toBeNull();
+    expect(parseCheckVerdicts('{"verdicts":[{"n":2,"verdict":"ok"},{"n":1,"verdict":"ok"}]}', 2)).toBeNull();
+    expect(parseCheckVerdicts("no", 1)).toBeNull();
+    expect(parseCheckVerdicts("", 1)).toBeNull();
+  });
+
+  it("gives a flag with no reason an empty one rather than refusing it", () => {
+    expect(parseCheckVerdicts('{"verdicts":[{"n":1,"verdict":"contradicts"}]}', 1)).toEqual([
+      { verdict: "contradicts", why: "" },
+    ]);
   });
 });

@@ -86,10 +86,11 @@ import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { effortFor, generatorFor, type ModelPower } from "./models.js";
+import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { plainWords } from "./plain-words.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
+import { checkLevel, SIMPLE_CHECK_ENABLED, SIMPLE_CHECK_VERSION } from "./simple-check.js";
 import {
   type BlockFingerprint,
   fallbackHeadTitle,
@@ -103,7 +104,10 @@ import {
   SIMPLE_MAX_IDS,
   type BlockId,
   type Meta,
+  type SimpleCheckAttempts,
+  type SimpleCheckFlag,
   type SimpleLevel,
+  type SimpleLevelCheck,
   type SimpleParagraph,
   type SimpleSummary,
   type Tree,
@@ -529,8 +533,17 @@ export interface SimpleSummaryRun {
   cacheWriteTokens: number;
   maxTokens: number;
   elapsedMs: number;
-  /** Requests made, across every level and retry — three when nothing was asked twice. */
+  /** Writer requests made, across every level and retry — three when nothing was asked twice. */
   calls: number;
+  /**
+   * The fidelity guard's calls and chat-wire tokens, **beside** the writer's
+   * rather than added in: the chat wire counts cache reads inside its input
+   * tokens and the Messages wire does not, so a sum would mean nothing.
+   * Zero with the guard off.
+   */
+  checkCalls: number;
+  checkInputTokens: number;
+  checkOutputTokens: number;
 }
 
 export async function generateSimpleSummary(opts: {
@@ -547,6 +560,11 @@ export async function generateSimpleSummary(opts: {
   cacheArticle?: boolean;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
+  /**
+   * Run the fidelity guard (src/simple-check.ts). Defaults to the switch,
+   * `SIMPLE_CHECK_ENABLED`; tests pass it rather than flipping the constant.
+   */
+  guard?: boolean;
 }): Promise<SimpleSummaryRun> {
   const { blocks, tree, meta: realMeta } = opts.article;
 
@@ -561,6 +579,9 @@ export async function generateSimpleSummary(opts: {
      so an id from the bibliography is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);
   const evidenceIds = new Set(evidence.map((b) => b.id as string));
+  /* What the checker quotes beside each paragraph: the same blocks' text. */
+  const textOf = new Map(evidence.map((b) => [b.id as string, b.text]));
+  const guard = opts.guard ?? SIMPLE_CHECK_ENABLED;
   const started = Date.now();
   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
   const article = articleWithIds(meta, evidence);
@@ -653,17 +674,76 @@ export async function generateSimpleSummary(opts: {
    */
   const writeLevel = async (level: SimpleLevel) => {
     const usages: Anthropic.Usage[] = [];
+    const checked = { calls: 0, inputTokens: 0, outputTokens: 0 };
+    /** A valid attempt the checker flagged, kept in case the retry it bought cannot be stored. */
+    let flagged: { paragraphs: SimpleParagraph[]; tally: SimpleDropped; flags: SimpleCheckFlag[] } | null = null;
+    const keep = (paragraphs: SimpleParagraph[], tally: SimpleDropped, attempts: number, check: SimpleLevelCheck | null) => {
+      for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
+      return { paragraphs, usages, attempts, check, checked };
+    };
+    /* **The guard never costs a press.** If the retry a flag bought fails —
+       its call or its validation — the flagged first attempt is stored, as it
+       would have been with no guard at all. An abort is still an abort. */
+    const fallBack = (err: unknown, attempt: number) => {
+      if (!flagged || signal.aborted) throw err;
+      /* A flag on the first attempt is the only way to get here. */
+      return keep(flagged.paragraphs, flagged.tally, attempt, {
+        result: "flagged",
+        attempts: 2,
+        retriedAfterFlag: true,
+        stored: 1,
+        flags: flagged.flags,
+      });
+    };
     for (let attempt = 1; ; attempt += 1) {
-      const { raw, usage } = await askLevel(level);
-      usages.push(usage);
-      const tally = emptyDropped();
+      let raw: string;
       try {
-        const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
-        for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
-        return { paragraphs, usages, attempts: attempt };
+        const asked = await askLevel(level);
+        usages.push(asked.usage);
+        raw = asked.raw;
       } catch (err) {
-        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) throw err;
+        return fallBack(err, attempt);
       }
+      const tally = emptyDropped();
+      let paragraphs: SimpleParagraph[];
+      try {
+        paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
+      } catch (err) {
+        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) return fallBack(err, attempt);
+        continue;
+      }
+      if (!guard) return keep(paragraphs, tally, attempt, null);
+
+      /* **The fidelity guard** (src/simple-check.ts, plan 261001i): only valid
+         text is checked, and it shares this level's attempts with validation. */
+      const result = await checkLevel(paragraphs, textOf, { signal });
+      checked.calls += 1;
+      checked.inputTokens += result.inputTokens;
+      checked.outputTokens += result.outputTokens;
+      /* A cancelled job, or a sibling that failed, is an abort — never a check
+         that failed and a level stored unchecked. */
+      signal.throwIfAborted();
+      const { outcome } = result;
+      if (outcome.kind === "flagged" && attempt < LEVEL_ATTEMPTS) {
+        flagged = { paragraphs, tally, flags: outcome.flags };
+        continue;
+      }
+      /* Two attempts at most (`LEVEL_ATTEMPTS`), and `SimpleCheckAttempts` says
+         which combinations of them can happen. */
+      const base: SimpleCheckAttempts =
+        attempt === 1
+          ? { attempts: 1, retriedAfterFlag: false, stored: 1 }
+          : { attempts: 2, retriedAfterFlag: flagged !== null, stored: 2 };
+      return keep(
+        paragraphs,
+        tally,
+        attempt,
+        outcome.kind === "passed"
+          ? { result: "passed", ...base }
+          : outcome.kind === "flagged"
+            ? { result: "flagged", ...base, flags: outcome.flags }
+            : { result: "unchecked", ...base, failure: outcome.failure },
+      );
     }
   };
 
@@ -699,13 +779,34 @@ export async function generateSimpleSummary(opts: {
   const sum = (pick: (u: Anthropic.Usage) => number | null | undefined) =>
     written.reduce((n, w) => n + w.usages.reduce((m, u) => m + (pick(u) ?? 0), 0), 0);
 
-  const simpleSummary = stamped(levels, {
+  const stamp = stamped(levels, {
     power: opts.power,
     slug: opts.article.slug,
     sourceHash,
     profile: opts.profile,
     elapsedMs: Date.now() - started,
   });
+  /* The guard's record goes on the artefact, beside what it judged (plan
+     261001i § The record): the ledger counts checker calls, but cannot say
+     what they answered. With the guard off there is no record at all. */
+  const simpleSummary: SimpleSummary = guard
+    ? {
+        ...stamp,
+        check: {
+          checker: SIMPLE_CHECK_VERSION,
+          requestedModel: modelFor("simple-check", "standard"),
+          levels: Object.fromEntries(
+            SIMPLE_LEVELS.map((level, i) => {
+              const check = written[i]!.check;
+              if (!check) throw new Error(`the "${level}" level was written with the guard on and has no check record`);
+              return [level, check];
+            }),
+          ) as Record<SimpleLevel, SimpleLevelCheck>,
+        },
+      }
+    : stamp;
+  const checkSum = (pick: (c: { calls: number; inputTokens: number; outputTokens: number }) => number) =>
+    written.reduce((n, w) => n + pick(w.checked), 0);
 
   /* Nothing is written here — the caller writes through the store. */
   return {
@@ -721,6 +822,9 @@ export async function generateSimpleSummary(opts: {
     cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
     maxTokens,
     calls: written.reduce((n, w) => n + w.usages.length, 0),
+    checkCalls: checkSum((c) => c.calls),
+    checkInputTokens: checkSum((c) => c.inputTokens),
+    checkOutputTokens: checkSum((c) => c.outputTokens),
     elapsedMs: Date.now() - started,
   };
 }
