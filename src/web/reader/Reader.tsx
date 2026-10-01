@@ -915,8 +915,10 @@ export function Reader({
    *
    * `NO_WORKS` is a module constant rather than a fresh `[]` because two memos
    * below key on it by identity, and an article with no citations is the
-   * ordinary case. Empty for a visitor, which is the whole of what keeps this
-   * feature owner-only — see `citeSelections`.
+   * ordinary case. Empty for a visitor: the prose marks are owner-only even
+   * though a visitor's band now has a public projection (260929c) — see
+   * `citeSelections`. Not the only lock: `showInSpideryarn` below names the
+   * owner-only part of the card.
    */
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
 
@@ -2840,6 +2842,9 @@ export function Reader({
            things (ProseHoverCard.tsx § canAddToShelf) and today's shared
            condition is a coincidence worth keeping visible. */
         canAddToShelf={owner !== null}
+        /* The citation half's "already an article here" line: owner-only,
+           named here as the band names it (plan 261001i). */
+        showInSpideryarn={owner !== null}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

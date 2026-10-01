@@ -112,6 +112,7 @@ function Harness() {
       onFollowNote: () => {},
       lookUpLinks: false,
       canAddToShelf: false,
+      showInSpideryarn: false,
     }),
     createElement(VisitorGlossaryBand, { glossary: GLOSSARY, onJump, onSelected: () => {} }),
   );
