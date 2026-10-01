@@ -1940,6 +1940,30 @@ describe("a signed-out browser on a shared document", () => {
        the branch a POST would hide in. */
     for (const mode of MODES) {
       if (pressed.includes(mode)) continue;
+      /* **Annotations is a toggle beside the radios** since 2026-10-01, and its
+         address is `?margin=1` (261001i): kept drawn and pressed while the notes
+         are on, and pressing it — which turns them off — stays public too. */
+      if (mode === "annotations") {
+        await remount();
+        await open("?margin=1");
+        trace.length = 0;
+        const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+        expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
+          MODE_LABEL.annotations,
+        );
+        expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+        expect(
+          host.querySelector(".marg-head, .marg-narrow, [data-marg-note]"),
+          "the column is on screen",
+        ).not.toBeNull();
+        await act(async () => (toggle as HTMLButtonElement).click());
+        await settle();
+        expect(outsidePublic(), "after pressing annotations").toEqual([]);
+        expect(trace.filter((r) => r.method !== "GET"), "after pressing annotations").toEqual([]);
+        expect(new URLSearchParams(location.search).get("margin")).toBeNull();
+        pressed.push(mode);
+        continue;
+      }
       await remount();
       await open(`?mode=${mode}`);
       trace.length = 0;
@@ -2743,6 +2767,20 @@ describe("a signed-in reader who does not own it", () => {
          covers. */
       expectBandFor(mode as Mode, `after pressing ${label}`);
     }
+
+    /* **And Annotations' toggle after the radios** (261001i): the notes on and
+       off again, both presses inside the public namespace. */
+    const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+    expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
+    for (const want of ["1", null]) {
+      await act(async () => (toggle as HTMLButtonElement).click());
+      await settle();
+      const extra = outsidePublic().filter((r) => r.url !== "/api/jobs");
+      expect(extra, `after pressing Annotations to ${want}`).toEqual([]);
+      expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+      expect(new URLSearchParams(location.search).get("margin")).toBe(want);
+    }
+    pressed.push("annotations");
 
     expect([...pressed].sort()).toEqual([...MODES].sort());
   }, SWEEP_MS);

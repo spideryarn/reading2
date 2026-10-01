@@ -34,7 +34,7 @@
  * `requireMarkersInHead` below now, and the build check calls the same function.
  */
 import { escapeHtml, headText } from "../html.js";
-import { DEFAULT_MODE, type Mode } from "../modes.js";
+import { type BandMode, DEFAULT_MODE } from "../modes.js";
 import type { ArticleView } from "../read-address.js";
 import { APP_NAME, documentTitle } from "../title-text.js";
 import { articleUrl, safePublicCanonical } from "../urls.js";
@@ -113,7 +113,7 @@ export const MANAGED_HEAD_END = "<!-- spideryarn:managed-head:end -->";
 export function composeShell(
   shell: string,
   head: PublicHead | null,
-  mode: Mode = DEFAULT_MODE,
+  mode: BandMode = DEFAULT_MODE,
   view: ArticleView = "article",
 ): string {
   const start = shell.indexOf(MANAGED_HEAD_START);
@@ -205,7 +205,7 @@ function requireOnce(shell: string, marker: string, at: number): void {
  * in that order and exactly once each — normalise, then escape at the moment it
  * becomes markup. src/html.ts explains why those are two jobs.
  */
-function tags(head: PublicHead, mode: Mode, view: ArticleView): string[] {
+function tags(head: PublicHead, mode: BandMode, view: ArticleView): string[] {
   /* "Untitled" rather than an empty tag, matching `articleTitle()` in
      src/title-text.ts. **Effectively unreachable from `loadHead`**, which falls
      back to the slug and so always hands over a string — it is the defence for

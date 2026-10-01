@@ -211,7 +211,18 @@ export function withRun(
   // Newest last on disk, oldest dropped first — the panel sorts for display,
   // so the file stays in the order things happened, which is the order that
   // makes it readable when somebody opens it in an editor.
-  return { runs: [...runs, run].slice(-MAX_RUNS), run, kind: "minted" };
+  return { runs: trimRuns([...runs, run]), run, kind: "minted" };
+}
+
+/**
+ * The newest `MAX_RUNS`, **except that a `pending` run is never dropped** — the
+ * same rule `begin` applies in src/store/pg-searches.ts. A search still being
+ * answered would otherwise be deleted under the call that is answering it.
+ * The newest run is the one just written, so it is always kept.
+ */
+function trimRuns(runs: SearchRun[]): SearchRun[] {
+  const cut = runs.length - MAX_RUNS;
+  return runs.filter((r, i) => i >= cut || r.status === "pending");
 }
 
 

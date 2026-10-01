@@ -86,23 +86,15 @@ export function SearchBand({
   onOpenHit(next: string | null): void;
 }) {
   useRenderCount("SearchBand");
-  const { runs, loaded, loadError, ask, retry, remove, recolour, error } = useSearch(slug);
-  /* Only a request this tab started is known to be in flight. A `pending` row
-     loaded by the opening GET may belong to another process, or to one that
-     died inside the server's 90-second sweep grace; this tab receives no later
-     update in either case. Treating every persisted `pending` as live would
-     therefore refuse that question indefinitely. */
-  const started = useRef(new Map<string, string>());
-  const running = useMemo(
-    () => {
-      const pending = new Set(runs.filter((run) => run.status === "pending").map((run) => run.id));
-      for (const id of started.current.keys()) {
-        if (!pending.has(id)) started.current.delete(id);
-      }
-      return new Set(started.current.keys());
-    },
-    [runs],
-  );
+  /* `useSearchMode` owns `?runs=` and is called after the hook, so a rename
+     reaches it through this ref. A rename swaps the id in place, and does
+     nothing if the reader has already unticked or deleted the search. */
+  const renameActive = useRef<(from: string, to: string) => void>(() => {});
+  /* Only a request this tab started is known to be in flight — `running` and
+     `isRunning` are the hook's, because only the hook knows the id the server
+     answered under. useSearch.ts § inFlight. */
+  const { runs, loaded, loadError, ask, retry, running, isRunning, remove, recolour, error } =
+    useSearch(slug, { onRenamed: (from, to) => renameActive.current(from, to) });
   const { panel, setActive } = useSearchMode({
     runs,
     blocks,
@@ -112,6 +104,8 @@ export function SearchBand({
     openHit,
     onOpenHit,
   });
+  renameActive.current = (from, to) =>
+    setActive((ids) => (ids.includes(from) ? ids.map((id) => (id === from ? to : id)) : ids));
 
   return (
     <SearchPanel
@@ -123,7 +117,7 @@ export function SearchBand({
         error,
         onAsk: (criterion) => {
           const question = criterion.trim();
-          if ([...started.current.values()].includes(question)) return;
+          if (isRunning(question)) return;
           /* `ask` mints the id, so `?runs=` can name the search before the
              model has said anything — the same trick `?note=` and `?thread=`
              use.
@@ -132,15 +126,13 @@ export function SearchBand({
              default-false: a search the reader just paid for and cannot see is
              not a result. */
           const id = ask(question);
-          started.current.set(id, question);
           setActive((ids) => [...ids, id]);
           onOpenHit(null);
         },
         running,
         onRetry: (id) => {
           const run = runs.find((candidate) => candidate.id === id);
-          if (!run || [...started.current.values()].includes(run.criterion.trim())) return;
-          started.current.set(id, run.criterion.trim());
+          if (!run || isRunning(run.criterion)) return;
           retry(id);
         },
         /* Straight through. Unlike every other write on this panel it does not

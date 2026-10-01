@@ -38,6 +38,12 @@ async function mount(slug: string): Promise<void> {
   });
 }
 
+async function show(slug: string): Promise<void> {
+  await act(async () => {
+    root.render(createElement(Harness, { slug }));
+  });
+}
+
 /**
  * Let the pending microtasks of a `fetch().then(...)` chain and a
  * `for await` loop over a stream actually settle. `setTimeout(0)` rather than
@@ -503,5 +509,147 @@ describe("a stream that stops without ending", () => {
     // The reader's words, not the class's — see `describeFetchFailure`.
     expect(run?.error).toContain("[ai-stalled]");
     expect(run?.error).not.toContain("StreamStalled");
+  });
+});
+
+/**
+ * `begin` can answer under an id other than the one the hook sent — `withRun`
+ * mints when the sent id names a row it will not reset. Everything this hook
+ * keeps by id has to follow, and the gap before `begin` arrives is where a
+ * reader's delete or colour choice lands on the old one.
+ * docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
+ */
+describe("a run that begin answers under a new id", () => {
+  const Q = "where the controls are";
+  const NEW = "spya-w4n7pk";
+  const createdAt = "2026-10-01T00:00:00.000Z";
+
+  /** A POST whose stream the case feeds by hand, answering under `NEW`. */
+  function heldPost(): { frame(event: string, data: unknown): void; end(): void } {
+    let ctl!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        ctl = c;
+      },
+    });
+    postImpl = () => Promise.resolve({ ok: true, body } as unknown as Response);
+    return {
+      frame(event, data) {
+        ctl.enqueue(sseBytes([{ event, data }]));
+      },
+      end() {
+        ctl.close();
+      },
+    };
+  }
+  const calls = (method: string) =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([, init]) => init?.method === method)
+      .map(([url]) => String(url));
+
+  it("tracks the question under the server's id until it finishes", async () => {
+    await mount("a-slug");
+    await flush();
+    const post = heldPost();
+    let sent = "";
+    act(() => {
+      sent = latest?.ask(Q) ?? "";
+    });
+    expect(latest?.running.has(sent)).toBe(true);
+    expect(latest?.isRunning(` ${Q} `)).toBe(true);
+
+    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    await flush();
+    expect([...(latest?.running ?? [])]).toEqual([NEW]);
+    expect(latest?.isRunning(Q)).toBe(true);
+
+    post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
+    post.end();
+    await flush();
+    expect(latest?.running.size).toBe(0);
+    expect(latest?.isRunning(Q)).toBe(false);
+  });
+
+  it("drops the previous article's in-flight snapshot when the slug changes", async () => {
+    await mount("a-slug");
+    await flush();
+    const oldPost = heldPost();
+    act(() => {
+      latest?.ask(Q);
+    });
+    expect(latest?.running.size).toBe(1);
+    expect(latest?.isRunning(Q)).toBe(true);
+
+    await show("another-slug");
+    await flush();
+    expect(latest?.running.size).toBe(0);
+    expect(latest?.isRunning(Q)).toBe(false);
+
+    oldPost.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    oldPost.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
+    oldPost.end();
+    await flush();
+    expect(latest?.runs, "the previous article's stream wrote into the new one").toEqual([]);
+  });
+
+  it("keeps a run deleted before begin answered deleted, and deletes the server's row", async () => {
+    await mount("a-slug");
+    await flush();
+    const post = heldPost();
+    let sent = "";
+    act(() => {
+      sent = latest?.ask(Q) ?? "";
+    });
+    act(() => latest?.remove(sent));
+    expect(latest?.isRunning(Q), "a deleted question is free to ask again").toBe(false);
+
+    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    await flush();
+    expect(calls("DELETE").some((u) => u.endsWith(`/${NEW}`)), "the server's row was never deleted").toBe(
+      true,
+    );
+
+    post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
+    post.end();
+    await flush();
+    expect(latest?.runs.map((r) => r.id), "the deleted search came back on done").toEqual([]);
+  });
+
+  it("lands cleanly when a renamed run deleted before begin ends without done", async () => {
+    await mount("a-slug");
+    await flush();
+    const post = heldPost();
+    let sent = "";
+    act(() => {
+      sent = latest?.ask(Q) ?? "";
+    });
+    act(() => latest?.remove(sent));
+
+    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    post.end();
+    await flush();
+    expect(latest?.runs).toEqual([]);
+    expect(latest?.running.size).toBe(0);
+    expect(latest?.isRunning(Q)).toBe(false);
+    expect(latest?.error).toBeNull();
+  });
+
+  it("moves a colour chosen before begin answered onto the server's id", async () => {
+    await mount("a-slug");
+    await flush();
+    const post = heldPost();
+    let sent = "";
+    act(() => {
+      sent = latest?.ask(Q) ?? "";
+    });
+    act(() => latest?.recolour(sent, 3));
+
+    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
+    post.end();
+    await flush();
+    expect(latest?.runs.find((r) => r.id === NEW)?.colour, "the colour was lost on screen").toBe(3);
+    expect(calls("PATCH").some((u) => u.endsWith(`/${NEW}`)), "the colour was never stored").toBe(true);
   });
 });

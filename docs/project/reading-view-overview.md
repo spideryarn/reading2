@@ -11,7 +11,9 @@ what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist colum
 which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
 [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) The other is
 Annotations, which draws a column of notes to the right of the prose instead, behind the
-experimental switch. So *a mode is open* and *a band is open* are separate questions
+experimental switch — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
+beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mode.md)). So *a mode
+is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
 
 The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
@@ -166,7 +168,10 @@ readers never are.
   part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
   a head pinned at the top saying which part and section you are in and, from the arc, where the
   argument has got to. It opens no band, generates nothing, and hides its notes on a window too
-  narrow for the column. Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
+  narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
+  at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
+  band you choose; where there is no room for both (under 900px), the band wins —
+  [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
   to the text, the middle for the text, the right for what is. Behind the switch. No
   `annotations.md` yet; the plan is the reference —
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
@@ -174,7 +179,7 @@ readers never are.
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
 That is every band mode; `plain` and Annotations open none — Annotations draws its column on the
-right instead.
+right instead, beside a band or without one.
 
 ### Marking a passage, and asking about one
 

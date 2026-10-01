@@ -27,7 +27,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { MODES } from "../src/modes.js";
+import { BAND_MODES } from "../src/modes.js";
 import { NO_FOUND, proseFound, selectPassages, type PassageSlots } from "../src/web/reader/passages.js";
 import { blockHues, blockMatches, blockStrength, type Found } from "../src/web/search-hits.js";
 import type { BlockId } from "../src/types.js";
@@ -139,7 +139,7 @@ describe("the quotes are marked wherever the reader is standing", () => {
        tests/every-mode-says-which-passages-it-marks.test.ts established: a new
        mode is already a compile error in `selectPassages`, and this makes it a
        red test too. */
-    for (const mode of MODES) {
+    for (const mode of BAND_MODES) {
       const marked = proseFound(selectPassages(mode, slots()).found, QUOTED);
       expect(marked.filter((f) => f.runId === "quotes"), `${mode} must mark the quotes`).toHaveLength(2);
     }
