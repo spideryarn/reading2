@@ -14,6 +14,9 @@
  * No database needed.
  */
 
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -86,14 +89,6 @@ describe("sslDecisionFor", () => {
     expect(decision.mode === "verified" && decision.ssl.ca).toContain("BEGIN CERTIFICATE");
   });
 
-  it("falls back to encrypted-but-unverified when there is no certificate at all", () => {
-    const decision = sslDecisionFor(REMOTE, { defaultCaPath: MISSING });
-    expect(decision.mode).toBe("encrypted-unverified");
-    expect(decision.ssl).toMatchObject({ rejectUnauthorized: false });
-    // The caller has to be able to say what is wrong, or the warning is noise.
-    expect(decision.why).toContain("not verified");
-  });
-
   it("throws rather than degrading when PGSSLROOTCERT names a file that is not there", () => {
     // Asking for verification and silently not getting it is worse than either
     // outcome on its own: you believe you are covered. An explicit path that
@@ -143,5 +138,120 @@ describe("a host override in the query string", () => {
   it("still accepts an ordinary local URL with harmless parameters", () => {
     expect(isLocalDatabaseUrl("postgres://u:p@127.0.0.1:54362/db?sslmode=disable")).toBe(true);
     expect(isLocalDatabaseUrl("postgres://u:p@127.0.0.1:54362/db")).toBe(true);
+  });
+});
+
+/**
+ * **What `pg` actually does with the decision**, asked of `pg` itself rather
+ * than of our reading of it. `pg` merges the parsed connection string OVER the
+ * config it is handed, and pg-connection-string replaces the whole `ssl` object
+ * when the URL carries any TLS setting — so `?sslmode=no-verify` or
+ * `?ssl=no-verify` turns verification off while this module reports
+ * "verified". These measure the socket's options, not the decision's label.
+ * docs/plans/261001j-refuse-unverified-tls-to-the-remote-database.md.
+ */
+const require = createRequire(import.meta.url);
+const ConnectionParameters = require("pg/lib/connection-parameters") as new (config: object) => {
+  ssl: unknown;
+};
+
+/** The `ssl` option the socket would get, given a URL and our decision for it. */
+function effectiveSsl(url: string, ssl: unknown): unknown {
+  return new ConnectionParameters({ connectionString: url, ssl }).ssl;
+}
+
+describe("the remote is verified or refused, never quietly unverified", () => {
+  it("hands pg our CA with verification on, for a plain remote URL", () => {
+    const decision = sslDecisionFor(REMOTE, { defaultCaPath: REAL_CA });
+    const used = effectiveSsl(REMOTE, decision.ssl) as { rejectUnauthorized?: boolean; ca?: string };
+    expect(used.rejectUnauthorized).toBe(true);
+    expect(used.ca).toContain("BEGIN CERTIFICATE");
+  });
+
+  /* The paths, established against pg: each of these, left in the URL, takes
+     the socket's TLS settings out of our hands. Some turn verification off
+     outright (no-verify, prefer, libpq-compat require); the rest drop our CA
+     and fall back to Node's public roots, which Supabase's private root is not
+     in. Refused as a class rather than sorted into safe and unsafe, because the
+     sorting is pg-connection-string's to change between versions. */
+  it.each([
+    ["sslmode=no-verify"],
+    ["sslmode=disable"],
+    ["sslmode=prefer"],
+    ["sslmode=require"],
+    ["uselibpqcompat=true&sslmode=require"],
+    ["ssl=no-verify"],
+    ["ssl=0"],
+    ["ssl=true"],
+    [`sslrootcert=${REAL_CA}`],
+    [`sslcert=${REAL_CA}`],
+    [`sslkey=${REAL_CA}`],
+    ["sslnegotiation=direct"],
+  ])("refuses a remote URL carrying %s", (query) => {
+    const url = `${REMOTE}?${query}`;
+    // The path is real: pg would not use the CA we decided on.
+    const used = effectiveSsl(url, { rejectUnauthorized: true, ca: "OUR-CA" });
+    expect(typeof used === "object" && (used as { ca?: string } | null)?.ca === "OUR-CA").toBe(false);
+    // And it is refused, naming the setting and what to do about it.
+    const key = query.split("=")[0] ?? "";
+    expect(() => sslDecisionFor(url, { defaultCaPath: REAL_CA })).toThrow(
+      new RegExp(`${key}[\\s\\S]*remove`, "i"),
+    );
+  });
+
+  it("is not fooled by a percent-encoded key or the other scheme", () => {
+    // URLSearchParams decodes key names, and so does pg-connection-string, so
+    // `%73slmode` is `sslmode` to both. GPT Sol, plan review.
+    expect(() => sslDecisionFor(`${REMOTE}?%73slmode=no-verify`, { defaultCaPath: REAL_CA })).toThrow(
+      /sslmode/,
+    );
+    const otherScheme = REMOTE.replace(/^postgresql:/, "postgres:");
+    expect(sslDecisionFor(otherScheme, { defaultCaPath: REAL_CA }).mode).toBe("verified");
+    expect(() => sslDecisionFor(`${otherScheme}?ssl=no-verify`, { defaultCaPath: REAL_CA })).toThrow(/ssl/);
+  });
+
+  /* The refusal only guards connections that ask it. A Pool or Client built
+     without an `ssl` option takes pg's defaults instead — PGSSLMODE and the
+     URL's own TLS keys — so every constructor in the shipped code and scripts
+     must pass one. Three did not, found by GPT Sol in plan review. */
+  it("is asked by every pg connection in src/ and scripts/", () => {
+    const root = path.resolve(import.meta.dirname, "..");
+    const files = execFileSync("git", ["ls-files", "src", "scripts"], { cwd: root, encoding: "utf8" })
+      .split("\n")
+      .filter((f) => /\.(ts|tsx|js|mjs)$/.test(f));
+    const unguarded: string[] = [];
+    let seen = 0;
+    for (const file of files) {
+      const text = readFileSync(path.join(root, file), "utf8");
+      for (const m of text.matchAll(/new (?:pg\.)?(?:Pool|Client)\(/g)) {
+        seen += 1;
+        // The constructor's argument, to its closing parenthesis at depth 0.
+        let depth = 0;
+        let end = m.index + m[0].length - 1;
+        for (; end < text.length; end++) {
+          if (text[end] === "(") depth++;
+          else if (text[end] === ")" && --depth === 0) break;
+        }
+        const args = text.slice(m.index, end);
+        // feedback-reporter.ts hands over a config whose `ssl` it sets last, from the decision.
+        if (/\bssl\s*:/.test(args) || /connection\.config/.test(args)) continue;
+        unguarded.push(`${file}:${text.slice(0, m.index).split("\n").length}`);
+      }
+    }
+    expect(seen).toBeGreaterThan(10); // positive control: the scan finds constructors at all
+    expect(unguarded).toEqual([]);
+  });
+
+  it("refuses the remote when there is no certificate, rather than encrypting unverified", () => {
+    expect(() => sslDecisionFor(REMOTE, { defaultCaPath: MISSING })).toThrow(
+      /refusing[\s\S]*supabase-ca\.crt/i,
+    );
+  });
+
+  it("leaves local alone, TLS settings in the URL included", () => {
+    // Local development stays exactly as it was: the container has no
+    // certificate, and what a local URL says about TLS is its own business.
+    expect(sslDecisionFor(LOCAL, { defaultCaPath: MISSING }).mode).toBe("disabled");
+    expect(sslDecisionFor(`${LOCAL}?sslmode=disable`, { defaultCaPath: MISSING }).mode).toBe("disabled");
   });
 });

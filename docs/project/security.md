@@ -1112,6 +1112,37 @@ now GET/HEAD/POST only, 405 otherwise, and the POST probe stops at 8KB. Separate
 caller, behind a comment claiming the deployment was behind a login wall — which
 [deployment.md](deployment.md) already showed was false. The stack goes to the log now.
 
+## The database connection is verified or refused <a id="database-tls"></a>
+
+Not one of the untrusted parties above: the party here is whoever sits on the network between a
+Vercel function, or a script on the box, and Supabase. TLS stops them reading the connection only if
+we **check whose certificate it is**. An encrypted connection that accepts any certificate works,
+looks identical, and hands every reader's articles and notes to a machine in the middle.
+
+[`sslDecisionFor`](../../src/db/ssl.ts) is the one place that decides, and every pool and script
+asks it. Until 2026-10-01 it had an `encrypted-unverified` answer — returned against the remote when
+the CA file was missing — and the runtime only logged a warning. And `pg` let the connection string
+override its decision: any of `ssl`, `sslmode`, `sslrootcert`, `sslcert`, `sslkey` or
+`sslnegotiation` in `DATABASE_URL` replaces the `ssl` object we hand it, so `?sslmode=no-verify` or
+`?ssl=no-verify` turned checking off while we reported "verified". Greg approved closing it on
+2026-10-01:
+
+> as long as the cure isn't worse than the disease
+
+So against any non-local URL it now **verifies or throws**, with a message saying what to remove or
+restore: a TLS key in the URL (`TLS_URL_KEYS`, refused as a class, plus anything `pg`'s own parser
+turns into TLS options under a spelling the list does not know), or no certificate. Local URLs are
+untouched. **It only guards connections that ask it**, so every `Pool` and `Client` in `src/` and
+`scripts/` passes its answer as `ssl`, and a test fails on one that does not. The cure was
+checked first: production's `/api/health` already said `verified`, and no `DATABASE_URL` on the box
+carries a query string. If it ever fires in production, readers get the ordinary generic failure,
+and the reason is in the logs and on `/api/health` as `ssl.error` and a warning, which
+`npm run deploy` refuses on.
+[tests/db-ssl.test.ts](../../tests/db-ssl.test.ts) measures each path against `pg`'s own
+`ConnectionParameters` rather than our reading of it;
+[tests/db-tls.test.ts](../../tests/db-tls.test.ts) guards the certificate file;
+[261001j](../plans/261001j-refuse-unverified-tls-to-the-remote-database.md) has the paths.
+
 ## Known gaps
 
 Honest list. None is a reason to delay the fix above; all are worth knowing.

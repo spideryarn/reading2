@@ -266,10 +266,11 @@ export function migratorUrlFrom(appUrl: string, password: string): string {
   url.username = `postgres.${ref}`;
   url.password = password;
   url.port = "5432";
-  /* Any of these in the connection string makes `pg` discard the explicit ssl
-     object, so the CA gets loaded, reported as verified, and not used. GPT Sol
-     found that in review; it is worth refusing here rather than inheriting it. */
-  for (const k of ["sslmode", "sslrootcert", "sslcert", "sslkey"]) url.searchParams.delete(k);
+  /* TLS keys in the query string (`?sslmode=…` and friends) are left in on
+     purpose. `pg` lets them replace the verified ssl object, and this used to
+     strip four of them — quietly repairing `sslmode=no-verify` while
+     `ssl=no-verify` went through. Now `sslDecisionFor` refuses every one of
+     them the same way, before deploy connects. docs/plans/261001j. */
   return url.toString();
 }
 
