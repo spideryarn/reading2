@@ -386,7 +386,7 @@ describe("which sections a wave asks about", () => {
         {},
         plain,
         SLUG,
-        { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+        { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
       );
     })();
     const fake = fakeExecutor();
@@ -1186,7 +1186,7 @@ describe("what the width gate did while the wave ran", () => {
       {},
       plain,
       SLUG,
-      { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+      { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
     );
     const out = await deepenTree({
       power: "standard",
@@ -1931,7 +1931,7 @@ describe("the question on a part the cascade built", () => {
       {},
       BLOCKS,
       SLUG,
-      { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+      { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
     );
   }
 
