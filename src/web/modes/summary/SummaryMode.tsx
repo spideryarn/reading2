@@ -1,7 +1,6 @@
 /**
- * **Summary mode's controller.** The band, and the hook underneath it:
- * `?deep=`, `?summary=`, the summary tree, and the row the reader is standing
- * on.
+ * **Summary mode's controller.** The band, its owner/visitor pair, and the
+ * plain-words slider.
  *
  * Lifted out of `App.tsx` unchanged on 2026-09-06, in the shape `IdeasMode.tsx`
  * established two days earlier: a mode's controller, its visitor twin and its
@@ -9,18 +8,24 @@
  * byte-for-byte, so `App.tsx` stops knowing what is inside them.
  * See docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  *
- * **One row of controls since 2026-10-01**: the outline (the tree's gists, at
- * Parts or Sections), and a slider over three plain-words levels — Brief,
- * Simple, Fuller — that a model writes on a press
+ * **The piece in plain words, and nothing else, since 2026-10-01.** One row of
+ * controls — a slider over three levels, Brief, Simple and Fuller, that a model
+ * writes on a press — and the chosen level's paragraphs under it
  * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
  *
  * ```
- *  [ Parts | Sections ]   ○──●──○ Simple   ⓤ
+ *  ▤ ○──●──○ ▤▤   ⓤ
+ *  the paragraphs, each with the passages it rests on
  * ```
  *
- * The outline fetches nothing, so for it owner and visitor are the same. The
- * plain-words levels are one artefact, so they brought the owner/visitor pair
+ * It also drew the tree's gists as an outline, at Parts or Sections, until
+ * Greg took that out the same day: *"We already have the structure mode, and
+ * so I think that probably overlaps with the summary parts and sections, and
+ * so let's just get rid of parts and sections"* (spya-b3ggv4,
+ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
+ *
+ * The plain-words levels are one artefact, so they bring the owner/visitor pair
  * the other artefact modes have: the owner's `OwnerSimple` mounts `useSimple`
  * (a GET, a job, the press) and supplies the badge, and the visitor's band
  * hands the panel the stored paragraphs off the public payload with no hook at
@@ -28,67 +33,55 @@
  */
 
 import type { ReactNode } from "react";
-import { useMemo, useRef } from "react";
-import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, SimpleLevel } from "../../../types.js";
+import { useRef } from "react";
+import { useQueryState } from "nuqs";
+import { TextAlignJustify, TextAlignStart } from "lucide-react";
+import type { BlockId, SimpleLevel } from "../../../types.js";
 import { SIMPLE_LEVELS } from "../../../types.js";
 import type { PublicSimpleSummary } from "../../../public-types.js";
 import { armActivation } from "../../activation.js";
 import { SUMMARY_SUB_MODES } from "../../sub-modes.js";
-import { currentAt, deepParam, isPlainLevel, type SummaryView, summaryParam } from "../../params.js";
+import { summaryParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
-import { buildSummaryTree } from "../../tree.js";
 import { AboutMade } from "../../BandAbout.js";
+import { ModeSurface } from "../../ModeSurface.js";
 import { SimplePanel } from "../../SimplePanel.js";
-import { SummaryPanel } from "../../SummaryPanel.js";
 import { ControlTip, Tooltip } from "../../Tooltip.js";
 import { useSimple } from "../../useSimple.js";
 import { WrittenForYou } from "../../WrittenForYou.js";
 
 /**
- * The owner's Summary band.
- *
- * The outline is drawn from the tree the page already holds; a plain-words
- * level is `OwnerSimple` below, mounted only while one is open, so its GET and
- * its `useAutoRun` owner exist exactly as long as the view does — and stay
- * mounted across a switch between the three levels, which share one artefact.
+ * The owner's Summary band: `OwnerSimple` below, so its GET and its
+ * `useAutoRun` owner exist exactly as long as the band does — and stay mounted
+ * across a move between the three levels, which share one artefact.
  *
  * See docs/project/summaries.md.
  */
-export function SummaryBand({
-  slug,
-  article,
-  onJump,
-}: {
-  slug: string;
-  article: Article;
-  onJump(id: BlockId): void;
-}) {
+export function SummaryBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
   useRenderCount("SummaryBand");
-  const { view, setView, onDeep } = useSummaryView();
-  const mode = useSummaryMode(article);
-  const panel = (plain: ReactNode, badge: ReactNode, about: ReactNode = null) => (
-    <SummaryPanel
-      {...mode}
-      onDeep={onDeep}
+  const [level, setLevel] = useQueryState("summary", summaryParam);
+  return (
+    <OwnerSimple
+      slug={slug}
+      level={level}
       onJump={onJump}
-      subMode={<SummaryControls slug={slug} value={view} onChange={setView} badge={badge} />}
-      simple={plain}
-      about={about}
+      render={(body, badge, about) => (
+        <SummarySurface
+          controls={<SummaryControls slug={slug} value={level} onChange={(next) => void setLevel(next)} badge={badge} />}
+          about={about}
+        >
+          {body}
+        </SummarySurface>
+      )}
     />
-  );
-  return isPlainLevel(view) ? (
-    <OwnerSimple slug={slug} level={view} onJump={onJump} render={panel} />
-  ) : (
-    panel(null, null)
   );
 }
 
 /**
  * The plain-words levels' owner half: the read, the job and the press — and
- * the *written for you* badge, which belongs in the row above the panel and
- * needs this hook's answer, so the band hands a `render` in rather than the
- * row reaching down.
+ * the *written for you* badge, which belongs in the row above the paragraphs
+ * and needs this hook's answer, so the band hands a `render` in rather than
+ * the row reaching down.
  */
 function OwnerSimple({
   slug,
@@ -99,7 +92,7 @@ function OwnerSimple({
   slug: string;
   level: SimpleLevel;
   onJump(id: BlockId): void;
-  render(plain: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
+  render(body: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
 }) {
   useRenderCount("OwnerSimple");
   const owner = useSimple(slug);
@@ -129,56 +122,65 @@ function OwnerSimple({
  *
  * The paragraphs came in the page's own payload (`simpleSummary`), or did
  * not, which means nobody has made them. No `useSimple`, so no read of
- * `/api/simple/:slug`, no `useAutoRun` and no job, and the pills arm nothing
+ * `/api/simple/:slug`, no `useAutoRun` and no job, and the slider arms nothing
  * — nothing here can ask the model. A second band rather than a flag because a
  * hook cannot be called conditionally (src/web/reader-capability.ts).
  */
 export function VisitorSummaryBand({
-  article,
   simple,
   onJump,
 }: {
-  article: Article;
   simple: PublicSimpleSummary | undefined;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("VisitorSummaryBand");
-  const { view, setView, onDeep } = useSummaryView();
+  const [level, setLevel] = useQueryState("summary", summaryParam);
   return (
-    <SummaryPanel
-      /* Keyed on outline-or-not so the outline's scroller is a fresh element
-         each time it comes back — `useFollow` attaches its wheel listener once
-         per mount. The owner's band gets the same from `OwnerSimple`'s mount. */
-      key={isPlainLevel(view) ? "plain" : "outline"}
-      {...useSummaryMode(article)}
-      onDeep={onDeep}
-      onJump={onJump}
-      subMode={<SummaryControls slug={null} value={view} onChange={setView} badge={null} />}
-      simple={
-        isPlainLevel(view) ? (
-          <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={view} onJump={onJump} />
-        ) : null
-      }
-    />
+    <SummarySurface
+      controls={<SummaryControls slug={null} value={level} onChange={(next) => void setLevel(next)} badge={null} />}
+    >
+      <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={level} onJump={onJump} />
+    </SummarySurface>
   );
 }
 
 /**
- * `?summary=` and `?deep=`, and the one verb that writes both: pressing Parts
- * or Sections under a plain-words level goes back to the outline *at* that
- * depth, in one history entry, so one Back undoes one press.
+ * The band itself, the same for owner and visitor: the surface, the one row of
+ * controls, and the paragraphs under it.
  */
-function useSummaryView() {
-  const [view, setView] = useQueryState("summary", summaryParam);
-  const [, setOutline] = useQueryStates({
-    summary: summaryParam,
-    deep: deepParam,
-  });
-  return {
-    view,
-    setView: (next: SummaryView) => void setView(next),
-    onDeep: (deep: number) => void setOutline({ summary: "gists", deep }),
-  };
+function SummarySurface({
+  controls,
+  about = null,
+  children,
+}: {
+  controls: ReactNode;
+  /**
+   * What the band's (i) adds after the mode's own words (ModeSurface.tsx §
+   * `about`): for the owner, who wrote the paragraphs and when.
+   */
+  about?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <ModeSurface label="Summary" feature="summ" mode="summary" about={about}>
+      {/* **No `head`, so there is no title row at all.** It said the mode's own
+          name, which the Dock at the foot of the page is already saying — Greg,
+          2026-09-05: *"I think we can rely on the bottom bar to tell us what
+          mode we're in, so for example 'Summary' mode doesn't need to say
+          `Summary` at the top, nor o any other modes."* Nothing else was in the
+          row, so the row went with it and the band starts at its content. The
+          surface's `label` above is what names the region, and always was — the
+          `<h2>` was never carrying that.
+          docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
+
+      {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
+          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The slider
+          and the badge, and no labels: the group is named for a screen reader
+          by its hidden legend, and the slider's card says what each level is. */}
+      <div className="summ-controls">{controls}</div>
+      {children}
+    </ModeSurface>
+  );
 }
 
 /**
@@ -208,21 +210,30 @@ const PLAIN_HOW =
   "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";
 
 /**
- * **The plain-words slider, and the badge** — the right half of Summary's one
- * row (SummaryPanel.tsx draws the Parts | Sections half beside it). Greg,
+ * **The plain-words slider, and the badge** — Summary's one row. Greg,
  * 2026-09-30 (SPIDERYARN-READING2-7J): *"let's provide a UI-slider with 3
  * level"*. A slider rather than three pills because the three are one scale —
  * shorter and plainer to the left, longer and fuller to the right — and a
  * slider is the control that says so.
  *
  * ```
- *  [ Parts | Sections ]   ○──●──○ Simple   ⓤ
+ *  ▤ ○──●──○ ▤▤   ⓤ
  * ```
  *
- * **Idle while the outline shows**: drawn faint, sitting on Simple (or where
- * the reader left it), and touching it — a click, a drag or an arrow key —
- * opens that level. The native `<input type="range">`, so the keyboard and a
- * screen reader get a real slider (`aria-valuetext` names the level).
+ * **Always live.** It was drawn faint while Summary's outline showed, resting
+ * on a level rather than showing one; the outline went on 2026-10-01, so there
+ * is nothing else for the band to be showing. The native
+ * `<input type="range">`, so the keyboard and a screen reader get a real
+ * slider (`aria-valuetext` names the level).
+ *
+ * **No level name beside it** — Greg, 2026-10-01: *"get rid of the "Simple"
+ * text - perhaps replace with an icon or similar"* (SPIDERYARN-READING2-7R).
+ * A small icon sits at each end instead: short lines at the Brief end, a full
+ * block of text at the Fuller end. Each is a pointer shortcut to that end's
+ * level, through the same `choose` as the slider, so it arms exactly as the
+ * slider does; it is out of the tab order and hidden from a screen reader,
+ * which already has the slider itself. The card names all three levels and
+ * which one is showing.
  *
  * @param slug the article, **only so a press can be recorded** — null for a
  *   visitor, whose press must arm nothing (there is no `useAutoRun` to claim
@@ -235,14 +246,11 @@ export function SummaryControls({
   badge,
 }: {
   slug: string | null;
-  value: SummaryView;
-  onChange(next: SummaryView): void;
+  value: SimpleLevel;
+  onChange(next: SimpleLevel): void;
   /** The owner's *written for you* badge, or null. */
   badge?: ReactNode;
 }) {
-  const on = isPlainLevel(value);
-  const level: SimpleLevel = on ? value : "simple";
-
   /* **The gesture seam.** Choosing a level with nothing stored writes all
      three — Greg's rule about opening a mode, one level down
      (src/web/activation.ts). Here, on the slider's own input events, and not
@@ -263,11 +271,22 @@ export function SummaryControls({
   const pointerActive = useRef(false);
   const pointerChanged = useRef(false);
   const suppressClick = useRef(false);
+  const shortest: SimpleLevel = "brief";
+  const longest: SimpleLevel = "fuller";
 
   return (
     <>
-      <fieldset className={`summ-seg summ-slider${on ? " on" : ""}`}>
+      <fieldset className="summ-seg summ-slider">
         <legend className="sr-only">In plain words</legend>
+        <button
+          type="button"
+          className="summ-slider-end"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => choose(shortest)}
+        >
+          <TextAlignStart size={14} />
+        </button>
         {/* `keepSide` for the reason RefereeViews gives: the band sits at the
             right of the window and a card flung to the cross axis would land on
             the controls being read. */}
@@ -278,6 +297,7 @@ export function SummaryControls({
           content={
             <ControlTip
               head="In plain words"
+              state={`Showing ${PLAIN[value].label}.`}
               what={SIMPLE_LEVELS.map((l) => `${PLAIN[l].label} — ${PLAIN[l].what}`).join(" ")}
               how={PLAIN_HOW}
             />
@@ -289,9 +309,9 @@ export function SummaryControls({
               min={0}
               max={SIMPLE_LEVELS.length - 1}
               step={1}
-              value={SIMPLE_LEVELS.indexOf(level)}
-              aria-label="In plain words: how simple"
-              aria-valuetext={`${PLAIN[level].label}${on ? "" : " (not showing)"}`}
+              value={SIMPLE_LEVELS.indexOf(value)}
+              aria-label="In plain words: how long and how simple"
+              aria-valuetext={PLAIN[value].label}
               onPointerDown={() => {
                 pointerActive.current = true;
                 pointerChanged.current = false;
@@ -319,8 +339,8 @@ export function SummaryControls({
                 }
               }}
               /* A click on the thumb where it already sits changes nothing, so
-                 `change` never fires; this is how the idle slider opens the
-                 level it is resting on. */
+                 `change` never fires; this is how a press on the level already
+                 showing still arms it — the retry after a failed read. */
               onClick={(e) => {
                 if (suppressClick.current) {
                   suppressClick.current = false;
@@ -336,47 +356,19 @@ export function SummaryControls({
                 }
               }}
             />
-            <span className="summ-slider-name" aria-hidden="true">
-              {PLAIN[level].label}
-            </span>
           </label>
         </Tooltip>
+        <button
+          type="button"
+          className="summ-slider-end"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => choose(longest)}
+        >
+          <TextAlignJustify size={14} />
+        </button>
       </fieldset>
       {badge ? <span className="summ-badge">{badge}</span> : null}
     </>
   );
-}
-
-/**
- * Everything the gists outline does that is not rendering.
- *
- * `?deep=` lives here for the reason it used to live in the band: it is
- * meaningless outside summary mode, and reading it in `Reader` would put a
- * parameter subscription on every render of the reading view for a value only
- * this mode uses. Its writer is `useSummaryView`'s `onDeep`, which also leaves
- * a plain-words level.
- */
-function useSummaryMode(article: Article) {
-  const [deep] = useQueryState("deep", deepParam);
-
-  const root = useMemo(
-    () => buildSummaryTree(article.tree, article.blocks),
-    [article.tree, article.blocks],
-  );
-
-  /* Read, never written, and not a subscription — see `currentAt` in
-     params.ts.
-
-     Turned into a row index here rather than passed down as an id, because the
-     panel's question is "is the reader inside this range", and a range is a
-     pair of row indices — comparing ids would be comparing random strings for
-     order, which is the one thing block-ids.md forbids. */
-  const at = currentAt();
-  const atRow = useMemo(() => {
-    if (at === null) return null;
-    const i = article.blocks.findIndex((b) => b.id === at);
-    return i === -1 ? null : i;
-  }, [at, article.blocks]);
-
-  return { root, deep, atRow };
 }

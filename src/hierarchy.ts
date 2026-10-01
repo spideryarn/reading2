@@ -274,7 +274,8 @@ export interface ModelNode {
  * not to write one (docs/reusable/silent-success.md).
  *
  * Absence is ordinary and always was: every tree built before this field
- * existed has none, and `SummaryPanel` draws the row exactly as it did. That is
+ * existed has none, and Summary's outline drew the row exactly as it did (until
+ * that outline was removed, 2026-10-01). That is
  * why this is not in `tree-invariants.ts` § the gist rule, which is stated in
  * both directions precisely because a *missing gist* must never pass as
  * deliberate.

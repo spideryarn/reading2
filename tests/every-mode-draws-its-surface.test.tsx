@@ -98,6 +98,7 @@ import type {
   Ideas,
   Quotes,
   SearchRun,
+  SimpleSummary,
   Timeline,
   Trajectory,
   TweetThread,
@@ -173,7 +174,11 @@ const SECOND = "A later chapter revisits the same episode from the other side.";
  * Hierarchy's gist columns had to show, until that mode retired on 2026-09-29.)
  */
 const COLUMN_GIST = "Where the argument finally lands.";
-/** The root's gist, which is what Summary's band is built from. */
+/**
+ * The root's gist. Summary's band drew it until its outline went on 2026-10-01
+ * (plan 261001p); nothing asserts it now, and it stays so the tree is a real
+ * one, different from every string in `DRAWS`.
+ */
 const ROOT_GIST = "The piece says the instruments came first.";
 /** The child node's title — the one row Outline can draw on this fixture. */
 const OUTLINE_ROW = "The instrument came first";
@@ -402,6 +407,38 @@ const CITATIONS: Citations = {
   capped: false,
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
+};
+
+/**
+ * **A plain-words paragraph** — what Summary's band draws since its outline
+ * went (plan 261001p). The default level's first paragraph; the others are
+ * different strings, so the row proves the band opened on `simple`.
+ */
+const SIMPLE_PARA = "The piece says the instrument was built before anyone knew what it measured.";
+
+const SIMPLE: SimpleSummary = {
+  version: "simple/2",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+  profileHash: null,
+  levels: {
+    brief: [
+      { text: "A short one about the rig.", ids: ["spya-bbbbbb" as BlockId] },
+      { text: "And why it matters.", ids: ["spya-cccccc" as BlockId] },
+    ],
+    simple: [
+      { text: SIMPLE_PARA, ids: ["spya-bbbbbb" as BlockId] },
+      { text: "It matters because the theory came later.", ids: ["spya-cccccc" as BlockId] },
+    ],
+    fuller: [
+      { text: "The fuller one names the rig.", ids: ["spya-bbbbbb" as BlockId] },
+      { text: "Then says what it measured.", ids: ["spya-bbbbbb" as BlockId] },
+      { text: "Then why the order matters.", ids: ["spya-cccccc" as BlockId] },
+    ],
+  },
 };
 
 const THREAD: TweetThread = {
@@ -765,6 +802,8 @@ function artefact(url: string): Response | null {
       ? json({ sketch: SKETCH, stale: false, outdated: false, profileChanged: false })
       : GONE();
   if (url.startsWith("/api/illustrated/")) return GONE();
+  if (url.startsWith("/api/simple/"))
+    return has ? json({ simpleSummary: SIMPLE, stale: false, outdated: false, profileChanged: false }) : GONE();
   return null;
 }
 
@@ -1135,8 +1174,11 @@ const SPENDS: Record<Mode, Spend> = {
   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
   /* The same tree again, in linked columns or one nested list. */
   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
-  /* And the same gists again, in a band instead of in the columns. */
-  summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
+  /* The plain-words levels are an artefact, but the bar's press arms nothing:
+     the band opens on its empty state, and the slider arms `simple` one level
+     down (activation.ts § MODE_TARGET.summary; plan 261001p). Whether opening
+     should start the run is an open product question (fb7t-7v). */
+  summary: { kind: "none", why: "opens on a plain-words level; only the slider inside it arms the run" },
   /* The tree's questions, the arc and the ideas already made — read, never
      generated. A press that started the Ideas job here would be the bug. */
   marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
@@ -1393,8 +1435,9 @@ const DRAWS: Record<Mode, Draws> = {
      raw, a `textContent` assertion here would be satisfied by a panel whose
      visible columns rendered nothing at all. */
   structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW, about: "corner" },
-  /* The root's own gist, drawn as the band rather than as a column. */
-  summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST, about: "corner" },
+  /* The default level's first paragraph, off `/api/simple/` — the outline
+     that drew the root's gist here went on 2026-10-01 (plan 261001p). */
+  summary: { kind: "band", where: ".mode-band.summ", says: SIMPLE_PARA, about: "corner" },
   /* An entry's name, which is what a closed row shows — a canary the panel
      cannot draw without having drawn the list. */
   glossary: { kind: "band", where: ".mode-band.gloss", says: GLOSSARY_TERM, about: "corner" },

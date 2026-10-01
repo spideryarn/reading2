@@ -724,8 +724,8 @@ export function wrapText(text: string, maxChars: number, maxLines: number): stri
  * Preorder, and children in the order the tree stores them, which is document
  * order — that is the whole invariant every one of these pictures rests on.
  * A collapsed node keeps its own entry and loses its subtree, which is what
- * makes "I closed this" different from "there is nothing here" (SummaryPanel.tsx
- * § two ways to be hidden).
+ * makes "I closed this" different from "there is nothing here" — the
+ * distinction Summary's outline drew, until it went on 2026-10-01.
  */
 /**
  * The deepest level any picture draws.

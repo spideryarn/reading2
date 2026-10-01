@@ -371,9 +371,10 @@ export function buildOutline(
 }
 
 /* ------------------------------------------------------- the summary tree --
-   What summary mode renders: the tree, indented and numbered, with the
-   one-sentence gist stage 4 wrote onto every internal node. See
-   docs/project/summaries.md and SummaryPanel.tsx for the view.
+   The tree, nested and numbered, with the one-sentence gist stage 4 wrote onto
+   every internal node. Named for summary mode, which drew it as an outline
+   until 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md);
+   Structure, Outline, Diagram and the graph read it now.
 
    **This reads nothing but the tree**, which is the whole of what changed on
    2026-08-31 when the generated length ladder was removed
@@ -420,17 +421,17 @@ export interface SummaryNode {
   /**
    * The Socratic question under it, on the root and depth-1 nodes only, and
    * only on trees built after 2026-09-05 — types.ts § `TreeNode.question`.
-   * Absent everywhere else, and the panel simply draws no second line.
+   * Absent everywhere else.
    */
   question?: string;
   children: SummaryNode[];
 }
 
 /**
- * The tree as the summary panel wants it: nested and numbered.
+ * The tree as the modes that draw it want it: nested and numbered.
  *
- * `depthLimit` stops the walk. It is 2 by default because that is where
- * params.ts stops offering — below it a node is one paragraph, which the reader
+ * `depthLimit` stops the walk. It is 2 by default — the parts and their
+ * sections; below that a node is one paragraph, which the reader
  * should be reading rather than being told about (types.ts § TreeNode.gist).
  */
 export function buildSummaryTree(
@@ -449,7 +450,7 @@ export function buildSummaryTree(
 
     /* **The apparatus is a leaf here, whatever the tree says.** Descending gave
        "Notes" one child per endnote — each with no title, no gist and no
-       summary — and `SummaryPanel` drew six phantom rows under a numbered part
+       summary — and Summary's outline drew six phantom rows under a numbered part
        3, every one of them saying "No summary for this section". The notes are
        in the structure and are not part of the argument; that is the whole
        promise of this stage, and summary mode was the one place still breaking
@@ -490,89 +491,4 @@ export function buildSummaryTree(
   };
 
   return build(tree.nodes[tree.rootId], "");
-}
-
-/**
- * Which entry the reader is actually in, as the panel is currently drawn.
- *
- * Greg, 2026-08-26: *"If I'm in 'Summary' mode, can we highlight and scroll to
- * the relevant Summary section that corresponds to the current position of the
- * text?"* — and "the relevant one" is the question this function exists to
- * answer once, in one place.
- *
- * `here` in SummaryPanel.tsx marks **every** ancestor of the reader's section,
- * deliberately: at a shallow depth cut-off, the part you are inside is the
- * honest answer to *where am I*. But a highlight that strong on four nested
- * rows says nothing, and there is only one row to scroll to. So this picks the
- * **deepest entry that is actually on screen**, which is not the same as the
- * deepest entry that contains the reader:
- *
- *  - a node below the `deep` cut-off is not drawn, so its parent is where the
- *    reader is *as far as this panel goes* — unless the reader pressed that
- *    node's `+N sections` badge, which opens it past the cut-off and puts its
- *    children back on screen;
- *  - a node inside a section the reader closed is not drawn either, and closing
- *    a section must not put the mark somewhere invisible.
- *
- * **The walk mirrors `Entry`'s own `showChildren`**, and that agreement is the
- * whole risk in this function. Get it wrong and nothing errors: the panel
- * scrolls to an element that is not there (no move at all), or marks a row the
- * reader cannot see, which reads as "the highlight is broken" rather than as a
- * rule disagreeing with itself. docs/reusable/silent-success.md. Which is why
- * both sides call `showsChildren` below rather than each writing the rule out.
- *
- * Returns `null` above the first section, and for the root — which covers the
- * whole article and is therefore "here" the entire time, a light that is always
- * on. At `deep: 0` only the root is drawn, so there is correctly nothing to
- * mark and nothing to scroll to.
- */
-export function currentEntryId(
-  root: SummaryNode,
-  atRow: number | null,
-  deep: number,
-  closed: ReadonlySet<string>,
-  opened: ReadonlySet<string> = new Set(),
-): string | null {
-  if (atRow === null) return null;
-  let node: SummaryNode | undefined = root;
-  let deepest: string | null = null;
-  while (node) {
-    if (node !== root) deepest = node.node.id;
-    if (!showsChildren(node, deep, closed, opened)) break;
-    node = node.children.find((c) => atRow >= c.startRow && atRow <= c.endRow);
-  }
-  return deepest;
-}
-
-/**
- * Whether one entry's children are drawn — the single rule, in one place.
- *
- * There are **three** states in it and each is its own variable, which is the
- * design note copied verbatim from their structure panel and then extended by
- * one:
- *
- *  - `deep` is the cut-off, and it removes a whole level of the tree;
- *  - `closed` is the set the reader shut;
- *  - `opened` is the set the reader opened *past* the cut-off, by pressing a
- *    `+N sections` badge on a node the cut-off was hiding.
- *
- * They compose, and none of them silently rewrites another: moving the Depth
- * buttons does not un-close anything, and pressing `+N` on one part does not
- * move the Depth buttons. `closed` wins over `opened` because it is the more
- * recent statement about that node — a collapse always clears the override, so
- * the two can never both be set (SummaryPanel § toggle).
- *
- * The panel's `Entry` and `currentEntryId` above both call this. They used to
- * write the rule out separately, which is a rule that will eventually disagree
- * with itself in a way nothing errors on.
- */
-export function showsChildren(
-  entry: SummaryNode,
-  deep: number,
-  closed: ReadonlySet<string>,
-  opened: ReadonlySet<string>,
-): boolean {
-  if (entry.children.length === 0) return false;
-  if (closed.has(entry.node.id)) return false;
-  return entry.node.depth < deep || opened.has(entry.node.id);
 }

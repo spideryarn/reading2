@@ -56,8 +56,7 @@ export { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "./types.js";
  * — including a diff of the hash's input, which is the one place it would
  * matter. Returns `null` rather than `""` so that "the reader emptied the box"
  * and "the reader never touched it" cannot be told apart *here*; whoever cares
- * about that distinction holds it above this line, as `SummaryPanel` does with
- * its `steer: string | null`.
+ * about that distinction holds it above this line.
  */
 export function normaliseProfileText(text: string | null | undefined): string | null {
   if (!text) return null;

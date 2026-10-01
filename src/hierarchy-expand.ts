@@ -236,7 +236,7 @@ const ENVELOPE_TOKENS = 200;
  *
  * 7. **A question, on the children of the whole work and on nothing else.**
  *    `EXPAND_SYSTEM` had no such field, so a part built by the cascade drew a
- *    bare gist beside a neighbour's question once `SummaryPanel` began drawing
+ *    bare gist beside a neighbour's question once Summary's outline began drawing
  *    `question ?? gist` — GPT Sol's P1-5, recorded on 2026-09-05 and fixed here.
  *    The content rules are **V4's shape plus `toc/8`'s plain-words rule**,
  *    copied from the QUESTIONS block in src/hierarchy.ts § `SYSTEM` and put

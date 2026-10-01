@@ -121,9 +121,9 @@ export function ModeBoundary({
   /* Only an owner's band is selected by the first three. A Diagram visitor
      is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
      address change there is not a new band and must not retry a broken one.
-     **Summary's is the exception**: a visitor gets Simple too, off the payload
-     (SummaryMode.tsx § `VisitorSummaryBand`), so Gists and Simple are two
-     bands for either reader. */
+     **Summary's is the exception**: a visitor gets the plain-words levels
+     too, off the payload (SummaryMode.tsx § `VisitorSummaryBand`), so moving
+     the slider is a new level for either reader, and retries a broken one. */
   const subMode =
     mode === "summary"
       ? sub.summary

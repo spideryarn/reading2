@@ -141,7 +141,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { RememberView, SummaryView } from "./params.js";
+import type { RememberView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -264,12 +264,17 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
     kind: "none",
     reason: "reads the tree, the arc and any ideas already made; it never starts a job",
   },
-  /* Opens on the outline, which is free. Its plain-words pills arm for
-     themselves one level down, as Remember's Quiz chip does — so pressing
-     Summary on an address that still says `?summary=simple` spends nothing. */
+  /* **Opens on a plain-words level and spends nothing.** Until 2026-10-01 it
+     opened on the tree's gists, which were free; that outline went
+     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
+     what is left is an artefact. The press still arms nothing: an article with
+     no plain-words version shows the empty state's "Write it", and the slider
+     and the command bar's three rows arm `simple` for themselves one level
+     down, as Remember's Quiz chip does. Whether opening Summary should start
+     the run is a product question still open (Overseer queue fb7t-7v). */
   summary: {
     kind: "none",
-    reason: "opens on the outline, from the tree the pipeline already built; the plain-words pills arm themselves",
+    reason: "opens on a plain-words level and shows \"Write it\" if there is none; the slider and the command bar's rows arm themselves",
   },
 
   /* Nothing exists to fill until the reader has typed. */
@@ -651,14 +656,15 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
+  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
   /* The literal every plain-words stop arms (SummaryMode.tsx § `SummaryControls`):
      one job writes all levels, so Fuller arms `simple` too. Sol's plan review
-     of 261001b, P1-3. */
-  if (mode === "summary") return sub.summary === "gists" ? null : "simple";
+     of 261001b, P1-3. Every Summary band is a plain-words level since the
+     outline went on 2026-10-01, so it does not depend on `?summary=`. */
+  if (mode === "summary") return "simple";
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {
     case "fixed":

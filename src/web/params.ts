@@ -980,25 +980,14 @@ export const confParam = createParser<number>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
-   Two controls now: `summary`, which chooses Gists or Simple, and `deep`, how
-   far down the tree the Gists view goes. There was a `len` control, which chose
-   between three generated lengths — it went on 2026-08-31 along with the stage
-   that wrote the two paid ones (docs/plans/260831s-gist-only-summaries.md).
-   What remains of that older design is free and on the tree.
+   One control: `summary`, which of the three plain-words levels is open.
 
-   **What is NOT in the URL, and why.** The panel also lets you open and close
-   individual sections — including opening one part's sections *past* the depth
-   cut-off, which is what its `+N sections` badge does since 2026-08-27 — and
-   docs/project/original-version/structure-panel.md is
-   emphatic that their version regretted keeping that only in memory. It stays
-   in memory here anyway, and the reason is the rule that governs everything
-   else in this app: a per-node open/closed set can only be written down as a
-   list of node ids, node ids are **positional**, and a re-run of `npm run hierarchy`
-   renumbers them (docs/project/block-ids.md#why-random-and-not-sequential). A
-   URL full of them would be long and, after any re-extraction, quietly wrong —
-   it would open a set of sections that are no longer the ones you opened. What
-   *is* stable is the depth, so the depth is what a link carries. Their point
-   still stands and this is the honest version of it. */
+   There used to be more. A `len` control chose between three generated lengths
+   until 2026-08-31 (docs/plans/260831s-gist-only-summaries.md); a `gists` view
+   drew the tree's gists as an outline, with `deep` choosing Parts or Sections,
+   until 2026-10-01 — Greg: *"let's just get rid of parts and sections"*
+   (spya-b3ggv4, docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
+   An old link carrying either degrades to the default below. */
 
 /**
  * Which picture the Diagram mode is drawing.
@@ -1132,83 +1121,29 @@ export const diagramHueParam = createParser<ScatterHue>({
   .withOptions({ history: "replace" });
 
 /**
- * How far down the tree the summary panel goes — their structure panel's depth
- * cut-off, which is the one control that view had and the one thing it proved:
- * *one control, whole-document granularity* is usable.
- *
- * 1 is the parts, 2 is the sections. It stops at 2 because below it a node is a
- * single paragraph, which the reader should be reading rather than being told
- * about.
- *
- * Note that this and a node's own open/closed state are **different ways to be
- * hidden**, and they compose rather than sharing a variable — their version got
- * that right and it is the one design note worth copying verbatim from it:
- * "too deep to show" and "I closed this" are different states. There are three
- * of them here, because "I opened this one anyway" is a third; this parameter
- * is the only one of the three that is stable enough to write down.
- *
- * So a reader who opens one part's sections past the cut-off does **not** move
- * this value, and a link they share opens at the depth they chose with the
- * pills. See SummaryPanel.tsx and `showsChildren` in tree.ts.
- *
- * An unparseable or out-of-range value falls back to the default rather than
- * throwing, the same rule as everything else in this file.
- */
-export const MAX_SUMMARY_DEPTH = 2;
-
-/**
- * The shallowest depth a reader can choose: the parts. `0`, the article's own
- * gist alone, was a pill until 2026-10-01 — Greg: *"Remove the "Article"
- * pill"* (SPIDERYARN-READING2-78) — so an old link's `?deep=0` now reads as
- * the default. The root's gist still heads the outline at every depth.
- */
-export const MIN_SUMMARY_DEPTH = 1;
-
-export const deepParam = createParser<number>({
-  parse: (v) => {
-    const n = Number.parseInt(v, 10);
-    return Number.isInteger(n) && n >= MIN_SUMMARY_DEPTH && n <= MAX_SUMMARY_DEPTH ? n : null;
-  },
-  serialize: (v) => String(v),
-})
-  .withDefault(1)
-  .withOptions({ history: "push" });
-
-/**
- * Summary's three views: the tree's gists (the outline, at `?deep=`), or one of
- * the three plain-words levels — `SIMPLE_LEVELS` in src/types.ts, whose names
- * are these URL values.
- */
-export const SUMMARY_VIEWS = ["gists", ...SIMPLE_LEVELS] as const;
-export type SummaryView = (typeof SUMMARY_VIEWS)[number];
-
-/** Is this view one of the plain-words levels? */
-export function isPlainLevel(view: SummaryView): view is SimpleLevel {
-  return view !== "gists";
-}
-
-/**
- * Which part of Summary is open — `gists` (the outline; the default, omitted),
- * `brief`, `simple` or `fuller`, a few short paragraphs in everyday words at three levels
- * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+ * Which plain-words level Summary shows — `brief`, `simple` or `fuller`, a few
+ * short paragraphs in everyday words at three lengths (`SIMPLE_LEVELS` in
+ * src/types.ts, whose names are these URL values;
+ * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
  * *Which thing, within this mode*, so the shape of `?remember=` and
  * `?referee=`: in the URL, because it changes the whole band, and pushed,
- * because switching is a deliberate act Back should undo. `?deep=` keeps its
- * value and is simply unused under a plain-words level.
+ * because switching is a deliberate act Back should undo.
  *
- * `gists` has no pill of its own since 2026-10-01: pressing Parts or Sections
- * is what chooses it (Greg, SPIDERYARN-READING2-7A).
+ * **`simple` is the default**, the stop the slider rests on, and is omitted
+ * from the address. `gists`, the outline this mode drew until 2026-10-01, is
+ * no longer a value, so an old `?summary=gists` reads as `simple` — the same
+ * degrade-to-the-default rule as every other parser in this file.
  *
- * **Writing it never spends.** Only a press on a plain-words pill arms the run
+ * **Writing it never spends.** Only a press on the slider arms the run
  * (SummaryMode.tsx § `SummaryControls`); Back, a pasted link and a last-view
  * restore arrive here and buy nothing.
  */
-export const summaryParam = createParser<SummaryView>({
-  parse: (v) => (SUMMARY_VIEWS.includes(v as SummaryView) ? (v as SummaryView) : null),
+export const summaryParam = createParser<SimpleLevel>({
+  parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),
   serialize: (v) => v,
 })
-  .withDefault("gists")
+  .withDefault("simple")
   .withOptions({ history: "push" });
 
 /* ------------------------------------------------------------ referee mode --
