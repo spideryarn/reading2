@@ -88,13 +88,15 @@ The plan's § The one product call says why, and what adding one later would tak
 
 ## The promise, and where it stops
 
-An **(i)** at the right-hand end of the order row says both halves, and the second one is not
-optional. It was a line in the band's foot until Greg, 2026-09-30 (SPIDERYARN-READING2-62):
+An **(i)** in the band's top-right corner says both halves, the question count and provenance; the
+second half of the promise is not optional. It was a line in the band's foot until Greg, 2026-09-30
+(SPIDERYARN-READING2-62), then briefly lived in the order row before every mode got the same corner
+on 2026-10-01:
 
 > In FAQ mode, move this text […] into a tooltip, e.g. behind an `(i)` icon.
 
 — the move Trajectory made for its own promise (SPIDERYARN-READING2-52). Hover, focus or a tap opens
-it; the row is drawn for the (i) alone when a list has no orders to offer.
+it; no order row is drawn solely to hold the (i).
 
 - **The quoted words are the article's own, checked against it.** `verifyPassage` in
   [`src/faq.ts`](../../src/faq.ts) needs the block to exist and `findQuote(…, "spaced")` to find the

@@ -134,6 +134,12 @@
   font-weight: 600;
   line-height: 1.3;
 }
+/* Column B's header is the band's top row on the right, so it clears the (i)
+   in the corner (mode-band.css § `.mode-band > .band-about`). Not on the band's
+   padding, which is part of the two-column threshold (layout.ts §
+   `STRUCT_PAD_X_REM`); and this header is measured live (`ofRef`), not from
+   the hidden copies, so the copies need not share it. */
+.mode-band.has-about .struct-of { padding-right: calc(0.3rem + var(--band-about-room)); }
 
 .struct-col {
   list-style: none;
@@ -403,4 +409,12 @@
   font-family: var(--font-ui);
   font-size: var(--structure-tier-mid);
   line-height: 1.4;
+}
+/* The empty whole band and the right column's "between parts" sentence can
+   each be the first visible words under the corner (i). The right-column rule
+   applies only when `.struct-of` is absent; when it is present, that header
+   already owns the clearance above. */
+.mode-band.struct.has-about > .struct-empty,
+.mode-band.struct.has-about .struct-inner > .struct-empty:first-child {
+  padding-right: var(--band-about-room);
 }

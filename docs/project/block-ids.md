@@ -493,6 +493,14 @@ the native `title` the others had. A link whose panel already shows the passage 
 `preview={false}` and its card says only where it is
 ([260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)).
 
+**A band's block link whose paragraph is on screen is lit**, in every mode at once, since
+2026-10-01 (Greg, `SPIDERYARN-READING2-8K`): one generated `<style>` keyed on the
+`data-block-link` the card already listens for, scoped to `.mode-band`, sampled on scroll —
+[`OnScreenLinksStyle.tsx`](../../src/web/OnScreenLinksStyle.tsx), with the row sampling shared with
+reading time in [`on-screen.ts`](../../src/web/on-screen.ts). A new mode that draws its links with
+`BlockRef` gets it for nothing
+([261001n](../plans/261001n-trajectory-question-above-quote-and-highlight-on-screen-block-links.md)).
+
 **The prose's own cross-references use the same card** — a phrase in one block linked to the block
 that shows it in detail, both ends by id, the target taken from the stored artefact and never from
 the DOM ([cross-references.md](cross-references.md)).

@@ -22,7 +22,6 @@
    second look for them would teach the reader they mean something else. What is
    NOT shared is the row, which is a different thing entirely. */
 /* The title row is `.band-head`, § mode band. */
-.quotes-count { color: var(--ink-faint); font-size: 0.85rem; }
 
 .quotes-rank {
   display: flex;
@@ -32,6 +31,9 @@
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
+/* The band's top row whenever it is drawn (no head then), so it clears the
+   (i) in the corner — mode-band.css § `.mode-band > .band-about`, plan 261001m. */
+.mode-band.has-about .quotes-rank { padding-right: calc(0.7rem + var(--band-about-room)); }
 .quotes-rank-btn {
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;
@@ -105,23 +107,6 @@
   font-size: 0.81rem;
   line-height: 1.35;
 }
-
-/* What the stage would not store. Quiet, above the list, and only when there is
-   something to say — the reader is entitled to know their list is shorter than
-   what the model offered, and a log line does not tell them.
-   docs/reusable/silent-success.md. */
-.quotes-discarded {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  margin: 0;
-  padding: 0.4rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.4;
-}
-.quotes-discarded svg { flex: none; transform: translateY(1px); }
 
 .quotes-error,
 .quotes-quiet {

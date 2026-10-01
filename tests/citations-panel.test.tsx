@@ -553,10 +553,10 @@ describe("CitationsPanel", () => {
   });
 
   it("says the list was capped only when the model said so", async () => {
-    /* Both notes are behind the (i) since plan 261001l (`spya-nca765`), so
-       what is read is the card it opens. */
+    /* Both notes are behind the (i) since plan 261001l (`spya-nca765`), in
+       the band's corner since 261001m, so what is read is the card it opens. */
     const card = async () => {
-      const about = host.querySelector<HTMLButtonElement>('[aria-label="About this list"]');
+      const about = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
       expect(about, "no (i) to open").not.toBeNull();
       await act(async () => about?.click());
       const text = document.querySelector('[role="tooltip"]')?.textContent ?? "";

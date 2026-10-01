@@ -8,7 +8,7 @@ Part of [prompt-caching.md](../project/prompt-caching.md). From Greg, via the Ov
 > delegate an agent to do some Sonnet web research on prompt caching best practices, then look for
 > ways we could restructure prompts and/or improve the way we're calling the AI to make much more
 > effective use of prompt caching across the board. Run spikes, perhaps even create an eval,
-> measure, get input/review from GPT Sol, update @docs/project/mode.md etc, follow & update
+> measure, get input/review from GPT Sol, update @docs/project/new-mode.md etc, follow & update
 > @docs/project/prompt-caching.md etc.
 >
 > — Greg, 2026-10-01

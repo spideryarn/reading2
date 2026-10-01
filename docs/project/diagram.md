@@ -1241,9 +1241,15 @@ about fifty pixels of a 400px band, saying the same thing every time.
 >
 > — Greg, 2026-08-30
 
-So it is an `Info` icon at the end of the panel's heading row, carrying the same
-words in the panel's own hover card (`ScatterNote` in
-[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
+So it was an `Info` icon at the end of the panel's heading row, carrying the same
+words in the panel's own hover card (`ScatterNote`). **Since 2026-10-01 it is the
+band's (i)**, the one every mode has in its top-right corner
+([mode.md](mode.md) § Every band has an (i), plan
+[261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md)): the
+caveat, and the dotted-links count that was a strip under the picture, are in its
+card when a projected picture is ready, and the heading row and `ScatterNote` are
+gone. The history below is why the heading row was chosen over the control row,
+and the reasoning still governs anything put back on either.
 
 Two things make that a move rather than a deletion, and each is the half a
 tooltip on its own would lose:
@@ -1252,9 +1258,11 @@ tooltip on its own would lose:
   whole of it, so a reader who cannot see the picture still learns when the
   projection lands that a fifth of the article is not in it. A card is reached by
   pointing or by Tab; it announces nothing.
-- **The counts are in the control's own name**, not only inside the card. "Info"
+- **The counts were in the control's own name**, not only inside the card. "Info"
   is a noun, and a control whose whole accessible name is a noun is one a screen
-  reader cannot skim.
+  reader cannot skim. The band's (i) has one fixed name, "About this mode", so
+  that half is now carried by the live region alone, which still speaks the
+  counts when the projection lands.
 
 `Info` rather than a warning triangle: paragraphs going unplaced is the ordinary
 case, and an alarm on the ordinary case is an alarm nobody reads by the second
