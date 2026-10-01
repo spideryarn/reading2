@@ -222,36 +222,57 @@ export const MODES = [
      the text (SPIDERYARN-READING2-5A); the old address redirects here.
      docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   "tweets",
-  /* **Annotations, 2026-10-01** — the first mode drawn to the RIGHT of the
-     prose: notes level with the blocks they belong to, scrolling with the
-     page, and no left band at all. Greg (SPIDERYARN-READING2-7K): "left-hand-
-     column (if displayed) would be stuff that's unanchored to the text, middle
-     column for the text itself, and right-hand-column (if displayed) for
-     annotations anchored to the blocks". Behind the experimental switch.
-     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
-  "annotations",
+  /* **Marginalia, 2026-10-01** (called Annotations until later that day) — the
+     first mode drawn to the RIGHT of the prose: notes level with the blocks
+     they belong to, scrolling with the page, and no left band at all. Greg
+     (SPIDERYARN-READING2-7K): "left-hand-column (if displayed) would be stuff
+     that's unanchored to the text, middle column for the text itself, and
+     right-hand-column (if displayed) for annotations anchored to the blocks".
+     Behind the experimental switch.
+     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md;
+     the rename is
+     docs/plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md. */
+  "marginalia",
 ] as const;
 export type Mode = (typeof MODES)[number];
 
 /**
- * **A mode that owns the left band** — every mode but Annotations, which since
+ * **A mode that owns the left band** — every mode but Marginalia, which since
  * 2026-10-01 is a switch of its own (`?margin=1`) rather than a value of
  * `?mode=`, so its column can sit beside a band.
  * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
  *
- * `annotations` stays in `MODES` because the catalog, the Dock's button, the
+ * `marginalia` stays in `MODES` because the catalog, the Dock's button, the
  * command bar and the experimental switch are keyed on it; what it may not be
- * is the *state* — `?mode=` parses to this type, so a press on Annotations
+ * is the *state* — `?mode=` parses to this type, so a press on Marginalia
  * cannot be written into it without the compiler asking which you meant.
  */
-export type BandMode = Exclude<Mode, "annotations">;
+export type BandMode = Exclude<Mode, "marginalia">;
 
 /** Whether a mode is one that owns the band — the narrowing for `BandMode`. */
 export function isBandMode(mode: Mode): mode is BandMode {
-  return mode !== "annotations";
+  return mode !== "marginalia";
 }
 
-/** Every value `?mode=` can hold — `MODES` less Annotations. */
+/**
+ * **Whether a `?mode=` value asks for Marginalia's column** — `marginalia`, or
+ * `annotations`, the mode's word until 2026-10-01, which old links and
+ * remembered last views still carry. Either one means `?margin=1`, never a band.
+ *
+ * Named exactly, not "any mode that is not a band", so that a future second
+ * non-band control cannot silently turn into the margin. The four places that
+ * translate the word — `marginInSearch` (src/web/params.ts), the Reader's
+ * arrival rewrite, the Dock's link builder and `rememberableSearch`
+ * (src/web/last-view.ts) — all ask this, so the two spellings cannot drift.
+ * Not `RETIRED_MODES`, which maps only to band modes: docs/project/mode.md §
+ * Retiring a mode;
+ * docs/plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md.
+ */
+export function isMarginaliaModeWord(value: string | null | undefined): boolean {
+  return value === "marginalia" || value === "annotations";
+}
+
+/** Every value `?mode=` can hold — `MODES` less Marginalia. */
 export const BAND_MODES: readonly BandMode[] = MODES.filter(isBandMode);
 
 /**
@@ -318,9 +339,10 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
  * the tab says the article.
  */
 export function modeFromParam(value: string | null | undefined): BandMode | null {
-  /* `annotations` is not a band (`BandMode`): an old `?mode=annotations` link
+  /* `marginalia` is not a band (`BandMode`): a `?mode=marginalia` link — or an
+     old `?mode=annotations` one, which is not a mode word at all any more —
      names Plain here, and the client turns the notes on for it
-     (`marginInSearch` in src/web/params.ts). */
+     (`isMarginaliaModeWord`, read by `marginInSearch` in src/web/params.ts). */
   if (isMode(value)) return isBandMode(value) ? value : null;
   if (value === null || value === undefined) return null;
   return Object.hasOwn(RETIRED_MODES, value) ? (RETIRED_MODES[value] ?? null) : null;

@@ -191,7 +191,7 @@ const listedOfKind = (kind: RowKind): string[] =>
 
 /** The mode buttons the Dock itself drew, in the order it drew them. */
 const dockLists = (): string[] =>
-  /* The radios and Annotations' toggle after them (261001i), in DOM order. */
+  /* The radios and Marginalia's toggle after them (261001i), in DOM order. */
   [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
@@ -359,6 +359,22 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
     metadataPage();
     expect(host.querySelector(".dock-commands")).not.toBeNull();
     expect(host.querySelector("dialog.cmdbar")).not.toBeNull();
+  });
+});
+
+describe("Marginalia's old name", () => {
+  it("selects Marginalia, not the Comments action that shares its annotations alias", () => {
+    const onMode = vi.fn();
+    reading({ onMode, experimental: EXPERIMENTAL_ON, drawer: A_DRAWER });
+    openBar();
+    type("annotations");
+
+    /* Both rows deliberately accept this reader word. Modes precede actions
+       on an equal match tier, so the renamed mode must be the selected one. */
+    expect(listed()).toEqual(["Marginalia", "Comments"]);
+    expect(selected()).toBe("Marginalia");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("marginalia");
   });
 });
 
@@ -538,7 +554,7 @@ describe("the backdrop", () => {
  * one level down.
  */
 const GENERATES: Record<Mode, boolean> = {
-  annotations: false,
+  marginalia: false,
   plain: false,
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */

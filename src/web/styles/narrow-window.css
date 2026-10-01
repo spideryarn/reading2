@@ -361,7 +361,7 @@
    banner is one sentence about the layout, the layout has just put a panel
    over the whole article, and a sentence nobody can read is not a sentence.
 
-   **Annotations names its narrow state instead of a band.** Its prose stays
+   **Marginalia names its narrow state instead of a band.** Its prose stays
    visible, so the masthead and shared notice stay too; only this banner goes,
    because its claim that a mode panel covers the article is false while the
    mode is showing its own "needs a wider window" line.
@@ -1330,7 +1330,7 @@
        and pull the title left of its own bar. GPT Sol, T1. */
     max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l))),
     calc(
-      /* `- --marg-reserve`: beside a band, Annotations' column keeps that much
+      /* `- --marg-reserve`: beside a band, Marginalia's column keeps that much
          of the bar's right clear of the reading cell, so the two boxes are no
          longer the same width (0 in every other case). 261001i. */
       (100% - var(--marg-reserve, 0px) + var(--masthead-pad-l) + var(--masthead-pad-r) -

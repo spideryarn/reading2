@@ -45,7 +45,8 @@ listed here; the names under each are files in `docs/project/`.
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
-  <br>↳ `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
+  <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
+  `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
   `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·
   `column-context.md` (history: the gist columns' fisheye) ·
   `structure.md` (the tree in the band: two columns or a nested list) ·

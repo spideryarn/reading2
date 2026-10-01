@@ -100,7 +100,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     mode,
     experimental: EXPERIMENTAL_ON,
     onMode(next, sub) {
-      /* Annotations is a switch, not a band (`BandMode`); not under test here. */
+      /* Marginalia is a switch, not a band (`BandMode`); not under test here. */
       if (sub === undefined) {
         if (isBandMode(next)) void setMode(next);
       } else void setSubNav(subModeParams(sub), { history: "push" });

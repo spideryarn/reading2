@@ -105,7 +105,7 @@ export const NO_FOUND: Found[] = [];
 const NOTHING: PassageSlot = { found: NO_FOUND, openKey: null };
 
 /**
- * **The mode → slot mapping, total over `BandMode`.** Annotations is not in it: since 2026-10-01 its column is a
+ * **The mode → slot mapping, total over `BandMode`.** Marginalia is not in it: since 2026-10-01 its column is a
  * switch beside the band (`?margin=1`) and marks nothing inside the prose — the
  * dashed underlines for ideas are deferred
  * (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,

@@ -1,11 +1,11 @@
 /**
- * **What a press of the Annotations button does.** Greg's rule for a window too
+ * **What a press of the Marginalia button does.** Greg's rule for a window too
  * narrow for the band and the notes together: *"whichever has been activated
  * most recently trumps/swaps out the other"* (SPIDERYARN-READING2-7P).
  *
  * Pressing a band already wins over the notes (layout.ts § `fitBoth`: below the
  * width for both, the band takes the room and `?margin=1` stays). This is the
- * other half: pressing Annotations where the two do not fit together, but the
+ * other half: pressing Marginalia where the two do not fit together, but the
  * notes would fit alone, closes the band and keeps the notes on — whether they
  * were off, or on and hidden behind a band that won. Everywhere else it is a
  * plain toggle, a phone included: there the notes do not fit even alone, and
@@ -32,7 +32,7 @@ export function notesFit(
   };
 }
 
-export type AnnotationsPressInput = {
+export type MarginaliaPressInput = {
   /** `?margin=1` is on now. */
   margin: boolean;
   /** A band is open on the left (`mode !== "plain"`). */
@@ -44,14 +44,14 @@ export type AnnotationsPressInput = {
   aloneFit: boolean;
 };
 
-export type AnnotationsPress = { margin: boolean; closeBand: boolean };
+export type MarginaliaPress = { margin: boolean; closeBand: boolean };
 
-export function annotationsPress({
+export function marginaliaPress({
   margin,
   bandOpen,
   bothFit,
   aloneFit,
-}: AnnotationsPressInput): AnnotationsPress {
+}: MarginaliaPressInput): MarginaliaPress {
   if (bandOpen && !bothFit && aloneFit) return { margin: true, closeBand: true };
   return { margin: !margin, closeBand: false };
 }

@@ -152,7 +152,7 @@ describe("the bottom bar's mode segment", () => {
   it("is still a radiogroup with exactly one checked", () => {
     paintDock();
     /* The radios' own box since 2026-10-01, inside the segment beside
-       Annotations' toggle (261001i). */
+       Marginalia's toggle (261001i). */
     expect(host.querySelector('.dock-modes [role="radiogroup"]')).not.toBeNull();
     const checked = radios().filter((el) => el.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);
