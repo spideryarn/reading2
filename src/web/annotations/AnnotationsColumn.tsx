@@ -13,7 +13,15 @@
  * layout change and a URL parameter rather than a rewrite.
  * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
  */
-import { Component, type ErrorInfo, type ReactNode, useEffect, useLayoutEffect, useState } from "react";
+import {
+  Component,
+  type ErrorInfo,
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import type { Ideas } from "../../types.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
 import { captureClientFailure } from "../monitoring.js";
@@ -148,22 +156,64 @@ export function AnnotationsHead({
       <aside className="marg-narrow" aria-label="Annotations">
         <p>
           {beside
-            ? "The notes need a wider window, or the panel closed — they sit to the right of the text."
+            ? "The notes need a wider window — press Annotations again to swap them in for the panel."
             : "The notes need a wider window — they sit to the right of the text."}
         </p>
       </aside>
     );
   }
   if (path.length === 0 && arc === null) return null;
-  /* **Orientation, not a summary**: the path on one line and the arc cut at
-     three, the whole of both in a card on hover, focus or tap. A head that
-     grew to the arc's full six or seven lines dominated the margin it is meant
-     to sit quietly at the top of (GPT Astra's design pass, 2026-10-01). */
+  /* **Orientation, not a summary**: the arc cut at three, the whole of it in a
+     card on hover, focus or tap. A head that grew to the arc's full six or
+     seven lines dominated the margin it is meant to sit quietly at the top of
+     (GPT Astra's design pass, 2026-10-01).
+
+     **The path is not forced onto one line**: each title has a line of its own
+     and may wrap to two. It was one line with an ellipsis, and in a 200–288px
+     column the part's title left the section a word or two — Greg, 7M: *"the
+     text is truncated too much"*. The whole title is in the app's hover card,
+     not a native `title` that a finger cannot reach. 261001k. */
   return (
     <aside className="marg-head" aria-label="Where you are">
-      {path.length > 0 && <p className="marg-path">{path.join(" › ")}</p>}
+      {path.length > 0 && (
+        <p className="marg-path">
+          {path.map((title, depth) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: the path is a fixed ancestry, part then section; position is its identity.
+            <Fragment key={depth}>
+              {/* Outside the line-clamped box: it remains one spoken path even
+                  when the visible title is cut after its second line. */}
+              {depth > 0 && <span className="sr-only"> › </span>}
+              <PathStep title={title} depth={depth} />
+            </Fragment>
+          ))}
+        </p>
+      )}
       {arc !== null && <ArcLine arc={arc} />}
     </aside>
+  );
+}
+
+/** A clamped title whose complete text is reachable by hover, focus and tap. */
+function PathStep({ title, depth }: { title: string; depth: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={setOpen}
+      content={<p>{title}</p>}
+    >
+      <button
+        type="button"
+        className="marg-path-step"
+        data-depth={depth}
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {title}
+      </button>
+    </Tooltip>
   );
 }
 

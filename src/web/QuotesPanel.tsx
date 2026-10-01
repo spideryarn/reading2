@@ -48,7 +48,7 @@
  * agreeing is that both call `markedQuotes` below.
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
-import { useState, type ReactElement } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
 import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
@@ -205,7 +205,7 @@ export const QUOTE_BAR_DEFAULT = 0.6;
  * three copies of "which positions exist" is how the count under the reader's
  * hand comes to disagree with the list under it.
  */
-export function barStops(quotes: Quote[]): number[] {
+export function barStops(quotes: readonly Quote[]): number[] {
   const seen = new Set<number>();
   for (const quote of quotes) {
     const p = priorityOf(quote);
@@ -379,7 +379,7 @@ export function visibleQuotes(
  * the first question — and a bar that hides nothing right now is one drag from
  * hiding something, which is why `effectiveRank` does not fall back on it.
  */
-export function canPrioritise(quotes: Quote[]): boolean {
+export function canPrioritise(quotes: readonly Quote[]): boolean {
   return barStops(quotes).length > 1;
 }
 
@@ -587,6 +587,23 @@ export function QuotesPanel({
      RankBar's pressed state, the numbers on each row — has to agree about what
      order the list is actually in. One call, one answer, passed down. */
   const rank = effectiveRank(all, chosenRank);
+  /* Empty with fewer than two quotes or two ranks; then there is no rank row
+     and the head row carries the count and the badge instead. */
+  const ranks = quotes && quotes.quotes.length > 1 ? rankOptions(all) : [];
+  const count = quotes && (
+    <span className="quotes-count">
+      {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
+    </span>
+  );
+  /* Provenance about the owner's own run, so a visitor sees none of it:
+     `profileHash` never leaves the server (src/public-types.ts). An icon since
+     2026-10-01, as Glossary's is (plan 260929a); `null` rather than a component
+     that renders nothing, so the rank row's trailing slot is empty when there
+     is nothing to put in it. */
+  const badge =
+    quotes && owner?.profiled ? (
+      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+    ) : null;
   /* **`markedQuotes` and not `rankQuotes(all, rank, bar)`**, although the two
      compute the same list from the same three lines. The prose marks this list
      now — in every mode, since 2026-09-08 — and it reaches it from
@@ -655,30 +672,26 @@ export function QuotesPanel({
     <ModeSurface
       label="Quotes"
       feature="quotes"
-      /* **A fragment, so the row is there before the quotes are.** Both
-          children are gated on `quotes`; `head={quotes && …}` would pass the
-          surface `null` while the list loads and no `.band-head` would be
-          drawn at all. */
+      /* **No head row while the rank row is drawn**, since 2026-10-01 — Greg,
+          on a landscape iPhone: *"all the stuff at the top of their columns
+          takes up the vertical real estate, and I can't see the actual result"*
+          (`spya-gcdwps`). Its two things go to the end of the rank row: the
+          profile badge always, and the count everywhere but *prioritised*,
+          whose bar row already says "5 of 14". The move Glossary made (plan
+          260929a); plan 261001l.
+
+          **Otherwise a fragment, so the row is there before the quotes are.**
+          Both children are gated on `quotes`; `head={quotes && …}` would pass
+          the surface `null` while the list loads and no `.band-head` would be
+          drawn at all. With one quote, or one rank on offer, there is no rank
+          row, so the old row stays and carries both. */
       head={
-        <>
-          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the count below it. */}
-          {quotes && (
-            <span className="quotes-count">
-              {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
-            </span>
-          )}
-          {/* Provenance about the owner's own run, so a visitor sees none of it:
-              `profileHash` never leaves the server (src/public-types.ts). */}
-          {quotes && owner && (
-            <WrittenForYou
-              written={owner.profiled}
-              changed={owner.profileChanged}
-              slug={owner.slug}
-            />
-          )}
-        </>
+        ranks.length > 0 ? null : (
+          <>
+            {count}
+            {badge}
+          </>
+        )
       }
       /* Pinned under the list rather than at the end of it. Same guard it had
           as a trailing child of the band — and **not on a stale or an outdated
@@ -703,8 +716,20 @@ export function QuotesPanel({
       }
     >
 
-      {quotes && quotes.quotes.length > 1 && (
-        <RankBar quotes={all} rank={rank} onRank={onRank} />
+      {ranks.length > 0 && (
+        <RankBar
+          options={ranks}
+          rank={rank}
+          onRank={onRank}
+          trailing={
+            badge || rank !== "prioritised" ? (
+              <>
+                {rank !== "prioritised" && count}
+                {badge}
+              </>
+            ) : null
+          }
+        />
       )}
 
       {/* Only in the order it belongs to. It is the one control here that sets a
@@ -828,17 +853,15 @@ export function QuotesPanel({
   );
 }
 
-/** Which ranks this particular list can actually offer. */
-function RankBar({
-  quotes,
-  rank,
-  onRank,
-}: {
-  quotes: Quote[];
-  rank: QuoteRank;
-  onRank(rank: QuoteRank): void;
-}) {
-  const options: { key: QuoteRank; label: string; title: string }[] = [
+type RankOption = { key: QuoteRank; label: string; title: string };
+
+/**
+ * Which ranks this particular list can actually offer — empty when fewer than
+ * two, which is how the panel knows there is no rank row to fold the head row
+ * into.
+ */
+function rankOptions(quotes: readonly Quote[]): RankOption[] {
+  const options: RankOption[] = [
     {
       key: "document",
       label: "in order",
@@ -876,27 +899,52 @@ function RankBar({
         ]
       : []),
   ];
-  if (options.length < 2) return null;
+  return options.length < 2 ? [] : options;
+}
 
+/**
+ * The rank buttons, and at the right-hand end whatever the panel hands
+ * `trailing`: the count and the profile badge, which came here from a head row
+ * of their own on 2026-10-01, so that row could go — the move Glossary made on
+ * 2026-09-29 (plan 260929a), for Greg's *"all the stuff at the top of their
+ * columns takes up the vertical real estate"* (`spya-gcdwps`, plan 261001l).
+ * **The trailing slot is beside the group, not in it**, for the reason
+ * GlossaryPanel.tsx § SortBar gives.
+ */
+function RankBar({
+  options,
+  rank,
+  onRank,
+  trailing,
+}: {
+  options: readonly RankOption[];
+  rank: QuoteRank;
+  onRank(rank: QuoteRank): void;
+  trailing: ReactNode;
+}) {
   return (
-    /* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
-       controls and wants a <legend>; these are toggle buttons that change how a
-       list is ordered, and `role="group"` with an accessible name is exactly
-       what ARIA has for that. Same call GlossaryPanel's SortBar makes. */
-    <div className="quotes-rank" role="group" aria-label="Order the quotes by">
-      <span className="quotes-rank-label">order</span>
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          className={`quotes-rank-btn${rank === option.key ? " on" : ""}`}
-          aria-pressed={rank === option.key}
-          title={option.title}
-          onClick={() => onRank(option.key)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="quotes-rank">
+      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
+          controls and wants a <legend>; these are toggle buttons that change how
+          a list is ordered, and `role="group"` with an accessible name is exactly
+          what ARIA has for that. Same call GlossaryPanel's SortBar makes. */}
+      <div className="gloss-sort-group" role="group" aria-label="Order the quotes by">
+        {/* No "order" word in front since 2026-10-01, as in Glossary; the
+            group's `aria-label` still says it to a screen reader. */}
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={`quotes-rank-btn${rank === option.key ? " on" : ""}`}
+            aria-pressed={rank === option.key}
+            title={option.title}
+            onClick={() => onRank(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {trailing && <span className="gloss-sort-trail">{trailing}</span>}
     </div>
   );
 }

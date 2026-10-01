@@ -176,13 +176,19 @@ unless the file is on its list with a reason.
 **Two columns beside the prose, and which one gives way.** Annotations' notes (`?margin=1`) can
 sit right of the prose while a band sits left of it, since 2026-10-01. All three need
 `MODE_MIN + MODE_PROSE_FLOOR + MARG_MIN` beside the rail — **900px with it** — and below that
-**the band wins**: it is what the reader opened most specifically and may hold their half-typed
-words, while the notes are ambient. From 700 to 899px the page is the band's, with one line under
-the prose saying the notes need a wider window or the panel closed; under 700 the band covers the
-window as it always has, and no line is drawn over it. `?margin=1` stays in the address, so
-widening the window or closing the band brings the notes back. `fitBoth` in
-[`layout.ts`](../../src/web/layout.ts) is the arithmetic, and
-[261001i](../plans/261001i-annotations-column-beside-a-band-mode.md) the reasons.
+**whichever was pressed last wins** — Greg, 7P: *"whichever has been activated most recently
+trumps/swaps out the other"*. Pressing a band while the notes are on gives the band the room and
+keeps `?margin=1` in the address, so widening the window brings both back; from 700 to 899px one
+line under the prose says the notes need a wider window or another press of Annotations, and under
+700 the band covers the window and no line is drawn over it. Pressing Annotations where the two do
+not fit together but the notes fit alone (612px with the rail) closes the band, in one history
+entry. Below 612 the notes fit nowhere, so the press only sets the switch and the band stays. With
+no press to go by — a link carrying both, a window narrowed under them — the band wins. `fitBoth`
+in [`layout.ts`](../../src/web/layout.ts) is the arithmetic, `annotationsPress` in
+[`press.ts`](../../src/web/annotations/press.ts) the rule, and
+[261001i](../plans/261001i-annotations-column-beside-a-band-mode.md) and
+[261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md)
+the reasons.
 
 The full account, including what the measuring harness cannot see, is
 [docs/plans/260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).

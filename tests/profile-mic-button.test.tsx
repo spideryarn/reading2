@@ -58,6 +58,8 @@ vi.mock("../src/web/useDictation.js", () => ({
     clearRecording: () => {},
     canRetry: false,
     retry: () => {},
+    artifact: () => 0,
+    dismiss: () => {},
   }),
 }));
 
@@ -78,6 +80,7 @@ function render(): HTMLButtonElement {
         onChange: () => {},
         onCommit: () => {},
         max: 500,
+        save: { kind: "clean" },
       }),
     );
   });

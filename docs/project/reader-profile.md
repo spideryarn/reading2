@@ -37,6 +37,14 @@ Metadata is still where it is edited.
 Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
 with the rest of the filesystem store.
 
+**Both boxes save themselves** two seconds after the reader stops typing, as well as on blur and
+⌘↵, say *Saving…* and then a green-ticked *Saved*, and ask before the page closes with a save
+pending. Greg, 2026-09-30: *"make it clearer when it has saved … if I try and close the page before
+it has saved, either warn the user, or auto-save"*. The box, its timer and its status line are
+`ProfileBox`; the save behind it — one at a time, never written back over words typed since — is
+[`useAutosavedText`](../../src/web/useAutosavedText.ts), which any other box holding saved text can
+use. [261001l](../plans/261001l-autosave-about-you-and-honest-mic-fallback.md).
+
 Both are **reader state**: they survive re-extraction and the pipeline cannot undo them. That is the
 argument [`src/shelf.ts`](../../src/shelf.ts) already makes for the renamed title, and it holds here
 word for word — a re-extraction rewrites `meta.json`, and anything of the reader's stored in there
@@ -685,7 +693,8 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
 | [`tests/route-profile-concurrency.test.ts`](../../tests/route-profile-concurrency.test.ts) | that the profile read really starts before the artefact read has finished, and that the artefact's error still wins |
 | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |
 | [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) | that the cached prefix is untouched by any profile |
-| [`src/web/ProfileBox.tsx`](../../src/web/ProfileBox.tsx) | the textarea, the hint and the counter — shared by `/profile` and the metadata page. The microphone moved out of it on 2026-08-27 |
+| [`src/web/ProfileBox.tsx`](../../src/web/ProfileBox.tsx) | the textarea, the hint, the counter, the idle save and the line saying where the save is — shared by `/profile` and the metadata page. The microphone moved out of it on 2026-08-27 |
+| [`src/web/useAutosavedText.ts`](../../src/web/useAutosavedText.ts) | the save behind both boxes: one at a time, queued, written back only over what was sent, flushed as the tab goes |
 | [`src/web/useDictation.ts`](../../src/web/useDictation.ts) | the microphone: four phases, the one owned track, the recorder, the upload |
 | [`src/web/useDictationField.ts`](../../src/web/useDictationField.ts) | wiring it to a text box: the caret, the span the words occupy, the box closed while the transcript is on its way |
 | [`src/web/DictationStrip.tsx`](../../src/web/DictationStrip.tsx) | the button and the strip, so every box that adopts a microphone gets the same one |

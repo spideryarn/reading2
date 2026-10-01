@@ -53,6 +53,13 @@ import type { DictationRecording, UseDictation } from "./useDictation.js";
 import { useNow } from "./useNow.js";
 import { useOnline } from "./useOnline.js";
 
+/** The chosen microphone could not be used. Each name only if the browser gave it. */
+export function deviceUnavailableWords(wanted: string | null, using: string | null): string {
+  const chosen = wanted ? `the microphone you chose (${wanted})` : "the microphone you chose";
+  const instead = using ? `, so this is using ${using}.` : ". Using another one.";
+  return `Couldn't use ${chosen}${instead}`;
+}
+
 /**
  * What the strip says, in one place — because it is also what the live region
  * says, and the two must not be allowed to drift apart.
@@ -294,9 +301,17 @@ export function DictationStrip({
       </p>
 
       {busy && (
-        <p className="prof-listening">
+        /* **`quiet` looks like a warning**, because the faint grey it used to
+           share with "Listening" was not something anybody noticed. The words
+           stay an observation rather than a diagnosis — `audio-level.ts` says
+           why — and the warm colour is `.prof-mic-warn`'s: a fact worth
+           knowing, not a failure. Greg, SPIDERYARN-READING2-7Z; plan 261001k. */
+        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}`}>
           {dictation.armed && (
             <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
+          )}
+          {dictation.quiet && (
+            <TriangleAlert size={13} className="prof-quiet-icon" aria-hidden="true" />
           )}
           {dictation.transcribing && <Loader2 size={13} className="spin" aria-hidden="true" />}
           {/* The live region above is already saying this. */}
@@ -332,9 +347,15 @@ export function DictationStrip({
       )}
 
       {/* A microphone was chosen and could not be opened, so something else is
-          being used. Said rather than left to be noticed. */}
+          being used. Said rather than left to be noticed — and since
+          2026-10-01 both by name where the browser gave names, because "using
+          another one" left Greg unable to tell whether anything was wrong
+          (spya-k3q9mc). "Couldn't use", not "isn't connected": all we know is
+          that asking for it by id failed. */}
       {dictation.armed && dictation.deviceUnavailable && (
-        <p className="prof-mic-warn">The microphone you chose isn't available. Using another one.</p>
+        <p className="prof-mic-warn">
+          {deviceUnavailableWords(dictation.deviceUnavailable.wanted, dictation.deviceLabel)}
+        </p>
       )}
 
       {picking && dictation.armed && dictation.deviceLabel && (

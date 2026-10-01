@@ -49,12 +49,13 @@
  * Still no marks in the prose and no `?faq=` selection — `selectPassages`
  * answers `NOTHING` (src/web/reader/passages.ts).
  */
-import { type ReactNode, useState } from "react";
-import { BadgeQuestionMark, Info, RotateCw, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
+import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
+import { BandAbout } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import {
   availableOrders,
@@ -73,7 +74,6 @@ import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
-import { Tooltip } from "./Tooltip.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
@@ -338,35 +338,15 @@ function OrderBar({
  * (SPIDERYARN-READING2-62): *"move this text … into a tooltip, e.g. behind an
  * `(i)` icon"*. It was the band's foot. The words are unchanged, and both
  * halves still load-bearing; the dropped count, a footnote to the first half,
- * came with it. Controlled, as Trajectory's *About this route* is (the same
- * move, SPIDERYARN-READING2-52), so a tap toggles it on a touch device with no
- * hover; hover and focus open it too.
+ * came with it. The (i) itself is `BandAbout`, shared with Citations since
+ * plan 261001l.
  */
 function AboutPassages({ dropped }: { dropped: string | null }) {
-  const [open, setOpen] = useState(false);
   return (
-    <Tooltip
-      content={
-        <>
-          <p>{FAQ_PROMISE}</p>
-          {dropped && <p>{dropped}</p>}
-        </>
-      }
-      placement="bottom"
-      open={open}
-      onOpenChange={setOpen}
-      className="faq-about-card"
-    >
-      <button
-        type="button"
-        className={`faq-about${open ? " on" : ""}`}
-        aria-label="About these passages"
-        aria-expanded={open}
-        onClick={() => setOpen((was) => !was)}
-      >
-        <Info size={14} />
-      </button>
-    </Tooltip>
+    <BandAbout label="About these passages">
+      <p>{FAQ_PROMISE}</p>
+      {dropped && <p>{dropped}</p>}
+    </BandAbout>
   );
 }
 
