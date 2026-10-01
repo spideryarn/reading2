@@ -79,6 +79,7 @@ import type {
   NavLabelStatus,
   Quote,
   Quotes,
+  RegistryWork,
   NodeId,
   SearchHit,
   SearchRun,
@@ -102,12 +103,14 @@ import {
 import type { DebateSynthesis } from "../types.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../debate-synthesis.js";
+import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import type {
   PublicArticle,
   PublicBlock,
   PublicCitations,
   PublicCitedWork,
   PublicCrossrefs,
+  PublicCitationRegistry,
   PublicClaimDebateRow,
   PublicDebate,
   PublicDirectDebateRow,
@@ -580,7 +583,19 @@ function publicCitedWork(work: CitedWork, blockText: ReadonlyMap<string, string>
     citedInBody: work.citedInBody,
     ...(url === null ? {} : { url }),
     linkFrom,
+    ...publicCitationRegistry(work.registry),
   };
+}
+
+/**
+ * **A found registry record, and nothing else** (plan 261001a stage 5) —
+ * rebuilt by `readRegistryWork`, so only its named fields cross. A `conflict`
+ * stays with the owner: it is our verdict on the article's identifier, and a
+ * visitor's row is drawn as the article gives it.
+ */
+function publicCitationRegistry(registry: unknown): { registry?: PublicCitationRegistry } {
+  const read = readCitationRegistry(registry);
+  return read?.kind === "found" ? { registry: read } : {};
 }
 
 /**
@@ -879,7 +894,14 @@ function publicDebateRowBase(
     /* The relevance stop, since 2026-10-01 (plan 261001b, 5P): one of three
        closed words, through `readStoredBears` so anything else is absent. */
     ...bearsOf(row),
+    ...publicRegistryWork(row.registry),
   };
+}
+
+/** A Debate row's registry record, rebuilt field by field (plan 261001a stage 6). */
+function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
+  const read = readRegistryWork(registry);
+  return read === null ? {} : { registry: read };
 }
 
 function bearsOf(row: DirectDebateRow | ClaimDebateRow): Pick<PublicClaimDebateRow, "bears"> {

@@ -842,6 +842,21 @@ export async function exportArticle(
         contextHash: row.contextHash,
         promptVersion: row.promptVersion,
         at: row.at.toISOString(),
+        /* The paper itself (plan 261001a stage 3), column for column; all
+           null on an answer from before that stage. */
+        paperState: row.paperState,
+        paperRequestedUrl: row.paperRequestedUrl,
+        paperFinalUrl: row.paperFinalUrl,
+        paperHost: row.paperHost,
+        paperWords: row.paperWords,
+        paperSentWords: row.paperSentWords,
+        paperChunks: row.paperChunks,
+        paperMatchedBy: row.paperMatchedBy,
+        paperUnreadableWhy: row.paperUnreadableWhy,
+        paperEvidenceSha: row.paperEvidenceSha,
+        paperSelectionVersion: row.paperSelectionVersion,
+        paperReadAt: row.paperReadAt?.toISOString() ?? null,
+        paperPassages: row.paperPassages,
       };
     }
     await put("citation_investigations", "citation-investigations.json", { investigations });

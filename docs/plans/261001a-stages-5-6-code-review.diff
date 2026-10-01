@@ -1,0 +1,2071 @@
+diff --git a/docs/project/citations.md b/docs/project/citations.md
+index 3c0fa6b9..a926bc8e 100644
+--- a/docs/project/citations.md
++++ b/docs/project/citations.md
+@@ -23,6 +23,17 @@ where the link came from, and **first cited**, a jump to the passage
+ entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
+ 2026-09-30.
+ 
++**The registry's record** (since 2026-10-01,
++[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
++stage 5): at the end of the step, each row whose link is a DOI or arXiv address — at most 80 — is
++looked up at Crossref or DataCite through the shared, cached lookup
++([`bibliographic.ts`](../../src/bibliographic.ts)), and the record is kept on the row only when its
++title agrees with the article's. A disagreement is kept as a *conflict*, and the row says the
++article's identifier points to a different title. The by-line stays as the article gives it; where
++the article gives no authors or no year, the registry's are drawn, marked *from Crossref* / *from
++DataCite*. A visitor's row carries a found record, never a conflict. Outside the stamp and the
++prompt, and the step never fails for it ([`citation-registry.ts`](../../src/citation-registry.ts)).
++
+ ## The one safety property
+ 
+ **Every address a row presents as the work's own was in the article, and code found it.** The model
+@@ -439,7 +450,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
+ button on the hover card and the threshold reveal it would need; marking every occurrence of a
+ mention in its block rather than only an unambiguous one; joining the citation section to the *link*
+ and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
+-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
++the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; the entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+ 
+ ## The code
+ 
+diff --git a/docs/project/reading-view-overview.md b/docs/project/reading-view-overview.md
+index e2a56649..9d079f70 100644
+--- a/docs/project/reading-view-overview.md
++++ b/docs/project/reading-view-overview.md
+@@ -131,6 +131,11 @@ readers never are.
+   Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
+   as filters above the list, owner-only for now
+   ([260930j](../plans/260930j-debate-themes-and-key-sources.md)).
++  Since 2026-10-01 a source whose address carries a DOI or arXiv id (`doi.org`, `arxiv.org`, or a
++  publisher's `/doi/10.…` path) gets Crossref's or DataCite's authors and year, kept only when the
++  record's title agrees with the page's; the by-line and the date order prefer them and say where
++  they came from, and a visitor sees them too
++  ([261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md) stage 6).
+ - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
+   thresholded the way the glossary is. Open it for the one safety property: every address a row
+   shows was in the article, and a search says it is one. Behind the switch; a visitor to a public
+diff --git a/src/citation-registry.ts b/src/citation-registry.ts
+new file mode 100644
+index 00000000..93fdd800
+--- /dev/null
++++ b/src/citation-registry.ts
+@@ -0,0 +1,139 @@
++/**
++ * **Citations rows carry the registry's record** — plan 261001a stage 5
++ * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
++ *
++ * At the end of the `citations` step, every row whose link is a DOI or arXiv
++ * address is looked up through stage 1's `lookupWork` (src/bibliographic.ts) —
++ * at most `MAX_REGISTRY_LOOKUPS`, two at a time, the cache first because
++ * `lookupWork` reads it first. What it may add, and nothing else:
++ *
++ * - **`found`** — the registry's title agrees with the article's title for the
++ *   work, by stage 2's rule (`registryTitleAgrees`, src/paper-evidence.ts), so a
++ *   mistyped DOI cannot lend a row somebody else's authors;
++ * - **`conflict`** — it does not: the article's identifier points at a
++ *   different work, and the row says so;
++ * - **nothing** — not found, unavailable, over the cap, or the lookup threw.
++ *   The step never fails because of a registry.
++ *
++ * **Not in the step's stamp, and not in what the model is sent.** The record is
++ * attached after the list is built, so `sourceHash` and `PROMPT_VERSION` mean
++ * what they meant; a registry answering differently next month is not the
++ * article moving. A re-run's lookups are cache hits — one database read each.
++ *
++ * Logged by the caller as counts only: no identifier, no title.
++ */
++import { lookupWork, parseWorkId, type LookupResult, type WorkId } from "./bibliographic.js";
++import { registryTitleAgrees } from "./paper-evidence.js";
++import { registryWorkOf } from "./registry-work.js";
++import type { CitationRegistry, Citations, CitedWork } from "./types.js";
++
++/** At most this many rows are looked up per run — `MAX_CITATIONS` today, named so a raise there does not raise this. */
++export const MAX_REGISTRY_LOOKUPS = 80;
++/** Lookups in flight at once. `lookupWork`'s own limiter is global; this only keeps one step from queueing on it. */
++export const REGISTRY_CONCURRENCY = 2;
++
++export type LookupWork = (id: WorkId) => Promise<LookupResult>;
++
++export interface RegistryDeps {
++  lookup: LookupWork;
++}
++
++/** The real registry — what src/pipeline.ts hands the step. A test checks it is `lookupWork` itself. */
++export const citationRegistryDeps: RegistryDeps = { lookup: lookupWork };
++
++export interface RegistryCounts {
++  /** Rows whose link is a DOI or arXiv address. */
++  identified: number;
++  asked: number;
++  found: number;
++  conflict: number;
++  notFound: number;
++  unavailable: number;
++  /** Identified rows past `MAX_REGISTRY_LOOKUPS`, not asked. */
++  overCap: number;
++}
++
++/**
++ * The identifier a row's **link** is — a `doi.org` or `arxiv.org` address — or
++ * null. A Scholar search or any other address is null by `parseWorkId`'s
++ * host rule; a `web` row is the owner's private find and is never stored, but
++ * is refused here too.
++ */
++export function rowWorkId(work: Pick<CitedWork, "url" | "linkFrom">): WorkId | null {
++  if (work.linkFrom === "web" || work.linkFrom === "search") return null;
++  return parseWorkId(work.url);
++}
++
++/** What one answer puts on the row, judged against the article's own title. */
++export function registryFor(work: Pick<CitedWork, "title">, result: LookupResult): CitationRegistry | null {
++  if (result.kind !== "found") return null;
++  if (!registryTitleAgrees(result.record.title, work.title)) {
++    return { kind: "conflict", source: result.record.source };
++  }
++  return { kind: "found", ...registryWorkOf(result.record) };
++}
++
++/** `items` through `fn`, at most `limit` at a time, results in input order. */
++export async function mapLimited<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
++  const out: R[] = new Array(items.length);
++  let next = 0;
++  const worker = async () => {
++    while (next < items.length) {
++      const i = next++;
++      out[i] = await fn(items[i] as T);
++    }
++  };
++  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
++  return out;
++}
++
++/** `lookup`, with a throw (which `lookupWork` does not do, but a dependency may) read as unavailable. */
++export async function safeLookup(lookup: LookupWork, id: WorkId): Promise<LookupResult> {
++  try {
++    return await lookup(id);
++  } catch {
++    return { kind: "unavailable", why: "error" };
++  }
++}
++
++/**
++ * **The list with each identified row's registry field set** — or cleared: a
++ * row's `registry` is this run's answer, never an earlier revision's. Rows are
++ * asked in list order, so the cap keeps the first eighty.
++ */
++export async function attachCitationRegistry(
++  citations: Citations,
++  deps: RegistryDeps,
++): Promise<{ citations: Citations; counts: RegistryCounts }> {
++  const counts: RegistryCounts = { identified: 0, asked: 0, found: 0, conflict: 0, notFound: 0, unavailable: 0, overCap: 0 };
++  const ids = citations.citations.map((work) => rowWorkId(work));
++  const distinct: WorkId[] = [];
++  for (const id of ids) {
++    if (id === null) continue;
++    counts.identified++;
++    if (!distinct.includes(id)) distinct.push(id);
++  }
++  const asked = distinct.slice(0, MAX_REGISTRY_LOOKUPS);
++  const answers = new Map<WorkId, LookupResult>();
++  const results = await mapLimited(asked, REGISTRY_CONCURRENCY, (id) => safeLookup(deps.lookup, id));
++  for (const [i, id] of asked.entries()) answers.set(id, results[i] as LookupResult);
++  counts.asked = asked.length;
++
++  const rows = citations.citations.map((work, i): CitedWork => {
++    const { registry: _previous, ...rest } = work;
++    const id = ids[i];
++    if (id === null || id === undefined) return rest;
++    const answer = answers.get(id);
++    if (answer === undefined) {
++      counts.overCap++;
++      return rest;
++    }
++    if (answer.kind === "not-found") counts.notFound++;
++    if (answer.kind === "unavailable") counts.unavailable++;
++    const registry = registryFor(work, answer);
++    if (registry === null) return rest;
++    counts[registry.kind]++;
++    return { ...rest, registry };
++  });
++  return { citations: { ...citations, citations: rows }, counts };
++}
+diff --git a/src/debate-registry.ts b/src/debate-registry.ts
+new file mode 100644
+index 00000000..ca5be6e7
+--- /dev/null
++++ b/src/debate-registry.ts
+@@ -0,0 +1,147 @@
++/**
++ * **Debate's authors and year, from the registry** — plan 261001a stage 6
++ * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md),
++ * the item 260929h deferred (SPIDERYARN-READING2-5P).
++ *
++ * After the `debate` step's searches, each distinct source address that
++ * **carries** an identifier is looked up through stage 1's `lookupWork`:
++ *
++ * - a `doi.org` path, or an `arxiv.org` abstract or PDF path — `parseWorkId`,
++ *   which goes through `identityOf` (src/cited-in-spideryarn.ts), the one parser
++ *   of an identifier out of an address;
++ * - **a publisher path whose first segment is `doi`**, optionally followed by
++ *   one of the view words publishers put there (`full`, `abs`, `pdf`, …), then
++ *   the DOI — `pnas.org/doi/10.1073/…`, `onlinelibrary.wiley.com/doi/full/10.1111/…`,
++ *   `dl.acm.org/doi/10.1145/…`. Nothing looser: a `10.` somewhere else in a
++ *   path, or a `doi` segment further down it, is not an identifier we trust to
++ *   be the page's own.
++ *
++ * **Kept only when the registry's title agrees with the engine's title for the
++ * page** — for every address, `doi.org` included, because a link can be as
++ * mistyped as a reference. The rule is `titleNamesWork` (src/citation-lookup.ts):
++ * anchored at the start, a site tail allowed, and a title the engine cut short
++ * ("…") matched on its opening words. A row with no engine title gets nothing.
++ * **Never a title search**: a page with no identifier is not looked up.
++ *
++ * Attached after the model's answer, so the stamp and `PROMPT_VERSION` are
++ * untouched; existing debates get it on a re-run.
++ */
++import { parseWorkId, type LookupResult, type WorkId } from "./bibliographic.js";
++import { citationRegistryDeps, mapLimited, REGISTRY_CONCURRENCY, safeLookup, type RegistryDeps } from "./citation-registry.js";
++import { titleNamesWork } from "./citation-lookup.js";
++import { registryWorkOf } from "./registry-work.js";
++import type { ClaimDebateRow, Debate, DirectDebateRow, RegistryWork } from "./types.js";
++
++/** The same registry Citations uses — one lookup, one cache. */
++export const debateRegistryDeps: RegistryDeps = citationRegistryDeps;
++
++/** Words a publisher puts between `/doi/` and the DOI. Anything else there and the path is not read. */
++const DOI_VIEWS = new Set(["full", "abs", "pdf", "epdf", "pdfdirect", "fulltext", "book", "reader", "epub"]);
++
++/**
++ * **The DOI a publisher's `/doi/…` path carries, or null.** The first path
++ * segment must be `doi`; then at most one view word; then a segment starting
++ * `10.` + digits, and the rest of the path as the suffix. The query string and
++ * fragment are never read.
++ */
++export function publisherPathDoi(url: string): string | null {
++  let u: URL;
++  try {
++    u = new URL(url);
++  } catch {
++    return null;
++  }
++  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
++  if (u.port !== "" || u.username !== "" || u.password !== "") return null;
++  let path: string;
++  try {
++    path = decodeURIComponent(u.pathname);
++  } catch {
++    return null;
++  }
++  const segments = path.split("/").filter((s) => s !== "");
++  if (segments[0]?.toLowerCase() !== "doi") return null;
++  let i = 1;
++  if (segments[i] !== undefined && DOI_VIEWS.has(segments[i]!.toLowerCase())) i++;
++  const prefix = segments[i];
++  const suffix = segments.slice(i + 1).join("/");
++  if (prefix === undefined || !/^10\.\d{4,9}$/.test(prefix) || suffix === "") return null;
++  return `${prefix}/${suffix}`;
++}
++
++/** The identifier a Debate source's address carries, or null. */
++export function debateWorkId(url: string): WorkId | null {
++  const direct = parseWorkId(url);
++  if (direct !== null) return direct;
++  const doi = publisherPathDoi(url);
++  return doi === null ? null : parseWorkId(`doi:${doi}`);
++}
++
++/** Does the registry's title agree with the engine's title for the page? Never without an engine title. */
++export function debateTitleAgrees(engineTitle: string | undefined, registryTitle: string): boolean {
++  if (!engineTitle?.trim()) return false;
++  return titleNamesWork(engineTitle, registryTitle) !== null;
++}
++
++export interface DebateRegistryCounts {
++  /** Distinct addresses that carry an identifier. */
++  identified: number;
++  found: number;
++  /** Found, and the title did not agree: not kept. */
++  disagreed: number;
++  notFound: number;
++  unavailable: number;
++}
++
++/**
++ * **The debate with each identified row's `registry` set, or cleared** — a row
++ * keeps only this run's answer. Distinct addresses are asked once; the rows
++ * are at most 24, so there is no cap beyond the groups' own.
++ */
++export async function attachDebateRegistry(
++  debate: Debate,
++  deps: RegistryDeps,
++): Promise<{ debate: Debate; counts: DebateRegistryCounts }> {
++  const counts: DebateRegistryCounts = { identified: 0, found: 0, disagreed: 0, notFound: 0, unavailable: 0 };
++  const rows = [...debate.direct.rows, ...debate.claims.rows];
++  const idOf = new Map<string, WorkId>();
++  for (const row of rows) {
++    const id = debateWorkId(row.url);
++    if (id !== null) idOf.set(row.url, id);
++  }
++  const ids = [...new Set(idOf.values())];
++  counts.identified = ids.length;
++  const results = await mapLimited(ids, REGISTRY_CONCURRENCY, (id) => safeLookup(deps.lookup, id));
++  const answers = new Map<WorkId, LookupResult>();
++  for (const [i, id] of ids.entries()) answers.set(id, results[i] as LookupResult);
++  for (const answer of answers.values()) {
++    if (answer.kind === "found") counts.found++;
++    else if (answer.kind === "not-found") counts.notFound++;
++    else counts.unavailable++;
++  }
++
++  const judged = new Set<WorkId>();
++  const withRegistry = <Row extends DirectDebateRow | ClaimDebateRow>(row: Row): Row => {
++    const { registry: _previous, ...rest } = row;
++    const id = idOf.get(row.url);
++    const answer = id === undefined ? undefined : answers.get(id);
++    if (id === undefined || answer?.kind !== "found") return rest as Row;
++    const agrees = debateTitleAgrees(row.title, answer.record.title);
++    if (!agrees) {
++      if (!judged.has(id)) counts.disagreed++;
++      judged.add(id);
++      return rest as Row;
++    }
++    judged.add(id);
++    const registry: RegistryWork = registryWorkOf(answer.record);
++    return { ...rest, registry } as Row;
++  };
++  return {
++    debate: {
++      ...debate,
++      direct: { ...debate.direct, rows: debate.direct.rows.map(withRegistry) },
++      claims: { ...debate.claims, rows: debate.claims.rows.map(withRegistry) },
++    },
++    counts,
++  };
++}
+diff --git a/src/messages.ts b/src/messages.ts
+index f9c702e4..ecd3e4a7 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4517,6 +4517,16 @@ export function debateWorkFieldsNote(parts: readonly string[]): string {
+   );
+ }
+ 
++/**
++ * **Where a Debate row's authors and year came from when a registry gave
++ * them** (plan 261001a stage 6): the identifier is the page address's own, and
++ * the record was kept only because its title agreed with the page's.
++ */
++export function debateRegistryNote(source: "crossref" | "datacite"): string {
++  const name = source === "crossref" ? "Crossref" : "DataCite";
++  return `Authors and year from ${name}, under the identifier this page's address carries — its title there agrees with the page's.`;
++}
++
+ /**
+  * **What the quotation was checked against, which is not the page.**
+  *
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 48ee524a..dc6faca0 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -112,6 +112,8 @@ import {
+   PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
+   previousCitationsFrom,
+ } from "./citations.js";
++import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
++import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
+ import { stageFailure } from "./job-failure.js";
+ import {
+   generateTrajectory,
+@@ -4440,6 +4442,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+         signal: ctx.signal,
+         power: ctx.power,
+       });
++      /* Stage 6 of plan 261001a: a source whose address carries a DOI or arXiv
++         id gets the registry's authors and year, when its title agrees.
++         After the searches and outside the stamp; it never fails the step. */
++      const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
++      run.debate = registered.debate;
+       const { direct, claims } = run.debate;
+       plog.info(
+         {
+@@ -4472,6 +4479,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+           claimsLost: claims.counts.lost,
+           /* The third call's outcome, so a `failed` is visible in the logs
+              rather than only as a missing box on screen (plan 260930j). */
++          registryIdentified: registered.counts.identified,
++          registryFound: registered.counts.found,
++          registryDisagreed: registered.counts.disagreed,
++          registryUnavailable: registered.counts.unavailable,
+           synthesis: run.debate.synthesis?.kind ?? null,
+           themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
+           keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
+@@ -4522,6 +4533,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+         power: ctx.power,
+         cacheArticle: ctx.cacheArticle,
+       });
++      /* Stage 5 of plan 261001a: each DOI or arXiv row looked up, its record
++         kept only where the titles agree. After the list is built, so it is in
++         neither the stamp nor the prompt; it never fails the step. */
++      const registered = await attachCitationRegistry(run.citations, citationRegistryDeps);
++      run.citations = registered.citations;
+       const rows = run.citations.citations;
+       const linkFrom = { doi: 0, arxiv: 0, article: 0, search: 0, web: 0 };
+       for (const c of rows) linkFrom[c.linkFrom]++;
+@@ -4562,6 +4578,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+           referenceListEntries: referenceList.list?.entries.size ?? 0,
+           referenceListMs: referenceList.ms,
+           entries: rows.filter((c) => c.entry !== undefined).length,
++          /* The registry witness: `registryUnavailable` near `registryAsked`
++             is the lookup failing, which nothing on screen would say. */
++          registryIdentified: registered.counts.identified,
++          registryAsked: registered.counts.asked,
++          registryFound: registered.counts.found,
++          registryConflict: registered.counts.conflict,
++          registryNotFound: registered.counts.notFound,
++          registryUnavailable: registered.counts.unavailable,
++          registryOverCap: registered.counts.overCap,
+           ...run.drops,
+           ...run.scores,
+         },
+diff --git a/src/public-types.ts b/src/public-types.ts
+index 6101e92e..96c4b5a5 100644
+--- a/src/public-types.ts
++++ b/src/public-types.ts
+@@ -61,6 +61,8 @@ import type {
+   Citation,
+   CitationLinkFrom,
+   CitationPlace,
++  CitationRegistry,
++  RegistryWork,
+   BlockContext,
+   BlockId,
+   BlockKind,
+@@ -531,8 +533,18 @@ export interface PublicCitedWork {
+   /** The article's source rule. `web` is the owner's private Find-it result
+    * and is normalised back to `search` at the public boundary. */
+   linkFrom: Exclude<CitationLinkFrom, "web">;
++  /**
++   * **A found registry record only** (plan 261001a stage 5): public metadata
++   * about the public identifier the row already links, rebuilt field by field
++   * by `readRegistryWork`. A `conflict` does not cross — the visitor's row is
++   * drawn as the article gives it, without our verdict on its identifier.
++   */
++  registry?: PublicCitationRegistry;
+ }
+ 
++/** The `found` arm of `CitationRegistry`, and only it. */
++export type PublicCitationRegistry = Extract<CitationRegistry, { kind: "found" }>;
++
+ /**
+  * **The Citations list, as a visitor gets it** — since 2026-09-29, the third
+  * mode plan 260929c moved off `owners-only` (SPIDERYARN-READING2-56).
+@@ -584,6 +596,8 @@ interface PublicDebateRowBase {
+   lean: DebateLean;
+   applies: string;
+   limits?: string;
++  /** The registry's record for the identifier the row's address carries (plan 261001a stage 6), rebuilt by `readRegistryWork`. */
++  registry?: RegistryWork;
+ }
+ 
+ /** A page about this piece, as a visitor gets it. `identifies` is never empty — the boundary reads it through `identifiesOf`. */
+diff --git a/src/public/dto.ts b/src/public/dto.ts
+index 4a8b92e6..25555c59 100644
+--- a/src/public/dto.ts
++++ b/src/public/dto.ts
+@@ -76,6 +76,7 @@ import type {
+   NavLabelStatus,
+   Quote,
+   Quotes,
++  RegistryWork,
+   NodeId,
+   SearchHit,
+   SearchRun,
+@@ -90,11 +91,13 @@ import type {
+   TweetThread,
+ } from "../types.js";
+ import { anchorFields, identifiesOf, isSimpleParagraphs, readStoredLean } from "../types.js";
++import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
+ import type {
+   PublicArticle,
+   PublicBlock,
+   PublicCitations,
+   PublicCitedWork,
++  PublicCitationRegistry,
+   PublicClaimDebateRow,
+   PublicDebate,
+   PublicDirectDebateRow,
+@@ -561,9 +564,21 @@ function publicCitedWork(work: CitedWork): PublicCitedWork {
+     citedInBody: work.citedInBody,
+     ...(url === null ? {} : { url }),
+     linkFrom,
++    ...publicCitationRegistry(work.registry),
+   };
+ }
+ 
++/**
++ * **A found registry record, and nothing else** (plan 261001a stage 5) —
++ * rebuilt by `readRegistryWork`, so only its named fields cross. A `conflict`
++ * stays with the owner: it is our verdict on the article's identifier, and a
++ * visitor's row is drawn as the article gives it.
++ */
++function publicCitationRegistry(registry: unknown): { registry?: PublicCitationRegistry } {
++  const read = readCitationRegistry(registry);
++  return read?.kind === "found" ? { registry: read } : {};
++}
++
+ /**
+  * **The Citations list** — the works, and `capped` because the panel prints it.
+  * src/public-types.ts § `PublicCitations`.
+@@ -772,9 +787,16 @@ function publicDebateRowBase(
+     lean: readStoredLean(row),
+     applies: row.applies,
+     ...(typeof row.limits === "string" ? { limits: row.limits } : {}),
++    ...publicRegistryWork(row.registry),
+   };
+ }
+ 
++/** A Debate row's registry record, rebuilt field by field (plan 261001a stage 6). */
++function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
++  const read = readRegistryWork(registry);
++  return read === null ? {} : { registry: read };
++}
++
+ /**
+  * The owner's comments, rebuilt comment by comment and citation by citation.
+  *
+diff --git a/src/registry-work.ts b/src/registry-work.ts
+new file mode 100644
+index 00000000..3e256d39
+--- /dev/null
++++ b/src/registry-work.ts
+@@ -0,0 +1,118 @@
++/**
++ * **A registry's record as a Citations or Debate row keeps it, and the guards
++ * that read one back** — plan 261001a stages 5 and 6
++ * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
++ *
++ * Pure and client-safe: the panels, the public projection and the two steps
++ * all read a stored row through `readRegistryWork` / `readCitationRegistry`,
++ * because nothing revalidates stored JSON on its way out of the database and a
++ * hand-edit or an older shape must draw as *no record*, never crash a panel.
++ *
++ * What is kept is bounded here, once: a registry may list a hundred authors of
++ * two hundred characters each, and eighty rows of that is not a row's worth.
++ */
++import type { CitationRegistry, RegistrySource, RegistryWork } from "./types.js";
++
++/**
++ * The part of stage 1's `WorkRecord` (src/bibliographic.ts) a row keeps —
++ * written out rather than imported, so the client's type graph does not reach
++ * the server's fetch path through this file.
++ */
++export interface RecordFields {
++  source: RegistrySource;
++  title: string;
++  authors: readonly { family: string; given?: string }[];
++  year?: number;
++  venue?: string;
++}
++
++/** Authors kept on a row; the rest are counted in `moreAuthors`. */
++export const REGISTRY_AUTHORS_KEPT = 12;
++const NAME_CAP = 100;
++const TITLE_CAP = 300;
++const VENUE_CAP = 200;
++
++/** What a reader is told the record came from. A `Record`, so a third registry is a compile error here. */
++export const REGISTRY_NAME: Record<RegistrySource, string> = { crossref: "Crossref", datacite: "DataCite" };
++
++function cap(value: string, max: number): string {
++  return value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
++}
++
++/** A stage-1 record, bounded, as a row keeps it. The DOI is the row's own address and is not repeated. */
++export function registryWorkOf(record: RecordFields): RegistryWork {
++  const kept = record.authors.slice(0, REGISTRY_AUTHORS_KEPT).map((a) =>
++    a.given === undefined ? { family: cap(a.family, NAME_CAP) } : { family: cap(a.family, NAME_CAP), given: cap(a.given, NAME_CAP) },
++  );
++  const more = record.authors.length - kept.length;
++  return {
++    source: record.source,
++    title: cap(record.title, TITLE_CAP),
++    authors: kept,
++    ...(more > 0 ? { moreAuthors: more } : {}),
++    ...(record.year !== undefined ? { year: record.year } : {}),
++    ...(record.venue !== undefined ? { venue: cap(record.venue, VENUE_CAP) } : {}),
++  };
++}
++
++function isSource(value: unknown): value is RegistrySource {
++  return value === "crossref" || value === "datacite";
++}
++
++function str(value: unknown, max: number): string | null {
++  return typeof value === "string" && value.trim() !== "" ? cap(value, max) : null;
++}
++
++/**
++ * **A stored record, rebuilt field by field, or null** — the one reader. Also
++ * the public projection's: what it returns is exactly the named fields, so an
++ * extra key on a stored row cannot ride through.
++ */
++export function readRegistryWork(value: unknown): RegistryWork | null {
++  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
++  const v = value as Record<string, unknown>;
++  if (!isSource(v.source)) return null;
++  const title = str(v.title, TITLE_CAP);
++  if (title === null || !Array.isArray(v.authors)) return null;
++  const authors: RegistryWork["authors"] = [];
++  for (const raw of v.authors.slice(0, REGISTRY_AUTHORS_KEPT)) {
++    if (typeof raw !== "object" || raw === null) continue;
++    const family = str((raw as { family?: unknown }).family, NAME_CAP);
++    if (family === null) continue;
++    const given = str((raw as { given?: unknown }).given, NAME_CAP);
++    authors.push(given === null ? { family } : { family, given });
++  }
++  const more = v.moreAuthors;
++  const year = v.year;
++  const venue = str(v.venue, VENUE_CAP);
++  return {
++    source: v.source,
++    title,
++    authors,
++    ...(typeof more === "number" && Number.isInteger(more) && more > 0 ? { moreAuthors: more } : {}),
++    ...(typeof year === "number" && Number.isInteger(year) && year >= 1500 && year <= 2100 ? { year } : {}),
++    ...(venue !== null ? { venue } : {}),
++  };
++}
++
++/** Citations' field read back: `found` through `readRegistryWork`, `conflict` with its source, else null. */
++export function readCitationRegistry(value: unknown): CitationRegistry | null {
++  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
++  const v = value as { kind?: unknown; source?: unknown };
++  if (v.kind === "conflict") return isSource(v.source) ? { kind: "conflict", source: v.source } : null;
++  if (v.kind !== "found") return null;
++  const work = readRegistryWork(value);
++  return work === null ? null : { kind: "found", ...work };
++}
++
++/** One author as a by-line names them: `Ashish Vaswani`, or an organisation's name alone. */
++export function registryAuthorName(author: RegistryWork["authors"][number]): string {
++  return author.given === undefined ? author.family : `${author.given} ${author.family}`;
++}
++
++/** Every kept author, comma-separated, and *et al.* when the registry lists more. Empty when none. */
++export function registryAuthorsText(work: RegistryWork): string {
++  const names = work.authors.map(registryAuthorName);
++  if (names.length === 0) return "";
++  return work.moreAuthors ? `${names.join(", ")} et al.` : names.join(", ");
++}
+diff --git a/src/types.ts b/src/types.ts
+index 9b5d2f3c..b47fa9b2 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -24,7 +24,7 @@
+  * nothing at all, so it costs the browser bundle nothing and keeps this file
+  * from becoming the sixth copy of the uuid regex.
+  */
+-import type { FailureKind } from "./messages.js";
++import type { FailureKind, PaperUnreadableReason } from "./messages.js";
+ import type { Assets } from "./assets.js";
+ import { isSpideryarnId, isUuid } from "./ids.js";
+ 
+@@ -3889,8 +3889,41 @@ export interface CitedWork {
+    * never on a visitor's list. docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
+    */
+   inSpideryarn?: CitedInSpideryarn;
++  /**
++   * **What Crossref or DataCite holds under the row's DOI or arXiv id** —
++   * written by the `citations` step after the model's list is built
++   * (src/citation-registry.ts, plan 261001a stage 5), so it is stored, unlike
++   * the read-time fields above. `found` only when the registry's title agrees
++   * with the article's; `conflict` when it does not — the article's identifier
++   * points at a different work. Absent: not looked up, nothing found, or a
++   * revision from before the stage.
++   */
++  registry?: CitationRegistry;
++}
++
++/** The two registries a record can come from (src/bibliographic.ts § `Registry`). */
++export type RegistrySource = "crossref" | "datacite";
++
++/**
++ * **A registry's record, as a row keeps it** — Citations' and Debate's
++ * (plan 261001a stages 5 and 6). Public metadata about a public identifier.
++ * Never read straight off a stored row on the client: nothing revalidates
++ * stored JSON, so read it through a guard.
++ */
++export interface RegistryWork {
++  source: RegistrySource;
++  title: string;
++  /** In the registry's order, at most `REGISTRY_AUTHORS_KEPT` (src/citation-registry.ts). An organisation is a `family` alone. */
++  authors: { family: string; given?: string }[];
++  /** How many more authors the registry lists past those kept; absent when none. */
++  moreAuthors?: number;
++  year?: number;
++  venue?: string;
+ }
+ 
++/** Citations' registry field: a record whose title agrees, or the fact that it does not. */
++export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "conflict"; source: RegistrySource };
++
+ /**
+  * How a cited work was matched to an article here, strongest first. `title` is
+  * the weakest — the same words, not the same identity — and the row says so.
+@@ -3939,8 +3972,73 @@ export interface CitationInvestigation {
+   /** Over everything the call was sent. Attached only while it matches. */
+   contextHash: string;
+   promptVersion: string;
++  /**
++   * **What we did about the paper itself** (plan 261001a stage 3) — code's
++   * account, never the model's. **Absent on an answer written before that
++   * stage**, which the row draws exactly as it did then.
++   */
++  paper?: InvestigatedPaper;
+ }
+ 
++/** How code confirmed a fetched PDF is the cited work — src/paper-evidence.ts § confirmIdentity. */
++export type PaperMatchedBy = "doi" | "arxiv" | "title-author";
++
++/** The AI's reading of how one of the paper's passages bears on what the article cites it for. */
++export type PaperPassageBears = "supports" | "partly" | "context";
++
++/**
++ * **One passage of the paper, found by code** — the chunk's own characters
++ * (`verifyPassage`, src/paper-evidence.ts), never the model's spelling. `bears`
++ * is the AI's reading.
++ */
++export interface PaperPassage {
++  /** The chunk it was found in, `c1`… */
++  chunk: string;
++  /** The page that chunk starts on, 1-based. */
++  page: number;
++  text: string;
++  bears: PaperPassageBears;
++}
++
++/**
++ * **The paper, as one *Investigate* press found it** — src/paper-evidence.ts's
++ * six outcomes, kept as a dated snapshot (`readAt`): nothing re-fetches on
++ * read, so the row never implies the remote paper is unchanged (Sol P-10).
++ * URLs and hosts are the owner's, like the rest of an investigation.
++ */
++export type InvestigatedPaper =
++  | {
++      state: "read";
++      requestedUrl: string;
++      finalUrl: string;
++      host: string;
++      /** Words in the paper's text as we read it, up to its references. */
++      words: number;
++      /** Words of it the AI was shown. */
++      sentWords: number;
++      /** The chunk ids the AI was shown, in document order. */
++      chunks: string[];
++      matchedBy: PaperMatchedBy;
++      /** sha256 of exactly what the AI was shown — the record of what was read. */
++      evidenceSha: string;
++      selectionVersion: string;
++      readAt: string;
++      /**
++       * At most three, each checked by code in the chunk it names. `[]`: the
++       * AI was shown the paper and no passage it offered was found there.
++       * `null`: the call for passages failed, so none was asked for
++       * successfully — never drawn as *found none*.
++       */
++      passages: PaperPassage[] | null;
++    }
++  | { state: "no-address"; readAt: string }
++  | { state: "unreadable"; requestedUrl: string; host: string; unreadableWhy: PaperUnreadableReason; readAt: string }
++  | { state: "not-the-full-text"; requestedUrl: string; finalUrl: string; host: string; readAt: string }
++  | { state: "not-confirmed"; requestedUrl: string; finalUrl: string; host: string; readAt: string }
++  | { state: "identity-conflict"; requestedUrl: string; host: string; readAt: string };
++
++export type InvestigatedPaperState = InvestigatedPaper["state"];
++
+ /**
+  * `POST /api/citations/:slug/:id/investigate` — SSE. Since plan 260930d,
+  * first `stage` (`{ stage: "finding" }`) and one `lookup` (a
+@@ -3959,11 +4057,13 @@ export interface InvestigateCitationDone {
+ /**
+  * Which step of the one *Investigate* press is running (plan 260930d): `finding`
+  * — the lookup that looks for the work's own page, only when the row has no
+- * current `assessed` one — then `reading`, the streamed answer. Sent as a
+- * `stage` frame (`{ stage }`); a `lookup` frame between them carries the
+- * lookup's answer, the same `FindCitationResponse` `POST …/find` answers.
++ * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
++ * paper itself fetched and checked, and when read, its passages asked for),
++ * then `reading`, the streamed answer. Sent as a `stage` frame (`{ stage }`);
++ * a `lookup` frame after `finding` carries the lookup's answer, the same
++ * `FindCitationResponse` `POST …/find` answers.
+  */
+-export type InvestigateStage = "finding" | "reading";
++export type InvestigateStage = "finding" | "reading-paper" | "reading";
+ 
+ /** What *Find it on the web* kept for one work. src/citation-find.ts. */
+ export interface CitationFound {
+@@ -4850,9 +4950,10 @@ interface DebateRowBase {
+   /*
+    * **What the work is — title, authors, year. Nothing writes these today.**
+    *
+-   * They are the landing place for a bibliographic lookup (DOI, arXiv,
+-   * OpenAlex) that Greg has not approved — a new outside service
+-   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred).
++   * They were the landing place for a bibliographic lookup
++   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred);
++   * that lookup landed as `registry` below (plan 261001a stage 6), its own
++   * field so where the words came from stays readable.
+    * Stage 2 first asked the search model to copy them off the page and kept
+    * each only if the page's extract held it; measured, that verified on 1 row
+    * of 11, because the extract is a passage from the middle of the page and the
+@@ -4884,6 +4985,15 @@ interface DebateRowBase {
+    * Read it through `readStoredBears`.
+    */
+   bears?: DebateBears;
++  /**
++   * **What Crossref or DataCite holds for the identifier this row's address
++   * carries** — written by the `debate` step after its searches
++   * (src/debate-registry.ts, plan 261001a stage 6), and only when the
++   * registry's title agrees with the engine's `title` for the page. The
++   * by-line and the *date* order prefer it to `authors` / `publishedYear`, and
++   * say where it came from. Read it through `readRegistryWork`.
++   */
++  registry?: RegistryWork;
+ }
+ 
+ /**
+diff --git a/src/web/CitationsPanel.tsx b/src/web/CitationsPanel.tsx
+index 4d4d6f44..ce645b88 100644
+--- a/src/web/CitationsPanel.tsx
++++ b/src/web/CitationsPanel.tsx
+@@ -44,7 +44,9 @@ import {
+   type CitedMatchedBy,
+   type CitedWork,
+   type InvestigateStage,
++  type RegistrySource,
+ } from "../types.js";
++import { readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
+ import { Link } from "./Link.js";
+ import { readHref } from "./router.js";
+ import type { PublicCitations, PublicCitedWork } from "../public-types.js";
+@@ -80,7 +82,7 @@ import {
+  * `CitedWork` is one of these, so the owner's path is unchanged. Since
+  * 2026-09-29, plan 260929c stage 3.
+  */
+-export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
++export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
+   /** The owner may have a private Find-it row; a public row cannot. */
+   linkFrom: CitedWork["linkFrom"];
+   found?: CitedWork["found"];
+@@ -92,6 +94,11 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
+   inSpideryarn?: CitedWork["inSpideryarn"];
+   /** The work's entry as the article gives it (plan 260930i). Not in the public projection. */
+   entry?: CitedWork["entry"];
++  /**
++   * The registry's record (plan 261001a stage 5). A visitor's row carries only
++   * a `found` one; the owner's may say `conflict`. Read through `workByLine`.
++   */
++  registry?: CitedWork["registry"];
+ };
+ 
+ /* ------------------------------------------------------------- the scores -- */
+@@ -178,9 +185,72 @@ export function shortAuthors(authors: string): string {
+   return authors;
+ }
+ 
+-/** `Chen et al. · 2017`, or empty when the article gives neither. */
+-export function byLineOf(work: Pick<ShownWork, "authors" | "year">): string {
+-  return [work.authors ? shortAuthors(work.authors) : undefined, work.year].filter(Boolean).join(" · ");
++/**
++ * **The authors and year a row draws, and where each came from** (plan
++ * 261001a stage 5). The article's own, always, where it gives them; the
++ * registry's only in a field the article leaves empty, and then `filled` names
++ * the registry so the row can say so. `conflict` when the registry holds a
++ * different title under the article's identifier — then nothing of its is drawn.
++ */
++export interface WorkByLine {
++  authors?: string;
++  year?: string;
++  filled: { source: RegistrySource; fields: ("authors" | "year")[] } | null;
++  conflict: RegistrySource | null;
++}
++
++export function workByLine(work: Pick<ShownWork, "authors" | "year" | "registry">): WorkByLine {
++  const registry = readCitationRegistry(work.registry);
++  if (registry?.kind !== "found") {
++    return {
++      ...(work.authors ? { authors: work.authors } : {}),
++      ...(work.year ? { year: work.year } : {}),
++      filled: null,
++      conflict: registry?.kind === "conflict" ? registry.source : null,
++    };
++  }
++  const fields: ("authors" | "year")[] = [];
++  let authors = work.authors || undefined;
++  if (!authors) {
++    const fromRegistry = registryAuthorsText(registry);
++    if (fromRegistry) {
++      authors = fromRegistry;
++      fields.push("authors");
++    }
++  }
++  let year = work.year || undefined;
++  if (!year && registry.year !== undefined) {
++    year = String(registry.year);
++    fields.push("year");
++  }
++  return {
++    ...(authors ? { authors } : {}),
++    ...(year ? { year } : {}),
++    filled: fields.length > 0 ? { source: registry.source, fields } : null,
++    conflict: null,
++  };
++}
++
++/** `Chen et al. · 2017`, or empty when neither the article nor the registry gives either. */
++export function byLineOf(work: Pick<ShownWork, "authors" | "year" | "registry">): string {
++  const line = workByLine(work);
++  return [line.authors ? shortAuthors(line.authors) : undefined, line.year].filter(Boolean).join(" · ");
++}
++
++/** What a by-line the registry filled in says about it: *Authors and year from Crossref …* */
++export function registryFilledNote(filled: NonNullable<WorkByLine["filled"]>): string {
++  const what = filled.fields.length === 2 ? "Authors and year" : filled.fields[0] === "authors" ? "Authors" : "Year";
++  return `${what} from ${REGISTRY_NAME[filled.source]}, under the identifier the article links — the article does not give ${filled.fields.length === 2 ? "them" : "it"}.`;
++}
++
++/** The short visible mark beside a filled-in by-line. */
++export function registryFilledMark(filled: NonNullable<WorkByLine["filled"]>): string {
++  return `from ${REGISTRY_NAME[filled.source]}`;
++}
++
++/** What a row says when the registry's title disagrees with the article's. */
++export function registryConflictNote(source: RegistrySource): string {
++  return `The article's identifier points, at ${REGISTRY_NAME[source]}, to a work with a different title — the link may not be this work.`;
+ }
+ 
+ /** Said under an entry wherever it is shown — a row's tooltip and the prose card. */
+@@ -827,6 +897,7 @@ function WorkRow({
+   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
+   const note = investigate?.note ?? null;
+   const scores = scoresOf(work);
++  const line = workByLine(work);
+   const by = byLineOf(work);
+   /* The found page's own title, in the tooltip: the search result's words,
+      never the model's (src/citation-find.ts). */
+@@ -857,6 +928,7 @@ function WorkRow({
+       </p>
+       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
+       {by && <ByLine work={work} by={by} />}
++      {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
+       <p className="cite-why">
+         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
+       </p>
+@@ -956,8 +1028,10 @@ function WorkRow({
+  */
+ function ByLine({ work, by }: { work: ShownWork; by: string }) {
+   const entry = work.entry;
+-  const shortened = work.authors !== undefined && shortAuthors(work.authors) !== work.authors;
+-  if (!entry && !shortened) return <p className="cite-by">{by}</p>;
++  const line = workByLine(work);
++  const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
++  const filled = line.filled;
++  if (!entry && !shortened && !filled) return <p className="cite-by">{by}</p>;
+   return (
+     <Tooltip
+       placement="bottom"
+@@ -965,7 +1039,8 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
+       className="tip-soon"
+       content={
+         <>
+-          <div className="tip-soon-head">{[work.authors, work.year].filter(Boolean).join(" · ")}</div>
++          <div className="tip-soon-head">{[line.authors, line.year].filter(Boolean).join(" · ")}</div>
++          {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
+           {entry && <p className="cite-entry">{entry}</p>}
+           {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
+         </>
+@@ -973,7 +1048,11 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
+     >
+       <p className="cite-by cite-by-more">
+         {by}
+-        {shortened && <span className="sr-only"> — authors: {work.authors}</span>}
++        {/* The registry's words are never drawn as the article's: a visible
++            mark, and the whole sentence in the tooltip (plan 261001a stage 5). */}
++        {filled && <span className="cite-by-from"> · {registryFilledMark(filled)}</span>}
++        {shortened && <span className="sr-only"> — authors: {line.authors}</span>}
++        {filled && <span className="sr-only"> — {registryFilledNote(filled)}</span>}
+         {entry && <span className="sr-only"> — {entry}</span>}
+       </p>
+     </Tooltip>
+diff --git a/src/web/DebatePanel.tsx b/src/web/DebatePanel.tsx
+index 74a8aa10..21138e48 100644
+--- a/src/web/DebatePanel.tsx
++++ b/src/web/DebatePanel.tsx
+@@ -133,6 +133,7 @@ import {
+   debateClaimsUnverified,
+   debateResponsesUnverified,
+   debateWithheldOnSharedLink,
++  debateRegistryNote,
+   debateWorkFieldsNote,
+ } from "../messages.js";
+ import {
+@@ -143,6 +144,7 @@ import {
+   type DebateKeySource,
+   type DebateLean,
+   type IdentificationLevel,
++  type RegistrySource,
+   distinctSources,
+   identificationLevel,
+   identifiesOf,
+@@ -166,9 +168,11 @@ import {
+   readAuthors,
+   readBears,
+   readPublishedYear,
++  readRowRegistry,
+   readWorkTitle,
+   visibleClaims,
+ } from "./debate-order.js";
++import { registryAuthorName } from "../registry-work.js";
+ import {
+   inThread,
+   KEY_ROLE_LABEL,
+@@ -1799,8 +1803,12 @@ function isCutShort(title: string): boolean {
+  * extract — stands in only where the engine gave none or cut it short, and then
+  * `titleIsAI` says so. With neither, the headline is the address.
+  *
+- * Authors and year are always the AI's reading (the plan's F2): the words are
+- * on the page, which does not prove they are *this* page's byline.
++ * Authors and year are the AI's reading (the plan's F2) — the words are on the
++ * page, which does not prove they are *this* page's byline — **unless the row
++ * carries a registry record** (plan 261001a stage 6): the address carried a
++ * DOI or arXiv id, and the registry's title for it agrees with the engine's.
++ * Then the record's authors and year win, and `registry` names where they came
++ * from; a cut-short engine title gives way to the record's whole one too.
+  */
+ export function rowWork(row: DebateRow): {
+   headline: string;
+@@ -1808,17 +1816,33 @@ export function rowWork(row: DebateRow): {
+   headlineIsAddress: boolean;
+   authors: string[];
+   year: number | null;
++  /** Set when the authors and year (and maybe the headline) are the registry's. */
++  registry: RegistrySource | null;
+ } {
+   const engine = row.title?.trim() ? row.title : null;
++  const record = readRowRegistry(row);
+   const work = readWorkTitle(row);
+-  const useWork = work !== null && (engine === null || isCutShort(engine));
+-  const headline = useWork ? work : (engine ?? addressOf(row.url));
++  const cut = engine !== null && isCutShort(engine);
++  const useRecord = record !== null && cut;
++  const useWork = !useRecord && work !== null && (engine === null || cut);
++  const headline = useRecord ? record.title : useWork ? work : (engine ?? addressOf(row.url));
++  if (record !== null) {
++    return {
++      headline,
++      titleIsAI: false,
++      headlineIsAddress: false,
++      authors: record.authors.map(registryAuthorName),
++      year: record.year ?? readPublishedYear(row),
++      registry: record.source,
++    };
++  }
+   return {
+     headline,
+     titleIsAI: useWork,
+     headlineIsAddress: !useWork && engine === null,
+     authors: readAuthors(row),
+     year: readPublishedYear(row),
++    registry: null,
+   };
+ }
+ 
+@@ -1904,8 +1928,16 @@ function Row({
+       {(byline.length > 0 || !work.headlineIsAddress || direct) && (
+         <p className="dbt-meta">
+           {byline.length > 0 && (
+-            <span className="dbt-byline" title="As the AI read it off the page — found in the page's extract, not checked as its byline">
++            <span
++              className="dbt-byline"
++              title={
++                work.registry !== null
++                  ? debateRegistryNote(work.registry)
++                  : "As the AI read it off the page — found in the page's extract, not checked as its byline"
++              }
++            >
+               {byline.join(" · ")}
++              {work.registry !== null && <span className="tw:sr-only"> — {debateRegistryNote(work.registry)}</span>}
+             </span>
+           )}
+           {byline.length > 0 && !work.headlineIsAddress && (
+@@ -2012,13 +2044,14 @@ function RowDetail({
+      wire's, and calling it the AI's reading would be false (F2). */
+   const aiParts = [
+     work.titleIsAI ? "title" : null,
+-    work.authors.length > 0 ? "authors" : null,
+-    work.year === null ? null : "year",
++    work.authors.length > 0 && work.registry === null ? "authors" : null,
++    work.year === null || work.registry !== null ? null : "year",
+   ].filter((part): part is string => part !== null);
+   return (
+     <div id={id} className="dbt-detail" hidden={hidden}>
+       {work.authors.length > 0 && <p className="dbt-authors">By {work.authors.join(", ")}</p>}
+       {aiParts.length > 0 && <p className="dbt-note dbt-work-note">{debateWorkFieldsNote(aiParts)}</p>}
++      {work.registry !== null && <p className="dbt-note dbt-work-note">{debateRegistryNote(work.registry)}</p>}
+       {/* **The fence.** Everything outside it is either the wire's or the
+           article's; everything inside it is a model's reading of a stranger's
+           page, and nothing in the returned evidence verifies any of it. */}
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index 9a0915e3..cea20b11 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -70,8 +70,12 @@ import {
+   CITE_VERDICT_LABEL,
+   CITE_WHY_LABEL,
+   readNoteOf,
++  registryConflictNote,
++  registryFilledMark,
++  registryFilledNote,
+   sourceOf,
+   verdictText,
++  workByLine,
+ } from "./CitationsPanel.js";
+ import { useHoverCard } from "./useHoverCard.js";
+ import { TermJump } from "./TermJump.js";
+@@ -1654,6 +1658,7 @@ function clip(text: string, max: number): string {
+ function CiteCard({ work }: { work: CitedWork }) {
+   const source = sourceOf(work);
+   const by = byLineOf(work);
++  const line = workByLine(work);
+   const where = work.citedAt.length;
+ 
+   return (
+@@ -1688,7 +1693,15 @@ function CiteCard({ work }: { work: CitedWork }) {
+           <span className="prose-card-name">{work.title}</span>
+         )}
+       </p>
+-      {by && <p className="prose-card-text prose-card-cite-by">{by}</p>}
++      {by && (
++        <p className="prose-card-text prose-card-cite-by">
++          {by}
++          {/* Where the registry filled in what the article does not give: said
++              on the card itself, with the sentence on hover (plan 261001a stage 5). */}
++          {line.filled && <span title={registryFilledNote(line.filled)}> · {registryFilledMark(line.filled)}</span>}
++        </p>
++      )}
++      {line.conflict && <p className="prose-card-cite-read">{registryConflictNote(line.conflict)}</p>}
+       {/* The entry as the article gives it — journal, conference, volume
+           (SPIDERYARN-READING2-6K, plan 260930i). Here in full rather than in a
+           tooltip: a card is what a finger gets, and it has the room. */}
+diff --git a/src/web/debate-order.ts b/src/web/debate-order.ts
+index 33fc4c24..593c0230 100644
+--- a/src/web/debate-order.ts
++++ b/src/web/debate-order.ts
+@@ -21,7 +21,7 @@
+  *  - **claim** (*by claim*) — rows about this piece as the first group, then one
+  *    group per claim in **article order**, headed by the claim's own words.
+  *    Needs nothing the artefact does not already have.
+- *  - **date** — oldest first by `publishedYear`, undated last, with a marker at
++ *  - **date** — oldest first by `rowYear` (the registry's year, else `publishedYear`), undated last, with a marker at
+  *    the article's own year. Needs a row that carries a year.
+  *  - **stance** — critical first, then *could not tell*, *neither*,
+  *    *supportive*. Needs nothing new.
+@@ -55,13 +55,16 @@
+  * DTO is a listed defence and does not pass them — the plan's § Deliberately
+  * not in this), and a stored row is never revalidated. So every read here
+  * copes with the field being absent or nonsense, and a visitor is offered *by
+- * claim* and *stance* by construction.
++ * claim* and *stance* by construction. The one exception is `registry` (plan
++ * 261001a stage 6), which the DTO does pass: a visitor is offered *date* where
++ * a row's record carries a year.
+  *
+  * **Search order is the tie-break everywhere**, and it is never re-sorted by
+  * identification level — the chip on a direct row already says that.
+  */
+-import type { BlockId, DebateBears, DebateLean } from "../types.js";
++import type { BlockId, DebateBears, DebateLean, RegistryWork } from "../types.js";
+ import { readStoredBears, readStoredLean } from "../types.js";
++import { readRegistryWork } from "../registry-work.js";
+ import { applyThreshold, type ThresholdResult } from "./threshold.js";
+ 
+ /**
+@@ -131,6 +134,24 @@ export function readPublishedYear(row: object): number | null {
+     : null;
+ }
+ 
++/**
++ * **A row's registry record, or null** (plan 261001a stage 6) — rebuilt by
++ * `readRegistryWork`, so a stored row in any shape reads as a record or as
++ * nothing.
++ */
++export function readRowRegistry(row: object): RegistryWork | null {
++  return readRegistryWork((row as { registry?: unknown }).registry);
++}
++
++/**
++ * **The year a row is dated by**: the registry's, where the row's address
++ * carried an identifier whose record agreed with the page's title, else
++ * `publishedYear`. The *date* order sorts on this and nothing else.
++ */
++export function rowYear(row: object): number | null {
++  return readRowRegistry(row)?.year ?? readPublishedYear(row);
++}
++
+ /** A row's `workTitle`, or null when absent or blank. */
+ export function readWorkTitle(row: object): string | null {
+   const value = (row as { workTitle?: unknown }).workTitle;
+@@ -233,7 +254,7 @@ function hasDataFor(order: DebateOrder, direct: readonly object[], claims: reado
+     case "prioritised":
+       return claims.some((r) => readBears(r) !== null);
+     case "date":
+-      return [...direct, ...claims].some((r) => readPublishedYear(r) !== null);
++      return [...direct, ...claims].some((r) => rowYear(r) !== null);
+     case "claim":
+     case "stance":
+       return true;
+@@ -312,17 +333,17 @@ function byDate<D extends OrderableRow, C extends ClaimLikeRow>(
+ ): DebateGroup<D, C>[] {
+   const all: (D | C)[] = [...direct, ...claims];
+   const dated = stableBy(
+-    all.filter((r) => readPublishedYear(r) !== null),
+-    (r) => readPublishedYear(r) ?? 0,
++    all.filter((r) => rowYear(r) !== null),
++    (r) => rowYear(r) ?? 0,
+   );
+-  const undated = all.filter((r) => readPublishedYear(r) === null);
++  const undated = all.filter((r) => rowYear(r) === null);
+   if (articleYear === null) {
+     return nonEmpty<D, C>([
+       { kind: "flat", rows: dated },
+       { kind: "undated", rows: undated },
+     ]);
+   }
+-  const cut = dated.findIndex((r) => (readPublishedYear(r) ?? 0) >= articleYear);
++  const cut = dated.findIndex((r) => (rowYear(r) ?? 0) >= articleYear);
+   const at = cut === -1 ? dated.length : cut;
+   return nonEmpty<D, C>([
+     { kind: "flat", rows: dated.slice(0, at) },
+diff --git a/src/web/styles/citations.css b/src/web/styles/citations.css
+index 15c676ff..cca60701 100644
+--- a/src/web/styles/citations.css
++++ b/src/web/styles/citations.css
+@@ -56,6 +56,9 @@
+   text-underline-offset: 2px;
+   width: fit-content;
+ }
++/* "from Crossref" beside a by-line the registry filled in: quieter than the
++   by-line, because it says where the words came from rather than what they are. */
++.cite-by-from { color: var(--ink-faint); }
+ /* The entry in the tooltip, and in the prose card: the article's own words. */
+ .cite-entry {
+   font-size: 0.8rem;
+diff --git a/tests/citation-registry.test.ts b/tests/citation-registry.test.ts
+new file mode 100644
+index 00000000..81e4aca2
+--- /dev/null
++++ b/tests/citation-registry.test.ts
+@@ -0,0 +1,207 @@
++/**
++ * **Citations rows carry the registry's record** — plan 261001a stage 5
++ * (src/citation-registry.ts). No network and no database: `lookupWork` is a
++ * fake, and the one test of the wiring checks the real deps are `lookupWork`
++ * itself (the memory note *mutate the composition root*).
++ */
++import { describe, expect, it } from "vitest";
++
++import { lookupWork, type LookupResult, type WorkId, type WorkRecord } from "../src/bibliographic.js";
++import {
++  attachCitationRegistry,
++  citationRegistryDeps,
++  MAX_REGISTRY_LOOKUPS,
++  REGISTRY_CONCURRENCY,
++  rowWorkId,
++} from "../src/citation-registry.js";
++import { debateRegistryDeps } from "../src/debate-registry.js";
++import { REGISTRY_AUTHORS_KEPT } from "../src/registry-work.js";
++import type { BlockId, Citations, CitedWork } from "../src/types.js";
++
++const AT = "spya-k3m9qt" as BlockId;
++
++function work(over: Partial<CitedWork> & Pick<CitedWork, "id" | "title" | "url" | "linkFrom">): CitedWork {
++  return {
++    key: `work:${over.title}`,
++    why: "What the piece uses it for.",
++    mentions: [],
++    citedAt: [AT],
++    firstCited: AT,
++    citedInBody: true,
++    ...over,
++  };
++}
++
++function list(rows: CitedWork[]): Citations {
++  return {
++    version: "citations/4",
++    generator: "m",
++    slug: "s",
++    sourceHash: "h",
++    citations: rows,
++    capped: false,
++  } as Citations;
++}
++
++function record(id: string, title: string, over: Partial<WorkRecord> = {}): WorkRecord {
++  return {
++    id: id as WorkId,
++    source: "crossref",
++    title,
++    authors: [{ family: "Vaswani", given: "Ashish" }, { family: "Shazeer", given: "Noam" }],
++    year: 2017,
++    venue: "NeurIPS",
++    doi: id.replace(/^doi:/, ""),
++    ...over,
++  };
++}
++
++/** A fake registry: answers by id, and records every id it was asked. */
++function fake(answers: Record<string, LookupResult>) {
++  const asked: string[] = [];
++  return {
++    asked,
++    lookup: async (id: WorkId): Promise<LookupResult> => {
++      asked.push(id);
++      return answers[id] ?? { kind: "not-found" };
++    },
++  };
++}
++
++const ATTENTION = work({
++  id: "w1",
++  title: "Attention Is All You Need",
++  url: "https://doi.org/10.5555/attention",
++  linkFrom: "doi",
++});
++
++describe("which rows are looked up", () => {
++  it("is the row's link — a doi.org or arxiv.org address — and nothing else", () => {
++    expect(rowWorkId(ATTENTION)).toBe("doi:10.5555/attention");
++    expect(rowWorkId(work({ id: "a", title: "T", url: "https://arxiv.org/abs/1706.03762v5", linkFrom: "arxiv" }))).toBe(
++      "arxiv:1706.03762",
++    );
++    /* An article-given link that happens to be a doi.org address is a DOI link too. */
++    expect(rowWorkId(work({ id: "b", title: "T", url: "https://doi.org/10.1000/x", linkFrom: "article" }))).toBe("doi:10.1000/x");
++    expect(rowWorkId(work({ id: "c", title: "T", url: "https://example.com/paper", linkFrom: "article" }))).toBeNull();
++    expect(
++      rowWorkId(work({ id: "d", title: "T", url: "https://scholar.google.com/scholar?q=10.1000/x", linkFrom: "search" })),
++    ).toBeNull();
++  });
++
++  it("asks nothing for rows without an identifier", async () => {
++    const reg = fake({});
++    const out = await attachCitationRegistry(
++      list([work({ id: "c", title: "T", url: "https://example.com/paper", linkFrom: "article" })]),
++      reg,
++    );
++    expect(reg.asked).toEqual([]);
++    expect(out.citations.citations[0]?.registry).toBeUndefined();
++  });
++});
++
++describe("what an answer puts on the row", () => {
++  it("keeps a found record whose title agrees", async () => {
++    const reg = fake({ "doi:10.5555/attention": { kind: "found", record: record("doi:10.5555/attention", "Attention is all you need") } });
++    const out = await attachCitationRegistry(list([ATTENTION]), reg);
++    expect(out.citations.citations[0]?.registry).toEqual({
++      kind: "found",
++      source: "crossref",
++      title: "Attention is all you need",
++      authors: [
++        { family: "Vaswani", given: "Ashish" },
++        { family: "Shazeer", given: "Noam" },
++      ],
++      year: 2017,
++      venue: "NeurIPS",
++    });
++    expect(out.counts).toMatchObject({ identified: 1, asked: 1, found: 1, conflict: 0 });
++  });
++
++  it("keeps a disagreeing title as a conflict, and none of the record", async () => {
++    const reg = fake({
++      "doi:10.5555/attention": {
++        kind: "found",
++        record: record("doi:10.5555/attention", "Soil microbiomes of the Atacama desert", { source: "datacite" }),
++      },
++    });
++    const out = await attachCitationRegistry(list([ATTENTION]), reg);
++    expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
++    expect(out.counts.conflict).toBe(1);
++  });
++
++  it("leaves the row as it was when the registry is unavailable, not found, or throws — and the step succeeds", async () => {
++    const rows = [
++      ATTENTION,
++      work({ id: "w2", title: "Two", url: "https://doi.org/10.1000/two", linkFrom: "doi" }),
++      work({ id: "w3", title: "Three", url: "https://doi.org/10.1000/three", linkFrom: "doi" }),
++    ];
++    const out = await attachCitationRegistry(list(rows), {
++      lookup: async (id) => {
++        if (id === "doi:10.1000/three") throw new Error("boom");
++        return id === "doi:10.1000/two" ? { kind: "not-found" } : { kind: "unavailable", why: "busy" };
++      },
++    });
++    expect(out.citations.citations.map((w) => w.registry)).toEqual([undefined, undefined, undefined]);
++    expect(out.citations.citations.map((w) => "registry" in w)).toEqual([false, false, false]);
++    expect(out.counts).toMatchObject({ asked: 3, notFound: 1, unavailable: 2, found: 0 });
++  });
++
++  it("clears an earlier revision's registry rather than keeping it", async () => {
++    const stale = { ...ATTENTION, registry: { kind: "conflict" as const, source: "crossref" as const } };
++    const out = await attachCitationRegistry(list([stale]), fake({}));
++    expect("registry" in (out.citations.citations[0] ?? {})).toBe(false);
++  });
++
++  it("keeps at most REGISTRY_AUTHORS_KEPT authors and counts the rest", async () => {
++    const many = Array.from({ length: REGISTRY_AUTHORS_KEPT + 5 }, (_, i) => ({ family: `Author${i}` }));
++    const reg = fake({
++      "doi:10.5555/attention": { kind: "found", record: record("doi:10.5555/attention", "Attention Is All You Need", { authors: many }) },
++    });
++    const out = await attachCitationRegistry(list([ATTENTION]), reg);
++    const r = out.citations.citations[0]?.registry;
++    expect(r?.kind).toBe("found");
++    if (r?.kind !== "found") return;
++    expect(r.authors).toHaveLength(REGISTRY_AUTHORS_KEPT);
++    expect(r.moreAuthors).toBe(5);
++  });
++});
++
++describe("how many, and how fast", () => {
++  it("asks at most MAX_REGISTRY_LOOKUPS, the first in list order, and never more than two at once", async () => {
++    const rows = Array.from({ length: MAX_REGISTRY_LOOKUPS + 20 }, (_, i) =>
++      work({ id: `w${i}`, title: `Work ${i}`, url: `https://doi.org/10.1000/w${i}`, linkFrom: "doi" }),
++    );
++    const asked: string[] = [];
++    let inFlight = 0;
++    let most = 0;
++    const out = await attachCitationRegistry(list(rows), {
++      lookup: async (id) => {
++        asked.push(id);
++        inFlight++;
++        most = Math.max(most, inFlight);
++        await new Promise((r) => setTimeout(r, 1));
++        inFlight--;
++        return { kind: "not-found" };
++      },
++    });
++    expect(asked).toHaveLength(MAX_REGISTRY_LOOKUPS);
++    expect(asked[0]).toBe("doi:10.1000/w0");
++    expect(asked).not.toContain(`doi:10.1000/w${MAX_REGISTRY_LOOKUPS}`);
++    expect(most).toBe(REGISTRY_CONCURRENCY);
++    expect(out.counts).toMatchObject({ identified: MAX_REGISTRY_LOOKUPS + 20, asked: MAX_REGISTRY_LOOKUPS, overCap: 20 });
++  });
++
++  it("asks once for an identifier two rows share", async () => {
++    const reg = fake({});
++    await attachCitationRegistry(list([ATTENTION, { ...ATTENTION, id: "w1b" }]), reg);
++    expect(reg.asked).toEqual(["doi:10.5555/attention"]);
++  });
++});
++
++describe("the composition root", () => {
++  it("hands both steps stage 1's lookupWork itself", () => {
++    expect(citationRegistryDeps.lookup).toBe(lookupWork);
++    expect(debateRegistryDeps.lookup).toBe(lookupWork);
++  });
++});
+diff --git a/tests/debate-registry.test.ts b/tests/debate-registry.test.ts
+new file mode 100644
+index 00000000..39d351c1
+--- /dev/null
++++ b/tests/debate-registry.test.ts
+@@ -0,0 +1,196 @@
++/**
++ * **Debate's authors and year, from the registry** — plan 261001a stage 6
++ * (src/debate-registry.ts). No network: `lookupWork` is a fake.
++ */
++import { describe, expect, it } from "vitest";
++
++import type { LookupResult, WorkId, WorkRecord } from "../src/bibliographic.js";
++import { attachDebateRegistry, debateTitleAgrees, debateWorkId, publisherPathDoi } from "../src/debate-registry.js";
++import type { BlockId, ClaimDebateRow, Debate, DirectDebateRow } from "../src/types.js";
++
++describe("which addresses carry an identifier", () => {
++  it("reads doi.org and arxiv.org addresses through parseWorkId", () => {
++    expect(debateWorkId("https://doi.org/10.1038/nn.4304")).toBe("doi:10.1038/nn.4304");
++    expect(debateWorkId("https://arxiv.org/abs/1706.03762v7")).toBe("arxiv:1706.03762");
++    expect(debateWorkId("https://arxiv.org/pdf/1809.10635")).toBe("arxiv:1809.10635");
++  });
++
++  it("reads a publisher path whose first segment is doi", () => {
++    expect(debateWorkId("https://www.pnas.org/doi/10.1073/pnas.2208839120")).toBe("doi:10.1073/pnas.2208839120");
++    expect(debateWorkId("https://onlinelibrary.wiley.com/doi/full/10.1111/cogs.13154")).toBe("doi:10.1111/cogs.13154");
++    expect(debateWorkId("https://dl.acm.org/doi/10.1145/3442188.3445922")).toBe("doi:10.1145/3442188.3445922");
++    expect(debateWorkId("https://dl.acm.org/doi/pdf/10.1145/3442188.3445922?download=true")).toBe(
++      "doi:10.1145/3442188.3445922",
++    );
++    /* A suffix with its own slash is kept whole. */
++    expect(publisherPathDoi("https://journals.sagepub.com/doi/abs/10.1177/0956797614524581/x")).toBe(
++      "10.1177/0956797614524581/x",
++    );
++  });
++
++  it("refuses a 10. that is anywhere else", () => {
++    /* A path that merely contains a DOI-shaped run. */
++    expect(debateWorkId("https://example.com/files/10.1073/pnas.2208839120")).toBeNull();
++    /* `doi` further down the path, not first. */
++    expect(debateWorkId("https://example.com/blog/doi/10.1073/pnas.2208839120")).toBeNull();
++    /* An unknown word between `doi` and the DOI. */
++    expect(debateWorkId("https://example.com/doi/mirror/10.1073/pnas.2208839120")).toBeNull();
++    /* In the query string. */
++    expect(debateWorkId("https://example.com/doi?id=10.1073/pnas.2208839120")).toBeNull();
++    expect(debateWorkId("https://example.com/view?doi=10.1073/pnas.2208839120")).toBeNull();
++    /* A prefix with no suffix, and a registrant too short to be one. */
++    expect(debateWorkId("https://www.pnas.org/doi/10.1073")).toBeNull();
++    expect(debateWorkId("https://www.pnas.org/doi/10.17/x")).toBeNull();
++    /* A non-default port, a credential, a non-web scheme. */
++    expect(debateWorkId("https://www.pnas.org:8443/doi/10.1073/pnas.1")).toBeNull();
++    expect(debateWorkId("https://u:p@www.pnas.org/doi/10.1073/pnas.1")).toBeNull();
++    expect(debateWorkId("ftp://www.pnas.org/doi/10.1073/pnas.1")).toBeNull();
++    /* A plain page. */
++    expect(debateWorkId("https://www.nature.com/articles/nn.4304")).toBeNull();
++  });
++});
++
++describe("the title must agree with the engine's", () => {
++  const REG = "Memory sources associated with REM and NREM dream reports throughout the night";
++  it("agrees on the whole title, and on the whole title with a site after it", () => {
++    expect(debateTitleAgrees(REG, REG)).toBe(true);
++    expect(debateTitleAgrees(`${REG} | PNAS`, REG)).toBe(true);
++  });
++  it("agrees on a cut-short title by its opening words", () => {
++    expect(debateTitleAgrees("Memory Sources Associated with REM and NREM Dream Reports ...", REG)).toBe(true);
++    expect(debateTitleAgrees("Memory Sources Associated with REM and NREM Dream Reports …", REG)).toBe(true);
++  });
++  it("disagrees on a different work, a notice about the work, a too-short cut, or no engine title", () => {
++    expect(debateTitleAgrees("Soil microbiomes of the Atacama desert", REG)).toBe(false);
++    expect(debateTitleAgrees(`Correction to: ${REG}`, REG)).toBe(false);
++    expect(debateTitleAgrees("Memory sources ...", REG)).toBe(false);
++    expect(debateTitleAgrees(undefined, REG)).toBe(false);
++    expect(debateTitleAgrees("  ", REG)).toBe(false);
++  });
++});
++
++/* -------------------------------------------------------------- the step -- */
++
++const BLOCK = "spya-k3m9qt" as BlockId;
++
++function claimRow(id: string, url: string, title?: string): ClaimDebateRow {
++  return {
++    id,
++    url,
++    ...(title === undefined ? {} : { title }),
++    sourceQuote: "a passage",
++    relation: "qualifies",
++    lean: "neither",
++    applies: "It narrows the claim.",
++    claimQuote: "the claim",
++    blockId: BLOCK,
++  };
++}
++
++function directRow(id: string, url: string, title: string): DirectDebateRow {
++  return {
++    id,
++    url,
++    title,
++    sourceQuote: "a passage",
++    relation: "disputes",
++    lean: "leans-against",
++    applies: "It disputes it.",
++    articleReferenceQuote: "the piece",
++    identifies: [{ kind: "named", by: "title", witness: "the piece" }],
++  };
++}
++
++function debateOf(direct: DirectDebateRow[], claims: ClaimDebateRow[]): Debate {
++  const counts = {
++    returnedSources: 0,
++    reportedRows: 0,
++    keptRows: 0,
++    omittedOverCap: 0,
++    lost: {
++      uncited: 0,
++      selfSource: 0,
++      unverifiedSource: 0,
++      directnessUnverified: 0,
++      sourceIsCopy: 0,
++      claimNotInBlock: 0,
++      unknownBlockId: 0,
++      malformed: 0,
++    },
++    webSearches: 0,
++  };
++  return {
++    version: "debate/4",
++    generator: "m",
++    slug: "s",
++    sourceHash: "h",
++    searchedAt: "2026-10-01T00:00:00.000Z",
++    direct: { rows: direct, counts },
++    claims: { rows: claims, counts },
++    elapsedMs: 1,
++  };
++}
++
++function found(title: string, over: Partial<WorkRecord> = {}): LookupResult {
++  return {
++    kind: "found",
++    record: {
++      id: "doi:10.1073/pnas.1" as WorkId,
++      source: "crossref",
++      title,
++      authors: [{ family: "Wamsley", given: "Erin" }],
++      year: 2019,
++      doi: "10.1073/pnas.1",
++      ...over,
++    },
++  };
++}
++
++describe("attachDebateRegistry", () => {
++  it("keeps an agreeing record on every row with that address, asks each identifier once, and never asks for a plain page", async () => {
++    const asked: string[] = [];
++    const url = "https://www.pnas.org/doi/10.1073/pnas.1";
++    const debate = debateOf(
++      [directRow("d1", url, "Dreams and memory | PNAS")],
++      [claimRow("c1", url, "Dreams and memory | PNAS"), claimRow("c2", "https://blog.example.org/post", "A post")],
++    );
++    const out = await attachDebateRegistry(debate, {
++      lookup: async (id) => {
++        asked.push(id);
++        return found("Dreams and memory");
++      },
++    });
++    expect(asked).toEqual(["doi:10.1073/pnas.1"]);
++    const want = { source: "crossref", title: "Dreams and memory", authors: [{ family: "Wamsley", given: "Erin" }], year: 2019 };
++    expect(out.debate.direct.rows[0]?.registry).toEqual(want);
++    expect(out.debate.claims.rows[0]?.registry).toEqual(want);
++    expect("registry" in (out.debate.claims.rows[1] ?? {})).toBe(false);
++    expect(out.counts).toMatchObject({ identified: 1, found: 1, disagreed: 0 });
++  });
++
++  it("drops a record whose title disagrees — doi.org included — and one for a row with no engine title", async () => {
++    const debate = debateOf(
++      [],
++      [
++        claimRow("c1", "https://doi.org/10.1073/pnas.1", "Something else entirely"),
++        claimRow("c2", "https://doi.org/10.1073/pnas.2"),
++      ],
++    );
++    const out = await attachDebateRegistry(debate, { lookup: async () => found("Dreams and memory") });
++    expect(out.debate.claims.rows.map((r) => "registry" in r)).toEqual([false, false]);
++    expect(out.counts.disagreed).toBe(2);
++  });
++
++  it("survives a registry that is unavailable or throws", async () => {
++    const debate = debateOf([], [claimRow("c1", "https://doi.org/10.1073/pnas.1", "Dreams and memory")]);
++    const a = await attachDebateRegistry(debate, { lookup: async () => ({ kind: "unavailable", why: "busy" }) });
++    expect("registry" in (a.debate.claims.rows[0] ?? {})).toBe(false);
++    const b = await attachDebateRegistry(debate, {
++      lookup: async () => {
++        throw new Error("boom");
++      },
++    });
++    expect("registry" in (b.debate.claims.rows[0] ?? {})).toBe(false);
++    expect(b.counts.unavailable).toBe(1);
++  });
++});
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index 4164ec35..8ab415b9 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -1086,6 +1086,17 @@ describe("the artefacts a shared link carries", () => {
+         citedInBody: true,
+         url: "https://doi.org/10.1/abc",
+         linkFrom: "doi",
++        /* A found registry record, every field set (plan 261001a stage 5):
++           public metadata about the public DOI, and it crosses field by field. */
++        registry: {
++          kind: "found",
++          source: "crossref",
++          title: "A clean work",
++          authors: [{ family: "Somebody", given: "S." }],
++          moreAuthors: 3,
++          year: 2004,
++          venue: "Journal of Works",
++        },
+         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
+         /* The owner's *Look it up* (plan 260929g R-6): every field set, each
+            string a sentinel that must not reach the wire. */
+@@ -1115,6 +1126,21 @@ describe("the artefacts a shared link carries", () => {
+           at: "2026-09-30T10:00:00.000Z",
+           contextHash: "invhashsentinel0",
+           promptVersion: "citation-investigate/1",
++          /* Plan 261001a stage 3: what was read of the paper is owner-only too. */
++          paper: {
++            state: "read",
++            requestedUrl: "https://paper-requested-sentinel.example/p.pdf",
++            finalUrl: "https://paper-final-sentinel.example/p.pdf",
++            host: "paper-host-sentinel.example",
++            words: 1234,
++            sentWords: 567,
++            chunks: ["c1"],
++            matchedBy: "doi",
++            evidenceSha: "9".repeat(64),
++            selectionVersion: "paper-selection-sentinel",
++            readAt: "2026-10-01T10:00:00.000Z",
++            passages: [{ chunk: "c1", page: 1, text: "paper passage sentinel from the pdf", bears: "supports" }],
++          },
+         },
+         /* The work's reference entry (plan 260930i) — owner-only until the
+            public DTO names it, which is Greg's call on a defence. */
+@@ -1139,6 +1165,9 @@ describe("the artefacts a shared link carries", () => {
+         citedInBody: false,
+         url: "https://user:pw@x.org/paper",
+         linkFrom: "article",
++        /* A registry conflict is our verdict on the article's identifier and
++           stays with the owner (plan 261001a stage 5). */
++        registry: { kind: "conflict", source: "datacite" },
+       },
+       {
+         id: "w-private",
+@@ -1709,6 +1738,16 @@ describe("the artefacts a shared link carries", () => {
+         "citations[].reference.blockId",
+         "citations[].reference.quote",
+         "citations[].reference.start",
++        "citations[].registry",
++        "citations[].registry.authors",
++        "citations[].registry.authors[].family",
++        "citations[].registry.authors[].given",
++        "citations[].registry.kind",
++        "citations[].registry.moreAuthors",
++        "citations[].registry.source",
++        "citations[].registry.title",
++        "citations[].registry.venue",
++        "citations[].registry.year",
+         "citations[].relevance",
+         "citations[].title",
+         "citations[].url",
+@@ -1719,6 +1758,10 @@ describe("the artefacts a shared link carries", () => {
+     const json = JSON.stringify(built.citations);
+     expect(json).not.toContain("found.example");
+     expect(json).not.toContain('"key"');
++    /* A found registry record crosses; a conflict does not (plan 261001a stage 5). */
++    expect(built.citations?.citations[0]?.registry?.kind).toBe("found");
++    expect(built.citations?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
++    expect(json).not.toContain("conflict");
+     expect(built.citations?.capped).toBe(true);
+   });
+ 
+@@ -1757,6 +1800,14 @@ describe("the artefacts a shared link carries", () => {
+       "investigation-matched-host.example",
+       "invhashsentinel0",
+       '"extractsRead"',
++      /* The paper itself (plan 261001a stage 3). */
++      '"paper"',
++      "paper-requested-sentinel.example",
++      "paper-final-sentinel.example",
++      "paper-host-sentinel.example",
++      "paper-selection-sentinel",
++      "paper passage sentinel from the pdf",
++      '"sentWords"',
+     ]) {
+       expect(json, sentinel).not.toContain(sentinel);
+     }
+@@ -2063,6 +2114,16 @@ describe("the debate a shared link carries", () => {
+     webSearches: 12,
+   };
+ 
++  /** A registry record with every field set (plan 261001a stage 6) — public metadata, so it crosses. */
++  const REGISTRY = {
++    source: "datacite" as const,
++    title: "A reply",
++    authors: [{ family: "Reply", given: "A." }, { family: "Consortium" }],
++    moreAuthors: 2,
++    year: 2021,
++    venue: "Zenodo",
++  };
++
+   /** A direct row with every field set, and all three kinds of evidence. */
+   function directRow(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
+     return {
+@@ -2074,6 +2135,7 @@ describe("the debate a shared link carries", () => {
+       lean: "leans-against",
+       applies: "It argues the measure is not computable.",
+       limits: "It does not address the second half.",
++      registry: REGISTRY,
+       articleReferenceQuote: `in "${TITLE}"`,
+       identifies: [
+         { kind: "linked", url: "https://www.noemamag.com/the-mythology-of-conscious-ai/" },
+@@ -2095,6 +2157,7 @@ describe("the debate a shared link carries", () => {
+       lean: "neither",
+       applies: "It narrows the claim.",
+       limits: "Only for mammals.",
++      registry: REGISTRY,
+       claimQuote: "the measurement",
+       blockId: "spya-bbbbbb" as BlockId,
+       ...over,
+@@ -2153,6 +2216,15 @@ describe("the debate a shared link carries", () => {
+         "direct.rows[].lean",
+         "direct.rows[].applies",
+         "direct.rows[].limits",
++        "direct.rows[].registry",
++        "direct.rows[].registry.source",
++        "direct.rows[].registry.title",
++        "direct.rows[].registry.authors",
++        "direct.rows[].registry.authors[].family",
++        "direct.rows[].registry.authors[].given",
++        "direct.rows[].registry.moreAuthors",
++        "direct.rows[].registry.year",
++        "direct.rows[].registry.venue",
+         "direct.rows[].articleReferenceQuote",
+         "direct.rows[].identifies",
+         "direct.rows[].identifies[].kind",
+@@ -2174,6 +2246,15 @@ describe("the debate a shared link carries", () => {
+         "claims.rows[].lean",
+         "claims.rows[].applies",
+         "claims.rows[].limits",
++        "claims.rows[].registry",
++        "claims.rows[].registry.source",
++        "claims.rows[].registry.title",
++        "claims.rows[].registry.authors",
++        "claims.rows[].registry.authors[].family",
++        "claims.rows[].registry.authors[].given",
++        "claims.rows[].registry.moreAuthors",
++        "claims.rows[].registry.year",
++        "claims.rows[].registry.venue",
+         "claims.rows[].claimQuote",
+         "claims.rows[].blockId",
+         "claims.sourceNotPublishable",
+diff --git a/tests/registry-client.test.tsx b/tests/registry-client.test.tsx
+new file mode 100644
+index 00000000..a2b6d220
+--- /dev/null
++++ b/tests/registry-client.test.tsx
+@@ -0,0 +1,226 @@
++// @vitest-environment jsdom
++/**
++ * **What the panels draw from a registry record** — plan 261001a stages 5 and
++ * 6. Citations: the by-line stays as the article gives it, and the registry
++ * fills only a field the article leaves empty, marked with its source; a
++ * conflict says so and draws nothing of the record. Debate: the record's
++ * authors and year win over the AI's reading, and the *date* order sorts on
++ * its year.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++
++import type { BlockId, CitationRegistry, Citations, ClaimDebateRow, CitedWork } from "../src/types.js";
++import type { UseCitations } from "../src/web/useCitations.js";
++
++const { CitationsPanel, byLineOf, registryConflictNote, workByLine } = await import("../src/web/CitationsPanel.js");
++const { rowWork } = await import("../src/web/DebatePanel.js");
++const { debateOrderOptions, orderDebateRows, rowYear } = await import("../src/web/debate-order.js");
++
++const AT = "spya-k3m9qt" as BlockId;
++
++const FOUND: CitationRegistry = {
++  kind: "found",
++  source: "crossref",
++  title: "Attention is all you need",
++  authors: [
++    { family: "Vaswani", given: "Ashish" },
++    { family: "Shazeer", given: "Noam" },
++    { family: "Parmar", given: "Niki" },
++  ],
++  moreAuthors: 5,
++  year: 2017,
++};
++
++function work(over: Partial<CitedWork> = {}): CitedWork {
++  return {
++    id: "spya-a2b3c4",
++    key: "doi:10.5555/attention",
++    title: "Attention Is All You Need",
++    why: "The piece leans on it.",
++    mentions: [],
++    citedAt: [AT],
++    firstCited: AT,
++    citedInBody: true,
++    url: "https://doi.org/10.5555/attention",
++    linkFrom: "doi",
++    ...over,
++  };
++}
++
++describe("Citations' by-line", () => {
++  it("keeps the article's authors and year even when the registry has its own", () => {
++    const line = workByLine(work({ authors: "Vaswani et al.", year: "2017", registry: FOUND }));
++    expect(line).toEqual({ authors: "Vaswani et al.", year: "2017", filled: null, conflict: null });
++  });
++
++  it("fills only what the article leaves empty, and names the registry", () => {
++    expect(workByLine(work({ registry: FOUND }))).toMatchObject({
++      authors: "Ashish Vaswani, Noam Shazeer, Niki Parmar et al.",
++      year: "2017",
++      filled: { source: "crossref", fields: ["authors", "year"] },
++    });
++    expect(workByLine(work({ authors: "A. Vaswani", registry: { ...FOUND, source: "datacite" } }))).toMatchObject({
++      authors: "A. Vaswani",
++      year: "2017",
++      filled: { source: "datacite", fields: ["year"] },
++    });
++    expect(byLineOf(work({ registry: FOUND }))).toBe("Ashish Vaswani et al. · 2017");
++  });
++
++  it("draws nothing of a conflict's, and says the identifier points elsewhere", () => {
++    const line = workByLine(work({ registry: { kind: "conflict", source: "crossref" } }));
++    expect(line).toEqual({ filled: null, conflict: "crossref" });
++    expect(byLineOf(work({ registry: { kind: "conflict", source: "crossref" } }))).toBe("");
++  });
++
++  it("reads a malformed stored record as none", () => {
++    const junk = { kind: "found", source: "openalex", title: "x", authors: [] } as unknown as CitationRegistry;
++    expect(workByLine(work({ registry: junk }))).toEqual({ filled: null, conflict: null });
++  });
++});
++
++/* ---------------------------------------------------------------- render -- */
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  host.remove();
++});
++
++function owner(citations: CitedWork[]): UseCitations {
++  const artefact: Citations = {
++    version: "test",
++    generator: "test",
++    slug: "a-piece",
++    sourceHash: "hash",
++    citations,
++    capped: false,
++    generatedAt: "2026-09-11T09:00:00.000Z",
++    elapsedMs: 1,
++  } as Citations;
++  return {
++    status: "ready",
++    citations: artefact,
++    stale: false,
++    outdated: false,
++    slug: "a-piece",
++    error: null,
++    job: null,
++    failed: null,
++    stalled: false,
++    starting: false,
++    automatic: false,
++    ensure: async () => {},
++    regenerate: async () => {},
++    cancel: () => {},
++    findNote: null,
++    investigating: null,
++    investigateStage: null,
++    investigateDraft: null,
++    investigateFailed: null,
++    investigate: async () => {},
++  } as UseCitations;
++}
++
++async function draw(citations: CitedWork[]) {
++  await act(async () =>
++    root.render(
++      createElement(CitationsPanel, {
++        access: { kind: "owner", owner: owner(citations) },
++        order: "document",
++        onOrder: () => {},
++        bar: null,
++        onBar: () => {},
++        onJump: () => {},
++      }),
++    ),
++  );
++}
++
++describe("a Citations row on screen", () => {
++  it("marks a filled-in by-line with its registry", async () => {
++    await draw([work({ registry: FOUND })]);
++    const by = host.querySelector(".cite-by");
++    expect(by?.textContent).toContain("Ashish Vaswani et al. · 2017");
++    expect(by?.textContent).toContain("from Crossref");
++  });
++
++  it("says nothing about a registry where the article gave both", async () => {
++    await draw([work({ authors: "Vaswani", year: "2017", registry: FOUND })]);
++    expect(host.textContent).not.toContain("Crossref");
++  });
++
++  it("says when the article's identifier points to a different title", async () => {
++    await draw([work({ registry: { kind: "conflict", source: "datacite" } })]);
++    expect(host.textContent).toContain(registryConflictNote("datacite"));
++  });
++});
++
++/* ---------------------------------------------------------------- Debate -- */
++
++function claim(id: string, over: Partial<ClaimDebateRow> = {}): ClaimDebateRow {
++  return {
++    id,
++    url: "https://doi.org/10.1073/pnas.1",
++    title: "Dreams and memory",
++    sourceQuote: "a passage",
++    relation: "qualifies",
++    lean: "neither",
++    applies: "It narrows the claim.",
++    claimQuote: "the claim",
++    blockId: AT,
++    ...over,
++  };
++}
++
++const RECORD = {
++  source: "datacite" as const,
++  title: "Dreams and memory: the whole title",
++  authors: [{ family: "Wamsley", given: "Erin" }, { family: "Stickgold" }],
++  year: 2010,
++};
++
++describe("Debate's by-line and date order", () => {
++  it("prefers the record's authors and year to the AI's, and says where they came from", () => {
++    const w = rowWork(claim("c", { authors: ["Somebody"], publishedYear: 2024, registry: RECORD }));
++    expect(w.authors).toEqual(["Erin Wamsley", "Stickgold"]);
++    expect(w.year).toBe(2010);
++    expect(w.registry).toBe("datacite");
++    /* A whole engine title stays the headline. */
++    expect(w.headline).toBe("Dreams and memory");
++  });
++
++  it("gives a cut-short engine title way to the record's whole one", () => {
++    expect(rowWork(claim("c", { title: "Dreams and memory: the whole ...", registry: RECORD })).headline).toBe(
++      RECORD.title,
++    );
++  });
++
++  it("draws as before without a record", () => {
++    const w = rowWork(claim("c", { authors: ["Somebody"], publishedYear: 2024 }));
++    expect(w).toMatchObject({ authors: ["Somebody"], year: 2024, registry: null });
++  });
++
++  it("dates rows by the record's year first, and offers the date order on it alone", () => {
++    const rows = [
++      claim("ai-dated", { publishedYear: 2015 }),
++      claim("registry-dated", { publishedYear: 2024, registry: RECORD }),
++      claim("undated", { url: "https://blog.example.org/x" }),
++    ];
++    expect(rowYear(rows[1] as ClaimDebateRow)).toBe(2010);
++    const groups = orderDebateRows([], rows, "date", new Map([[AT, 0]]));
++    expect(groups.map((g) => g.rows.map((r) => r.id))).toEqual([["registry-dated", "ai-dated"], ["undated"]]);
++    const onlyRegistry = [claim("a", { registry: RECORD }), claim("b", { lean: "leans-for" })];
++    expect(debateOrderOptions([], onlyRegistry, new Map([[AT, 0]]))).toContain("date");
++  });
++});

@@ -4522,6 +4522,25 @@ export function debateWorkFieldsNote(parts: readonly string[]): string {
 }
 
 /**
+ * **Which Debate fields came from a registry** (plan 261001a stage 6): the
+ * identifier is the page address's own, and the record was kept only because
+ * its title agreed with the page's. `parts` names only fields actually used,
+ * so a missing registry year cannot claim an extracted year as Crossref's.
+ */
+export function debateRegistryNote(
+  source: "crossref" | "datacite",
+  parts: readonly ("full title" | "authors" | "year")[],
+): string {
+  const name = source === "crossref" ? "Crossref" : "DataCite";
+  const [first = "", ...rest] = parts;
+  const last = rest.pop();
+  const head = [first, ...rest].join(", ");
+  const list = last === undefined ? head : `${head} and ${last}`;
+  const subject = list.charAt(0).toUpperCase() + list.slice(1);
+  return `${subject} from ${name}, under the identifier this page's address carries — its title there agrees with the page's.`;
+}
+
+/**
  * **What the quotation was checked against, which is not the page.**
  *
  * The survivor bias this discloses is real and is the reason it is on screen

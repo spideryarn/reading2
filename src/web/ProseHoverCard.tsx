@@ -70,8 +70,12 @@ import {
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
   readNoteOf,
+  registryConflictNote,
+  registryFilledMark,
+  registryFilledNote,
   sourceOf,
   verdictText,
+  workByLine,
 } from "./CitationsPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { TermJump } from "./TermJump.js";
@@ -1654,6 +1658,7 @@ function clip(text: string, max: number): string {
 function CiteCard({ work }: { work: CitedWork }) {
   const source = sourceOf(work);
   const by = byLineOf(work);
+  const line = workByLine(work);
   const where = work.citedAt.length;
 
   return (
@@ -1688,7 +1693,15 @@ function CiteCard({ work }: { work: CitedWork }) {
           <span className="prose-card-name">{work.title}</span>
         )}
       </p>
-      {by && <p className="prose-card-text prose-card-cite-by">{by}</p>}
+      {by && (
+        <p className="prose-card-text prose-card-cite-by">
+          {by}
+          {/* Where the registry filled in what the article does not give: said
+              on the card itself, with the sentence on hover (plan 261001a stage 5). */}
+          {line.filled && <span title={registryFilledNote(line.filled)}> · {registryFilledMark(line.filled)}</span>}
+        </p>
+      )}
+      {line.conflict && <p className="prose-card-cite-read">{registryConflictNote(line.conflict)}</p>}
       {/* The entry as the article gives it — journal, conference, volume
           (SPIDERYARN-READING2-6K, plan 260930i). Here in full rather than in a
           tooltip: a card is what a finger gets, and it has the room. */}

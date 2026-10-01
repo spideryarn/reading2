@@ -34,6 +34,7 @@ import type {
   Block,
   BlockId,
   Citations,
+  CitationRegistry,
   ClaimDebateRow,
   Debate,
   DirectDebateRow,
@@ -1102,6 +1103,18 @@ describe("the artefacts a shared link carries", () => {
         citedInBody: true,
         url: "https://doi.org/10.1/abc",
         linkFrom: "doi",
+        /* A found registry record, every field set (plan 261001a stage 5):
+           public metadata about the public DOI, and it crosses field by field. */
+        registry: {
+          kind: "found",
+          source: "crossref",
+          title: "A clean work",
+          authors: [{ family: "Somebody", given: "S." }],
+          moreAuthors: 3,
+          year: 2004,
+          venue: "Journal of Works",
+          ownerOnlySentinel: "citation registry extra must not cross",
+        } as CitationRegistry & { ownerOnlySentinel: string },
         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
         /* The owner's *Look it up* (plan 260929g R-6): every field set, each
            string a sentinel that must not reach the wire. */
@@ -1131,6 +1144,21 @@ describe("the artefacts a shared link carries", () => {
           at: "2026-09-30T10:00:00.000Z",
           contextHash: "invhashsentinel0",
           promptVersion: "citation-investigate/1",
+          /* Plan 261001a stage 3: what was read of the paper is owner-only too. */
+          paper: {
+            state: "read",
+            requestedUrl: "https://paper-requested-sentinel.example/p.pdf",
+            finalUrl: "https://paper-final-sentinel.example/p.pdf",
+            host: "paper-host-sentinel.example",
+            words: 1234,
+            sentWords: 567,
+            chunks: ["c1"],
+            matchedBy: "doi",
+            evidenceSha: "9".repeat(64),
+            selectionVersion: "paper-selection-sentinel",
+            readAt: "2026-10-01T10:00:00.000Z",
+            passages: [{ chunk: "c1", page: 1, text: "paper passage sentinel from the pdf", bears: "supports" }],
+          },
         },
         /* The work's reference entry (plan 260930i) — owner-only until the
            public DTO names it, which is Greg's call on a defence. */
@@ -1155,6 +1183,9 @@ describe("the artefacts a shared link carries", () => {
         citedInBody: false,
         url: "https://user:pw@x.org/paper",
         linkFrom: "article",
+        /* A registry conflict is our verdict on the article's identifier and
+           stays with the owner (plan 261001a stage 5). */
+        registry: { kind: "conflict", source: "datacite" },
       },
       {
         id: "w-private",
@@ -1744,6 +1775,16 @@ describe("the artefacts a shared link carries", () => {
         "citations[].reference.blockId",
         "citations[].reference.quote",
         "citations[].reference.start",
+        "citations[].registry",
+        "citations[].registry.authors",
+        "citations[].registry.authors[].family",
+        "citations[].registry.authors[].given",
+        "citations[].registry.kind",
+        "citations[].registry.moreAuthors",
+        "citations[].registry.source",
+        "citations[].registry.title",
+        "citations[].registry.venue",
+        "citations[].registry.year",
         "citations[].relevance",
         "citations[].title",
         "citations[].url",
@@ -1754,6 +1795,11 @@ describe("the artefacts a shared link carries", () => {
     const json = JSON.stringify(built.citations);
     expect(json).not.toContain("found.example");
     expect(json).not.toContain('"key"');
+    expect(json).not.toContain("citation registry extra must not cross");
+    /* A found registry record crosses; a conflict does not (plan 261001a stage 5). */
+    expect(built.citations?.citations[0]?.registry?.kind).toBe("found");
+    expect(built.citations?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
+    expect(json).not.toContain("conflict");
     expect(built.citations?.capped).toBe(true);
   });
 
@@ -1792,6 +1838,14 @@ describe("the artefacts a shared link carries", () => {
       "investigation-matched-host.example",
       "invhashsentinel0",
       '"extractsRead"',
+      /* The paper itself (plan 261001a stage 3). */
+      '"paper"',
+      "paper-requested-sentinel.example",
+      "paper-final-sentinel.example",
+      "paper-host-sentinel.example",
+      "paper-selection-sentinel",
+      "paper passage sentinel from the pdf",
+      '"sentWords"',
     ]) {
       expect(json, sentinel).not.toContain(sentinel);
     }
@@ -2100,6 +2154,17 @@ describe("the debate a shared link carries", () => {
     webSearches: 12,
   };
 
+  /** A registry record with every field set (plan 261001a stage 6) — public metadata, so it crosses. */
+  const REGISTRY = {
+    source: "datacite" as const,
+    title: "A reply",
+    authors: [{ family: "Reply", given: "A." }, { family: "Consortium" }],
+    moreAuthors: 2,
+    year: 2021,
+    venue: "Zenodo",
+    ownerOnlySentinel: "debate registry extra must not cross",
+  };
+
   /** A direct row with every field set, and all three kinds of evidence. */
   function directRow(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
     return {
@@ -2111,6 +2176,7 @@ describe("the debate a shared link carries", () => {
       lean: "leans-against",
       applies: "It argues the measure is not computable.",
       limits: "It does not address the second half.",
+      registry: REGISTRY,
       articleReferenceQuote: `in "${TITLE}"`,
       identifies: [
         { kind: "linked", url: "https://www.noemamag.com/the-mythology-of-conscious-ai/" },
@@ -2132,6 +2198,7 @@ describe("the debate a shared link carries", () => {
       lean: "neither",
       applies: "It narrows the claim.",
       limits: "Only for mammals.",
+      registry: REGISTRY,
       claimQuote: "the measurement",
       blockId: "spya-bbbbbb" as BlockId,
       ...over,
@@ -2190,6 +2257,15 @@ describe("the debate a shared link carries", () => {
         "direct.rows[].lean",
         "direct.rows[].applies",
         "direct.rows[].limits",
+        "direct.rows[].registry",
+        "direct.rows[].registry.source",
+        "direct.rows[].registry.title",
+        "direct.rows[].registry.authors",
+        "direct.rows[].registry.authors[].family",
+        "direct.rows[].registry.authors[].given",
+        "direct.rows[].registry.moreAuthors",
+        "direct.rows[].registry.year",
+        "direct.rows[].registry.venue",
         "direct.rows[].articleReferenceQuote",
         "direct.rows[].identifies",
         "direct.rows[].identifies[].kind",
@@ -2211,6 +2287,15 @@ describe("the debate a shared link carries", () => {
         "claims.rows[].lean",
         "claims.rows[].applies",
         "claims.rows[].limits",
+        "claims.rows[].registry",
+        "claims.rows[].registry.source",
+        "claims.rows[].registry.title",
+        "claims.rows[].registry.authors",
+        "claims.rows[].registry.authors[].family",
+        "claims.rows[].registry.authors[].given",
+        "claims.rows[].registry.moreAuthors",
+        "claims.rows[].registry.year",
+        "claims.rows[].registry.venue",
         "claims.rows[].claimQuote",
         "claims.rows[].blockId",
         "claims.sourceNotPublishable",
@@ -2219,6 +2304,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
     expect(built.debate?.direct.sourceNotPublishable).toBe(0);
     expect(built.debate?.claims.sourceNotPublishable).toBe(0);
+    expect(JSON.stringify(built.debate)).not.toContain("debate registry extra must not cross");
     /* A clean article address on a linked signal crosses as itself. */
     expect(built.debate?.direct.rows[0]?.identifies[0]).toEqual({
       kind: "linked",

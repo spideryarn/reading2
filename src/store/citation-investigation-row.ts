@@ -3,14 +3,145 @@
  * the write half is src/store/pg-citation-investigations.ts, the read half
  * `loadCitations` in src/store/pg.ts. Its own file, importing nothing from
  * either, so src/store/pg.ts can use it without an import cycle.
+ *
+ * **The paper's columns (plan 261001a stage 3) are all null on an answer from
+ * before that stage**, and that reads back as no `paper` at all — the row is
+ * drawn as it was then. Every other state is read back only with the fields
+ * its CHECKs promise; a row that breaks them throws rather than drawing a
+ * paper we cannot vouch for.
  */
 import type { citationInvestigations } from "../db/schema.js";
-import type { CitationInvestigation } from "../types.js";
+import type { PaperUnreadableReason } from "../messages.js";
+import type { CitationInvestigation, InvestigatedPaper, PaperMatchedBy } from "../types.js";
 
 type Row = typeof citationInvestigations.$inferSelect;
 type Columns = Omit<Row, "articleId" | "entryId" | "ownerId">;
+type PaperColumns = Pick<
+  Columns,
+  | "paperState"
+  | "paperRequestedUrl"
+  | "paperFinalUrl"
+  | "paperHost"
+  | "paperWords"
+  | "paperSentWords"
+  | "paperChunks"
+  | "paperMatchedBy"
+  | "paperUnreadableWhy"
+  | "paperEvidenceSha"
+  | "paperSelectionVersion"
+  | "paperReadAt"
+  | "paperPassages"
+>;
 
-/** Every column but the key and the owner — so an upsert replaces the whole answer. */
+const NO_PAPER: PaperColumns = {
+  paperState: null,
+  paperRequestedUrl: null,
+  paperFinalUrl: null,
+  paperHost: null,
+  paperWords: null,
+  paperSentWords: null,
+  paperChunks: null,
+  paperMatchedBy: null,
+  paperUnreadableWhy: null,
+  paperEvidenceSha: null,
+  paperSelectionVersion: null,
+  paperReadAt: null,
+  paperPassages: null,
+};
+
+/** The paper as columns — every one named, so a state cannot leave a stale value behind on an upsert. */
+export function paperColumns(paper: InvestigatedPaper | undefined): PaperColumns {
+  if (!paper) return NO_PAPER;
+  const base = { ...NO_PAPER, paperState: paper.state, paperReadAt: new Date(paper.readAt) };
+  switch (paper.state) {
+    case "read":
+      return {
+        ...base,
+        paperRequestedUrl: paper.requestedUrl,
+        paperFinalUrl: paper.finalUrl,
+        paperHost: paper.host,
+        paperWords: paper.words,
+        paperSentWords: paper.sentWords,
+        paperChunks: paper.chunks,
+        paperMatchedBy: paper.matchedBy,
+        paperEvidenceSha: paper.evidenceSha,
+        paperSelectionVersion: paper.selectionVersion,
+        paperPassages: paper.passages,
+      };
+    case "no-address":
+      return base;
+    case "unreadable":
+      return { ...base, paperRequestedUrl: paper.requestedUrl, paperHost: paper.host, paperUnreadableWhy: paper.unreadableWhy };
+    case "not-the-full-text":
+    case "not-confirmed":
+      return { ...base, paperRequestedUrl: paper.requestedUrl, paperFinalUrl: paper.finalUrl, paperHost: paper.host };
+    case "identity-conflict":
+      return { ...base, paperRequestedUrl: paper.requestedUrl, paperHost: paper.host };
+    default: {
+      const never: never = paper;
+      throw new Error(`unhandled paper state: ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+function need<T>(value: T | null, column: string): T {
+  if (value === null) throw new Error(`citation_investigations: ${column} is null where its paper state needs it`);
+  return value;
+}
+
+/** The paper back from its columns, or `undefined` for an answer from before stage 3. */
+export function paperFromRow(row: PaperColumns): InvestigatedPaper | undefined {
+  const state = row.paperState;
+  if (state === null) return undefined;
+  const readAt = need(row.paperReadAt, "paper_read_at").toISOString();
+  switch (state) {
+    case "read":
+      return {
+        state,
+        requestedUrl: need(row.paperRequestedUrl, "paper_requested_url"),
+        finalUrl: need(row.paperFinalUrl, "paper_final_url"),
+        host: need(row.paperHost, "paper_host"),
+        words: need(row.paperWords, "paper_words"),
+        sentWords: need(row.paperSentWords, "paper_sent_words"),
+        chunks: need(row.paperChunks, "paper_chunks"),
+        matchedBy: need(row.paperMatchedBy, "paper_matched_by") as PaperMatchedBy,
+        evidenceSha: need(row.paperEvidenceSha, "paper_evidence_sha"),
+        selectionVersion: need(row.paperSelectionVersion, "paper_selection_version"),
+        readAt,
+        passages: row.paperPassages,
+      };
+    case "no-address":
+      return { state, readAt };
+    case "unreadable":
+      return {
+        state,
+        requestedUrl: need(row.paperRequestedUrl, "paper_requested_url"),
+        host: need(row.paperHost, "paper_host"),
+        unreadableWhy: need(row.paperUnreadableWhy, "paper_unreadable_why") as PaperUnreadableReason,
+        readAt,
+      };
+    case "not-the-full-text":
+    case "not-confirmed":
+      return {
+        state,
+        requestedUrl: need(row.paperRequestedUrl, "paper_requested_url"),
+        finalUrl: need(row.paperFinalUrl, "paper_final_url"),
+        host: need(row.paperHost, "paper_host"),
+        readAt,
+      };
+    case "identity-conflict":
+      return {
+        state,
+        requestedUrl: need(row.paperRequestedUrl, "paper_requested_url"),
+        host: need(row.paperHost, "paper_host"),
+        readAt,
+      };
+    default:
+      throw new Error(`citation_investigations: unknown paper_state ${JSON.stringify(state)}`);
+  }
+}
+
+/** Every column but the key and the owner — so an upsert replaces the whole answer, the paper included. */
 export function investigationColumns(inv: CitationInvestigation): Columns {
   return {
     answer: inv.answer,
@@ -24,11 +155,13 @@ export function investigationColumns(inv: CitationInvestigation): Columns {
     contextHash: inv.contextHash,
     promptVersion: inv.promptVersion,
     at: new Date(inv.at),
+    ...paperColumns(inv.paper),
   };
 }
 
 /** One stored row as the type the owner's payload carries. */
 export function investigationFromRow(row: Row): CitationInvestigation {
+  const paper = paperFromRow(row);
   return {
     answer: row.answer,
     sources: row.sources,
@@ -41,5 +174,6 @@ export function investigationFromRow(row: Row): CitationInvestigation {
     at: row.at.toISOString(),
     contextHash: row.contextHash,
     promptVersion: row.promptVersion,
+    ...(paper ? { paper } : {}),
   };
 }

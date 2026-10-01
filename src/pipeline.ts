@@ -113,6 +113,8 @@ import {
   PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
   previousCitationsFrom,
 } from "./citations.js";
+import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
+import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateTrajectory,
@@ -4455,6 +4457,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         power: ctx.power,
       });
+      /* Stage 6 of plan 261001a: a source whose address carries a DOI or arXiv
+         id gets the registry's authors and year, when its title agrees.
+         After the searches and outside the stamp; it never fails the step. */
+      const registryStarted = Date.now();
+      const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
+      const registryMs = Date.now() - registryStarted;
+      run.debate = registered.debate;
       const { direct, claims } = run.debate;
       plog.info(
         {
@@ -4487,6 +4496,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           claimsLost: claims.counts.lost,
           /* The third call's outcome, so a `failed` is visible in the logs
              rather than only as a missing box on screen (plan 260930j). */
+          registryIdentified: registered.counts.identified,
+          registryFound: registered.counts.found,
+          registryDisagreed: registered.counts.disagreed,
+          registryNotFound: registered.counts.notFound,
+          registryUnavailable: registered.counts.unavailable,
+          registryOverBudget: registered.counts.overBudget,
+          registryMs,
           synthesis: run.debate.synthesis?.kind ?? null,
           themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
           keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
@@ -4537,6 +4553,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
+      /* Stage 5 of plan 261001a: each DOI or arXiv row looked up, its record
+         kept only where the titles agree. After the list is built, so it is in
+         neither the stamp nor the prompt; it never fails the step. */
+      const registryStarted = Date.now();
+      const registered = await attachCitationRegistry(run.citations, citationRegistryDeps);
+      const registryMs = Date.now() - registryStarted;
+      run.citations = registered.citations;
       const rows = run.citations.citations;
       const linkFrom = { doi: 0, arxiv: 0, article: 0, search: 0, web: 0 };
       for (const c of rows) linkFrom[c.linkFrom]++;
@@ -4577,6 +4600,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           referenceListEntries: referenceList.list?.entries.size ?? 0,
           referenceListMs: referenceList.ms,
           entries: rows.filter((c) => c.entry !== undefined).length,
+          /* The registry witness: `registryUnavailable` near `registryAsked`
+             is the lookup failing, which nothing on screen would say. */
+          registryIdentified: registered.counts.identified,
+          registryAsked: registered.counts.asked,
+          registryFound: registered.counts.found,
+          registryConflict: registered.counts.conflict,
+          registryNotFound: registered.counts.notFound,
+          registryUnavailable: registered.counts.unavailable,
+          registryUnconfirmed: registered.counts.unconfirmed,
+          registryOverCap: registered.counts.overCap,
+          registryOverBudget: registered.counts.overBudget,
+          registryMs,
           ...run.drops,
           ...run.scores,
         },
