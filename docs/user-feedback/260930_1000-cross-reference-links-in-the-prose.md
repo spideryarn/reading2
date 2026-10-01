@@ -52,8 +52,8 @@ Greg approved the sanitiser edit (relayed by the Overseer):
 
 > Yes to the filter fix (or any other fix that feels clean, general, robust, clean)
 
-**Ending: Shipped**, on `dev` and not deployed. The commit is named in the line below once it has
-landed. Instead of adding the missing names to the sanitiser's forbidden list, the list was turned
+**Ending: Shipped**, on `dev` and not deployed: `4b4790e5` (the policy) and `13f8266b` (review fixes
+and docs), landed with `56f5c479`. Instead of adding the missing names to the sanitiser's forbidden list, the list was turned
 round. An imported article now keeps only the `data-*` attributes and classes we declare, so every
 mark the app draws, including any added later, is out of an article's reach. That covers the
 `xref` mark, the block-preview card, and the click handlers' own classes.
