@@ -1,0 +1,129 @@
+{
+  "arm": "high-none-guard1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "adb74e7cc558a13ae2e0c07a8418c3e7982dd4eb85d1af64340f810a1b3de13c",
+  "at": "2026-10-01T09:25:49.448Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "wallMs": 15813,
+  "costUsd": 0.144234,
+  "tokens": {
+    "input": 68098,
+    "output": 2963,
+    "reasoning": 1133
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 197,
+  "fullerWords": 283,
+  "briefWords": 158,
+  "paragraphs": [
+    {
+      "text": "This article is a science review about how brain cells handle information. It introduces a math tool called partial information decomposition, or PID, which breaks down how two or more input signals together explain what a target neuron does next.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "The authors say this matters because simply tracking information flow between neurons does not explain how neurons actually combine and transform signals into new information, which is what computation really means. PID lets researchers see this \"processing\" directly, something older tools could not do.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "PID splits the information two sources give about a target into separate parts: redundant (information both sources share), unique (information only one source gives), and synergistic (information that only appears when you look at both sources together, like a pattern neither alone reveals). Synergy is treated as the signature of real computation.",
+      "ids": [
+        "spya-q2b0e5",
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain cell cultures and from monkeys performing tasks, the authors found synergy is higher in densely connected \"rich club\" neurons, grows with recurrent connections between source neurons, and peaks when source neurons are moderately, not too strongly, correlated. In monkeys, which brain regions showed the most synergy also shifted with the task stage, suggesting synergy tracks behavior.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how scientists try to measure 'information processing' in the brain: how groups of neurons take in signals and combine them into something new. Its main tool is a method called partial information decomposition, or PID, which breaks down the information that several neurons together carry about another neuron's future activity.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The piece says brains clearly take in sensory signals and turn them into behavior, but how neurons actually transform that information is still poorly understood. New recording technology now lets scientists track hundreds or thousands of neurons at once, but they have lacked good ways to turn that flood of data into understanding, which is the gap this review addresses.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons give about a target into three parts: redundant information (available from either source alone), unique information (available only from one specific source), and synergistic information (only visible when you look at both sources together, a sign the neuron is combining, not just adding, its inputs). The review builds up this framework step by step, including the mathematical machinery needed when there are more than two sources.",
+      "ids": [
+        "spya-pjdgu6",
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain cultures and from monkeys doing tasks, the authors report that synergy (higher-order combined information) is higher in densely connected 'rich club' neurons, in neurons with more recurrent connections, and where input signals are moderately, not too strongly, correlated. In monkeys, redundancy rose during motor execution, suggesting the brain duplicates signals when reliability matters most.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "text": "The review closes with practical advice on choosing tools and data types for PID, its current limits (like explosive complexity with many neurons), and future directions such as time-resolved and multi-target versions of the method.",
+      "ids": [
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is a science review about how brain cells handle information. It explains a method called partial information decomposition, or PID, which breaks down what two or more neurons together tell us about a third neuron's activity.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "This matters because just tracking signals moving between neurons does not show how neurons actually combine and transform those signals. PID can spot synergy: information that only shows up when you look at two inputs together, not from either one alone. The authors say this synergy is a sign of real computation happening in the brain.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Studies described here found synergy was higher in densely connected hub neurons called rich clubs, and in neurons with more loop-like recurrent connections. Synergy also peaked when input neurons' signals were moderately similar, not too different or too alike. In monkeys doing a task, which brain signal pattern dominated, combined versus duplicated information, shifted depending on what part of the task they were doing.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

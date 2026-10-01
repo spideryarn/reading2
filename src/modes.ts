@@ -234,6 +234,27 @@ export const MODES = [
 export type Mode = (typeof MODES)[number];
 
 /**
+ * **A mode that owns the left band** — every mode but Annotations, which since
+ * 2026-10-01 is a switch of its own (`?margin=1`) rather than a value of
+ * `?mode=`, so its column can sit beside a band.
+ * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+ *
+ * `annotations` stays in `MODES` because the catalog, the Dock's button, the
+ * command bar and the experimental switch are keyed on it; what it may not be
+ * is the *state* — `?mode=` parses to this type, so a press on Annotations
+ * cannot be written into it without the compiler asking which you meant.
+ */
+export type BandMode = Exclude<Mode, "annotations">;
+
+/** Whether a mode is one that owns the band — the narrowing for `BandMode`. */
+export function isBandMode(mode: Mode): mode is BandMode {
+  return mode !== "annotations";
+}
+
+/** Every value `?mode=` can hold — `MODES` less Annotations. */
+export const BAND_MODES: readonly BandMode[] = MODES.filter(isBandMode);
+
+/**
  * The mode a reader lands in, named once.
  *
  * Two places need it — `modeParam`'s fallback below, and `withMode` in
@@ -250,7 +271,7 @@ export type Mode = (typeof MODES)[number];
  * asked directly, said not to preserve them: *"we're in alpha and have no users
  * yet"*.
  */
-export const DEFAULT_MODE: Mode = "plain";
+export const DEFAULT_MODE: BandMode = "plain";
 
 /**
  * **Is this string one of the modes?** — the guard the server needs and the
@@ -280,7 +301,7 @@ export function isMode(value: string | null | undefined): value is Mode {
  * twelve days, and a bookmark or a shared link naming it should open the mode
  * that now holds it rather than degrading to the article.
  */
-export const RETIRED_MODES: Readonly<Record<string, Mode>> = {
+export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
   outline: "structure",
   /* The gist columns, retired 2026-09-29; Structure draws the same tree.
      docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
@@ -296,8 +317,11 @@ export const RETIRED_MODES: Readonly<Record<string, Mode>> = {
  * a shared link's tab title — so `?mode=outline` cannot open Structure while
  * the tab says the article.
  */
-export function modeFromParam(value: string | null | undefined): Mode | null {
-  if (isMode(value)) return value;
+export function modeFromParam(value: string | null | undefined): BandMode | null {
+  /* `annotations` is not a band (`BandMode`): an old `?mode=annotations` link
+     names Plain here, and the client turns the notes on for it
+     (`marginInSearch` in src/web/params.ts). */
+  if (isMode(value)) return isBandMode(value) ? value : null;
   if (value === null || value === undefined) return null;
   return Object.hasOwn(RETIRED_MODES, value) ? (RETIRED_MODES[value] ?? null) : null;
 }

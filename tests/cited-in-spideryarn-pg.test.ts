@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { matchCited } from "../src/cited-in-spideryarn.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
+import { articleRevisions, articles, blockIdentities, revisionBlocks, uploadSourceGuesses } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { citedCandidatesQuery, pgCitedInSpideryarnStore } from "../src/store/pg-cited-in-spideryarn.js";
@@ -47,12 +47,19 @@ interface Fixture {
   title: string;
   titleOverride?: string;
   finalUrl?: string;
+  /** An upload: no address at all, and this `upload_source_guesses` row (plan 261001i). */
+  upload?: { status: "found"; kind: "canonical" | "matching"; url: string };
 }
+
+/** The DOI our guess found for an upload — never any fixture's own address. */
+const GUESSED = "https://doi.org/10.1038/nature14539";
+const MATCHING = "https://example.org/a-page-that-looks-like-it";
 
 const FIXTURES: Fixture[] = [
   /* The reader's own: private, renamed. A candidate, shown under their rename. */
   { n: 1, owner: READER, slug: "cited-pg-mine-private", visibility: "private", readable: true, archived: false, title: "Own extracted", titleOverride: "Own rename" },
-  /* The reader's own, archived: off the shelf, so not a candidate. */
+  /* The reader's own, archived: off the shelf but still theirs to open by link, so a
+     candidate that says it is archived (plan 261001i). */
   { n: 2, owner: READER, slug: "cited-pg-mine-archived", visibility: "private", readable: true, archived: true, title: "Own archived" },
   /* The reader's own, half-made: the owner's reader 404s it, so not a candidate. */
   { n: 3, owner: READER, slug: "cited-pg-mine-unreadable", visibility: "private", readable: false, archived: false, title: "Own unreadable" },
@@ -66,6 +73,12 @@ const FIXTURES: Fixture[] = [
   { n: 7, owner: OTHER, slug: "cited-pg-other-public-archived", visibility: "public", readable: true, archived: true, title: "Other archived" },
   /* Public, readable, but fetched through a signed address: a candidate that must not be matchable by it. */
   { n: 8, owner: OTHER, slug: "cited-pg-other-public-signed", visibility: "public", readable: true, archived: false, title: "Other signed", finalUrl: SIGNED },
+  /* The reader's own upload, with a canonical guess: matchable by the DOI we found. */
+  { n: 9, owner: READER, slug: "cited-pg-mine-upload", visibility: "private", readable: true, archived: false, title: "Own upload", upload: { status: "found", kind: "canonical", url: GUESSED } },
+  /* The reader's own upload whose guess is only a page that looks like it: not an identifier. */
+  { n: 10, owner: READER, slug: "cited-pg-mine-upload-matching", visibility: "private", readable: true, archived: false, title: "Own upload matching", upload: { status: "found", kind: "matching", url: MATCHING } },
+  /* A stranger's public upload with a canonical guess: the guess is owner-only, so never matched by. */
+  { n: 11, owner: OTHER, slug: "cited-pg-other-public-upload", visibility: "public", readable: true, archived: false, title: "Other upload", upload: { status: "found", kind: "canonical", url: GUESSED } },
 ];
 
 const hex = (n: number) => n.toString(16).padStart(2, "0");
@@ -78,6 +91,28 @@ async function cleanUp(): Promise<void> {
   await db.update(articles).set({ currentRevisionId: null }).where(inArray(articles.id, ids));
   await db.delete(articleRevisions).where(inArray(articleRevisions.articleId, ids));
   await db.delete(articles).where(inArray(articles.id, ids));
+}
+
+/** An upload has no address at all; anything else was fetched from one. */
+function addressesOf(f: Fixture): { requestedUrl: string | null; finalUrl: string | null } {
+  if (f.upload) return { requestedUrl: null, finalUrl: null };
+  return { requestedUrl: f.finalUrl ?? PAPER, finalUrl: f.finalUrl ?? "https://arxiv.org/pdf/2001.08361v1" };
+}
+
+/** A settled `upload_source_guesses` row, as src/store/pg-source-guesses.ts writes one. */
+async function insertGuess(n: number, upload: NonNullable<Fixture["upload"]>): Promise<void> {
+  await getDb()
+    .insert(uploadSourceGuesses)
+    .values({
+      articleId: articleId(n),
+      status: upload.status,
+      url: upload.url,
+      host: new URL(upload.url).hostname,
+      kind: upload.kind,
+      matchedBy: upload.kind === "canonical" ? "doi" : "content",
+      attempts: 1,
+      finishedAt: new Date("2026-09-03T00:00:00Z"),
+    });
 }
 
 function asReader<T>(owner: OwnerId, fn: () => Promise<T>): Promise<T> {
@@ -124,8 +159,7 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
         articleId: articleId(f.n),
         status: "published",
         title: f.title,
-        requestedUrl: f.finalUrl ?? PAPER,
-        finalUrl: f.finalUrl ?? "https://arxiv.org/pdf/2001.08361v1",
+        ...addressesOf(f),
         ...(f.readable
           ? {
               tree: {
@@ -141,6 +175,7 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
           : {}),
       });
       await db.update(articles).set({ currentRevisionId: revisionId(f.n) }).where(eq(articles.id, articleId(f.n)));
+      if (f.upload) await insertGuess(f.n, f.upload);
       if (f.readable) {
         await db.insert(blockIdentities).values({ articleId: articleId(f.n), blockId: BLOCK });
         await db.insert(revisionBlocks).values({
@@ -164,13 +199,40 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
     await closeDb();
   });
 
-  it("are the reader's own and the public ones, readable and on a shelf, and nothing else", async () => {
+  it("are the reader's own, archived or not, and the public ones on the shelf, readable, and nothing else", async () => {
     const candidates = (await asReader(READER, () => citedCandidates("x"))).filter((c) => ours(c.slug));
     expect(candidates.map((c) => c.slug).sort()).toEqual([
+      "cited-pg-mine-archived",
       "cited-pg-mine-private",
+      "cited-pg-mine-upload",
+      "cited-pg-mine-upload-matching",
       "cited-pg-other-public",
       "cited-pg-other-public-signed",
+      "cited-pg-other-public-upload",
     ]);
+    const archived = candidates.filter((c) => c.archived).map((c) => c.slug);
+    expect(archived).toEqual(["cited-pg-mine-archived"]);
+  });
+
+  it("carries an upload's canonical guess for the reader's own article only (plan 261001i)", async () => {
+    const candidates = await asReader(READER, () => citedCandidates("x"));
+    const bySlug = new Map(candidates.map((c) => [c.slug, c]));
+    expect(bySlug.get("cited-pg-mine-upload")).toMatchObject({ guessedUrl: GUESSED, urls: [] });
+    /* A page that merely looks like the PDF is not an identifier. */
+    expect(bySlug.get("cited-pg-mine-upload-matching")?.guessedUrl).toBeNull();
+    /* A stranger's guess is owner-only data their public page does not publish. */
+    expect(bySlug.get("cited-pg-other-public-upload")?.guessedUrl).toBeNull();
+    expect(bySlug.get("cited-pg-mine-private")?.guessedUrl).toBeNull();
+    const strangers = candidates.filter((c) => !c.mine);
+    expect(JSON.stringify(strangers)).not.toContain("nature14539");
+
+    const doiWork: CitedWork = { ...CITING, id: "spya-c7exq4", key: "doi:10.1038/nature14539", url: GUESSED, linkFrom: "doi", title: "Deep learning" };
+    expect(matchCited([doiWork], candidates.filter((c) => ours(c.slug))).get(doiWork.id)).toEqual({
+      slug: "cited-pg-mine-upload",
+      whose: "yours",
+      matchedBy: "guessed-id",
+      title: "Own upload",
+    });
   });
 
   it("never carries a stranger's rename or requested address, and does carry the reader's own", async () => {
@@ -226,18 +288,22 @@ describe("the articles a cited work may be matched to", { timeout: 20_000 }, () 
     expect(theirs.map((c) => c.slug).sort()).toEqual([
       "cited-pg-other-private",
       "cited-pg-other-public",
+      "cited-pg-other-public-archived",
       "cited-pg-other-public-signed",
+      "cited-pg-other-public-upload",
     ]);
+    /* Their own guess is theirs to be matched by. */
+    expect(theirs.find((c) => c.slug === "cited-pg-other-public-upload")?.guessedUrl).toBe(GUESSED);
     expect(theirs.find((c) => c.slug === "cited-pg-other-public")?.displayTitle).toBe("Other secret rename");
   });
 
   it("asks whose in the where, as one grouped clause, beside the shelf and readability bars", () => {
     const { sql, params } = citedCandidatesQuery(getDb(), READER).toSQL();
     const where = sql.slice(sql.indexOf(" where "));
+    /* Theirs, archived or not; or public and on the public shelf (plan 261001i). */
     expect(where).toMatch(
-      /\("spideryarn"\."articles"\."owner_id" = \$\d+ or "spideryarn"\."articles"\."visibility" = \$\d+\)/,
+      /\("spideryarn"\."articles"\."owner_id" = \$\d+ or \("spideryarn"\."articles"\."visibility" = \$\d+ and "spideryarn"\."articles"\."archived_at" is null\)\)/,
     );
-    expect(where).toContain('"spideryarn"."articles"."archived_at" is null');
     expect(where).toContain('"spideryarn"."article_revisions"."tree" is not null');
     expect(where).toContain("exists (");
     expect(params).toContain(READER);

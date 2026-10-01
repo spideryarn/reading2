@@ -11,6 +11,15 @@ The two meet at one seam: this sweep ends in an umbrella plan, and once you pick
 building that cluster is an ordinary job run the ordinary way. So this doc covers **what to look for
 and how to choose**; that one covers stages, briefs, reviews and commits.
 
+What it is for, in the words of the person who asked for it. Greg, 2026-10-01:
+
+> delegate to an agent (which should in turn spin off lots of subagents, including some GPTs) to try
+> and look for improvements to the codebase (e.g. run type-checking and linting and knip or madge or
+> similar), look for previous issues/postmortems/hotspots, too-large functions or files, code we no
+> longer use, places where things could be amalgamated or reused or abstracted or refactored,
+> potential product simplifications (if non-trivial or involving tradeoffs, check with me first),
+> and anything else you think will improve the codebase long-term
+
 **Run it in a lull.** Start once the incoming work has been worked down (a feedback backlog, a
 feature push), not in the middle of it. With twenty sessions editing the same files, a sweep audits
 a moving tree, and its clusters collide with work in flight.
@@ -57,6 +66,11 @@ uncommitted changes included, against what it actually says.
 Otherwise it is the whole tree, and that is more than one agent can hold. Fan it out.
 
 ### How to run the trawl: wide and cheap, then narrow and expensive
+
+**The sweep is an orchestrator, not a reader.** Whoever runs it spends its own context on scoring
+and the umbrella plan, and fans everything else out: many subagents, **with GPT models among them
+from the breadth stage onwards**, not only at review. A cheap GPT nominator over a zone finds things
+a Claude nominator over the same zone does not.
 
 **Breadth first, in parallel, with cheap models.** Their job is to **nominate**, not to score — you
 do the scoring. Split the sweep two ways, because the two cuts find different things and neither
@@ -147,7 +161,14 @@ search wherever else the project keeps prose, not only the docs directory.
 ### Size is a symptom, not the disease
 
 Measure — run whatever static analysis the project has, count lines and complexity — but hold the
-numbers loosely, and rank by **churn × complexity**, the file that is both big and edited every
+numbers loosely. **Run the tools, don't only read**: the type checker and the linter the project
+already gates on, plus the ones it doesn't. Use an unused-file/export/dependency finder (knip or
+similar) for code nobody uses any more, and a module-graph tool (madge or similar) for circular
+imports and for the modules everything depends on. Add per-function size and complexity on top of
+per-file. Run them as one-off measurements, from `npx` or a scratch install, rather than adding them
+to the project. A tool that earns a permanent place is a proposal in the umbrella plan. Every "unused" it reports is an absence,
+so § the scope line below applies to it in full: dynamic imports, scripts and string-built paths are
+what these tools cannot see. Rank by **churn × complexity**, the file that is both big and edited every
 week. A deepening in code nobody touches is a refactor you will never cash in. **Bug history is the
 third axis:** the files that fix commits and postmortems keep naming are hotspots whatever their
 size (`git log --format= --name-only --grep=fix`, counted per file, is a cheap first cut).

@@ -23,7 +23,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MODE, MODES } from "../src/web/params.js";
+import { BAND_MODES } from "../src/modes.js";
+import { DEFAULT_MODE } from "../src/web/params.js";
 import {
   APP_NAME,
   articleWaitTitle,
@@ -108,7 +109,7 @@ describe("an article", () => {
       tweets: "Tweets",
       annotations: "Annotations",
     };
-    for (const mode of MODES) {
+    for (const mode of BAND_MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });
       if (mode === DEFAULT_MODE) {
         expect(t).toBe(`${title}${SEP}${APP_NAME}`);
@@ -171,6 +172,7 @@ describe("the pages either side of an article", () => {
     expect(pageTitle({ kind: "design" })).toBe(`Design reference${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "login" })).toBe(`Sign in${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "callback" })).toBe(`Signing you in${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "new-password" })).toBe(`Choose a new password${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "loading" })).toBe(`Loading…${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "error" })).toBe(`Couldn’t open${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "not-found" })).toBe(`Not found${SEP}${APP_NAME}`);
@@ -205,6 +207,7 @@ describe("every title, whatever the page", () => {
     { kind: "not-found" },
     { kind: "login" },
     { kind: "callback" },
+    { kind: "new-password" },
     { kind: "loading" },
     { kind: "error" },
   ] as const;

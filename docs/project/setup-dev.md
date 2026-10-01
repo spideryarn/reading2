@@ -423,12 +423,15 @@ project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.t
 ([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
 caller.
 
-**Every job is on the capable tier except the ones `TASK_TIER` marks `quick`** — two when this was
-written. The quick tier is about a tenth the price, and both of those jobs were **written for it** rather than moved onto it: `link-summary` — how a hovered link's
+**Every job is on the capable tier except the ones `TASK_TIER` marks `quick`.** The quick tier is
+about a tenth the price, and all of its jobs were **written for it** rather than moved onto it:
+`link-summary` — how a hovered link's
 destination stands to the piece being read
-([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05, and
+([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05,
 `quiz-verdict` — whether the reader got a question right, judged from the finished mark and shown to
-nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07.
+nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07,
+and `simple-check` — Simple's fidelity guard, measured against Sonnet before it was built
+([summaries.md](summaries.md#simple-a-plain-words-orientation)) — on 2026-10-01.
 That distinction is the whole of the policy: a new job may be born on the quick tier by judgment, and
 **moving an existing one still means running an eval under [`evals/`](../../evals/README.md) first
 and writing down what it cost**. Greg, 2026-08-26 — *"use your judgment about which tasks to use for
@@ -501,9 +504,10 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_CITATIONS_FIND_MODEL` | Citations mode's *Look it up* (was *Find it*), the one call with web search for a cited work: picks which result, if any, is its own page, and reads that result's search extract ([citations.md](citations.md#look-it-up-on-the-web)); inside *Investigate*, the call that picks the cited paper's checked passages uses this same model |
 | `SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL` | The same search for an uploaded paper itself, once, to guess where it lives on the web ([ingest-queue.md](ingest-queue.md#a-guessed-web-address-looked-for-once)) |
 | `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Investigate*: one streamed answer about one cited work, written with a few web searches over the whole article (explain's tier) |
-| `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — the other quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
+| `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
 | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
+| `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
 | `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies — read it

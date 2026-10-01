@@ -37,3 +37,12 @@ reader, not only admins.
   panel, not only here.
 
 Plan: [260930e](../plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md).
+
+**Follow-ups, 2026-10-01**
+([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)):
+the glossary row now says which of the two will happen. It shows *Find more terms* when the run will
+add to the list, and *Run it again* with *writes a new list* when the article,
+the glossary's instructions or the reader's profile has changed. *Start again*'s Retry got the same
+one-press latch. An Undo for an accidental *Find more* was designed and deliberately not built: the
+pass only adds terms, Stop is on screen while it runs, and nobody has asked for it. On `dev` in
+`d4c29a3f` and `e32935e7`, not deployed. Ending unchanged: shipped.

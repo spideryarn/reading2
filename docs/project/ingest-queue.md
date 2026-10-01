@@ -844,13 +844,19 @@ click never bounded that anyway: a script calls the route. So it went for every 
 confirm said still has to be said somewhere**, and each piece has a home: the glossary's *appends* is
 a note under its name — it adds terms when `existingFor` accepts a matching old list and writes a
 new one when there is none, or when the article, the Glossary prompt or the reader profile changed.
-The page cannot know which, so the note says both and the button is the plain *Run it again*; the
+Since 2026-10-01 the page knows which: `ArticleMetadata.glossaryRun` is `existingFor`'s verdict for
+the profile the press sends (`glossaryRunKind`, src/glossary.ts), so the row says *Find more terms*
+when it will append and *Run it again* with *writes a new list* when it will not,
+and keeps the two-sided note only when the server cannot say
+([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)). It is
+a prediction from the state the page read, and the page reads again after a run and after the
+purpose box saves; the
 sketch's price and wait, debate's **up to two separately metered calls** at $0.20–0.40 on a short
 article, and Trajectory's *needs Quotes first* are the same kind of note under those rows' names.
 Each note is also its button's accessible description. A Retry is one press too, and holds
 *Starting…* across its round trip so a double click sends one. The whole-article reset, the first
 row of the same card, keeps its confirm — it removes the extras and can move comments, which is the
-reader's to agree to.
+reader's to agree to — and its Retry, behind that confirm, has had the same latch since 2026-10-01.
 
 ### A reader can start an article again, and have its modes made again after it
 

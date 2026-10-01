@@ -392,7 +392,7 @@ describe("an article with no metadata", () => {
       ],
     });
 
-    const run = await generateSimpleSummary({ power: "standard", article: withoutMeta, profile: null });
+    const run = await generateSimpleSummary({ power: "standard", article: withoutMeta, profile: null, guard: false });
 
     expect(run.simpleSummary.levels.simple).toHaveLength(3);
     expect(run.simpleSummary.sourceHash).toBe(

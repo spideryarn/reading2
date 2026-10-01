@@ -59,7 +59,7 @@
  */
 import { useEffect } from "react";
 import { APP_NAME, MODE_LABEL, SEP, TAGLINE, VIEW_LABEL, articleTitle, clamp } from "../title-text.js";
-import { DEFAULT_MODE, type Mode } from "./params.js";
+import { type BandMode, DEFAULT_MODE } from "./params.js";
 import { CHANGELOG_LABEL, type AdminPage, type ArticleView } from "./router.js";
 
 /**
@@ -115,7 +115,7 @@ export type TitleSpec =
    * naming the field is what makes `{ view: "metadata", mode }` an error
    * wherever it is built.
    */
-  | { kind: "read"; title: string; view: "article"; mode: Mode }
+  | { kind: "read"; title: string; view: "article"; mode: BandMode }
   | {
       kind: "read";
       title: string;
@@ -209,6 +209,11 @@ export type TitleSpec =
   | { kind: "landing" }
   | { kind: "login" }
   | { kind: "callback" }
+  /**
+   * The callback page after a password-recovery link, asking for a new one.
+   * Not a route of its own — AuthCallback.tsx and SetNewPassword.tsx say why.
+   */
+  | { kind: "new-password" }
   /** An article page with its fetch still in the air. */
   | { kind: "loading" }
   /** An article page whose fetch failed. We do not know enough to say what. */
@@ -347,6 +352,9 @@ function segments(spec: TitleSpec): string[] {
        mean nothing to the person reading it. */
     case "callback":
       return ["Signing you in", APP_NAME];
+
+    case "new-password":
+      return ["Choose a new password", APP_NAME];
 
     case "loading":
       return ["Loading…", APP_NAME];

@@ -30,6 +30,8 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
+import { type UrlSessionKind, watchUrlSessionKinds } from "./url-session-kind.js";
+
 /**
  * **The two reads are literal, and `required` indexes an ordinary object.**
  *
@@ -57,6 +59,36 @@ function required(name: "VITE_SUPABASE_URL" | "VITE_SUPABASE_PUBLISHABLE_KEY"): 
 }
 
 /**
+ * Did this page load arrive at the callback with a `?code=` on it?
+ *
+ * **Read here, before `createClient`, because nothing later can.** The client
+ * starts exchanging the code the moment it is made, and strips `code` from the
+ * address bar when that succeeds — which in dev, with Vite serving modules one
+ * at a time, can happen before React has mounted AuthCallback. AuthCallback
+ * then read an empty address and moved on as though nobody had tried to sign
+ * in: seen in the browser on 2026-10-01, a password-recovery link landing on the
+ * shelf with no form, 3 times in about 12. docs/plans/261001i-password-reset.md.
+ */
+let ARRIVED_WITH_CODE =
+  typeof location !== "undefined" &&
+  /^\/auth\/callback\/?$/.test(location.pathname) &&
+  new URLSearchParams(location.search).has("code");
+
+export function arrivedWithCode(): boolean {
+  return ARRIVED_WITH_CODE;
+}
+
+/**
+ * The module survives same-document navigation, but its arrival fact must not.
+ * AuthCallback calls this when it clears the parameters for this attempt. React
+ * StrictMode's first effect cleanup does not clear it: only the live effect that
+ * reaches a verdict does, so the second effect still sees the same arrival.
+ */
+export function forgetCodeArrival(): void {
+  ARRIVED_WITH_CODE = false;
+}
+
+/**
  * The publishable key is **not a secret** — it ships in this bundle by design,
  * and it grants nothing on its own. The secret key (`sb_secret_…`) must never
  * appear in any `VITE_` variable; `tests/no-secrets-in-bundle.test.ts` checks.
@@ -75,6 +107,21 @@ export const supabase = createClient(
     },
   },
 );
+
+/**
+ * Whether the session in this page load's URL was a password recovery.
+ *
+ * **Here, straight after `createClient`, and not in AuthCallback.** The SDK
+ * says so only by an event it fires after `initialize()` has resolved, possibly
+ * before AuthCallback mounts; this is the one place certain to hear it.
+ * url-session-kind.ts says why.
+ */
+const kindOf = watchUrlSessionKinds(supabase.auth);
+
+/** Was this auth session a password recovery? Resolves once the SDK says. */
+export function urlSessionKind(accessToken: string): Promise<UrlSessionKind> {
+  return kindOf(accessToken);
+}
 
 /** Where Google (or anyone else) sends the reader back to. See AuthCallback.tsx. */
 export const CALLBACK_PATH = "/auth/callback";

@@ -1,5 +1,5 @@
 ---
-reports: spya-esua8w
+reports: spya-esua8w, spya-pexkj4
 ending: shipped
 ---
 # Ask why you are reading, and a Trajectory for that intent
@@ -43,3 +43,27 @@ which is a defence, and an unattended run does not edit one. The question is in 
 § For Greg.
 
 Plan: [260930e](../plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md).
+
+## An earlier report asking for the same prompt
+
+`spya-pexkj4` (2026-09-29 15:15Z, from Greg, read from its row in production on 2026-10-01). It
+never got a note, so the Earlier tab showed it as not shipped:
+
+> The concern is that users are not setting the, they're not aware that they can provide information
+> about their background and needs for a specific article, which will then inform, you know, the
+> glossary and summary and everything else that we generate for them. And so I was thinking when you
+> open an article for the first time, we would perhaps give them the option to do this and maybe
+> include a tiny message saying where else they could do this in future.
+>
+> In other words, when I open an article for the first time, pop up a dialogue that gives me the
+> option to say what I'm trying to get from it and what my background is. And while you're at it, it
+> could also include a box for the general user profile, perhaps default collapsed, so I can edit
+> that too at the same time. This is the, and it should use the same microphone input machinery that
+> I have for feedback. And then obviously, if I choose to skip it, I can always edit the article
+> label, background and needs metadata in the metadata section, because that's where it currently is
+> accessible from.
+
+The core of it shipped above: the question is asked as the article arrives, and skipping it leaves
+Metadata as the place to answer later. **Three parts of it were not done**: it is asked on the add
+page while the import runs, not in a dialog on first open; there is no collapsed box for the general
+profile beside it; and the box has no microphone (the plan deferred dictation from v1 on purpose).

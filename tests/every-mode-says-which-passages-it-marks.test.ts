@@ -30,7 +30,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { MODES, type Mode } from "../src/modes.js";
+import { BAND_MODES, type BandMode } from "../src/modes.js";
 import { NO_FOUND, selectPassages, type PassageSlots } from "../src/web/reader/passages.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { BlockId } from "../src/types.js";
@@ -98,7 +98,7 @@ const PRODUCERS = {
  * blocks in the prose would mark the whole article. Same position as `outline`
  * and `hierarchy` took, before each retired into it.
  */
-const SILENT: Mode[] = [
+const SILENT: BandMode[] = [
   "plain",
   "chat",
   "glossary",
@@ -122,15 +122,14 @@ const SILENT: Mode[] = [
      not a selection, and a Tweets band that marked every post's passages would
      mark most of the article. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   "tweets",
-  /* Earned: its notes sit beside their blocks in a column of their own and
-     mark nothing in the prose; dashed underlines for ideas are deferred —
-     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
-  "annotations",
+  /* Annotations is not here since 2026-10-01: its column is a switch beside the
+     band, not a value of `?mode=` (`BandMode`) —
+     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
 ];
 
 describe("selectPassages", () => {
   it("gives each producer its own marks and its own ring, from one slot", () => {
-    for (const [mode, slot] of Object.entries(PRODUCERS) as [Mode, keyof PassageSlots][]) {
+    for (const [mode, slot] of Object.entries(PRODUCERS) as [BandMode, keyof PassageSlots][]) {
       const chosen = selectPassages(mode, SLOTS);
       expect(chosen.found, `${mode} drew another band's marks`).toBe(SLOTS[slot].found);
       expect(chosen.openKey, `${mode} rang another band's passage`).toBe(SLOTS[slot].openKey);
@@ -169,6 +168,6 @@ describe("selectPassages", () => {
     expect(
       [...answered].sort(),
       "a mode in MODES has no arm here — add it to PRODUCERS or to SILENT",
-    ).toEqual([...MODES].sort());
+    ).toEqual([...BAND_MODES].sort());
   });
 });

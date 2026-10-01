@@ -71,12 +71,11 @@ export type ReaderCapability =
        * article rather than something citations mode fetches for itself.
        *
        * **And there is no visitor arm for it**, which is the difference from
-       * `glossary` and `quotes` and is a decision rather than an omission:
-       * `POLICY.citations` is `owners-only`, so the public projection these
-       * rows' URLs would pass through is not built (docs/project/citations.md
-       * § Who sees it). A visitor therefore gets no marks and no card section,
-       * by construction and not by a check — which is what keeps a half-working
-       * card off a shared link.
+       * `glossary` and `quotes`. Since 260929c a visitor's *band* reads a
+       * public projection of the list (src/web/visitor.ts), but the prose
+       * marks and their card section stay owner-only: a visitor gets neither,
+       * because this read is not on their arm. The card's owner-only parts
+       * are gated by name as well (ProseHoverCard.tsx § `showInSpideryarn`).
        */
       citations: CitationsRead;
       /**

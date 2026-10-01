@@ -688,6 +688,34 @@ Code: [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx),
 [`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx); the stage is
 [`src/simple-summary.ts`](../../src/simple-summary.ts).
 
+### The fidelity guard (since 2026-10-01)
+
+Plain words pull a model towards the everyday name for a thing, and on the PID paper that name was
+the paper's word for a different thing: synergy *"grows with more feedback loops"*, where the paper
+finds feedback connections lower it. A prompt rule did not make that rare
+([261001h](../plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md)). So each
+level, once written and valid, is **checked**: one quick-tier call reads every paragraph beside the
+text of the blocks it cites and says, per paragraph, whether those passages contradict it.
+
+- **A flag buys the level's one remaining attempt**; the retry is stored whatever its verdict, and if
+  the retry itself fails, the flagged first attempt is. The guard can make a press slower (4–5 s,
+  more on a retry) but never makes it store nothing.
+- **A checker that fails or answers unreadably** leaves the level stored unchecked, and does not
+  spend the retry.
+- **It cannot catch what the cited passages do not say**: a claim wrong about the article but not
+  contradicted by its own passages passes. Measured, it caught 24 of 30 hand-labelled faults and
+  alarmed on 1–2% of other paragraphs, for about $0.0027 a press.
+- **Each stored summary carries a `check` record** (per level: passed, flagged with the reasons, or
+  unchecked, and how many attempts), the owner's and never a visitor's; a summary without one was
+  written before the guard or with it off. Every check is also an `ai_calls` row of purpose
+  `simple-check`. `npx tsx scripts/simple-check-report.ts` reads both, read-only — what each can and
+  cannot see is in its header.
+- **Off is one line**: `SIMPLE_CHECK_ENABLED` in [`src/simple-check.ts`](../../src/simple-check.ts),
+  then a deploy.
+
+It is Simple's alone; the other summary voices are not checked. The design, the review and the
+first real press are in [261001i](../plans/261001i-simple-fidelity-guard-built.md).
+
 ## What this deliberately does not have
 
 **A length control.** See [above](#why-there-is-no-length-control). The two generated rungs and the

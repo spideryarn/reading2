@@ -47,6 +47,8 @@ function candidate(over: Partial<CitedCandidate> = {}): CitedCandidate {
     matchTitle: null,
     displayTitle: null,
     byline: null,
+    archived: false,
+    guessedUrl: null,
     ...over,
   };
 }
@@ -142,6 +144,43 @@ describe("matchOf", () => {
   });
 });
 
+describe("an upload, by the identifier we found for it (plan 261001i)", () => {
+  const upload = (over: Partial<CitedCandidate> = {}) =>
+    candidate({ slug: "upload-spya-dddddd", guessedUrl: "https://doi.org/10.1038/nature14539", ...over });
+
+  it("matches a DOI work to an upload whose guessed address is that DOI, said as a guess", () => {
+    expect(matchOf(DOI_WORK, upload())).toBe("guessed-id");
+    expect(matchOf(ARXIV_WORK, upload({ guessedUrl: "https://arxiv.org/abs/2001.08361" }))).toBe("guessed-id");
+  });
+
+  it("fails closed on a guessed address that is not a resolver's: parsing, not the row's kind, decides", () => {
+    expect(matchOf(DOI_WORK, upload({ guessedUrl: "https://example.com/10.1038/nature14539" }))).toBeNull();
+  });
+
+  it("never matches a guessed address by address, only by the identifier it is", () => {
+    const pageWork = work({ url: "https://example.com/paper", linkFrom: "article" });
+    expect(matchOf(pageWork, upload({ guessedUrl: "https://example.com/paper" }))).toBeNull();
+  });
+
+  it("is an identifier match: the reader's own upload beats a stranger's public copy (GPT Sol, plan review)", () => {
+    const publicReal = candidate({ slug: "a-public", mine: false, urls: ["https://doi.org/10.1038/nature14539"] });
+    expect(matchCited([DOI_WORK], [publicReal, upload({ slug: "z-guess" })]).get(DOI_WORK.id)?.slug).toBe("z-guess");
+    /* An archived own copy by its real DOI still loses to a live upload: live before archived. */
+    const archivedReal = candidate({ slug: "a-archived", archived: true, urls: ["https://doi.org/10.1038/nature14539"] });
+    expect(matchCited([DOI_WORK], [archivedReal, upload({ slug: "z-guess" })]).get(DOI_WORK.id)?.slug).toBe("z-guess");
+  });
+
+  it("between two of the reader's live copies, the real identifier before our guess", () => {
+    const real = candidate({ slug: "z-real", urls: ["https://doi.org/10.1038/nature14539"] });
+    expect(matchCited([DOI_WORK], [upload({ slug: "a-guess" }), real]).get(DOI_WORK.id)?.slug).toBe("z-real");
+    const byTitle = candidate({ slug: "a-title", matchTitle: TITLE });
+    expect(matchCited([DOI_WORK], [byTitle, upload({ slug: "z-guess" })]).get(DOI_WORK.id)).toMatchObject({
+      slug: "z-guess",
+      matchedBy: "guessed-id",
+    });
+  });
+});
+
 describe("authorsAgree", () => {
   it("is unknown when either side names nobody", () => {
     expect(authorsAgree(undefined, "Jane Smith")).toBe("unknown");
@@ -170,6 +209,23 @@ describe("matchCited", () => {
     }
     expect(matchCited([ARXIV_WORK], [byTitle, publicById]).get(ARXIV_WORK.id)?.slug).toBe("b-public");
     expect(matchCited([ARXIV_WORK], [publicById]).get(ARXIV_WORK.id)?.whose).toBe("public");
+  });
+
+  it("puts the reader's live copy before their archived one, and their archived one before a public one", () => {
+    const url = ["https://arxiv.org/abs/2001.08361"];
+    const live = candidate({ slug: "z-live", urls: url });
+    const archived = candidate({ slug: "a-archived", urls: url, archived: true });
+    const pub = candidate({ slug: "a-public", mine: false, urls: url });
+    expect(matchCited([ARXIV_WORK], [archived, pub, live]).get(ARXIV_WORK.id)?.slug).toBe("z-live");
+    expect(matchCited([ARXIV_WORK], [pub, archived]).get(ARXIV_WORK.id)).toEqual({
+      slug: "a-archived",
+      whose: "yours",
+      matchedBy: "arxiv",
+      title: "a-archived",
+      archived: true,
+    });
+    /* A live copy's match carries no archived key at all. */
+    expect(matchCited([ARXIV_WORK], [live]).get(ARXIV_WORK.id)).not.toHaveProperty("archived");
   });
 
   it("gives an unmatched work nothing", () => {

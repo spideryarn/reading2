@@ -165,11 +165,12 @@ rerun card, before the first mode row, and still asks before it posts.
 
 - A per-reader limiter on re-runs (ai-gateway.md already has the design, and the files are on the
   security map, so it is Greg's).
-- Undo for an accidental *Find more terms* (the appended terms stay).
+- Undo for an accidental *Find more terms* (the appended terms stay). **Designed and deliberately
+  not built**, on GPT Sol's advice — [261001i](261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md) § 2.
 - Saying, on the glossary's row, that a rewrite stops saved look-ups showing beside entries whose
   ids change (they stay stored). The old confirm did not say it either.
 - Telling the reader in advance whether a glossary run will append or rewrite: needs the server to
-  expose `existingFor`'s verdict through `articleMetadata`.
+  expose `existingFor`'s verdict through `articleMetadata`. **Done, 2026-10-01** — [261001i](261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md) § 3.
 - ResetArticle's Retry fires and forgets `queue.retry` (Sol code review P3). It predates this work,
   sits behind its own confirm, and the server collapses a duplicate reset; giving `useResetJob` the
-  same latch is the fix.
+  same latch is the fix. **Done, 2026-10-01** — [261001i](261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md) § 1.

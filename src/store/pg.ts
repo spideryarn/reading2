@@ -46,7 +46,7 @@ import {
   revisionStepRuns,
 } from "../db/schema.js";
 import { isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
-import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
+import { glossaryRunKind, isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
   isOutdated as quotesAreOutdated,
   isStale as quotesAreStale,
@@ -3269,6 +3269,16 @@ const rawPgArticleReader: ArticleReader = {
       archivedAt: shelfFrom(found.article).archivedAt ?? null,
       /* Off the same `articles` row — plan 260930f. */
       highPowerSince: found.article.highPowerSince?.toISOString() ?? null,
+      /* **The run's own verdict, from the run's own inputs** — plan 261001i § 3.
+         `articleHash` is the `articleFingerprint` the glossary stamps (its
+         `isCurrent` arm above reads the same), and the profile is
+         `renderProfile` over the same two boxes `resolveProfile` joins for
+         Metadata's press in src/routes.ts. No query: all three are in hand. */
+      glossaryRun: glossaryRunKind(
+        revision.glossary as Glossary | null,
+        articleHash,
+        renderProfile({ profile, purpose: shelfFrom(found.article).purpose ?? null }),
+      ),
 
       /* **Free, and that is why all three are here rather than behind a second
          endpoint.** `currentRevisionQuery` selects `articles` whole — the row

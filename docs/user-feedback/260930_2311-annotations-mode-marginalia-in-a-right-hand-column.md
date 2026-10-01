@@ -1,5 +1,5 @@
 ---
-reports: spya-u3dgk7, spya-w2kgha
+reports: spya-u3dgk7, spya-w2kgha, spya-ayajv6
 ending: shipped
 ---
 # Annotations mode: marginalia in a right-hand column
@@ -60,3 +60,34 @@ once is deferred, with the column built so that it is a layout change when wante
 Sonnet web pass found nothing that beats a ten-line collision rule. GPT Astra's design pass reshaped
 the head, the questions' anchoring and the stamps; the plan records each of its points and which were
 taken.
+
+**Follow-up, 2026-10-01: both columns at once** —
+[261001i](../plans/261001i-annotations-column-beside-a-band-mode.md). The notes are now a switch
+of their own, `?margin=1`, rather than a mode, so they stay open beside whichever band you pick:
+the Dock's Annotations button is an on/off toggle at the right-hand end, and pressing Plain closes
+the band but keeps the notes. From 900px up you get band, prose and notes; below that the band
+wins, with a line under the prose saying the notes need a wider window or the panel closed, and on
+a phone the band covers everything as before. Old `?mode=annotations` links open the notes. On
+`dev` at `eb76050d`, with GPT Sol's review fixes at `70650d76`.
+
+## An earlier report asking for the mode
+
+`spya-ayajv6` (2026-09-29 17:53Z, from Greg, read from its row in production on 2026-10-01) was the
+first request for this mode, the one 7E refers to as "another Feedback report". It never got a note,
+so the Earlier tab showed it as not shipped. Its opening, in his words (the full text is in the
+row):
+
+> I'd like to create a new annotations mode that basically, it's like it provides marginalia. It
+> provides scribbles in the margins as you scroll past, sort of anchored in the text or to a
+> particular block. […] it should almost entirely be reusing existing stuff that we've already
+> generated from quotes and ideas and timeline and summary and... Maybe FAQ and other stuff […] I
+> think part of the challenge is to sort of avoid overwhelming the reader. So maybe a bunch of them
+> are default collapsed when you're in annotations mode, but they're still there. […] when I run it,
+> perhaps it should first trigger some of those other modes if they haven't already been run, and
+> trajectory mode should do the same.
+
+The mode exists and reuses what is already generated, which is the heart of it. **Not done from this
+report**: the margin draws on the ideas and the outline only, not yet quotes, timeline, summaries,
+FAQ or citations; there are no "later we discuss X" links; and opening it does not run the modes it
+draws on (it generates nothing). Greg's later report SPIDERYARN-READING2-82, *Include FAQ,
+citations, debate items in annotations*, is the open request for the first of those.

@@ -584,6 +584,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **Simple's fidelity guard** (src/simple-check.ts) — `link-summary`'s row,
+     because it is the request plan 261001h measured, sent through that route.
+     The same two reasons: no `order` on a quick-tier OpenAI model, and
+     `require_parameters` so an upstream cannot quietly drop the token ceiling
+     or the low effort. */
+  "simple-check": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
      policy and its reason: the request sends `openrouter:web_search`, and a
      fallback that silently dropped the tool leaves a model answering from
@@ -864,6 +874,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      says why, and that the documented 1,024-token floor means even `low` buys
      a thousand tokens of thinking. Sent from here since 2026-09-28. */
   "link-summary": { effort: "low" },
+  /* The effort plan 261001h measured at, through `link-summary`'s row: a
+     verdict per paragraph, not a piece of writing. */
+  "simple-check": { effort: "low" },
   "citations-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },

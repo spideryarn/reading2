@@ -291,3 +291,19 @@
    about the rung that hides the mode labels, which is this one. Rung 1 hides no
    mode label, so there is nothing there for this rule to put back. */
 .dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
+
+/* **The radios inside the segment are a semantic group of their own** —
+   Annotations' toggle sits beside them in the same segment, outside the
+   `role="radiogroup"` (Dock.tsx § `MarginToggle`). Keep this as a real flex box:
+   `display: contents` can remove the element carrying the role from a browser's
+   accessibility tree. The outer segment still supplies the frame.
+   docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+.dock-modes-radios {
+  display: inline-flex;
+  align-items: stretch;
+  /* On a coarse pointer the outer segment grows to share spare width. Give
+     this wrapper one share per enclosed radio, beside the toggle's one, then
+     let the radios divide those shares equally. Without this weight the
+     toggle receives nearly all of the extra width. */
+  flex: var(--dock-radio-count) 0 auto;
+}

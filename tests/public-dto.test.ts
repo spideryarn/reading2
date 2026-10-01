@@ -1072,6 +1072,22 @@ describe("the artefacts a shared link carries", () => {
         { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
       ],
     },
+    /* The fidelity guard's audit record (plan 261001i) — the owner's, not a visitor's. */
+    check: {
+      checker: "simple-check/1",
+      requestedModel: "checker-model",
+      levels: {
+        brief: { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 },
+        simple: { result: "unchecked", attempts: 1, retriedAfterFlag: false, stored: 1, failure: "call" },
+        fuller: {
+          result: "flagged",
+          attempts: 2,
+          retriedAfterFlag: true,
+          stored: 2,
+          flags: [{ paragraph: 1, why: "checker-why-sentence" }],
+        },
+      },
+    },
   };
 
   /**
@@ -1730,7 +1746,18 @@ describe("the artefacts a shared link carries", () => {
     );
     expect(built.simpleSummary).toEqual({ levels: SIMPLE.levels });
     const json = JSON.stringify(built.simpleSummary);
-    for (const provenance of ["simple/2", "some-model", "abc123", "generatedAt", "elapsedMs", "profileHash", "0f1e2d3c4b5a6978"]) {
+    for (const provenance of [
+      "simple/2",
+      "some-model",
+      "abc123",
+      "generatedAt",
+      "elapsedMs",
+      "profileHash",
+      "0f1e2d3c4b5a6978",
+      "simple-check/1",
+      "checker-model",
+      "checker-why-sentence",
+    ]) {
       expect(json, provenance).not.toContain(provenance);
     }
   });

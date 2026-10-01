@@ -606,6 +606,10 @@ export function Metadata({
         const stored = purpose ?? "";
         setPurposeSaved(stored);
         setPurposeDraft(stored);
+        /* The glossary row's verdict (`glossaryRun`) is judged against this
+           sentence, so one read before the save may be wrong after it — plan
+           261001i § 3, GPT Sol's plan review. */
+        void refresh();
       })
       .catch((e: Error) => setPurposeError(e.message));
   }
@@ -1413,6 +1417,8 @@ function RerunSection({
                we cannot make yet. `RerunRow` reads either as *not that we know
                of*, which is what picks *Run it* over *Run it again*. */
             done={provenance?.stages.find((s) => s.step === step)?.done}
+            /* Read by the glossary's row alone — plan 261001i § 3. */
+            glossaryRun={provenance?.glossaryRun}
             onFinished={onFinished}
           />
         ))}
@@ -1484,6 +1490,30 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * `JobProgress`), because a sibling `<span>` is not read to somebody who
  * reaches the button by keyboard.
  */
+/**
+ * **The glossary's label and note once the server has said which** — plan
+ * 261001i § 3. `glossaryRun` is `glossaryRunKind` (src/glossary.ts), the
+ * run's own `existingFor` verdict for the profile this page's press sends, so
+ * *Find more terms* comes back and is true when it shows. Absent or `null` —
+ * an older server, the request still out, no fingerprint — keeps the hedge in
+ * `RERUN_COST_NOTE`.
+ */
+const GLOSSARY_RUN: Record<
+  "first" | "append" | "rewrite",
+  { label: string | null; note: string | null }
+> = {
+  /* `null` label: the ordinary *Run it* / *Run it again* off `done`. */
+  first: { label: null, note: null },
+  append: {
+    label: "Find more terms",
+    note: "Adds more terms to this list",
+  },
+  rewrite: {
+    label: null,
+    note: "Writes a new list, because the article, the glossary's instructions or your profile has changed",
+  },
+};
+
 const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
   glossary:
     /* *Up to date* is doing the work: `existingFor` refuses the old list when
@@ -1540,12 +1570,15 @@ function RerunRow({
   slug,
   step,
   done,
+  glossaryRun,
   onFinished,
 }: {
   slug: string;
   step: MetadataRerunStep;
   /** `StageState.done`, or undefined while the metadata request is out. */
   done: boolean | undefined;
+  /** `ArticleMetadata.glossaryRun`; only the glossary's row reads it. */
+  glossaryRun: ArticleMetadata["glossaryRun"];
   onFinished: () => void;
 }) {
   const { job, failed, stalled, starting, start, cancel } = useStepJob(
@@ -1585,9 +1618,11 @@ function RerunRow({
      (src/glossary.ts) decides from the source, the prompt version and the
      reader profile, none of which `done` tracks exactly (GPT Sol, both
      reviews of 260930e). So it gets the plain label, and its note says the
-     two outcomes rather than predicting one. */
-  const label = done ? "Run it again" : "Run it";
-  const note = RERUN_COST_NOTE[step];
+     two outcomes rather than predicting one — **until the server says which**,
+     since 2026-10-01: `GLOSSARY_RUN` above. */
+  const known = step === "glossary" && glossaryRun ? GLOSSARY_RUN[glossaryRun] : null;
+  const label = known?.label ?? (done ? "Run it again" : "Run it");
+  const note = known ? known.note : RERUN_COST_NOTE[step];
   /* Keyed on the step: a dozen rows share the page, and a fixed id would
      describe every button with whichever note came first. */
   const noteId = `rerun-note-${step}`;

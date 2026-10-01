@@ -225,7 +225,8 @@ options, or how to choose between them."* So before the question itself: what th
 background, and any jargon, in plain words; then each option explained fully and plainly — an ASCII
 diagram where shape matters, an example of what each would look like in use, what it costs and what
 it gives up; then what would make you pick one over the other. A bare "A, B or C?" with a one-line
-label each is the shape he cannot answer, and it will come back to you to be rewritten.
+label each is the shape he cannot answer, and it will come back to you to be rewritten. How many to
+ask at once, which ones, and in what order: [ask-me-questions.md](docs/reusable/ask-me-questions.md).
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.

@@ -225,6 +225,11 @@ function useResetJob(slug: string, onFinished: () => void) {
   }, [job, rememberRegenerating]);
 
   const startedId = useRef<string | null>(null);
+  /* A Retry's single-flight latch — `inFlight` in src/web/useStepJob.ts, for
+     the same reason: two presses of *Yes, try again* can reach `retry` before
+     React commits `starting`. Held until the new job is in the list, as
+     `starting` is; a refusal releases it. */
+  const inFlight = useRef(false);
   const [starting, setStarting] = useState(false);
   useEffect(() => {
     const id = startedId.current;
@@ -232,6 +237,7 @@ function useResetJob(slug: string, onFinished: () => void) {
     const seen = queue.jobs.find((j) => j.id === id);
     if (!seen) return;
     setStarting(false);
+    inFlight.current = false;
     startedId.current = null;
     if (seen.status === "done" && !announced.current.has(id)) finish(id);
   }, [queue.jobs, finish]);
@@ -258,6 +264,33 @@ function useResetJob(slug: string, onFinished: () => void) {
     [queue, slug, rememberRegenerating],
   );
 
+  /**
+   * **A Retry holds *Starting…* across its round trip** — `retry` in
+   * src/web/useStepJob.ts, copied. It was `void queue.retry(id)` until
+   * 2026-10-01, so the confirm closed onto the old failure and its Retry until
+   * a poll found the new job, and a second press sent a second retry. The
+   * server collapses a duplicate reset, so this was untidy rather than costly
+   * (GPT Sol's code review of 260930e, P3). The new job becomes the watched
+   * one, as a started reset does; on a refusal the old failure comes back.
+   */
+  const retry = useCallback(
+    async (id: string) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      setStarting(true);
+      const next = await queue.retry(id);
+      if (next) {
+        setPostFailure(undefined);
+        setWatchedId(next.id);
+        startedId.current = next.id;
+        return;
+      }
+      inFlight.current = false;
+      setStarting(false);
+    },
+    [queue],
+  );
+
   const stopped = watchedId ? queue.jobs.find((j) => j.id === watchedId) : undefined;
   const watchedReset = stopped && isResetOf(stopped, slug) ? stopped : null;
   const successorSource = job ?? watchedReset ?? recoveredReset;
@@ -279,10 +312,10 @@ function useResetJob(slug: string, onFinished: () => void) {
         ? {
             message: stopped.error ?? "The job failed.",
             retryable: jobWorthRetrying(stopped),
-            retry: () => void queue.retry(stopped.id),
+            retry: () => void retry(stopped.id),
           }
         : stopped?.status === "cancelled"
-          ? { message: "Stopped.", retryable: true, retry: () => void queue.retry(stopped.id) }
+          ? { message: "Stopped.", retryable: true, retry: () => void retry(stopped.id) }
           : null;
 
   return {

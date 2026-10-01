@@ -124,7 +124,12 @@ function loose(props: Record<string, unknown> = {}): void {
 
 /** Every control that is one of the modes, in either arm. */
 function modeControls(): HTMLElement[] {
-  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], a.dock-mode')];
+  /* Annotations' toggle beside the radios since 2026-10-01 (261001i). */
+  return [
+    ...host.querySelectorAll<HTMLElement>(
+      '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',
+    ),
+  ];
 }
 
 /** The one whose accessible name is this mode's label. */

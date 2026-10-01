@@ -109,6 +109,14 @@ import type { ArtifactReads } from "../src/store/artifacts.js";
 /** What the next call answers. One entry per call the test expects. */
 const answers: string[] = [];
 
+/* Simple's fidelity guard (plan 261001i) is a chat-wire call after each level.
+   This file is about hashes, so every check passes without leaving the process;
+   tests/simple-summary.test.ts is where the guard is tested. */
+vi.mock("../src/simple-check.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/simple-check.js")>()),
+  checkLevel: async () => ({ outcome: { kind: "passed" }, inputTokens: 0, outputTokens: 0 }),
+}));
+
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {

@@ -31,7 +31,11 @@
  * message, which docs/project/copy.md exists to keep stable precisely so that a
  * test can pin it without pinning prose.
  */
-import { act, createElement } from "react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,12 +43,20 @@ const initialize = vi.fn();
 const getSession = vi.fn();
 const navigate = vi.fn();
 const takeReturn = vi.fn();
+/* What the SDK said the URL's session was. docs/plans/261001i-password-reset.md. */
+const urlSessionKind = vi.fn();
+/* Whether the page *loaded* with a code on it, as lib/supabase.ts read it before
+   the SDK could strip it. */
+const arrival = { withCode: false };
+const forgetCodeArrival = vi.fn(() => {
+  arrival.withCode = false;
+});
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   /* `onAuthStateChange` is not this file's subject: `src/web/lib/api.ts` calls
      it at module load, and this test reaches that module transitively through
      `ShelfEntry` → `TitleEditor`. Without it the file throws on import and all
-     11 tests below stop running — vitest does report that, but as
+     tests below stop running — vitest does report that, but as
      "1 failed | no tests", which reads like an empty file rather than a
      silenced one. */
   supabase: {
@@ -54,6 +66,9 @@ vi.mock("../src/web/lib/supabase.js", () => ({
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
   },
+  urlSessionKind,
+  arrivedWithCode: () => arrival.withCode,
+  forgetCodeArrival,
   CALLBACK_PATH: "/auth/callback",
   callbackUrl: () => "https://spideryarn.test/auth/callback",
 }));
@@ -70,13 +85,14 @@ const { AuthCallback } = await import("../src/web/AuthCallback.js");
 let root: Root | null = null;
 
 /** Land on the callback address with a given query string, and let the effect run. */
-async function arriveWith(search: string): Promise<string> {
+async function arriveWith(search: string, strict = false): Promise<string> {
   history.replaceState(null, "", `/auth/callback${search}`);
   const host = document.createElement("div");
   document.body.appendChild(host);
   await act(async () => {
     root = createRoot(host);
-    root.render(createElement(AuthCallback));
+    const callback = createElement(AuthCallback);
+    root.render(strict ? createElement(StrictMode, null, callback) : callback);
   });
   /* Let the promise chain inside the effect drain — `initialize().then(...)`
      is two microtask hops deep before it decides anything. */
@@ -96,6 +112,10 @@ beforeEach(() => {
   takeReturn.mockReturnValue(null);
   initialize.mockResolvedValue({ error: null });
   getSession.mockResolvedValue({ data: { session: { access_token: "t" } } });
+  urlSessionKind.mockReset();
+  urlSessionKind.mockResolvedValue("sign-in");
+  forgetCodeArrival.mockClear();
+  arrival.withCode = false;
 });
 
 afterEach(() => {
@@ -153,10 +173,13 @@ describe("a sign-in that did not", () => {
   });
 
   it("says the provider refused, without quoting the provider", async () => {
+    /* Even a remembered page-load code cannot outrank explicit error params. */
+    arrival.withCode = true;
     const shown = await arriveWith(
       "?error=access_denied&error_code=access_denied&error_description=The+user+did+not+approve",
     );
     expect(navigate).not.toHaveBeenCalled();
+    expect(initialize).not.toHaveBeenCalled();
     expect(shown).toContain("[auth-denied]");
     /* docs/project/copy.md: never repeat what the provider said. Their text is
        not ours to show, and it is written for a developer rather than a reader. */
@@ -195,6 +218,43 @@ describe("arriving with nothing on it", () => {
     expect(navigate).toHaveBeenCalled();
     expect(initialize).not.toHaveBeenCalled();
   });
+
+  /**
+   * **The code was there; the SDK took it before this mounted.** The exchange
+   * starts at module load and strips `?code=` when it succeeds, and in dev —
+   * Vite serving modules one by one — that can finish before React mounts this.
+   * Seen in the browser on 2026-10-01: 3 of about 12 recovery links went
+   * `/auth/callback?code=… → /auth/callback → /login → /`, with no form, because
+   * this page read an empty address and moved on. The page load's own address,
+   * read before `createClient`, is what decides whether there is a verdict to
+   * wait for.
+   */
+  it("still waits for the verdict when the SDK stripped the code first", async () => {
+    arrival.withCode = true;
+    urlSessionKind.mockResolvedValue("recovery");
+    /* main.tsx mounts the app in StrictMode in development. */
+    await arriveWith("", true);
+    expect(initialize).toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(2);
+  });
+
+  it("does not reuse that page-load arrival on a later in-app callback navigation", async () => {
+    arrival.withCode = true;
+    urlSessionKind.mockResolvedValue("recovery");
+    await arriveWith("");
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(2);
+
+    act(() => root?.unmount());
+    root = null;
+    document.body.innerHTML = "";
+    navigate.mockClear();
+    initialize.mockClear();
+
+    await arriveWith("");
+    expect(initialize).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalled();
+  });
 });
 
 describe("a sign-in that never finishes", () => {
@@ -218,5 +278,144 @@ describe("a sign-in that never finishes", () => {
     });
     expect(host.textContent).toContain("[auth-slow]");
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the same deadline while reading the resulting session", async () => {
+    getSession.mockReturnValue(new Promise(() => {}));
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    history.replaceState(null, "", "/auth/callback?code=abc123");
+    await act(async () => {
+      root = createRoot(host);
+      root.render(createElement(AuthCallback));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(11_000);
+    });
+    expect(host.textContent).toContain("[auth-slow]");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe("a password-recovery link", () => {
+  /**
+   * The recovery exchange signs the reader in, exactly like any other link. What
+   * tells it apart is the SDK's PASSWORD_RECOVERY event, which lib/supabase.ts
+   * catches at module scope. docs/plans/261001i-password-reset.md.
+   */
+  it("asks for a new password instead of sending the reader on", async () => {
+    urlSessionKind.mockResolvedValue("recovery");
+    await arriveWith("?code=abc123");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(2);
+    expect(location.search).not.toContain("code=");
+  });
+
+  it("consumes the stored destination on the recovery path too", async () => {
+    urlSessionKind.mockResolvedValue("recovery");
+    await arriveWith("?code=abc123");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  /** A failed exchange is a failure, whatever event anyone heard. */
+  it("still reports a failed exchange", async () => {
+    urlSessionKind.mockResolvedValue("recovery");
+    initialize.mockResolvedValue({ error: new Error("code verifier missing") });
+    const shown = await arriveWith("?code=abc123");
+    expect(shown).toContain("[auth-exchange]");
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
+    expect(getSession).not.toHaveBeenCalled();
+    expect(urlSessionKind).not.toHaveBeenCalled();
+  });
+
+  /** About this session, not the first event anybody heard (another tab's). */
+  it("asks about the session the exchange produced", async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: "this-one" } } });
+    await arriveWith("?code=abc123");
+    expect(urlSessionKind).toHaveBeenCalledWith("this-one");
+  });
+
+  /**
+   * The event never comes. The SDK promises one, so its absence is not evidence
+   * of an ordinary sign-in — and silently moving on would break the email's
+   * promise of a new password. Say so, and offer the shelf the reader already
+   * has. GPT Sol, plan review, finding 2.
+   */
+  it("says it could not tell, rather than guessing, once the deadline passes", async () => {
+    urlSessionKind.mockReturnValue(new Promise(() => {}));
+    await arriveWith("?code=abc123");
+    expect(navigate).not.toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(11_000);
+    });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("[auth-kind]");
+    expect(document.body.textContent).not.toContain("[auth-slow]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  /** One ten-second budget from arrival, not a fresh one once the exchange is done. */
+  it("does not restart the deadline after a slow exchange", async () => {
+    initialize.mockReturnValue(
+      new Promise((resolve) => setTimeout(() => resolve({ error: null }), 9_000)),
+    );
+    urlSessionKind.mockReturnValue(new Promise(() => {}));
+    await arriveWith("?code=abc123");
+    await act(async () => {
+      vi.advanceTimersByTime(9_100);
+    });
+    expect(document.body.textContent).not.toContain("[auth-kind]");
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(document.body.textContent).toContain("[auth-kind]");
+  });
+});
+
+/**
+ * **Every failure forgets where the reader was going.** auth-return.ts promises
+ * a failed sign-in does not survive to redirect the next one; until 2026-10-01
+ * three failures kept that promise only by omission. GPT Sol found it reviewing
+ * 261001i's plan; Greg approved the fix the same day. The last case is the
+ * structural one: a fourth failure added later cannot skip the clearing,
+ * because there is one way to fail.
+ */
+describe("a failure never leaves the destination behind", () => {
+  it("on [auth-slow]", async () => {
+    initialize.mockReturnValue(new Promise(() => {}));
+    await arriveWith("?code=abc123");
+    await act(async () => {
+      vi.advanceTimersByTime(11_000);
+    });
+    expect(document.body.textContent).toContain("[auth-slow]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  it("on [auth-nosession]", async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    const shown = await arriveWith("?code=abc123");
+    expect(shown).toContain("[auth-nosession]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  it("on [auth-finish]", async () => {
+    initialize.mockRejectedValue(new TypeError("fetch failed"));
+    const shown = await arriveWith("?code=abc123");
+    expect(shown).toContain("[auth-finish]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  it("because every error goes through the one exit that clears it", () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "web", "AuthCallback.tsx"),
+      "utf8",
+    );
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    /* The binding and its one call are the only references: an alias such as
+       `const showError = setError` must not open a second path around `fail`.
+       Strip comments so a commented-out `takeReturn` cannot satisfy the guard. */
+    expect(code.match(/\bsetError\b/g)).toHaveLength(2);
+    expect(code.match(/\bsetError\(/g)).toHaveLength(1);
+    expect(code).toMatch(/const fail = \([^)]*\) => \{[\s\S]{0,400}?takeReturn\(CALLBACK_HREF\);[\s\S]{0,200}?setError\(/);
   });
 });

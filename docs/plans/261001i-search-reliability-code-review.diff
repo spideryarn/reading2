@@ -1,0 +1,690 @@
+diff --git a/src/routes.ts b/src/routes.ts
+index 09a4a719..b07e27d9 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -4214,8 +4214,6 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
+   } catch (err) {
+     captureFailure(err, { route: "search", slug, id: run.id });
+     patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
+-  } finally {
+-    searching.delete(key);
+   }
+ 
+   try {
+@@ -4239,6 +4237,11 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
+     );
+     captureFailure(storeErr, { route: "search", slug, phase: "record-result" });
+   } finally {
++    /* Not released until the answer is stored. Released straight after the
++       model call, a GET landing before `finish` swept this row — past the
++       grace, nothing else protects it — and the answer then stored nothing.
++       GPT Sol, docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
++    searching.delete(key);
+     res.end();
+   }
+ }
+diff --git a/src/searches.ts b/src/searches.ts
+index fa7f3a09..e584f20b 100644
+--- a/src/searches.ts
++++ b/src/searches.ts
+@@ -211,7 +211,18 @@ export function withRun(
+   // Newest last on disk, oldest dropped first — the panel sorts for display,
+   // so the file stays in the order things happened, which is the order that
+   // makes it readable when somebody opens it in an editor.
+-  return { runs: [...runs, run].slice(-MAX_RUNS), run, kind: "minted" };
++  return { runs: trimRuns([...runs, run]), run, kind: "minted" };
++}
++
++/**
++ * The newest `MAX_RUNS`, **except that a `pending` run is never dropped** — the
++ * same rule `begin` applies in src/store/pg-searches.ts. A search still being
++ * answered would otherwise be deleted under the call that is answering it.
++ * The newest run is the one just written, so it is always kept.
++ */
++function trimRuns(runs: SearchRun[]): SearchRun[] {
++  const cut = runs.length - MAX_RUNS;
++  return runs.filter((r, i) => i >= cut || r.status === "pending");
+ }
+ 
+ 
+diff --git a/src/store/pg-searches.ts b/src/store/pg-searches.ts
+index 05cc9a1c..d5fdf84f 100644
+--- a/src/store/pg-searches.ts
++++ b/src/store/pg-searches.ts
+@@ -50,7 +50,7 @@
+ 
+ import { randomUUID } from "node:crypto";
+ 
+-import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
++import { and, asc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
+ 
+ import { getDb } from "../db/client.js";
+ import { searchRuns } from "../db/schema.js";
+@@ -256,20 +256,28 @@ const rawPgSearchStore: SearchStore = {
+          are watching. Full behavioural parity needs an insertion ordinal, which
+          is a column and has not been paid for. Recorded in
+          docs/plans/260826e-postgres-storage-implementation.md. */
++      /* **And a `pending` row past the cap is skipped, not deleted** — 2026-10-01.
++         It is a search somebody is still waiting on, possibly in another tab or
++         process, and deleting it made its fenced `finish` update nothing: no
++         `done`, "The search stopped arriving", and the paid answer gone on
++         reload. It becomes trimmable once it finishes or the sweep fails it,
++         and the next `begin` takes it then. So the cap is thirty plus however
++         many older searches are still running.
++         docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+       const others = await tx
+-        .select({ id: searchRuns.id })
++        .select({ id: searchRuns.id, status: searchRuns.status })
+         .from(searchRuns)
+         .where(and(eq(searchRuns.articleId, articleId), notInArray(searchRuns.id, [decided.id])))
+         .orderBy(sql`${searchRuns.createdAt} desc`, sql`${searchRuns.id} desc`)
+         .offset(MAX_RUNS - 1);
+-      if (others.length) {
++      const past = others.filter((r) => r.status !== "pending").map((r) => r.id);
++      if (past.length) {
+         await tx.delete(searchRuns).where(
+           and(
+             eq(searchRuns.articleId, articleId),
+-            inArray(
+-              searchRuns.id,
+-              others.map((r) => r.id),
+-            ),
++            inArray(searchRuns.id, past),
++            // Repeated in SQL for the reason the reset's predicate is above.
++            ne(searchRuns.status, "pending"),
+           ),
+         );
+       }
+diff --git a/src/web/modes/search/SearchMode.tsx b/src/web/modes/search/SearchMode.tsx
+index c9a5878a..9bfc3d44 100644
+--- a/src/web/modes/search/SearchMode.tsx
++++ b/src/web/modes/search/SearchMode.tsx
+@@ -86,23 +86,15 @@ export function SearchBand({
+   onOpenHit(next: string | null): void;
+ }) {
+   useRenderCount("SearchBand");
+-  const { runs, loaded, loadError, ask, retry, remove, recolour, error } = useSearch(slug);
+-  /* Only a request this tab started is known to be in flight. A `pending` row
+-     loaded by the opening GET may belong to another process, or to one that
+-     died inside the server's 90-second sweep grace; this tab receives no later
+-     update in either case. Treating every persisted `pending` as live would
+-     therefore refuse that question indefinitely. */
+-  const started = useRef(new Map<string, string>());
+-  const running = useMemo(
+-    () => {
+-      const pending = new Set(runs.filter((run) => run.status === "pending").map((run) => run.id));
+-      for (const id of started.current.keys()) {
+-        if (!pending.has(id)) started.current.delete(id);
+-      }
+-      return new Set(started.current.keys());
+-    },
+-    [runs],
+-  );
++  /* `useSearchMode` owns `?runs=` and is called after the hook, so a rename
++     reaches it through this ref. A rename swaps the id in place, and does
++     nothing if the reader has already unticked or deleted the search. */
++  const renameActive = useRef<(from: string, to: string) => void>(() => {});
++  /* Only a request this tab started is known to be in flight — `running` and
++     `isRunning` are the hook's, because only the hook knows the id the server
++     answered under. useSearch.ts § inFlight. */
++  const { runs, loaded, loadError, ask, retry, running, isRunning, remove, recolour, error } =
++    useSearch(slug, { onRenamed: (from, to) => renameActive.current(from, to) });
+   const { panel, setActive } = useSearchMode({
+     runs,
+     blocks,
+@@ -112,6 +104,8 @@ export function SearchBand({
+     openHit,
+     onOpenHit,
+   });
++  renameActive.current = (from, to) =>
++    setActive((ids) => (ids.includes(from) ? ids.map((id) => (id === from ? to : id)) : ids));
+ 
+   return (
+     <SearchPanel
+@@ -123,7 +117,7 @@ export function SearchBand({
+         error,
+         onAsk: (criterion) => {
+           const question = criterion.trim();
+-          if ([...started.current.values()].includes(question)) return;
++          if (isRunning(question)) return;
+           /* `ask` mints the id, so `?runs=` can name the search before the
+              model has said anything — the same trick `?note=` and `?thread=`
+              use.
+@@ -132,15 +126,13 @@ export function SearchBand({
+              default-false: a search the reader just paid for and cannot see is
+              not a result. */
+           const id = ask(question);
+-          started.current.set(id, question);
+           setActive((ids) => [...ids, id]);
+           onOpenHit(null);
+         },
+         running,
+         onRetry: (id) => {
+           const run = runs.find((candidate) => candidate.id === id);
+-          if (!run || [...started.current.values()].includes(run.criterion.trim())) return;
+-          started.current.set(id, run.criterion.trim());
++          if (!run || isRunning(run.criterion)) return;
+           retry(id);
+         },
+         /* Straight through. Unlike every other write on this panel it does not
+diff --git a/src/web/useSearch.ts b/src/web/useSearch.ts
+index 13d5f5b3..929f7b22 100644
+--- a/src/web/useSearch.ts
++++ b/src/web/useSearch.ts
+@@ -109,6 +109,18 @@ export interface SearchApi {
+   ask(criterion: string): string;
+   /** The same criterion again — for a run whose model call failed. */
+   retry(id: string): void;
++  /**
++   * The requests this tab has out, by the id the **server** is using — which
++   * `begin` can change, see `send`. A `pending` row loaded by the opening GET
++   * is not here: it may belong to another process, or to one that died, and
++   * this tab gets no later news of it.
++   */
++  running: ReadonlySet<string>;
++  /**
++   * Is this (trimmed) question already out from this tab? Read from a ref, so
++   * two presses inside one React batch both see the first.
++   */
++  isRunning(criterion: string): boolean;
+   remove(id: string): void;
+   /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
+   recolour(id: string, colour: number | null): void;
+@@ -132,8 +144,43 @@ function withChoice(run: SearchRun, colour: number | null | undefined): SearchRu
+   return colour === null || colour === undefined ? rest : { ...rest, colour };
+ }
+ 
+-export function useSearch(slug: string): SearchApi {
++export function useSearch(
++  slug: string,
++  {
++    onRenamed,
++  }: {
++    /**
++     * `begin` answered under a different id from the one sent — the caller's
++     * `?runs=` still names the old one. Called once, before any hit arrives.
++     */
++    onRenamed?: (from: string, to: string) => void;
++  } = {},
++): SearchApi {
++  const renamed = useRef(onRenamed);
++  renamed.current = onRenamed;
+   const [runs, setRuns] = useState<SearchRun[]>([]);
++
++  /**
++   * What this tab has in flight: the server's id → the trimmed question, and
++   * the `send` that owns the entry, so a late `finally` from an earlier
++   * attempt cannot clear a later one's.
++   *
++   * It lives here rather than in the panel because only `send` knows the id
++   * the server is actually using. The panel used to record the id it asked
++   * under; when `begin` answered with another, that id fell out of `runs` and
++   * the guard let the same question be paid for again while it ran.
++   * docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
++   */
++  const inFlight = useRef(new Map<string, { criterion: string; owner: symbol }>());
++  const [flights, setFlights] = useState(0);
++  const flown = useCallback(() => setFlights((n) => n + 1), []);
++  // biome-ignore lint/correctness/useExhaustiveDependencies: `flights` is the trigger and not an input — it is bumped whenever the ref changes, and the ref supplies what to read.
++  const running = useMemo(() => new Set(inFlight.current.keys()), [flights]);
++  const isRunning = useCallback(
++    (criterion: string) =>
++      [...inFlight.current.values()].some((f) => f.criterion === criterion.trim()),
++    [],
++  );
+   const [loaded, setLoaded] = useState(false);
+   const [loadError, setLoadError] = useState<string | null>(null);
+   const [error, setError] = useState<string | null>(null);
+@@ -196,15 +243,22 @@ export function useSearch(slug: string): SearchApi {
+    */
+   const patching = useRef(new Map<string, Promise<void>>());
+ 
+-  // Switching article throws the tombstones away with the runs they name.
++  /** `recolour`, for `send`'s rename, which is declared above it. */
++  const recolourLater = useRef<(id: string, colour: number | null) => void>(() => {});
++
++  // Switching article throws the tombstones away with the runs they name —
++  // and the in-flight list, so a question still out on the last article does
++  // not refuse the same words on this one.
+   useEffect(() => {
+     const gone = deleted.current;
+     const picks = chosen.current;
+     const chains = patching.current;
++    const flying = inFlight.current;
+     return () => {
+       gone.clear();
+       picks.clear();
+       chains.clear();
++      flying.clear();
+     };
+   }, [slug]);
+ 
+@@ -324,6 +378,48 @@ export function useSearch(slug: string): SearchApi {
+          after the `begin` frame addresses the row by this, not by `id`. */
+       let liveId = id;
+       let settled = false;
++      const owner = Symbol(id);
++      inFlight.current.set(id, { criterion: criterion.trim(), owner });
++      flown();
++      /** Off the in-flight list — only if this `send` still owns the entry. */
++      const land = () => {
++        if (inFlight.current.get(liveId)?.owner !== owner) return;
++        inFlight.current.delete(liveId);
++        flown();
++      };
++      /**
++       * `begin` answered under another id. `withRun` minted one because the id
++       * we sent was taken by a row it would not reset — most often a retry of
++       * a run whose stream dropped here while the server was still answering
++       * it. Drop the row we rendered under our own id, or the reader sees two
++       * of the same search; then move everything this tab keeps by id.
++       *
++       * **Every** per-id thing, not only the two the bug was about (GPT Sol's
++       * plan review). The in-flight entry and `?runs=`, or the guard and the
++       * marks lose the search the reader is watching. The tombstone, or a row
++       * deleted in the gap before `begin` comes back on `done` — and the
++       * server's row is deleted now, since our DELETE named an id it never
++       * had. And a colour chosen in that gap, or it is lost on screen and
++       * on reload.
++       */
++      const follow = (to: string) => {
++        const stale = liveId;
++        setRuns((prev) => prev.filter((r) => r.id !== stale));
++        liveId = to;
++        const flight = inFlight.current.get(stale);
++        if (flight?.owner === owner) {
++          inFlight.current.delete(stale);
++          inFlight.current.set(to, flight);
++          flown();
++        }
++        if (deleted.current.has(stale)) {
++          deleted.current.add(to);
++          void forget(to);
++          return;
++        }
++        if (chosen.current.has(stale)) recolourLater.current(to, chosen.current.get(stale) ?? null);
++        renamed.current?.(stale, to);
++      };
+ 
+       void (async () => {
+         try {
+@@ -357,14 +453,7 @@ export function useSearch(slug: string): SearchApi {
+                  moment, which is the true thing to do rather than a side
+                  effect worth avoiding. */
+               if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
+-              if (begun.id !== liveId) {
+-                // `beginRun` reset a different existing id than the one we
+-                // sent — drop the row we rendered optimistically under our
+-                // own, or the reader ends up with two of the same search.
+-                const stale = liveId;
+-                setRuns((prev) => prev.filter((r) => r.id !== stale));
+-                liveId = begun.id;
+-              }
++              if (begun.id !== liveId) follow(begun.id);
+               if (!gone) put(begun);
+               continue;
+             }
+@@ -408,10 +497,12 @@ export function useSearch(slug: string): SearchApi {
+           const message = describeFetchFailure(e as Error);
+           setError(message);
+           put({ id: liveId, criterion, createdAt, status: "error", hits: [], error: message });
++        } finally {
++          land();
+         }
+       })();
+     },
+-    [slug, put, forget],
++    [slug, put, forget, flown],
+   );
+ 
+   const ask = useCallback(
+@@ -504,16 +595,21 @@ export function useSearch(slug: string): SearchApi {
+     [slug],
+   );
+ 
++  recolourLater.current = recolour;
++
+   const remove = useCallback(
+     (id: string) => {
+       deleted.current.add(id);
+       setRuns((prev) => prev.filter((r) => r.id !== id));
++      // Deleting it frees the question at once, as it always has: asking it
++      // again is a new search the reader chose, not an impatient press.
++      if (inFlight.current.delete(id)) flown();
+       // If a POST is still out, its `.then` re-sends the DELETE once the write
+       // it is racing has definitely landed. Doing it only here would let the
+       // POST write the row back after we deleted it.
+       void forget(id);
+     },
+-    [forget],
++    [forget, flown],
+   );
+ 
+   /**
+@@ -544,6 +640,8 @@ export function useSearch(slug: string): SearchApi {
+     loadError,
+     ask,
+     retry,
++    running,
++    isRunning,
+     remove,
+     recolour,
+     error,
+diff --git a/tests/search-parallel-finds.test.tsx b/tests/search-parallel-finds.test.tsx
+index c6f5c260..69c6f48b 100644
+--- a/tests/search-parallel-finds.test.tsx
++++ b/tests/search-parallel-finds.test.tsx
+@@ -108,13 +108,20 @@ interface Posted {
+   stream: ReturnType<typeof openStream>;
+ }
+ 
+-function server(saved: SearchRun[] = []): Posted[] {
++/**
++ * `renamed` maps an id the client sends to the id the server answers `begin`
++ * with — what `withRun` does when a "retry" names a row that has not actually
++ * failed on the server, so it mints instead of resetting.
++ */
++function server(saved: SearchRun[] = [], renamed: Record<string, string> = {}): Posted[] {
+   const posted: Posted[] = [];
+   answer = (_url, init) => {
+     const method = (init.method ?? "GET").toUpperCase();
+     if (method === "GET") return Promise.resolve(json({ runs: saved }));
+     if (method === "POST") {
+-      const { id, criterion } = JSON.parse(String(init.body)) as { id: string; criterion: string };
++      const sent = JSON.parse(String(init.body)) as { id: string; criterion: string };
++      const { criterion } = sent;
++      const id = renamed[sent.id] ?? sent.id;
+       const stream = openStream();
+       posted.push({ id, criterion, stream });
+       stream.frame("begin", run(id, criterion, "pending"));
+@@ -448,6 +455,58 @@ describe("Search: several meaning-searches at once", () => {
+     expect(posted.map((p) => p.criterion)).toEqual([FIRST, FIRST]);
+   });
+ 
++  it("keeps refusing the question when the server answers a retry under a new id, and keeps it ticked", async () => {
++    /* The deferred finding from docs/plans/260930f-parallel-searches.md: the
++       guard recorded the id this tab sent, `begin` answered with another one,
++       and the sent id fell out of the list — so the same question could be
++       paid for again while it was still running, and the search the reader was
++       watching dropped out of `?runs=`.
++       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
++    const message = "The model service was unavailable. Try again. [ai-500]";
++    const sentId = "spya-r8x3tf";
++    const serverId = "spya-w4n7pk";
++    history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${sentId}`);
++    const posted = server([{ ...run(sentId, FIRST, "error"), error: message }], {
++      [sentId]: serverId,
++    });
++    mount();
++    await flush();
++    expect(ticked()).toEqual([FIRST]);
++
++    click(must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`));
++    await flush();
++    expect(posted.map((p) => p.id)).toEqual([serverId]);
++
++    // The same question, while the renamed run is still open: refused.
++    type(FIRST);
++    enter();
++    await flush();
++    expect(posted, "an identical search was sent while the renamed one was running").toHaveLength(1);
++    expect(ticked(), "the renamed search dropped out of ?runs=").toEqual([FIRST]);
++    // The URL itself, past nuqs's throttle: `ticked()` reads rows by question,
++    // so it cannot see a stale id left beside the live one.
++    await act(async () => {
++      await new Promise((r) => setTimeout(r, 200));
++    });
++    const inUrl = new URLSearchParams(location.search).get("runs") ?? "";
++    expect(inUrl).toContain(serverId);
++    expect(inUrl).not.toContain(sentId);
++
++    // Positive control: a different question goes.
++    type(SECOND);
++    enter();
++    await flush();
++    expect(posted).toHaveLength(2);
++
++    // And once the renamed run has finished, the question is free again.
++    finish(posted[0] as Posted);
++    await flush();
++    type(FIRST);
++    enter();
++    await flush();
++    expect(posted.map((p) => p.criterion)).toEqual([FIRST, SECOND, FIRST]);
++  });
++
+   it("keeps a legacy run seed when it appends, and removes that id on delete", async () => {
+     const legacyId = "spya-s9y4ug";
+     history.replaceState(null, "", `/read/${SLUG}?mode=search&run=${legacyId}`);
+diff --git a/tests/searches.test.ts b/tests/searches.test.ts
+index 12b74d17..7f81ea12 100644
+--- a/tests/searches.test.ts
++++ b/tests/searches.test.ts
+@@ -140,6 +140,11 @@ describe("the colour the reader picked", () => {
+   });
+ });
+ 
++/** Every run marked finished, so the cap can apply to it. */
++function done(runs: SearchRun[]): SearchRun[] {
++  return runs.map((r) => ({ ...r, status: "done" as const }));
++}
++
+ describe("withRun — which run a begin produces", () => {
+   /* The decision itself, with no store under it. `pgSearchStore.begin` runs it
+      and `tests/store-searches-pg.test.ts` drives all three of its branches
+@@ -187,14 +192,34 @@ describe("withRun — which run a begin produces", () => {
+   it("keeps at most MAX_RUNS, oldest first", () => {
+     // The oldest end, deliberately: the searches you come back to are the ones
+     // you ran recently.
++    // Each one finished, because a `pending` run is never trimmed — see below.
+     let runs: SearchRun[] = [];
+     for (let i = 0; i < MAX_RUNS + 3; i++) {
+-      ({ runs } = withRun(runs, `criterion ${i}`, undefined, at));
++      ({ runs } = withRun(done(runs), `criterion ${i}`, undefined, at));
+     }
+     expect(runs).toHaveLength(MAX_RUNS);
+     expect(runs[0]?.criterion).toBe("criterion 3");
+     expect(runs[MAX_RUNS - 1]?.criterion).toBe(`criterion ${MAX_RUNS + 2}`);
+   });
++
++  it("never trims a run that is still pending, however many newer ones begin", () => {
++    /* The deferred finding from docs/plans/260930f-parallel-searches.md: the
++       trim used to spare only the run it had just written, so thirty newer
++       searches begun while an old one was still running deleted it mid-call.
++       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
++    let { runs, run: slow } = withRun([], "the slow one", undefined, at);
++    for (let i = 0; i < MAX_RUNS + 3; i++) {
++      ({ runs } = withRun(
++        runs.map((r) => (r.id === slow.id ? r : { ...r, status: "done" as const })),
++        `criterion ${i}`,
++        undefined,
++        at,
++      ));
++    }
++    expect(runs.find((r) => r.id === slow.id)?.status).toBe("pending");
++    // Everything else is still held to the cap: thirty, plus the one running.
++    expect(runs).toHaveLength(MAX_RUNS + 1);
++  });
+ });
+ 
+ /**
+diff --git a/tests/store-searches-pg.test.ts b/tests/store-searches-pg.test.ts
+index 0e28b9f4..02ab5fee 100644
+--- a/tests/store-searches-pg.test.ts
++++ b/tests/store-searches-pg.test.ts
+@@ -148,7 +148,9 @@ describe("the Postgres searches store", () => {
+     const ids: string[] = [];
+     for (let i = 0; i < MAX_RUNS + 3; i++) {
+       const at = () => new Date(start + i * 60_000).toISOString();
+-      const { run } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
++      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
++      // Finished, because a `pending` run is never trimmed — see below.
++      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
+       ids.push(run.id);
+     }
+     const kept = (await pgSearchStore.load(SLUG)).map((r) => r.id);
+@@ -164,8 +166,9 @@ describe("the Postgres searches store", () => {
+     const ids: string[] = [];
+     for (let i = 0; i < MAX_RUNS + 3; i++) {
+       const at = clockFrom(Date.parse("2026-08-01T00:00:00.000Z") + (MAX_RUNS + 3 - i) * 60_000);
+-      const { run } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
++      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
+       ids.push(run.id);
++      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
+       // The run just written is always still there, whatever its timestamp.
+       const after = await pgSearchStore.load(SLUG);
+       expect(after.map((r) => r.id), `run ${i} trimmed itself`).toContain(run.id);
+@@ -174,6 +177,44 @@ describe("the Postgres searches store", () => {
+     expect((await pgSearchStore.load(SLUG)).length).toBe(MAX_RUNS);
+   });
+ 
++  it("never trims a search that is still running, however many newer ones begin", async () => {
++    /* The deferred finding from docs/plans/260930f-parallel-searches.md § Deferred
++       (GPT Sol's plan review, finding 4): the trim spared only the row it had
++       just written, so thirty newer searches begun while an old one was still
++       out deleted it. Its fenced `finish` then updated nothing and the reader's
++       paid answer was gone. docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
++    const start = Date.parse("2026-08-01T00:00:00.000Z");
++    const slow = await pgSearchStore.begin(SLUG, "the slow one", undefined, () =>
++      new Date(start).toISOString(),
++    );
++    for (let i = 1; i <= MAX_RUNS + 3; i++) {
++      const at = () => new Date(start + i * 60_000).toISOString();
++      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
++      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
++    }
++    const kept = await pgSearchStore.load(SLUG);
++    expect(kept.find((r) => r.id === slow.run.id)?.status).toBe("pending");
++    // Everything else is still held to the cap: thirty, plus the one running.
++    expect(kept).toHaveLength(MAX_RUNS + 1);
++    // And the slow search can still land its answer.
++    const landed = await pgSearchStore.finish(
++      SLUG,
++      slow.run.id,
++      { status: "done", hits: [] },
++      slow.attempt,
++    );
++    expect(landed?.status).toBe("done");
++
++    // Once it has finished, the next search trims it like any other.
++    const next = await pgSearchStore.begin(SLUG, "one more", undefined, () =>
++      new Date(start + (MAX_RUNS + 4) * 60_000).toISOString(),
++    );
++    await pgSearchStore.finish(SLUG, next.run.id, { status: "done", hits: [] }, next.attempt);
++    const after = await pgSearchStore.load(SLUG);
++    expect(after.map((r) => r.id)).not.toContain(slow.run.id);
++    expect(after).toHaveLength(MAX_RUNS);
++  });
++
+   it("sweeps nothing, loudly, when the article has no runs at all", async () => {
+     /* Raw SQL `not in ()` is a syntax error rather than "matches everything",
+        and this was expected to be the likeliest 500 in the whole store. It is
+diff --git a/tests/use-search.test.ts b/tests/use-search.test.ts
+index 9e4278c9..471ad31b 100644
+--- a/tests/use-search.test.ts
++++ b/tests/use-search.test.ts
+@@ -505,3 +505,104 @@ describe("a stream that stops without ending", () => {
+     expect(run?.error).not.toContain("StreamStalled");
+   });
+ });
++
++/**
++ * `begin` can answer under an id other than the one the hook sent — `withRun`
++ * mints when the sent id names a row it will not reset. Everything this hook
++ * keeps by id has to follow, and the gap before `begin` arrives is where a
++ * reader's delete or colour choice lands on the old one.
++ * docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
++ */
++describe("a run that begin answers under a new id", () => {
++  const Q = "where the controls are";
++  const NEW = "spya-w4n7pk";
++  const createdAt = "2026-10-01T00:00:00.000Z";
++
++  /** A POST whose stream the case feeds by hand, answering under `NEW`. */
++  function heldPost(): { frame(event: string, data: unknown): void; end(): void } {
++    let ctl!: ReadableStreamDefaultController<Uint8Array>;
++    const body = new ReadableStream<Uint8Array>({
++      start(c) {
++        ctl = c;
++      },
++    });
++    postImpl = () => Promise.resolve({ ok: true, body } as unknown as Response);
++    return {
++      frame(event, data) {
++        ctl.enqueue(sseBytes([{ event, data }]));
++      },
++      end() {
++        ctl.close();
++      },
++    };
++  }
++  const calls = (method: string) =>
++    vi
++      .mocked(fetch)
++      .mock.calls.filter(([, init]) => init?.method === method)
++      .map(([url]) => String(url));
++
++  it("tracks the question under the server's id until it finishes", async () => {
++    await mount("a-slug");
++    await flush();
++    const post = heldPost();
++    let sent = "";
++    act(() => {
++      sent = latest?.ask(Q) ?? "";
++    });
++    expect(latest?.running.has(sent)).toBe(true);
++    expect(latest?.isRunning(` ${Q} `)).toBe(true);
++
++    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
++    await flush();
++    expect([...(latest?.running ?? [])]).toEqual([NEW]);
++    expect(latest?.isRunning(Q)).toBe(true);
++
++    post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
++    post.end();
++    await flush();
++    expect(latest?.running.size).toBe(0);
++    expect(latest?.isRunning(Q)).toBe(false);
++  });
++
++  it("keeps a run deleted before begin answered deleted, and deletes the server's row", async () => {
++    await mount("a-slug");
++    await flush();
++    const post = heldPost();
++    let sent = "";
++    act(() => {
++      sent = latest?.ask(Q) ?? "";
++    });
++    act(() => latest?.remove(sent));
++    expect(latest?.isRunning(Q), "a deleted question is free to ask again").toBe(false);
++
++    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
++    await flush();
++    expect(calls("DELETE").some((u) => u.endsWith(`/${NEW}`)), "the server's row was never deleted").toBe(
++      true,
++    );
++
++    post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
++    post.end();
++    await flush();
++    expect(latest?.runs.map((r) => r.id), "the deleted search came back on done").toEqual([]);
++  });
++
++  it("moves a colour chosen before begin answered onto the server's id", async () => {
++    await mount("a-slug");
++    await flush();
++    const post = heldPost();
++    let sent = "";
++    act(() => {
++      sent = latest?.ask(Q) ?? "";
++    });
++    act(() => latest?.recolour(sent, 3));
++
++    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
++    post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
++    post.end();
++    await flush();
++    expect(latest?.runs.find((r) => r.id === NEW)?.colour, "the colour was lost on screen").toBe(3);
++    expect(calls("PATCH").some((u) => u.endsWith(`/${NEW}`)), "the colour was never stored").toBe(true);
++  });
++});

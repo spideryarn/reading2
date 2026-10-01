@@ -51,6 +51,8 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Google button and the email form, and every line of auth logic in them. Two pages render it |
 | [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | the compact screen at `/login`, for a password-reset landing |
 | [`src/web/AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where Google returns to, and why it reads the URL itself |
+| [`src/web/SetNewPassword.tsx`](../../src/web/SetNewPassword.tsx) | choose a new password, shown by AuthCallback after a recovery link — [261001i](../plans/261001i-password-reset.md) |
+| [`src/web/lib/url-session-kind.ts`](../../src/web/lib/url-session-kind.ts) | how AuthCallback tells a recovery from a sign-in: the SDK's late `PASSWORD_RECOVERY` event, caught at module scope |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) | where the reader was going, in `sessionStorage`, with three rules |
 | [`src/web/AccountSection.tsx`](../../src/web/AccountSection.tsx) | signed in as / sign out, on `/profile` |
 | [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the PDF link, because a navigation carries no header |

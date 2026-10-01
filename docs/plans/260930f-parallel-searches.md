@@ -95,13 +95,18 @@ POSTs held open so the first search is still pending:
   one. Its fenced `finish` would then update nothing, the route sends no `done`, the reader sees
   "The search stopped arriving", and the paid search is gone on reload. That needs thirty
   concurrent searches on one article, so it is accepted rather than fixed. The stronger fix is to
-  leave `pending` rows out of the trim. (GPT Sol's plan review, finding 4.)
+  leave `pending` rows out of the trim. (GPT Sol's plan review, finding 4.) **Fixed 2026-10-01**
+  that way:
+  [261001i](261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md).
 
 - **A `begin` that answers with a different id stops the duplicate guard tracking that search.**
   `SearchBand` records the id it minted; when `beginRun` resets an existing row instead
   (`withRun` in `src/searches.ts`), `useSearch` swaps the row to the server's id and the minted one
   drops out of `started` on the next render. The same question could then be asked again while it
   runs. That needs the reset path and an impatient second press together, so it is noted, not fixed.
+  **Fixed 2026-10-01**: the in-flight list moved into `useSearch`, which knows the server's id (and
+  it is a mint, not a reset) —
+  [261001i](261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md).
 
 ## Plan review (GPT Sol, 2026-09-30) and what was done
 
