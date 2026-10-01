@@ -306,6 +306,7 @@ import type { Verifier, VerifyResult } from "../src/auth.js";
 import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UNEXPECTED_FAILURE } from "../src/messages.js";
+import { modelFor, powerFor } from "../src/models.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -364,6 +365,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/admin\\/vouchers\\/([\\w-]+)$", flags: "" },
     methods: ["PATCH"],
     witnesses: ["/api/admin/vouchers/w1"],
+  },
+  /* 261001p — Retry one voucher email, beside the voucher it belongs to. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/voucher-emails/w1/retry"],
   },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
@@ -849,8 +856,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 82;
-const EXPECTED_GUARD_COUNT = 100;
+const EXPECTED_MATCHER_COUNT = 83;
+const EXPECTED_GUARD_COUNT = 101;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1983,6 +1990,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/vouchers",
         "POST literal /api/admin/vouchers",
         "PATCH regex /^\\/api\\/admin\\/vouchers\\/([\\w-]+)$/",
+        // voucher email Retry, 261001p — beside the voucher routes
+        "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
@@ -2551,6 +2560,13 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
     it("finds a route that is there", async () => {
       const reply = await call("GET", "/api/models?fresh=1&x=2");
       expect(reply.status).toBe(200);
+    });
+
+    it("reports Simple on the model the step sends it to, not the standard one (plan 261001p)", async () => {
+      const reply = await call("GET", "/api/models");
+      const simple = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "simple");
+      expect(simple?.id).toBe(modelFor("simple", powerFor("simple", "standard")));
+      expect(simple?.id).toBe(modelFor("simple", "high"));
     });
 
     it("still refuses a method that is not, and quotes the raw URL back", async () => {

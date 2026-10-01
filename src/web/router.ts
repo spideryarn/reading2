@@ -78,7 +78,7 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
-import { ADMIN_USERS_PATH } from "../urls.js";
+import { ADMIN_USERS_PATH, ADMIN_VOUCHERS_PATH } from "../urls.js";
 import type { BlockId } from "../types.js";
 import {
   canStamp,
@@ -634,7 +634,7 @@ export const ADMIN_HREF = "/admin";
 export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 /* Gift vouchers — docs/project/admin.md § `/admin/vouchers`. */
-export const ADMIN_VOUCHERS_HREF = "/admin/vouchers";
+export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**

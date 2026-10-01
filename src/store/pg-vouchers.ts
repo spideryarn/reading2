@@ -53,7 +53,9 @@ import {
 } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
+import { latestVoucherEmails, queueClaimedEmail, queueGiftEmail, skipQueuedGifts } from "./pg-voucher-emails.js";
 import type { AdminVoucher, ClaimantUsage } from "../admin-vouchers.js";
+import { isUuid } from "../ids.js";
 
 const logger = log("store");
 
@@ -79,10 +81,25 @@ export function looksLikeEmail(normalised: string): boolean {
 
 /* ------------------------------------------------------------- the claim -- */
 
-/** A seam for tests; defaults to the Auth Admin API. */
+/** Seams for tests; each defaults to the real thing. */
 export interface ClaimDeps {
   readonly lookup?: (ownerId: string) => Promise<AccountConfirmation>;
+  /** The creator's notice, queued inside the claim's transaction. */
+  readonly queueClaimed?: typeof queueClaimedEmail;
 }
+
+/**
+ * What a claim did: how many vouchers it bound, and the creator notices it
+ * queued — one per voucher — **committed**, so the caller may hand each to
+ * `afterResponse`. Never register those tasks inside the transaction: a task
+ * queued there would still run after a rollback, against a row that never was.
+ */
+export interface ClaimResult {
+  readonly claimed: number;
+  readonly deliveries: readonly string[];
+}
+
+const NOTHING_CLAIMED: ClaimResult = { claimed: 0, deliveries: [] };
 
 /**
  * **Bind every waiting voucher addressed to this reader to this reader.**
@@ -106,6 +123,12 @@ export interface ClaimDeps {
  *    claimed by exactly one statement, so two concurrent reads cannot claim it
  *    twice, and an administrator who changed the address or revoked it a moment
  *    earlier wins.
+ * 4. **And, in that same transaction, one creator notice per claimed voucher**
+ *    (src/store/pg-voucher-emails.ts), rendered from the `UPDATE … RETURNING`.
+ *    **The claim and its notices commit together**: if queueing one fails,
+ *    neither the claim nor any notice commits, the route still serves the plan,
+ *    and the next visit claims again. The lock order is the voucher (the
+ *    `UPDATE`) and then its delivery (the insert).
  *
  * **Throws only on a database error**; the route catches that and serves the
  * plan anyway, because a failed claim is retried on the next visit.
@@ -113,10 +136,10 @@ export interface ClaimDeps {
 export async function claimVouchersFor(
   user: { readonly id: string; readonly email: string | null | undefined },
   deps: ClaimDeps = {},
-): Promise<number> {
-  if (!user.email) return 0;
+): Promise<ClaimResult> {
+  if (!user.email) return NOTHING_CLAIMED;
   const email = normaliseEmail(user.email);
-  if (!looksLikeEmail(email)) return 0;
+  if (!looksLikeEmail(email)) return NOTHING_CLAIMED;
 
   const db = getDb();
   const [waiting] = await db
@@ -126,7 +149,7 @@ export async function claimVouchersFor(
       and(eq(billingVouchers.email, email), isNull(billingVouchers.claimedBy), isNull(billingVouchers.revokedAt)),
     )
     .limit(1);
-  if (!waiting) return 0;
+  if (!waiting) return NOTHING_CLAIMED;
 
   const confirmation = await (deps.lookup ?? confirmedAccountEmail)(user.id);
   if (confirmation.kind !== "confirmed" || normaliseEmail(confirmation.email) !== email) {
@@ -135,15 +158,16 @@ export async function claimVouchersFor(
       { ownerId: user.id, lookup: confirmation.kind },
       "a gift voucher is waiting for this address, and the Auth service did not confirm it is theirs — not claimed",
     );
-    return 0;
+    return NOTHING_CLAIMED;
   }
 
-  const claimed = await db.transaction(
-    async (tx) => {
+  const queueClaimed = deps.queueClaimed ?? queueClaimedEmail;
+  const answer = await db.transaction(
+    async (tx): Promise<ClaimResult> => {
       await tx.insert(billingAccounts).values({ ownerId: user.id }).onConflictDoNothing({
         target: billingAccounts.ownerId,
       });
-      return await tx
+      const claimed = await tx
         .update(billingVouchers)
         .set({ claimedBy: user.id, claimedAt: sql`now()`, updatedAt: sql`now()` })
         .where(
@@ -153,16 +177,35 @@ export async function claimVouchersFor(
             eq(billingVouchers.email, email),
           ),
         )
-        .returning({ id: billingVouchers.id });
+        .returning({
+          id: billingVouchers.id,
+          email: billingVouchers.email,
+          articles: billingVouchers.articles,
+          createdAt: billingVouchers.createdAt,
+          claimedAt: billingVouchers.claimedAt,
+        });
+      const deliveries: string[] = [];
+      for (const voucher of claimed) {
+        const delivery = await queueClaimed(tx, voucher.id, {
+          claimantEmail: voucher.email,
+          ownerId: user.id,
+          articles: voucher.articles,
+          createdAt: voucher.createdAt,
+          /* Set by this very statement, so never null here. */
+          claimedAt: voucher.claimedAt ?? new Date(),
+        });
+        if (delivery) deliveries.push(delivery);
+      }
+      return { claimed: claimed.length, deliveries };
     },
     /* Pinned, for the reason `reserveIngest` gives: `on conflict do nothing` is
        only an escape from a concurrent writer at read committed. */
     READ_COMMITTED,
   );
-  if (claimed.length > 0) {
-    logger.info({ ownerId: user.id, vouchers: claimed.length }, "gift vouchers claimed");
+  if (answer.claimed > 0) {
+    logger.info({ ownerId: user.id, vouchers: answer.claimed }, "gift vouchers claimed");
   }
-  return claimed.length;
+  return answer;
 }
 
 /* ------------------------------------------------- what the reader sees -- */
@@ -203,6 +246,7 @@ export interface ListDeps {
  */
 export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]> {
   const rows = await getDb().select().from(billingVouchers).orderBy(desc(billingVouchers.createdAt));
+  const emails = await latestVoucherEmails(rows.map((r) => r.id));
   const claimants = [...new Set(rows.flatMap((r) => (r.claimedBy ? [r.claimedBy] : [])))];
   const tiers = claimants.length > 0 ? await allTiers() : [];
   const lookupEmail = deps.lookupEmail ?? accountEmail;
@@ -229,6 +273,7 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
       revokedAt: row.revokedAt?.toISOString() ?? null,
       claimantEmail: claimant?.email ?? null,
       ...(claimant ? { claimant: claimant.usage } : {}),
+      emails: emails.get(row.id) ?? { gift: null, claimed: null },
     };
   });
 }
@@ -251,19 +296,70 @@ async function claimantUsage(ownerId: string, tiers: Awaited<ReturnType<typeof a
 
 /** What `/admin/vouchers` may create. Validated by the route before it arrives. */
 export interface NewVoucher {
+  /**
+   * **Minted by the browser** (`crypto.randomUUID()`), so a replayed create —
+   * a proxy's retry, a double submit — is the same create rather than a second
+   * voucher and a second email (Sol F2).
+   */
+  readonly id: string;
   readonly email: string;
   readonly articles: number;
   readonly note: string | null;
 }
 
-/** Make one voucher. It waits, unclaimed, until its address asks for a plan. */
-export async function createVoucher(input: NewVoucher, createdBy: string): Promise<{ id: string }> {
-  const [row] = await getDb()
-    .insert(billingVouchers)
-    .values({ email: normaliseEmail(input.email), articles: input.articles, note: input.note, createdBy })
-    .returning({ id: billingVouchers.id });
-  if (!row) throw new Error("creating a gift voucher returned no row");
-  return row;
+export type CreateVoucherAnswer =
+  /** `delivery` is the recipient's email, queued and committed with the voucher. */
+  | { readonly kind: "created"; readonly id: string; readonly delivery: string }
+  /** The same body under the same id: the original, and nothing queued. */
+  | { readonly kind: "replayed"; readonly id: string }
+  /** That id is a different voucher. */
+  | { readonly kind: "conflict" };
+
+/**
+ * **Make one voucher, and queue its recipient's email in the same
+ * transaction.** It then waits, unclaimed, until its address asks for a plan.
+ *
+ * `on conflict (id) do nothing`: a replay under the same id finds the original,
+ * and is `replayed` only if the stored address, articles, note and creator are
+ * exactly what it carries; anything else under that id is a `conflict`. The
+ * email is queued only when this call's insert is the one that inserted.
+ */
+export async function createVoucher(input: NewVoucher, createdBy: string): Promise<CreateVoucherAnswer> {
+  const email = normaliseEmail(input.email);
+  return await getDb().transaction(
+    async (tx): Promise<CreateVoucherAnswer> => {
+      const [row] = await tx
+        .insert(billingVouchers)
+        .values({ id: input.id, email, articles: input.articles, note: input.note, createdBy })
+        .onConflictDoNothing({ target: billingVouchers.id })
+        .returning({ id: billingVouchers.id });
+      if (row) {
+        const delivery = await queueGiftEmail(tx, row.id, email, input.articles);
+        return { kind: "created", id: row.id, delivery };
+      }
+      const [existing] = await tx
+        .select({
+          email: billingVouchers.email,
+          articles: billingVouchers.articles,
+          note: billingVouchers.note,
+          createdBy: billingVouchers.createdBy,
+        })
+        .from(billingVouchers)
+        .where(eq(billingVouchers.id, input.id))
+        .limit(1);
+      const same =
+        existing !== undefined &&
+        existing.email === email &&
+        existing.articles === input.articles &&
+        existing.note === input.note &&
+        existing.createdBy === createdBy;
+      return same ? { kind: "replayed", id: input.id } : { kind: "conflict" };
+    },
+    /* A concurrent replay waits on the first insert's key, then does nothing
+       and reads the committed original — which needs a fresh snapshot per
+       statement, as `reserveIngest` explains. */
+    READ_COMMITTED,
+  );
 }
 
 /** A parsed request body, or the sentence a 400 says. */
@@ -277,15 +373,19 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
  */
 export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
-  const unknown = Object.keys(body).filter((key) => !["email", "articles", "note"].includes(key));
+  const unknown = Object.keys(body).filter((key) => !["id", "email", "articles", "note"].includes(key));
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
+  if (typeof body.id !== "string" || !isUuid(body.id)) return { ok: false, message: "id must be a uuid." };
   const email = parseEmail(body.email);
   if (!email.ok) return email;
   const articles = parseArticles(body.articles);
   if (!articles.ok) return articles;
   const note = parseNote(body.note ?? null);
   if (!note.ok) return note;
-  return { ok: true, value: { email: email.value, articles: articles.value, note: note.value } };
+  return {
+    ok: true,
+    value: { id: body.id.toLowerCase(), email: email.value, articles: articles.value, note: note.value },
+  };
 }
 
 /** What `PATCH /api/admin/vouchers/:id` may carry: any of four fields, at least one. */
@@ -356,7 +456,13 @@ export interface VoucherPatch {
 }
 
 export type VoucherUpdate =
-  | { readonly kind: "updated" }
+  /**
+   * `giftDelivery` is present only when the address really changed on an
+   * unclaimed, unrevoked voucher: the recipient's email to the new address,
+   * queued and committed with the change, for the caller to send after its
+   * response.
+   */
+  | { readonly kind: "updated"; readonly giftDelivery?: string }
   | { readonly kind: "not-found" }
   /** The address of a claimed voucher cannot change: it already belongs to an account. */
   | { readonly kind: "claimed" };
@@ -395,7 +501,12 @@ async function updateOnce(id: string, patch: VoucherPatch): Promise<VoucherUpdat
          visibility switch take. See the header. */
       if (seen.claimedBy) await lockBillingAccount(tx, seen.claimedBy);
       const [current] = await tx
-        .select({ claimedBy: billingVouchers.claimedBy, revokedAt: billingVouchers.revokedAt })
+        .select({
+          claimedBy: billingVouchers.claimedBy,
+          revokedAt: billingVouchers.revokedAt,
+          email: billingVouchers.email,
+          articles: billingVouchers.articles,
+        })
         .from(billingVouchers)
         .where(eq(billingVouchers.id, id))
         .for("update")
@@ -404,12 +515,18 @@ async function updateOnce(id: string, patch: VoucherPatch): Promise<VoucherUpdat
       if (current.claimedBy !== seen.claimedBy) return "retry";
       if (patch.email !== undefined && current.claimedBy) return { kind: "claimed" };
 
+      /* **A real change only**: the same address again — a replayed PATCH, or a
+         concurrent one that committed first — sends nothing (Sol, review 2 F3). */
+      const newEmail = patch.email === undefined ? undefined : normaliseEmail(patch.email);
+      const readdressed = newEmail !== undefined && newEmail !== current.email;
+      const revokedAfter = patch.revoked === undefined ? current.revokedAt !== null : patch.revoked;
+
       await tx
         .update(billingVouchers)
         .set({
           ...(patch.articles === undefined ? {} : { articles: patch.articles }),
           ...(patch.note === undefined ? {} : { note: patch.note }),
-          ...(patch.email === undefined ? {} : { email: normaliseEmail(patch.email) }),
+          ...(newEmail === undefined ? {} : { email: newEmail }),
           /* Revoking an already revoked voucher keeps its first date. */
           ...(patch.revoked === undefined
             ? {}
@@ -419,6 +536,17 @@ async function updateOnce(id: string, patch: VoucherPatch): Promise<VoucherUpdat
           updatedAt: sql`now()`,
         })
         .where(eq(billingVouchers.id, id));
+
+      /* Voucher locked above, then its deliveries — the house order
+         (src/store/pg-voucher-emails.ts § Lock order). A revoke cancels the
+         gift emails that have not started; a new address cancels the ones
+         still waiting for the old one, and queues its own. */
+      if (patch.revoked === true) await skipQueuedGifts(tx, id, "voucher revoked");
+      if (readdressed && newEmail !== undefined && !revokedAfter) {
+        await skipQueuedGifts(tx, id, "address changed");
+        const giftDelivery = await queueGiftEmail(tx, id, newEmail, patch.articles ?? current.articles);
+        return { kind: "updated", giftDelivery };
+      }
       return { kind: "updated" };
     },
     READ_COMMITTED,

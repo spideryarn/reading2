@@ -1014,3 +1014,34 @@ describe("parseCheckVerdicts", () => {
     ]);
   });
 });
+
+/* ------------------------------------------------------- the pipeline step -- */
+
+describe("the step", () => {
+  /* Plan 261001p: Simple is written on the high-power model whatever the
+     article's own setting, because on the PID paper Sonnet swapped the paper's
+     terms in 5 levels of 18 and Opus in none of 36. */
+  it("writes on the high-power model for an article whose power is standard", async () => {
+    const { STEPS } = await import("../src/pipeline.js");
+    const { memoryArtefacts } = await import("./helpers/memory-artefacts.js");
+    const { nullCheckpointStore } = await import("../src/store/checkpoints.js");
+    const store = memoryArtefacts();
+    store.plant("simple-step", "hierarchy", "blocks", { blocks: BLOCKS });
+    store.plant("simple-step", "hierarchy", "tree", example.tree);
+    answer = {};
+    const result = await STEPS.simple.run(
+      {
+        power: "standard",
+        slug: "simple-step",
+        report: () => undefined,
+        signal: new AbortController().signal,
+        cacheArticle: false,
+      },
+      store,
+      nullCheckpointStore(),
+    );
+    expect(sent).toHaveLength(3);
+    for (const call of sent) expect(call.options).toMatchObject({ power: "high" });
+    expect(result.parts?.simple).toMatchObject({ generator: HIGH_POWER_MODEL });
+  });
+});

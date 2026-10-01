@@ -277,6 +277,9 @@ will eventually have to decide whether they are a system or an accident:
 - **[design-logo.md](design-logo.md)** — the thirteen animations the wordmark plays when you point
   at it or hold it down, how they were picked from about 140 ideas, and the four ways a fourteenth
   can silently do nothing.
+- **[loading-spinner.md](loading-spinner.md)** — the two spinners and which a wait gets: the
+  wordmark, running two of its hover animations at once, for a whole page waiting; `LoaderCircle`
+  for anything inline.
 - **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block in
   [`styles/site.css`](../../src/web/styles/site.css) and the four rules in it, how to shoot a product screenshot that shows what it
   claims to, and the two ways a full-page capture of these pages lies to you.

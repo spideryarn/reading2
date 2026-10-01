@@ -295,7 +295,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               in money. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md. */}
           <p className="tw:mt-6 tw:max-w-[62ch] tw:leading-relaxed">
             <strong className="tw:text-foreground">High-powered AI.</strong> Claude Opus instead of
-            Sonnet for one article, when the reading is hard. Switching it on counts as one more
+            Sonnet for one article, when the reading is hard (plain-words summaries are on Opus
+            already). Switching it on counts as one more
             article against your allowance, half of one while it is public.
           </p>
           <p className="tw:mt-6 tw:text-sm">

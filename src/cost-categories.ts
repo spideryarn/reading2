@@ -207,6 +207,12 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "citation-investigate": "interactive request work",
   /* The paper's passages, inside the same *Investigate* press. */
   "citation-paper-passages": "interactive request work",
+  /* *Dig deeper*'s forced search, before the answer a reader pressed for —
+     src/dig-deeper.ts. Request scope, reader-triggered. */
+  "dig-deeper-search": "interactive request work",
+  /* *Dig deeper*'s answer, on the high-power model — src/explain.ts with a
+     `dig`. Request scope, reader-triggered. */
+  "dig-deeper": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
   /* The word that decides how hard the reader's next question is, judged from

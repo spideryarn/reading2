@@ -1,0 +1,118 @@
+{
+  "arm": "high-none-sonnetctl5",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:35:09.423Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 16453,
+  "costUsd": 0.056096,
+  "tokens": {
+    "input": 5517,
+    "output": 2894,
+    "reasoning": 1154
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 225,
+  "fullerWords": 324,
+  "briefWords": 150,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a huge text-prediction computer program released in 2020, and what its surprising abilities mean for the future. It argues for the \"scaling hypothesis\": the idea that simply making neural networks (programs loosely modeled on brains) much bigger, fed with more data and computing power, is enough to make them far more capable, without clever new designs.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 was not trained for any one task, yet it learned to follow instructions and pick up new tasks from just a few examples, something the piece calls meta-learning, or learning how to learn. That suggests huge unsupervised models (ones trained without labeled answers) could become key building blocks for future AI. It also shows that many experts who confidently predicted AI progress would stall were proven wrong.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-b93jbz",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "A core idea is the \"blessings of scale\": as neural networks and their training data grow, problems that seemed impossible become easy, and new abilities appear on their own. Another is the \"pretraining thesis\": training a model to predict the next word in text extremely well forces it to learn grammar, facts, and reasoning, because only genuine understanding can shave off the last, hardest fraction of prediction error. The piece also raises a worry: such models might quietly develop agent-like, goal-pursuing behavior simply because they were trained on huge amounts of human-generated text.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-n4zu5k",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge AI language model released in 2020 that predicts text one word at a time, and about what its success means for the future of artificial intelligence. The author argues GPT-3 supports the \"scaling hypothesis\": the idea that you do not need clever new tricks to get smarter AI, just much bigger neural networks (the layered math systems AI learns through) trained on much more data and computing power.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-m3gtj6"
+      ]
+    },
+    {
+      "text": "The author says this matters because GPT-3 was not just bigger than earlier models, it did something new: without being specifically trained for it, it learned to follow instructions and pick up brand-new tasks from just a few examples, a skill called meta-learning (learning how to learn). The piece argues this shows deep learning can produce qualitatively new abilities simply from scale, yet most AI researchers and labs still do not take this seriously or invest in it, which the author sees as a strange and important blind spot.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-fvqe70",
+        "spya-khnsat"
+      ]
+    },
+    {
+      "text": "A core idea is the \"blessings of scale\": unlike most research, where small problems are easy and big ones are hard, in deep learning big, difficult, varied problems can be easier to solve well than small ones, because huge models stop relying on shortcuts and memorized tricks and start finding genuinely general solutions. The author also lays out the \"pretraining thesis\": a model trying to predict text accurately is eventually forced to learn real-world reasoning, since only true understanding can shrink its remaining errors.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-rjwfkb"
+      ]
+    },
+    {
+      "text": "The piece also looks back at AI history, noting that a few researchers predicted this scaling trend decades ago while most experts dismissed it, and argues that experts confidently declaring limits to AI have repeatedly been wrong without acknowledging it. An appendix raises a further concern: because these models learn by imitating huge amounts of human-written text, they may pick up genuine agency (goal-directed, planning-like behavior) even when nobody intended to build an agent at all.",
+      "ids": [
+        "spya-cty5hx",
+        "spya-m9r8zx",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a giant computer program that learned to write text by reading huge amounts of internet writing. It looks at the \"scaling hypothesis\": the idea that just making these programs much bigger, with more data and computing power, is the real path to smarter machines.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "This matters because almost nobody expected making GPT-3 so much bigger to work this well. It did not just know more facts. It learned to follow new instructions and solve new tasks from just a few examples, without being specially trained to do so.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "One key idea is meta-learning: learning how to learn new tasks on the fly, which showed up on its own as the model grew. Another is the \"blessings of scale\": unlike most research, where small things are easy and big things are hard, here problems got easier to solve as the model and its training got bigger.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-sfkxh8"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}
