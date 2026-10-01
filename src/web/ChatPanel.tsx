@@ -489,8 +489,9 @@ export function ChatPanel({
                list to go back to; no new, because there is one Remember
                conversation; no rename, which only the list offered. The same
                two-press delete chat has, relabelled for what it does here —
-               the band begins the fresh conversation once the server has
-               confirmed the delete. Plan 261001m § 4 and F1. */
+               the band first finishes Live, then begins the fresh conversation
+               once the server has confirmed the delete. An entirely local empty
+               thread needs no request. Plan 261001m § 4 and F1. */
             open && (
               <ArmedDelete
                 key={open.id}

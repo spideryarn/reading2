@@ -295,9 +295,13 @@ modes showed every thread, a Remember row carried a `remember` tag, and opening 
 chats, and Remember shows its single thread directly, with no list, no `+`, no rename and the header
 reading *Remember*. The thread is **derived during render** — the stored one if there is one, else
 one begun locally — and `?thread=` is only synced to it afterwards, so neither a stale `?thread=`
-nor the first frame of a load ever shows a list. Delete stays, as **Start over**, and the fresh
-thread is not begun until the server has confirmed the delete: begun sooner, a quick first
-question would be appended to the old thread a moment before the delete cascaded it away.
+nor the first frame of a load ever shows a list. Delete stays, as **Start over**. An active Live
+conversation finishes writing its last exchange before the DELETE starts, and the fresh thread is
+not begun until that DELETE has finished: begun sooner, a spoken or typed turn could be appended to
+the old thread a moment before the delete cascaded it away. An empty conversation that never left
+the tab is discarded locally; if its opening request dies before the server names it, its held Start
+over is sent under the only thread id the tab has rather than leaving the band on a loading
+placeholder no request can end. The DELETE is harmless if the opening request wrote nothing.
 
 **The box is smaller on a short screen.** Six rows at rest on a desktop; on a viewport under 500px
 tall — a landscape phone, where the band is about 338px — it is two rows at rest and grows with

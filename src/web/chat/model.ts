@@ -444,7 +444,11 @@ export interface DeleteOperation extends Registered, Held {
    * begins a fresh Remember conversation only once the delete has been
    * answered, and a refused delete means the old one is still the article's
    * Remember conversation on the server — so a fresh one beside it would have
-   * its first turn folded into a thread this tab is hiding. Plan 261001m, F1.
+   * its first turn folded into a thread this tab is hiding. If the thread is
+   * still entirely local the reducer retires this special delete locally. If
+   * its last naming turn dies before `begin`, the reducer sends the idempotent
+   * DELETE under the only name it has: unlike Chat, Remember offers no later
+   * send that could release a held mutation. Plan 261001m, F1.
    */
   restoreOnFailure?: boolean;
 }

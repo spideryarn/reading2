@@ -2058,6 +2058,43 @@ describe("a mutation of a conversation the server has not named", () => {
     expect(titles(named.state)).toEqual([]);
   });
 
+  it("finishes a held DELETE when the opening turn dies before it can name the conversation", () => {
+    const removed = twice(opening(), {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread", restoreOnFailure: true },
+    }).state;
+    expect(removed.operations.get(DELETE)).toMatchObject({ kind: "delete", held: true });
+
+    const failed = twice(removed, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "the request failed before begin",
+    });
+
+    expect(failed.commands, "the held DELETE stayed waiting for a frame that cannot arrive").toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: "guess-thread" },
+    ]);
+    expect(failed.state.operations.has(TURN_A), "the failed opening turn remained live").toBe(false);
+    expect(failed.state.operations.get(DELETE)).toMatchObject({ kind: "delete", held: false });
+
+    const deleted = twice(failed.state, { type: "delete.succeeded", opId: DELETE }).state;
+    expect(deleted.operations.has(DELETE), "the released DELETE did not retire").toBe(false);
+    expect(titles(deleted), "the deleted conversation came back").toEqual([]);
+  });
+
+  it("deletes an empty unnamed conversation locally instead of waiting for a frame that cannot arrive", () => {
+    const empty = twice(loaded(), { type: "thread.begun", thread: thread("guess-thread", "New chat") }).state;
+    const removed = twice(empty, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread", restoreOnFailure: true },
+    });
+
+    expect(removed.commands).toEqual([]);
+    expect(removed.state.operations.has(DELETE), "an empty local DELETE can never receive an answer").toBe(false);
+    expect(removed.state.base.some((t) => t.id === "guess-thread")).toBe(false);
+    expect(removed.state.unnamed.has("guess-thread")).toBe(false);
+  });
+
   /**
    * **And the hold ends**, which is the half a test of the holding alone cannot
    * see: once the frame has named the conversation, a mutation goes out at the
@@ -2216,7 +2253,10 @@ describe("a mutation of a conversation the server has not named", () => {
    * stream lost **after** `beginTurn` wrote the thread and before the frame was
    * read; there the conversation exists on the server under a name this tab
    * never learned, and it arrives on the next load. Sending early did not cover
-   * it either — that request raced the same write.
+   * it either — that request raced the same write. Remember's Start over opts
+   * into releasing the idempotent DELETE with `restoreOnFailure`: its UI cannot
+   * offer this later send while the delete is held, so keeping it would wedge
+   * the band.
    */
   it("stays held, and silent, when the turn dies before it is named", () => {
     const removed = twice(opening(), {

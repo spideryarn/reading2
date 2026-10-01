@@ -267,6 +267,67 @@ function refusedDelete(state: ChatState, op: DeleteOperation): ReadonlyMap<strin
 }
 
 /**
+ * Forget a conversation that existed only in this tab.
+ *
+ * A DELETE of an `unnamed` conversation normally waits for the opening turn's
+ * `begin` frame, because only that frame proves which id the server can delete.
+ * An empty conversation has no naming turn at all, so keeping its held delete
+ * would mean keeping an operation no request can ever answer. Remove the local
+ * thread and everything scoped to it instead; it has never left this tab.
+ */
+function forgetLocalThread(state: ChatState, threadId: string): ChatState {
+  const operations = new Map<OpId, Operation>();
+  for (const [id, op] of state.operations) {
+    if (op.kind === "load" || op.threadId !== threadId) operations.set(id, op);
+  }
+  const tombstones = new Map(state.tombstones);
+  tombstones.delete(threadId);
+  return {
+    ...state,
+    base: state.base.filter((t) => t.id !== threadId),
+    operations,
+    tombstones,
+    unnamed: knownAs(state, threadId),
+  };
+}
+
+/** Send Remember's held delete once no remaining turn can supply a better name. */
+function releaseUnstoredDelete(state: ChatState, threadId: string): Outcome {
+  if (!state.unnamed.has(threadId)) return unchanged(state);
+  const heldDelete = [...state.operations.values()].find(
+    (op): op is DeleteOperation =>
+      op.kind === "delete" &&
+      op.threadId === threadId &&
+      op.held &&
+      op.restoreOnFailure === true &&
+      !op.superseded,
+  );
+  if (!heldDelete) return unchanged(state);
+  const canStillName = [...state.operations.values()].some(
+    (op) => op.kind === "turn" && op.threadId === threadId,
+  );
+  if (canStillName) return unchanged(state);
+
+  /* The opening request may have written the thread before its `begin` frame
+     was lost. Its provisional id is then the only server handle this tab has,
+     and DELETE is deliberately idempotent when that row was never written. */
+  return {
+    state: {
+      ...state,
+      operations: withOp(state, { ...heldDelete, held: false }),
+    },
+    commands: [
+      {
+        type: "delete",
+        opId: heldDelete.id,
+        slug: state.slug,
+        threadId,
+      },
+    ],
+  };
+}
+
+/**
  * What a turn has drawn, written into `base`, and the operation retired.
  *
  * **The same function the projection uses**, given the operation's final state.
@@ -364,6 +425,19 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
     }
     case "delete.started": {
       const { threadId } = event.op;
+      const held = state.unnamed.has(threadId);
+      /* An empty local conversation has no opening turn and therefore no future
+         `begin` frame to release a held DELETE. It has never reached the server,
+         so deleting it is the same local operation as discarding it. */
+      if (
+        held &&
+        event.op.restoreOnFailure === true &&
+        ![...state.operations.values()].some(
+          (op) => op.kind === "turn" && op.threadId === threadId,
+        )
+      ) {
+        return { state: forgetLocalThread(state, threadId), commands: NOTHING };
+      }
       /* The tombstone goes down **before** the request leaves, and it is what
          stops a still-open stream's frames putting the conversation back on
          screen while the DELETE is in flight. `final`, so that an unrelated
@@ -376,7 +450,6 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
          costs the reader nothing: the conversation leaves the screen the instant
          they press the button, whether or not there is yet anything on the
          server to delete. */
-      const held = state.unnamed.has(threadId);
       return {
         state: register<DeleteOperation>(
           marked,
@@ -1496,7 +1569,10 @@ export function reduce(state: ChatState, event: ChatEvent): Outcome {
       /* A turn is superseded only by a delete of its conversation, and a wish
          waiting on it would then wait for ever. */
       const cleared = op.kind === "turn" ? stranded(state, op.id) : state;
-      return { state: { ...cleared, operations: withoutOp(cleared, op.id) }, commands: NOTHING };
+      const retired = { ...cleared, operations: withoutOp(cleared, op.id) };
+      return op.kind === "turn"
+        ? releaseUnstoredDelete(retired, op.threadId)
+        : { state: retired, commands: NOTHING };
     }
     return applyResult(state, event, op);
   }

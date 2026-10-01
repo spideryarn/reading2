@@ -72,6 +72,19 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
+let livePhase: "idle" | "live" = "idle";
+let liveThreadId: string | null = null;
+const stopLive = vi.fn<() => Promise<void>>(() => Promise.resolve());
+
+vi.mock("../src/web/live/useLiveConversation.js", () => ({
+  useLiveConversation: () => ({
+    phase: livePhase,
+    threadId: liveThreadId,
+    stop: stopLive,
+    start: vi.fn(),
+  }),
+}));
+
 const { ConversationBand } = await import("../src/web/modes/conversation/ConversationModes.js");
 
 const SLUG = "a-piece";
@@ -106,6 +119,10 @@ beforeEach(() => {
   renders.length = 0;
   stored = [];
   releaseDelete = null;
+  livePhase = "idle";
+  liveThreadId = null;
+  stopLive.mockReset();
+  stopLive.mockResolvedValue();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -113,6 +130,10 @@ beforeEach(() => {
 
 afterEach(async () => {
   await act(async () => root.unmount());
+  /* nuqs batches replaceState calls on a 50 ms throttle. Let its global queue
+     flush while jsdom still owns `location`; otherwise a longer multi-file run
+     can tear the environment down first and report an unhandled timer error. */
+  await new Promise((resolve) => setTimeout(resolve, 60));
   host.remove();
 });
 
@@ -232,6 +253,40 @@ describe("Remember opens its one conversation and never a list", () => {
 });
 
 describe("Start over waits for the server", () => {
+  it("finishes Live before the DELETE starts, so its final spoken POST cannot race the deletion", async () => {
+    stored = [REMEMBER];
+    let releaseStop: (() => void) | null = null;
+    stopLive.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseStop = resolve;
+        }),
+    );
+    await mount("remember", "?mode=remember");
+    livePhase = "live";
+    liveThreadId = REMEMBER.id;
+    await mount("remember", "?mode=remember");
+
+    await act(async () => {
+      prop<(id: string) => void>("onDelete")(REMEMBER.id);
+      await Promise.resolve();
+    });
+
+    expect(stopLive).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.method === "DELETE"), "DELETE started before Live finished").toHaveLength(0);
+    await act(async () => prop<(q: string) => void>("onSend")("This must not leave"));
+    expect(calls.filter((c) => c.method === "POST"), "a typed turn escaped while Start over waited").toHaveLength(0);
+
+    livePhase = "idle";
+    await act(async () => releaseStop?.());
+    await settle();
+    expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+
+    await act(async () => releaseDelete?.(200));
+    await settle();
+  });
+
   it("offers nowhere to type until the DELETE has resolved, then opens a fresh one", async () => {
     stored = [REMEMBER];
     await mount("remember", "?mode=remember");

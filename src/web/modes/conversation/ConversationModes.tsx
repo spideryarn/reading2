@@ -371,13 +371,21 @@ export function ConversationBand({
   const [thread, setThread] = useQueryState("thread", threadParam);
   const remembering = kind === "remember";
   /**
+   * Start over has two ordered waits: Live must finish writing its last spoken
+   * exchange, then the DELETE must finish. While either is true Remember has no
+   * composer and none of its callbacks may start another write.
+   */
+  const [resetting, setResetting] = useState<"idle" | "stopping-live" | "deleting">("idle");
+  const resettingNow = useRef(false);
+  /**
    * **Remember's one conversation, derived during render** — never chosen in an
    * effect, so there is no frame in which the panel is handed a `?thread=` that
    * names nothing and draws a list. `?thread=` follows it (the effect below)
    * rather than leading it: a chat's id or a stale one in Remember's URL is
    * simply overruled. GPT Sol's plan review, F6.
    */
-  const theRemember = useMemo(() => (remembering ? oneRemember(threads) : null), [remembering, threads]);
+  const remembered = useMemo(() => (remembering ? oneRemember(threads) : null), [remembering, threads]);
+  const theRemember = resetting === "idle" ? remembered : null;
   /** The open conversation's id: Remember's one, or what `?thread=` says in chat. */
   const current = remembering ? (theRemember?.id ?? null) : thread;
 
@@ -469,9 +477,13 @@ export function ConversationBand({
   const hangUp = useRef(live.stop);
   hangUp.current = live.stop;
   useEffect(() => {
+    /* Start over owns this hang-up and awaits it before DELETE. Letting this
+       navigation reaction start a second stop would put the same flush back in
+       a race with the deletion. */
+    if (resetting !== "idle") return;
     if (live.phase === "idle" || live.phase === "failed") return;
     if (live.threadId && live.threadId !== current) void hangUp.current();
-  }, [current, live.phase, live.threadId]);
+  }, [current, live.phase, live.threadId, resetting]);
 
   useEffect(() => {
     if (!pendingLive) return;
@@ -620,9 +632,19 @@ export function ConversationBand({
    * begin.
    */
   useEffect(() => {
-    if (!remembering || !loaded || theRemember || deleting) return;
+    if (!remembering || !loaded || theRemember || deleting || resetting !== "idle") return;
     startNew();
-  }, [remembering, loaded, theRemember, deleting, startNew]);
+  }, [remembering, loaded, theRemember, deleting, resetting, startNew]);
+
+  /* A failed DELETE restores the old thread; a successful one leaves none. In
+     either case the operation retiring is what lets Remember draw again. The
+     reducer may also finish an entirely local, unnamed delete without ever
+     entering `deleting`, which this same condition covers. */
+  useEffect(() => {
+    if (resetting !== "deleting" || deleting) return;
+    resettingNow.current = false;
+    setResetting("idle");
+  }, [resetting, deleting]);
   /* Read, never written, and not a subscription — see `currentAt` in
      params.ts. It is passed to the model so that "this bit" and "what he just
      said" resolve to where the reader actually is. */
@@ -676,6 +698,7 @@ export function ConversationBand({
          switch — see the note where the hook is called. */
       live={live}
       onStartLive={(id) => {
+        if (resettingNow.current) return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");
         setPendingLive({ id: next, from: current });
@@ -686,6 +709,7 @@ export function ConversationBand({
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
       onSend={(question) => {
+        if (resettingNow.current) return;
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.
         /* This mode's kind: every conversation the band can open is of it now.
@@ -707,6 +731,7 @@ export function ConversationBand({
          the reader who typed to start it should still have a caret when it
          opens, in the composer that has just replaced the one they typed into. */
       onSendNew={(question) => {
+        if (resettingNow.current) return;
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
         const id = send(null, question, at, {
@@ -722,7 +747,20 @@ export function ConversationBand({
         /* **Start over.** The conversation leaves the screen at once, and the
            fresh one is begun only when the server has answered — see the
            Remember effect above. If the server refuses, the old one comes back. */
-        if (remembering) return remove(id, { restoreOnFailure: true });
+        if (remembering) {
+          if (resettingNow.current) return;
+          resettingNow.current = true;
+          setResetting("stopping-live");
+          void (async () => {
+            try {
+              if (live.phase !== "idle" && live.phase !== "failed") await live.stop();
+            } finally {
+              setResetting("deleting");
+              remove(id, { restoreOnFailure: true });
+            }
+          })();
+          return;
+        }
         remove(id);
         // Back to the list rather than to a conversation that is not there.
         if (id === thread) void setThread(null);

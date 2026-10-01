@@ -201,3 +201,22 @@ One P0, four P1s, four P2s. Taken unless said otherwise:
 Sol's "materially simpler" migration — assert no duplicates and create the index, folding only by
 a separate reviewed step — is not taken because the brief asks for the fold; with F2, F5, F7 and F8
 the fold is small and its test covers each case.
+
+## Before the deploy that carries the migration (for the Overseer)
+
+The Overseer approved the migration on 2026-10-01 on condition that this count is still zero just
+before the deploy (read-only; inside `begin read only` … `rollback` on production):
+
+```sql
+select count(*) as articles_with_several_remember_threads
+from (
+  select article_id
+  from spideryarn.chat_threads
+  where kind = 'remember'
+  group by article_id
+  having count(*) > 1
+) x;
+```
+
+Zero means the fold moves nothing and the migration only creates the index. Anything else: hold
+it for Greg. Measured 0 on 2026-10-01 at about 15:20.
