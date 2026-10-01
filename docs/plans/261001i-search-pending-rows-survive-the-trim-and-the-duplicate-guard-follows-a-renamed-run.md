@@ -123,6 +123,28 @@ needs re-keying. The panel's `running` is a set of row ids (`SearchPanel` matche
 `runs`), so the row id has to be tracked anyway, and the re-key is five lines in the one place that
 learns the new id.
 
+## Code review (GPT Sol, 2026-10-01) and what was done
+
+[Review](261001i-search-reliability-code-review-sol.md): approve with fixes, all made by Sol in the
+tree and checked here.
+
+1. **P1: a stream from the previous article could land after the reader switched.** It wrote its
+   renamed row and `?runs=` into the new article. **Fixed:** `send` carries an article token and
+   stops acting on frames once the article has changed.
+2. **P2: my "outer `finally`" was not outer.** If `sse(res)` threw after `searching.add`, the key
+   was pinned for the life of the process. **Fixed:** one `try/finally` now covers everything after
+   the add.
+3. **P2: clearing the registry on a slug change did not refresh `running`.** **Fixed:** the cleanup
+   bumps the version.
+4. **P3: `recolourLater` was assigned during render.** **Fixed:** `recolour` is declared before
+   `send` and captured directly. The ref is gone.
+5. **P3: the duplicate and URL assertions still failed fast in one test.** **Fixed:** the duplicate
+   one is soft. New tests cover an untick in the gap, a renamed-and-deleted run whose stream ends
+   silently, and late frames after a slug change.
+
+Wider, for later: `useCriteria.ts` (noted above), and other streaming hooks may have the same
+late-frame-after-slug-change gap.
+
 ## Docs
 
 [search.md](../project/search.md) gets a sentence where it describes the cap. The 260930f

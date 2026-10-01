@@ -38,6 +38,12 @@ async function mount(slug: string): Promise<void> {
   });
 }
 
+async function show(slug: string): Promise<void> {
+  await act(async () => {
+    root.render(createElement(Harness, { slug }));
+  });
+}
+
 /**
  * Let the pending microtasks of a `fetch().then(...)` chain and a
  * `for await` loop over a stream actually settle. `setTimeout(0)` rather than
@@ -565,6 +571,28 @@ describe("a run that begin answers under a new id", () => {
     expect(latest?.isRunning(Q)).toBe(false);
   });
 
+  it("drops the previous article's in-flight snapshot when the slug changes", async () => {
+    await mount("a-slug");
+    await flush();
+    const oldPost = heldPost();
+    act(() => {
+      latest?.ask(Q);
+    });
+    expect(latest?.running.size).toBe(1);
+    expect(latest?.isRunning(Q)).toBe(true);
+
+    await show("another-slug");
+    await flush();
+    expect(latest?.running.size).toBe(0);
+    expect(latest?.isRunning(Q)).toBe(false);
+
+    oldPost.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    oldPost.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
+    oldPost.end();
+    await flush();
+    expect(latest?.runs, "the previous article's stream wrote into the new one").toEqual([]);
+  });
+
   it("keeps a run deleted before begin answered deleted, and deletes the server's row", async () => {
     await mount("a-slug");
     await flush();
@@ -586,6 +614,25 @@ describe("a run that begin answers under a new id", () => {
     post.end();
     await flush();
     expect(latest?.runs.map((r) => r.id), "the deleted search came back on done").toEqual([]);
+  });
+
+  it("lands cleanly when a renamed run deleted before begin ends without done", async () => {
+    await mount("a-slug");
+    await flush();
+    const post = heldPost();
+    let sent = "";
+    act(() => {
+      sent = latest?.ask(Q) ?? "";
+    });
+    act(() => latest?.remove(sent));
+
+    post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
+    post.end();
+    await flush();
+    expect(latest?.runs).toEqual([]);
+    expect(latest?.running.size).toBe(0);
+    expect(latest?.isRunning(Q)).toBe(false);
+    expect(latest?.error).toBeNull();
   });
 
   it("moves a colour chosen before begin answered onto the server's id", async () => {

@@ -113,7 +113,11 @@ interface Posted {
  * with — what `withRun` does when a "retry" names a row that has not actually
  * failed on the server, so it mints instead of resetting.
  */
-function server(saved: SearchRun[] = [], renamed: Record<string, string> = {}): Posted[] {
+function server(
+  saved: SearchRun[] = [],
+  renamed: Record<string, string> = {},
+  beginImmediately = true,
+): Posted[] {
   const posted: Posted[] = [];
   answer = (_url, init) => {
     const method = (init.method ?? "GET").toUpperCase();
@@ -124,7 +128,7 @@ function server(saved: SearchRun[] = [], renamed: Record<string, string> = {}): 
       const id = renamed[sent.id] ?? sent.id;
       const stream = openStream();
       posted.push({ id, criterion, stream });
-      stream.frame("begin", run(id, criterion, "pending"));
+      if (beginImmediately) stream.frame("begin", run(id, criterion, "pending"));
       return Promise.resolve(stream.response);
     }
     return Promise.resolve(json({ ok: true }));
@@ -481,7 +485,9 @@ describe("Search: several meaning-searches at once", () => {
     type(FIRST);
     enter();
     await flush();
-    expect(posted, "an identical search was sent while the renamed one was running").toHaveLength(1);
+    expect
+      .soft(posted, "an identical search was sent while the renamed one was running")
+      .toHaveLength(1);
     expect(ticked(), "the renamed search dropped out of ?runs=").toEqual([FIRST]);
     // The URL itself, past nuqs's throttle: `ticked()` reads rows by question,
     // so it cannot see a stale id left beside the live one.
@@ -505,6 +511,36 @@ describe("Search: several meaning-searches at once", () => {
     enter();
     await flush();
     expect(posted.map((p) => p.criterion)).toEqual([FIRST, SECOND, FIRST]);
+  });
+
+  it("does not retick a retry unticked before its renamed begin arrives", async () => {
+    const message = "The model service was unavailable. Try again. [ai-500]";
+    const sentId = "spya-r8x3tf";
+    const serverId = "spya-w4n7pk";
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${sentId}`);
+    const posted = server(
+      [{ ...run(sentId, FIRST, "error"), error: message }],
+      { [sentId]: serverId },
+      false,
+    );
+    mount();
+    await flush();
+
+    click(must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`));
+    await flush();
+    click(must(`input[aria-label="Also mark: ${FIRST}"]`));
+    await flush();
+    expect(ticked()).toEqual([]);
+
+    act(() => posted[0]?.stream.frame("begin", run(serverId, FIRST, "pending")));
+    await flush();
+    expect(ticked(), "the delayed rename undid the reader's untick").toEqual([]);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+    const inUrl = new URLSearchParams(location.search).get("runs") ?? "";
+    expect(inUrl).not.toContain(sentId);
+    expect(inUrl).not.toContain(serverId);
   });
 
   it("keeps a legacy run seed when it appends, and removes that id on delete", async () => {

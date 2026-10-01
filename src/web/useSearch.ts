@@ -242,25 +242,32 @@ export function useSearch(
    * first would be a stall for nothing. GPT Sol's review, 2026-08-27.
    */
   const patching = useRef(new Map<string, Promise<void>>());
-
-  /** `recolour`, for `send`'s rename, which is declared above it. */
-  const recolourLater = useRef<(id: string, colour: number | null) => void>(() => {});
+  const articleToken = useMemo(() => Symbol(slug), [slug]);
+  const currentArticle = useRef<symbol | null>(articleToken);
 
   // Switching article throws the tombstones away with the runs they name —
   // and the in-flight list, so a question still out on the last article does
   // not refuse the same words on this one.
   useEffect(() => {
+    currentArticle.current = articleToken;
     const gone = deleted.current;
     const picks = chosen.current;
     const chains = patching.current;
     const flying = inFlight.current;
     return () => {
+      if (currentArticle.current === articleToken) currentArticle.current = null;
       gone.clear();
       picks.clear();
       chains.clear();
-      flying.clear();
+      if (flying.size > 0) {
+        flying.clear();
+        // `running` is a rendered snapshot of this ref. Clearing the ref alone
+        // leaves its memo on the previous article until some later request
+        // happens to bump the version.
+        flown();
+      }
     };
-  }, [slug]);
+  }, [articleToken, flown]);
 
   useEffect(() => {
     let live = true;
@@ -352,186 +359,6 @@ export function useSearch(
   );
 
   /**
-   * Ask the server, and read the run as it is built.
-   *
-   * Frames: one `begin`, then any number of `hit`, then exactly one `done` —
-   * **except when the run was deleted mid-search**, which ends the stream
-   * with no `done` at all (src/routes.ts § search explains why a stream
-   * cannot answer that case with a 404). The `!settled` check below is how
-   * that expected silence is told apart from an actual broken connection: a
-   * run this tab has tombstoned is allowed to end quietly, anything else that
-   * ends without `done` is reported as a failure.
-   */
-  const send = useCallback(
-    (id: string, criterion: string, createdAt: string) => {
-      // Drop whatever the previous attempt left behind, so a retry shows a
-      // spinner rather than the old error with a spinner under it.
-      const pending: SearchRun = { id, criterion, createdAt, status: "pending", hits: [] };
-      put(pending);
-      setError(null);
-      // Searching again un-deletes: the reader is plainly no longer finished
-      // with it, whatever they clicked a moment ago.
-      deleted.current.delete(id);
-
-      /* The id the *server* is using. Normally the one we minted; see the
-         module docstring on why `beginRun` can reset it instead. Everything
-         after the `begin` frame addresses the row by this, not by `id`. */
-      let liveId = id;
-      let settled = false;
-      const owner = Symbol(id);
-      inFlight.current.set(id, { criterion: criterion.trim(), owner });
-      flown();
-      /** Off the in-flight list — only if this `send` still owns the entry. */
-      const land = () => {
-        if (inFlight.current.get(liveId)?.owner !== owner) return;
-        inFlight.current.delete(liveId);
-        flown();
-      };
-      /**
-       * `begin` answered under another id. `withRun` minted one because the id
-       * we sent was taken by a row it would not reset — most often a retry of
-       * a run whose stream dropped here while the server was still answering
-       * it. Drop the row we rendered under our own id, or the reader sees two
-       * of the same search; then move everything this tab keeps by id.
-       *
-       * **Every** per-id thing, not only the two the bug was about (GPT Sol's
-       * plan review). The in-flight entry and `?runs=`, or the guard and the
-       * marks lose the search the reader is watching. The tombstone, or a row
-       * deleted in the gap before `begin` comes back on `done` — and the
-       * server's row is deleted now, since our DELETE named an id it never
-       * had. And a colour chosen in that gap, or it is lost on screen and
-       * on reload.
-       */
-      const follow = (to: string) => {
-        const stale = liveId;
-        setRuns((prev) => prev.filter((r) => r.id !== stale));
-        liveId = to;
-        const flight = inFlight.current.get(stale);
-        if (flight?.owner === owner) {
-          inFlight.current.delete(stale);
-          inFlight.current.set(to, flight);
-          flown();
-        }
-        if (deleted.current.has(stale)) {
-          deleted.current.add(to);
-          void forget(to);
-          return;
-        }
-        if (chosen.current.has(stale)) recolourLater.current(to, chosen.current.get(stale) ?? null);
-        renamed.current?.(stale, to);
-      };
-
-      void (async () => {
-        try {
-          const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, criterion }),
-          });
-          /* A failure before the stream opens is ordinary JSON — the server
-             validates before it writes a header. A failure after it opens is
-             the stream simply ending, handled below. */
-          if (!r.ok || !r.body) throw await failure(r);
-
-          /* A clock on the bytes — see the note in useComments.ts. A search
-             has nowhere to recover to either, so this turns a stream that
-             stopped without ending into the failure it already shows for a
-             stream that ended, rather than a spinner nothing can clear. */
-          for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
-            // Computed once per frame, before acting on it: a delete can land
-            // between two frames of the same stream, and every branch below
-            // has to see the same answer to "is this gone".
-            const gone = deleted.current.has(liveId);
-            if (event.name === "begin") {
-              const begun = event.data as SearchRun;
-              /* Fresher news about the article than the GET has. The server
-                 fingerprints the blocks as it opens the run, so this hash *is*
-                 the article's current one — and adopting it is what stops a
-                 search the reader has just paid for being labelled out of date
-                 because the page was loaded before the piece was re-extracted.
-                 It also correctly ages every other row on the list at the same
-                 moment, which is the true thing to do rather than a side
-                 effect worth avoiding. */
-              if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
-              if (begun.id !== liveId) follow(begun.id);
-              if (!gone) put(begun);
-              continue;
-            }
-            if (event.name === "hit") {
-              if (!gone) {
-                const { hit } = event.data as { hit: SearchHit };
-                setRuns((prev) =>
-                  prev.map((r) => (r.id === liveId ? { ...r, hits: [...r.hits, hit] } : r)),
-                );
-              }
-              continue;
-            }
-            if (event.name === "done") {
-              settled = true;
-              const done = event.data as SearchRun;
-              if (deleted.current.has(done.id)) {
-                /* Deleted while the answer was in the air. The DELETE we sent
-                   may have run *before* the server finished writing, so the
-                   row can be back on disk; send it again now that nothing
-                   else will write it. */
-                void forget(done.id);
-                return;
-              }
-              // The final pass is authoritative and may legitimately differ
-              // from what streamed — it *replaces* the accumulated hits
-              // rather than merging with them.
-              put(done);
-              return;
-            }
-          }
-
-          /* The stream ended without a `done`. A run this tab deleted is
-             expected to end exactly this way — see the docstring above and
-             src/routes.ts § search. Anything else ending silently is a
-             dropped connection, the same failure useComments.ts guards. */
-          if (!settled && !deleted.current.has(liveId)) {
-            throw new ReaderFacingError("The search stopped arriving. Try again.");
-          }
-        } catch (e) {
-          if (deleted.current.has(liveId)) return;
-          const message = describeFetchFailure(e as Error);
-          setError(message);
-          put({ id: liveId, criterion, createdAt, status: "error", hits: [], error: message });
-        } finally {
-          land();
-        }
-      })();
-    },
-    [slug, put, forget, flown],
-  );
-
-  const ask = useCallback(
-    (criterion: string) => {
-      const id = mintId();
-      send(id, criterion.trim(), new Date().toISOString());
-      return id;
-    },
-    [send],
-  );
-
-  /**
-   * Run a search whose model call failed, again.
-   *
-   * Reads `runs` from the closure rather than from a `setRuns` updater. An
-   * updater must be pure — React StrictMode invokes it twice — and firing a
-   * POST from inside one sends two requests and spends two model calls. That
-   * bug is recorded in useComments.ts § retry; this is the same shape, avoided
-   * the same way.
-   */
-  const retry = useCallback(
-    (id: string) => {
-      const existing = runs.find((r) => r.id === id);
-      if (existing) send(existing.id, existing.criterion, existing.createdAt);
-    },
-    [runs, send],
-  );
-
-  /**
    * Pin one saved search to a palette slot, or hand it back to the hash.
    *
    * **Optimistic, and it stays optimistic even if the request fails.** Every
@@ -595,7 +422,189 @@ export function useSearch(
     [slug],
   );
 
-  recolourLater.current = recolour;
+  /**
+   * Ask the server, and read the run as it is built.
+   *
+   * Frames: one `begin`, then any number of `hit`, then exactly one `done` —
+   * **except when the run was deleted mid-search**, which ends the stream
+   * with no `done` at all (src/routes.ts § search explains why a stream
+   * cannot answer that case with a 404). The `!settled` check below is how
+   * that expected silence is told apart from an actual broken connection: a
+   * run this tab has tombstoned is allowed to end quietly, anything else that
+   * ends without `done` is reported as a failure.
+   */
+  const send = useCallback(
+    (id: string, criterion: string, createdAt: string) => {
+      // Drop whatever the previous attempt left behind, so a retry shows a
+      // spinner rather than the old error with a spinner under it.
+      const pending: SearchRun = { id, criterion, createdAt, status: "pending", hits: [] };
+      put(pending);
+      setError(null);
+      // Searching again un-deletes: the reader is plainly no longer finished
+      // with it, whatever they clicked a moment ago.
+      deleted.current.delete(id);
+
+      /* The id the *server* is using. Normally the one we minted; see the
+         module docstring on why `beginRun` can reset it instead. Everything
+         after the `begin` frame addresses the row by this, not by `id`. */
+      let liveId = id;
+      let settled = false;
+      const owner = Symbol(id);
+      const belongsHere = () => currentArticle.current === articleToken;
+      inFlight.current.set(id, { criterion: criterion.trim(), owner });
+      flown();
+      /** Off the in-flight list — only if this `send` still owns the entry. */
+      const land = () => {
+        if (inFlight.current.get(liveId)?.owner !== owner) return;
+        inFlight.current.delete(liveId);
+        flown();
+      };
+      /**
+       * `begin` answered under another id. `withRun` minted one because the id
+       * we sent was taken by a row it would not reset — most often a retry of
+       * a run whose stream dropped here while the server was still answering
+       * it. Drop the row we rendered under our own id, or the reader sees two
+       * of the same search; then move everything this tab keeps by id.
+       *
+       * **Every** per-id thing, not only the two the bug was about (GPT Sol's
+       * plan review). The in-flight entry and `?runs=`, or the guard and the
+       * marks lose the search the reader is watching. The tombstone, or a row
+       * deleted in the gap before `begin` comes back on `done` — and the
+       * server's row is deleted now, since our DELETE named an id it never
+       * had. And a colour chosen in that gap, or it is lost on screen and
+       * on reload.
+       */
+      const follow = (to: string) => {
+        const stale = liveId;
+        setRuns((prev) => prev.filter((r) => r.id !== stale));
+        liveId = to;
+        const flight = inFlight.current.get(stale);
+        if (flight?.owner === owner) {
+          inFlight.current.delete(stale);
+          inFlight.current.set(to, flight);
+          flown();
+        }
+        if (deleted.current.has(stale)) {
+          deleted.current.add(to);
+          void forget(to);
+          return;
+        }
+        if (chosen.current.has(stale)) recolour(to, chosen.current.get(stale) ?? null);
+        renamed.current?.(stale, to);
+      };
+
+      void (async () => {
+        try {
+          const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, criterion }),
+          });
+          if (!belongsHere()) return;
+          /* A failure before the stream opens is ordinary JSON — the server
+             validates before it writes a header. A failure after it opens is
+             the stream simply ending, handled below. */
+          if (!r.ok || !r.body) throw await failure(r);
+
+          /* A clock on the bytes — see the note in useComments.ts. A search
+             has nowhere to recover to either, so this turns a stream that
+             stopped without ending into the failure it already shows for a
+             stream that ended, rather than a spinner nothing can clear. */
+          for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
+            if (!belongsHere()) return;
+            // Computed once per frame, before acting on it: a delete can land
+            // between two frames of the same stream, and every branch below
+            // has to see the same answer to "is this gone".
+            const gone = deleted.current.has(liveId);
+            if (event.name === "begin") {
+              const begun = event.data as SearchRun;
+              /* Fresher news about the article than the GET has. The server
+                 fingerprints the blocks as it opens the run, so this hash *is*
+                 the article's current one — and adopting it is what stops a
+                 search the reader has just paid for being labelled out of date
+                 because the page was loaded before the piece was re-extracted.
+                 It also correctly ages every other row on the list at the same
+                 moment, which is the true thing to do rather than a side
+                 effect worth avoiding. */
+              if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
+              if (begun.id !== liveId) follow(begun.id);
+              if (!gone) put(begun);
+              continue;
+            }
+            if (event.name === "hit") {
+              if (!gone) {
+                const { hit } = event.data as { hit: SearchHit };
+                setRuns((prev) =>
+                  prev.map((r) => (r.id === liveId ? { ...r, hits: [...r.hits, hit] } : r)),
+                );
+              }
+              continue;
+            }
+            if (event.name === "done") {
+              settled = true;
+              const done = event.data as SearchRun;
+              if (deleted.current.has(done.id)) {
+                /* Deleted while the answer was in the air. The DELETE we sent
+                   may have run *before* the server finished writing, so the
+                   row can be back on disk; send it again now that nothing
+                   else will write it. */
+                void forget(done.id);
+                return;
+              }
+              // The final pass is authoritative and may legitimately differ
+              // from what streamed — it *replaces* the accumulated hits
+              // rather than merging with them.
+              put(done);
+              return;
+            }
+          }
+
+          /* The stream ended without a `done`. A run this tab deleted is
+             expected to end exactly this way — see the docstring above and
+             src/routes.ts § search. Anything else ending silently is a
+             dropped connection, the same failure useComments.ts guards. */
+          if (!settled && !deleted.current.has(liveId)) {
+            throw new ReaderFacingError("The search stopped arriving. Try again.");
+          }
+        } catch (e) {
+          if (!belongsHere()) return;
+          if (deleted.current.has(liveId)) return;
+          const message = describeFetchFailure(e as Error);
+          setError(message);
+          put({ id: liveId, criterion, createdAt, status: "error", hits: [], error: message });
+        } finally {
+          land();
+        }
+      })();
+    },
+    [slug, put, forget, flown, recolour, articleToken],
+  );
+
+  const ask = useCallback(
+    (criterion: string) => {
+      const id = mintId();
+      send(id, criterion.trim(), new Date().toISOString());
+      return id;
+    },
+    [send],
+  );
+
+  /**
+   * Run a search whose model call failed, again.
+   *
+   * Reads `runs` from the closure rather than from a `setRuns` updater. An
+   * updater must be pure — React StrictMode invokes it twice — and firing a
+   * POST from inside one sends two requests and spends two model calls. That
+   * bug is recorded in useComments.ts § retry; this is the same shape, avoided
+   * the same way.
+   */
+  const retry = useCallback(
+    (id: string) => {
+      const existing = runs.find((r) => r.id === id);
+      if (existing) send(existing.id, existing.criterion, existing.createdAt);
+    },
+    [runs, send],
+  );
 
   const remove = useCallback(
     (id: string) => {

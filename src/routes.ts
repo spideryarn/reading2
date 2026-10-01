@@ -4188,61 +4188,63 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   );
   const key = `${slug}/${run.id}`;
   searching.add(key);
-
-  const { frame } = sse(res);
-  frame("begin", run);
-
-  let patch: Partial<SearchRun>;
   try {
-    const article = await loadArticle(slug);
-    let hits: SearchHit[] = [];
-    let model = "";
-    for await (const event of findPassagesStream({
-      power: powerOf(article),
-      meta: article.meta,
-      blocks: article.blocks,
-      criterion: run.criterion,
-    })) {
-      if (event.type === "hit") {
-        frame("hit", { hit: event.hit });
-        continue;
+    const { frame } = sse(res);
+    frame("begin", run);
+
+    let patch: Partial<SearchRun>;
+    try {
+      const article = await loadArticle(slug);
+      let hits: SearchHit[] = [];
+      let model = "";
+      for await (const event of findPassagesStream({
+        power: powerOf(article),
+        meta: article.meta,
+        blocks: article.blocks,
+        criterion: run.criterion,
+      })) {
+        if (event.type === "hit") {
+          frame("hit", { hit: event.hit });
+          continue;
+        }
+        hits = event.result.hits;
+        model = event.result.model;
       }
-      hits = event.result.hits;
-      model = event.result.model;
+      patch = { status: "done", hits, model };
+    } catch (err) {
+      captureFailure(err, { route: "search", slug, id: run.id });
+      patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
     }
-    patch = { status: "done", hits, model };
-  } catch (err) {
-    captureFailure(err, { route: "search", slug, id: run.id });
-    patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
-  }
 
-  try {
-    /* The attempt goes back with the answer, and the Postgres store refuses a
-       `finish` without one rather than falling back to identity. A run keeps
-       its id across a retry — that is what makes it the same question — so
-       identity alone cannot say which model call is reporting, and a call a
-       sweep already buried would otherwise land on top of the retry the reader
-       is watching. `undefined` on the filesystem, which has no attempts. */
-    const stored = await searchStore.finish(slug, run.id, patch, attempt);
-    /* `undefined` now means one of two things and both are silence. The reader
-       deleted this run while the model was thinking — see the docstring above,
-       the client has already forgotten the row — or this attempt is no longer
-       the live one, in which case there is a newer answer on its way and
-       saying anything about this one would only overwrite it on screen. */
-    if (stored) frame("done", stored);
-  } catch (storeErr) {
-    log("store").error(
-      { ...errorFields(storeErr), slug, id: run.id },
-      `could not record a search result for ${slug}`,
-    );
-    captureFailure(storeErr, { route: "search", slug, phase: "record-result" });
+    try {
+      /* The attempt goes back with the answer, and the Postgres store refuses a
+         `finish` without one rather than falling back to identity. A run keeps
+         its id across a retry — that is what makes it the same question — so
+         identity alone cannot say which model call is reporting, and a call a
+         sweep already buried would otherwise land on top of the retry the reader
+         is watching. `undefined` on the filesystem, which has no attempts. */
+      const stored = await searchStore.finish(slug, run.id, patch, attempt);
+      /* `undefined` now means one of two things and both are silence. The reader
+         deleted this run while the model was thinking — see the docstring above,
+         the client has already forgotten the row — or this attempt is no longer
+         the live one, in which case there is a newer answer on its way and
+         saying anything about this one would only overwrite it on screen. */
+      if (stored) frame("done", stored);
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug, id: run.id },
+        `could not record a search result for ${slug}`,
+      );
+      captureFailure(storeErr, { route: "search", slug, phase: "record-result" });
+    } finally {
+      res.end();
+    }
   } finally {
-    /* Not released until the answer is stored. Released straight after the
-       model call, a GET landing before `finish` swept this row — past the
-       grace, nothing else protects it — and the answer then stored nothing.
-       GPT Sol, docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+    /* Held from the moment the pending row exists until the answer is stored.
+       Releasing it straight after the model call let a GET sweep the row before
+       `finish`; registering it outside this finally let a failed SSE setup pin
+       it for the life of the process. */
     searching.delete(key);
-    res.end();
   }
 }
 
