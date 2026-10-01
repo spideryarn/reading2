@@ -31,12 +31,109 @@
  * that has gone past the top" is one comparison, it is what a reader means by
  * the question, and it is stable. Measured inside `requestAnimationFrame` so
  * the scroll handler itself never touches layout.
+ *
+ * ## A click opens, scrolls and flashes; and a search box finds the section
+ *
+ * Greg, 2026-10-01 (SPIDERYARN-READING2-7Y, then -83):
+ *
+ * > If I click on the Table of Contents in the left-hand of the Metadata page,
+ * > expand that section (if needed) and flash to show where it is in the page.
+ *
+ * > Add a Search box (above the left-hand table-of-contents) … and then should
+ * > scroll to the right place, expand the section, flash it, etc (reusing
+ * > machinery).
+ *
+ * Both go through one verb, `reveal`: tell the section to open
+ * (`SECTION_REVEAL`, which Metadata.tsx § Section listens for), scroll to it,
+ * and flash it once the scroll has stopped (flash.ts § flashElement, the
+ * reading view's flash). The search itself is page-search.ts, which reads the
+ * same `[data-section]` elements this list does, plus their `data-keywords`.
+ * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { flashElement } from "./flash.js";
+import { searchSections, type SearchableSection } from "./page-search.js";
+import { reducedMotion } from "./scroll.js";
 
-/** One entry: the section's `id` to scroll to, and the heading to print. */
-type Entry = { id: string; label: string };
+/**
+ * The event a section listens for to open itself — sent to the `[data-section]`
+ * element by `reveal`. A DOM event rather than lifted state, because lifting it
+ * would need the list of sections this component reads off the page instead.
+ */
+export const SECTION_REVEAL = "section-reveal";
+
+/**
+ * **Flash when the scroll has stopped, not when it starts.** The wash holds for
+ * about a third of `FLASH_MS` and then fades; fired at the click, a smooth
+ * scroll across a long page would spend the hold travelling and land on the
+ * fade. There is no settle callback for `scrollIntoView`, and `scrollend` is
+ * not everywhere yet, so: wait until no scroll event has arrived for
+ * `SCROLL_IDLE_MS`. A section already in place never scrolls, and flashes after
+ * that one short wait. `SCROLL_MAX_MS` is the ceiling, for a scroll that keeps
+ * being nudged (an image loading above it, say).
+ */
+const SCROLL_IDLE_MS = 120;
+const SCROLL_MAX_MS = 1500;
+
+/**
+ * **The section with this id, inside `root` and nowhere else.** Two of these
+ * pages mounted at once (tests do) share section ids, because they are derived
+ * from labels. Not `root.querySelector("#id")`: jsdom answers an id selector
+ * from the document's id table — the *first* element with that id — and then
+ * checks it is inside `root`, so the second page's lookup came back empty. A
+ * browser does not do that, but the test that pins this property runs in
+ * jsdom, and walking the `[data-section]` elements is right in both.
+ */
+function sectionIn(root: HTMLElement | null, id: string): HTMLElement | null {
+  if (!root) return null;
+  for (const el of root.querySelectorAll<HTMLElement>("[data-section]")) {
+    if (el.id === id) return el;
+  }
+  return null;
+}
+
+/**
+ * Open the section, scroll to it, put focus on its heading, flash it. Resolved
+ * inside `root`, for the duplicate-ids reason the click handler below gives.
+ */
+function reveal(root: HTMLElement | null, id: string): void {
+  const el = sectionIn(root, id);
+  if (!el) return;
+  /* The section commits its open state synchronously on this event
+     (Metadata.tsx § Section, `flushSync`), so its body is in the DOM before the
+     scroll is asked for — near the foot of the page a shut section may not
+     leave the scroll range to bring its heading up. Sol, plan review. */
+  el.dispatchEvent(new CustomEvent(SECTION_REVEAL));
+  /* Optional-called: jsdom has none. */
+  el.scrollIntoView?.({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  /* **Focus follows the eye**: the heading, which every section makes
+     focusable from a script, without a second scroll. Otherwise a keyboard or
+     screen-reader user is left in the margin while the page has moved. */
+  el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  let idle = setTimeout(done, SCROLL_IDLE_MS);
+  const cap = setTimeout(done, SCROLL_MAX_MS);
+  function onScroll(): void {
+    clearTimeout(idle);
+    idle = setTimeout(done, SCROLL_IDLE_MS);
+  }
+  function done(): void {
+    clearTimeout(idle);
+    clearTimeout(cap);
+    window.removeEventListener("scroll", onScroll);
+    if (el?.isConnected) flashElement(el);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+}
+
+/**
+ * One entry: the section's `id` to scroll to, the heading to print, and the two
+ * other things the search box reads — its `data-keywords` and its heading's
+ * one-line answer (`[data-section-aside]`). Kept here, rather than read at
+ * search time, so a cost or a stage count that lands while a query is typed
+ * re-ranks the results without another keystroke.
+ */
+type Entry = SearchableSection;
 
 /**
  * How far below the top of the viewport a heading counts as reached.
@@ -69,6 +166,7 @@ export function PageContents({
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [here, setHere] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   /* Re-read the page's sections, now. Called on mount and on every mutation
      inside the container, which is affordable because it is one
@@ -82,10 +180,21 @@ export function PageContents({
     const found = Array.from(root.querySelectorAll<HTMLElement>("[data-section]")).map((el) => ({
       id: el.id,
       label: el.dataset.section ?? "",
+      keywords: el.dataset.keywords ?? "",
+      aside: el.querySelector("[data-section-aside]")?.textContent ?? "",
     }));
     setEntries((was) =>
       was.length === found.length &&
-      was.every((e, i) => e.id === found[i]?.id && e.label === found[i]?.label)
+      was.every((e, i) => {
+        const f = found[i];
+        return (
+          f !== undefined &&
+          e.id === f.id &&
+          e.label === f.label &&
+          e.keywords === f.keywords &&
+          e.aside === f.aside
+        );
+      })
         ? was
         : found,
     );
@@ -96,7 +205,16 @@ export function PageContents({
     const root = containerRef.current;
     if (!root) return;
     const watch = new MutationObserver(rescan);
-    watch.observe(root, { childList: true, subtree: true });
+    /* `characterData` because an aside can change by its text node alone (a
+       cost arriving), and the keywords attribute because a section could
+       change its own. */
+    watch.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["data-keywords", "data-section"],
+    });
     return () => watch.disconnect();
   }, [containerRef, rescan]);
 
@@ -130,7 +248,7 @@ export function PageContents({
            labels and therefore share ids, and a document-wide lookup hands the
            second page's list the first page's sections. The scan is already
            scoped; this is the half that was not. */
-        const el = root?.querySelector<HTMLElement>(`#${CSS.escape(entry.id)}`);
+        const el = sectionIn(root, entry.id);
         if (el && el.getBoundingClientRect().top <= REACHED_PX) current = entry.id;
       }
       /* Above the first heading, the first entry is still the honest answer —
@@ -169,9 +287,20 @@ export function PageContents({
     };
   }, [entries, containerRef]);
 
+  /* **What the search box matched, best first; `null` while it is empty.**
+     Recomputed when the entries change too, so a section that arrives while a
+     query is typed joins the results. */
+  const matches = useMemo(() => {
+    if (query.trim() === "") return null;
+    const ids = searchSections(query, entries);
+    return ids.flatMap((id) => entries.filter((e) => e.id === id));
+  }, [query, entries]);
+
   /* Nothing worth navigating. One entry is furniture rather than help, and an
      empty list is the state before the metadata request has landed. */
   if (entries.length < 2) return null;
+
+  const shown = matches ?? entries;
 
   return (
     /* **Fixed, in the margin — not a column beside the content.** As a flex
@@ -184,14 +313,50 @@ export function PageContents({
        at 1.5rem in. One breakpoint down there is not room, and a contents list
        overlapping the prose is worse than no contents list.
 
-       Vertically centred rather than pinned near the top, which is also what
-       keeps it clear of the fixed corner wordmark (`.logo-home`). */
+       **A fixed top, not vertically centred** — centred it was until the
+       search box arrived (plan 261001s), and then every keystroke that
+       filtered the list shrank the box and moved the input under the
+       reader's cursor. 6rem down, level with the page's first sections; the
+       corner wordmark it once had to clear moved into the dock on 2026-09-06.
+       The list scrolls inside a column that stops short of the dock, so a
+       long page's contents never run under it. Sol, plan review. */
     <nav
       aria-label={label}
-      className="tw:hidden tw:xl:block tw:fixed tw:left-6 tw:top-1/2 tw:z-10 tw:w-44 tw:-translate-y-1/2 tw:font-sans"
+      className="tw:hidden tw:xl:flex tw:xl:flex-col tw:fixed tw:left-6 tw:top-[calc(6rem_+_var(--safe-top))] tw:max-h-[calc(100vh_-_6rem_-_var(--safe-top)_-_var(--dock-space)_-_1rem)] tw:z-10 tw:w-44 tw:font-sans"
     >
-      <ul className="tw:m-0 tw:list-none tw:p-0">
-        {entries.map((entry) => (
+      {/* **Above the list, in the same column** — where Greg asked for it.
+          Typing filters the list below to what matches, best first; Enter
+          takes you to the first; Escape empties the box and puts the whole
+          list back. `type="search"` for the platform's clear button and the
+          right on-screen keyboard. */}
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const first = matches?.[0];
+            if (first) reveal(containerRef.current, first.id);
+          } else if (e.key === "Escape" && query !== "") {
+            /* Only when there is something to clear, so an Escape in an empty
+               box still reaches whatever else on the page listens for it. */
+            e.preventDefault();
+            e.stopPropagation();
+            setQuery("");
+          }
+        }}
+        placeholder="Search this page"
+        aria-label="Search this page's sections"
+        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight tw:focus-visible:outline-none"
+      />
+      {matches !== null && matches.length === 0 && (
+        <p role="status" className="tw:m-0 tw:pl-3 tw:text-xs tw:text-ink-faint">
+          Nothing on this page matches.
+        </p>
+      )}
+      <ul className="tw:m-0 tw:min-h-0 tw:list-none tw:overflow-y-auto tw:p-0">
+        {shown.map((entry) => (
           <li key={entry.id}>
             {/* A button, not `<a href="#id">`. This app routes its own anchors
                 (Link.tsx), and a bare hash href would both go through that and
@@ -205,9 +370,7 @@ export function PageContents({
                    ids are derived from headings, so two of these pages mounted
                    at once carry duplicates and a document-wide lookup scrolls
                    to the wrong one. */
-                containerRef.current
-                  ?.querySelector<HTMLElement>(`#${CSS.escape(entry.id)}`)
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                reveal(containerRef.current, entry.id);
               }}
               /* `aria-current` as well as the colour: the highlight is the
                  answer to "where am I", and a screen reader is owed it too. */

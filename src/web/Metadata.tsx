@@ -287,7 +287,8 @@ import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
-import { PageContents } from "./PageContents.js";
+import { flushSync } from "react-dom";
+import { PageContents, SECTION_REVEAL } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
@@ -898,7 +899,12 @@ export function Metadata({
           /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
              *"we can have more of the sections be default collapsed, like
              authors, export, delete"*. The count stays on the heading. */
-          <Section label="Authors" aside={`${meta.authors.length}`} collapsible>
+          <Section
+            label="Authors"
+            aside={`${meta.authors.length}`}
+            keywords="names writers byline who wrote it affiliations"
+            collapsible
+          >
             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
               {meta.authors.map((author, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: two authors can share a name; order is the identity
@@ -1247,7 +1253,7 @@ function SharingSection({
 }) {
   if (!offer) return null;
   return (
-    <Section label="Access & sharing" landing>
+    <Section label="Access & sharing">
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
           page background — Greg: *"the section should be inside a box like the
@@ -1372,7 +1378,13 @@ function RerunSection({
     /* **Collapsible only while nothing has gone wrong** — the rule the stage
        rows brought with them from *Technical details* (`StageRecord` below):
        a failed metadata request draws the section open, with the error first. */
-    <Section label="AI processing" collapsible={!error} keepMounted aside={error ? null : aside}>
+    <Section
+      label="AI processing"
+      keywords="steps stages pipeline models summaries glossary structure hierarchy"
+      collapsible={!error}
+      keepMounted
+      aside={error ? null : aside}
+    >
       {error && (
         <p
           className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
@@ -1783,7 +1795,12 @@ function CostSection({ slug }: { slug: string }) {
   const load = useArticleCost(slug);
   const failed = load.kind === "failed";
   return (
-    <Section label="What it cost" collapsible={!failed} aside={articleCostSummary(load)}>
+    <Section
+      label="What it cost"
+      keywords="calls models tokens breakdown"
+      collapsible={!failed}
+      aside={articleCostSummary(load)}
+    >
       <ArticleCostBody load={load} />
     </Section>
   );
@@ -2292,7 +2309,11 @@ function TechnicalDetails({
   rawSha256: string | undefined;
 }) {
   return (
-    <Section label="Technical details" collapsible>
+    <Section
+      label="Technical details"
+      keywords="address url source original stored fingerprint hash slug id revision"
+      collapsible
+    >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {/* **The slug, called what it is to the person reading.** "Slug" is
@@ -3480,14 +3501,23 @@ function sectionId(label: string): string {
 function Section({
   label,
   aside,
+  keywords,
   collapsible,
   keepMounted,
-  landing,
   children,
 }: {
   label: string;
   /** One line answering the section's question, on the heading row. */
   aside?: ReactNode;
+  /**
+   * **Words a reader might search for that the section does not print** — the
+   * search box above the contents list reads them (`data-keywords`,
+   * page-search.ts). Mostly for the sections that unmount their body when
+   * shut, whose words are otherwise not on the page to find. The synonyms
+   * every page shares live in page-search.ts § SYNONYMS; these are this
+   * section's own. Plan 261001s.
+   */
+  keywords?: string;
   collapsible?: boolean;
   /**
    * **Shut hides the children rather than unmounting them.** For *AI
@@ -3499,15 +3529,6 @@ function Section({
    * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
    */
   keepMounted?: boolean;
-  /**
-   * **The heading can take focus from a script**, for a button elsewhere on the
-   * page that sends the reader here — *Share…* in `TopActions`, which lands on
-   * *Access & sharing*. The heading rather than the first control inside,
-   * because that control changes with the card's state (a link box, *Share with
-   * anyone…*, or nothing while it loads), and a landing that puts an action
-   * under Enter is the wrong kind of arrival. GPT Sol, plan review, 2026-09-30.
-   */
-  landing?: boolean;
   children: ReactNode;
 }) {
   /* Local state, not a URL parameter, and this page's own `at` two hundred
@@ -3542,6 +3563,25 @@ function Section({
    */
   const [open, setOpen] = useState(false);
   const showing = !collapsible || open;
+  /* **Opened from outside** — the contents list and its search box send
+     `SECTION_REVEAL` to the section they are taking the reader to
+     (PageContents.tsx § reveal; Greg, SPIDERYARN-READING2-7Y: *"expand that
+     section (if needed)"*). An event on this element rather than lifted state,
+     because lifting it would need a list of the page's sections — the second
+     list PageContents exists not to have. Opens, never shuts: a reveal of an
+     open section leaves it open. A section that is not collapsible is already
+     showing, and setting `open` on it changes nothing. */
+  const sectionEl = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = sectionEl.current;
+    if (!el) return;
+    /* `flushSync` so the body is in the DOM when the event returns: the
+       sender scrolls next, and near the foot of the page a shut section may
+       not leave the scroll range to bring its heading up. Sol, plan review. */
+    const reveal = () => flushSync(() => setOpen(true));
+    el.addEventListener(SECTION_REVEAL, reveal);
+    return () => el.removeEventListener(SECTION_REVEAL, reveal);
+  }, []);
   const head = (
     <>
       <span
@@ -3561,9 +3601,24 @@ function Section({
        the section the list then marks, and setting the two equal put that on a
        knife edge that a browser lost. See the constant's docstring; if you
        change this 24, that number has to stay above it. */
-    <section id={sectionId(label)} data-section={label} className="tw:mt-8 tw:scroll-mt-24">
+    <section
+      ref={sectionEl}
+      id={sectionId(label)}
+      data-section={label}
+      {...(keywords ? { "data-keywords": keywords } : {})}
+      className="tw:mt-8 tw:scroll-mt-24"
+    >
+      {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
+          Tab stop), for whatever sends the reader here — *Share…* in
+          `TopActions`, which lands on *Access & sharing*, and the contents list
+          and its search box, which land on any section (PageContents.tsx §
+          reveal). The heading rather than the first control inside, because
+          that control changes with the card's state, and a landing that puts
+          an action under Enter is the wrong kind of arrival. GPT Sol, plan
+          reviews, 2026-09-30 and 261001s. It was one section's `landing` prop
+          until the contents list needed the same for all of them. */}
       <h2
-        {...(landing ? { tabIndex: -1 } : {})}
+        tabIndex={-1}
         className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
         {collapsible ? (
           /* The heading itself is the control, so the target is the whole line
@@ -3585,7 +3640,10 @@ function Section({
         {/* Shown open or shut, and that is the point of it: shutting the
             section must not take the answer away, only the detail. */}
         {aside && (
-          <span className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint">
+          <span
+            data-section-aside=""
+            className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint"
+          >
             {aside}
           </span>
         )}

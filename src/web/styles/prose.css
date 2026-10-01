@@ -143,6 +143,34 @@ tr.row-active td.text { background: var(--panel); }
 td.text.block-flash { animation: block-flash var(--flash-ms) ease-out; }
 td.text.block-flash-still { box-shadow: inset 0 0 0 100vmax var(--highlight-wash); }
 
+/* **The same flash on any element** — a Metadata section its contents list or
+   search box just took the reader to (flash.ts § flashElement).
+
+   **A translucent layer over the top, not the inset shadow the cell uses.** A
+   section is mostly cards with opaque backgrounds of their own, and an inset
+   shadow paints *under* its children, so the wash would show only in the gaps
+   between them. An `::after` above everything, letting clicks through, tints
+   the cards too. Same orange, same length, same hold-then-fade; reduced motion
+   gets it held still for the same time. */
+@keyframes element-flash {
+  0%, 35% { opacity: 0.22; }
+  100% { opacity: 0; }
+}
+.element-flash,
+.element-flash-still { position: relative; }
+.element-flash::after,
+.element-flash-still::after {
+  content: "";
+  position: absolute;
+  inset: -0.5rem;
+  border-radius: 0.75rem;
+  background: var(--spideryarn-orange);
+  pointer-events: none;
+  opacity: 0;
+}
+.element-flash::after { animation: element-flash var(--flash-ms) ease-out; }
+.element-flash-still::after { opacity: 0.22; }
+
 /* Literal search paints its find-at-speed rail with this same property
    (annotations.css § has-hit). Preserve it as a second shadow: an animation
    otherwise wins the cascade while moving, and the later search rule wins the
