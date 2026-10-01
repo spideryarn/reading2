@@ -1222,10 +1222,34 @@ class Meter {
     if (typeof model === "string" && model.length > 0) this.answeredBy = model;
   }
 
+  /** Set when `sawRoute` found a selected endpoint; the frame's word is then ignored. */
+  private upstreamFromRoute = false;
+  /** False for a request whose frames are known to mislabel — see `frameProviderTrusted`. */
+  trustFrameProvider = true;
+
   /** Which upstream answered, when the frame says. The Messages wire gets this free. */
   sawUpstream(provider: unknown): void {
+    if (this.upstreamFromRoute || !this.trustFrameProvider) return;
     if (typeof provider === "string" && provider.length > 0)
       this.upstream = provider;
+  }
+
+  /**
+   * The endpoint OpenRouter says it selected, from `openrouter_metadata` —
+   * believed over the frame's `provider`, which is wrong on the Exa path. See
+   * `ROUTE_METADATA`. Absent metadata changes nothing.
+   */
+  sawRoute(metadata: unknown): void {
+    const available = (metadata as { endpoints?: { available?: unknown } } | null)
+      ?.endpoints?.available;
+    if (!Array.isArray(available)) return;
+    const selected = (available as { provider?: unknown; selected?: unknown }[]).find(
+      (e) => e?.selected === true,
+    );
+    if (typeof selected?.provider === "string" && selected.provider.length > 0) {
+      this.upstream = selected.provider;
+      this.upstreamFromRoute = true;
+    }
   }
 
   /**
@@ -1304,6 +1328,36 @@ const ATTRIBUTION = {
   "HTTP-Referer": "http://localhost:5273",
   "X-Title": "Spideryarn",
 } as const;
+
+/**
+ * **Asks OpenRouter to say which endpoint it actually picked**, because on one
+ * path the frame's own `provider` does not.
+ *
+ * A request carrying an Exa `openrouter:web_search` comes back with
+ * `provider: "OpenAI"` on every frame, streamed or not, for a Claude model
+ * pinned to Anthropic — and equally under a Bedrock-only pin, while
+ * `only: ["openai"]` 404s. The routing is obeyed; the label is the server-tool
+ * loop's. This header adds `openrouter_metadata` (once, on the usage chunk of a
+ * stream), whose `endpoints.available[].selected` named Anthropic and Bedrock
+ * correctly in every probe. Measured 2026-10-01:
+ * docs/plans/261001g-exa-upstream-label.md. `Meter.sawRoute` reads it.
+ */
+const ROUTE_METADATA = { "X-OpenRouter-Metadata": "enabled" } as const;
+
+/**
+ * **Is the frame's `provider` worth believing for this request?** Not when it
+ * asks for Exa: see `ROUTE_METADATA`. Only the explicit spelling every caller
+ * here uses is recognised; a default-engine search that fell back to Exa, or
+ * the older `plugins` form, would not be caught by this and would rely on the
+ * metadata alone.
+ */
+function frameProviderTrusted(body: AiRequestBody): boolean {
+  const tools = Array.isArray(body.tools) ? (body.tools as unknown[]) : [];
+  return !tools.some((t) => {
+    const tool = t as { type?: unknown; parameters?: { engine?: unknown } } | null;
+    return tool?.type === "openrouter:web_search" && tool.parameters?.engine === "exa";
+  });
+}
 
 /**
  * The body a caller passes: whatever the endpoint wants, and a `model`.
@@ -1418,12 +1472,21 @@ function prepare(
   body: AiRequestBody,
   streaming: boolean,
   key0: string | undefined,
-): { key: string; payload: string; url: string; fingerprint: string } {
+): {
+  key: string;
+  payload: string;
+  url: string;
+  headers: Record<string, string>;
+  fingerprint: string;
+} {
   const key = apiKey(key0);
   return {
     key,
     payload: outgoing(job, body, streaming),
     url: `${OPENROUTER_BASE}${pathFor(job)}`,
+    /* Chat only: the other paths this function serves (embeddings) were never
+       probed with it, and their frames carry no `provider` to correct. */
+    headers: wireOf(job) === "chat" ? ROUTE_METADATA : {},
     /* Named, never carried. See `keyFingerprint` — the reconciliation is per
        key, and `src/embeddings.ts` legitimately passes a different one. */
     fingerprint: keyFingerprint(key),
@@ -1446,7 +1509,7 @@ function wireOf(job: RoutedJob): Wire {
 }
 
 function send(
-  prepared: { key: string; payload: string; url: string },
+  prepared: { key: string; payload: string; url: string; headers?: Record<string, string> },
   signal: AbortSignal | undefined,
 ): Promise<Response> {
   return fetch(prepared.url, {
@@ -1455,6 +1518,7 @@ function send(
       Authorization: `Bearer ${prepared.key}`,
       "Content-Type": "application/json",
       ...ATTRIBUTION,
+      ...prepared.headers,
     },
     ...(signal ? { signal } : {}),
     body: prepared.payload,
@@ -1549,6 +1613,7 @@ export async function* openRouterStream(
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, true, options.apiKey);
   const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint);
+  meter.trustFrameProvider = frameProviderTrusted(body);
   let outcome: SpendRecord["outcome"] = "ok";
   /**
    * Whether the loop below ran to its own end.
@@ -1611,6 +1676,7 @@ export async function* openRouterStream(
     )) {
       meter.sawModel(chunk.model);
       meter.sawUpstream(chunk.provider);
+      meter.sawRoute(chunk.openrouter_metadata);
       /* **Every chunk that has one, not just the last.** The usage chunk is
          normally the final one and carries no choices — but "normally" is doing
          work in that sentence, and overwriting with each one costs nothing and
@@ -1730,6 +1796,7 @@ export async function openRouterJson(
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, false, options?.apiKey);
   const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint);
+  meter.trustFrameProvider = frameProviderTrusted(body);
   let outcome: SpendRecord["outcome"] = "ok";
   try {
     const response = await send(prepared, options?.signal);
@@ -1759,11 +1826,12 @@ export async function openRouterJson(
          See `providerSpokeNonsense` in openrouter-stream.ts. */
     }
     const record = json as
-      | { usage?: unknown; model?: unknown; provider?: unknown }
+      | { usage?: unknown; model?: unknown; provider?: unknown; openrouter_metadata?: unknown }
       | null;
     if (record?.usage) meter.saw(record.usage);
     meter.sawModel(record?.model);
     meter.sawUpstream(record?.provider);
+    meter.sawRoute(record?.openrouter_metadata);
     return {
       json,
       answeredBy: meter.answeredBy,

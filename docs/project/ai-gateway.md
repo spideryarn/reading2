@@ -456,6 +456,39 @@ awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/a
 back for `npm run cost`. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
 
+### `upstream` — the endpoint OpenRouter selected, not the frame's label
+
+**On the Exa path the frame lies, and the routing does not.** A chat request carrying
+`openrouter:web_search` with `engine: "exa"` comes back with `provider: "OpenAI"` on every frame,
+streamed or not, for `anthropic/claude-sonnet-5` pinned to Anthropic. The pin is obeyed: under
+`only: ["amazon-bedrock"]` the frames still say OpenAI while the generation record says Bedrock,
+`only: ["openai"]` 404s, and the token cost matches Anthropic's prices, cache-write premium included.
+So nothing in the routing, the money or the privacy promise above was wrong. Only the `upstream`
+column was. Measured 2026-10-01 in
+[261001g-exa-upstream-label.md](../plans/261001g-exa-upstream-label.md).
+
+**The fix is in the recording.** Every chat-wire call now sends `X-OpenRouter-Metadata: enabled`,
+and the meter writes down the endpoint that `openrouter_metadata.endpoints.available[]` marks
+`selected`. Where that block is present it beats the frame's `provider`. If an explicit-Exa
+request comes back without it, the row says `null` ("not known") rather than `OpenAI`. Other calls
+fall back to the frame's `provider`, as before. The metadata is believed because it named
+Anthropic and Bedrock correctly in every probe. It is not documented as a billing record, and
+`GET /api/v1/generation?id=…` remains the authority if a question ever turns on one call.
+
+**Rows written before this landed are wrong in one recognisable way**, and they were left as they
+are rather than rewritten in production. A Claude model never genuinely runs on OpenAI, so this
+selects exactly the mislabelled rows:
+
+```sql
+SELECT … FROM spideryarn.ai_calls
+WHERE upstream = 'OpenAI' AND requested_model LIKE 'anthropic/%';
+```
+
+The callers concerned were `debate`'s search calls (its synthesis call was always right),
+`referee-candidates`, `citations-find`, `upload-source-guess` and `citation-investigate`. The
+Messages wire takes its upstream from `message.provider` and has no Exa caller. A future one would
+need the same probe.
+
 ### `byok_upstream_nanos` — the column whose name is a condition
 
 **A row's money is now `credits + byok_upstream + computed`, with nothing conditional about it**, and

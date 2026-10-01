@@ -576,6 +576,12 @@ export interface StreamChunk {
    * somebody who never ran the call.
    */
   provider?: string;
+  /**
+   * Present only when the request sent `X-OpenRouter-Metadata: enabled`, and
+   * then once, on the usage chunk. Its selected endpoint is the true upstream
+   * where `provider` above is not — `ROUTE_METADATA` in src/ai-call.ts.
+   */
+  openrouter_metadata?: unknown;
   error?: { message: string };
   usage?: Usage;
   choices?: {
