@@ -110,6 +110,8 @@ describe("rememberableSearch", () => {
   it("reads a remembered mode=annotations from its first day as the notes on", () => {
     expect(rememberableSearch("?mode=annotations")).toBe("?margin=1");
     expect(rememberableSearch("?at=spya-a&mode=annotations&margin=1")).toBe("?at=spya-a&margin=1");
+    expect(rememberableSearch("?margin=0&mode=annotations")).toBe("?margin=1");
+    expect(rememberableSearch("?mode=annotations&margin=0")).toBe("?margin=1");
     expect(restoredHref("/read/x", "", "?mode=annotations")).toBe("/read/x?margin=1");
   });
 

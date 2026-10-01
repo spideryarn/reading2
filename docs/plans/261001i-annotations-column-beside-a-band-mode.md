@@ -175,3 +175,35 @@ Glossary at 1600 — the same 80px it sits without the notes, the prose's own gu
 change. **One flaw, fixed**: on a phone, with the band stepped aside after a term was opened, the
 band's back pill lay over the left half of the "needs a wider window" line; the line is no longer
 drawn under a band that covers the window, away or not.
+
+## GPT Sol's code review
+
+Write-capable, on `eb76050d`:
+[261001i-annotations-beside-a-band-code-review-sol.md](261001i-annotations-beside-a-band-code-review-sol.md),
+on [its prompt](261001i-annotations-beside-a-band-code-review-prompt.md) and
+[the diff](261001i-annotations-beside-a-band-code-review.diff). Verdict **land after fixes**, no
+P0 or P1. It fixed four itself, each with a test it saw fail first; I read the diff and ran the
+gates.
+
+- **P2, fixed** — the metadata page's links carried a retired `?mode=annotations` on: choosing a
+  band dropped the notes, and choosing Annotations kept the old word. Now canonicalised through
+  `withMargin` first.
+- **P2, fixed** — a remembered view holding both `mode=annotations` and `margin=0` restored two
+  `margin` keys in an order-dependent URL; it now does the Reader's rewrite and emits one.
+- **P2, fixed** — `display: contents` can drop the element carrying `role="radiogroup"` from the
+  accessibility tree (WebKit bug 185679). The radios' box is a real flex box now, given one flex
+  share per radio, so on a tablet the toggle does not take all the spare width. Re-checked in the
+  browser (`dock-*` in the shots): one continuous segment, every button 27.4px high, the toggle
+  as wide as its neighbours wherever labels are dropped, and the accessibility tree has the named
+  radiogroup with one checked radio and the pressed toggle after it. With the experimental switch
+  on, the row still scrolls sideways on a phone and a portrait iPad — the bar's existing rule for a
+  row that does not fit (narrow-windows.md), with the same number of buttons as before.
+- **P3, fixed** — `BandMode` reached the rest of the active-band seams: the Dock's `mode` prop,
+  `withMode`, `documentTitle`, `composeShell`, the herald and the feedback context.
+
+It found nothing further in `fitBoth`, the layout variables, `marginColumn`, the ideas feed's
+lifetime or the arrival rewrite.
+
+## Status
+
+**Landed on `dev`, 2026-10-01.** Behind the experimental switch, as Annotations was.

@@ -56,7 +56,7 @@
  * docs/plans/260827ai-public-read-only-access.md § Stage 2 for the server half.
  */
 import { normaliseText } from "./html.js";
-import { DEFAULT_MODE, type Mode } from "./modes.js";
+import { type BandMode, DEFAULT_MODE, type Mode } from "./modes.js";
 import type { ArticleView } from "./read-address.js";
 
 /** The product. `reading2` is the directory and the repo; this is the name. */
@@ -184,7 +184,7 @@ export function articleTitle(title: string | null): string {
  */
 export function documentTitle(
   title: string | null,
-  mode: Mode = DEFAULT_MODE,
+  mode: BandMode = DEFAULT_MODE,
   view: ArticleView = "article",
 ): string {
   /* **The view wins over the mode, and that is `readTitle`'s rule rather than a

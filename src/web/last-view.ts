@@ -253,9 +253,23 @@ export function rememberableSearch(search: string): string {
      the notes back rather than a word `modeParam` reads as Plain. Translated
      here, on the way in and on the way out, so a restore never puts the old
      spelling on the address — docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
-  const translated = pairs(search).map((p) =>
-    pairKey(p) === "mode" && pairValue(p) === "annotations" ? "margin=1" : p,
-  );
+  const raw = pairs(search);
+  const firstMode = raw.find((p) => pairKey(p) === "mode");
+  const oldAnnotations = firstMode !== undefined && pairValue(firstMode) === "annotations";
+  let wroteMargin = false;
+  const translated = oldAnnotations
+    ? raw.flatMap((p) => {
+        const key = pairKey(p);
+        /* Match the Reader's atomic rewrite: the legacy mode wins over any
+           simultaneous margin value, and no duplicate of either spelling is
+           restored into an order-dependent URL. */
+        if (key === "margin") return [];
+        if (key !== "mode") return [p];
+        if (wroteMargin) return [];
+        wroteMargin = true;
+        return ["margin=1"];
+      })
+    : raw;
   const kept = [...new Set(translated)].filter((p) => {
     const key = pairKey(p);
     if (!REMEMBERED.includes(key as (typeof REMEMBERED)[number])) return false;

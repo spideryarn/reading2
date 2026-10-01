@@ -6,7 +6,21 @@
 import { describe, expect, it } from "vitest";
 import { modeFromParam } from "../src/modes.js";
 import { readMode } from "../src/read-address.js";
+import { documentTitle } from "../src/title-text.js";
+import type { FeedbackArticleContext } from "../src/web/feedback-context.js";
+import type { HeraldPress } from "../src/web/ModeHerald.js";
 import { marginInSearch, marginParam, modeParam } from "../src/web/params.js";
+
+type FeedbackMode = FeedbackArticleContext["mode"];
+const acceptFeedbackMode = (_mode: FeedbackMode) => {};
+// @ts-expect-error Annotations is never the current band in diagnostics.
+acceptFeedbackMode("annotations");
+// @ts-expect-error The herald names a band press, not the margin toggle.
+const retiredHerald: HeraldPress = { mode: "annotations", nonce: 1 };
+void retiredHerald;
+// @ts-expect-error The server title receives the parsed band mode.
+const retiredTitle = documentTitle("A piece", "annotations");
+void retiredTitle;
 
 describe("the margin switch", () => {
   it("parses 1 and 0, and nothing else", () => {

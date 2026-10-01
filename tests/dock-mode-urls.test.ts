@@ -16,7 +16,8 @@
  * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.2.
  */
 import { describe, expect, it } from "vitest";
-import { withMode } from "../src/web/Dock.js";
+import type { ComponentProps } from "react";
+import { type Dock, withMode } from "../src/web/Dock.js";
 import { DEFAULT_MODE } from "../src/web/params.js";
 
 /** What the parameter is after `withMode`, or `null` when it is absent. */
@@ -25,6 +26,15 @@ function modeIn(search: string): string | null {
 }
 
 describe("withMode", () => {
+  // @ts-expect-error Annotations is the margin switch, not a value of `?mode=`.
+  const retiredModeHref = withMode("", "annotations");
+  void retiredModeHref;
+  type DockMode = ComponentProps<typeof Dock>["mode"];
+  const acceptDockMode = (_mode: DockMode) => {};
+  acceptDockMode("glossary");
+  // @ts-expect-error The Dock reads a band mode; Annotations is only an output button.
+  acceptDockMode("annotations");
+
   it("writes the parameter for a mode that is not the default", () => {
     expect(modeIn(withMode("", "chat"))).toBe("chat");
     expect(modeIn(withMode("at=spya-k3m9qt", "glossary"))).toBe("glossary");

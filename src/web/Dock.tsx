@@ -163,7 +163,16 @@
    `useRef` came back on 2026-09-06, for the drawer's focus rather than the
    bar's — see § the drawer takes focus, and gives it back. The aliased type
    has not. */
-import { useCallback, useEffect, useMemo, useRef, useId, useState, type ReactNode } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useId,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AlignLeft,
   BookA,
@@ -229,7 +238,14 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 /* Type only, for `useActivateMode` below: the picture a Diagram press would land
    on, already degraded by `diagramInSearch`. */
 import type { DiagramKind } from "./diagram.js";
-import { DEFAULT_MODE, diagramInSearch, marginInSearch, type Mode, type Panel } from "./params.js";
+import {
+  type BandMode,
+  DEFAULT_MODE,
+  diagramInSearch,
+  marginInSearch,
+  type Mode,
+  type Panel,
+} from "./params.js";
 import { modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
@@ -327,7 +343,7 @@ interface Props {
    * has no middle band to put a mode in, so their Chat button is a link back
    * to the reading view rather than a switch that would have nothing to switch.
    */
-  mode?: Mode;
+  mode?: BandMode;
   /**
    * `sub` is given only by the command bar's sub-mode rows (since 2026-10-01,
    * SPIDERYARN-READING2-77): open `next` **with that chip chosen**, writing the
@@ -1036,7 +1052,7 @@ export type ModesMissingFromDock<
  */
 export function visibleModes(
   on: boolean,
-  current: Mode | undefined,
+  current: BandMode | undefined,
   /* Annotations' column is on (`?margin=1`). Its button is a toggle rather than
      the current mode since 2026-10-01, and it is kept for the same reason the
      current mode is: the one control that turns the notes off must not vanish
@@ -1083,11 +1099,12 @@ export function groupStarts(visible: readonly ModeUi[]): ReadonlySet<Mode> {
  * the URL simply draws nothing extra, the same way `modeParam` falls back to the
  * default rather than throwing (params.ts § modeParam).
  */
-function modeInSearch(search: string): Mode | undefined {
+function modeInSearch(search: string): BandMode | undefined {
   /* Through `modeFromParam`, so a carried `?mode=outline` names Structure here
      exactly as it does on the reading view. */
   const named = modeFromParam(new URLSearchParams(search).get("mode"));
-  return MODES_UI.find((m) => m.mode === named)?.mode;
+  if (named === null) return undefined;
+  return MODES_UI.some((m) => m.mode === named) ? named : undefined;
 }
 
 /**
@@ -1239,7 +1256,7 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  */
 export function fitSignature(
   visible: readonly ModeUi[],
-  mode: Mode | undefined,
+  mode: BandMode | undefined,
   onMode: Props["onMode"],
   drawer: Props["drawer"],
   /**
@@ -1542,14 +1559,16 @@ function useActivateSubMode(
  * function so the two doors cannot land in different places.
  */
 function modeLinkHref(slug: string, search: string, mode: Mode): string {
+  /* A metadata URL can itself carry the retired spelling. Translate it before
+     following either axis: choosing a band must keep the notes, and choosing
+     Annotations must not mint `mode=annotations` again. */
+  const canonical = marginInSearch(search) ? withMargin(search, true) : search;
   /* Annotations is not a band: its link opens the article with the notes on
      and whatever band the reader came from still open. */
   if (mode === "annotations") {
-    const params = new URLSearchParams(search);
-    params.set("margin", "1");
-    return readHref(slug, params.toString(), "article");
+    return readHref(slug, withMargin(canonical, true), "article");
   }
-  return readHref(slug, withMode(search, mode), "article");
+  return readHref(slug, withMode(canonical, mode), "article");
 }
 
 export function Dock({
@@ -2373,7 +2392,7 @@ function withPanel(search: string, panel: Panel): string {
  * already be in the carried string, and `mode=toc&mode=chat` is a URL whose
  * meaning depends on which one the parser happens to read first.
  */
-export function withMode(search: string, mode: Mode): string {
+export function withMode(search: string, mode: BandMode): string {
   const params = new URLSearchParams(search);
   /* **Delete rather than write when it is the default**, since 2026-08-29.
      This used to `set` unconditionally, which meant every navigation through the
@@ -2386,6 +2405,17 @@ export function withMode(search: string, mode: Mode): string {
      rename inheriting the same problem. GPT Sol, 2026-08-29. */
   if (mode === DEFAULT_MODE) params.delete("mode");
   else params.set("mode", mode);
+  return params.toString();
+}
+
+/** A carried query string with Annotations' independent switch set or cleared. */
+export function withMargin(search: string, margin: boolean): string {
+  const params = new URLSearchParams(search);
+  /* The old spelling means this switch, not a band. Removing it here keeps a
+     metadata link from sending the Reader through a second legacy rewrite. */
+  if (params.get("mode") === "annotations") params.delete("mode");
+  if (margin) params.set("margin", "1");
+  else params.delete("margin");
   return params.toString();
 }
 
@@ -2494,7 +2524,7 @@ function DockModes({
    * and so that `fitSignature` is measuring the same set that is drawn.
    */
   modes: readonly ModeUi[];
-  mode: Mode;
+  mode: BandMode;
   /**
    * **Opening a mode**, which since 2026-09-07 is one callback rather than the
    * two calls this component used to make for itself — `Dock` § `activateMode`,
@@ -2552,16 +2582,22 @@ function DockModes({
   /* **Annotations is a toggle, not one of the radios**, since 2026-10-01: its
      column sits right of the prose beside whichever band is open, so it is not
      one of the things the middle column shows and cannot be the one checked
-     radio. It is last in `MODES_UI`, and drawn after the radiogroup (which is
-     `display: contents`, so the segment's styling still sees one row of
-     buttons) — `MarginToggle`. docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+     radio. It is last in `MODES_UI`, and drawn after the radiogroup (which
+     has one flex share per radio, so the segment still grows as one row of
+     equal controls) — `MarginToggle` and dock-fit.css.
+     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
   const radios = modes.filter((m) => m.mode !== "annotations");
   const toggle = modes.find((m) => m.mode === "annotations");
   return (
     <div className="dock-modes">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-       <div className="dock-modes-radios" role="radiogroup" aria-label="What the middle column shows">
-        {radios.map((m) => (
+        <div
+          className="dock-modes-radios"
+          role="radiogroup"
+          aria-label="What the middle column shows"
+          style={{ "--dock-radio-count": radios.length } as CSSProperties}
+        >
+          {radios.map((m) => (
           <Tooltip
             key={m.mode}
             placement="top"
@@ -2646,8 +2682,8 @@ function DockModes({
               <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
             </button>
           </Tooltip>
-        ))}
-       </div>
+          ))}
+        </div>
         {toggle && (
           <MarginToggle
             m={toggle}

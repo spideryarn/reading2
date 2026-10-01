@@ -158,6 +158,30 @@ describe("the bottom bar's mode segment", () => {
     expect(checked).toHaveLength(1);
   });
 
+  it("keeps the radiogroup itself in the layout and accessibility trees", () => {
+    const css = readFileSync(
+      path.join(import.meta.dirname, "../src/web/styles/dock-fit.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.dock-modes-radios\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule, "the radiogroup needs its own layout box").toContain("display: inline-flex");
+    expect(rule).not.toContain("display: contents");
+  });
+
+  it("gives the real radiogroup one coarse-pointer flex share per radio", () => {
+    paintDock();
+    const group = host.querySelector<HTMLElement>(".dock-modes-radios");
+    expect(group).not.toBeNull();
+    expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(String(radios().length));
+
+    const css = readFileSync(
+      path.join(import.meta.dirname, "../src/web/styles/dock-fit.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.dock-modes-radios\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toContain("flex: var(--dock-radio-count) 0 auto");
+  });
+
   it("still selects on a click", () => {
     const { changes } = paintDock();
     const second = radios()[1];

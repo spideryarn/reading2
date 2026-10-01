@@ -1568,14 +1568,26 @@ describe("a throw inside any band leaves the article", () => {
        switch on; the band itself opens from the address either way. */
     experimentalSince = "2026-09-01T09:00:00.000Z";
     probe.throwAt = label;
-    await open(`?mode=${mode}${extra}`);
+    /* Annotations is `?margin=1`, a switch beside the band, since 2026-10-01
+       (261001i): it is reached by that address and left by turning it off —
+       Plain closes a band and leaves the notes' switch alone. */
+    const margin = mode === "annotations";
+    await open(margin ? `?margin=1${extra}` : `?mode=${mode}${extra}`);
 
     containedInside(mode);
     reportedOnce(MODE_LABEL[mode]);
 
     /* And the reader can still leave it. */
-    await press(MODE_LABEL.plain);
-    expect(modeInUrl()).toBe("plain");
+    if (margin) {
+      const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+      expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
+      await act(async () => (toggle as HTMLButtonElement).click());
+      await settle();
+      expect(new URLSearchParams(location.search).get("margin")).toBeNull();
+    } else {
+      await press(MODE_LABEL.plain);
+      expect(modeInUrl()).toBe("plain");
+    }
     expect(text()).not.toContain("[mode-render]");
     expect(text()).toContain(PARAGRAPH);
   });

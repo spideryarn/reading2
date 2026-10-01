@@ -51,7 +51,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MODES, type Mode } from "../src/modes.js";
+import { type BandMode, MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type { PublicArtefacts } from "../src/types.js";
 import { Dock, fitSignature, visibleModes } from "../src/web/Dock.js";
@@ -277,6 +277,25 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
     expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
   });
 
+  it("the metadata page translates an old Annotations mode before following either axis", () => {
+    loose("?mode=annotations");
+    const hrefFor = (mode: Mode) => {
+      const link = [...host.querySelectorAll<HTMLAnchorElement>("a.dock-mode")].find(
+        (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
+      );
+      expect(link, `${mode} link`).toBeDefined();
+      return new URL((link as HTMLAnchorElement).href).searchParams;
+    };
+
+    const glossary = hrefFor("glossary");
+    expect(glossary.get("mode")).toBe("glossary");
+    expect(glossary.get("margin"), "a band link dropped the old notes state").toBe("1");
+
+    const annotations = hrefFor("annotations");
+    expect(annotations.get("mode"), "the toggle link kept minting the retired mode").toBeNull();
+    expect(annotations.get("margin")).toBe("1");
+  });
+
   it("a mode word the URL made up is ignored rather than drawn", () => {
     loose("?mode=nonsense");
     expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
@@ -298,7 +317,7 @@ describe("the fit signature", () => {
      tests/dock-experimental-switch.test.tsx § the fit signature, and
      tests/dock-corner-controls.test.tsx § the fit signature — because they are
      about those controls, not about the modes. */
-  const sig = (on: boolean, current: Mode) =>
+  const sig = (on: boolean, current: BandMode) =>
     fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
