@@ -57,8 +57,13 @@ import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 
 /**
+ * `tweets/6`, 2026-10-01: the paperwork rule (src/paperwork.ts), a last post that
+ * ends on the takeaway, and no author lists (Greg, SPIDERYARN-READING2-8M;
+ * docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
+ *
  * `tweets/5`, 2026-09-29: each post names the passages it was drawn from, so the
  * band can link it back to them (Greg, SPIDERYARN-READING2-5A;
  * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
@@ -67,7 +72,7 @@ import { plainWords } from "./plain-words.js";
  *
  * `tweets/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
  */
-export const PROMPT_VERSION = "tweets/5";
+export const PROMPT_VERSION = "tweets/6";
 
 /** The most passages one post may link to. More is a row of chips nobody reads. */
 export const MAX_POST_BLOCKS = 3;
@@ -259,9 +264,10 @@ Says what the piece CLAIMS. Not what it is about, and never a tease.
 
 THE LAST POST
 
-Says what the piece leaves open or deliberately unsettled. Not a call to action,
-not "follow for more", not credits — whatever shows this thread carries the
-article's own link already.
+Ends on the piece's conclusion: where it lands, and any implication it states
+itself. If it deliberately reaches no conclusion, end on the central question
+it leaves open. Not a call to action, not "follow for more", not credits — whatever
+shows this thread carries the article's own link already.
 
 WHERE EACH POST CAME FROM
 
@@ -304,6 +310,8 @@ ids of the blocks it came from. Nothing else — no summary, no title, no
 commentary about the thread.
 
 ${plainWords("explain")}
+
+${paperwork("summary")}
 
 ${PROFILE_RULES}`;
 
@@ -348,8 +356,16 @@ export function renderPrompt(opts: {
      metadata: it is an *instruction* about how to refer to the author, not a
      fact about the article, and the cached block has to be the same bytes for
      every stage that reads it. */
+  /* **Never a list of authors** (Greg, SPIDERYARN-READING2-8M): "Refer to them
+     by surname" over a nine-name byline opened a thread with all nine. When the
+     structured list says there are more than two we say so outright, rather
+     than asking the model to count a free-text byline (GPT Sol's plan review,
+     P2-9); without it, the model is asked to count. */
+  const count = meta?.authors?.length ?? 0;
   const author = meta?.byline
-    ? `Written by ${meta.byline}. Refer to them by surname.`
+    ? count > 2
+      ? `Written by ${meta.byline}. That is ${count} authors: write "the authors", or the first author's surname and "colleagues". Never list them.`
+      : `Written by ${meta.byline}. Refer to them by surname; if there are more than two, write "the authors", or the first author's surname and "colleagues". Never list them.`
     : "The byline is unknown. Write \"the author\" — do not guess a name.";
 
   /* The full text and the title moved to a cached `system` block — see

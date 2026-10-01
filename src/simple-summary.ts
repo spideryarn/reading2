@@ -90,6 +90,7 @@ import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js"
 import { parseJsonAnswer } from "./parse-json.js";
 import { plainWords } from "./plain-words.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
+import { paperwork } from "./paperwork.js";
 import { checkLevel, type CheckOutcome, SIMPLE_CHECK_ENABLED, SIMPLE_CHECK_VERSION } from "./simple-check.js";
 import {
   type BlockFingerprint,
@@ -118,14 +119,32 @@ export type { SimpleLevel, SimpleParagraph, SimpleSummary } from "./types.js";
 export { SIMPLE_LEVELS } from "./types.js";
 
 /**
- * Bumped whenever the prompt changes what a paragraph *is*. The one constant:
- * stamped into the artefact by `buildSimpleSummary` and compared against by the
- * pipeline's stamp and the owner's read (src/pipeline.ts, src/store/pg.ts).
+ * **The stored shape's version**, stamped into the artefact as `version`.
+ * Bumped only when what is stored changes shape, because `isUsableSimpleSummary`
+ * (src/types.ts) requires an exact match and reads anything else as absent.
  *
  * `simple/2` (2026-10-01) is three levels and the profile. A `simple/1` row has
- * no `levels` and reads as absent (`isUsableSimpleSummary`, src/types.ts).
+ * no `levels` and reads as absent.
  */
 export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
+
+/**
+ * **The prompt's version**, bumped whenever the wording changes what a level
+ * says. Stamped as `promptVersion`, and what the pipeline's stamp, Metadata and
+ * the owner's `outdated` compare (src/pipeline.ts, src/store/pg.ts). Split from
+ * `SIMPLE_VERSION` on 2026-10-01, when the paperwork rule and the shorter Brief
+ * changed the prompt and not the shape: bumping the shape would have made every
+ * stored summary unreadable (GPT Sol's plan review of 261001p, P1-3).
+ *
+ * `simple-prompt/2` (2026-10-01): the paperwork rule (src/paperwork.ts), an
+ * ending on the takeaway, a shorter Brief (Greg, SPIDERYARN-READING2-8M, -8F).
+ */
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/2";
+
+/** The prompt a stored summary was written with; a row from before the field is the first. */
+export function simplePromptVersion(simple: Pick<SimpleSummary, "promptVersion">): string {
+  return simple.promptVersion ?? "simple-prompt/1";
+}
 
 /** Passages per paragraph. Extra ids are dropped and counted. */
 export const MAX_IDS = SIMPLE_MAX_IDS;
@@ -171,8 +190,8 @@ export const ANSWER_TOKENS =
 const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number; sentence: number }> = {
   brief: {
     reader: "A bright twelve-year-old",
-    shape: "Two or three short paragraphs, each two or three sentences",
-    words: 100,
+    shape: "Two short paragraphs, each two or three sentences; three only if the piece truly needs it",
+    words: 80,
     sentence: 18,
   },
   simple: {
@@ -197,8 +216,9 @@ const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number;
 const NOTCH_UP: Record<SimpleLevel, string> = {
   brief: `
 
-Keep it very simple: the one thing the piece is about, why it matters, and at
-most two key ideas. Leave out anything a first-time reader could do without.`,
+Keep it very simple: the one thing the piece is about, why it matters, and
+what it concludes. At most one other key idea. Leave out anything a first-time
+reader could do without.`,
   simple: "",
   fuller: `
 
@@ -249,6 +269,8 @@ THE SHAPE
 - Then: why it matters — why THE PIECE says it matters, not why you think it
   might.
 - Then: its key ideas or findings.
+- End on the takeaway: the piece's main conclusion, and any implication it
+  states itself. Never advice or a consequence it does not give.
 
 FAITHFUL, NOT JUST SIMPLE
 
@@ -268,6 +290,8 @@ why it matters has to rest on where the piece says why it matters.
 The ids go only in "ids". Never write an id, or "block …", in the text.
 
 ${plainWords("explain")}
+
+${paperwork("summary")}
 
 ${PROFILE_RULES}
 
@@ -551,6 +575,7 @@ export function buildSimpleSummary(
 function stamped(levels: Record<SimpleLevel, SimpleParagraph[]>, opts: StampOptions): SimpleSummary {
   return {
     version: SIMPLE_VERSION,
+    promptVersion: SIMPLE_PROMPT_VERSION,
     /* The model's name for this power — every staleness check compares against it. */
     generator: generatorFor(opts.power),
     slug: opts.slug,

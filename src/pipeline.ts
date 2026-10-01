@@ -100,7 +100,7 @@ import {
   generateSimpleSummary,
   inputFingerprint as simpleFingerprint,
   SIMPLE_LEVELS,
-  SIMPLE_VERSION,
+  SIMPLE_PROMPT_VERSION,
 } from "./simple-summary.js";
 import {
   generateDebate,
@@ -3888,7 +3888,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       return {
         inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
-        promptVersion: SIMPLE_VERSION,
+        promptVersion: SIMPLE_PROMPT_VERSION,
         model: CAPABLE_MODEL,
       };
     },

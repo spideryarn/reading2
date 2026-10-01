@@ -4750,6 +4750,14 @@ export interface SimpleSummary {
    * reaches a visitor (src/public/dto.ts).
    */
   profileHash: string | null;
+  /**
+   * The prompt's own version, `SIMPLE_PROMPT_VERSION` in src/simple-summary.ts,
+   * separate from `version`, which is the stored shape and must match exactly.
+   * **Absent on a row written before 2026-10-01**, which is the first prompt
+   * (`simplePromptVersion` reads it as `simple-prompt/1`): usable, but
+   * outdated. Plan 261001p.
+   */
+  promptVersion?: string;
   /** Every level, always — validation stores all of them or none. */
   levels: Record<SimpleLevel, SimpleParagraph[]>;
   /**
@@ -4879,6 +4887,7 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
     Number.isFinite(simple.elapsedMs) &&
     simple.elapsedMs >= 0 &&
     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    (simple.promptVersion === undefined || (typeof simple.promptVersion === "string" && simple.promptVersion.length > 0)) &&
     isSimpleLevels(simple.levels) &&
     /* Absent is a row from before the guard, or with it off; present must be whole. */
     (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))

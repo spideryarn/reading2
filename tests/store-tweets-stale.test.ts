@@ -47,6 +47,8 @@ import { pgArticleReader } from "../src/store/pg.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
 import type { Block, StepName, Tree, TweetThread } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
+import { CAPABLE_MODEL } from "../src/models.js";
 
 loadEnvLocal();
 
@@ -248,5 +250,26 @@ describe("loadTweets on a thread written before tweets/5", () => {
     } finally {
       await setRevision({ finalUrl: URL1 });
     }
+  }, 30_000);
+});
+
+/**
+ * **Metadata's Tweets row asks about the prompt and the model too** — plan
+ * 261001p, GPT Sol's plan review P1-5. Until then `isCurrent`'s `case "tweets"`
+ * compared only the article, so a thread written by an older prompt was
+ * "current" for ever and the page never offered the rewrite. The positive
+ * control is the same thread at today's version and model.
+ */
+describe("articleMetadata's Tweets row", () => {
+  const tweetsDone = async (): Promise<boolean | undefined> =>
+    (await pgArticleReader.articleMetadata(SLUG)).stages.find((s) => s.step === "tweets")?.done;
+
+  it("is current at today's prompt and model, and not at an older prompt", async () => {
+    const hash = articleWithIdsFingerprint(BLOCKS, TREE, CITED_META);
+    await step("tweets", hash);
+    await setRevision({ tweets: { ...threadFor(TWEETS_PROMPT_VERSION, hash), generator: CAPABLE_MODEL } });
+    expect(await tweetsDone()).toBe(true);
+    await setRevision({ tweets: { ...threadFor("tweets/5", hash), generator: CAPABLE_MODEL } });
+    expect(await tweetsDone()).toBe(false);
   }, 30_000);
 });

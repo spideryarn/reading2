@@ -20,8 +20,10 @@ import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../sr
 import {
   ANSWER_TOKENS,
   SIMPLE_SYSTEMS,
+  SIMPLE_PROMPT_VERSION,
   SIMPLE_VERSION,
   buildSimpleSummary,
+  simplePromptVersion,
   emptyDropped,
   generateSimpleSummary,
   inputFingerprint,
@@ -1012,5 +1014,35 @@ describe("parseCheckVerdicts", () => {
     expect(parseCheckVerdicts('{"verdicts":[{"n":1,"verdict":"contradicts"}]}', 1)).toEqual([
       { verdict: "contradicts", why: "" },
     ]);
+  });
+});
+
+/* ------------------------------------------------ the prompt's own stamp -- */
+
+/**
+ * **The prompt has a version of its own, and the shape keeps `simple/2`** —
+ * plan 261001p, GPT Sol's plan review P1-3. A wording change must be able to
+ * mark a summary outdated without making it unreadable, which bumping the shape
+ * version would.
+ */
+describe("the prompt version (plan 261001p)", () => {
+  it("stamps today's prompt beside the unchanged shape version", () => {
+    const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
+    expect(out.version).toBe("simple/2");
+    expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
+    expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
+  });
+
+  it("reads a row from before the field as the first prompt: usable, and outdated", () => {
+    const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
+    const { promptVersion: _, ...legacy } = out;
+    expect(isUsableSimpleSummary(legacy)).toBe(true);
+    expect(simplePromptVersion(legacy)).toBe("simple-prompt/1");
+    expect(simplePromptVersion(legacy)).not.toBe(SIMPLE_PROMPT_VERSION);
+  });
+
+  it("refuses an empty prompt version rather than reading it as the first", () => {
+    const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
+    expect(isUsableSimpleSummary({ ...out, promptVersion: "" })).toBe(false);
   });
 });
