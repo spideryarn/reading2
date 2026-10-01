@@ -63,7 +63,8 @@ export function PurposeLine({ owner, bannerUp }: Props) {
           {/* Focusable so a keyboard reaches the whole sentence too. */}
           {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip's trigger */}
           <span className="traj-purpose-said" tabIndex={0}>
-            <span className="traj-purpose-label">Reading for:</span> {purpose}
+            <span className="traj-purpose-label">Reading for:</span>{" "}
+            <span className="traj-purpose-text">{purpose}</span>
           </span>
         </Tooltip>
         <Link

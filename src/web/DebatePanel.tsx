@@ -1633,7 +1633,7 @@ function Threads({
             >
               <span className="dbt-thread-label">
                 {t.kind === "key" && <Star size={12} aria-hidden="true" className="dbt-key-star" />}
-                {t.label}
+                <span className="dbt-thread-name">{t.label}</span>
                 <span className="dbt-thread-count">{count}</span>
               </span>
               {t.gist && <span className="dbt-thread-gist">{t.gist}</span>}

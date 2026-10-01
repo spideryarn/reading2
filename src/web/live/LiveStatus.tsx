@@ -128,7 +128,9 @@ export function LiveStatus({ live, onRestart, onType, onDictate, blocks, onJump 
           ? <p className="chat-live-transcript-empty">Your words and the reply appear here as you speak.</p>
           : live.lines.map((line) => <p key={line.id} className={`chat-live-line ${line.role}`}>
             <strong>{line.role === "reader" ? "You" : "Spideryarn"}</strong>{" "}
-            {line.text || "…"}{!line.done && <span aria-hidden="true"> ▍</span>}
+            <span className="chat-live-words">
+              {line.text || "…"}{!line.done && <span aria-hidden="true"> ▍</span>}
+            </span>
           </p>)}
       </section>}
       <div className="chat-live-actions">

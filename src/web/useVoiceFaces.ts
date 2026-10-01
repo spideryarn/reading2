@@ -14,18 +14,30 @@
  * **Called from `Reader`, not from `App`**, because `Reader` already reads the
  * switch and `App` deliberately does not: subscribing there would make every
  * signed-in page ask `GET /api/reader` (App.tsx § nothing here wakes it). The
- * cleanup takes the attribute away when the reading view unmounts, so the
- * shelf and `/profile` keep their faces whatever the switch says.
+ * last enabled reading view's cleanup takes the attribute away, so the
+ * shelf and `/profile` keep their faces whatever the switch says, without one
+ * of two coexisting readers turning it off underneath the other.
  */
 import { useEffect } from "react";
 
 export const VOICES_ATTRIBUTE = "data-voices";
 
+/**
+ * More than one reading view can be mounted during a transition or by an
+ * embedding test. The attribute belongs to all enabled readers together: one
+ * reader leaving must not turn the faces off underneath another one.
+ */
+let enabledReaders = 0;
+
 export function useVoiceFaces(on: boolean): void {
   useEffect(() => {
     if (!on) return;
     const root = document.documentElement;
+    enabledReaders += 1;
     root.setAttribute(VOICES_ATTRIBUTE, "");
-    return () => root.removeAttribute(VOICES_ATTRIBUTE);
+    return () => {
+      enabledReaders -= 1;
+      if (enabledReaders === 0) root.removeAttribute(VOICES_ATTRIBUTE);
+    };
   }, [on]);
 }

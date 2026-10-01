@@ -451,7 +451,7 @@ function IdeaRow({
                       onJump(f.blockId);
                     }}
                   >
-                    <span className="ideas-quote">
+                    <span className={`ideas-quote${f.whole ? " ideas-quote-moved" : ""}`}>
                       {f.whole ? "whole paragraph — the exact words have moved" : f.short}
                     </span>
                     {f.reasoning && <span className="ideas-reason">{f.reasoning}</span>}

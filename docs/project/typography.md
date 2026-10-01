@@ -87,8 +87,9 @@ Greg's v1, behind the [Experimental switch](experimental-features.md):
 | `--font-reader` | anything the reader typed | Arial, from the system |
 | `--font-ui` | the chrome | Geist, unchanged — the fourth voice by being left alone |
 
-All of it is one file, [`styles/voices.css`](../../src/web/styles/voices.css): three lists of
-existing selectors, every rule under `:root[data-voices]`, which
+All of the type rules are in one file, [`styles/voices.css`](../../src/web/styles/voices.css): three
+selector lists, with narrow component wrappers where mixed-provenance text needs separating, and
+every rule under `:root[data-voices]`, which
 [`useVoiceFaces`](../../src/web/useVoiceFaces.ts) sets on `<html>` while the reading view is open
 and the switch is on. With the switch off it matches nothing, and the table at the top of this doc
 is the whole truth. Why these faces rather than the system ones Greg named, which elements are

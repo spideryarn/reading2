@@ -429,7 +429,9 @@ function Remark({
             {/* The referee's own words where we have them, so the remark sits
                 against the thing it is about. Rule 2 of the mode: every row is an
                 index into the piece. */}
-            <span className="mir-quote">{comment?.quote ?? remark.blockId}</span>
+            <span className={`mir-quote${comment ? "" : " mir-block-id"}`}>
+              {comment?.quote ?? remark.blockId}
+            </span>
           </button>
         </Tooltip>
       )}
@@ -450,7 +452,11 @@ function Remark({
       {remark.kind === "placement" && (
         <p className="mir-placement">
           <span className="mir-placement-number">{signedValence(remark.valence)}</span>
-          {remark.criterion && <span className="mir-placement-on"> on {remark.criterion}</span>}
+          {remark.criterion && (
+            <span className="mir-placement-on">
+              {" "}on <span className="mir-placement-criterion">{remark.criterion}</span>
+            </span>
+          )}
         </p>
       )}
 

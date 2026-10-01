@@ -6,13 +6,14 @@
    This is that v1: docs/plans/261001d-typeface-per-voice.md has the reasoning,
    docs/project/typography.md § A face per voice the summary.
 
-   EVERY RULE IS UNDER `:root[data-voices]`, which App.tsx sets only while the
+   EVERY RULE IS UNDER `:root[data-voices]`, which Reader sets only while the
    Experimental switch is on (useVoiceFaces.ts). Off, this file matches nothing
    and every face is what it was. Promoting it is deleting that guard;
    abandoning it is deleting this file, its import and the hook.
 
-   The whole decision is in this one file on purpose: three lists of selectors
-   that already exist, so nothing in the other stylesheets had to change.
+   The whole decision is in this one file on purpose: three lists of selectors.
+   Most already existed; a few narrow wrappers split mixed-provenance text so
+   nearby UI copy can stay Geist. No other stylesheet's rules had to change.
    `:root[data-voices] .x` outranks the plain `.x` it overrides, and this file
    is imported late (after every sheet but the logo animations). It sits in `@layer app` like its neighbours, so a `tw:font-*`
    utility on an element still wins — none of the elements below carries one.
@@ -37,16 +38,22 @@
     .dock-question-quote,
     .ill-quote,
     .note-preview,
-    .ideas-quote,
-    .tl-quote,
+    .gloss-ask-found,
+    .faq-quote,
+    .ideas-quote:not(.ideas-quote-moved),
+    .tl-quote:not(.tl-quote-moved),
+    .tl-when-words,
     .srch-hit-quote,
     .clm-quote,
     .crit-quote,
-    .mir-quote,
+    .mir-quote:not(.mir-block-id),
     .mir-passage,
     .traj-words,
+    .traj-words-tip,
+    .tip-cite-text,
     .prose-card-quote,
-    .cite-entry
+    .cite-entry,
+    .dbt-claim-text
 ) {
     font-family: var(--font-author);
 }
@@ -74,7 +81,7 @@
     .prose-card-part-senseHere .prose-card-text,
     .prose-card-part-background .prose-card-text,
     /* ideas, FAQ, quiz */
-    .ideas-blurb,
+    .ideas-name,
     .ideas-reason,
     .faq-question,
     .quiz-premise,
@@ -86,22 +93,31 @@
     /* chat, and the comment's Explanation */
     .chat-turn.model,
     .chat-turn.model .fmt-h,
+    .chat-live-line.companion .chat-live-words,
     .cmt-answer,
+    /* Candidates is chat-shaped but not rendered by ChatPanel. Its answer gets
+       a narrow wrapper so errors and tool-status copy beside it stay UI. */
+    .cnd-answer,
+    .cnd-answer .fmt-h,
+    .cnd-name,
+    .cnd-affil,
+    .cnd-requirement,
+    .cnd-why,
     /* the rest of the band */
     .traj-cue,
     .tl-label,
     .cite-why,
-    .cite-verdict-text,
     .cite-does,
     .cite-inv-lead,
     .cite-inv-text,
     .cite-inv-draft,
     .srch-hit-why,
-    .clm-claim,
-    .clm-why,
+    .clm-list .clm-claim,
+    .clm-why:not(.clm-why-withheld),
     .crit-why,
     .mir-note,
     .dbt-ai,
+    .dbt-thread-name,
     .dbt-thread-gist,
     .dbt-key-why,
     .dbt-relation
@@ -112,8 +128,10 @@
 /* ---- the reader: what they typed ----------------------------------------- */
 :root[data-voices] :is(
     .chat-turn.you,
+    .chat-live-line.reader .chat-live-words,
     .chat-input,
     .chat-edit-box,
+    .chat-rename,
     textarea.cmt-note,
     p.cmt-body,
     .cmt-followup input,
@@ -124,10 +142,17 @@
     .srch-input,
     .srch-saved-criterion,
     .gloss-ask-input,
-    .traj-purpose-said,
+    .traj-purpose-text,
+    .traj-purpose-tip p,
     .traj-purpose-input,
+    .crit-text,
+    .crit-poles input,
     .crit-criterion,
-    .crit-yours
+    .crit-yours,
+    .mir-criterion,
+    .mir-placement-criterion,
+    .cnd-asked,
+    .cnd-box
 ) {
     font-family: var(--font-reader);
 }
