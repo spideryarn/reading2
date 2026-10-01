@@ -1,4 +1,4 @@
-# Keyboard: ↑ / ↓ take the step, ← / → choose the stride
+# Keyboard: ↑ / ↓ take the step; ← / → step Trajectory and Quiz
 
 > **Status, 2026-09-29.** The stride belonged to the gist columns of Hierarchy mode, which was removed
 > that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Trajectory stops
@@ -235,6 +235,9 @@ back into the page means the page (`tests/keynav-horizontal.test.ts`).
 [260930h](../plans/260930h-quiz-and-remember-controls-as-icons-arrow-keys-step-the-quiz.md).
 
 ## The aim is visible before you press anything
+
+> **History.** This went with the stride on 2026-09-29: no `data-aim` remains in `src/web`, and
+> `tests/aimed-column.test.ts` no longer exists. Kept for the reasoning about tinting a column.
 
 An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
 running it. So the aim is drawn:

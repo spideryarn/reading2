@@ -8,7 +8,7 @@
 > — Greg, 2026-08-30
 
 Three asks, and they are the same ask at three depths: **the overview does not
-say that a part leads anywhere.** [diagram.md § Sketch](../project/diagram.md#sketch)
+say that a part leads anywhere.** [sketch.md](../project/sketch.md)
 is the feature; [260830j-sketch-diagram.md](260830j-sketch-diagram.md) is how it got built, and
 [§ The door the model forgot to fit](260830j-sketch-diagram.md#the-door-the-model-forgot-to-fit)
 is the last time this exact problem came up — a door existed and nobody could
@@ -110,7 +110,7 @@ compromise. § Not doing.
 **An inferred door is marked exactly like a written one.** `opensInferred` says
 whose work the link was, and that matters to `score.inferred` and to nobody
 else — a reader who can press it is not short of anything.
-[diagram.md § The scene is checked again in the browser](../project/diagram.md#the-scene-is-checked-again-in-the-browser).
+[sketch.md § The scene is checked again in the browser](../project/sketch.md#the-scene-is-checked-again-in-the-browser).
 
 ## 2. The peek: the scene itself, small, inside the region it belongs to
 
@@ -150,7 +150,7 @@ with, the two `band` regions that make another read as parallel tracks, and the
 dashes that separate a worked example from the main convergence — while its
 straight lines crossed boxes they had nothing to do with and invented junctions.
 A picture that asserts more than the article does is exactly the failure
-[diagram.md § The shapes make claims](../project/diagram.md#the-shapes-make-claims-and-the-prompt-says-so)
+[sketch.md § The shapes make claims](../project/sketch.md#the-shapes-make-claims-and-the-prompt-says-so)
 already records twice. And a second painter is a second answer to the question
 [`sketch-paint.ts`](../../src/sketch-paint.ts) exists to be the only answer to —
 the *one painter, two sinks* rule, broken quietly.
@@ -311,7 +311,7 @@ that no change can redden is testing nothing.
   smaller piece of work.
 - **No pan or free zoom inside the picture.** Enlarge is the answer to size, for
   the reasons in
-  [diagram.md § 288px](../project/diagram.md#288px-is-not-a-size-a-diagram-fits-in-and-zooming-inside-it-does-not-help),
+  [sketch.md § 288px](../project/sketch.md#288px-is-not-a-size-a-diagram-fits-in-and-zooming-inside-it-does-not-help),
   and a second zooming gesture would be a second answer to a settled question.
 
 ## What GPT Sol's review changed

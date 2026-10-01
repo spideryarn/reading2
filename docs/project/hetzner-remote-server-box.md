@@ -1,5 +1,7 @@
 # The Hetzner remote server box, and `gjd-remote`
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 A Hetzner server that runs Claude Code sessions in tmux so they keep working when the laptop sleeps.
 You drive it from **[`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts)**, and if you read one
 thing here, make it `gjd-remote --help`, which is the reference and stays current.
@@ -115,7 +117,12 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts) — **run one long command on the box in tmux**,
   with a log, and let the session end when it does. Not part of `gjd-remote`: it talks to local tmux
   and nothing else. This is what to use instead of hand-rolling a `tmux new-session`, and why is
-  [Sessions nobody made on purpose](#sessions-nobody-made-on-purpose).
+  [Sessions nobody made on purpose](#sessions-nobody-made-on-purpose). The job gets the tmux
+  **server's** environment, not your shell's (`tmux show-options -g update-environment` lists only
+  `DISPLAY`, the `SSH_*` variables and three others), so an `export X=…` typed before it does not reach the command: on 2026-09-08 the
+  Overseer started that way with its OpenRouter key absent from `/proc/<pid>/environ`. An export
+  inside a small `sh` script passed as the command does arrive. Its one flag is in
+  [testing.md](testing.md#run-the-suite-in-tmux-because-a-killed-run-and-a-passing-run-look-the-same).
 - [browser-control.md](browser-control.md) — **read this before any browser work.** Which mechanism
   goes with which machine, and the answer is not a preference: Claude in Chrome cannot follow you to
   a headless box, so it is Playwright there.
@@ -500,6 +507,12 @@ has looked. Everything getting on with itself sorts below both.
 | `shell idle` | no Claude in it, and nothing running: a `new-shell` waiting for you, or a husk |
 | `unknown` | something could not be determined, and a line under the table says which row and why |
 
+**A dispatched session can sit at `needs you` from its first minutes.** `new-claude --no-attach`
+does not reliably start Claude in auto mode: of three launched identically seconds apart on
+2026-09-08, one stopped at its first approval prompt (`npm run worktree:setup`) and looked, from
+outside, like a session thinking. `tmux send-keys` into it is refused by the auto-mode classifier,
+so only somebody attaching with `gjd-remote resume <name>` can answer it.
+
 **`shell idle` means "at rest right now", never "finished".** It is one snapshot of the process
 table, so a shell nobody has typed into yet looks exactly like one whose work is over — which is why
 nothing sweeps them and there is no `--idle-shells` flag. It is there so you can see which shells
@@ -735,6 +748,11 @@ waiting begins. Three things follow from where the sleep is:
 - **It says `✓ created`, never `✓ started`.** Claude has not started, and the tick that says it has
   is the one this tool has had to earn back twice.
 
+**The brief is not in the job script.** `~/gjd-remote/jobs/<name>-<uuid>.sh` only `cat`s
+`~/gjd-remote/prompts/<name>-<uuid>.md` into `claude`, so grepping the `.sh` for a phrase in the
+brief finds nothing and reads as a brief that left it out — which on 2026-09-16 made seven correctly
+briefed feedback sessions look as though none carried the Sol review instruction.
+
 ### It attaches, and for a long wait you don't want that
 
 `--wait` takes the same path every other launch takes: it attaches, unless you say `--no-attach`.
@@ -939,6 +957,10 @@ Two things worth knowing:
 - **With nothing bound, you detach by closing the tab** — the session survives, verified. From
   another shell on the box, `tmux detach-client -s NAME`. `gjd-remote resume` brings you back.
   If you want a key for it, `bind -n F12 detach-client` is one line; no TUI here sends F12.
+- **So closing a tab never ends `claude`**, and a finished session holds ~300–450 MB until something
+  kills it; fourteen had piled up by 2026-08-31. `node ~/gjd-remote/sessions.mjs` reports which are
+  finished (`--kill` reaps only those), judging by the transcript's last message rather than tmux's
+  activity time or the file's mtime, both of which move on idle sessions.
 - **The file being right and the keyboard being right are two facts.** A tmux server reads its
   config once, at start, and the box's server outlives provisioning by weeks — so provisioning
   rewrites `~/.tmux.conf` and changes nothing about the keyboard until somebody sources it. Both
@@ -1130,6 +1152,14 @@ form.
   box looks like — and every caller reads that emptiness as an answer. The remote script signs off
   with a marker and a reply without it is a failure. Same reasoning as
   [../reusable/silent-success.md](../reusable/silent-success.md), which is the general case.
+- **`tmux -t name` matches by prefix.** When `foo` does not exist, `kill-session -t foo` resolves
+  to another agent's `foo-bar-2281848` without an error; `-t '=foo'` is the exact match, and it
+  refuses when nothing matches. Found 2026-09-08 in a cleanup guard whose `stop` would have killed a
+  stranger.
+- **`tmux ls | head` hides sessions.** The box carries 30-odd sessions listed alphabetically, so a
+  live job whose name starts late in the alphabet falls off the end. On 2026-09-07 that, plus a codex
+  log that stays empty until the run exits, made a healthy Sol review look dead and bought a
+  duplicate. `tmux has-session -t '=<name>'` asks about one session exactly.
 - **`display -p -t "=name"` is not how you ask tmux about a session.** `display` takes a target
   *pane*, and the `=` exact-match prefix is only honoured on the session part when a colon follows.
   Without it tmux 3.4 returns empty fields and exits 0 — which is how `ls` came to report every

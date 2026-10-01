@@ -235,7 +235,7 @@ the current article before jumping; absent is a useful failure, not a guess.
 Execution requires explicit user intent. Merely typing, ranking suggestions, loading JavaScript,
 rendering a preview, returning by Back or receiving a model tool call does not authorise a paid
 action. An unambiguous submitted command names the requested work, but does not prove its price was
-visible. Preserve [Diagram's price-before-press policy](../project/diagram.md#what-it-costs-and-what-that-decides):
+visible. Preserve [Diagram's price-before-press policy](../project/sketch.md#what-it-costs-and-what-that-decides):
 include the **full prerequisite work and total estimated cost/wait before the spend-authorising
 press**. A deterministic action row that already disclosed that plan needs no redundant confirmation.
 For free language or voice, if interpretation is the first time the effects/prerequisites/cost are

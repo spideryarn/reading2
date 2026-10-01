@@ -1,5 +1,7 @@
 # Testing it in a browser
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 The reading view has no DOM tests and won't for a while — see
 [testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). Until it
 does, **looking at it in a browser is the test harness for stage 6**, and that makes it worth
@@ -46,6 +48,10 @@ first one, and then pointed its verification at 5301 — **the old server** — 
 re-verification. The numbers came back identical, which is equally consistent with "the fix works"
 and "I measured the wrong process", and that is exactly the shape
 [silent-success.md](../reusable/silent-success.md) is about.
+
+The same holds for `npx tsx server.ts &` followed by `kill $!`, which stops the npx wrapper and
+leaves the node child holding the port (confirmed 2026-09-09 on the fleet dashboard's port); the
+symptom is a stale bundle hash, which reads as a cache problem.
 
 So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), then check the port is
 actually free before starting another. And prove *which code* is being served before you trust a
@@ -147,6 +153,14 @@ Two habits that catch it:
 - **Run a control.** Set a made-up property (`--zz-control`) the same way you set the real one and
   read both back. If the control works and yours does not, it is your property; if neither works, it
   is your method. That one call is what turned "the CSS is broken" into "the browser is stale".
+
+### A long check measures a moving tree
+
+HMR pushes every edit into a browser agent's open page, so a half-hour check reports on whatever
+the tree held at each moment, not on a commit, and its report reads exactly like a finding about
+current code. On 2026-09-07 one reported the wordmark's text vanishing in the dock against a CSS rule
+its parent had already replaced mid-run; it did not reproduce, and finding that out cost a whole
+verification round. The same is true of a 24-minute gate on a busy `dev`.
 
 ### A preview page that never imported the stylesheet
 

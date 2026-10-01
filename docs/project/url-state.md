@@ -1,5 +1,7 @@
 # URL state
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 Everything about *how you are looking at an article* lives in the query string — and, since
 2026-08-26, everything about how you are looking at **the shelf** does too
 ([§ The library's own five](#the-librarys-own-five)). Nothing the reader
@@ -51,21 +53,26 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `match` | which matcher search mode is using: the letters you typed, or what they mean (default `meaning`) — [search.md](search.md) | push | `?match=words` |
 | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
+| `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` — the default, and absent, since 2026-09-15 ([search.md](search.md)) | push | `?order=document` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
 | `name` | the bar debate mode's group-one rows hide under — **the word, not a number**: `named`, `quoted` or `linked`, the name of the strongest evidence that a page is about this piece. **Absent means nobody has touched it**, which the panel reads as `DEBATE_LEVEL_DEFAULT` ([`debate-levels.ts`](../../src/web/debate-levels.ts)); rows answering what the article *claims* carry no level and are never under it | **replace** | `?name=linked` |
 | `debateby` | how debate mode's list is ordered: `prioritised` (the default, and absent), `claim` (*by claim* — grouped under the claim in the piece each row answers, in article order), `date` or `stance` (most critical first). An order the rows cannot support — `prioritised` and `date` on any debate from before stage 2 of [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md), and on every visitor's — draws *by claim* instead, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveDebateOrder`). Its own key for `citeby`'s reason. Independent of `name`: the bar filters, the order arranges | push | `?debateby=stance` |
 | `bears` | debate mode's **relevance bar**, shown only while `prioritised` is the order drawn: how directly the AI judged a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only, so it and `name` never hide the same row; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
+| `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
 | `citeby` | how the citations list is ordered: `prioritised` (the default, and absent), `document` (first cited), `relevance` or `influence` — [citations.md](citations.md). **Not the glossary's `sort`**: every parameter survives a mode switch, and a shared key would carry one mode's order into the other | push | `?citeby=relevance` |
 | `citebar` | the bar the citations' prioritised order hides under — `(2 × relevance + influence) / 3`. **Absent means nobody has touched it**, which the panel reads as `CITATION_BAR_DEFAULT` ([`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)). Not the glossary's `gate`, which `Reader` reads in every mode | **replace**, debounced | `?citebar=0.55` |
 | `faqby` | how the FAQ is ordered: `prioritised` (the default, and absent), `document` (reading order), `centrality` (most central) or `difficulty` (hardest); one the list has nothing for falls back to `document` — [faq.md](faq.md). Its own key for `citeby`'s reason | push | `?faqby=document` |
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
+| `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
 | `deep` | how far down the tree summary mode goes: `1` the parts (the default), `2` the sections. `0`, the article alone, lost its pill on 2026-10-01 and now reads as the default | push | `?deep=2` |
 | `summary` | which part of Summary is open: `gists`, the outline (the default, and absent; chosen by pressing Parts or Sections), or one of the three plain-words levels on the slider — `brief`, `simple`, `fuller` — [summaries.md](summaries.md) § Simple. Arriving on it never spends; only touching the slider does. `deep` keeps its value and is unused under a level. Pressing Parts or Sections writes both keys in one entry | push | `?summary=fuller` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
 | `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
+| `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
+| `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
 | `remember` | which half of Remember is open: `recall` (the default) or `quiz` — [remember-mode.md](remember-mode.md). **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
 
 **`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
@@ -157,8 +164,8 @@ reader's question.
 **And then the toggle went again, on 2026-09-05, and the parameter stayed.** Greg: *"we don't need
 the 'Spine' button (let's just default to always showing it)"* — so the rail is on wherever nobody
 has said otherwise, outline mode included, and nothing on screen writes `?spine=` or `?text=` any
-more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). Both are still honoured
-on arrival: `?spine=0` still hides the rail.
+more ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)). `?spine=0` is still
+honoured on arrival and still hides the rail; `?text=` was too, until 2026-09-29, and is now ignored.
 
 > **2026-09-29: this whole history is moot.** Hierarchy mode, `?cols=`, `?text=` and the `liftStrandedText`
 > rewrite are gone; `?mode=hierarchy` is a retired mode that opens Structure, as `?mode=outline` does
@@ -243,8 +250,8 @@ the middle band between the spine and the prose ([260826a-chat-mode.md](../plans
 **The default is `plain` since 2026-08-31**, and it was `hierarchy` before that. Plain is the
 article and nothing else — no band — so a bare `/read/<slug>` opens the
 prose. (`?mode=hierarchy` used to ask for the gist columns; since 2026-09-29 it opens Structure.)
-([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)). Two consequences:
-`?mode=hierarchy` now appears in copied URLs where nothing appeared before, since `withMode` in
+([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)). Two consequences at the
+time: `?mode=hierarchy` began to appear in copied URLs where nothing had appeared before, since `withMode` in
 [`Dock.tsx`](../../src/web/Dock.tsx) omits whichever mode is the default; and **every link written
 before that day that said nothing about a mode now opens Plain rather than the hierarchy.** So does
 every `?mode=toc` link, from before the 2026-08-29 rename, which used to survive on the
@@ -437,8 +444,21 @@ back.** Since 2026-09-16, and it replaces the flat rule this section used to sta
 strips the stamp* — which was right about a reader who had moved on and wrong about one who had not
 moved at all. On a phone the mode band **covers** the article
 ([narrow-windows.md](narrow-windows.md)), so leaving the mode is the only way to *see* where a jump
-landed; the chip was therefore destroyed at exactly the moment it was needed, which is what the
-reader reported. [260916a](../plans/260916a-back-to-where-you-were-survives-a-mode-change.md).
+landed; the chip was therefore destroyed at exactly the moment it was needed. What Greg asked for:
+
+> ideally we want things across modes to use reusable machinery so that if we build something like
+> that back to X when you click on an entry in a mode, that should be true across citations and
+> quotes and ideas and search and everything else that has that similar kind of ability to jump us
+> around the article.
+>
+> So then the back to would work robustly and universally.
+>
+> — Greg, 2026-09-12 (SPIDERYARN-READING2-41,
+> [260916a](../plans/260916a-back-to-where-you-were-survives-a-mode-change.md))
+
+That is already the design: every band's jump is the `onJump` it is handed, which is `jumpTo` in
+[`reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts), so a mode that uses
+it gets the chip with no code of its own.
 
 So the chip is `history.go(-depth)` rather than `history.back()`, and:
 
@@ -532,8 +552,8 @@ flew over on the way. `POSITION_SETTLE_MS` is 300ms.
 > — Greg, 2026-08-25
 
 `?at=` always holds a **block id**. Ordinary scrolling writes the id of the **first block of the
-section the reader is in** — depth `leafDepth - 1`, which is what `columnLabel` already calls
-"Sections". A deliberate jump may name a finer block, and the spy preserves it while the reader
+section the reader is in** — depth `leafDepth - 1`, what the reader sees called "Sections"
+(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). A deliberate jump may name a finer block, and the spy preserves it while the reader
 stays inside that block's section; that is the paragraph below on what the spy writes. Three things
 follow from the unit the spy works in:
 
@@ -629,7 +649,7 @@ unasked.
 **A parameter this file gains later is neither remembered nor recognised**, and the second half of
 that is the one that bites: a link carrying only the new parameter would look like a bare address
 and be written over. `tests/last-view.test.ts` scans the client for `useQueryState` keys and fails on
-one that neither list has heard of, so the thirty-sixth parameter is a decision rather than an
+one that neither list has heard of, so the next parameter is a decision rather than an
 omission.
 
 Deferred, and named in

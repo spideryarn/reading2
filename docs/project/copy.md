@@ -1,5 +1,7 @@
 # Copy
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The words the reader sees, and the rules they follow. Mostly this is about
 **error messages**, because those are where writing badly costs the most: an
 empty state that reads oddly is a shrug, but a failure the reader misreads sends

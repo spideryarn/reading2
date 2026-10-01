@@ -190,7 +190,7 @@ article revision, definition version, prompt version, model and profile; and gal
   devil's advocate pass, with the code citations behind every objection.
 - [search.md](../project/search.md) — the mode that is already most of this. Two matchers, one box,
   saved runs, several at once, one hue and one spine lane each.
-- [diagram.md § The fourth: Sketch](../project/diagram.md#the-fourth-sketch) and
+- [sketch.md](../project/sketch.md) and
   [`src/sketch-scene.ts`](../../src/sketch-scene.ts) — the precedent the whole idea rests on: the
   model chooses the arrangement, never the markup, and numbers can be checked.
 - [quotes.md](../project/quotes.md), [timeline.md](../project/timeline.md),

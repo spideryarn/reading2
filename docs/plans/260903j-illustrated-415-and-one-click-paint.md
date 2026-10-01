@@ -5,7 +5,7 @@ Status: **all three stages landed**; production repaired and the one-press chain
 on the Mac — it is where `.env.prod` is), 2026-09-03.
 
 Two things Greg asked for after the first live use of the
-[Illustrated](../project/diagram.md#illustrated) sub-mode:
+[Illustrated](../project/illustrated.md) sub-mode:
 
 > I had a problem with the new "Illustrated" Diagram sub-mode:
 >

@@ -8,7 +8,7 @@ Feedback SPIDERYARN-READING2-5X (report `spya-c7807j`), from Greg (admin), on
 >
 > — Greg, 2026-09-30
 
-Parent docs: [diagram.md § Illustrated](../project/diagram.md#illustrated) and
+Parent docs: [illustrated.md](../project/illustrated.md) and
 [article-images.md](../project/article-images.md). Status: **built, on `dev`, not deployed** (see § Outcome).
 
 ## What the image model can take — checked before planning
@@ -81,7 +81,7 @@ attachments ("Image 1: an earlier plate of this same set… Image 2: FIGURE A �
 three rules: draw it **recognisably, as an illustration and not a reproduction**; take **no style**
 from a figure (the Sketch's PNG measurably pulled plates towards flowchart-blue on 2026-09-03);
 copy **none of its lettering**. These are prompt text, not guarantees — nothing checks the pixels,
-which is true of every rule on this plate ([diagram.md § It is an interpretation](../project/diagram.md#illustrated)).
+which is true of every rule on this plate ([illustrated.md § It is an interpretation](../project/illustrated.md#it-is-an-interpretation-and-the-app-says-so)).
 
 ### 4. Freshness
 

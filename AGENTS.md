@@ -47,7 +47,8 @@ listed here; the names under each are files in `docs/project/`.
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
   `granularity-zoom.md` ·
-  `column-context.md` (the gist column's fisheye) ·
+  `column-context.md` (history: the gist columns' fisheye) ·
+  `structure.md` (the tree in the band: two columns or a nested list) ·
   `reading-time.md` (where you have spent time, down the spine) ·
   `maths.md` (TeX in the prose, drawn as maths) · `glossary.md` · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) ·
@@ -57,7 +58,10 @@ listed here; the names under each are files in `docs/project/`.
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
   `trajectory.md` (skim a paper at increasing depth: a route through its quotes, walked three times) ·
   `search.md` · `referee-mode.md` (helping a peer reviewer, without reading for them) ·
-  `diagram.md` ·
+  `diagram.md` · `sketch.md` (the picture a model draws of the argument) ·
+  `illustrated.md` (the Sketch, painted) ·
+  `debate.md` (what the rest of the web says about the piece) ·
+  `tweets.md` (the piece as a thread; the one mode that writes on arrival) ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·
   `live-conversation.md` (talking to the article out loud) ·

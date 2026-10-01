@@ -33,9 +33,10 @@ Two rules an agent will otherwise break:
 | `npm run db:check` | that the database in `DATABASE_URL` has the columns this build reads | needs a database |
 | `npm run eval:*` | model quality — by hand, costs money, minutes | — |
 
-**`npm run check` needs a local database**, because its test gate runs under `REQUIRE_POSTGRES=1` —
-without it, seventy-odd suites skip themselves and the gate goes green over a quarter of the suite
-not running ([static-analysis.md](static-analysis.md#the-gateadvisory-split)). `-- --offline` runs
+**`npm run check` needs a local database**, because its test gate does: since 2026-09-05 `npm test`
+fails once, before a file is collected, on a machine with no database, rather than skipping the
+suites that need one
+([testing.md](testing.md#when-a-skip-is-not-acceptable-never-since-2026-09-05)). `-- --offline` runs
 everything else and says in its summary that it is not the real gate.
 
 `db:check` is still not in `npm run check`, because it asks about one particular deployment's

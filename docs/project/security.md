@@ -1,5 +1,7 @@
 # Security
 
+Up: [security-map.md](security-map.md)
+
 **Two untrusted parties, and neither is another user.**
 
 **The content**, which is what most of this document is about. Spideryarn is a local, single-user

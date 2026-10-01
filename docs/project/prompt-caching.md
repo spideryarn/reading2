@@ -1,5 +1,7 @@
 # Prompt caching — paying for the article once
 
+Up: [architecture.md](architecture.md)
+
 The article is the long part of nine prompts and it never changes. This is how we stop paying for it
 every time.
 

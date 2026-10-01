@@ -1,5 +1,7 @@
 # Links — what the article's own hyperlinks say about where they go
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 Hover a hyperlink in the prose and a card says something about the destination. Greg, 2026-08-27:
 
 > add hover-tooltips for hyperlinks (including anchor links) that show something about the

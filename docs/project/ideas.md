@@ -1,5 +1,7 @@
 # Ideas — the propositions this piece needs you to hold
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The **glossary** answers *what does this word mean*. This answers *what do I have to understand* —
 the ideas an article leans on without stating, and the ideas it puts forward. A mode in the band
 between the spine and the prose, beside [Glossary](glossary.md).
@@ -90,6 +92,11 @@ computation, this being the first mode a failure was contained in — every band
 [`src/web/styles/ideas.css`](../../src/web/styles/ideas.css). Tests:
 [`tests/ideas.test.ts`](../../tests/ideas.test.ts) (the stage) and
 [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts) (the client, in jsdom).
+
+**A visitor to a public article sees a stored list** (`VisitorIdeasBand`, from the page's payload)
+and can never start one. Where that is decided for this mode and every other — `POLICY` in the
+client, `REVISION_READ_POLICY` on the server — is
+[new-mode.md § Where else to look](new-mode.md#where-else-to-look).
 
 ## The unit is what is new, not the provenance
 

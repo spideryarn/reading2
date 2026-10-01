@@ -1,5 +1,7 @@
 # Auth
 
+Up: [security-map.md](security-map.md)
+
 **Decided 2026-08-25: Supabase Auth.** The working that produced that is in
 [docs/research/260825a-auth-options.md](../research/260825a-auth-options.md) — this file is the decision and where
 its pieces live.
