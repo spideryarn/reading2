@@ -1,0 +1,146 @@
+/* marginalia.css — Annotations mode's column, right of the prose: the notes
+   beside each block and the head pinned at the top of the column.
+   AnnotationsColumn.tsx has the shape;
+   docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md has
+   the reasons.
+
+   **Visibly ours.** Small sans, faint ink and no hue: the accent belongs to the
+   reader's own marks (docs/research/260828c-decorated-mode-ideas.md § The
+   channel budget), so these can never be mistaken for a comment, and comments
+   can join this column one day without being mistaken for ours.
+
+   **Never in a copy.** `user-select: none` on every note and the head, so a
+   reader who copies three paragraphs gets the author's three paragraphs. */
+
+/* ---------------------------------------------------------- § the room --
+   `.reader` keeps `--marg-reserve` clear on its right, and it is often 0:
+   while the centred prose already leaves the column room beside it, nothing
+   moves. layout.ts § `fitMargin` is the arithmetic. Both variables are 0 in
+   every other mode, so this rule is inert there. */
+.reader {
+  padding-right: calc(var(--marg-reserve, 0px) + var(--safe-right));
+}
+
+/* ---------------------------------------------------------- § a note --
+   Inside its block's `td.text` (which is `position: relative` — gutter.css),
+   at the cell's top, starting just past its right edge. Out of flow, so the
+   prose's rows are exactly Plain's. `useMarginLayout` writes a `translate` on
+   the few that would overlap the one above. */
+.marg-note {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: var(--marg-w);
+  box-sizing: border-box;
+  padding: 0.35rem 0.5rem 0 1.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+  user-select: none;
+  -webkit-user-select: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.marg-note p {
+  margin: 0;
+}
+
+/* The question a part answers: the one note at fuller ink, because it is the
+   one that asks the reader to do something — read on to answer it. The
+   article's own question (depth 0) a step quieter than a part's, since it is
+   about the whole and sits beside its first lines. */
+.marg-question {
+  color: var(--ink);
+  font-style: italic;
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 0.5rem;
+}
+.marg-question[data-depth="0"] {
+  color: var(--ink-faint);
+}
+
+/* An idea, at its first occurrence: a stamp in small caps, then the idea's
+   handle. The statement is in the card — on hover, focus or a tap. A button
+   (AnnotationsColumn.tsx § IdeaStamp) drawn as text. */
+.marg-idea {
+  all: unset;
+  display: block;
+  cursor: help;
+  text-decoration: underline dashed color-mix(in oklch, var(--ink-faint) 60%, transparent);
+  text-underline-offset: 3px;
+  border-radius: 2px;
+}
+.marg-idea:focus-visible {
+  outline: 2px solid var(--ring, var(--rule-strong));
+  outline-offset: 2px;
+}
+.marg-stamp {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+/* ---------------------------------------------------------- § the head --
+   Pinned at the top of the column, under the controls bar. It covers the top
+   of the notes as they scroll beneath it, so it has a background. */
+.marg-head {
+  position: fixed;
+  top: calc(var(--bar-bottom) + 0.5rem);
+  /* Over the column: the table's right edge (layout.ts § `Fit.margLeft`), plus
+     the note's own left padding so the head and the notes share an edge. */
+  left: calc(var(--safe-left) + var(--marg-left) + 1.25rem);
+  width: calc(var(--marg-w) - 1.75rem);
+  z-index: 30;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+  user-select: none;
+  -webkit-user-select: none;
+  display: grid;
+  gap: 0.3rem;
+}
+.marg-head p {
+  margin: 0;
+}
+.marg-path {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+.marg-arc {
+  color: var(--ink);
+}
+
+/* No room for the column: one line at the foot of the window, just above the
+   dock, saying why there are no notes. Not at the top, where it would sit over
+   the article's opening lines (GPT Sol, F9 on the plan). */
+.marg-narrow {
+  position: fixed;
+  left: 50%;
+  translate: -50% 0;
+  bottom: calc(var(--dock-space) + 0.5rem);
+  z-index: 30;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  padding: 0.4rem 0.75rem;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.marg-narrow p {
+  margin: 0;
+}

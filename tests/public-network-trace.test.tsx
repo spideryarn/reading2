@@ -855,6 +855,10 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   /* The way out: the article and nothing else — no band, and nothing to check
      beyond its absence. */
   plain: { where: null, says: null },
+  /* Annotations: no band, so `where` is null (the check above is that no
+     `.mode-band` opened) — and the page must still carry the idea the
+     visitor's payload holds, which only the column's stamp draws. */
+  annotations: { where: null, says: PUBLIC_IDEA },
   /* Structure, free for a visitor on the terms Outline was (slice 1b): the same
      tree, in columns — or, on a narrow band, in the nested list that was Outline
      mode until 2026-09-10. jsdom lays nothing out, so this file always gets the

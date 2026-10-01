@@ -259,6 +259,10 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  annotations: {
+    kind: "none",
+    reason: "reads the tree, the arc and any ideas already made; it never starts a job",
+  },
   /* Opens on the outline, which is free. Its plain-words pills arm for
      themselves one level down, as Remember's Quiz chip does — so pressing
      Summary on an address that still says `?summary=simple` spends nothing. */

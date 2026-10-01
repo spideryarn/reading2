@@ -1443,6 +1443,13 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "StructureBand", as: "owner" },
     { label: "StructureBand", as: "visitor" },
   ],
+  /* No band: what `modeBand()` returns for it is the column's head (and the
+     owner's read of the ideas), so that is what throws here. The notes in the
+     table's cells have a boundary of their own — § Annotations' notes, below. */
+  annotations: [
+    { label: "AnnotationsHead", as: "owner" },
+    { label: "AnnotationsHead", as: "visitor" },
+  ],
 };
 
 /** The modes allowed to have no boundary, by name. Growing this is a decision. */
@@ -1492,6 +1499,33 @@ function containedInside(mode: AnyMode): void {
   expect(host.querySelector(SPINE), "the spine went with it").not.toBeNull();
   expect(host.querySelector(".dock-modes"), "the dock went with it").not.toBeNull();
 }
+
+/**
+ * **Annotations' notes are drawn in the table's own cells**, outside the
+ * mode's boundary, so each block's notes carry a boundary of their own
+ * (AnnotationsColumn.tsx § MarginNotesSlot). A throw in one must cost the
+ * reader that note and nothing else: the prose, the spine and the dock stay,
+ * the head is not replaced by a fallback, and it is reported once.
+ */
+describe("Annotations' notes", () => {
+  it("a throw in a block's notes loses the notes and keeps the article", async () => {
+    who.set(OWNER_A);
+    experimentalSince = "2026-09-01T09:00:00.000Z";
+    probe.throwAt = "MarginNotes";
+    await open("?mode=annotations");
+
+    expect(probe.labelThrows, "the throwing mock never ran").toBeGreaterThan(0);
+    expect(host.querySelector("[data-marg-note]"), "a note survived its own throw").toBeNull();
+    expect(text(), "the root fallback fired").not.toContain("[render]");
+    expect(text(), "the mode fallback fired for a note").not.toContain("[mode-render]");
+    expect(text(), "the exception text reached the reader").not.toContain(BOOM);
+    expect(text(), "the prose went with it").toContain(PARAGRAPH);
+    expect(host.querySelector(SPINE), "the spine went with it").not.toBeNull();
+    expect(host.querySelector(".dock-modes"), "the dock went with it").not.toBeNull();
+    expect(probe.reports.length, "reported").toBeGreaterThan(0);
+    expect(probe.reports.every((r) => r.context?.feature === "Annotations")).toBe(true);
+  });
+});
 
 describe("every mode has decided whether its band may break on its own", () => {
   it("gives every mode in MODES a decision, and every contained one a witness", () => {

@@ -87,6 +87,10 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   faq: BAND,
   trajectory: BAND,
   tweets: BAND,
+  /* No band, but a column of its own on the right, and that column is inside
+     the same boundary at its own call site in Reader.tsx — so a throw in it
+     leaves the article readable, as a band's would. */
+  annotations: BAND,
 };
 
 /**

@@ -160,6 +160,10 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
     /* Tweets neither: each post's passages are jumps (`BlockRef`), not a
        selection. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
     case "tweets":
+    /* Annotations neither: its notes sit beside their blocks in a column of
+       their own, and mark nothing inside the prose — the dashed underlines for
+       ideas are deferred (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md). */
+    case "annotations":
       return NOTHING;
     default: {
       /* The compiler being made to say that every mode has been given an

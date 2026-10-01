@@ -537,6 +537,7 @@ describe("the backdrop", () => {
  * one level down.
  */
 const GENERATES: Record<Mode, boolean> = {
+  annotations: false,
   plain: false,
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */

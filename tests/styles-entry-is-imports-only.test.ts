@@ -183,6 +183,10 @@ const MANIFEST = [
      element — trajectory.css's header. */
   "trajectory.css",
   "quiz.css",
+  /* Annotations' column. Shares no selector with its neighbours, so its place
+     is only "after the reader's own sheets": `.reader`'s padding-right here
+     must win over shell.css's. */
+  "marginalia.css",
   "feedback.css",
   "site.css",
   /* Indifferent to its position, unlike the sheet below it: two rules, both

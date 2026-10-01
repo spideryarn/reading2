@@ -25,7 +25,14 @@ import {
   useState,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
+import type { Article, BlockId, CitedWork, GlossaryEntry, Ideas } from "../../types.js";
+import { annotationNotes, arcAt, headPath } from "../annotations/notes.js";
+import {
+  AnnotationsHead,
+  MarginNotesSlot,
+  OwnerIdeasFeed,
+  useMarginLayout,
+} from "../annotations/AnnotationsColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
@@ -326,7 +333,15 @@ export function Reader({
    * controls applied. Both went with that mode:
    * docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md.)
    */
-  const bandOpen = mode !== "plain";
+  const bandOpen = mode !== "plain" && mode !== "annotations";
+  /**
+   * **Annotations draws a column to the RIGHT of the prose instead of a band**
+   * (layout.ts § `fitMargin`). No band opens, so everything that asks
+   * `bandOpen` — the band covering the prose on a phone, the herald, the
+   * reading-time "is the prose on screen" — sees Plain's page.
+   * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
+   */
+  const marginOpen = mode === "annotations";
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader follows a
@@ -400,10 +415,11 @@ export function Reader({
            measure — Greg, 2026-09-29: *"It could be quite a wide left-hand
            column if that will help to make it be readable."* */
         bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
+        margin: marginOpen,
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, bandOpen, showSpine, mode],
+    [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, mode],
   );
 
   /**
@@ -433,7 +449,11 @@ export function Reader({
   // measured before the move. `spine` is in it for a stronger reason than
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}`;
+  // `tableW` and `margReserve` since 2026-10-01: Annotations moves and narrows
+  // the prose with `modeW` still 0, so without them switching into it at a
+  // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
+  // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -1263,6 +1283,27 @@ export function Reader({
   }, [drawnQuiz, article.blocks, openQuizAt]);
 
   /**
+   * **Annotations: the notes beside each block** — AnnotationsColumn.tsx.
+   *
+   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` in the
+   * mode's "band", never made) or the visitor's payload. Drawn only while the
+   * window has room for the column (`fit.margW`); on a narrow one the head
+   * says why there is nothing. Memoised on the notes alone, so scrolling does
+   * not re-render `TableView`.
+   */
+  const [ownerIdeas, setOwnerIdeas] = useState<Ideas["ideas"] | null>(null);
+  const annotationIdeas = owner ? ownerIdeas : (artefacts?.ideas?.ideas ?? null);
+  const marginRoom = marginOpen && fit.margW > 0;
+  const marginNotes = useMemo(() => {
+    if (!marginRoom) return null;
+    const byBlock = annotationNotes(article.tree, article.blocks, annotationIdeas);
+    const out = new Map<BlockId, ReactElement>();
+    for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
+    return out;
+  }, [marginRoom, article.tree, article.blocks, annotationIdeas]);
+  useMarginLayout(marginRoom, marginNotes);
+
+  /**
    * Reading order, not ask order — the panel's arrows walk you *down the
    * article*, not back through your own afternoon. See comment-nav.ts, and note
    * that the order comes from the block index and never from the id string
@@ -1831,6 +1872,22 @@ export function Reader({
          is the way out to the article; it has nothing to put in the middle. */
       case "plain":
         return null;
+      /* **No band either**: Annotations draws a column to the RIGHT of the
+         prose instead — its notes inside the table's cells (`marginNotes`),
+         and here only what is not anchored to a block: the head pinned at
+         the top of the column, and the read of the owner's ideas. Here so
+         both are inside the mode's error boundary. */
+      case "annotations":
+        return (
+          <>
+            {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
+            <AnnotationsHead
+              room={fit.margW > 0}
+              path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
+              arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
+            />
+          </>
+        );
       case "chat":
         /* **The key is inert today, and it is kept for the day it is not.**
            It was written when one `ConversationBand` was mounted by two modes
@@ -2326,6 +2383,11 @@ export function Reader({
              reading column when it is centred over it (styles.css § plain,
              centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
           "--table-w": `${fit.tableW}px`,
+          /* Annotations' column, and the room `.reader` keeps for it on its
+             right — layout.ts § `fitMargin`. Both 0 in every other mode. */
+          "--marg-w": `${fit.margW}px`,
+          "--marg-reserve": `${fit.margReserve}px`,
+          "--marg-left": `${fit.margLeft}px`,
         } as CSSProperties
       }
     >
@@ -2494,6 +2556,7 @@ export function Reader({
         onHelp={owner ? helpAboutBlock : undefined}
         afterBlock={afterBlock}
         quizAfter={quizAfter}
+        margin={marginNotes}
         /* The owner's, and only once the opening read has landed without error
            — `bookmarkBlock` says why. */
         onBookmark={

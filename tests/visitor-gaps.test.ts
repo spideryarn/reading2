@@ -329,6 +329,9 @@ describe("what a visitor is told, mode by mode", () => {
       "summary",
       "diagram",
       "search",
+      /* The tree's questions, the arc and the payload's ideas, beside the
+         text: nothing a visitor can be short of (visitor.ts § POLICY). */
+      "annotations",
     ];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
@@ -383,6 +386,8 @@ describe("what a visitor is told, mode by mode", () => {
            and there is no gap to report.
            docs/plans/260910g-structure-mode-subsumes-outline.md. */
         mode === "structure" ||
+        /* Free on Structure's terms: what it draws is in the payload. */
+        mode === "annotations" ||
         mode === "glossary" ||
         mode === "summary" ||
         mode === "ideas" ||

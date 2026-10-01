@@ -32,7 +32,7 @@ const RUNS = [
      its own (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)
      — another shape of the whole piece, beside Summary. Greg did not place it
      by hand. */
-  ["structure", "summary", "tweets", "diagram"],
+  ["structure", "summary", "annotations", "tweets", "diagram"],
   ["trajectory", "quotes", "faq", "glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],
   ["search", "chat", "remember"],
