@@ -10,7 +10,25 @@
  *
  * docs/plans/261001b-admin-sign-up-email-carries-the-address.md.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const adminNotices = vi.hoisted(() => ({
+  calls: [] as { message: { readonly subject: string; readonly text: string }; label: string }[],
+}));
+
+/* Preserve the real sender and watch it go past. Merely asserting its skipped
+   result would also pass if notifyUpgrade fabricated that same value without
+   ever reaching notifyAdmin. */
+vi.mock("../src/email.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/email.js")>();
+  return {
+    ...actual,
+    notifyAdmin: async (...args: Parameters<typeof actual.notifyAdmin>) => {
+      adminNotices.calls.push({ message: args[0], label: args[1] });
+      return await actual.notifyAdmin(...args);
+    },
+  };
+});
 
 import { notifyUpgrade, upgradeMessage } from "../src/billing/sync.js";
 import type { PlanUpgrade } from "../src/billing/tiers.js";
@@ -47,21 +65,59 @@ describe("accountEmail", () => {
     expect(seen[0]?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("accepts the user envelope the official Supabase client also accepts", async () => {
+    expect(
+      await accountEmail(OWNER, {
+        fetch: reply({ user: { id: OWNER, email: "reader@example.invalid" } }),
+        endpoint: ENDPOINT,
+      }),
+    ).toEqual({ kind: "found", email: "reader@example.invalid" });
+  });
+
+  it("aborts a stalled request after five seconds and returns unavailable", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      expect(ms).toBe(5_000);
+      return controller.signal;
+    });
+    const stalled = (async (_url: string, init: RequestInit) => {
+      expect(init.signal).toBe(controller.signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const lookup = accountEmail(OWNER, { fetch: stalled, endpoint: ENDPOINT });
+      controller.abort(new DOMException("timed out", "TimeoutError"));
+      await expect(lookup).resolves.toEqual({ kind: "unavailable", reason: "TimeoutError" });
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   it.each<[string, typeof fetch]>([
     ["a refusal", reply({ msg: "User not found" }, 404)],
     ["a body that is not JSON", reply("<html>proxy</html>")],
     ["an answer about somebody else", reply({ id: "someone-else", email: "other@example.invalid" })],
-    ["an account with no address", reply({ id: OWNER, email: "" })],
     [
-      "a timeout",
-      (async () => {
-        throw new DOMException("timed out", "TimeoutError");
-      }) as typeof fetch,
+      "an enveloped answer about somebody else",
+      reply({ user: { id: "someone-else", email: "other@example.invalid" } }),
     ],
+    ["an account with no address", reply({ id: OWNER, email: "" })],
   ])("%s is unavailable, not a throw, and names no address", async (_, fetch) => {
     const got = await accountEmail(OWNER, { fetch, endpoint: ENDPOINT });
     expect(got.kind).toBe("unavailable");
     expect(JSON.stringify(got)).not.toContain("@");
+  });
+
+  it("does not carry a refused response body into its reason", async () => {
+    expect(
+      await accountEmail(OWNER, {
+        fetch: reply({ message: "sensitive provider response", email: "other@example.invalid" }, 503),
+        endpoint: ENDPOINT,
+      }),
+    ).toEqual({ kind: "unavailable", reason: "the Auth service answered 503" });
   });
 
   it("missing configuration is unavailable, not a throw", async () => {
@@ -107,6 +163,7 @@ describe("the upgrade notice", () => {
   });
 
   it("is sent when the lookup fails", async () => {
+    adminNotices.calls.length = 0;
     const asked: string[] = [];
     const lookup = async (id: string): Promise<AccountEmail> => {
       asked.push(id);
@@ -115,6 +172,9 @@ describe("the upgrade notice", () => {
     /* Under vitest `sendEmail` skips rather than sends, and says so: reaching it is the claim. */
     expect(await notifyUpgrade(OWNER, UPGRADE, lookup)).toEqual({ kind: "skipped", reason: "not production" });
     expect(asked).toEqual([OWNER]);
+    expect(adminNotices.calls).toHaveLength(1);
+    expect(adminNotices.calls[0]?.label).toBe("plan upgrade");
+    expect(adminNotices.calls[0]?.message.text).toContain("Email: (could not be looked up: TimeoutError)");
   });
 });
 

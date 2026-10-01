@@ -458,7 +458,18 @@ export async function accountEmail(ownerId: string, deps: AccountEmailDeps = {})
       await res.text().catch(() => "");
       return { kind: "unavailable", reason: `the Auth service answered ${res.status}` };
     }
-    const body = (await res.json().catch(() => null)) as { id?: unknown; email?: unknown } | null;
+    const wire: unknown = await res.json().catch(() => null);
+    /* GoTrue has returned the user both directly and under `{ user: … }`; the
+       official Supabase client's `_userResponse` deliberately accepts both.
+       Read either shape here too, while applying the same id check below. */
+    const candidate =
+      wire !== null && typeof wire === "object" && "user" in wire
+        ? ((wire as { user?: unknown }).user ?? wire)
+        : wire;
+    const body =
+      candidate !== null && typeof candidate === "object"
+        ? (candidate as { id?: unknown; email?: unknown })
+        : null;
     /* Checked, not assumed: an answer about another account would put the
        wrong person's address in front of the admin. */
     if (body?.id !== ownerId) return { kind: "unavailable", reason: "the answer was not about this account" };

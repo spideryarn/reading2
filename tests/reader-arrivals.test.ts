@@ -12,7 +12,24 @@
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const routedArrivals = vi.hoisted(() => ({ calls: [] as [string, string][] }));
+
+/* Watch the real seam rather than replacing it: the database still decides
+   whether this is the first request, while this records exactly what routes.ts
+   handed across. Without this, a direct call to noteArrival can stay green if
+   the composition root drops or substitutes the token's address. */
+vi.mock("../src/arrivals.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/arrivals.js")>();
+  return {
+    ...actual,
+    noteArrival: async (...args: Parameters<typeof actual.noteArrival>) => {
+      routedArrivals.calls.push([args[0], args[1]]);
+      return await actual.noteArrival(...args);
+    },
+  };
+});
 
 import { arrivalMessage, forgetKnownArrivals, noteArrival } from "../src/arrivals.js";
 import type { Verifier } from "../src/auth.js";
@@ -64,6 +81,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  routedArrivals.calls.length = 0;
   forgetKnownArrivals();
   await pool?.query("delete from spideryarn.reader_arrivals where owner_id = any($1)", [
     [NEWCOMER, OLD_HAND],
@@ -90,6 +108,14 @@ describe.skipIf(!pool)("noteArrival", () => {
     forgetKnownArrivals();
     await noteArrival(NEWCOMER, NEWCOMER_EMAIL, { announce });
     expect(announced).toEqual([NEWCOMER]);
+  });
+
+  it("hands the announcer the address it was given", async () => {
+    const heard: [string, string][] = [];
+    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, {
+      announce: async (id, email) => heard.push([id, email]),
+    });
+    expect(heard).toEqual([[NEWCOMER, NEWCOMER_EMAIL]]);
   });
 
   it("two instances racing announce once", async () => {
@@ -208,17 +234,11 @@ describe.skipIf(!pool)("the route handler notes an arrival", () => {
   it("on an authenticated request that a route answered, and not on a refused one", async () => {
     expect(await get("/api/library", refused)).toBe(401);
     expect(await arrived()).toBe(false);
+    expect(routedArrivals.calls).toEqual([]);
 
     expect(await get("/api/library", signedIn)).toBe(200);
     expect(await arrived()).toBe(true);
-  });
-
-  it("hands the announcer the verified token's address", async () => {
-    const heard: [string, string][] = [];
-    await noteArrival(NEWCOMER, NEWCOMER_EMAIL, {
-      announce: async (id, email) => heard.push([id, email]),
-    });
-    expect(heard).toEqual([[NEWCOMER, NEWCOMER_EMAIL]]);
+    expect(routedArrivals.calls).toEqual([[NEWCOMER, NEWCOMER_EMAIL]]);
   });
 
   it("ends the response before a slow arrival insert, then keeps the invocation alive", async () => {
