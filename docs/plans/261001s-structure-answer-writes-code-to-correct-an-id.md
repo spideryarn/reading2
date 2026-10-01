@@ -144,8 +144,7 @@ and 10 each on `entropy-24-00930`, `scaling-hypothesis` and `source-spya-f550ta`
 (the last two draws were still running when this was written). Both failures were `.replace` on a
 range **end** — `"spya-zj9hxx".replace("spya-zj9hxx","spya-dnv2tp")` and, again,
 `"spya-p6hwth".replace("spya-p6hwth","spya-vp5h33")` — so seven of the eight events seen so far are
-ends. Pooled with the 261001p runs, `toc/10` stands at 4 in 40 on `analog-cognition`
-(stress arm) and 1 in 40 elsewhere.
+ends.
 
 ### Stage 1 — structured outputs as a shared seam, plus Structure's starts-only converter (no prompt change)
 
