@@ -157,6 +157,22 @@ export async function sendEmail(email: Email, label: string, deps: EmailDeps = {
   }
 }
 
+/**
+ * **Somebody else's text, made safe to put on one line of a plain-text mail.**
+ *
+ * There is no markup for it to become — the mail is `text` only — but a line
+ * break inside it could still draw a line of its own underneath, a fake link
+ * included. So every control character (Unicode category `Cc`, which has CR
+ * and LF in it) and the Unicode line and paragraph separators are replaced by
+ * a space, and the result is capped at `max` code points, the ellipsis
+ * included. 254 is a display bound sized for an address, not a protocol
+ * limit. Keep it out of the subject either way.
+ */
+export function oneLine(text: string, max = 254): string {
+  const flat = [...text.replace(/[\p{Cc}\u2028\u2029]/gu, " ").trim()];
+  return flat.length > max ? `${flat.slice(0, max - 1).join("")}…` : flat.join("");
+}
+
 /** Where admin notifications go. */
 export function adminAddress(env: EmailEnv = realEnv()): string {
   return env.SPIDERYARN_ADMIN_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL;

@@ -9814,7 +9814,7 @@ export async function serveAuthenticatedApi(
          response. Here, in the half only a `VerifiedUser` reaches; a request
          whose route threw does not arrive, and its next one does.
          src/arrivals.ts, src/after-response.ts, docs/plans/260930i. */
-      await afterResponse("recording an account arrival", () => noteArrival(user.id));
+      await afterResponse("recording an account arrival", () => noteArrival(user.id, user.email));
       return;
     }
 
