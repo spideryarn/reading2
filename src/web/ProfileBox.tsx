@@ -29,12 +29,40 @@
  *
  * **Dictated text goes in at the caret, not at the end.** A reader who clicks
  * into the middle of a sentence and starts talking means it there.
+ *
+ * **It saves itself after a pause, says so, and questions a reader leaving
+ * with words unsaved.** Greg, 2026-09-30 (spya-czbj9r):
+ *
+ * > make it clearer when it has saved (e.g. show some loading spinner and then
+ * > green-checkmark or similar. And if I try and close the page before it has
+ * > saved, either warn the user, or auto-save. Maybe auto-save any time it has
+ * > been idle for a few seconds? Perhaps this could be a reusable
+ * > text-input-box auto-save component …
+ *
+ * This box is that component: both of its pages hand it a `SaveState` (from
+ * [`useAutosavedText`](./useAutosavedText.ts), which does the saving) and get
+ * the timer, the warning and the status line without writing any of them.
+ * docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
  */
-import { useRef } from "react";
+import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import type { SaveState } from "./useAutosavedText.js";
 import { useDictationField } from "./useDictationField.js";
+
+/**
+ * How long the box must sit still before it saves. Long enough to be a pause
+ * rather than a gap between words; short enough that closing the tab a moment
+ * after the last word usually finds it already saved.
+ */
+export const AUTOSAVE_IDLE_MS = 2_000;
+
+/** Text the server may not have: what the timer, the warning and the hidden tab act on. */
+function pending(s: SaveState): boolean {
+  return s.kind === "dirty" || s.kind === "saving" || s.kind === "error";
+}
 
 export function ProfileBox({
   id,
@@ -47,6 +75,7 @@ export function ProfileBox({
   max,
   disabled,
   rows = 4,
+  save,
 }: {
   id: string;
   label: string;
@@ -60,6 +89,8 @@ export function ProfileBox({
   max: number;
   disabled?: boolean;
   rows?: number;
+  /** Where the save stands. The page owns the save; the box owns saying so. */
+  save: SaveState;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -84,6 +115,48 @@ export function ProfileBox({
   const dictation = dictate.dictation;
 
   const over = value.length > max;
+
+  /* Read by listeners and timers that outlive the render they were set up in. */
+  /* The microphone is on, or its words are still on their way. */
+  const busy = dictation.armed || dictation.transcribing;
+  const latest = useRef({ save, onCommit, busy });
+  latest.current = { save, onCommit, busy };
+
+  /* **Saved after a pause.** Keyed on the text, never on the state: a refused
+     save moves the state to `error`, and a timer re-armed by that would retry a
+     refused save every two seconds for as long as the page stayed open. A new
+     keystroke is what earns a new attempt.
+
+     Not while dictating, nor while the transcript is coming back — which can
+     take longer than the pause. The dictation commits for itself when its words
+     land, and a save before then is a save of the recogniser's rough guesses,
+     or of the box without the words at all. GPT Sol's plan review, item 3. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — every keystroke restarts the pause, which is the whole of an idle timer
+  useEffect(() => {
+    if (disabled || busy || !pending(latest.current.save)) return;
+    const t = window.setTimeout(() => {
+      if (!latest.current.busy) latest.current.onCommit();
+    }, AUTOSAVE_IDLE_MS);
+    return () => window.clearTimeout(t);
+  }, [value, disabled, busy]);
+
+  /* **Leaving with words unsaved is questioned.** Desktop only in practice:
+     iOS does not fire `beforeunload`, which is why the save behind this box
+     also saves on `visibilitychange` and fires a `keepalive` on `pagehide` —
+     useAutosavedText.ts. Attached only while something is pending, because a
+     page with a `beforeunload` listener is kept out of some browsers'
+     back-forward cache whether or not the listener ever objects. */
+  const unsaved = pending(save);
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Older Chromium and Safari want the legacy return value as well.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
 
   return (
     <div className="prof-box">
@@ -134,6 +207,54 @@ export function ProfileBox({
           {value.length} / {max}
         </span>
       </div>
+
+      <SaveStatus save={save} />
     </div>
   );
+}
+
+/**
+ * The line that says where the save is. Mounted for the life of the box and
+ * `aria-live`, so what is announced is the change.
+ */
+function SaveStatus({ save }: { save: SaveState }) {
+  return (
+    <p className={`prof-save is-${save.kind}`} aria-live="polite">
+      {saveWords(save)}
+    </p>
+  );
+}
+
+function saveWords(save: SaveState) {
+  switch (save.kind) {
+    case "loading":
+      return "Loading…";
+    case "clean":
+      return "Saves as you type.";
+    case "dirty":
+      return "Unsaved changes";
+    case "saving":
+      return (
+        <>
+          <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" /> Saving…
+        </>
+      );
+    case "saved":
+      return (
+        <>
+          <Check size={12} aria-hidden="true" />
+          Saved
+        </>
+      );
+    case "error":
+      return (
+        <>
+          <TriangleAlert size={12} aria-hidden="true" /> Not saved — {save.message}
+        </>
+      );
+    default: {
+      const never: never = save;
+      return never;
+    }
+  }
 }

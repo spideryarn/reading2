@@ -92,7 +92,21 @@ function echoedHeadings(html) {
 
 // And the apparatus must be unselectable, or it leaves in the reader's clipboard
 // inside a quotation with the author's name on it.
-const MUST_BE_UNSELECTABLE = ['.gutter', '.margin', '.seam-title', '.seam-gist', '.arc-turn', '.gate', '.idea-stamp', '.gloss-note'];
+const MUST_BE_UNSELECTABLE = ['.gutter', '.margin', '.seam-title', '.seam-gist', '.arc-turn', '.role-tag', '.gate', '.idea-stamp', '.gloss-note'];
+
+// `user-select: none` is not enough on its own: the copy handler clones the
+// selection, and `cloneContents()` ignores it. So the same list has to be in the
+// handler's strip list too, in the page as built rather than in page.js, or a stale
+// decorated.html passes. A seam's title and gist go with the whole `.seam`.
+// (`.role-tag` was missing here: a multi-paragraph copy carried 22 role labels.)
+const STRIPPED_BY_ANCESTOR = { '.seam-title': '.seam', '.seam-gist': '.seam' };
+
+function unstrippedApparatus(html) {
+  const m = html.match(/const APPARATUS = '([^']*)'/);
+  if (!m) return ['(no APPARATUS strip list found in the inlined page.js)'];
+  const stripped = new Set(m[1].split(',').map((s) => s.trim()));
+  return MUST_BE_UNSELECTABLE.filter((sel) => !stripped.has(sel) && !stripped.has(STRIPPED_BY_ANCESTOR[sel]));
+}
 
 function selectableApparatus(html) {
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
@@ -111,17 +125,24 @@ console.log(`apparatus selectors missing user-select:none: ${selectable.length} 
 for (const s of selectable) console.log('  ' + s);
 if (selectable.length) process.exitCode = 1;
 
+const unstripped = unstrippedApparatus(page);
+console.log(`apparatus selectors the copy handler does not strip: ${unstripped.length} (expected 0)`);
+for (const s of unstripped) console.log('  ' + s);
+if (unstripped.length) process.exitCode = 1;
+
 // Controls for both, because neither had ever been watched failing. Each
 // re-introduces the exact bug that was live an hour ago: the first reprinted every
 // author heading as ours, the second let the whole apparatus into the clipboard.
 const authorHeading = blocks.find((b) => b.kind === 'heading' && b.tag === 'h2').text;
 const echoControl = echoedHeadings(page.replace('<main id="stream">', `<main id="stream"><h2 class="seam-title">${authorHeading}</h2>`));
 const selectControl = selectableApparatus(page.replace(/user-select: none;/g, 'user-select: auto;'));
+const stripControl = unstrippedApparatus(page.replace(/(const APPARATUS = '[^']*)\.gate, /, '$1'));
 console.log(
   `\ncontrols — heading echo re-introduced: ${echoControl.length} found (expected at least 1); ` +
-    `user-select stripped: ${selectControl.length} of ${MUST_BE_UNSELECTABLE.length} now selectable`,
+    `user-select stripped: ${selectControl.length} of ${MUST_BE_UNSELECTABLE.length} now selectable; ` +
+    `.gate dropped from the copy strip list: ${stripControl.join(' ') || 'not noticed'}`,
 );
-if (echoControl.length === 0 || selectControl.length !== MUST_BE_UNSELECTABLE.length) {
+if (echoControl.length === 0 || selectControl.length !== MUST_BE_UNSELECTABLE.length || stripControl.join() !== '.gate') {
   console.log('  ONE OF THESE CHECKS IS BROKEN — its clean run above means nothing.');
   process.exitCode = 1;
 }

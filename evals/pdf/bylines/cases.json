@@ -1,0 +1,1992 @@
+[
+ {
+  "id": "attention-stream",
+  "source": "https://arxiv.org/pdf/1706.03762 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email",
+   "corresponding-mark",
+   "equal-contribution",
+   "symbols"
+  ],
+  "bylineText": "Ashish Vaswani ∗ \nGoogle Brain \navaswani@google.com \nNoam Shazeer ∗ \nGoogle Brain \nnoam@google.com \nNiki Parmar ∗ \nGoogle Research \nnikip@google.com \nJakob Uszkoreit ∗ \nGoogle Research \nusz@google.com \nLlion Jones ∗ \nGoogle Research \nllion@google.com \nAidan N. Gomez ∗ † \nUniversity of Toronto \naidan@cs.toronto.edu \nŁukasz Kaiser ∗ \nGoogle Brain \nlukaszkaiser@google.com \nIllia Polosukhin ∗ ‡ \nillia.polosukhin@gmail.com",
+  "pages": [
+   "Ashish Vaswani ∗ \nGoogle Brain \navaswani@google.com \nNoam Shazeer ∗ \nGoogle Brain \nnoam@google.com \nNiki Parmar ∗ \nGoogle Research \nnikip@google.com \nJakob Uszkoreit ∗ \nGoogle Research \nusz@google.com \nLlion Jones ∗ \nGoogle Research \nllion@google.com \nAidan N. Gomez ∗ † \nUniversity of Toronto \naidan@cs.toronto.edu \nŁukasz Kaiser ∗ \nGoogle Brain \nlukaszkaiser@google.com \nIllia Polosukhin ∗ ‡ \nillia.polosukhin@gmail.com \nAbstract \nThe dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train.\n† Work performed while at Google Brain. \n‡ Work performed while at Google Research.\n31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA."
+  ],
+  "answer": [
+   {
+    "name": "Ashish Vaswani",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Noam Shazeer",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Niki Parmar",
+    "affiliations": [
+     "Google Research"
+    ]
+   },
+   {
+    "name": "Jakob Uszkoreit",
+    "affiliations": [
+     "Google Research"
+    ]
+   },
+   {
+    "name": "Llion Jones",
+    "affiliations": [
+     "Google Research"
+    ]
+   },
+   {
+    "name": "Aidan N. Gomez",
+    "affiliations": [
+     "University of Toronto"
+    ]
+   },
+   {
+    "name": "Łukasz Kaiser",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Illia Polosukhin",
+    "affiliations": []
+   }
+  ],
+  "notes": "Illia Polosukhin prints no institution. Equal-contribution note is at the page foot."
+ },
+ {
+  "id": "attention-rows",
+  "source": "https://arxiv.org/pdf/1706.03762 (page 1 via pdfjs-dist, items sorted into rows by y then x: a model reading the grid left to right)",
+  "shape": [
+   "stacked",
+   "grid-interleaved",
+   "email",
+   "corresponding-mark",
+   "symbols"
+  ],
+  "bylineText": "Ashish Vaswani Noam Shazeer Niki Parmar Jakob Uszkoreit\nGoogle Brain Google Brain Google Research Google Research\navaswani@google.com noam@google.com nikip@google.com usz@google.com\n∗ ∗ † ∗\nLlion Jones Aidan N. Gomez Łukasz Kaiser\nGoogle Research University of Toronto Google Brain\nllion@google.com aidan@cs.toronto.edu lukaszkaiser@google.com\n∗ ‡\nIllia Polosukhin",
+  "pages": [
+   "Ashish Vaswani Noam Shazeer Niki Parmar Jakob Uszkoreit\nGoogle Brain Google Brain Google Research Google Research\navaswani@google.com noam@google.com nikip@google.com usz@google.com\n∗ ∗ † ∗\nLlion Jones Aidan N. Gomez Łukasz Kaiser\nGoogle Research University of Toronto Google Brain\nllion@google.com aidan@cs.toronto.edu lukaszkaiser@google.com\n∗ ‡\nIllia Polosukhin"
+  ],
+  "answer": [
+   {
+    "name": "Ashish Vaswani",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Noam Shazeer",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Niki Parmar",
+    "affiliations": [
+     "Google Research"
+    ]
+   },
+   {
+    "name": "Jakob Uszkoreit",
+    "affiliations": [
+     "Google Research"
+    ]
+   },
+   {
+    "name": "Llion Jones",
+    "affiliations": [
+     "Google Research"
+    ]
+   },
+   {
+    "name": "Aidan N. Gomez",
+    "affiliations": [
+     "University of Toronto"
+    ]
+   },
+   {
+    "name": "Łukasz Kaiser",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Illia Polosukhin",
+    "affiliations": []
+   }
+  ],
+  "adversarialDrops": [
+   {
+    "how": "drop Niki and Jakob, replace them with mailbox words",
+    "answer": [
+     {
+      "name": "Ashish Vaswani",
+      "affiliations": [
+       "Niki Parmar Jakob Uszkoreit Google Brain Google Brain Google Research Google Research"
+      ]
+     },
+     {
+      "name": "Noam Shazeer",
+      "affiliations": []
+     },
+     {
+      "name": "nikip",
+      "affiliations": []
+     },
+     {
+      "name": "usz",
+      "affiliations": []
+     },
+     {
+      "name": "Llion Jones",
+      "affiliations": [
+       "Google Research"
+      ]
+     },
+     {
+      "name": "Aidan N. Gomez",
+      "affiliations": [
+       "University of Toronto"
+      ]
+     },
+     {
+      "name": "Łukasz Kaiser",
+      "affiliations": [
+       "Google Brain"
+      ]
+     },
+     {
+      "name": "Illia Polosukhin",
+      "affiliations": []
+     }
+    ]
+   }
+  ],
+  "notes": "Row-major reading of a 4-column grid: names row, institution row, email row, with the marker row (∗ ∗ † ∗) between. Polosukhin has no institution or email row here."
+ },
+ {
+  "id": "ilyas-stream",
+  "source": "https://arxiv.org/pdf/1905.02175 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email",
+   "corresponding-mark"
+  ],
+  "bylineText": "Andrew Ilyas ∗ \nMIT \nailyas@mit.edu \nShibani Santurkar ∗ \nMIT \nshibani@mit.edu \nDimitris Tsipras ∗ \nMIT \ntsipras@mit.edu \nLogan Engstrom ∗ \nMIT \nengstrom@mit.edu \nBrandon Tran\nMIT \nbtran115@mit.edu \nAleksander M ˛ adry\nMIT \nmadry@mit.edu",
+  "pages": [
+   "Andrew Ilyas ∗ \nMIT \nailyas@mit.edu \nShibani Santurkar ∗ \nMIT \nshibani@mit.edu \nDimitris Tsipras ∗ \nMIT \ntsipras@mit.edu \nLogan Engstrom ∗ \nMIT \nengstrom@mit.edu \nBrandon Tran\nMIT \nbtran115@mit.edu \nAleksander M ˛ adry\nMIT \nmadry@mit.edu \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Andrew Ilyas",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Shibani Santurkar",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Dimitris Tsipras",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Logan Engstrom",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Brandon Tran",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Aleksander M ˛ adry",
+    "affiliations": [
+     "MIT"
+    ]
+   }
+  ],
+  "notes": "Text layer splits the Polish letter: \"M ˛ adry\"."
+ },
+ {
+  "id": "ilyas-rows",
+  "source": "https://arxiv.org/pdf/1905.02175 (page 1 via pdfjs-dist, items sorted into rows by y then x: a model reading the grid left to right)",
+  "shape": [
+   "stacked",
+   "grid-interleaved",
+   "email",
+   "corresponding-mark"
+  ],
+  "bylineText": "Andrew Ilyas Shibani Santurkar Dimitris Tsipras\nMIT MIT MIT\nailyas@mit.edu shibani@mit.edu tsipras@mit.edu\n∗\nLogan Engstrom Brandon Tran Aleksander M ˛ adry\nMIT MIT MIT\nengstrom@mit.edu btran115@mit.edu madry@mit.edu",
+  "pages": [
+   "Andrew Ilyas Shibani Santurkar Dimitris Tsipras\nMIT MIT MIT\nailyas@mit.edu shibani@mit.edu tsipras@mit.edu\n∗\nLogan Engstrom Brandon Tran Aleksander M ˛ adry\nMIT MIT MIT\nengstrom@mit.edu btran115@mit.edu madry@mit.edu\nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Andrew Ilyas",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Shibani Santurkar",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Dimitris Tsipras",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Logan Engstrom",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Brandon Tran",
+    "affiliations": [
+     "MIT"
+    ]
+   },
+   {
+    "name": "Aleksander M ˛ adry",
+    "affiliations": [
+     "MIT"
+    ]
+   }
+  ],
+  "notes": "Rows: 3 names / 3 MIT / 3 emails / 3 names / 3 MIT / 3 emails; the repeated word MIT is the whole institution."
+ },
+ {
+  "id": "rnd-rows",
+  "source": "https://arxiv.org/pdf/1810.12894 (page 1 via pdfjs-dist, items sorted into rows by y then x: a model reading the grid left to right)",
+  "shape": [
+   "stacked",
+   "grid-interleaved",
+   "corresponding-mark",
+   "no-email"
+  ],
+  "bylineText": "Yuri Burda Harrison Edwards Amos Storkey Oleg Klimov\nOpenAI OpenAI Univ. of Edinburgh OpenAI",
+  "pages": [
+   "Yuri Burda Harrison Edwards Amos Storkey Oleg Klimov\nOpenAI OpenAI Univ. of Edinburgh OpenAI\nA BSTRACT\nWe introduce an exploration bonus for deep reinforcement learning methods that\nis easy to implement and adds minimal overhead to the computation performed.\nThe bonus is the error of a neural network predicting features of the observations\ngiven by a fixed randomly initialized neural network. We also introduce a method\nto flexibly combine intrinsic and extrinsic rewards. We find that the random\nnetwork distillation (RND) bonus combined with this increased flexibility enables\nsignificant progress"
+  ],
+  "answer": [
+   {
+    "name": "Yuri Burda",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Harrison Edwards",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Amos Storkey",
+    "affiliations": [
+     "Univ. of Edinburgh"
+    ]
+   },
+   {
+    "name": "Oleg Klimov",
+    "affiliations": [
+     "OpenAI"
+    ]
+   }
+  ],
+  "notes": "Four columns: names row then institutions row; the ∗ marks are on a separate row above and so are absent from the byline run."
+ },
+ {
+  "id": "karras-stream",
+  "source": "https://arxiv.org/pdf/1710.10196 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email",
+   "braces-shared-email",
+   "interleaved"
+  ],
+  "bylineText": "Tero Karras \nNVIDIA \n{ tkarras,taila,slaine,jlehtinen } @nvidia.com \nTimo Aila \nNVIDIA \nSamuli Laine \nNVIDIA \nJaakko Lehtinen \nNVIDIA and Aalto University",
+  "pages": [
+   "Tero Karras \nNVIDIA \n{ tkarras,taila,slaine,jlehtinen } @nvidia.com \nTimo Aila \nNVIDIA \nSamuli Laine \nNVIDIA \nJaakko Lehtinen \nNVIDIA and Aalto University \nA BSTRACT"
+  ],
+  "answer": [
+   {
+    "name": "Tero Karras",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Timo Aila",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Samuli Laine",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Jaakko Lehtinen",
+    "affiliations": [
+     "NVIDIA and Aalto University"
+    ]
+   }
+  ],
+  "notes": "The shared braces email {tkarras,...}@nvidia.com sits between the first and second author."
+ },
+ {
+  "id": "karras-rows",
+  "source": "https://arxiv.org/pdf/1710.10196 (page 1 via pdfjs-dist, items sorted into rows by y then x: a model reading the grid left to right)",
+  "shape": [
+   "stacked",
+   "grid-interleaved",
+   "braces-shared-email"
+  ],
+  "bylineText": "Tero Karras Timo Aila Samuli Laine Jaakko Lehtinen\nNVIDIA NVIDIA NVIDIA NVIDIA and Aalto University\n{ tkarras,taila,slaine,jlehtinen } @nvidia.com",
+  "pages": [
+   "Tero Karras Timo Aila Samuli Laine Jaakko Lehtinen\nNVIDIA NVIDIA NVIDIA NVIDIA and Aalto University\n{ tkarras,taila,slaine,jlehtinen } @nvidia.com\nA BSTRACT"
+  ],
+  "answer": [
+   {
+    "name": "Tero Karras",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Timo Aila",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Samuli Laine",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Jaakko Lehtinen",
+    "affiliations": [
+     "NVIDIA and Aalto University"
+    ]
+   }
+  ],
+  "notes": "Names row, institutions row (\"NVIDIA NVIDIA NVIDIA NVIDIA and Aalto University\"), braces row."
+ },
+ {
+  "id": "lu-shared-geometry",
+  "source": "https://arxiv.org/pdf/1811.11684 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email"
+  ],
+  "bylineText": "Qihong Lu \nPrinceton University \nqlu@princeton.edu \nPo-Hsuan Chen \nGoogle Brain \ncameronchen@google.com \nJonathan W. Pillow \nPrinceton University \npillow@princeton.edu \nPeter J. Ramadge \nPrinceton University \nramadge@princeton.edu \nKenneth A. Norman \nPrinceton University \nknorman@princeton.edu \nUri Hasson \nPrinceton University \nhasson@princeton.edu",
+  "pages": [
+   "Qihong Lu \nPrinceton University \nqlu@princeton.edu \nPo-Hsuan Chen \nGoogle Brain \ncameronchen@google.com \nJonathan W. Pillow \nPrinceton University \npillow@princeton.edu \nPeter J. Ramadge \nPrinceton University \nramadge@princeton.edu \nKenneth A. Norman \nPrinceton University \nknorman@princeton.edu \nUri Hasson \nPrinceton University \nhasson@princeton.edu \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Qihong Lu",
+    "affiliations": [
+     "Princeton University"
+    ]
+   },
+   {
+    "name": "Po-Hsuan Chen",
+    "affiliations": [
+     "Google Brain"
+    ]
+   },
+   {
+    "name": "Jonathan W. Pillow",
+    "affiliations": [
+     "Princeton University"
+    ]
+   },
+   {
+    "name": "Peter J. Ramadge",
+    "affiliations": [
+     "Princeton University"
+    ]
+   },
+   {
+    "name": "Kenneth A. Norman",
+    "affiliations": [
+     "Princeton University"
+    ]
+   },
+   {
+    "name": "Uri Hasson",
+    "affiliations": [
+     "Princeton University"
+    ]
+   }
+  ],
+  "notes": "The Lu et al. byline quoted in docs/plans/260930e-pdf-transcription-glitches.md (the refused stacked byline)."
+ },
+ {
+  "id": "pytorch-21-authors",
+  "source": "https://arxiv.org/pdf/1912.01703 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email",
+   "many-authors"
+  ],
+  "bylineText": "Adam Paszke \nUniversity of Warsaw \nadam.paszke@gmail.com \nSam Gross \nFacebook AI Research \nsgross@fb.com \nFrancisco Massa \nFacebook AI Research \nfmassa@fb.com \nAdam Lerer \nFacebook AI Research \nalerer@fb.com \nJames Bradbury \nGoogle \njekbradbury@gmail.com \nGregory Chanan \nFacebook AI Research \ngchanan@fb.com \nTrevor Killeen \nSelf Employed \nkilleent@cs.washington.edu \nZeming Lin \nFacebook AI Research \nzlin@fb.com \nNatalia Gimelshein \nNVIDIA \nngimelshein@nvidia.com \nLuca Antiga \nOrobix \nluca.antiga@orobix.com \nAlban Desmaison \nOxford University \nalban@robots.ox.ac.uk \nAndreas Köpf \nXamla \nandreas.koepf@xamla.com \nEdward Yang \nFacebook AI Research \nezyang@fb.com \nZach DeVito \nFacebook AI Research \nzdevito@cs.stanford.edu \nMartin Raison \nNabla \nmartinraison@gmail.com \nAlykhan Tejani \nTwitter \natejani@twitter.com \nSasank Chilamkurthy \nQure.ai \nsasankchilamkurthy@gmail.com \nBenoit Steiner \nFacebook AI Research \nbenoitsteiner@fb.com \nLu Fang \nFacebook \nlufang@fb.com \nJunjie Bai \nFacebook \njbai@fb.com \nSoumith Chintala \nFacebook AI Research \nsoumith@gmail.com",
+  "pages": [
+   "Adam Paszke \nUniversity of Warsaw \nadam.paszke@gmail.com \nSam Gross \nFacebook AI Research \nsgross@fb.com \nFrancisco Massa \nFacebook AI Research \nfmassa@fb.com \nAdam Lerer \nFacebook AI Research \nalerer@fb.com \nJames Bradbury \nGoogle \njekbradbury@gmail.com \nGregory Chanan \nFacebook AI Research \ngchanan@fb.com \nTrevor Killeen \nSelf Employed \nkilleent@cs.washington.edu \nZeming Lin \nFacebook AI Research \nzlin@fb.com \nNatalia Gimelshein \nNVIDIA \nngimelshein@nvidia.com \nLuca Antiga \nOrobix \nluca.antiga@orobix.com \nAlban Desmaison \nOxford University \nalban@robots.ox.ac.uk \nAndreas Köpf \nXamla \nandreas.koepf@xamla.com \nEdward Yang \nFacebook AI Research \nezyang@fb.com \nZach DeVito \nFacebook AI Research \nzdevito@cs.stanford.edu \nMartin Raison \nNabla \nmartinraison@gmail.com \nAlykhan Tejani \nTwitter \natejani@twitter.com \nSasank Chilamkurthy \nQure.ai \nsasankchilamkurthy@gmail.com \nBenoit Steiner \nFacebook AI Research \nbenoitsteiner@fb.com \nLu Fang \nFacebook \nlufang@fb.com \nJunjie Bai \nFacebook \njbai@fb.com \nSoumith Chintala \nFacebook AI Research \nsoumith@gmail.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Adam Paszke",
+    "affiliations": [
+     "University of Warsaw"
+    ]
+   },
+   {
+    "name": "Sam Gross",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Francisco Massa",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Adam Lerer",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "James Bradbury",
+    "affiliations": [
+     "Google"
+    ]
+   },
+   {
+    "name": "Gregory Chanan",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Trevor Killeen",
+    "affiliations": [
+     "Self Employed"
+    ]
+   },
+   {
+    "name": "Zeming Lin",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Natalia Gimelshein",
+    "affiliations": [
+     "NVIDIA"
+    ]
+   },
+   {
+    "name": "Luca Antiga",
+    "affiliations": [
+     "Orobix"
+    ]
+   },
+   {
+    "name": "Alban Desmaison",
+    "affiliations": [
+     "Oxford University"
+    ]
+   },
+   {
+    "name": "Andreas Köpf",
+    "affiliations": [
+     "Xamla"
+    ]
+   },
+   {
+    "name": "Edward Yang",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Zach DeVito",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Martin Raison",
+    "affiliations": [
+     "Nabla"
+    ]
+   },
+   {
+    "name": "Alykhan Tejani",
+    "affiliations": [
+     "Twitter"
+    ]
+   },
+   {
+    "name": "Sasank Chilamkurthy",
+    "affiliations": [
+     "Qure.ai"
+    ]
+   },
+   {
+    "name": "Benoit Steiner",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   },
+   {
+    "name": "Lu Fang",
+    "affiliations": [
+     "Facebook"
+    ]
+   },
+   {
+    "name": "Junjie Bai",
+    "affiliations": [
+     "Facebook"
+    ]
+   },
+   {
+    "name": "Soumith Chintala",
+    "affiliations": [
+     "Facebook AI Research"
+    ]
+   }
+  ],
+  "notes": "21 authors (above the usual author limit)."
+ },
+ {
+  "id": "ddpm",
+  "source": "https://arxiv.org/pdf/2006.11239 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email"
+  ],
+  "bylineText": "Jonathan Ho \nUC Berkeley \njonathanho@berkeley.edu \nAjay Jain \nUC Berkeley \najayj@berkeley.edu \nPieter Abbeel \nUC Berkeley \npabbeel@cs.berkeley.edu",
+  "pages": [
+   "Jonathan Ho \nUC Berkeley \njonathanho@berkeley.edu \nAjay Jain \nUC Berkeley \najayj@berkeley.edu \nPieter Abbeel \nUC Berkeley \npabbeel@cs.berkeley.edu \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Jonathan Ho",
+    "affiliations": [
+     "UC Berkeley"
+    ]
+   },
+   {
+    "name": "Ajay Jain",
+    "affiliations": [
+     "UC Berkeley"
+    ]
+   },
+   {
+    "name": "Pieter Abbeel",
+    "affiliations": [
+     "UC Berkeley"
+    ]
+   }
+  ],
+  "notes": ""
+ },
+ {
+  "id": "mikolov-word2vec",
+  "source": "https://arxiv.org/pdf/1301.3781 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email",
+   "institution-with-address"
+  ],
+  "bylineText": "Tomas Mikolov \nGoogle Inc., Mountain View, CA \ntmikolov@google.com \nKai Chen \nGoogle Inc., Mountain View, CA \nkaichen@google.com \nGreg Corrado \nGoogle Inc., Mountain View, CA \ngcorrado@google.com \nJeffrey Dean \nGoogle Inc., Mountain View, CA \njeff@google.com",
+  "pages": [
+   "Tomas Mikolov \nGoogle Inc., Mountain View, CA \ntmikolov@google.com \nKai Chen \nGoogle Inc., Mountain View, CA \nkaichen@google.com \nGreg Corrado \nGoogle Inc., Mountain View, CA \ngcorrado@google.com \nJeffrey Dean \nGoogle Inc., Mountain View, CA \njeff@google.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Tomas Mikolov",
+    "affiliations": [
+     "Google Inc., Mountain View, CA"
+    ]
+   },
+   {
+    "name": "Kai Chen",
+    "affiliations": [
+     "Google Inc., Mountain View, CA"
+    ]
+   },
+   {
+    "name": "Greg Corrado",
+    "affiliations": [
+     "Google Inc., Mountain View, CA"
+    ]
+   },
+   {
+    "name": "Jeffrey Dean",
+    "affiliations": [
+     "Google Inc., Mountain View, CA"
+    ]
+   }
+  ],
+  "notes": ""
+ },
+ {
+  "id": "christiano-missing-institution",
+  "source": "https://arxiv.org/pdf/1706.03741 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "email",
+   "some-without-institution"
+  ],
+  "bylineText": "Paul F Christiano \nOpenAI \npaul@openai.com \nJan Leike \nDeepMind \nleike@google.com \nTom B Brown \nnottombrown@gmail.com \nMiljan Martic \nDeepMind \nmiljanm@google.com \nShane Legg \nDeepMind \nlegg@google.com \nDario Amodei \nOpenAI \ndamodei@openai.com",
+  "pages": [
+   "Paul F Christiano \nOpenAI \npaul@openai.com \nJan Leike \nDeepMind \nleike@google.com \nTom B Brown \nnottombrown@gmail.com \nMiljan Martic \nDeepMind \nmiljanm@google.com \nShane Legg \nDeepMind \nlegg@google.com \nDario Amodei \nOpenAI \ndamodei@openai.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Paul F Christiano",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Jan Leike",
+    "affiliations": [
+     "DeepMind"
+    ]
+   },
+   {
+    "name": "Tom B Brown",
+    "affiliations": []
+   },
+   {
+    "name": "Miljan Martic",
+    "affiliations": [
+     "DeepMind"
+    ]
+   },
+   {
+    "name": "Shane Legg",
+    "affiliations": [
+     "DeepMind"
+    ]
+   },
+   {
+    "name": "Dario Amodei",
+    "affiliations": [
+     "OpenAI"
+    ]
+   }
+  ],
+  "notes": "Tom B Brown prints only an email, no institution."
+ },
+ {
+  "id": "bert-braces",
+  "source": "https://arxiv.org/pdf/1810.04805 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "braces-shared-email",
+   "shared-institution"
+  ],
+  "bylineText": "Jacob Devlin Ming-Wei Chang Kenton Lee Kristina Toutanova \nGoogle AI Language \n{ jacobdevlin,mingweichang,kentonl,kristout } @google.com",
+  "pages": [
+   "Jacob Devlin Ming-Wei Chang Kenton Lee Kristina Toutanova \nGoogle AI Language \n{ jacobdevlin,mingweichang,kentonl,kristout } @google.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Jacob Devlin",
+    "affiliations": [
+     "Google AI Language"
+    ]
+   },
+   {
+    "name": "Ming-Wei Chang",
+    "affiliations": [
+     "Google AI Language"
+    ]
+   },
+   {
+    "name": "Kenton Lee",
+    "affiliations": [
+     "Google AI Language"
+    ]
+   },
+   {
+    "name": "Kristina Toutanova",
+    "affiliations": [
+     "Google AI Language"
+    ]
+   }
+  ],
+  "notes": "Four names on one line, one institution, braces emails."
+ },
+ {
+  "id": "resnet-braces",
+  "source": "https://arxiv.org/pdf/1512.03385 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "braces-shared-email",
+   "shared-institution"
+  ],
+  "bylineText": "Kaiming He Xiangyu Zhang Shaoqing Ren Jian Sun\nMicrosoft Research \n{ kahe, v-xiangz, v-shren, jiansun } @microsoft.com",
+  "pages": [
+   "Kaiming He Xiangyu Zhang Shaoqing Ren Jian Sun\nMicrosoft Research \n{ kahe, v-xiangz, v-shren, jiansun } @microsoft.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Kaiming He",
+    "affiliations": [
+     "Microsoft Research"
+    ]
+   },
+   {
+    "name": "Xiangyu Zhang",
+    "affiliations": [
+     "Microsoft Research"
+    ]
+   },
+   {
+    "name": "Shaoqing Ren",
+    "affiliations": [
+     "Microsoft Research"
+    ]
+   },
+   {
+    "name": "Jian Sun",
+    "affiliations": [
+     "Microsoft Research"
+    ]
+   }
+  ],
+  "notes": ""
+ },
+ {
+  "id": "dqn-braces",
+  "source": "https://arxiv.org/pdf/1312.5602 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "braces-shared-email",
+   "shared-institution",
+   "wrapped-line"
+  ],
+  "bylineText": "Volodymyr Mnih Koray Kavukcuoglu David Silver Alex Graves Ioannis Antonoglou\nDaan Wierstra Martin Riedmiller \nDeepMind Technologies \n{ vlad,koray,david,alex.graves,ioannis,daan,martin.riedmiller } @ deepmind.com",
+  "pages": [
+   "Volodymyr Mnih Koray Kavukcuoglu David Silver Alex Graves Ioannis Antonoglou\nDaan Wierstra Martin Riedmiller \nDeepMind Technologies \n{ vlad,koray,david,alex.graves,ioannis,daan,martin.riedmiller } @ deepmind.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Volodymyr Mnih",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   },
+   {
+    "name": "Koray Kavukcuoglu",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   },
+   {
+    "name": "David Silver",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   },
+   {
+    "name": "Alex Graves",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   },
+   {
+    "name": "Ioannis Antonoglou",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   },
+   {
+    "name": "Daan Wierstra",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   },
+   {
+    "name": "Martin Riedmiller",
+    "affiliations": [
+     "DeepMind Technologies"
+    ]
+   }
+  ],
+  "notes": ""
+ },
+ {
+  "id": "cot-braces",
+  "source": "https://arxiv.org/pdf/2201.11903 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "braces-shared-email",
+   "shared-institution"
+  ],
+  "bylineText": "Jason Wei Xuezhi Wang Dale Schuurmans Maarten Bosma\nBrian Ichter Fei Xia Ed H. Chi Quoc V. Le Denny Zhou \nGoogle Research, Brain Team \n{jasonwei,dennyzhou}@google.com",
+  "pages": [
+   "Jason Wei Xuezhi Wang Dale Schuurmans Maarten Bosma\nBrian Ichter Fei Xia Ed H. Chi Quoc V. Le Denny Zhou \nGoogle Research, Brain Team \n{jasonwei,dennyzhou}@google.com \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Jason Wei",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Xuezhi Wang",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Dale Schuurmans",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Maarten Bosma",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Brian Ichter",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Fei Xia",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Ed H. Chi",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Quoc V. Le",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Denny Zhou",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   }
+  ],
+  "notes": "Names wrap over two lines; the braces list is only two of the nine emails."
+ },
+ {
+  "id": "dpo-symbol-markers",
+  "source": "https://arxiv.org/pdf/2305.18290 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "symbols",
+   "corresponding-mark",
+   "equal-contribution",
+   "braces-shared-email"
+  ],
+  "bylineText": "Rafael Rafailov ∗† Archit Sharma ∗† Eric Mitchell ∗† \nStefano Ermon †‡ Christopher D. Manning † Chelsea Finn †\n† Stanford University ‡ CZ Biohub \n{rafailov,architsh,eric.mitchell}@cs.stanford.edu",
+  "pages": [
+   "Rafael Rafailov ∗† Archit Sharma ∗† Eric Mitchell ∗† \nStefano Ermon †‡ Christopher D. Manning † Chelsea Finn †\n† Stanford University ‡ CZ Biohub \n{rafailov,architsh,eric.mitchell}@cs.stanford.edu \nAbstract\n∗ Equal contribution; more junior authors listed earlier.\n37th Conference on Neural Information Processing Systems (NeurIPS 2023)."
+  ],
+  "answer": [
+   {
+    "name": "Rafael Rafailov",
+    "affiliations": [
+     "Stanford University"
+    ]
+   },
+   {
+    "name": "Archit Sharma",
+    "affiliations": [
+     "Stanford University"
+    ]
+   },
+   {
+    "name": "Eric Mitchell",
+    "affiliations": [
+     "Stanford University"
+    ]
+   },
+   {
+    "name": "Stefano Ermon",
+    "affiliations": [
+     "Stanford University",
+     "CZ Biohub"
+    ]
+   },
+   {
+    "name": "Christopher D. Manning",
+    "affiliations": [
+     "Stanford University"
+    ]
+   },
+   {
+    "name": "Chelsea Finn",
+    "affiliations": [
+     "Stanford University"
+    ]
+   }
+  ],
+  "notes": "Affiliations keyed by symbol († Stanford University, ‡ CZ Biohub); ∗† on the first three, †‡ on Ermon. The equal-contribution note is at the page foot."
+ },
+ {
+  "id": "vit-equal-contribution",
+  "source": "https://arxiv.org/pdf/2010.11929 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "symbols",
+   "equal-contribution",
+   "braces-shared-email",
+   "shared-institution"
+  ],
+  "bylineText": "Alexey Dosovitskiy ∗ , † , Lucas Beyer ∗ , Alexander Kolesnikov ∗ , Dirk Weissenborn ∗ ,\nXiaohua Zhai ∗ , Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer,\nGeorg Heigold, Sylvain Gelly, Jakob Uszkoreit, Neil Houlsby ∗ , †\n∗ equal technical contribution, † equal advising\nGoogle Research, Brain Team \n{ adosovitskiy, neilhoulsby } @google.com",
+  "pages": [
+   "Alexey Dosovitskiy ∗ , † , Lucas Beyer ∗ , Alexander Kolesnikov ∗ , Dirk Weissenborn ∗ ,\nXiaohua Zhai ∗ , Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer,\nGeorg Heigold, Sylvain Gelly, Jakob Uszkoreit, Neil Houlsby ∗ , †\n∗ equal technical contribution, † equal advising\nGoogle Research, Brain Team \n{ adosovitskiy, neilhoulsby } @google.com \nA BSTRACT"
+  ],
+  "answer": [
+   {
+    "name": "Alexey Dosovitskiy",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Lucas Beyer",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Alexander Kolesnikov",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Dirk Weissenborn",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Xiaohua Zhai",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Thomas Unterthiner",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Mostafa Dehghani",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Matthias Minderer",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Georg Heigold",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Sylvain Gelly",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Jakob Uszkoreit",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   },
+   {
+    "name": "Neil Houlsby",
+    "affiliations": [
+     "Google Research, Brain Team"
+    ]
+   }
+  ],
+  "notes": "The line \"∗ equal technical contribution, † equal advising\" sits between the names and the institution. Names glued to \"∗ , †\" markers."
+ },
+ {
+  "id": "flashattention-letter-symbols",
+  "source": "https://arxiv.org/pdf/2205.14135 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "braces-shared-email",
+   "and-joined"
+  ],
+  "bylineText": "Tri Dao y , Daniel Y. Fu y , Stefano Ermon y , Atri Rudra z , and Christopher Ré y\ny Department of Computer Science, Stanford University \nz Department of Computer Science and Engineering, University at Buffalo, SUNY \n{trid,danfu}@cs.stanford.edu , ermon@stanford.edu , atri@buffalo.edu , \nchrismre@cs.stanford.edu",
+  "pages": [
+   "Tri Dao y , Daniel Y. Fu y , Stefano Ermon y , Atri Rudra z , and Christopher Ré y\ny Department of Computer Science, Stanford University \nz Department of Computer Science and Engineering, University at Buffalo, SUNY \n{trid,danfu}@cs.stanford.edu , ermon@stanford.edu , atri@buffalo.edu , \nchrismre@cs.stanford.edu \nJune 24, 2022"
+  ],
+  "answer": [
+   {
+    "name": "Tri Dao",
+    "affiliations": [
+     "Department of Computer Science, Stanford University"
+    ]
+   },
+   {
+    "name": "Daniel Y. Fu",
+    "affiliations": [
+     "Department of Computer Science, Stanford University"
+    ]
+   },
+   {
+    "name": "Stefano Ermon",
+    "affiliations": [
+     "Department of Computer Science, Stanford University"
+    ]
+   },
+   {
+    "name": "Atri Rudra",
+    "affiliations": [
+     "Department of Computer Science and Engineering, University at Buffalo, SUNY"
+    ]
+   },
+   {
+    "name": "Christopher Ré",
+    "affiliations": [
+     "Department of Computer Science, Stanford University"
+    ]
+   }
+  ],
+  "notes": "Markers y / z are the text layer reading dagger-like glyphs as letters; they are spaced from the names. The Stanford affiliation is printed with a glued y marker."
+ },
+ {
+  "id": "lora-asterisk",
+  "source": "https://arxiv.org/pdf/2106.09685 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "corresponding-mark",
+   "braces-shared-email",
+   "shared-institution",
+   "wrapped-line"
+  ],
+  "bylineText": "Edward Hu ∗ Yelong Shen ∗ Phillip Wallis Zeyuan Allen-Zhu\nYuanzhi Li Shean Wang Lu Wang Weizhu Chen \nMicrosoft Corporation \n{ edwardhu, yeshe, phwallis, zeyuana,\nyuanzhil, swang, luw, wzchen } @microsoft.com\nyuanzhil@andrew.cmu.edu",
+  "pages": [
+   "Edward Hu ∗ Yelong Shen ∗ Phillip Wallis Zeyuan Allen-Zhu\nYuanzhi Li Shean Wang Lu Wang Weizhu Chen \nMicrosoft Corporation \n{ edwardhu, yeshe, phwallis, zeyuana,\nyuanzhil, swang, luw, wzchen } @microsoft.com\nyuanzhil@andrew.cmu.edu \n(Version 2) \nA BSTRACT"
+  ],
+  "answer": [
+   {
+    "name": "Edward Hu",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Yelong Shen",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Phillip Wallis",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Zeyuan Allen-Zhu",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Yuanzhi Li",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Shean Wang",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Lu Wang",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   },
+   {
+    "name": "Weizhu Chen",
+    "affiliations": [
+     "Microsoft Corporation"
+    ]
+   }
+  ],
+  "notes": "A stray extra email for one author follows the braces."
+ },
+ {
+  "id": "vgg-ampersand",
+  "source": "https://arxiv.org/pdf/1409.1556 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "and-joined",
+   "corresponding-mark",
+   "braces-shared-email"
+  ],
+  "bylineText": "Karen Simonyan ∗ & Andrew Zisserman + \nVisual Geometry Group, Department of Engineering Science, University of Oxford \n{ karen,az } @robots.ox.ac.uk",
+  "pages": [
+   "Karen Simonyan ∗ & Andrew Zisserman + \nVisual Geometry Group, Department of Engineering Science, University of Oxford \n{ karen,az } @robots.ox.ac.uk \nA BSTRACT"
+  ],
+  "answer": [
+   {
+    "name": "Karen Simonyan",
+    "affiliations": [
+     "Visual Geometry Group, Department of Engineering Science, University of Oxford"
+    ]
+   },
+   {
+    "name": "Andrew Zisserman",
+    "affiliations": [
+     "Visual Geometry Group, Department of Engineering Science, University of Oxford"
+    ]
+   }
+  ],
+  "notes": "\"&\"-joined with ∗ and + marks glued after the names."
+ },
+ {
+  "id": "neural-ode",
+  "source": "https://arxiv.org/pdf/1806.07366 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "comma-list",
+   "corresponding-mark",
+   "braces-shared-email",
+   "shared-institution"
+  ],
+  "bylineText": "Ricky T. Q. Chen*, Yulia Rubanova*, Jesse Bettencourt*, David Duvenaud \nUniversity of Toronto, Vector Institute \n{rtqichen, rubanova, jessebett, duvenaud}@cs.toronto.edu",
+  "pages": [
+   "Ricky T. Q. Chen*, Yulia Rubanova*, Jesse Bettencourt*, David Duvenaud \nUniversity of Toronto, Vector Institute \n{rtqichen, rubanova, jessebett, duvenaud}@cs.toronto.edu \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Ricky T. Q. Chen",
+    "affiliations": [
+     "University of Toronto, Vector Institute"
+    ]
+   },
+   {
+    "name": "Yulia Rubanova",
+    "affiliations": [
+     "University of Toronto, Vector Institute"
+    ]
+   },
+   {
+    "name": "Jesse Bettencourt",
+    "affiliations": [
+     "University of Toronto, Vector Institute"
+    ]
+   },
+   {
+    "name": "David Duvenaud",
+    "affiliations": [
+     "University of Toronto, Vector Institute"
+    ]
+   }
+  ],
+  "notes": "Asterisks glued to the names (\"Chen*,\")."
+ },
+ {
+  "id": "instructgpt-20-authors",
+  "source": "https://arxiv.org/pdf/2203.02155 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "symbols",
+   "corresponding-mark",
+   "many-authors",
+   "shared-institution"
+  ],
+  "bylineText": "Long Ouyang ∗ Jeff Wu ∗ Xu Jiang ∗ Diogo Almeida ∗ Carroll L. Wainwright ∗ \nPamela Mishkin ∗ Chong Zhang Sandhini Agarwal Katarina Slama Alex Ray\nJohn Schulman Jacob Hilton Fraser Kelton Luke Miller Maddie Simens\nAmanda Askell † Peter Welinder Paul Christiano ∗† \nJan Leike ∗ Ryan Lowe ∗",
+  "pages": [
+   "Long Ouyang ∗ Jeff Wu ∗ Xu Jiang ∗ Diogo Almeida ∗ Carroll L. Wainwright ∗ \nPamela Mishkin ∗ Chong Zhang Sandhini Agarwal Katarina Slama Alex Ray\nJohn Schulman Jacob Hilton Fraser Kelton Luke Miller Maddie Simens\nAmanda Askell † Peter Welinder Paul Christiano ∗† \nJan Leike ∗ Ryan Lowe ∗ \nOpenAI \nAbstract\n∗ Primary authors. This was a joint project of the OpenAI Alignment team. RL and JL are the team leads.\nCorresponding author: lowe@openai.com . \n† Work done while at OpenAI. Current affiliations: AA: Anthropic; PC: Alignment Research Center."
+  ],
+  "answer": [
+   {
+    "name": "Long Ouyang",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Jeff Wu",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Xu Jiang",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Diogo Almeida",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Carroll L. Wainwright",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Pamela Mishkin",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Chong Zhang",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Sandhini Agarwal",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Katarina Slama",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Alex Ray",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "John Schulman",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Jacob Hilton",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Fraser Kelton",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Luke Miller",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Maddie Simens",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Amanda Askell",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Peter Welinder",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Paul Christiano",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Jan Leike",
+    "affiliations": [
+     "OpenAI"
+    ]
+   },
+   {
+    "name": "Ryan Lowe",
+    "affiliations": [
+     "OpenAI"
+    ]
+   }
+  ],
+  "notes": "The institution OpenAI is on the line after the names, so it is outside the byline run; 20 authors; wrapped over four lines with ∗ and † marks. Page foot holds \"∗ Primary authors\" and \"† Work done while at OpenAI\" notes."
+ },
+ {
+  "id": "frontiers-numeric-and",
+  "source": "evals/pdf/titles/frontiers-wrapped-title/source.pdf page 1 (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "numeric-markers",
+   "and-joined",
+   "corresponding-mark",
+   "affiliations-packed"
+  ],
+  "bylineText": "Mei-jun Ou 1 , Xiang-hua Xu 2 , Hong Chen 1 , Fu-rong Chen 3 and \nShuai Shen 4 *",
+  "pages": [
+   "Mei-jun Ou 1 , Xiang-hua Xu 2 , Hong Chen 1 , Fu-rong Chen 3 and \nShuai Shen 4 * \n1 Head and Neck Surgery Department, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya \nSchool of Medicine, Central South University, Changsha, China, 2 Health Service Center, Hunan Cancer \nHospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, \nChangsha, China, 3 School of Nursing, University of South China, Hengyang, China, 4 Department of \nGeneral Surgery, Changsha Hospital of Hunan Normal University/The Fourth Hospital of Changsha, \nChangsha, China \nThe Cancer-related"
+  ],
+  "answer": [
+   {
+    "name": "Mei-jun Ou",
+    "affiliations": [
+     "Head and Neck Surgery Department, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China"
+    ]
+   },
+   {
+    "name": "Xiang-hua Xu",
+    "affiliations": [
+     "Health Service Center, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China"
+    ]
+   },
+   {
+    "name": "Hong Chen",
+    "affiliations": [
+     "Head and Neck Surgery Department, Hunan Cancer Hospital/The Affiliated Cancer Hospital of Xiangya School of Medicine, Central South University, Changsha, China"
+    ]
+   },
+   {
+    "name": "Fu-rong Chen",
+    "affiliations": [
+     "School of Nursing, University of South China, Hengyang, China"
+    ]
+   },
+   {
+    "name": "Shuai Shen",
+    "affiliations": [
+     "Department of General Surgery, Changsha Hospital of Hunan Normal University/The Fourth Hospital of Changsha, Changsha, China"
+    ]
+   }
+  ],
+  "notes": "Local fixture; the four affiliations are packed in one run on the page. The byline is the first two lines only (the slice is cut after \"Shuai Shen 4 *\")."
+ },
+ {
+  "id": "arnn-letter-markers",
+  "source": "evals/pdf/titles/arxiv-arnn-eeg-stamp/source.pdf page 1 (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "corresponding-mark",
+   "Elsevier"
+  ],
+  "bylineText": "Salim Rukhsar a, ∗ , Anil K.Tiwari a",
+  "pages": [
+   "Salim Rukhsar a, ∗ , Anil K.Tiwari a \na Department of Electrical Engineering, IIT Jodhpur, 342037, India \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Salim Rukhsar",
+    "affiliations": [
+     "Department of Electrical Engineering, IIT Jodhpur, 342037, India"
+    ]
+   },
+   {
+    "name": "Anil K.Tiwari",
+    "affiliations": [
+     "Department of Electrical Engineering, IIT Jodhpur, 342037, India"
+    ]
+   }
+  ],
+  "notes": "Local fixture; the letter marker a is spaced here but is glued (\"Rukhsara,∗\") in the transcribed record."
+ },
+ {
+  "id": "copernicus-superscript",
+  "source": "evals/pdf/titles/copernicus-ball-lightning-title/source.pdf page 1 (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "superscript",
+   "numeric-markers",
+   "corresponding-mark"
+  ],
+  "bylineText": "Alexander G. Keul 1,",
+  "pages": [
+   "Alexander G. Keul 1, \u0015 \n1 Environmental Psychology, Salzburg University, Salzburg, Austria \n\u0015 retired \nCorrespondence:"
+  ],
+  "answer": [
+   {
+    "name": "Alexander G. Keul",
+    "affiliations": [
+     "Environmental Psychology, Salzburg University, Salzburg, Austria"
+    ]
+   }
+  ],
+  "notes": "The ☆ (retired) note is a separate line under the affiliation."
+ },
+ {
+  "id": "acl-affiliation-in-byline",
+  "source": "evals/pdf/titles/acl-conference-banner/source.pdf page 1 (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "shared-institution",
+   "no-markers",
+   "comma-list"
+  ],
+  "bylineText": "Agam Shah , Suvan Paturi , Sudheer Chava \nGeorgia Institute of Technology",
+  "pages": [
+   "Agam Shah , Suvan Paturi , Sudheer Chava \nGeorgia Institute of Technology \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Agam Shah",
+    "affiliations": [
+     "Georgia Institute of Technology"
+    ]
+   },
+   {
+    "name": "Suvan Paturi",
+    "affiliations": [
+     "Georgia Institute of Technology"
+    ]
+   },
+   {
+    "name": "Sudheer Chava",
+    "affiliations": [
+     "Georgia Institute of Technology"
+    ]
+   }
+  ],
+  "notes": "Institution fused into the byline record; no markers at all."
+ },
+ {
+  "id": "nakamura-jneurosci",
+  "source": "https://www.jneurosci.org/content/41/50/10382.full.pdf (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "numeric-markers",
+   "and-joined"
+  ],
+  "bylineText": "Kouichi C. Nakamura, 1 Andrew Sharott, 1 Takuma Tanaka, 2 and Peter J. Magill 1,3",
+  "pages": [
+   "Kouichi C. Nakamura, 1 Andrew Sharott, 1 Takuma Tanaka, 2 and Peter J. Magill 1,3\n1 Medical Research Council Brain Network Dynamics Unit, Nuffield Department of Clinical Neurosciences, University of Oxford, Oxford, OX1 3TH,\nUnited Kingdom, 2 Center for Data Science Education and Research, Shiga University, Hikone, Shiga 522-8522, Japan, and 3 Oxford Parkinson ’ s\nDisease Centre, University of Oxford, Oxford, OX1 3QX, United Kingdom \nThe cerebral cortex"
+  ],
+  "answer": [
+   {
+    "name": "Kouichi C. Nakamura",
+    "affiliations": [
+     "Medical Research Council Brain Network Dynamics Unit, Nuffield Department of Clinical Neurosciences, University of Oxford, Oxford, OX1 3TH, United Kingdom"
+    ]
+   },
+   {
+    "name": "Andrew Sharott",
+    "affiliations": [
+     "Medical Research Council Brain Network Dynamics Unit, Nuffield Department of Clinical Neurosciences, University of Oxford, Oxford, OX1 3TH, United Kingdom"
+    ]
+   },
+   {
+    "name": "Takuma Tanaka",
+    "affiliations": [
+     "Center for Data Science Education and Research, Shiga University, Hikone, Shiga 522-8522, Japan"
+    ]
+   },
+   {
+    "name": "Peter J. Magill",
+    "affiliations": [
+     "Medical Research Council Brain Network Dynamics Unit, Nuffield Department of Clinical Neurosciences, University of Oxford, Oxford, OX1 3TH, United Kingdom",
+     "Oxford Parkinson ’ s Disease Centre, University of Oxford, Oxford, OX1 3QX, United Kingdom"
+    ]
+   }
+  ],
+  "notes": "Markers are spaced after a comma (\"Nakamura, 1 Andrew\"); Magill has 1,3. The byline slice ends at the first affiliation block, so slice bylineText is trimmed below."
+ },
+ {
+  "id": "wen-jneurosci-star",
+  "source": "https://www.jneurosci.org/content/40/40/7724.full.pdf (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "numeric-markers",
+   "corresponding-mark",
+   "and-joined"
+  ],
+  "bylineText": "Tanya Wen, 1 John Duncan, 1,2 * and Daniel J Mitchell 1 *",
+  "pages": [
+   "Tanya Wen, 1 John Duncan, 1,2 * and Daniel J Mitchell 1 * \n1 Medical Research Council, Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom, and 2 Department\nof Experimental Psychology, University of Oxford, Radcliffe Observatory, Oxford OX2 6GG, United Kingdom \nTask episodes"
+  ],
+  "answer": [
+   {
+    "name": "Tanya Wen",
+    "affiliations": [
+     "Medical Research Council, Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom"
+    ]
+   },
+   {
+    "name": "John Duncan",
+    "affiliations": [
+     "Medical Research Council, Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom",
+     "Department of Experimental Psychology, University of Oxford, Radcliffe Observatory, Oxford OX2 6GG, United Kingdom"
+    ]
+   },
+   {
+    "name": "Daniel J Mitchell",
+    "affiliations": [
+     "Medical Research Council, Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom"
+    ]
+   }
+  ],
+  "notes": "Spaced \"1,2 *\" marker group on Duncan, and a trailing * corresponding mark on two names."
+ },
+ {
+  "id": "kim-jneurosci-multi-marker",
+  "source": "https://www.jneurosci.org/content/44/2/e0803232023.full.pdf (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "numeric-markers",
+   "and-joined"
+  ],
+  "bylineText": "Insub Kim, 1 Eline R. Kupers, 1 Garikoitz Lerma-Usabiaga, 2 , 3 and Kalanit Grill-Spector 1 , 4",
+  "pages": [
+   "Insub Kim, 1 Eline R. Kupers, 1 Garikoitz Lerma-Usabiaga, 2 , 3 and Kalanit Grill-Spector 1 , 4\n1 Department of Psychology, Stanford University, Stanford, CA, 94305, 2 BCBL. Basque Center on Cognition, Brain and Language, 20009 San Sebastian,\nSpain, 3 IKERBASQUE. Basque Foundation for Science, 48009 Bilbao, Spain, and 4 Wu Tsai Neurosciences Institute, Stanford University, Stanford, CA,\n94305 \nThe use of fMRI"
+  ],
+  "answer": [
+   {
+    "name": "Insub Kim",
+    "affiliations": [
+     "Department of Psychology, Stanford University, Stanford, CA, 94305"
+    ]
+   },
+   {
+    "name": "Eline R. Kupers",
+    "affiliations": [
+     "Department of Psychology, Stanford University, Stanford, CA, 94305"
+    ]
+   },
+   {
+    "name": "Garikoitz Lerma-Usabiaga",
+    "affiliations": [
+     "BCBL. Basque Center on Cognition, Brain and Language, 20009 San Sebastian, Spain",
+     "IKERBASQUE. Basque Foundation for Science, 48009 Bilbao, Spain"
+    ]
+   },
+   {
+    "name": "Kalanit Grill-Spector",
+    "affiliations": [
+     "Department of Psychology, Stanford University, Stanford, CA, 94305",
+     "Wu Tsai Neurosciences Institute, Stanford University, Stanford, CA, 94305"
+    ]
+   }
+  ],
+  "notes": "Two-part markers with spaces (\"Lerma-Usabiaga, 2 , 3 and\"); an affiliation line shares a row with the next."
+ },
+ {
+  "id": "ben-yakov-orcid",
+  "source": "https://www.jneurosci.org/content/38/47/10057.full.pdf (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "orcid-glyph",
+   "and-joined",
+   "shared-institution"
+  ],
+  "bylineText": "X Aya Ben-Yakov and X Richard N. Henson",
+  "pages": [
+   "X Aya Ben-Yakov and X Richard N. Henson \nMedical Research Council Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom \nThe function of the human hippocampus"
+  ],
+  "answer": [
+   {
+    "name": "Aya Ben-Yakov",
+    "affiliations": [
+     "Medical Research Council Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom"
+    ]
+   },
+   {
+    "name": "Richard N. Henson",
+    "affiliations": [
+     "Medical Research Council Cognition and Brain Sciences Unit, University of Cambridge, Cambridge CB2 7EF, United Kingdom"
+    ]
+   }
+  ],
+  "notes": "The J Neurosci ORCID glyph reads as a lone \"X\" before each name (spaced here; glued, \"XChristopher Baldassano\", in the transcribed records)."
+ },
+ {
+  "id": "williams-orcid-3",
+  "source": "https://www.jneurosci.org/content/39/17/3172.full.pdf (pdfjs-dist)",
+  "shape": [
+   "inline",
+   "orcid-glyph",
+   "and-joined",
+   "shared-institution"
+  ],
+  "bylineText": "X Angharad N. Williams, X Mark Postans, and Carl J. Hodgetts",
+  "pages": [
+   "X Angharad N. Williams, X Mark Postans, and Carl J. Hodgetts \nCardiff University Brain Research Imaging Centre (CUBRIC), School of Psychology, Cardiff University, Cardiff CF10 3AT, United Kingdom \nReview of Ben-Yakov"
+  ],
+  "answer": [
+   {
+    "name": "Angharad N. Williams",
+    "affiliations": [
+     "Cardiff University Brain Research Imaging Centre (CUBRIC), School of Psychology, Cardiff University, Cardiff CF10 3AT, United Kingdom"
+    ]
+   },
+   {
+    "name": "Mark Postans",
+    "affiliations": [
+     "Cardiff University Brain Research Imaging Centre (CUBRIC), School of Psychology, Cardiff University, Cardiff CF10 3AT, United Kingdom"
+    ]
+   },
+   {
+    "name": "Carl J. Hodgetts",
+    "affiliations": [
+     "Cardiff University Brain Research Imaging Centre (CUBRIC), School of Psychology, Cardiff University, Cardiff CF10 3AT, United Kingdom"
+    ]
+   }
+  ],
+  "notes": "Three ORCID glyphs, \"X\" before each name."
+ },
+ {
+  "id": "boulet-elsevier-letters",
+  "source": "https://arxiv.org/pdf/0801.0848 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "and-joined",
+   "affiliations-with-address"
+  ],
+  "bylineText": "Romain Boulet a , Bertrand Jouve a , Fabrice Rossi b , and\nNathalie Villa c",
+  "pages": [
+   "Romain Boulet a , Bertrand Jouve a , Fabrice Rossi b , and\nNathalie Villa c \na Institut de Math´ ematiques, Universit´ e de Toulouse et CNRS (UMR 5219), 5\nall´ ees Antonio Machado, 31058 Toulouse cedex 9, France \nb Projet AxIS, INRIA Rocquencourt, Domaine de Voluceau, Rocquencourt, B.P.\n105, 78153 Le Chesnay cedex - France \nc Institut de Math´ ematiques, Universit´ e de Toulouse et CNRS (UMR 5219), 118\nroute de Narbonne, 31062 Toulouse cedex 9, France \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Romain Boulet",
+    "affiliations": [
+     "Institut de Math´ ematiques, Universit´ e de Toulouse et CNRS (UMR 5219), 5 all´ ees Antonio Machado, 31058 Toulouse cedex 9, France"
+    ]
+   },
+   {
+    "name": "Bertrand Jouve",
+    "affiliations": [
+     "Institut de Math´ ematiques, Universit´ e de Toulouse et CNRS (UMR 5219), 5 all´ ees Antonio Machado, 31058 Toulouse cedex 9, France"
+    ]
+   },
+   {
+    "name": "Fabrice Rossi",
+    "affiliations": [
+     "Projet AxIS, INRIA Rocquencourt, Domaine de Voluceau, Rocquencourt, B.P. 105, 78153 Le Chesnay cedex - France"
+    ]
+   },
+   {
+    "name": "Nathalie Villa",
+    "affiliations": [
+     "Institut de Math´ ematiques, Universit´ e de Toulouse et CNRS (UMR 5219), 118 route de Narbonne, 31062 Toulouse cedex 9, France"
+    ]
+   }
+  ],
+  "notes": "Letters spaced (\"Boulet a ,\"); text layer drops accents into separate ´ glyphs."
+ },
+ {
+  "id": "michel-letters-multi",
+  "source": "https://arxiv.org/pdf/1104.5304 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "corresponding-mark",
+   "Elsevier"
+  ],
+  "bylineText": "Vincent Michel a , Alexandre Gramfort a , Ga¨ el Varoquaux a , Evelyn Eger b , Christine Keribin c,d , Bertrand\nThirion a, ∗",
+  "pages": [
+   "Vincent Michel a , Alexandre Gramfort a , Ga¨ el Varoquaux a , Evelyn Eger b , Christine Keribin c,d , Bertrand\nThirion a, ∗ \na Parietal team INRIA Saclay-Ile-de-France, France. \nb INSERM U562, Gif/Yvette, France - CEA/DSV/I2BM/Neurospin/LCOGN \nc Select team INRIA Saclay-Ile-de-France, France. \nd Universit´ e Paris Sud, Laboratoire de Math´ ematiques, UMR 8628, Orsay, France. \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Vincent Michel",
+    "affiliations": [
+     "Parietal team INRIA Saclay-Ile-de-France, France."
+    ]
+   },
+   {
+    "name": "Alexandre Gramfort",
+    "affiliations": [
+     "Parietal team INRIA Saclay-Ile-de-France, France."
+    ]
+   },
+   {
+    "name": "Ga¨ el Varoquaux",
+    "affiliations": [
+     "Parietal team INRIA Saclay-Ile-de-France, France."
+    ]
+   },
+   {
+    "name": "Evelyn Eger",
+    "affiliations": [
+     "INSERM U562, Gif/Yvette, France - CEA/DSV/I2BM/Neurospin/LCOGN"
+    ]
+   },
+   {
+    "name": "Christine Keribin",
+    "affiliations": [
+     "Select team INRIA Saclay-Ile-de-France, France.",
+     "Universit´ e Paris Sud, Laboratoire de Math´ ematiques, UMR 8628, Orsay, France."
+    ]
+   },
+   {
+    "name": "Bertrand Thirion",
+    "affiliations": [
+     "Parietal team INRIA Saclay-Ile-de-France, France."
+    ]
+   }
+  ],
+  "notes": "Keribin has c,d (two affiliations). Accents are separate ´ glyphs with a space."
+ },
+ {
+  "id": "yu-magri-letters",
+  "source": "https://arxiv.org/pdf/1903.00321 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "corresponding-mark",
+   "Elsevier"
+  ],
+  "bylineText": "Hans Yu a , Matthew P. Juniper a , Luca Magri a,b, ∗",
+  "pages": [
+   "Hans Yu a , Matthew P. Juniper a , Luca Magri a,b, ∗ \na Department of Engineering, University of Cambridge, Trumpington Street, Cambridge CB2 1PZ, UK \nb Institute for Advanced Study, Technical University of Munich, Lichtenbergstrasse 2a, 85748 Garching,\nGermany (visiting fellowship) \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Hans Yu",
+    "affiliations": [
+     "Department of Engineering, University of Cambridge, Trumpington Street, Cambridge CB2 1PZ, UK"
+    ]
+   },
+   {
+    "name": "Matthew P. Juniper",
+    "affiliations": [
+     "Department of Engineering, University of Cambridge, Trumpington Street, Cambridge CB2 1PZ, UK"
+    ]
+   },
+   {
+    "name": "Luca Magri",
+    "affiliations": [
+     "Department of Engineering, University of Cambridge, Trumpington Street, Cambridge CB2 1PZ, UK",
+     "Institute for Advanced Study, Technical University of Munich, Lichtenbergstrasse 2a, 85748 Garching, Germany"
+    ]
+   }
+  ],
+  "notes": "Magri has a,b,∗; the second affiliation carries a \"(visiting fellowship)\" note that is not copied."
+ },
+ {
+  "id": "bing-letters",
+  "source": "https://arxiv.org/pdf/2003.04603 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "corresponding-mark",
+   "Elsevier"
+  ],
+  "bylineText": "Zhenshan Bing a,b , Claus Meschede b , Guang Chen c , Alois Knoll b , Kai Huang a, ∗",
+  "pages": [
+   "Zhenshan Bing a,b , Claus Meschede b , Guang Chen c , Alois Knoll b , Kai Huang a, ∗ \na School of Data and Computer Science, Sun Yat-Sen University, China \nb Department of Computer Science, Technical University of Munich, Germany \nc School of Automotive Studies, Tongji University, China \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Zhenshan Bing",
+    "affiliations": [
+     "School of Data and Computer Science, Sun Yat-Sen University, China",
+     "Department of Computer Science, Technical University of Munich, Germany"
+    ]
+   },
+   {
+    "name": "Claus Meschede",
+    "affiliations": [
+     "Department of Computer Science, Technical University of Munich, Germany"
+    ]
+   },
+   {
+    "name": "Guang Chen",
+    "affiliations": [
+     "School of Automotive Studies, Tongji University, China"
+    ]
+   },
+   {
+    "name": "Alois Knoll",
+    "affiliations": [
+     "Department of Computer Science, Technical University of Munich, Germany"
+    ]
+   },
+   {
+    "name": "Kai Huang",
+    "affiliations": [
+     "School of Data and Computer Science, Sun Yat-Sen University, China"
+    ]
+   }
+  ],
+  "notes": "Bing is a,b; the byline slice ends at \"Germany\" which is the last printed byline line of affiliation b (\"Germany\")."
+ },
+ {
+  "id": "koide-majima-dagger",
+  "source": "https://arxiv.org/pdf/1907.03236 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "inline",
+   "letter-markers",
+   "equal-contribution",
+   "labelled-blocks"
+  ],
+  "bylineText": "Naoko Koide-Majima a,b † , Kei Majima c,d †",
+  "pages": [
+   "Naoko Koide-Majima a,b † , Kei Majima c,d † \nAffiliations: \na AI Science Research and Development Promotion Center, National Institute of Information\nand Communications Technology, Osaka 565-0871, Japan \nb Graduate School of Frontier Biosciences, Osaka University, Osaka 565-0871, Japan \nc Graduate School of Informatics, Kyoto University, Kyoto 606-8501, Japan \nd Institute for Quantum Life Science, National Institutes for Quantum and Radiological\nScience and Technology, Chiba, 263-8555, Japan\n† These authors contributed equally to this work. \nCorresponding author: \nKei Majima, Ph.D.\nInstitute for Quantum Life Science,\nNational Institutes for Quantum and Radiological Science and Technology,\nChiba, 263-8555, Japan\nPhone: +81-43-251-2111\nE-mail: majima.kei@qst.go.jp \nDeclaration of interest:"
+  ],
+  "answer": [
+   {
+    "name": "Naoko Koide-Majima",
+    "affiliations": [
+     "AI Science Research and Development Promotion Center, National Institute of Information and Communications Technology, Osaka 565-0871, Japan",
+     "Graduate School of Frontier Biosciences, Osaka University, Osaka 565-0871, Japan"
+    ]
+   },
+   {
+    "name": "Kei Majima",
+    "affiliations": [
+     "Graduate School of Informatics, Kyoto University, Kyoto 606-8501, Japan",
+     "Institute for Quantum Life Science, National Institutes for Quantum and Radiological Science and Technology, Chiba, 263-8555, Japan"
+    ]
+   }
+  ],
+  "notes": "The page labels \"Authors:\" and \"Affiliations:\". Corresponding-author contact block is not copied. The byline slice here ends after the affiliations because the printed byline is one line."
+ },
+ {
+  "id": "pourkamali-inline-institution",
+  "source": "https://arxiv.org/pdf/1708.03218 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "stacked",
+   "institution-in-byline",
+   "no-markers"
+  ],
+  "bylineText": "Farhad Pourkamali-Anaraki\nDepartment of Computer Science, University of Massachusetts Lowell, MA, USA\nStephen Becker\nDepartment of Applied Mathematics, University of Colorado Boulder, CO, USA",
+  "pages": [
+   "Farhad Pourkamali-Anaraki\nDepartment of Computer Science, University of Massachusetts Lowell, MA, USA\nStephen Becker\nDepartment of Applied Mathematics, University of Colorado Boulder, CO, USA \nAbstract"
+  ],
+  "answer": [
+   {
+    "name": "Farhad Pourkamali-Anaraki",
+    "affiliations": [
+     "Department of Computer Science, University of Massachusetts Lowell, MA, USA"
+    ]
+   },
+   {
+    "name": "Stephen Becker",
+    "affiliations": [
+     "Department of Applied Mathematics, University of Colorado Boulder, CO, USA"
+    ]
+   }
+  ],
+  "notes": "Name / institution / name / institution fused in one run."
+ },
+ {
+  "id": "pierro-grouped",
+  "source": "https://arxiv.org/pdf/1802.05065 (page 1 via pdfjs-dist getTextContent, stream order)",
+  "shape": [
+   "institution-in-byline",
+   "and-joined",
+   "grouped-by-institution"
+  ],
+  "bylineText": "Vincenzo Pierro, Luigi Troiano, and Elena Mejuto \nDept. of Engineering, University of Sannio, Corso Garibaldi, 107, I-82100 Benevento, Italy \nGiovanni Filatrella \nDept. of Sciences and Technologies, University of Sannio, Via Port’Arsa, 11, I-82100 Benevento, Italy",
+  "pages": [
+   "Vincenzo Pierro, Luigi Troiano, and Elena Mejuto \nDept. of Engineering, University of Sannio, Corso Garibaldi, 107, I-82100 Benevento, Italy \nGiovanni Filatrella \nDept. of Sciences and Technologies, University of Sannio, Via Port’Arsa, 11, I-82100 Benevento, Italy \nThe numerical integration"
+  ],
+  "answer": [
+   {
+    "name": "Vincenzo Pierro",
+    "affiliations": [
+     "Dept. of Engineering, University of Sannio, Corso Garibaldi, 107, I-82100 Benevento, Italy"
+    ]
+   },
+   {
+    "name": "Luigi Troiano",
+    "affiliations": [
+     "Dept. of Engineering, University of Sannio, Corso Garibaldi, 107, I-82100 Benevento, Italy"
+    ]
+   },
+   {
+    "name": "Elena Mejuto",
+    "affiliations": [
+     "Dept. of Engineering, University of Sannio, Corso Garibaldi, 107, I-82100 Benevento, Italy"
+    ]
+   },
+   {
+    "name": "Giovanni Filatrella",
+    "affiliations": [
+     "Dept. of Sciences and Technologies, University of Sannio, Via Port’Arsa, 11, I-82100 Benevento, Italy"
+    ]
+   }
+  ],
+  "notes": "No markers; three authors share the first department line, a fourth has his own."
+ }
+]

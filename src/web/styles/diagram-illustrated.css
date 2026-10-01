@@ -257,6 +257,9 @@
    by the panel's own width, so a plate cannot run past the bottom of a laptop
    screen and take the list with it. */
 .ill-in-full .ill-plate { max-height: 78vh; }
+/* In the band a press on the plate is Enlarge (plan 261001l); only that copy
+   carries `.enlarges`. */
+.ill-plate.enlarges { cursor: zoom-in; }
 /* `overscroll-behavior` stops a trackpad flick inside a tall plate scrolling
    the article behind it — Lightbox.tsx § two things `<dialog>` does not do. */
 .ill-in-full .ill-scroll { padding: 0 0.9rem 1.2rem; overscroll-behavior: contain; }

@@ -41,8 +41,6 @@ cost. **One of them was written as a deploy blocker and the deploy went out anyw
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
 
-- 2026-09-30 · SPIDERYARN-READING2-69 (shipped) · PDF transcription glitches. One call left open: the author check can still drop an author printed after the last name the model gave, which is tied to stacked NeurIPS-style bylines · [260930e](../plans/260930e-pdf-transcription-glitches.md#deferred-and-named). *Its other two were answered 2026-09-30: footnotes are shown and linked ([260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md)); the re-render of existing PDF articles is written up there and left to "Start this article again".*
-
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data
 > retention, so the sentence `/privacy` and every microphone had carried — *"your voice … isn't

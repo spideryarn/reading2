@@ -574,6 +574,116 @@ describe("the backdrop of the full-screen overlay", () => {
   });
 });
 
+/**
+ * **A press on the picture is Enlarge.** Greg, 2026-09-05 (`spya-dfghb4`):
+ * *"If I click on the Sketch or Illustrated images in Diagram, that should be
+ * equivalent to clicking on Enlarge button for them."* And 2026-09-11
+ * (`spya-mghbv7`), *"click or double-click"* — so the second click of a
+ * double-click, which lands in the overlay the first one opened, must not be
+ * read as a press on the backdrop and shut it again. Plan 261001l.
+ */
+describe("a press on the plate", () => {
+  function stub(): HTMLDialogElement {
+    const dialog = host.querySelector<HTMLDialogElement>("dialog.ill-full");
+    expect(dialog, "no overlay to enlarge into").not.toBeNull();
+    if (dialog) {
+      dialog.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      };
+      dialog.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+        this.dispatchEvent(new Event("close"));
+      };
+    }
+    return dialog as HTMLDialogElement;
+  }
+
+  it("enlarges it, the same as the Enlarge button", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    const plate = host.querySelector<HTMLImageElement>(".ill-scroll img.ill-plate");
+    expect(plate, "no plate in the band to press").not.toBeNull();
+
+    await act(async () => {
+      plate?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open"), "a press on the plate did not open the overlay").toBe(true);
+    expect(host.querySelector(".ill-in-full")).not.toBeNull();
+  });
+
+  /* Found by the browser pass at 1280×800: the second click of a real
+     double-click landed on a *what it depicts* row inside the overlay, which
+     closes it and jumps the article — so the picture opened and shut again. */
+  it("is not undone by the second click of a double-click landing on a row inside it", async () => {
+    serving();
+    const jumps: BlockId[] = [];
+    await mount((id) => jumps.push(id));
+    const dialog = stub();
+    await act(async () => {
+      host.querySelector(".ill-scroll img.ill-plate")?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    await settle();
+    const row = dialog.querySelector(".ill-row");
+    expect(row, "no row inside the overlay").not.toBeNull();
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open"), "the double-click's second half shut the overlay").toBe(true);
+    expect(jumps).toEqual([]);
+  });
+
+  it("enlarges for a real click whose pointer type is unknown", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    const plate = host.querySelector<HTMLImageElement>(".ill-scroll img.ill-plate");
+    expect(plate, "no plate in the band to press").not.toBeNull();
+
+    /* Pointer Events permits `""` when the device type cannot be detected. It
+       is therefore not proof of keyboard/AT activation; the click count is the
+       reliable distinction here (`detail: 0` for non-pointer activation). */
+    const click = new MouseEvent("click", { bubbles: true, detail: 1 });
+    Object.defineProperty(click, "pointerType", { value: "" });
+    await act(async () => {
+      plate?.dispatchEvent(click);
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open"), "an unclassified pointer press did not open the overlay").toBe(true);
+  });
+
+  it("is not undone by the second click of a double-click landing on the backdrop", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    await act(async () => {
+      host.querySelector(".ill-scroll img.ill-plate")?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    await settle();
+    expect(dialog.hasAttribute("open")).toBe(true);
+
+    await act(async () => {
+      dialog.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open"), "the double-click's second half shut the overlay").toBe(true);
+
+    /* And a deliberate press on the backdrop still closes it. */
+    await act(async () => {
+      dialog.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    await settle();
+    expect(dialog.hasAttribute("open")).toBe(false);
+  });
+});
+
 describe("a plate the run could not paint", () => {
   /**
    * A run keeps the plates it managed to draw and records why the others have

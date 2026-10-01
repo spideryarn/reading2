@@ -1080,3 +1080,29 @@
   letter-spacing: 0.02em;
   color: var(--ink-faint);
 }
+
+/* **A band's (i)** (`BandAbout.tsx`), at the right-hand end of its order row
+   (`.gloss-sort-trail`), holding the sentences about the whole list that were
+   its foot — FAQ's (SPIDERYARN-READING2-62) and Citations' (plan 261001l).
+   Quiet, like Trajectory's `.traj-about` and Quotes' `.quotes-why`: a footnote, not a control the reader needs. Sized to the
+   order buttons beside it rather than the house control height, so the row
+   does not grow for it. */
+.band-about {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.band-about:hover { color: var(--ink); background: var(--surface-raised); }
+.band-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
+.band-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.band-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
+.band-about-card p { margin: 0; }
+.band-about-card p + p { margin-top: 0.4rem; }

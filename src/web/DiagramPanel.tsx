@@ -1504,23 +1504,24 @@ export function DiagramPanel({
     <ModeSurface
       label="Diagram"
       feature="diag"
-      /* **A fragment, and here that is not an edge case.** The row's only child
-          is the scatter's caveat, which draws on the two projected pictures —
-          and Sketch is the default and the only picture an unexperimental owner
-          is offered, so the *ordinary* state of this header is empty. A
-          `head={drawingPoints && …}` would hand the surface `null` and delete
-          the row for almost every reader.
+      /* **Only when there is a caveat to carry**, since 2026-10-01. The row's
+          only child is the scatter's caveat, which draws on the two projected
+          pictures — and Sketch is the default and the only picture an
+          unexperimental owner is offered, so the ordinary state of this header
+          was an empty row: 19px of nothing above the picker on a landscape
+          phone, found by the screenshot pass for Greg's *"take screenshots to
+          try and find ways to make things vertically more compact"*
+          (`spya-gcdwps`, plan 261001l).
 
-          **It would not undo the 2026-08-30 fix**, and an earlier version of
-          this comment said it would. Whenever the caveat exists the conditional
-          form still builds a `.band-head` around it, so the caveat keeps its
-          non-wrapping row either way; what the conditional removes is the
-          *empty* row in Sketch and the other no-caveat states. The fragment is
-          right because this stage's job is to preserve the DOM the band already
-          had, not because the alternative breaks the caveat. GPT Sol F28,
-          2026-09-07. */
+          It was a fragment until then for a reason that has since expired: the
+          stage that introduced `ModeSurface` had the job of preserving the DOM
+          the band already had (GPT Sol F28, 2026-09-07). **Whenever the caveat
+          exists the conditional still builds the `.band-head` around it**, so
+          the caveat keeps its non-wrapping row — what goes is the empty row in
+          Sketch and the other no-caveat states. */
       head={
-        <>
+        drawingPoints && projection.status === "ready" ? (
+          <>
         {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
             docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
             stays, and here that matters more than elsewhere: the caveat below
@@ -1559,10 +1560,9 @@ export function DiagramPanel({
             wrap, so the icon rides free) and Trail at its widest (one chip group,
             so it fits), and never the combination that costs a line. Found by a
             browser sweep, 2026-08-31. */}
-        {drawingPoints && projection.status === "ready" && (
           <ScatterNote projection={projection} />
-        )}
-        </>
+          </>
+        ) : null
       }
     >
 

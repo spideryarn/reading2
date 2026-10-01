@@ -861,3 +861,101 @@ describe("the backdrop of the full-screen overlay", () => {
     expect(host.querySelector(".sk-in-full")).not.toBeNull();
   });
 });
+
+/**
+ * **A press on the picture's background is Enlarge** — Greg, 2026-09-05 and
+ * 2026-09-11 (`spya-dfghb4`, `spya-mghbv7`): *"perhaps on the background of a
+ * Sketch"*. Only the background: a node already selects and a region's name
+ * already opens a scene, and both keep their meaning. Plan 261001l.
+ */
+describe("a press on the picture", () => {
+  function stub(): HTMLDialogElement {
+    const dialog = host.querySelector<HTMLDialogElement>("dialog.sk-full");
+    expect(dialog, "no overlay to enlarge into").not.toBeNull();
+    if (dialog) {
+      dialog.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      };
+      dialog.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+        this.dispatchEvent(new Event("close"));
+      };
+    }
+    return dialog as HTMLDialogElement;
+  }
+  const press = (el: Element | null, detail = 1) =>
+    act(async () => {
+      el?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail }));
+    });
+
+  it("enlarges it when the press lands on the background", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    const svg = host.querySelector(".sk-scroll svg.sk-svg");
+    expect(svg, "no picture in the band").not.toBeNull();
+
+    await press(svg);
+
+    expect(dialog.hasAttribute("open"), "a press on the background did not open the overlay").toBe(true);
+    expect(host.querySelector(".sk-in-full")).not.toBeNull();
+  });
+
+  it("leaves a press on a node to select it, and a press on a region's name to open it", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+
+    await press(host.querySelector(".sk-scroll .sk-node .sk-hit"));
+    expect(dialog.hasAttribute("open"), "a press on a node enlarged the picture").toBe(false);
+
+    await press(host.querySelector(".sk-scroll .sk-region-open .sk-hit"));
+    expect(dialog.hasAttribute("open"), "a press on a region's name enlarged the picture").toBe(false);
+  });
+
+  it("ignores a press that is not a pointer pointing: keyboard or AT activation, or the end of a selection", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    const svg = host.querySelector(".sk-scroll svg.sk-svg");
+
+    /* `detail: 0` is what keyboard, voice and `element.click()` produce. */
+    await press(svg, 0);
+    expect(dialog.hasAttribute("open"), "a keyboard-style click enlarged the picture").toBe(false);
+
+    /* A drag that selected some of the picture's words ends in a click. */
+    const walker = document.createTreeWalker(svg as Node, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => ((n.textContent ?? "").trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+    });
+    const words = walker.nextNode();
+    expect(words, "no text in the picture to select").not.toBeNull();
+    const range = document.createRange();
+    range.setStart(words as Node, 0);
+    range.setEnd(words as Node, (words?.textContent ?? "").length);
+    /* `addRange` does nothing while a range is already there — the spec. */
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    expect(window.getSelection()?.isCollapsed).toBe(false);
+    await press(svg);
+    window.getSelection()?.removeAllRanges();
+    expect(dialog.hasAttribute("open"), "the end of a selection drag enlarged the picture").toBe(false);
+
+    /* And with nothing selected, the same press does. */
+    await press(svg);
+    expect(dialog.hasAttribute("open")).toBe(true);
+  });
+
+  it("is not undone by the second click of a double-click landing on the backdrop", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    await press(host.querySelector(".sk-scroll svg.sk-svg"));
+    expect(dialog.hasAttribute("open")).toBe(true);
+
+    await press(dialog, 2);
+    expect(dialog.hasAttribute("open"), "the double-click's second half shut the overlay").toBe(true);
+
+    await press(dialog, 1);
+    expect(dialog.hasAttribute("open")).toBe(false);
+  });
+});

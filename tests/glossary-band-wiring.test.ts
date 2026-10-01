@@ -210,7 +210,8 @@ describe("the threshold wiring", () => {
     /* …and `sorts` is asked of the whole list, not of what the gate lets in. */
     expect(glossaryPanel).toMatch(/const sorts = glossary && glossary\.entries\.length > 1 \? sortOptions\(all\)/);
     expect(glossaryPanel).toMatch(/glossary && order === "prioritised" && \(\s*<GateSlider/);
-    expect(quotesPanel).toMatch(/quotes\.quotes\.length > 1 && \(\s*<RankBar/);
+    expect(quotesPanel).toMatch(/ranks\.length > 0 && \(\s*<RankBar/);
+    expect(quotesPanel).toMatch(/const ranks = quotes && quotes\.quotes\.length > 1 \? rankOptions\(all\)/);
     expect(quotesPanel).toMatch(/quotes && rank === "prioritised" && \(\s*<BarSlider/);
     /* Search reaches the same state through an early return, which is the
        precedent the other two follow and has to carry both controls with it. */

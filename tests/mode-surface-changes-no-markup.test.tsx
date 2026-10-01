@@ -1900,29 +1900,28 @@ const QUIZ_NONE: BandShape = {
 };
 
 /**
- * **Diagram's header is empty in the shape a reader normally sees.**
+ * **Diagram has no header in the shape a reader normally sees**, since
+ * 2026-10-01 (plan 261001l).
  *
  * Its only child is the scatter's caveat, which renders on the two projected
  * pictures and not on the Sketch — and Sketch is the default and the only
- * picture an unexperimental owner is offered. So this is not an edge state like
- * Glossary's: it is the ordinary one.
+ * picture an unexperimental owner is offered. Until then the row was drawn
+ * empty in that ordinary state, 19px of nothing on a landscape phone.
  */
 const DIAGRAM_SHAPE: BandShape = {
   className: "mode-band diag",
   label: "Diagram",
-  head: true,
-  children: ["div.band-head", "div.diag-kinds[aria-label,role]", "div.sk"],
-  headChildren: [],
+  head: false,
+  children: ["div.diag-kinds[aria-label,role]", "div.sk"],
 };
 
-/** A visitor gets no picker at all — not a hidden one — so the band is two
- *  children rather than three. */
+/** A visitor gets no picker at all — not a hidden one — so the band is one
+ *  child rather than two. */
 const DIAGRAM_VISITOR: BandShape = {
   className: "mode-band diag",
   label: "Diagram",
-  head: true,
-  children: ["div.band-head", "div.sk"],
-  headChildren: [],
+  head: false,
+  children: ["div.sk"],
 };
 
 /**
@@ -2135,7 +2134,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(QUIZ_NO_SUBMODE);
   });
 
-  it("draws Diagram's band with an empty header, which is its ordinary shape", async () => {
+  it("draws Diagram's band with no header, which is its ordinary shape", async () => {
     await paint(mountDiagram({ kind: "owner" }));
     expectShape(DIAGRAM_SHAPE);
   });

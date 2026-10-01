@@ -16,7 +16,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   audioConstraint,
+  judgeFallback,
   labelled,
+  rememberDeviceLabel,
+  rememberedDeviceLabel,
   listInputs,
   rememberDevice,
   rememberedDevice,
@@ -159,5 +162,89 @@ describe("what to call it on screen", () => {
     expect(labelled(null)).toBeNull();
     expect(labelled({ label: "" } as MediaStreamTrack)).toBeNull();
     expect(labelled({ label: "   " } as MediaStreamTrack)).toBeNull();
+  });
+});
+
+/**
+ * **A remembered microphone that will not open by id may still be there.**
+ *
+ * spya-k3q9mc, Greg on an iPhone with AirPods, 2026-09-29: *"The microphone you
+ * chose isn't available. Using another one."* — and then it worked. The stored
+ * id had stopped resolving (why, on iOS, was not established), and the default
+ * it fell back to may well have been the same microphone. The label is what
+ * is remembered beside the id and compared — never on its own, since labels
+ * need not be unique.
+ * docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
+ */
+describe("judging the fallback", () => {
+  it("remembers the label beside the id, and forgets both together", () => {
+    rememberDevice("abc123");
+    rememberDeviceLabel("AirPods Pro");
+    expect(rememberedDeviceLabel()).toBe("AirPods Pro");
+    rememberDevice(null);
+    expect(rememberedDeviceLabel()).toBeNull();
+  });
+
+  /* A new choice is a different device; the old name would vouch for it. */
+  it("drops the label when a different device is chosen", () => {
+    rememberDevice("abc123");
+    rememberDeviceLabel("AirPods Pro");
+    rememberDevice("def456");
+    expect(rememberedDeviceLabel()).toBeNull();
+  });
+
+  const PHONE = [
+    { deviceId: "new-id", label: "AirPods Pro" },
+    { deviceId: "mic-id", label: "iPhone Microphone" },
+  ];
+
+  it("calls the fallback the same microphone when it is the one input with that name, and adopts its new id", () => {
+    expect(judgeFallback("AirPods Pro", { label: "AirPods Pro", id: "new-id" }, PHONE)).toEqual({
+      kind: "same-device",
+      id: "new-id",
+    });
+  });
+
+  it("says which one was wanted when the fallback is a different microphone", () => {
+    expect(
+      judgeFallback("AirPods Pro", { label: "iPhone Microphone", id: "mic-id" }, PHONE),
+    ).toEqual({ kind: "different", wanted: "AirPods Pro" });
+  });
+
+  /* Labels are descriptive, not unique. Two inputs with the chosen name and
+     no id to tell them apart is not a match. GPT Sol's plan review, item 4. */
+  it("does not match a name two inputs share", () => {
+    const twins = [
+      { deviceId: "a", label: "USB Audio Device" },
+      { deviceId: "b", label: "USB Audio Device" },
+    ];
+    expect(judgeFallback("USB Audio Device", { label: "USB Audio Device", id: "a" }, twins)).toEqual(
+      { kind: "different", wanted: "USB Audio Device" },
+    );
+  });
+
+  it("does not match when the input with that name is not the one that opened", () => {
+    const list = [{ deviceId: "other", label: "AirPods Pro" }];
+    expect(judgeFallback("AirPods Pro", { label: "AirPods Pro", id: "new-id" }, list)).toEqual({
+      kind: "different",
+      wanted: "AirPods Pro",
+    });
+  });
+
+  /* Stored before labels were kept: there is nothing to compare, and warning
+     on every press for ever is the bug. */
+  it("forgets a choice that was stored without a name", () => {
+    expect(judgeFallback(null, { label: "AirPods Pro", id: "new-id" }, PHONE)).toEqual({
+      kind: "forget",
+    });
+  });
+
+  /* A browser that will not say what it opened cannot be said to have opened
+     the right thing. */
+  it("does not match on a missing name or id", () => {
+    expect(judgeFallback("AirPods Pro", { label: null, id: "new-id" }, PHONE).kind).toBe("different");
+    expect(judgeFallback("AirPods Pro", { label: "AirPods Pro", id: null }, PHONE).kind).toBe(
+      "different",
+    );
   });
 });
