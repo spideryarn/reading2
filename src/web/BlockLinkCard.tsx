@@ -141,7 +141,9 @@ function contentFor(
 ): ReactNode | null {
   /* A cross-reference's target comes from the resolver and only from there —
      never `data-block-link`, `data-block-missing` or `data-block-preview` off
-     the mark, all three of which an article can still write today. */
+     the mark. Since 2026-10-01 the sanitiser drops all three from an
+     article's own markup (src/sanitize-policy.ts § `ARTICLE_DATA_ATTRS`); the
+     resolver is the second line. */
   const xref = el.matches(XREF_SELECTOR);
   const id = xref ? (resolveXref?.(el) ?? null) : el.getAttribute("data-block-link");
   if (id === null) return null;

@@ -44,6 +44,15 @@ const CORPUS: Array<[string, string]> = [
   ["prose", `<p>An <em>em</em>, a <a href="https://e.com/a">link</a>, <code>c</code>.</p>`],
   ["nested list", `<ul><li>one<ul><li>nested</li></ul></li></ul>`],
   ["figure", `<figure><img src="/d.png" alt="d"><figcaption>Fig 1</figcaption></figure>`],
+  /* The allowlist of 2026-10-01 (src/sanitize-policy.ts § `ARTICLE_DATA_ATTRS`)
+     in each namespace, so the two bindings are seen to agree on it — including
+     an HTML integration point inside MathML, where the namespace switches back. */
+  ["forged block link", `<p><a href="#x" data-block-link="spya-k3m9qt" class="xref">a</a></p>`],
+  ["svg marking", `<svg><g class="xref" data-xref="n-1"><text>x</text></g></svg>`],
+  [
+    "mathml marking",
+    `<math><mi class="mode-band tml-left" data-block-link="x">x</mi><mtext><span class="xref tml-left" data-xref="1">y</span></mtext></math>`,
+  ],
 ];
 
 describe("the browser pass applies the policy", () => {

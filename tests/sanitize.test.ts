@@ -57,12 +57,15 @@ describe("sanitizeHtml — what must survive", () => {
     expect(out).toContain(`id="spya-k3m9qt"`);
   });
 
-  it("keeps ordinary data-* attributes", () => {
-    // Not the annotation ones — those are reserved to the client and stripped
-    // from source markup; see "does not let an article forge a comment mark".
+  it("drops a publisher's own data-* attributes", () => {
+    /* This said "keeps" until 2026-10-01. Since then an article keeps only the
+       `data-*` names `ARTICLE_DATA_ATTRS` declares (src/sanitize-policy.ts), so
+       that no marking the reading view adds can be forged by one —
+       docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md.
+       Nothing read these: the production survey there found 32 names, all
+       publisher tracking and metadata apart from our own. */
     const out = sanitizeHtml(`<p data-footnote="3" data-lang="fr">x</p>`);
-    expect(out).toContain("data-footnote");
-    expect(out).toContain("data-lang");
+    expect(out).toBe("<p>x</p>");
   });
 
   it("keeps ordinary prose markup", () => {
@@ -374,10 +377,13 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
-  it("keeps a non-reserved class beside the stripped one", () => {
-    const out = sanitizeHtml(`<p class="cmt lede">x</p>`);
-    expect(out).toContain("lede");
-    expect(out).not.toMatch(/\bcmt\b/);
+  it("keeps a declared class beside a stripped one, and nothing else", () => {
+    /* Said "keeps a non-reserved class" until 2026-10-01, when classes became an
+       allowlist (src/sanitize-policy.ts § `ARTICLE_CLASSES`): a publisher's
+       `lede` goes now too. Readability had already stripped it on every real
+       import. */
+    const out = sanitizeHtml(`<p class="cmt pdf-uncertain lede">x</p>`);
+    expect(out).toBe(`<p class="pdf-uncertain">x</p>`);
   });
 
   it("strips srcdoc, which would put the frame in our own origin", () => {

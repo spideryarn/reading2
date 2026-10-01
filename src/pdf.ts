@@ -291,7 +291,9 @@ export interface PdfRecord {
  * So the model transcribes them, labels them, and `RENDERED` below drops them.
  * The check compares like with like, the gate can be tight, and v2 showing
  * footnotes is a change to one set rather than a change to the prompt, the
- * check and the thresholds together.
+ * check and the thresholds together. (It came to less than that: footnotes are
+ * shown since 2026-09-30 without touching the prompt or `RENDERED` at all —
+ * `renderHtml` lists them at the end. See `RENDERED`.)
  *
  * **`tabledata` was the same lesson taught twice.** The first version applied
  * this to footnotes and references and left rule 7 saying "do not transcribe a
@@ -335,11 +337,20 @@ export type RecordType =
   | "tabledata";
 
 /**
- * What v1 puts on the page. Everything else is transcribed, checked, and not shown.
+ * What v1 puts on the page **in place**, as the article's prose. Everything else
+ * is transcribed, checked, and not shown — with one exception since 2026-09-30:
+ * `footnote` records are shown too, gathered into the notes at the end and
+ * linked from their markers (src/pdf-read.ts § `renderNotes`,
+ * docs/plans/260930k-pdf-footnotes-shown-and-linked.md).
  *
  * This set is also **what the check gates on**, and that is not a coincidence:
  * a fault the reader can never see is worth reporting and not worth failing an
- * article for. src/pdf-score.ts § `check`.
+ * article for. src/pdf-score.ts § `check`. **Footnotes are the stated gap in
+ * that**: now visible, still scored as unshown, so an invented value or a
+ * stray tag in a note is reported rather than failing the article. Deliberately
+ * not tightened with the change that showed them — a stricter gate would buy
+ * re-reads, and so money, on every import, for text the reader sees only as
+ * a note — and the place to revisit is here, if a note is ever caught lying.
  */
 export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "heading1",
@@ -441,6 +452,61 @@ export class TooManyPages extends Error {
  */
 export function refuseTooManyPages(pages: number, limit: number | undefined): void {
   if (limit !== undefined && pages > limit) throw new TooManyPages(pages, limit);
+}
+
+/**
+ * **More text than a caller agreed to hold** — `pass0`'s `maxChars`, the third
+ * bound beside bytes (the fetcher's) and pages (`TooManyPages`). A page count
+ * says nothing about how much text a page carries, and a small file can put a
+ * great deal of it on each; this is what bounds the memory `pass0` keeps.
+ * Plan 261001a stage 2, GPT Sol's P-5.
+ */
+export class TooManyCharacters extends Error {
+  constructor(
+    readonly chars: number,
+    readonly limit: number,
+  ) {
+    super(`This PDF has more than ${limit} characters of text (${chars} read before stopping).`);
+    this.name = "TooManyCharacters";
+  }
+}
+
+/** A PDF may contain arbitrarily many empty positioned runs, which a character cap cannot see. */
+export class TooManyTextItems extends Error {
+  constructor(
+    readonly items: number,
+    readonly limit: number,
+  ) {
+    super(`This PDF has more than ${limit} text items (${items} read before stopping).`);
+    this.name = "TooManyTextItems";
+  }
+}
+
+/** What `pass0` accepts. Every field is optional, so the callers that pass none are unchanged. */
+export interface Pass0Options {
+  /** Refuse, before any page is read, a document with more pages than this (`TooManyPages`). */
+  maxPages?: number;
+  /**
+   * Stop, and throw `TooManyCharacters`, once the text read so far passes this
+   * many characters. Checked as each text run is added, so a single enormous
+   * page is bounded too.
+   */
+  maxChars?: number;
+  /** Stop once this many pdf.js text-layer items have been visited, including empty runs. */
+  maxItems?: number;
+  /** Keep positioned items in the result. The paper-evidence reader needs only lines, so it does not. */
+  retainItems?: boolean;
+  /**
+   * **The caller's deadline, and it reaches pdf.js.** Checked before each page,
+   * and on abort the loading task is destroyed — the only thing that ends one —
+   * so a pending page read rejects rather than running on. `pass0` then rejects
+   * with the signal's own reason, never pdf.js's "Worker was destroyed", which
+   * is not a fact about the file. `countPdfPages` below says what this can and
+   * cannot interrupt: the abort lands at pdf.js's own `await` points.
+   */
+  signal?: AbortSignal;
+  /** Called after each page's text is read, with its number. Progress, and the seam the abort test watches. */
+  onPage?: (page: number) => void;
 }
 
 /**
@@ -593,8 +659,10 @@ export async function countPdfPages(
 
 export async function pass0(
   source: string | Uint8Array,
-  opts: { maxPages?: number } = {},
+  opts: Pass0Options = {},
 ): Promise<Pass0> {
+  const signal = opts.signal;
+  signal?.throwIfAborted();
   /**
    * **A copy, and it is not defensive tidiness.** pdf.js takes *ownership* of
    * the array it is given: it transfers the underlying buffer to its worker and
@@ -611,8 +679,32 @@ export async function pass0(
      page resources and leaves the worker running. The guard below needs to walk
      away from a document it has decided not to read. */
   const pdfjs = await loadPdfjs();
+  /* Loading pdf.js can take over a second on the first PDF a process sees. */
+  signal?.throwIfAborted();
   const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
-  const doc = await loadingTask.promise;
+  /* `void`: the `finally` below awaits a `destroy` on every path; this only
+     has to start one, so a pending `getPage` rejects instead of running on. */
+  const giveUp = () => {
+    void loadingTask.destroy();
+  };
+  signal?.addEventListener("abort", giveUp, { once: true });
+  let doc: Awaited<typeof loadingTask.promise>;
+  try {
+    doc = await loadingTask.promise;
+  } catch (err) {
+    signal?.removeEventListener("abort", giveUp);
+    const aborted = signal?.aborted ?? false;
+    /* `giveUp` starts destruction so the pending load rejects; await that same
+       idempotent teardown before returning. Otherwise a request can finish while
+       pdf.js still owns its worker and transferred buffer. */
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* The original load/abort remains the answer. */
+    }
+    if (aborted) signal?.throwIfAborted();
+    throw err;
+  }
 
   /**
    * **The cap, before a single page is read.**
@@ -646,6 +738,7 @@ export async function pass0(
   try {
     refuseTooManyPages(doc.numPages, opts.maxPages);
   } catch (err) {
+    signal?.removeEventListener("abort", giveUp);
     try {
       await loadingTask.destroy();
     } catch {
@@ -660,24 +753,36 @@ export async function pass0(
   try {
     const info = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined;
     metaTitle = info?.Title?.trim() || null;
+    let chars = 0;
+    let textItems = 0;
     for (let n = 1; n <= doc.numPages; n++) {
+      /* Between pages, which is where pdf.js hands control back. */
+      signal?.throwIfAborted();
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
       const items: TextItem[] = [];
       let text = "";
       let sideways = 0;
       for (const item of content.items) {
+        textItems += 1;
+        if (opts.maxItems !== undefined && textItems > opts.maxItems) {
+          throw new TooManyTextItems(textItems, opts.maxItems);
+        }
         if (!("str" in item)) continue;
         if (isSideways(item.transform)) {
           /* Counted, not silently dropped — see `isSideways`. */
           sideways += item.str.trim() ? item.str.trim().split(/\s+/).length : 0;
           continue;
         }
-        items.push({
-          x: Math.round(item.transform[4]!),
-          y: Math.round(item.transform[5]!),
-          text: item.str,
-        });
+        chars += item.str.length;
+        if (opts.maxChars !== undefined && chars > opts.maxChars) throw new TooManyCharacters(chars, opts.maxChars);
+        if (opts.retainItems !== false) {
+          items.push({
+            x: Math.round(item.transform[4]!),
+            y: Math.round(item.transform[5]!),
+            text: item.str,
+          });
+        }
         text += item.str + (item.hasEOL ? "\n" : "");
       }
       const trimmed = text.replace(/[ \t]+/g, " ").trim();
@@ -688,8 +793,15 @@ export async function pass0(
         sideways,
         items,
       });
+      opts.onPage?.(n);
     }
+  } catch (err) {
+    /* A page read the abort interrupted rejects with pdf.js's destruction
+       error; the caller is told the abort, which is why it failed. */
+    signal?.throwIfAborted();
+    throw err;
   } finally {
+    signal?.removeEventListener("abort", giveUp);
     /* `cleanup` releases page resources; **`destroy` is what stops the worker**,
        and the comment two hundred lines up already said so while this line went
        on calling only the first. So a parse that threw, and every ordinary
@@ -837,18 +949,27 @@ function mendHyphens(lines: string[]): string[] {
   const out: string[] = [];
   for (const line of lines) {
     const previous = out.at(-1);
-    const rest = line.trimStart();
-    if (
-      previous !== undefined &&
-      /(\p{L})[-\u2010\u00ad]$/u.test(previous) &&
-      /^\p{L}/u.test(rest)
-    ) {
-      out[out.length - 1] = previous.replace(/[-\u2010\u00ad]$/u, "") + rest;
+    const joined = previous === undefined ? null : joinHyphenated(previous, line);
+    if (joined !== null) {
+      out[out.length - 1] = joined;
       continue;
     }
     out.push(line);
   }
   return out;
+}
+
+/**
+ * **`mendHyphens`' rule for one pair of lines**: `previous` + `next` as one
+ * word when `previous` ends in a letter and a hyphen and `next` begins with a
+ * letter, else `null`. Exported so src/paper-evidence.ts mends a word broken
+ * across a *page* — which `baselineFor` never sees, since it works one page at
+ * a time — by this rule rather than a second one beside it.
+ */
+export function joinHyphenated(previous: string, next: string): string | null {
+  const rest = next.trimStart();
+  if (!/(\p{L})[-\u2010\u00ad]$/u.test(previous) || !/^\p{L}/u.test(rest)) return null;
+  return previous.replace(/[-\u2010\u00ad]$/u, "") + rest;
 }
 
 // ---------------------------------------------------------------- CLI

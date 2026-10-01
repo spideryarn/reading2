@@ -50,9 +50,18 @@ export interface CitedCandidate {
 
 const RANK: Record<CitedMatchedBy, number> = { doi: 0, arxiv: 1, address: 2, title: 3 };
 
+/** A DOI as the resolver path carries it: `10.` + registrant + `/` + suffix. */
+const DOI_BODY = "10\\.\\d{4,9}\\/[^\\s\"'<>?#]+";
 /** A DOI resolver path, whole: no prefix/suffix that merely contains a DOI. */
-const DOI_PATH = /^\/(10\.\d{4,9}\/[^\s"'<>?#]+)$/i;
+const DOI_PATH = new RegExp(`^\\/(${DOI_BODY})$`, "i");
 const ARXIV_ID = "(\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?\\/\\d{7})";
+/**
+ * The same two shapes as a whole bare string — a DOI, or an arXiv id with an
+ * optional version — for src/bibliographic.ts, so there is one parser of each
+ * rather than two that drift.
+ */
+export const DOI_SHAPE = new RegExp(`^(${DOI_BODY})$`, "i");
+export const ARXIV_ID_SHAPE = new RegExp(`^${ARXIV_ID}(?:v\\d+)?$`, "i");
 const ARXIV_PAGE_PATH = new RegExp(`^/(?:abs|html)/${ARXIV_ID}(?:v\\d+)?/?$`, "i");
 const ARXIV_PDF_PATH = new RegExp(`^/pdf/${ARXIV_ID}(?:v\\d+)?(?:\\.pdf)?/?$`, "i");
 
