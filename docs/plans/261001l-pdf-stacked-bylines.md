@@ -215,4 +215,6 @@ read and checked.
 
 ## Shipped
 
-(filled in when it lands)
+2026-10-01, on `dev` as `f662af42` (the change, the eval, the tests) and `7ea278ca` (the code
+review's fixes); not deployed — the Overseer deploys. Nothing already on a shelf changes: the check
+runs at import, so a PDF re-imported (or started again from the Metadata page) gets it.

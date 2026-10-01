@@ -77,7 +77,7 @@ Plan: [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).
 >
 > — Greg, 2026-10-01
 
-**Ending: Shipped** — on `dev` as COMMIT_PLACEHOLDER, not deployed. A PDF's author list is now taken
+**Ending: Shipped** — on `dev` as `f662af42` and its review fixes `7ea278ca`, not deployed. A PDF's author list is now taken
 when the byline prints name / institution / email per author (NeurIPS), or the names together and
 their addresses after (`{jacobdevlin,…}@google.com`), as long as there is one address per author.
 The address count is what proves nobody was left out; an institution the model names is never
