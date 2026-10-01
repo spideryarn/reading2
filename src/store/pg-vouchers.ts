@@ -344,10 +344,23 @@ export async function giftAudienceFor(
     readonly standing?: (ownerId: string) => Promise<Awaited<ReturnType<typeof standingOf>>>;
   } = {},
 ): Promise<GiftAudience> {
-  const found = await (deps.lookup ?? confirmedAccountByEmail)(normalisedEmail);
+  let found: AccountByEmail;
+  try {
+    found = await (deps.lookup ?? confirmedAccountByEmail)(normalisedEmail);
+  } catch (err) {
+    /* The real lookup returns `unavailable`, but keep the fallback at this
+       boundary too: an Auth/listing failure must not fail the voucher write. */
+    logger.warn(
+      { error: err instanceof Error ? err.name : "unknown error" },
+      "voucher email: account lookup failed, inviting",
+    );
+    return { kind: "invite" };
+  }
   if (found.kind !== "one") {
     if (found.kind === "unavailable") {
-      logger.warn({ reason: found.reason }, "voucher email: account lookup unavailable, inviting");
+      /* `reason` is deliberately not repeated: a future lookup must not be
+         able to put an address or provider response into a log line. */
+      logger.warn("voucher email: account lookup unavailable, inviting");
     }
     return { kind: "invite" };
   }
@@ -423,7 +436,7 @@ export async function createVoucher(
 ): Promise<CreateVoucherAnswer> {
   const email = normaliseEmail(input.email);
   /* Before the transaction: a network call does not belong inside one. */
-  const audience = await (deps.audience ?? giftAudienceFor)(email);
+  const audience = await giftAudienceOrInvite(email, deps.audience ?? giftAudienceFor);
   return await getDb().transaction(
     async (tx): Promise<CreateVoucherAnswer> => {
       const [row] = await tx
@@ -580,12 +593,30 @@ export async function updateVoucher(id: string, patch: VoucherPatch, deps: Vouch
   /* Asked only when the address is being set, and before any transaction: it
      is a network call. Whether it is a *real* change is decided inside. */
   const audience =
-    patch.email === undefined ? undefined : await (deps.audience ?? giftAudienceFor)(normaliseEmail(patch.email));
+    patch.email === undefined
+      ? undefined
+      : await giftAudienceOrInvite(normaliseEmail(patch.email), deps.audience ?? giftAudienceFor);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const answer = await updateOnce(id, patch, audience);
     if (answer !== "retry") return answer;
   }
   throw new Error(`updating gift voucher ${id} kept racing its claim`);
+}
+
+/** The write's last fail-open boundary: audience enrichment never owns the voucher event. */
+async function giftAudienceOrInvite(
+  normalisedEmail: string,
+  resolve: (email: string) => Promise<GiftAudience>,
+): Promise<GiftAudience> {
+  try {
+    return await resolve(normalisedEmail);
+  } catch (err) {
+    logger.warn(
+      { error: err instanceof Error ? err.name : "unknown error" },
+      "voucher email: audience unavailable, inviting",
+    );
+    return { kind: "invite" };
+  }
 }
 
 async function updateOnce(

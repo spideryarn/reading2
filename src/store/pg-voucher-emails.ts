@@ -407,7 +407,9 @@ export async function skipQueuedGifts(tx: Tx, voucherId: string, detail: "vouche
  * reader claims within moments of opening Spideryarn, often before anybody has
  * seen a failed send; refusing then would make every failure for a reader
  * permanent. The claim moves the voucher to an account with that same confirmed
- * address, so the email still goes to the person it was for.
+ * address, so none of the voucher transitions can redirect this email. As for
+ * every frozen recipient, a later change in inbox ownership is outside this
+ * predicate (docs/project/email.md § Gift voucher emails).
  */
 const RETRYABLE = sql`(
   (e.status in ('queued', 'failed', 'skipped')

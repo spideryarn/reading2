@@ -144,6 +144,8 @@ async function sweep(): Promise<void> {
     "delete from spideryarn.billing_vouchers where email like 'vmail-0000b0c5-%' or claimed_by::text like $1",
     [RUBBLE],
   );
+  await pool.query("delete from spideryarn.ingest_events where owner_id::text like $1", [RUBBLE]);
+  await pool.query("delete from spideryarn.articles where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id::text like $1", [RUBBLE]);
 }
 
@@ -480,16 +482,31 @@ describe("at most once", () => {
     expect(await reserveVoucherEmailRetry(fresh)).toEqual({ kind: "refused" });
   });
 
-  it("refuses a gift Retry once the voucher is revoked or readdressed, but not once it is claimed — and never blocks a queued automatic send", async () => {
-    const box = mailbox();
-    /* Claimed after its event: the queued automatic send still goes (event time). */
-    const claimedOne = await givenVoucher(READER, 2);
+  it("refuses a gift Retry once sent, revoked or readdressed, but lets a genuinely failed gift retry after claim", async () => {
+    /* A delivered gift remains at most once after claim. This is distinct from
+       the unclaimed `sent` case above: claimed gifts are the predicate changed
+       in 261002a. */
+    const delivered = mailbox();
+    const sent = await givenVoucher(READER, 2);
+    await sendQueuedVoucherEmail(sent.delivery, delivered.deps);
     expect((await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).claimed).toBe(1);
+    expect(await reserveVoucherEmailRetry(sent.delivery)).toEqual({ kind: "refused" });
+    expect(delivered.fetch).toHaveBeenCalledTimes(1);
+
+    /* A definite provider refusal, followed by a claim before anybody looked:
+       Retry still takes it (261002a, Sol F1), and sends its first copy. */
+    let refuse = true;
+    const box = mailbox({
+      answer: async () =>
+        refuse
+          ? new Response("{}", { status: 500 })
+          : new Response(JSON.stringify({ id: "re_retry" }), { status: 200 }),
+    });
+    const claimedOne = await givenVoucher(OTHER, 2);
     await sendQueuedVoucherEmail(claimedOne.delivery, box.deps);
-    expect(box.fetch).toHaveBeenCalledTimes(1);
-    /* A send that failed before anybody looked, and an existing reader who had
-       already claimed: Retry still takes it (261002a, Sol F1), and sends it. */
-    await pool?.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [claimedOne.delivery]);
+    expect(await delivery(claimedOne.delivery)).toMatchObject({ status: "failed", detail: "Resend answered 500" });
+    expect((await claimVouchersFor({ id: OTHER, email: emailOf(OTHER) }, { lookup: confirmed(OTHER) })).claimed).toBe(1);
+    refuse = false;
     const reserved = await reserveVoucherEmailRetry(claimedOne.delivery);
     expect(reserved.kind).toBe("reserved");
     if (reserved.kind === "reserved") await deliverReservedVoucherEmail(claimedOne.delivery, reserved.attempts, box.deps);
@@ -838,13 +855,17 @@ describe("the recipient's email is written for who they are", () => {
   });
 
   it("invites anybody it cannot name as one reader: nobody, several, or a failed lookup", async () => {
+    const standing = vi.fn(async () => {
+      throw new Error("billing must not be read");
+    });
     for (const found of [
       { kind: "none" },
       { kind: "several" },
       { kind: "unavailable", reason: "timed out" },
     ] as const) {
-      expect(await giftAudienceFor(emailOf(READER), { lookup: async () => found })).toEqual({ kind: "invite" });
+      expect(await giftAudienceFor(emailOf(READER), { lookup: async () => found, standing })).toEqual({ kind: "invite" });
     }
+    expect(standing).not.toHaveBeenCalled();
     const box = mailbox();
     control.deps = box.deps;
     control.byEmail.set(emailOf(READER), { kind: "several" });
@@ -853,11 +874,78 @@ describe("the recipient's email is written for who they are", () => {
     expect(box.sent[0]?.text).toContain("Sign in or create an account: https://www.spideryarn.com/login");
   });
 
+  it("falls back to the invitation when the audience lookup throws, without failing a create or PATCH", async () => {
+    const failed = async () => {
+      throw new Error(`${emailOf(READER)} must not reach a log`);
+    };
+    const said = await logLinesWhile(async () => {
+      expect(await giftAudienceFor(emailOf(READER), { lookup: failed })).toEqual({ kind: "invite" });
+
+      const made = await createVoucher(
+        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null },
+        CREATOR_A,
+        { audience: failed },
+      );
+      expect(made.kind).toBe("created");
+      if (made.kind !== "created") throw new Error("expected a created voucher");
+      expect((await delivery(made.delivery)).body_text).toContain("Sign in or create an account");
+
+      const original = await givenVoucher(OTHER, 3);
+      const updated = await updateVoucher(original.id, { email: emailOf(READER) }, { audience: failed });
+      expect(updated).toMatchObject({ kind: "updated", giftDelivery: expect.any(String) });
+      if (updated.kind !== "updated" || !updated.giftDelivery) throw new Error("expected a queued address-change email");
+      expect((await delivery(updated.giftDelivery)).body_text).toContain("Sign in or create an account");
+    });
+    expect(said).toContain("account lookup failed, inviting");
+    expect(said).toContain("audience unavailable, inviting");
+    expect(said).not.toContain(emailOf(READER));
+  });
+
   it("reads a found reader's plan from the database", async () => {
     expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
       kind: "reader",
       plan: { kind: "free", limit: 3, wallUsed: 0, waiting: 0 },
     });
+  });
+
+  it("reads the wall's public, minimal, in-flight and high-power costs for the email", async () => {
+    if (!pool) return;
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
+       values ($1, $2, 'public', now()) returning id`,
+      [READER, `voucher-email-usage-${randomUUID()}`],
+    );
+    const article = rows[0]?.id;
+    if (!article) throw new Error("expected an article id");
+    await pool.query(
+      `insert into spideryarn.ingest_events (owner_id, kind, reserved_at, succeeded_at, article_id)
+       values
+         ($1, 'ingest', now(), now(), $2),
+         ($1, 'minimal', now(), now(), null),
+         ($1, 'ingest', now(), null, null),
+         ($1, 'high_power', now(), now(), $2)`,
+      [READER, article],
+    );
+    expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
+      kind: "reader",
+      plan: { kind: "free", limit: 3, wallUsed: 402, waiting: 0 },
+    });
+  });
+
+  it("includes claimed gifts in a lapsed reader's Free limit", async () => {
+    const old = await givenVoucher(READER, 4);
+    expect((await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).claimed).toBe(1);
+    await pool?.query(
+      `update spideryarn.billing_accounts
+          set status = 'canceled', stripe_subscription_id = $2, stripe_customer_id = $3
+        where owner_id = $1`,
+      [READER, `sub_lapsed_${READER}`, `cus_lapsed_${READER}`],
+    );
+    expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
+      kind: "reader",
+      plan: { kind: "free", limit: 7, wallUsed: 0, waiting: 0 },
+    });
+    expect((await deliveriesOf(old.id)).filter((row) => row.kind === "gift")).toHaveLength(1);
   });
 
   it("uses the new count when a PATCH changes the address and the articles together", async () => {

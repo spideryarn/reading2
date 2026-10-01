@@ -33,9 +33,8 @@ Not a bug in the sending, and not about existing users. Read from production (re
   only), so the send gate would not have stopped one either.
 
 So the build he used had no code that sent a voucher email at all. Nothing to recover for that
-voucher: it is already claimed, a gift email to it is no longer retryable by design, and its claim
-predates the creator's notice too. The next voucher he creates will be the first real test of the
-send.
+voucher: there is no delivery row to retry, and its claim predates the creator's notice too. The
+next voucher he creates will be the first real test of the send.
 
 **What is still wrong today** is what he asked for second: the email that would go out now is one
 invitation for everybody — *sign in, or create an account, with this same address* — which is the
@@ -94,8 +93,9 @@ The existing rule refused a gift email's Retry once its voucher was claimed. For
 that makes nearly every failure permanent: they claim the moment they next open Spideryarn, usually
 before anybody has looked at the Status cell. **A gift Retry now needs only an unrevoked voucher still
 at the address the email was frozen with**, claimed or not. A `sent` email is still never retried,
-so this cannot send a second copy of a delivered one. This is the at-most-once outbox's predicate,
-not a security check.
+so the change adds no second path to a row known to have been delivered. It retains the outbox's
+existing, documented limit: after an ambiguous attempt, a Retry beyond Resend's 24-hour idempotency
+window can send a duplicate. This is the outbox's predicate, not a security check.
 
 ## How the lookup works, and what it costs
 

@@ -19,7 +19,7 @@
  * project with two accounts on it — docs/reusable/silent-success.md, and see
  * `pages()` below for how the fake is built.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   accountFrom,
@@ -587,6 +587,23 @@ describe("the request itself", () => {
     await withFetch(spy, () => gotruePages("https://project.supabase.co/", "k")(2, 50));
     expect(url).toBe("https://project.supabase.co/auth/v1/admin/users?page=2&per_page=50");
   });
+
+  it("hands its abort signal to fetch, where aborting it ends the request", async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | null | undefined;
+    const hung: typeof globalThis.fetch = async (_input, init) => {
+      seen = init?.signal;
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    };
+    const request = withFetch(hung, () =>
+      gotruePages("https://project.supabase.co", "service-role-key", controller.signal)(1, 200),
+    );
+    controller.abort(new Error("deadline"));
+    await expect(request).rejects.toThrow("deadline");
+    expect(seen).toBe(controller.signal);
+  });
 });
 
 /* The gift voucher's email asks who has an address (261002a). */
@@ -653,4 +670,34 @@ describe("the one account with this address, and only if confirmed", () => {
     });
     expect(seen?.aborted).toBe(true);
   }, 10_000);
+
+  it("refuses an Auth/database project mismatch before making a request", async () => {
+    const before = {
+      database: process.env.DATABASE_URL,
+      supabase: process.env.SUPABASE_URL,
+      key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    };
+    const realFetch = globalThis.fetch;
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    globalThis.fetch = fetch;
+    process.env.DATABASE_URL =
+      "postgresql://postgres:password@db.aaaaaaaaaaaaaaaaaaaa.supabase.co:5432/postgres";
+    process.env.SUPABASE_URL = "https://bbbbbbbbbbbbbbbbbbbb.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    try {
+      expect(await confirmedAccountByEmail("a@x.test")).toEqual({
+        kind: "unavailable",
+        reason: "the account list failed",
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = realFetch;
+      if (before.database === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = before.database;
+      if (before.supabase === undefined) delete process.env.SUPABASE_URL;
+      else process.env.SUPABASE_URL = before.supabase;
+      if (before.key === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = before.key;
+    }
+  });
 });
