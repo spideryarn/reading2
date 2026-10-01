@@ -60,11 +60,14 @@ expects one embedded picture where a figure has several panels or pictures.
 - **Shipped:** `renderHtml` writes each table's cells as a `<table>` inside its figure, and
   the check gates cells like prose (`CHECKED` in `src/pdf.ts`). It is forward-only: an
   article changes when it is re-extracted.
-- **Not shipped:** composite figures. Rendering the model's box was designed, and GPT Sol's
-  review found it could take in a captionless table or another figure's region. Its safety
-  veto, the strict layout read, also fails on every page that holds a picture. So it waits
-  on a layout read that measures pictures, or on a narrower rule. The options and the
-  decision Greg owns are in the plan's § Stage 2.
+- **Shipped, second:** composite figures. When the locator's judge refuses a box for holding
+  several things, `judgeLocatedRegion` renders the box once the page ties it to its
+  caption, and the locator is asked about every refused figure. The first design was
+  refused by GPT Sol's review, because it could take in a captionless table or another
+  figure's region. Greg then set the bar (*"I'd rather accidentally pull in a bit of extra
+  stuff … than have no figure imported at all"*), so the rule binds the region to its
+  caption instead of proving that every pixel is the figure's. A re-run of the assets stage
+  alone recovers an existing article's figures (`pdf-figures/6`).
 - **Right for the long term:** a figure is a *region of a page bound to its caption*, not a
   picture. All three routes should end up proving that region and rendering it. The bitmap
   route's "store the embedded picture whole" would then be an optimisation for the

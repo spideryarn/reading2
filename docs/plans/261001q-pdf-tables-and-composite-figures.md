@@ -268,6 +268,20 @@ covers the whole-page case only.
 - The gate: two cases in `tests/pdf-score.test.ts` — an invented number in a cell is
   `invented`, while a footnote's stays `unshown`. The cell case is red with `tabledata`
   taken back out of `CHECKED`; the footnote case pins the deliberate contrast.
-- Stage 2, when it is built: Sol's list (finding 10) — a zero-picture vector page, a
-  different sole caption, a captionless table, a low-text scan, an `other` paint, shading
-  or unmeasured paint, two markers choosing one region — plus the real paper by hand.
+- Stage 2, the judge: `tests/pdf-figure-located-region.test.ts` — a framed 2×2 grid
+  rendered whole; snapping out to a picture the box cut, and not to one it barely touched;
+  a stray prose line and a failed strict read with unmeasured paint both accepted (Greg's
+  bar); a caption beside the figure; refused when the caption is far away, when a table's
+  caption is inside, when another figure's caption is as near, when the box is mostly
+  prose, when the caption is only mentioned mid-line; an `other` paint not snapped to.
+- Stage 2, the wiring: `tests/collect-pdf-composite-figures.test.ts`, two generated PDFs
+  and a scripted locator — two photos under one caption (`ambiguous` without the route),
+  stored; two charts with a small legend and no picture on the page (never asked before
+  the gate change), asked and stored; a box around prose, refused. Red on the collector
+  and locator before the change, by swapping the committed files back in. The
+  `pdf-figures/6` stamp is pinned in `tests/collect-assets.test.ts`.
+- The real paper, by hand: `collectPdfFigures` with the real locator on the production
+  PDF (three calls) — all three figures stored, at 1502×928, 1335×1188 and 1124×375, the
+  renders looked at: each figure whole with its labels and nothing else. A box around
+  Table 3 with Fig 1's caption is refused `caption-not-adjacent`, and a box around the
+  prose under Fig 2 is refused `mostly-prose`.

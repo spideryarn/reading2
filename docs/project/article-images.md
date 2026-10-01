@@ -277,19 +277,23 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   figures are refused in v1. It costs ~$0.002 a call, at most `MAX_LOCATE_CALLS` per article, and
   nothing for an article whose figures all pair. Every test passes `locate: null` or a script, so
   the suite spends nothing.
-- **A composite assembled from several PDF objects can get no picture from any route.** Six
-  photos in a grid, eight blot strips, three charts in one frame: the bitmap route sees
-  several pictures (`ambiguous`), the drawn route refuses any page with a
-  picture and any panel under 36 pt (`not-located`), and the locator's judge stores one
-  embedded picture whole, so a box around a composite is refused (`assembly`,
-  `not-one-picture`) even when the box is right — and on the paper behind report
-  spya-pawfwx it was right three times out of three. In production on 2026-10-01, 26 of
-  36 PDF figures had no picture, 22 of them `ambiguous`; that refusal word does not say
-  whether the page held a composite or several unrelated pictures. Rendering the model's
-  box instead was designed and reviewed and **not built**, because its acceptance rule
-  could take in a table or another figure's region, and the strict-read veto it needs fails
-  on every page with a picture; the findings and the two cheaper options (framed figures
-  only, or the whole page) are in
+- **Since 2026-10-01 a composite figure is rendered from the model's box.** Six photos in
+  a grid, eight blot strips, three charts in one frame: the bitmap route sees several
+  pictures (`ambiguous`), the drawn route refuses any page with a picture and any panel
+  under 36 pt (`not-located`), and the locator's own judge stores one embedded picture
+  whole. So a composite got no picture from any route, even when the model's box was
+  right — on the paper behind report spya-pawfwx it was right three times out of three.
+  In production that day, 26 of 36 PDF figures had no picture, 22 of them `ambiguous`.
+  Now, when the judge refuses for what is *in* the box, `judgeLocatedRegion`
+  ([`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts)) snaps the box out to whole
+  pictures, drawings and labels and renders it with PDFium, **once the page ties it to its
+  caption**: the caption found once at a line start and sitting beside the region, no other
+  figure's or table's caption in it or as near, and not mostly prose. **The bar is lower
+  than the other routes' on purpose**, and it is Greg's: *"I'd rather accidentally pull in
+  a bit of extra stuff that got included within the bounding box than have no figure
+  imported at all"* (2026-10-01). A stray line or the edge of a neighbour may come along;
+  a region tied to the wrong caption may not. The locator is now asked about every refused
+  figure, not only one with a picture nearby, still capped at `MAX_LOCATE_CALLS` —
   [261001q § Stage 2](../plans/261001q-pdf-tables-and-composite-figures.md).
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
