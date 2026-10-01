@@ -20,7 +20,7 @@ and runs the job.** Claude writes this plan, reads every hunk, runs the gates, c
 each stage to `dev`.
 
 Found by [261001p § Ledger](261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
-Postmortem: [261001c](../postmortems/261001c-a-model-answer-patches-a-mistyped-id-with-code.md).
+Postmortem: written in stage 4, under `docs/postmortems/` (not linked until it exists).
 
 ## What happens
 
@@ -74,9 +74,13 @@ So: it works on our wire with the models we use, and streaming and adaptive thin
 work. **But at `low`, adapting to the schema, the model chose to skip thinking altogether, twice.**
 That is a quality risk, and it has to be measured rather than assumed in either direction. The
 thinking-effort eval found Structure with thinking *off* dropped far more of the author's headings.
-The structure call has no cache breakpoint, so nothing here tested caching. For stages that share a
-cached article (arc and tweets), the format is part of the request, and that has to be measured per
-group, as `effort` was ([prompt-caching.md](../project/prompt-caching.md)).
+The structure call has no cache breakpoint, so nothing here tested caching. **Changing
+`output_config.format` invalidates a prompt cache** (Anthropic's structured-outputs docs), and
+`sharesArticleCache` in src/pipeline.ts groups stages by effort and renderer only. So the schema's
+identity becomes a third cache-compatibility dimension before any cache-sharing stage gets a
+schema (r3 H2; [prompt-caching.md](../project/prompt-caching.md)). Anthropic's current Sonnet
+guidance also warns that structured outputs at low or medium effort can skip thinking, and suggests
+a line asking the model to think the problem through first (r3 H3).
 
 **What a schema guarantees, and what it does not.** It guarantees syntax and shape: no
 `.replace(…)`, no stray value, every required field present. It does not guarantee that an id is
@@ -92,9 +96,10 @@ is exactly a wrong id let through silently.
 1. **In-band revision.** A model writing JSON token by token cannot take back what it has written.
    When it decides an id is wrong, whether mistyped or a boundary it has reconsidered, it writes the
    edit as code.
-2. **We ask for JSON in prose, and nothing enforces it.** Three small steps already use strict
-   structured outputs (`src/pdf-figure-locate.ts`, `src/pdf-frontmatter.ts`,
-   `src/paper-metadata.ts`, on the chat-completions wire). The pipeline's big calls do not, and no
+2. **We ask for JSON in prose, and nothing enforces it.** Six smaller jobs already use strict
+   structured outputs on the chat-completions wire (`src/paper-metadata.ts`, `src/pdf-authors.ts`,
+   `src/pdf-figure-locate.ts`, `src/pdf-frontmatter.ts`, `src/pdf-read.ts`,
+   `src/shelf-terms/model-scores.ts`, as of `origin/dev` merged 2026-10-01). The pipeline's big calls do not, and no
    doc records a decision either way.
 3. **Structure asks for the field where the edit happens.** The end of a section is redundant: the
    start is believed and the end is computed, as src/hierarchy-expand.ts already does. Yet it is the
@@ -116,8 +121,9 @@ turns a sampling accident into a failed step.
 | A prompt line saying "never write code" | Not done: a schema enforces what a line would only ask. |
 
 **What the safety claim is, stated narrowly** (r2 G2): no parser repair creates or accepts a
-value. A schema cannot invent an id either: every id is still resolved with `index.get`, and an
-invented start refuses with today's error. **A wrong-but-real start remains possible, exactly as it
+value. A model held to a string can still write an invented id, and the resolver, not the schema,
+refuses it: every id is still resolved with `index.get`, and an invented start refuses with
+today's error. **A wrong-but-real start remains possible, exactly as it
 is today.** Only structural measurement and human review catch it, and nothing here makes it more
 likely. The one design that would make it more likely, an id `enum`, is forbidden above.
 
@@ -140,109 +146,159 @@ results. The stage-0 before arm below ran without it, so its spend is missing fr
 `evals/paperwork/structure-parse.ts` keeps **every** raw answer now. Fresh `toc/10` draws: 40 on
 `analog-cognition` (labels `before-a1`–`a4`; a stress arm, never presented as a population rate)
 and 10 each on `entropy-24-00930`, `scaling-hypothesis` and `source-spya-f550ta` (`before-o`).
-**Result:** `analog-cognition` **2 in 40** answers malformed; the other three articles 0 in 28
-(the last two draws were still running when this was written). Both failures were `.replace` on a
+**Result:** `analog-cognition` **2 in 40** answers malformed; the other three articles 0 in 30. Both failures were `.replace` on a
 range **end** — `"spya-zj9hxx".replace("spya-zj9hxx","spya-dnv2tp")` and, again,
 `"spya-p6hwth".replace("spya-p6hwth","spya-vp5h33")` — so seven of the eight events seen so far are
 ends.
 
-### Stage 1 — structured outputs as a shared seam, plus Structure's starts-only converter (no prompt change)
+### Stage 1 — the schema seam for the Messages wire, and Structure's starts-only converter (no prompt change)
 
-- **A shared helper for a strict JSON-schema format on the Messages wire**, in a new module beside
-  src/messages-stream.ts, so that no stage hand-writes `output_config`. It merges `format` with the
-  existing `effort` and never drops it; `messages-stream.ts` line ~477 already merges
-  `output_config` for the high-power model, and both have to compose. It validates at test time
-  that a schema has no `$ref` cycle and sets `additionalProperties: false` on every object, so the
-  upstream 400 is found in `npm test` and not in production. And it states the id rule: no `enum`
-  of block ids.
-- **Structure's starts-only answer type and converter** (r2 G1): `ModelNode.range` stays
-  `[string, string]`. A separate answer type (`root` with no range, children carrying `start`) is
-  converted at the `treeFrom` boundary: the root gets the body range, and every child's full range
-  is derived. The start-to-ranges kernel is **extracted from `normaliseExpansion`** and shared,
-  with the whole-document policy explicit where the two differ: an outside-parent start is clamped
-  here and refused there, and a one-child set collapses here and is refused there. The resulting
-  ordinary `ModelNode` goes to `buildTree`. Evals that parse structure answers
-  (`evals/hierarchy-structure/model-arms.ts`, `evals/paperwork/run.ts`, `evals/plain-words/run.ts`,
-  `evals/paperwork/structure-parse.ts`) call the same converter, never their own.
-- **The live `toc/10` path is unchanged, byte for byte**: the parity and hoist pins stay green, and
+Built on a tree that already has `origin/dev` merged into it (r3 H1). So the thinking-effort harness,
+Sketch's move to `low` and the six chat-wire schema users are all in front of the builder.
+
+- **A pure, non-mutating validator over Anthropic's supported schema subset**, run whenever a format
+  is built, not only in tests (r3 H4). It refuses:
+  - direct and indirect `$ref` cycles, and external refs (local acyclic refs are allowed);
+  - any object, at any depth, without `additionalProperties: false`. That includes objects under
+    `properties`, `items`, `$defs`/`definitions`, `anyOf` and `allOf`;
+  - `minLength`, `maxLength`, `minimum`, `maximum`, `multipleOf` and unsupported array constraints;
+  - regexes outside the supported subset;
+  - optional and union counts beyond a stated ceiling.
+
+  **And no `enum` on a field that carries a block id.** That is part of the helper's contract, with
+  a test over every schema we ship.
+- **One wire adapter, for the Messages wire only** (r3 H5). It sets `output_config.format =
+  {type: "json_schema", schema}` and composes with `effort`. Its tests:
+  - an explicit effort plus a format both survive unchanged;
+  - a high-power adaptive call still gains `effort: "high"` through `messagesWireBody`, without
+    losing the format;
+  - a standard-power call keeps the format and gains no effort.
+
+  The six chat-wire users are left as they are. A chat adapter is written only if stage 3 moves a
+  chat call. It would reuse the same validator and keep each job's name, `strict: true` and
+  `require_parameters` routing.
+- **Structure's starts-only answer type and converter** (r2 G1, r3 H7). `ModelNode.range` stays
+  `[string, string]`. A separate answer type, with no range on `root` and a `start` on each child, is
+  converted at the `treeFrom` boundary into ordinary `ModelNode`s for `buildTree`. The kernel that
+  turns starts into ranges is extracted from `normaliseExpansion` and shared, with the
+  whole-document policy written out wherever the two differ. Direct tests:
+  - nested derivation;
+  - a start outside its parent, first or later (clamped here, refused in the scoped call);
+  - duplicate and non-increasing starts;
+  - the heading snap;
+  - one-child input, and a set that collapses to one child after drops;
+  - root and body bounds;
+  - no mutation of the answer object.
+
+  The evals that parse structure answers call the same converter once the wire changes in stage 2:
+  `evals/hierarchy-structure/model-arms.ts`, `evals/paperwork/run.ts`, `evals/plain-words/run.ts`,
+  `evals/paperwork/structure-parse.ts`, and the thinking-effort harness if it parses one.
+- **The live `toc/10` path is unchanged, byte for byte.** The parity and hoist pins stay green, and
   an existing ranged checkpoint replays to the identical tree.
-- **Offline replay, free:** every retained `toc/10` answer that builds today — the stage-0 raws and
-  the local database's `hierarchy-structure` checkpoints — is built twice: as today, and with its
-  ends deleted, through the converter. The gate is r2 G7's: zero newly unbuildable answers, zero
-  additional dropped children, zero lost authored headings, and an identical flattened
-  `(depth, title, range)` tree for ≥ 99 % of answers (with fewer than 100, zero unexplained
-  changes). Claude reads every tree that is not identical. **If it fails, stop and rethink.**
-- Tests, red first: the helper's schema checks; the converter on a starts-only answer gives the
-  same tree as an agreeing ranged answer; an invented start refuses with the existing message; a
-  colliding start drops and counts.
+- **Offline replay, free.** Every retained `toc/10` answer that builds today — the 70 stage-0 raws
+  and the local database's `hierarchy-structure` checkpoints — is built twice: as today, and with
+  its ends deleted, through the converter. The gate (r2 G7):
+  - zero newly unbuildable answers;
+  - zero additional dropped children;
+  - zero lost authored headings;
+  - an identical flattened `(depth, title, range)` tree for ≥ 99 % of answers (with fewer than 100,
+    zero unexplained changes).
+
+  Claude reads every tree that is not identical. **If it fails, stop and rethink.**
 
 ### Stage 2 — Structure on `toc/11`: starts-only and schema-constrained, measured
 
-- SYSTEM's OUTPUT asks for `start`, with src/hierarchy-expand.ts' wording. The request carries the
-  three-level unrolled schema via the stage-1 helper. `PROMPT_VERSION` becomes `toc/11`. Everything
-  pinned moves with it, and the plan names it (r2 G6): the parity test, the hoist pin and its digest,
-  `EXPANSION_PROMPT_STAMP` (`toc/10+expand/7` becomes `toc/11+expand/7`, so **every existing
-  deepening checkpoint misses once**, which is accepted), and a test that a `toc/10` structure
+- SYSTEM's OUTPUT asks for `start`, worded as src/hierarchy-expand.ts words it. The request carries
+  the three-level unrolled schema through the stage-1 adapter. `PROMPT_VERSION` becomes `toc/11`.
+  The pins that move (r2 G6): the parity test, the hoist pin and its digest, and
+  `EXPANSION_PROMPT_STAMP` (`toc/10+expand/7` becomes `toc/11+expand/7`). So **every existing
+  deepening checkpoint misses once**, which is accepted. Plus a test that a `toc/10` structure
   checkpoint is not resumed under `toc/11`.
-- **After arm, paid, with spend recorded:** the same 40/10/10/10 draws on `toc/11` at production
-  effort (`low`). Reported per article: parse failures (with exact intervals, and Fisher's test
-  against stage 0 as a description, not proof), invented-start refusals, dropped children, dropped
-  authored headings, depth-1 part counts, thinking tokens, cost and duration.
-  **Shipping gate:** zero invented-start failures and zero dropped children across the arm; any
-  occurrence stops shipping pending review.
-- **Quality, because the schema switched thinking off at `low`:** the thinking-effort harness on
-  dev (research 261001c, its quality panel) is run for Structure on `toc/11` against `toc/10` at
-  `low`. If `toc/11` at `low` is worse, the same panel runs `toc/11` at `medium`, and the
-  effort/quality/cost trade goes to Greg as numbers. **Production effort is not changed here
-  without Greg** (the Overseer's instruction). If `toc/11` at `low` holds quality, it ships at
-  `low`.
+- **Validity arm, paid, with spend recorded.** The stage-0 draws again (40/10/10/10), on `toc/11` at
+  production effort (`low`). Reported per article: parse failures with exact intervals, refusals on
+  invented starts, dropped children, dropped authored headings, depth-1 part counts, thinking
+  tokens, cost and duration. **Gate:** zero refusals on invented starts and zero dropped children.
+- **Quality, pre-registered (r3 H3).** The thinking-effort harness's rule, unchanged:
+  - the eight articles, two draws per arm (`toc/10` at `low` as the base, `toc/11` at `low` as the
+    candidate), one blind lineup per article;
+  - Sol ranks and Opus scores, giving U per article;
+  - a clear loss is a mean U ≤ 1.1 and a possible loss is up to 1.5, with the worse judge winning;
+  - Hierarchy's stricter structural gates apply as well.
 
-### Stage 3 — survey every JSON call, and move each one that fits
+  **A loss stops shipping.** If `toc/11` at `low` loses, the next arm is `toc/11` at `low` plus
+  Anthropic's think-first line, and only after that `medium`. The cost and quality numbers go to
+  Greg, and production effort is not changed without him.
 
-- Sol lists every model call that expects JSON back (all `parseJsonAnswer` / `parseJsonFrom`
-  callers, the chat-completions wire's `response_format` users, anything that `JSON.parse`s model
-  text), with: the wire, the model, whether the answer is streamed and parsed partially while it
-  arrives, cache-group membership, the shape (and whether it is recursive), any citations (which
-  are incompatible with a format), and an eval if one exists.
-- Each one that fits moves onto the stage-1 helper, with its own schema and a red-first test that
-  the request carries it. Each one that does not fit is named with its reason in this doc. Calls
-  that stream partial JSON to a reader (for example a summary that renders as it arrives) are
-  checked to still render as they arrive.
-- Where an eval exists — Ideas and Sketch (the effort harness), Quotes (trajectory's) — failure
-  rates before and after, paid, with spend recorded.
-- Cache groups (arc and tweets): measured, so that a format on one does not quietly cost the other
-  its cache read.
+### Stage 3a — the survey (read-only, Sol)
 
-### Stage 4 — lower thinking, re-tested (paid, report only)
+A matrix, in this doc, of **every model call that expects JSON back**:
 
-Re-run the thinking-effort harness on dev (research 261001c) for the cases rejected **only because
-of broken JSON**, now with the schema: Ideas at `medium` and `low` (10 in 16 malformed before), plus
-any others the research doc names. Report validity, cost, duration and the quality panel's verdict
-against today's setting. **No production effort setting changes.** That is Greg's call on the
-numbers.
+- `parseJsonAnswer` and `parseJsonFrom` callers that parse a model's answer. Not the parsers of
+  stored data, such as src/shelf.ts, src/chat.ts, src/comments.ts, src/searches.ts and
+  src/glossary-lookups.ts;
+- the chat-wire `response_format` users;
+- any other `JSON.parse` of model text.
 
-### Stage 5 — the rule, the postmortem, the hand-off
+Its columns (r3 H6): the wire; model and effort; provider support; whether it streams and parses
+partially; cache group; shape, and whether it is recursive; tools or plugins (web search);
+refusal and truncation handling; prefill; cold-schema latency; any eval; and the verdict — fits,
+or does not fit and why.
 
-- **The rule, in one home** (docs/project/ai-gateway.md or prompting-guide.md, whichever owns *how
-  we call a model*; the other signposts it): every call that expects JSON uses a strict schema
-  through the helper; no `enum` of ids; ids are still resolved; recursion must be unrolled.
-- **docs/project/mode.md** (an entry-point rule doc): a checklist line. **Proposed only, as before
-  and after wording in the hand-off for Greg's approval**, not applied
+Already expected not to fit without a probe:
+
+- src/debate.ts: a schema together with `openrouter:web_search` is unmeasured;
+- src/citation-find.ts and src/source-guess-run.ts: the search annotations are the security
+  witness;
+- src/dig-deeper.ts, for the same reason;
+- src/referee-candidates.ts: it streams reader-visible prose around a hidden shortlist.
+
+src/citations.ts is ordinary JSON, and its name does not exclude it. src/search.ts needs proof that
+`hitExtractor` still emits hits before completion.
+
+### Stage 3b — the migrations, in small commits, observed failures first
+
+Each one gets the schema through the adapter, a red-first test that the request carries it, and
+the existing refusal and truncation checks kept before the parse.
+
+**Cache-group identity comes first.** `sharesArticleCache` gains the schema as a dimension, or
+stages with different schemas are declared incompatible. Red-first grouping tests, and one paid
+writer/reader check that asserts non-zero cache reads (r3 H2).
+
+1. **Ideas**, with its lower-effort re-test in the same draws (r3 H8): the harness at `high`
+   (today) against `medium` and `low`, all under the schema. It reports validity, cost, duration
+   and the panel's verdict. Production effort does not change; that is Greg's call on the numbers.
+2. **Sketch**, now at `low`: a same-effort before/after quality panel, because a schema at `low`
+   may switch its thinking off.
+3. **Quotes** (the Sentry event), with a validity count from its eval.
+4. The remaining Messages-wire calls that fit, grouped by cache group.
+5. The chat-wire calls that fit, through a chat adapter over the same validator.
+
+### Stage 4 — the rule, the postmortem, the hand-off
+
+- **The rule, in one home.** That is docs/project/ai-gateway.md or prompting-guide.md, whichever
+  owns how we call a model; the other signposts it. Every call that expects JSON uses a strict
+  schema through the adapter, and:
+  - no `enum` of ids;
+  - ids are still resolved;
+  - recursion is unrolled;
+  - the schema is part of cache compatibility;
+  - at low effort, check that thinking still happens.
+- **docs/project/mode.md**, an entry-point rule doc, gets a checklist line. It is **proposed
+  only**, as before and after wording in the hand-off, for Greg's approval
   ([edit-important-docs.md](../reusable/edit-important-docs.md)).
 - The postmortem's five things, a line under postmortems.md, the 261001p ledger pointed here, and
   hierarchy.md's prompt versions.
-- The message to the Overseer, with the plain-words answer to Greg's question: yes there is a JSON
-  mode; why it was not used; what it fixes and what it does not.
+- The message to the Overseer, with the plain-words answer to Greg's question.
 
 ## Done
 
-- Structure is on `toc/11`: starts-only and schema-constrained, measured before and after, quality
-  held or the trade put to Greg.
-- Every JSON call is on a schema or named with its reason. The rule is written in one home, and the
-  mode.md line is proposed.
-- The lower-thinking re-test is reported, with no production change.
-- No lenient parse anywhere. Ids are still resolved; no `enum` of ids.
-- Each stage committed and pushed to `dev` as it lands.
+- Structure is on `toc/11`, starts-only and schema-constrained. It is measured before and after,
+  and passes the pre-registered quality rule, or the trade goes to Greg.
+- Every JSON call is either on a schema or named with its reason. The rule is written in one home,
+  and the mode.md line is proposed.
+- Ideas' lower-effort re-test is reported, with no production change.
+- No lenient parse anywhere. Ids are still resolved, and there is no `enum` of ids.
+- Each stage is committed and pushed to `dev` as it lands.
 
 ## Ledger
 
@@ -257,3 +313,19 @@ numbers.
   is the evidence that structured outputs work on our wire. Revision 3 is reviewed read-only by
   Sol before stage 1 is built. Per the two-rounds rule this is a review of new scope, not a third
   round on the old.
+- **Plan review r3 (Sol, new scope): revise before building.** No P0s, and all eight findings
+  accepted:
+  - H1: `origin/dev` is merged before stage 1 (done, the merge under `34509bc09`). There are six
+    chat-wire schema users, not three.
+  - H2: the schema's identity is a cache dimension. Arc and Tweets do not share a cache, which the
+    plan had wrong.
+  - H3: the quality rule is pre-registered; the think-first line comes before `medium`; Sketch gets
+    a quality panel too.
+  - H4: a runtime validator over the whole supported subset.
+  - H5: a Messages-only adapter, and a chat one only if it is needed.
+  - H6: the survey's columns and the calls expected not to fit.
+  - H7: direct converter tests, and "a schema cannot invent an id" corrected.
+  - H8: the survey split out, and Ideas' effort re-test folded into its migration.
+
+  Revision 4 is not sent for another plan round. Per the two-rounds rule Claude settles it, and
+  stage 1's build is the next check.
