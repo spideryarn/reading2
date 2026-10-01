@@ -1,0 +1,97 @@
+[
+  {
+    "id": "P1",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P2",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P3",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P4",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P5",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P6",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P7",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P8",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P9",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P10",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P11",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P12",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P13",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P14",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P15",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P16",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P17",
+    "left": "before-2",
+    "right": "after-2"
+  },
+  {
+    "id": "P18",
+    "left": "after-2",
+    "right": "before-2"
+  },
+  {
+    "id": "P19",
+    "left": "before-2",
+    "right": "after-2"
+  }
+]

@@ -92,6 +92,26 @@ describe("tweets' prompt", () => {
     for (const marker of MARKERS) expect(out).not.toContain(marker);
     expect(out).not.toMatch(/\n{3,}/);
   });
+
+  it("turns a many-author byline into an attribution instruction, never a list", () => {
+    const out = tweetsPrompt({
+      meta: {
+        ...META,
+        byline: "A. One, B. Two, C. Three",
+        authors: [
+          { name: "A. One", affiliations: [] },
+          { name: "B. Two", affiliations: [] },
+          { name: "C. Three", affiliations: [] },
+        ],
+      },
+      tree: TREE,
+      posts: 6,
+      profile: null,
+    });
+    expect(out).toContain('That is 3 authors: write "the authors"');
+    expect(out).toContain('the first author\'s surname and "colleagues"');
+    expect(out).toContain("Never list them");
+  });
 });
 
 /**

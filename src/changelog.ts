@@ -178,6 +178,23 @@ export interface ParseResult {
   problems: string[];
 }
 
+/**
+ * **The release about to ship**, from `src/web/changelog-pending.json` — the
+ * notes `changelog.ts plan --upcoming` and `write --pending` produce before the
+ * deploy, so they go out *in* it (docs/plans/261001q).
+ *
+ * The same shape as a line, with the one field it cannot know: there is no
+ * deployment yet. `version` is when it was planned; `sha` is the tip the notes
+ * describe. Once production is serving it, `changelog.ts promote` appends it to
+ * the history with the real deployment's id and build time, and clears it.
+ */
+export type PendingRelease = Omit<ChangelogVersion, "deployment_id"> & { deployment_id: null };
+
+export interface PendingParseResult {
+  pending: PendingRelease | null;
+  problems: string[];
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -455,6 +472,41 @@ export function parseChangelog(text: string): ParseResult {
 
   problems.push(...chainProblems(versions));
   return { versions, problems };
+}
+
+/**
+ * Parse the pending file against the history it will be appended to.
+ *
+ * `null` (the file's whole content) is *nothing pending*. Anything else must be
+ * one release that would pass as the history's next line: the same field checks,
+ * `deployment_id` null rather than an id, `previous_sha` the history's last `sha`
+ * and a `version` after its last — so that `promote` appending it later cannot
+ * be the first time anybody finds out it does not fit. Its `release` is the
+ * number it will have as a line.
+ */
+export function parsePending(text: string, history: ChangelogVersion[]): PendingParseResult {
+  const problems: string[] = [];
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    return { pending: null, problems: [`pending: does not parse (${(err as Error).message.slice(0, 60)})`] };
+  }
+  if (raw === null) return { pending: null, problems };
+  if (!isRecord(raw)) return { pending: null, problems: ["pending: neither null nor an object"] };
+  if (raw.deployment_id !== null) {
+    return { pending: null, problems: ["pending: deployment_id must be null — it has not been deployed"] };
+  }
+  /* `readVersion` insists on an id, which is right for every line of the
+     history; lend it a placeholder rather than loosen it for all of them. */
+  const v = readVersion({ ...raw, deployment_id: "pending" }, "pending", problems);
+  if (!v) return { pending: null, problems };
+  const release = (history.at(-1)?.release ?? 0) + 1;
+  const asLine: ChangelogVersion = { ...v, release };
+  for (const p of chainProblems([...history, asLine]).filter((q) => q.startsWith(`${v.version}:`))) {
+    problems.push(`pending ${p}`);
+  }
+  return { pending: { ...v, release, deployment_id: null }, problems };
 }
 
 /**

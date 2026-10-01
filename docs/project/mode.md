@@ -254,8 +254,8 @@ for is that the second one is worth reading. The rule is
 So `description` is the mode in one fragment — it is also what the command bar draws inline beside
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
 the current modes that is almost always one of three things: **it reads something already built**
-(Structure, Summary), **its content is a model pass over the article, written once and
-stored** (Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram's Sketch
+(Structure), **its content is a model pass over the article, written once and
+stored** (Summary's plain-words levels, which a press on the bar does not yet start, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
 or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining

@@ -449,3 +449,25 @@ describe("the scan, where there is nothing to check against", () => {
     expect(ok.pages[0]!.recall).toBeNull();
   });
 });
+
+describe("a table's cells, which the reader sees since 2026-10-01", () => {
+  const page = "Table 3. HER-2 Status. Negative 27 0 Positive 3 9";
+  const rec = (type: PdfRecord["type"], text: string): PdfRecord => ({ page: 1, type, text, continues: false, uncertain: false });
+
+  it("gates a number in a cell that is on none of the pages, as it gates prose", () => {
+    /* docs/plans/261001q-pdf-tables-and-composite-figures.md: a cell is shown,
+       so an invented value in one is not merely "unshown". */
+    const score = scorePage(1, [page], [
+      rec("table", "Table 3. HER-2 Status."),
+      rec("tabledata", "Negative | 27 | 0\nPositive | 31 | 9"),
+    ]);
+    expect(score.invented).toContain("31");
+    expect(score.unshown).not.toContain("31");
+  });
+
+  it("does not gate a footnote, which stays reported only", () => {
+    const score = scorePage(1, [page], [rec("paragraph", "Negative 27 0 Positive 3 9"), rec("footnote", "See 1999.")]);
+    expect(score.invented).toEqual([]);
+    expect(score.unshown).toContain("1999");
+  });
+});

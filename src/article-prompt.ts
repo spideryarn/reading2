@@ -127,9 +127,11 @@ function head(meta: Meta, identity: ArticleIdentity): string {
  * is shown ids, including one written next year, is told in the same breath,
  * and a prompt that is shown none (the glossary, the arc) is not. The
  * hierarchy prompts render their own numbered blocks (src/hierarchy-prompt.ts)
- * and are not told yet: their request bytes are pinned to `toc/9`, and a
- * sentence there is a version bump that regenerates every tree. No hierarchy
- * leak has been seen; add it at the next bump —
+ * and are not told yet. No hierarchy leak has been seen. It was to ride on the
+ * next bump, and `toc/10` (plan 261001p) passed it by on purpose: that bump was
+ * measured as one change, and this note's first line ("Each block below starts
+ * with its id") is not true of the hierarchy's `[i] id <tag>:` lines, so it
+ * would want its own wording there, not a copy —
  * docs/plans/260928c-block-refs-shown-to-readers.md.
  */
 export const BLOCK_ID_NOTE = `Each block below starts with its id. The ids are for these instructions, not

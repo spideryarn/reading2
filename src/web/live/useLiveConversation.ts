@@ -88,7 +88,7 @@ import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 
 import type { SpokenExchange } from "../useChat.js";
 import type { SpokenLanded } from "../chat/controller.js";
 import { claimMicrophone, releaseMicrophone, type MicClaim } from "../mic-lock.js";
-import { audioConstraint, labelled, rememberedDevice } from "../mic-devices.js";
+import { audioConstraint, defaultInputListed, deviceMissing, labelled, rememberedDevice } from "../mic-devices.js";
 import { useAudioLevel } from "../useAudioLevel.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
 import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
@@ -1758,6 +1758,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              Only when a real microphone is wanted. The synthetic silent track
              opens no device, so claiming for it would make an automated check
              evict a reader's live dictation for a device it never touches. */
+          let microphoneFallbackNotice: string | null = null;
           if (microphone) {
             held = {
               /* Asked to stop by the next claimant.
@@ -1803,13 +1804,36 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           if (microphone) {
             if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser cannot open a microphone. Use a supported browser or carry on typing.");
             let stream: MediaStream;
+            /* The system default by name where the browser lists one, as
+               dictation does: mic-devices.ts § audioConstraint. */
+            const defaultListed = preferred === null && (await defaultInputListed());
+            if (stale()) return abandon();
             try {
-              stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred));
+              stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred, defaultListed));
             } catch (error) {
               if (stale()) return abandon();
-              if (!preferred || !(error instanceof DOMException) || !["OverconstrainedError", "NotFoundError"].includes(error.name)) throw error;
-              setNotice("Your chosen microphone is unavailable. Using the browser's default microphone.");
-              stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              if (!(preferred || defaultListed) || !deviceMissing(error)) throw error;
+              /* A missing chosen device takes the same system-default route as
+                 the picker. Its successful common path did not enumerate, so
+                 detect Chromium's named default only now. */
+              const fallbackDefaultListed = preferred !== null && (await defaultInputListed());
+              if (stale()) return abandon();
+              let namedDefaultVanished = false;
+              try {
+                stream = await navigator.mediaDevices.getUserMedia(
+                  audioConstraint(null, fallbackDefaultListed),
+                );
+              } catch (fallbackError) {
+                if (stale()) return abandon();
+                if (!fallbackDefaultListed || !deviceMissing(fallbackError)) throw fallbackError;
+                namedDefaultVanished = true;
+                stream = await navigator.mediaDevices.getUserMedia(audioConstraint(null));
+              }
+              if (preferred) {
+                microphoneFallbackNotice = namedDefaultVanished
+                  ? "Your chosen microphone is unavailable. Using another microphone."
+                  : "Your chosen microphone is unavailable. Using the system default microphone.";
+              }
             }
             track = stream.getAudioTracks()[0] ?? null;
           } else {
@@ -1818,6 +1842,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           }
           if (stale()) return abandon();
           if (!track) throw new Error("no microphone track [live-no-track]");
+          if (microphoneFallbackNotice) setNotice(microphoneFallbackNotice);
           /* **Created disabled, and that is the seeding barrier.** "Sent before
              the first response" does not prove "accepted before VAD created
              one": the reader can start talking the instant the connection is
