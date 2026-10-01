@@ -151,8 +151,19 @@ on the day it was written.
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```
-npm run eval:caching -- data/noema-mythology-of-conscious-ai
+npm run eval:caching -- noema-mythology-of-conscious-ai [--wire=chat|messages|both]
 ```
+
+The article is read from the store by slug. Two arms: the **chat wire** (search twice, chat twice)
+and the **Messages wire** (real stage functions with `cacheArticle: true`: quotes at another effort
+as a cold control, then `generateGlossary` and `generateQuotes` at their shared effort). The Messages
+arm checks the wire and the stages' byte layout, **not** the job wiring that sets the flag —
+[`tests/article-cache-call-site.test.ts`](../tests/article-cache-call-site.test.ts) is that half.
+Its verdict is PASS, FAIL, or WARM, INCONCLUSIVE when either intended-cold key was already warm.
+It requires one complete ledger row per stage and an exact write/read match; retries and partial
+matches fail. `loadArticle` is the reader-facing store view, so a shelf title override can differ
+from the extracted metadata a pipeline draft reads; both stages still receive the same bytes, which
+is the comparison this arm makes.
 
 **This one calls a model**, unlike `hierarchy-labels.ts`, and that is the whole point of it. Everything
 deterministic about prompt caching is already pinned in
@@ -162,9 +173,10 @@ None of that proves a cache was *read*. Only the provider can say, and the only 
 twice and look at the number.
 
 It searches one article twice with two different criteria, back to back, and prints
-`cacheReadTokens` / `cacheWriteTokens` and the cost against uncached. **The pass condition is a
-non-zero read on the second call.** Results land in `results/` so the next change is compared against
-a number.
+`cacheReadTokens` / `cacheWriteTokens` and the cost against uncached. The chat arm requires the warm
+read to cover most of the rendered article; the Messages arm uses the stricter exact comparison
+above. Results land in `results/` with an ISO timestamp, so a later run cannot overwrite the number
+it is meant to be compared with.
 
 Worth having as an eval rather than a test because the failure is invisible: a cache that has stopped
 hitting returns the right answer, raises no error, and only costs more
