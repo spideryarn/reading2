@@ -109,6 +109,18 @@
   flex: none;
   color: var(--ink-faint);
 }
+/* Nothing heard for ten seconds: the same words, warm rather than faint, and a
+   glyph, so it is noticed while the microphone is still on. The colour is
+   `.prof-mic-warn`'s — a fact worth knowing, not a failure. Plan 261001k. */
+.prof-listening.quiet .prof-listening-what {
+  color: var(--highlight-ink, var(--highlight));
+  font-weight: 600;
+}
+.prof-quiet-icon {
+  flex: none;
+  align-self: center;
+  color: var(--highlight-ink, var(--highlight));
+}
 
 /* The unconfirmed tail of a dictation. Italic and faint because it is a guess
    the recogniser may still revise — and it is never saved. */

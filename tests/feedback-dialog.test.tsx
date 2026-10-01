@@ -56,14 +56,20 @@ vi.mock("../src/web/router.js", () => ({
  * and that closing the dialog calls `toggle` — the guards GPT Sol's review of
  * the plan asked for, both of which pass by accident if the mock is a constant.
  */
-const mic = { supported: true, armed: false, transcribing: false };
+const mic = { supported: true, armed: false, transcribing: false, artifact: 7 };
 const micToggles: string[] = [];
+/** What `dismiss` was handed, in order. Plan 261001k. */
+const micDismissals: number[] = [];
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
     dictation: {
       ...mic,
       toggle: () => {
         micToggles.push("hook");
+      },
+      artifact: () => mic.artifact,
+      dismiss: (n: number) => {
+        micDismissals.push(n);
       },
     },
     readOnly: mic.transcribing,
@@ -998,6 +1004,44 @@ describe("the thank-you, and getting out of it", () => {
   });
 
   /**
+   * **A filed report takes its dictation's message with it.** Feedback report
+   * SPIDERYARN-READING2-7Z, Greg, 2026-10-01: a `[mic-silent]` from a
+   * dictation that caught nothing was still there on every later opening, after
+   * the report had been sent by typing. The dialog is mounted for the life of
+   * the page, and so is its dictation. What is dismissed is the artifact that
+   * was on the strip **when Send was pressed**, not whatever is there when the
+   * answer lands. Plan 261001k.
+   */
+  it("dismisses the dictation's message when the report is filed, as it stood at Send", async () => {
+    micDismissals.length = 0;
+    mic.artifact = 7;
+    mountControlled();
+    type("Typed instead.");
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    /* Something new on the strip while the send is away. */
+    mic.artifact = 8;
+    act(() => release?.());
+    await act(async () => {});
+    expect(micDismissals).toEqual([7]);
+    mic.artifact = 7;
+  });
+
+  it("leaves the dictation's message alone when the send fails", async () => {
+    micDismissals.length = 0;
+    mountControlled();
+    type("Typed instead.");
+    answer = async () => new Response("nope", { status: 500 });
+    send();
+    await act(async () => {});
+    expect(micDismissals).toEqual([]);
+  });
+
+  /**
    * **Words typed after Send are not the report that was filed**, so dismissing
    * the thank-you must not delete them.
    *
@@ -1012,6 +1056,7 @@ describe("the thank-you, and getting out of it", () => {
    * it is closed here rather than inherited.
    */
   it("keeps a sentence added after Send, and starts a new report for it", async () => {
+    micDismissals.length = 0;
     mountControlled();
     type("The first thing.");
     /* Send, and answer it only after the reader has typed more. */
@@ -1032,6 +1077,8 @@ describe("the thank-you, and getting out of it", () => {
        emptied — but not of words that were never in the POST. */
     expect(host.querySelector(".toast")).not.toBeNull();
     expect(firstBox().value).toBe("The first thing. And another.");
+    /* The box is a new draft, so what the strip says belongs to it. */
+    expect(micDismissals, "dismissed the dictation of a draft that was not sent").toEqual([]);
     /* And it is a new report, not a second send of the one already filed. */
     answer = ok(201);
     send();

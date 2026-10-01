@@ -58,6 +58,8 @@ vi.mock("../src/web/useDictation.js", () => ({
     clearRecording: () => {},
     canRetry: false,
     retry: () => {},
+    artifact: () => 0,
+    dismiss: () => {},
   }),
 }));
 
