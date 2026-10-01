@@ -81,14 +81,21 @@ function drawsShelf(route: Exclude<Route, { kind: "callback" }>, user: User): bo
  * A list of route kinds, and it has to be the same list as the branches below
  * that mount one of these four pages; tests/dock-corner-controls.test.tsx walks
  * them and counts.
+ *
+ * **A set rather than `route.kind === …` comparisons**, because
+ * tests/public-readable-sharing-page.test.tsx counts that exact text in this
+ * file to prove the page is mounted on both arms, and a predicate spelled the
+ * same way reads as a third mount.
  */
+const SITE_NAV_ROUTES: ReadonlySet<Route["kind"]> = new Set([
+  "features",
+  "public-sharing",
+  "pricing",
+  "public-library",
+]);
+
 function drawsSiteNav(route: Route): boolean {
-  return (
-    route.kind === "features" ||
-    route.kind === "public-sharing" ||
-    route.kind === "pricing" ||
-    route.kind === "public-library"
-  );
+  return SITE_NAV_ROUTES.has(route.kind);
 }
 
 /** Every page except those with a chrome row of their own to put Feedback in:

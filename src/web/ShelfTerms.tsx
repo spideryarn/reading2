@@ -37,7 +37,7 @@ import { availableTopics } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
 import { ShelfTermsDetail } from "./ShelfTermsDetail.js";
 import { topicHueStops } from "./topic-colour.js";
-import { TooltipGroup } from "./Tooltip.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 /** How many chips the collapsed row draws, besides any chosen ones. */
 export const COLLAPSED_CHIPS = 12;
@@ -56,6 +56,53 @@ const TERMS_ROW = "tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2";
  * the spinner and its words take the first pill's place.
  */
 const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6, 8, 4, 6.5, 7, 5.5, 6];
+
+/**
+ * **The word *Topics*, with a card saying how they are picked and ordered.**
+ * Greg, 2026-09-29 (`spya-tw6zxw`): *"Add a tooltip explaining how they're
+ * selected and ordered. Or alternatively, make the ordering much more
+ * self-explanatory, because it's very confusing right now"*. The card, because
+ * the order is the chooser's and an eval picked it (shelf-terms.md § The
+ * model's judgement); docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 3.
+ *
+ * What it says is src/shelf-terms/choose.ts said plainly: a greedy cover in
+ * which each pick is the candidate whose *discounted* coverage (an article
+ * already covered still counts, for less) times its quality is highest — the
+ * model's 0–3 score when there is one, the program's own measure when there is
+ * not — with restatements skipped and near-neighbours separated afterwards.
+ * Hence *roughly* the order of picking: the adjacency pass can reorder. GPT
+ * Sol's plan review caught the first draft saying "the most articles the ones
+ * before it had not reached", which is the lexicographic order this does not
+ * use.
+ *
+ * Only on the row that has topics: the loading and empty states already say
+ * in words what is happening, and a card there would be a second sentence.
+ * Focusable, as the glossary's globe is, so the card is not mouse-only.
+ */
+function TopicsLabel() {
+  return (
+    <Tooltip
+      placement="top"
+      keepSide
+      className="tip-soon"
+      content={
+        <ControlTip
+          head="Topics"
+          what="Phrases your articles use, picked to cover much of the shelf while still overlapping. Choose one to see only the articles about it; choose another to narrow to articles about both."
+          how="Listed roughly in the order they were picked. Each pick favours a phrase that reaches articles the earlier ones reached less, weighted by how good a topic it makes — judged for you by a model once it has scored them, by the program until then. Near-copies are left out, and similar ones kept apart. The number is how many articles in this view use it."
+        />
+      }
+    >
+      <span
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the card
+        tabIndex={0}
+        className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:text-xs tw:font-medium tw:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+      >
+        Topics
+      </span>
+    </Tooltip>
+  );
+}
 
 /**
  * **The row's place, held while the topics are asked for** (Greg's report
@@ -208,7 +255,7 @@ export function ShelfTerms({
   return (
     <div className="tw:mb-3">
       <div className={TERMS_ROW}>
-        <span className="tw:text-xs tw:font-medium tw:text-muted-foreground">Topics</span>
+        <TopicsLabel />
         {!detail && (
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
             {shown.map((t) => (

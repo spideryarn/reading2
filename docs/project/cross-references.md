@@ -54,7 +54,7 @@ true, and the prose has nowhere to say "out of date".
   ([260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md)). It is added to that
   list by hand, because the list is derived from modes and this is not one. It runs in the first,
   parallel group.
-- **On demand**, from Metadata's *Re-run AI processing* (`METADATA_RERUN_STEPS`).
+- **On demand**, from Metadata's *AI processing* (`METADATA_RERUN_STEPS`).
 
 Not in the import itself, which stays as fast as it can be. The prose picks the links up as soon as
 the job finishes, with no reload (`useCrossrefs` refreshes on the job's completion).
