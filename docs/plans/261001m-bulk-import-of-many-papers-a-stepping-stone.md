@@ -1,6 +1,10 @@
 # Bulk import of many papers: a stepping stone
 
-Status: planned 2026-10-01, plan review pending. Feedback report `spya-chhzxv`, Greg's own (admin).
+Status: **Awaiting Greg, nothing built** (2026-10-01). Feedback report `spya-chhzxv`, Greg's own
+(admin, proved by `scripts/feedback-reporter.ts`). The research and both spikes are done; the batch
+build below was planned, reviewed, and **withdrawn** — § Outcome says why, and § Questions for Greg
+is what unblocks the rest. The sections between them are the plan as it was reviewed, kept so the
+review reads against it.
 
 > And one way to do this would be to make it easy for people to upload, you know, potentially
 > thousands of papers, you know, as PDFs or whatever, and to then do really minimal processing on
@@ -193,3 +197,99 @@ profile without any per-paper AI beyond the minimal call.
 - **Server-side dedupe inside `POST /api/uploads`.** It would change the single-file path's
   behaviour for a reader who re-uploads on purpose; the read-only *known* route leaves that path
   alone.
+
+## Outcome: stop and discuss
+
+GPT Sol's plan review ([261001m-review-plan-sol.md](261001m-review-plan-sol.md), prompt
+[261001m-review-plan-prompt.md](261001m-review-plan-prompt.md)) came back **rethink**, and the
+findings are right:
+
+| id | sev | finding | where it leaves the batch build |
+|---|---|---|---|
+| F1 | P0 | `/known` is read-before-write: two tabs both hear "new", both import, both take a slot | idempotency needs an atomic owner+hash claim on the server |
+| F2 | P1 | "two in flight" is per tab, not per reader, and does not see the single-file engine | a per-owner limit on the server, or no fairness claim |
+| F3 | P1 | the client hears only `done`; an `error`, a `cancelled` or a hidden tab stalls the queue | a terminal-state seam in `jobEngine` |
+| F4 | P1 | "importing" is not one upload state; `pending` may be abandoned bytes | an explicit state policy |
+| F5 | P1 | the main-modes box defaults on: 200 papers would queue ~1,200 mode jobs and fill the queue | batches default off, inside the backpressure |
+| F6 | P1 | the minimal "upgrade" needs a new admitted route; the `{uploadId}` path cannot reuse a verified upload | design detail for the minimal build |
+| F7 | P1 | every file hashed twice, whole in memory | hash once, bounded |
+| F8 | P2 | neither `raw_sha256` nor uploads-by-hash is indexed | two partial indexes |
+
+**So the batch half is not the simple stepping stone this plan took it for.** Fixed properly it is
+an atomic claim, a server-side per-owner limit, a terminal-state seam, a state policy and two indexes
+— and what it buys is still only *a reader's remaining quota* in one drop (a few dozen papers), not
+the thousands Greg described. Sol: *"the full-import batch is also not 'most of the way' to
+thousands — the reusable parts are file selection, atomic owner/hash registration, storage, and
+status UI, while the full-ingest completion scheduler is specialised work."*
+
+**And the minimal half, which is the real stepping stone, waits on a billing decision**, because
+its only point is that it does not cost a slot. That is a defence and Greg's.
+
+Opus was asked to arbitrate between (A) build the fixed batch, (B) build something smaller, and
+(C) stop. It picked **B: the metadata extractor alone, as a library function with a scored eval**,
+because every shape of "minimal" needs it. **Overruled, on Greg's own instruction** — *"if you think
+this is really complicated and there's no sort of reasonably simple 80-20 solution, then stop and
+let's discuss"* — because a function nothing calls is not a stepping stone a reader can stand on,
+and it is about an hour's work for whoever builds the minimal level once the questions below are
+answered. What Opus wanted from it is recorded under *When it is built* below.
+
+What this session leaves on `dev`: this plan, the review, and the two spikes in
+[`evals/pdf/minimal-metadata/`](../../evals/pdf/minimal-metadata/), which answer the cost question.
+
+## Questions for Greg
+
+**The background, in plain words.** Today every paper you add gets the full treatment: a model
+reads the whole PDF and turns it into text (a few pence to ten pence), and another builds the
+structure and summary (five to thirty-five pence). That is what a "slot" pays for. There is no way to
+add a paper *without* that, and the shelf only knows how to show papers that have had it.
+
+**The good news, measured today:** the cheap thing you hoped for exists. A small model reading only
+the text of a paper's first two pages got the title and authors right on all 13 test papers, found
+the abstract wherever there was one, and costs **about $0.0005 a paper — 50p per thousand**, half
+your "tenth of a penny". Without any model at all, the title is right only about half the time, so
+the model is worth its 0.05p.
+
+**What I would build once you answer**, the simplest version:
+
+```
+  shelf
+  ├─ your articles (as now: read, modes, everything)
+  └─ Papers you haven't read yet            ← new: a list, not articles
+       ├─ "Attention Is All You Need" · Vaswani, Shazeer, … · abstract ▸   [Read this]
+       ├─ …
+       └─ drop a folder of PDFs here: each is stored, gets its title/authors/abstract for 0.05p,
+          and is skipped if you already have it
+  [Read this] = today's full import of the stored file, and THAT is when it takes a slot
+```
+
+1. **Billing: may a "haven't read yet" paper take no slot, with its own monthly ceiling instead?**
+   For example: up to 1,000 a month on any paid tier, 50 on free. Something has to bound it, because
+   each one still costs us 0.05p plus storage, and without a number a script could add 100,000.
+   *Yes* means the shape above. *No* means minimal imports cost a slot like any other, and then there
+   is little reason to build them at all. If yes: are 1,000 and 50 the right numbers?
+2. **Is a "haven't read yet" paper a card on a list, or an article you can open?** A card (above) is
+   much the simpler: nothing in the reading view changes, and *Read this* is the import we already
+   have. An article you can open with no structure, summary or modes means teaching every mode, the
+   shelf, export and search what an article with nothing in it looks like — several times the work.
+   I recommend the card.
+3. **May we keep the PDFs of papers people have not opened, and say so on `/privacy`?** We keep the
+   file of every article today; this would be the same, for files nobody has read yet.
+4. **Batches: full imports too, or minimal only at first?** Dropping 40 PDFs and having all 40 get
+   the full treatment is what the reviewed plan above built, and it is the part with the hard
+   concurrency problems (F1–F5). I recommend minimal-only batches first, with *Read this* one at a
+   time or on a ticked handful; your three levels then become *minimal* on the drop, and *standard*
+   or *all main modes* (the existing tick box) when you press *Read this*.
+
+### When it is built
+
+- The extractor: pdf.js text of pages 1–2, capped at 6,000 characters, to the quick model, JSON
+  checked against a schema, the DOI checked against a pattern, a DOI or arXiv id optionally confirmed
+  through `src/bibliographic.ts` (free, no abstract). Its eval scored and committed, several runs per
+  file, cost totals recorded, more injection fixtures, scans with no text layer named as out of scope
+  (Sol's last paragraph; Opus).
+- An owner-scoped *paper* row keyed on (owner, sha256), unique, so a re-dropped batch is idempotent
+  by construction rather than by a read-before-write (F1, F8).
+- *Read this* as its own admitting route that takes the paper's opaque id, never a hash or a path,
+  reserves through `withIngestSlot`, and cannot run twice (F6).
+- The abstract and title are document text: fenced wherever they later reach a prompt (the reader
+  profile), and a DOI validated before it becomes a link (F6).
