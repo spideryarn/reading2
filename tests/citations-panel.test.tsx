@@ -544,11 +544,23 @@ describe("CitationsPanel", () => {
   });
 
   it("says the list was capped only when the model said so", async () => {
+    /* Both notes are behind the (i) since plan 261001l (`spya-nca765`), so
+       what is read is the card it opens. */
+    const card = async () => {
+      const about = host.querySelector<HTMLButtonElement>('[aria-label="About this list"]');
+      expect(about, "no (i) to open").not.toBeNull();
+      await act(async () => about?.click());
+      const text = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+      await act(async () => about?.click());
+      return text;
+    };
     await draw(owner());
-    expect(host.textContent).not.toContain(CAPPED_NOTE);
-    expect(host.textContent).toContain(INFLUENCE_NOTE);
+    let text = await card();
+    expect(text).not.toContain(CAPPED_NOTE);
+    expect(text).toContain(INFLUENCE_NOTE);
     await draw(owner({ citations: artefact(WORKS, true) }));
-    expect(host.textContent).toContain(CAPPED_NOTE);
+    text = await card();
+    expect(text).toContain(CAPPED_NOTE);
     expect(CAPPED_NOTE).toBe(
       "This piece cites more than 80 works; these are the 80 we judged it leans on most.",
     );

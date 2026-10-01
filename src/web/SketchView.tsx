@@ -82,6 +82,7 @@ import type { Block, BlockId } from "../types.js";
 import type { PublicSketch } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
+import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { useSketch } from "./useSketch.js";
@@ -1036,7 +1037,7 @@ function SketchBody({
         {/* biome-ignore lint/a11y/useSemanticElements: SVG has no listbox element; the roles are written out for the same reason scatter.ts's are — the DOM is flat and nothing in the markup says this is the third of twelve */}
         <svg
           ref={svg}
-          className="sk-svg"
+          className={`sk-svg${full ? "" : " enlarges"}`}
           viewBox={`0 0 ${painted.width} ${painted.height}`}
           /* **Always the container's width.** In the band that is 288–400px and
              the shape is what survives; in the overlay it is most of the window
@@ -1059,6 +1060,21 @@ function SketchBody({
           tabIndex={0}
           onKeyDown={onKey}
           onBlur={() => setHover(null)}
+          /* **A press on the background is Enlarge**, in the band — Greg,
+             2026-09-11 (`spya-mghbv7`): *"perhaps on the background of a
+             Sketch"*. Only the background: a node selects and a region's name
+             opens a scene, and both keep their meaning. Only a real pointer
+             press, not the listbox's own keys or the end of a selection drag
+             (enlargePress.ts). Nothing in the overlay. Plan 261001l. */
+          onClick={
+            full
+              ? undefined
+              : (e) => {
+                  if (!pressEnlarges(e)) return;
+                  if ((e.target as Element).closest(".sk-node, .sk-region-open")) return;
+                  setFull(true);
+                }
+          }
         >
           {/* **No `<title>` here, and that is on purpose.** An SVG `<title>`
               is a native tooltip over *every pixel of the picture*, so the
@@ -1297,7 +1313,9 @@ function SketchBody({
            inside it, so "the target is the dialog itself" means the press landed
            outside the panel — including on the `::backdrop` underneath. */
         onClick={(e) => {
-          if (e.target === dialog.current) setFull(false);
+          /* Not the second click of the double-click that opened it —
+             enlargePress.ts § laterClickOfMany. */
+          if (e.target === dialog.current && !laterClickOfMany(e)) setFull(false);
         }}
       >
         {/* Mounted only while open, so the picture's state lives in exactly one

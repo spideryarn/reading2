@@ -68,6 +68,7 @@ import { apiFetch } from "./lib/api.js";
    entirely rather than leaving a one-way one for `npm run check`'s cycle gate to
    keep quiet about. */
 import { SKETCH_WAIT } from "./sketch-cost.js";
+import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 
@@ -235,7 +236,16 @@ function usePlateBytes(
  * docs/reusable/silent-success.md shape. It gets its own sentence, and the
  * spinner is now reachable only while a fetch really is out.
  */
-function Plate({ slug, plate }: { slug: string; plate: IllustratedPlate }) {
+function Plate({
+  slug,
+  plate,
+  onEnlarge,
+}: {
+  slug: string;
+  plate: IllustratedPlate;
+  /** In the band only: a press on the picture is Enlarge. `null` in the overlay. */
+  onEnlarge: (() => void) | null;
+}) {
   const { url, error } = usePlateBytes(slug, plate.image ?? null);
 
   if (plate.failed !== undefined) {
@@ -262,8 +272,16 @@ function Plate({ slug, plate }: { slug: string; plate: IllustratedPlate }) {
     );
   }
   return (
+    /* biome-ignore lint/a11y/useKeyWithClickEvents: a pointer shortcut for the Enlarge button beside the title, which is the keyboard's way in — enlargePress.ts. */
     <img
-      className="ill-plate"
+      className={`ill-plate${onEnlarge ? " enlarges" : ""}`}
+      onClick={
+        onEnlarge
+          ? (e) => {
+              if (pressEnlarges(e)) onEnlarge();
+            }
+          : undefined
+      }
       src={url}
       /* The plate's own title, and the sentence that says what kind of thing
          this is — a screen reader gets no more from a painting than that, and
@@ -503,7 +521,10 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
       {notes.length > 0 && <p className="ill-note">{notes.join(" ")}</p>}
 
       <div className="ill-scroll">
-        <Plate slug={slug} plate={plate} />
+        {/* **A press on the plate is Enlarge**, in the band — Greg, 2026-09-05
+            (`spya-dfghb4`) and 2026-09-11 (`spya-mghbv7`). Nothing in the
+            overlay, which is already enlarged. Plan 261001l. */}
+        <Plate slug={slug} plate={plate} onEnlarge={full ? null : () => setFull(true)} />
 
         {/* **The label, and it is a line rather than a tooltip.** This is the
             one picture here nothing can check against what it claims to depict,
@@ -621,7 +642,9 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
         className="ill-full"
         aria-label={`${plate.title}, full screen`}
         onClick={(e) => {
-          if (e.target === dialog.current) setFull(false);
+          /* Not the second click of the double-click that opened it —
+             enlargePress.ts § laterClickOfMany. */
+          if (e.target === dialog.current && !laterClickOfMany(e)) setFull(false);
         }}
       >
         {/* Mounted only while open, so the state lives in exactly one place and
