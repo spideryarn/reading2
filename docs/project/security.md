@@ -863,9 +863,9 @@ only one where the model chooses both the address *and the words the reader sees
   ([`Cited.tsx`](../../src/web/Cited.tsx)). The hover card says more, but a card takes 320ms of rest
   to open and a click does not wait for it, so the one fact a deceptive label cannot survive is on
   the page rather than behind a gesture.
-- **It is off unless the caller asks for it.** `CitedText` is shared with the summary panel, whose
-  model reads the same untrusted article under a prompt that says nothing about links, so only chat
-  — which has the provenance rule — turns the sink on.
+- **It is off unless the caller asks for it.** `Cited.tsx` is shared with Quiz, whose model
+  reads the same untrusted article under a prompt that says nothing about links, so only chat and
+  Referee's candidates — whose prompts carry chat's provenance rule — turn the sink on.
 
 **The rule to carry forward:** any model output that becomes an attribute — an `href`, a `src`, a
 `style`, an `id` — is untrusted input and needs an allowlist, not a parse. Model output that becomes

@@ -51,6 +51,9 @@
  * pin holds its text literally, not by calling `plainWords()`, so an edit to the
  * shared rule reddens this pin too — which is what it should do, since every
  * byte of it is sent. Plan 260926a § Stage 3.
+ * **RE-PINNED 2026-10-01 for `toc/10`**: the paperwork rule,
+ * `paperwork("structure")` from src/paperwork.ts, follows the plain-words core,
+ * held literally for the same reason (Greg, SPIDERYARN-READING2-8M; plan 261001p).
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
 
@@ -226,7 +229,27 @@ never changes which field a fact belongs in, which source may support it, or
 the shape and length these instructions set for each field: where those rules
 are more specific, they win. Text you are told to copy exactly stays exactly as written.
 
-Plainer than the article, never further from it: never less exact, and never beyond what it says.`;
+Plainer than the article, never further from it: never less exact, and never beyond what it says.
+
+PAPERWORK IS NOT THE PIECE
+
+Around a piece's content there may be paperwork: the list of authors and where
+they work, contact and correspondence details, acknowledgements and thanks,
+funding and grants, conflict-of-interest and other disclosures, ethics
+approval, author contributions, data-availability statements, and the
+publisher's notices. Where it only records how the piece was produced and
+published, it is paperwork.
+A range that is only paperwork still gets its node, because every block
+must be covered. For that node alone, and as the only exception to the gist
+rules above: its gist is a short plain label of WHAT it is ("The authors and
+where they work.", "Funding and conflict-of-interest statements."), never what
+it says, with no word floor and no claim. Send no "question" on it, at any
+depth. Every other gist, the root's included, ignores it.
+
+Judge it by what it does, not by its heading. If the piece uses any of these as
+evidence, reasoning, method or a limit on its findings — a funder's role that
+it says may bias the result, an ethics rule that shaped the study, an article
+ABOUT research funding — it is content, and the usual rules apply.`;
 
 const BLOCKS: Block[] = [
   { id: "spya-par001", tag: "h2", kind: "heading", level: 2, text: "First Part", words: 2, html: "<h2>First Part</h2>", gistable: true },

@@ -1,0 +1,162 @@
+{
+  "arm": "after-2",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "at": "2026-10-01T19:06:46.486Z",
+  "sourceSha256": {
+    "hierarchy.ts": "be8ec11b0875a55886eba9ec1b525753ee3627de1e11c2d559e3fbc9cca3a3f9",
+    "simple-summary.ts": "0b0501b333f9b6e9b604a8503cb90ef0b43c73aa0799a5d2f272c4622e75e22e",
+    "tweets.ts": "14a6167b8e17d64620d432cc06cee679695676d8aecb0b326f664f9f0e2a9a9c",
+    "paperwork.ts": "3eb8b4c90cd68cc9b50412f810f6646c998dbfe9a8e24a7bfe9ff89040da2961"
+  },
+  "versions": {
+    "toc": "toc/10",
+    "tweets": "tweets/6",
+    "simple": "simple/2"
+  },
+  "gists": [
+    {
+      "depth": 0,
+      "range": "spya-ac3022..spya-sq6h79",
+      "title": "Waves Organize Cognition and Consciousness",
+      "gist": "Cognition and consciousness arise when brain waves actively organize and compute over neuron spiking, not from synaptic wiring alone."
+    },
+    {
+      "depth": 1,
+      "range": "spya-ac3022..spya-rmrvzr",
+      "title": "Authors and affiliations",
+      "gist": "The authors, their institution, correspondence details, and competing-interest and keyword statements."
+    },
+    {
+      "depth": 1,
+      "range": "spya-c5z6sr..spya-d238cn",
+      "title": "Abstract",
+      "gist": "Brain waves and spiking interact bidirectionally, with waves acting as a control system that flexibly organizes neurons into patterns supporting thought and consciousness."
+    },
+    {
+      "depth": 1,
+      "range": "spya-f6m6jv..spya-dtnkkk",
+      "title": "Why fixed neurons cannot explain flexible cognition",
+      "gist": "Classical models explain fixed neuron tuning but not fast top-down control or the finding that many neurons multiplex several functions, called mixed selectivity."
+    },
+    {
+      "depth": 2,
+      "range": "spya-f6m6jv..spya-z9g2s3",
+      "title": "Introduction",
+      "gist": "Coordinating hundreds of millions of neurons within fractions of a second for flexible top-down control seems too slow for synaptic rewiring alone, suggesting brain waves instead provide this coordination."
+    },
+    {
+      "depth": 2,
+      "range": "spya-k046f6..spya-amx5qf",
+      "title": "20th century neuroscience: The classical model of neural information processing",
+      "gist": "Classic connectionist models describe hierarchical feedforward circuits where each neuron has one stable specialized function, but this cannot explain why any task engages about a third of prefrontal neurons at once."
+    },
+    {
+      "depth": 2,
+      "range": "spya-v0gbwq..spya-dtnkkk",
+      "title": "Mixed Selectivity: Multifunctional neurons enable flexible cognition",
+      "gist": "Many prefrontal neurons show nonlinear mixed selectivity, responding differently depending on context such as sequence order, which expands a network's representational and storage capacity far beyond fixed, single-purpose neurons."
+    },
+    {
+      "depth": 1,
+      "range": "spya-jnp59d..spya-f59f0p",
+      "title": "Waves control spiking without synapses",
+      "gist": "Brain waves actively organize and route neural spiking, and can directly influence it through ephaptic coupling, an extra-synaptic electrical effect that acts faster than spikes."
+    },
+    {
+      "depth": 2,
+      "range": "spya-jnp59d..spya-trb3jf",
+      "title": "Oscillations organize neural information",
+      "gist": "Neural oscillations, rhythmic shifts between excitation and inhibition measurable as local field potentials or EEG, organize information, route it between circuits, and coordinate memory, not merely reflecting spiking but shaping it."
+    },
+    {
+      "depth": 2,
+      "range": "spya-mapqhv..spya-f59f0p",
+      "title": "Oscillations directly influence spiking via ephaptic coupling",
+      "gist": "Electric fields from spiking neurons directly shift nearby membrane potentials without synapses, called ephaptic coupling, which sums across populations to rapidly synchronize and coordinate spiking over wide cortical areas."
+    },
+    {
+      "depth": 1,
+      "range": "spya-qck2sw..spya-qsz9ur",
+      "title": "Spatial Computing: A theory of oscillatory control of neural information",
+      "gist": "Spatial Computing theory proposes that alpha/beta waves act as spatial inhibitory templates controlling where faster gamma-band spiking expresses information, explaining both mixed selectivity and low-dimensional population coding."
+    },
+    {
+      "depth": 2,
+      "range": "spya-qck2sw..spya-q606tk",
+      "title": "Gamma and alpha/beta push-pull control",
+      "gist": "Spatially patterned alpha/beta waves act as inhibitory stencils suppressing gamma-band spiking in targeted locations, letting feedforward signals emerge only in open regions, forming flexible top-down control."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zmknun..spya-ee45vr",
+      "title": "Explaining mixed selectivity with spatial computing",
+      "gist": "A neuron can fall inside an alpha/beta suppressive stencil in one context and outside it in another, making its effective tuning change with context and producing the nonlinear mixed selectivity seen in recordings."
+    },
+    {
+      "depth": 2,
+      "range": "spya-m63zb9..spya-qsz9ur",
+      "title": "Explaining subspace coding with spatial computing",
+      "gist": "Because alpha/beta stencils gate overlapping subsets of neurons, population spiking settles into structured low-dimensional subspaces per context, reconciling noisy single-neuron responses with smooth, coordinated population trajectories shaped by wave dynamics."
+    },
+    {
+      "depth": 1,
+      "range": "spya-y09vju..spya-xf7ap4",
+      "title": "Traveling waves and analog computation",
+      "gist": "Waves that sweep across cortex, called traveling waves, may drive transitions between neural coding states, and wave interference can itself perform efficient analog computation generating new activity patterns."
+    },
+    {
+      "depth": 2,
+      "range": "spya-y09vju..spya-jcpyd5",
+      "title": "Traveling Waves and Representational Change",
+      "gist": "Alpha/beta traveling waves sweeping across cortex may drive transitions between orthogonal neural coding subspaces, marking moments such as movement onset or memory loading when representations form or change."
+    },
+    {
+      "depth": 2,
+      "range": "spya-h5qjz4..spya-xf7ap4",
+      "title": "Analog Computation with Waves",
+      "gist": "Overlapping brain waves add, cancel, and combine like analog computers, performing efficient parallel computation across cortex at once, possibly explaining how the brain computes so much on only about 20 watts."
+    },
+    {
+      "depth": 1,
+      "range": "spya-uvev07..spya-m8bzur",
+      "title": "Consciousness and competing theories",
+      "gist": "Anesthesia disrupts wave organization rather than silencing cortex, suggesting consciousness depends on coordinated waves linking synapses and spikes, a view reframing existing theories of consciousness and control."
+    },
+    {
+      "depth": 2,
+      "range": "spya-uvev07..spya-k02vdw",
+      "title": "Altered Cortical Waves and Unconsciousness",
+      "gist": "Different anesthetic drugs, acting on different molecular targets, all converge on slow, desynchronized cortical waves, suggesting consciousness depends on large-scale wave organization rather than any specific receptor or cell type."
+    },
+    {
+      "depth": 2,
+      "range": "spya-dnv2tp..spya-tdqde5",
+      "title": "A Hybrid Synapse/Wave Framework for Cognition and Consciousness",
+      "gist": "Synapses store long-term knowledge while waves decide, moment to moment, which representations are active, with slower waves routing and binding distributed activity into a unified conscious experience that updates stored knowledge."
+    },
+    {
+      "depth": 2,
+      "range": "spya-xn7mdj..spya-j6qfz4",
+      "title": "Comparison to other theories of consciousness and executive control",
+      "gist": "This account shares themes with Global Workspace, Integrated Information, and Higher-Order theories of consciousness and executive-control models, but locates the key mechanism in large-scale wave dynamics rather than broadcasting or winner-take-all gating."
+    },
+    {
+      "depth": 2,
+      "range": "spya-smkrcs..spya-m8bzur",
+      "title": "Waves as the organizing principle",
+      "gist": "Cognition and consciousness emerge mainly from brain-wide wave dynamics rather than discrete neuron-to-neuron exchange, a biologically plausible and energy-efficient mechanism evolution would plausibly have exploited given pressure to compute efficiently."
+    },
+    {
+      "depth": 1,
+      "range": "spya-yqq2ck..spya-sq6h79",
+      "title": "Funding and references",
+      "gist": "Funding sources, acknowledgements, and the reference list."
+    }
+  ],
+  "simple": {
+    "error": "Anthropic SDK request failed, status 402. [ai-no-credit]"
+  },
+  "tweets": {
+    "error": "Anthropic SDK request failed, status 402. [ai-no-credit]"
+  }
+}

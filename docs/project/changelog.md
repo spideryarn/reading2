@@ -18,6 +18,12 @@ The page has been built and the whole history has been through the process — e
 since 2026-08-24. [§ Running it](#running-it) is what *"run this doc"* means; the file's own count is
 what `changelog.ts check` prints, and is deliberately not written down here.
 
+**Since 2026-10-01 a deploy's notes go out in that deploy**, not the one after —
+[§ The pending release](#the-pending-release). Greg, 2026-10-01:
+
+> I wonder if we can make sure that the latest release notes are included in the deploy itself
+> going forwards.
+
 ## A version is a deploy
 
 Not a semver number, not a date. **One production deploy on Vercel is one version**, and its name is
@@ -56,11 +62,12 @@ anything. What the page does with those is a display question, not a data one.
 One append-only NDJSON file, **`src/web/changelog-versions.ndjson`**, one line per version, oldest
 first. NDJSON because the job only ever appends: a run adds lines to the end and never rewrites what
 is above, so two runs cannot lose each other's work and a diff shows exactly what a run decided.
+Since 2026-10-01 only `promote` appends to it — [§ The pending release](#the-pending-release).
 
-**The watermark is the last line's `deployment_id`.** "Since the last time it was run" needs no
-separate state file: enumerate the production deploys, find the one the last line names, and do the
-ones after it. It is the deployment id rather than the sha because the same sha can be deployed twice
-(2026-08-27 shipped `903b33e6` twice), and keying on the sha would swallow the second.
+**What a new release covers starts at the last line's `sha`**: `plan --upcoming` plans from there to
+`dev`'s tip. The deployment id still keys the lines — `promote` will not write a second line for one
+id, and `plan --deploys`, the recovery path, matches its watermark on it — because the same sha can be
+deployed twice (2026-08-27 shipped `903b33e6` twice), and keying on the sha would swallow the second.
 
 ```jsonc
 {
@@ -115,6 +122,43 @@ curious reader they exist for. The confirmation was taken twice rather than once
 repo public yet" is the sort of thing an agent will cheerfully assume — the repository page answers
 to a signed-out fetch, and Vercel's own `githubRepoVisibility` flips from `private` to `public`
 between that day's 05:29 and 09:49 production deploys.
+
+## The pending release
+
+Until 2026-10-01 the notes for a deploy were written *after* it, from Vercel's list, and reached
+readers with the deploy after that — so `/changelog` always ran one release behind, which is what Greg
+noticed. Now they are written before it and ship in it. The design, and the two GPT Sol reviews that
+shaped it, are [261001q](../plans/261001q-changelog-written-before-the-deploy-so-the-notes-ship-in-it.md).
+
+**Two files, because a line of the history cannot be written before its deploy.** A line is a
+permanent claim that *this was a release*; a deploy can fail, be retried, or be abandoned while its
+change is reverted. So:
+
+- **`src/web/changelog-pending.json`** holds the release about to ship — one object shaped like a
+  line, with `deployment_id: null` and its planning time as `version` — or `null`. It is **replaced
+  whole** by each `prepare`, never appended to, so a failed deploy's notes are simply rewritten to
+  cover the retry too.
+- **`changelog.ts promote`** appends it to the history once production is serving it, from
+  production's own `/build.json`: the real deployment id, the build time as `version`, and the
+  deployed commit as `sha`. Every production deploy gets one line, including one nobody described
+  and a redeploy, so the history stays the deploy record the fleet dashboard reads.
+
+**The page draws the pending release on top**, numbered as the line it will become, dated and linked
+by the build carrying it (`ChangelogPage.tsx` § `withPending`). That is true by construction: the
+bundle a reader is running was compiled from the commit that holds the file.
+
+**The deploy gate makes it complete.** `npm run deploy` refuses a commit whose own notes stop short of
+anything it ships that a reader could see (`deploy-checks.ts` § `changelogGap`). Strict on purpose: a
+revert landing after the notes would otherwise ship notes for a feature the deployed tree no longer
+has. `--force-gate=changelog` is the hotfix escape; `promote` then stops that deploy's line at what
+was described, so the next `prepare` describes the rest rather than nobody. The same gate also
+refuses to deploy over a build that was never promoted (`servingUnrecorded`): `promote` can only
+record what is serving, so a deploy replacing an unrecorded one would lose that deploy's line.
+
+**What counts as something a reader could see** is one definition,
+[`scripts/changelog/release-paths.ts`](../../scripts/changelog/release-paths.ts), asked by the planner,
+`promote` and the gate. The changelog's own two files are excluded from it — they are under `src/`,
+and every notes commit would otherwise need notes of its own.
 
 ## The four stages
 
@@ -297,9 +341,10 @@ The three decisions this section used to leave open, taken on 2026-09-06 in
   and `/design`, and `tests/eager-client-graph.test.ts` is what keeps it there.
 - **A run of quiet versions collapses into one line.** Hiding them outright leaves unexplained gaps
   in a dated list; showing all 19 buries the 49 that have something to say.
-- **A version's entry lands one deploy late.** The file is committed, so the run that writes version
-  N's line ships in version N+1. That is the honest ordering — the alternative is describing a deploy
-  before it happened — and the page does not imply otherwise.
+- **A version's entry used to land one deploy late**, until 2026-10-01, when Greg asked for the
+  notes to ship in the deploy itself. The objection here — that the alternative is describing a deploy
+  before it happened — is answered by keeping the not-yet-deployed release out of the history:
+  [§ The pending release](#the-pending-release).
 
 Four more, taken on 2026-09-07 in
 [260907f](../plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md).
@@ -318,8 +363,9 @@ releases with no way to see what was in it but to scroll all of it.
   asking for *"a version number (semver?) as part of the deploy … and on tooltip for the Homepage
   logo"*, which he took. The deploy cannot honestly carry a number: production is built on Vercel's
   machine from a push to `main`, `deploy.ts` has no channel into that build's environment, and a
-  version's line here is written *after* it ships — so a running build's own sha is never in the copy
-  of this file it is carrying. The logo's tooltip says *"built 7 Sep 2026 from 39282f8"*
+  version's line here is appended *after* it ships — so a running build's own sha is never in the
+  copy of this file it is carrying (its pending release is, but without a number of its own until it
+  is promoted). The logo's tooltip says *"built 7 Sep 2026 from 39282f8"*
   (`src/web/build-stamp.ts` § `buildDescription`), and the page's release number is the join.
 - **An entry's commits appear in one place, as shas.** Greg: *"I found the difference between the
   link to the changes and the commit a bit confusing."* They were the same thing drawn twice — this
@@ -340,17 +386,25 @@ And one on 2026-09-30, from Greg's feedback (SPIDERYARN-READING2-6P):
 
 ## Running it
 
-**`run docs/project/changelog.md`** means this section. The deterministic stages are committed as
-`scripts/changelog/changelog.ts`, so what an agent supplies is judgment and subagents, not
-bookkeeping. Everything intermediate goes under `logs/changelog/`, which is gitignored.
+**`run docs/project/changelog.md`** means this section, and since 2026-10-01 it is a command:
+**`npm run changelog:prepare`** ([`scripts/changelog/release-notes.ts`](../../scripts/changelog/release-notes.ts)),
+which the Overseer runs before every deploy ([overseer.md § Deploying](overseer.md#deploying)). It
+holds the deploy's lock, promotes whatever production is serving, does steps 1 and 2 itself, runs
+steps 3 to 6 as one `run-claude.ts` job on Opus briefed from
+[`scripts/changelog/prepare-prompt.md`](../../scripts/changelog/prepare-prompt.md), commits and pushes
+the pending file, and checks its own result with the deploy gate's function. The steps are written out
+here because that job follows them, and because a person recovering a run needs them.
 
-1. **Get the deploy list.** `mcp__vercel__list_deployments` with the ids in
-   [`scripts/deploy.ts`](../../scripts/deploy.ts) § `PROJECT_ID` / `TEAM_ID`, saved to a file. This
-   box has no `VERCEL_TOKEN` and the CLI is logged out, so the MCP tool is the way in; `plan` takes
-   either that response or a bare array.
-2. **`changelog.ts plan --deploys <file>`** — the watermark, the commit ranges, the ancestry check
-   per pair, the code/non-code split, the batches. Read what it prints: a version whose range is
-   empty or whose ancestry failed is the interesting output, not the summary line. It **refuses to
+The deterministic stages are `scripts/changelog/changelog.ts`, so what an agent supplies is judgment
+and subagents, not bookkeeping. Everything intermediate goes under `logs/changelog/`, which is
+gitignored; `prepare` gives each run its own directory there.
+
+1. **Promote.** `changelog.ts promote --serving <file>`, the file being production's `/build.json`
+   saved — [§ The pending release](#the-pending-release). Planning on top of a serving release that
+   is not yet in the history would fold it into the next one.
+2. **`changelog.ts plan --upcoming <dev tip>`** — one version from the history's last line to the
+   tip: the ancestry check, the code/non-code split, the batches. **When no commit in the range is
+   one a reader could see, it plans nothing**, and the pending release is `null`. It **refuses to
    start on top of an earlier run's stage directories**, because the stages address each other by
    index and file name rather than by run — pass `--fresh` to empty them, or `--work <dir>`.
 3. **Trawl.** One Sonnet subagent per batch file, briefed from
@@ -367,39 +421,41 @@ bookkeeping. Everything intermediate goes under `logs/changelog/`, which is giti
    citing eight commits and citing two.
 5. **`changelog.ts copy-inputs`**, then one Opus subagent per version, briefed from
    [`scripts/changelog/copy-brief.md`](../../scripts/changelog/copy-brief.md).
-6. **`changelog.ts write --trawl-model <name>`** — validates and appends. It refuses rather than
-   writing a bad file, and it re-reads the result afterwards. `<name>` is the model step 3's
-   subagents actually ran on (`sonnet`, or `opus` when Sonnet is rate-limited), and it is required,
-   because a default would record the wrong one without anyone noticing.
-7. **Commit and push them.** Nobody reads them first. Greg, 2026-09-10: *"I don't want there to be a
+6. **`changelog.ts write --pending --trawl-model <name>`** — validates, and writes the release whole
+   to the pending file. It refuses rather than writing a bad file, and a release that does not fit
+   after the history's last line is refused. `<name>` is the model step 3's subagents actually ran on
+   (`sonnet`, or `opus` when Sonnet is rate-limited), and it is required, because a default would
+   record the wrong one without anyone noticing.
+7. **Commit and push it.** Nobody reads it first. Greg, 2026-09-10: *"I don't want there to be a
    human review/gate — just go live with them as part of the deploy."* The gates are Sol's review in
-   step 4 and `write`'s checks in step 6; the lines ship with the next deploy of `dev`.
+   step 4 and `write`'s checks in step 6. If `dev` gained a commit a reader could see while the model
+   stages ran, `prepare` plans again rather than ship notes that stop short (up to three rounds).
 
-**Write the lines even when nobody is about to deploy them.** Greg, 2026-09-10: *"it should write the
-changelog docs, even if you can't actually deploy them."* The file is committed to `dev` like any
-other work and ships with the next deploy; a run that cannot deploy is not a reason to skip the run.
-The one real blocker is step 1: if Vercel cannot be reached from where you are (this box has no
-`VERCEL_TOKEN`, so the MCP tool's OAuth is the way in, and the dashboard's Deploys tab is no help —
-it reads *this file*), the fallback is production's own build stamp: `/build.json` and `/api/health`
-name the sha that is serving now, token-free, and `main`'s first-parent history from the watermark
-to that sha is the set of candidate deploy points. Write **one** version for that range, from the
-watermark to the serving sha, named by the stamp's build time, and say in the line's `generated_by`
-and in the commit that it was enumerated from the build stamp rather than Vercel. A later run cannot
-split that line: the file is append-only and the next run starts after it, so this file does not
-retain the join to the real deploys inside it (`8cd2206..c7d67cb5` covers about seven). Never guess
-intermediate deploy points from git alone.
+**Write the notes even when nobody is about to deploy them.** Greg, 2026-09-10: *"it should write the
+changelog docs, even if you can't actually deploy them."* Still true: `prepare` needs no deploy
+credential and no Vercel access, and a pending release committed to `dev` ships whenever the next
+deploy does — the next `prepare` before it simply rewrites it to cover whatever landed since.
 
-**Not a step in [get-ready-to-deploy.md](../reusable/get-ready-to-deploy.md), and not in
-`npm run deploy`.** The obvious objection — that the deploy has not happened yet — is a
-non-problem: a run describes the deploys that *have* happened and leaves undeployed work for a later
-one. The real reason is that the sweep runs unattended every three hours and exists to leave
-`dev` committed, green and pushed; a changelog step would dirty the tree afterwards and spend a
-Sol review on a question that has nothing to do with whether the deploy is ready. So it is its own
-job, which the Overseer starts straight after each deploy ([overseer.md § Deploying](overseer.md#deploying), since 2026-09-30), and it needs no person: see step 7. And a failure here does not look like a failure: the copy stage can
-strengthen *"code intended to do X"* into *"X is now available"* while every structural check passes.
-GPT Sol, asked to attack this, landed in the same place — **generate after the facts exist, review
-explicitly, publish one deploy late**
-([260906g](../plans/260906g-the-changelog-page-and-a-runner-that-can-be-asked-to-do-the-right-thing.md#the-deploy-sweep-no-and-the-reason-is-not-the-one-in-the-question)).
+**`plan --deploys <file>` is the recovery path, no longer the routine.** It enumerates Vercel's list
+(`mcp__vercel__list_deployments` with the ids in [`scripts/deploy.ts`](../../scripts/deploy.ts) §
+`PROJECT_ID` / `TEAM_ID`, saved to a file) and writes one line per deploy after the last line's
+deployment id, appended by `write` without `--pending` — the process as it was until 2026-10-01. It is
+for a deploy `promote` refuses, such as one made before the pending file existed; it refuses while a
+release is pending, because both would describe the same commits. If Vercel cannot be reached, the
+build-stamp fallback still applies: write **one** version from the watermark to the serving sha,
+named by the stamp's build time, say so in `generated_by` and the commit, and never guess
+intermediate deploy points from git alone (`8cd2206..c7d67cb5` covers about seven and cannot now be
+split).
+
+**Not a step inside `npm run deploy`**, though it now runs before it rather than after. The model
+stages take ten minutes or more and carry their own Sol review; inside the deploy, a review timeout
+would fail a deploy. So it is its own command, and the deploy's `changelog` gate is what joins them:
+a deploy whose commit does not carry notes for everything it ships is refused. And a failure here
+does not look like a failure: the copy stage can strengthen *"code intended to do X"* into *"X is now
+available"* while every structural check passes — which is why step 4 is not optional. The earlier
+reasoning for publishing one deploy late is in
+[260906g](../plans/260906g-the-changelog-page-and-a-runner-that-can-be-asked-to-do-the-right-thing.md#the-deploy-sweep-no-and-the-reason-is-not-the-one-in-the-question);
+what answered it is [§ The pending release](#the-pending-release).
 
 ## The traps
 

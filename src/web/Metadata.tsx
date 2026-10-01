@@ -551,8 +551,7 @@ export function Metadata({
    * free, which is the same argument its `comments` count already makes.
    *
    * `saved === null` means "not seeded yet", so an empty box the reader has
-   * cleared is tellable from one that has not loaded. Same distinction
-   * `SummaryPanel` holds for its steer.
+   * cleared is tellable from one that has not loaded.
    *
    * The save is [`useAutosavedText`](./useAutosavedText.ts), shared with
    * `/profile` since 2026-10-01, when the box began saving itself after a pause

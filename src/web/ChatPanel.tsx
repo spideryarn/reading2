@@ -1879,7 +1879,7 @@ function Answer({
   live: boolean;
 }) {
   /* The blocks, the chips, the web links and the marks all live in Cited.tsx,
-     shared with the summary panel. Two copies of what a citation looks like
+     shared with Quiz and Candidates. Two copies of what a citation looks like
      would drift, and a chip that means something slightly different depending
      on which band it is in is worse than either version. The chips' hover card
      is the one every block link shares (BlockLinkCard.tsx), which also moves

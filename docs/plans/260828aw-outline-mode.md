@@ -287,7 +287,9 @@ outlineProjection(geometry, tree, arc, focusRow, rung) →
 
 — pure, testable without a DOM, and the single answer to *what is drawn* and *which row is current*.
 Every bug this repo has written up in this area is two pieces of code deriving the same rule apart
-([summaries.md § Which row is "the relevant one"](../project/summaries.md#which-row-is-the-relevant-one)).
+(summaries.md § Which row is "the relevant one", removed with Summary's outline on 2026-10-01 —
+[§ History](../project/summaries.md#history-the-outline-2026-08-26-to-2026-10-01) says how to read it
+in git).
 
 What it reuses, and what it deliberately does not:
 
