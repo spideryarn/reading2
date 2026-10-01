@@ -1,0 +1,215 @@
+{
+  "style": "An illuminated manuscript page — gold leaf, ink line-work and parchment — suits a text about scholarly crisis, citation and correction because its own history is full of scribes, ledgers and declared verdicts.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Replication Crisis: Shape of the Argument",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-pcnqxn",
+          "quote": "the reproducibility of empirical results is the cornerstone of the scientific method",
+          "depicts": "A great carved cornerstone at the base of a stone archway, cracking down its centre, with loose mortar dust falling.",
+          "title": "CORNERSTONE OF SCIENCE CRACKING"
+        },
+        {
+          "node": "n2",
+          "block": "spya-tbsjz3",
+          "quote": "The standard threshold p < 0.05 means accepting a 5% false positive rate",
+          "depicts": "A hand-balance scale with one hundred small stones heaped on one pan and only five pale stones set apart on the other, tipping barely.",
+          "title": "FIVE IN A HUNDRED"
+        },
+        {
+          "node": "n3",
+          "block": "spya-t3scy3",
+          "quote": "John Bargh's much-cited \"elderly-walking\" study (originally published in 1996)",
+          "depicts": "Elderly figures shuffling slowly down a cloister corridor while two robed scholars with tablets watch and note their pace.",
+          "title": "THE ELDERLY-WALKING STUDY"
+        },
+        {
+          "node": "n4",
+          "block": "spya-dg8j93",
+          "quote": "declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A council of scholars in a chamber, one standing with raised hand before the others, as if making a solemn proclamation.",
+          "title": "CRISIS OF CONFIDENCE DECLARED"
+        },
+        {
+          "node": "n6",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A courtyard of ninety-seven small robed figures standing in rows; only thirty-six of them stand solid and lit, the rest pale and half-faded.",
+          "title": "ONLY THIRTY-SIX OF NINETY-SEVEN"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions from the original studies",
+          "depicts": "A laboratory rack of fifty-three glass vials; only eleven glow with a faint light, the rest sit dark and cold.",
+          "title": "ELEVEN OF FIFTY-THREE CONFIRMED"
+        },
+        {
+          "node": "n9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A crowded assembly of scholars from many trades — a chemist with flasks, a physician with vials, an astronomer with instruments — most of them with hands raised as if confessing a failure.",
+          "title": "SEVENTY IN A HUNDRED ADMIT FAILURE"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y782zn",
+          "quote": "the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "A heavy wooden cabinet with one open drawer crammed full of unread papers, while a single paper sits proudly displayed on the desk above it.",
+          "title": "THE FILE DRAWER EFFECT"
+        },
+        {
+          "node": "n12",
+          "block": "spya-scx28p",
+          "quote": "63% admitted failing to report all of a study's dependent measures",
+          "depicts": "A scholar at a writing desk holding one page forward into the light while several more pages are tucked behind their back, out of sight.",
+          "title": "HIDDEN DEPENDENT MEASURES"
+        },
+        {
+          "node": "n15",
+          "block": "spya-qthy2u",
+          "quote": "the replication crisis is a foundation for a \"credibility revolution\"",
+          "depicts": "Dawn light breaking over a half-built stone foundation, with masons setting new clear, translucent blocks into the old cracked cornerstone from the opening scene.",
+          "title": "A CREDIBILITY REVOLUTION DAWNS"
+        },
+        {
+          "node": "n16",
+          "block": "spya-w073xf",
+          "quote": "is the strategic use of multiple approaches to address one question",
+          "depicts": "Three surveyors on separate hilltops, each sighting through a different instrument toward one distant steeple, their sightlines meeting at a single point.",
+          "title": "TRIANGULATION OF ONE QUESTION"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged parchment, drawn in fine brown ink with selective gold leaf, in the style of a medieval scholarly chronicle. The composition runs top to bottom as a single winding processional path connecting eleven framed vignettes, each a small detailed scene in its own rectangular ink border with delicate corner flourishes, no two borders touching. At the top: a cracked stone cornerstone in an archway, mortar dust falling. Below it, a hand-balance scale holding a hundred small stones against five pale ones. Next, a cloister corridor where elderly figures shuffle slowly as two scholars with tablets observe. Beneath that, a council chamber where one robed scholar raises a hand before seated others, declaring something grave. The path then opens into a wider zone showing three evidence scenes side by side at the same height: a courtyard of ninety-seven small figures with only thirty-six glowing, a laboratory rack of fifty-three vials with only eleven lit, and beneath them both, a crowded assembly of mixed scholars and physicians with hands raised in confession. The path narrows again into two scenes set side by side: a wooden cabinet with an overstuffed open drawer, and a scholar hiding pages behind their back. Finally the path converges at the bottom into two closing scenes: dawn breaking over a half-finished stone foundation where masons set clear new blocks into the old cracked cornerstone, and three surveyors on separate hills sighting their instruments toward one distant steeple. Palette: faded ochre parchment ground, iron-gall brown ink linework, muted indigo and vermillion washes, gold leaf used sparingly on the dawn and the cornerstone. Beneath each of the eleven framed scenes, letter its title in small capital serif lettering — CORNERSTONE OF SCIENCE CRACKING, FIVE IN A HUNDRED, THE ELDERLY-WALKING STUDY, CRISIS OF CONFIDENCE DECLARED, ONLY THIRTY-SIX OF NINETY-SEVEN, ELEVEN OF FIFTY-THREE CONFIRMED, SEVENTY IN A HUNDRED ADMIT FAILURE, THE FILE DRAWER EFFECT, HIDDEN DEPENDENT MEASURES, A CREDIBILITY REVOLUTION DAWNS, TRIANGULATION OF ONE QUESTION — and nothing else anywhere on the page: no headings, no banners, no other inscriptions."
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "Evidence Converges Across Fields",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "The same courtyard of ninety-seven small robed figures from the overview, thirty-six standing solid and lit, the rest faded — the frame through which this plate is entered.",
+          "title": "ONLY THIRTY-SIX OF NINETY-SEVEN"
+        },
+        {
+          "node": "e2",
+          "block": "spya-ekg3fe",
+          "quote": "the replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A vast field of thousands of tiny seated figures with small glowing points above each head, so faint that only the whole multitude together makes a visible glow.",
+          "title": "THOUSANDS NEEDED FOR ONE SIGNAL"
+        },
+        {
+          "node": "e3",
+          "block": "spya-k59a2x",
+          "quote": "the effect sizes were 85% smaller on average than the original findings",
+          "depicts": "A large swelling growth drawn on the left side of the frame, and on the right a far smaller mark of the same shape, the difference between them shaded dark.",
+          "title": "EFFECTS SHRINK BY EIGHTY-FIVE PERCENT"
+        },
+        {
+          "node": "e6",
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66%",
+          "depicts": "A marketplace scale with a tall stacked bar of coins on one side and, on the other, a shorter stack of the same coins reaching only partway up.",
+          "title": "SIXTY-ONE PERCENT SMALLER EFFECTS"
+        },
+        {
+          "node": "e7",
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A great stone reservoir nearly full, with only a thin trickle escaping through a narrow spout into a small basin below.",
+          "title": "A TRICKLE OF REPRODUCIBLE STUDIES"
+        },
+        {
+          "node": "e8",
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "A brass mechanical oracle-head on a pedestal, drawn three times in sequence with a different gesture of its hand each time, though the lever beside it is unmoved.",
+          "title": "DIFFERENT ANSWER EVERY RUN"
+        },
+        {
+          "node": "e9",
+          "block": "spya-fuynra",
+          "quote": "fewer than 31% of researchers believe that failure to reproduce results means that the original result is probably wrong",
+          "depicts": "A seated assembly of scholars; only a small cluster near the front raise their hands in doubt while the greater number behind sit still, unmoved.",
+          "title": "A MINORITY DOUBTS THE VERDICT"
+        },
+        {
+          "node": "e10",
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "A single battered, torn scroll hung with far more laurel wreaths and ribbons than the neat intact scrolls beside it.",
+          "title": "THE UNREPLICATED PAPER MOST CITED"
+        }
+      ],
+      "prompt": "The same illuminated manuscript hand as the overview page: aged parchment, fine brown ink line-work, muted indigo and vermillion washes, gold leaf used sparingly. This plate opens by repeating, as its frame, the courtyard of ninety-seven small robed figures with thirty-six lit from the overview page, set at the top of the page to show the reader which part of the larger chronicle they have entered. Below it, arranged in a flowing vertical band down the centre and sides of the page, eight framed vignettes of equal size, large enough to read clearly, with generous parchment between them: a vast field of thousands of faint seated figures each with a tiny glow overhead; a large swollen growth beside a far smaller mark of the same shape; a marketplace scale with a tall coin-stack against a shorter one; a stone reservoir leaking only a thin trickle; a brass oracle-head shown three times with three different gestures; a seated assembly where only a few near the front raise doubting hands; and at the bottom, converging into one final scene, a torn scroll hung with far more laurels than its intact neighbours. The eight scenes should visually funnel downward, each pair narrowing toward the next, echoing how many separate fields of study all point toward one conclusion before the final ironic twist at the bottom. Letter beneath each scene, in small serif capitals and nothing else: ONLY THIRTY-SIX OF NINETY-SEVEN, THOUSANDS NEEDED FOR ONE SIGNAL, EFFECTS SHRINK BY EIGHTY-FIVE PERCENT, SIXTY-ONE PERCENT SMALLER EFFECTS, A TRICKLE OF REPRODUCIBLE STUDIES, DIFFERENT ANSWER EVERY RUN, A MINORITY DOUBTS THE VERDICT, THE UNREPLICATED PAPER MOST CITED. No other lettering, headings, banners or inscriptions anywhere on the page."
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Families of Causes",
+      "vignettes": [
+        {
+          "node": "c2",
+          "block": "spya-y782zn",
+          "quote": "the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "The same wooden cabinet with its overstuffed open drawer from the overview, set at the top of the left-hand column as the frame for this side of the page.",
+          "title": "THE FILE DRAWER EFFECT"
+        },
+        {
+          "node": null,
+          "block": "spya-f76az5",
+          "quote": "a considerable proportion of research findings might be false positives",
+          "depicts": "A great wave of small red-marked tokens pouring out over a low wall into a courtyard already crowded with similar tokens.",
+          "title": "A FLOOD OF FALSE POSITIVES"
+        },
+        {
+          "node": "c3",
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A row of eleven carved stone tablets among a hundred, each cracked crookedly so its numbers no longer line up with its neighbours.",
+          "title": "ELEVEN PERCENT RESULTS INCONGRUENT"
+        },
+        {
+          "node": "c5",
+          "block": "spya-gjx6ut",
+          "quote": "replicating 70% of experiments required asking for key reagents",
+          "depicts": "A scholar standing before a locked cabinet of unlabelled jars, writing a letter asking a distant colleague for the one ingredient missing from the shelf.",
+          "title": "ASKING FOR THE MISSING REAGENT"
+        },
+        {
+          "node": "d1",
+          "block": "spya-scx28p",
+          "quote": "63% admitted failing to report all of a study's dependent measures",
+          "depicts": "The same scholar at a writing desk holding one page forward while hiding several more behind their back, from the overview, now set at the top of the right-hand column.",
+          "title": "HIDDEN DEPENDENT MEASURES"
+        },
+        {
+          "node": "d2",
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "A dim lantern held up in a large dark hall, its light reaching only about a third of the way across the floor.",
+          "title": "A LANTERN AT ONE THIRD POWER"
+        },
+        {
+          "node": "d3",
+          "block": "spya-r42sms",
+          "quote": "studies have a large effect size bias",
+          "depicts": "A balloon inflated far larger than a small marked true size beside it, straining against its own string.",
+          "title": "THE LARGE EFFECT SIZE BIAS"
+        },
+        {
+          "node": "d6",
+          "block": "spya-rzjbzy",
+          "quote": "in complex systems, such as social psychology, \"the null hypothesis is always false\", or \"everything is correlated\"",
+          "depicts": "An enormous tangled web of fine threads running between dozens of unrelated small objects and figures, every one connected to every other.",
+          "title": "EVERYTHING IS CORRELATED"
+        }
+      ],
+      "prompt": "The same illuminated manuscript hand throughout: aged parchment, fine brown ink, muted indigo and vermillion washes, sparing gold leaf. The page is divided by a plain ink column-rule into two vertical halves, left and right, each framed by a narrow decorative border of twining vine-work but carrying no lettering of its own. The left column opens at the top with the wooden cabinet and its overstuffed drawer, repeated exactly as drawn in the overview page, marking this half as the publication-system side. Below it, in order down the column: a wave of small red-marked tokens spilling over a wall into a crowded courtyard; a row of eleven cracked stone tablets among a hundred whole ones; and a scholar writing a letter before a locked cabinet of unlabelled jars. The right column opens at the top with the scholar hiding pages behind their back, repeated exactly as drawn in the overview page, marking this half as the research-practice-and-statistics side. Below it, in order down the column: a dim lantern lighting only a third of a dark hall; a balloon straining far larger than its true marked size beside it; and at the bottom, an enormous tangled web of threads joining dozens of unrelated objects and figures to one another. The two columns should run as parallel descending chains that visually mirror each other without merging, both reaching the bottom edge of the page at the same height. Letter beneath each of the eight scenes, in small serif capitals and nothing else: THE FILE DRAWER EFFECT, A FLOOD OF FALSE POSITIVES, ELEVEN PERCENT RESULTS INCONGRUENT, ASKING FOR THE MISSING REAGENT, HIDDEN DEPENDENT MEASURES, A LANTERN AT ONE THIRD POWER, THE LARGE EFFECT SIZE BIAS, EVERYTHING IS CORRELATED. No other lettering, headings, banners, or inscriptions anywhere on the page."
+    }
+  ]
+}

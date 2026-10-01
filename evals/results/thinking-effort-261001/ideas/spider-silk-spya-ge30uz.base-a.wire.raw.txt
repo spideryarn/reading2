@@ -1,0 +1,80 @@
+{"ideas": [
+  {
+    "name": "Layered structure drives bulk mechanical performance",
+    "provenance": "introduced",
+    "statement": "Spider silk's extraordinary strength, toughness and elasticity arise from a layered (hierarchical) molecular structure: rigid crystalline beta-sheet blocks embedded in a stretchy, disordered protein matrix, with the interplay between the two producing properties neither part has alone.",
+    "occurrences": [
+      {"blockId": "spya-p263u9", "quote": "Silks have a hierarchical structure.", "reasoning": "States the general principle that structure at multiple scales, not just chemical composition, produces the material's behavior."},
+      {"blockId": "spya-p263u9", "quote": "The interplay between the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties.", "reasoning": "Directly ties the hard/soft two-part structure to the fibre's standout mechanical qualities."},
+      {"blockId": "spya-ns50b2", "quote": "He suggested crystallites embedded in an amorphous matrix interlinked with hydrogen bonds.", "reasoning": "Presents the founding model that macro properties come from how hard and soft regions are arranged together."},
+      {"blockId": "spya-dadew4", "quote": "The fibres' microstructural information and macroscopic mechanical properties are related.", "reasoning": "States outright that microscopic arrangement, not just protein content, governs the fibre's large-scale behavior."}
+    ]
+  },
+  {
+    "name": "Strength, stiffness and toughness are separate properties",
+    "provenance": "introduced",
+    "statement": "A material can be strong, stiff, ductile or tough in different combinations; these are independent measurements, so calling something 'stronger' than another material does not automatically mean it performs better overall.",
+    "occurrences": [
+      {"blockId": "spya-hv4xng", "quote": "Strength and toughness are distinct quantities. Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.", "reasoning": "Explicitly separates strength from toughness and shows the two rankings can differ between materials."},
+      {"blockId": "spya-nwva2u", "quote": "This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).", "reasoning": "Defines toughness as a distinct, measurable quantity separate from raw tensile strength."},
+      {"blockId": "spya-n5mzfc", "quote": "An illustration of the differences between toughness, stiffness and strength", "reasoning": "Flags these three as separate axes a reader must keep apart to follow later comparisons."},
+      {"blockId": "spya-dq9b7q", "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus.", "reasoning": "Uses stiffness (Young's modulus) as yet another independent axis, separate from the strength and toughness discussed elsewhere."}
+    ]
+  },
+  {
+    "name": "Silk solidifies by being pulled, not pushed",
+    "provenance": "introduced",
+    "statement": "Spider silk is not extruded like toothpaste or grown like a plant cell wall; it is drawn out of the gland by an external pulling force, and this pulling itself (combined with chemical changes along the duct) is what converts the liquid protein into solid fibre.",
+    "occurrences": [
+      {"blockId": "spya-mepbwz", "quote": "It is pulled on demand from a precursor out of specialised glands, rather than continuously grown like plant cell walls.", "reasoning": "Sets up the pull-based production mode as the defining feature distinguishing silk formation from ordinary biological growth."},
+      {"blockId": "spya-g2gw42", "quote": "Silk production is a pultrusion, similar to extrusion, with the subtlety that the force is induced by pulling at the finished fibre rather than squeezing it out of a reservoir.", "reasoning": "Names the mechanism precisely as pulling-driven rather than pushing-driven, which is the crux of how the fibre forms."},
+      {"blockId": "spya-zekc76", "quote": "Finally, the silk is spun from the taper exterior. The molecules become more stable helixes and β-sheets from the liquid crystal.", "reasoning": "Shows the endpoint of the pulling process: a liquid-crystal protein solution becomes a solid ordered fibre only once it is drawn out."},
+      {"blockId": "spya-m78y5s", "quote": "This allows the silk to flow through the duct as a liquid while maintaining molecular order.", "reasoning": "Explains why the silk can remain liquid until pulled, which only makes sense if pulling itself triggers solidification."}
+    ]
+  },
+  {
+    "name": "One spider, many purpose-built silks",
+    "provenance": "introduced",
+    "statement": "A single spider has several separate glands, each producing a silk with different properties for a different job (framing, sticking, wrapping, egg protection), rather than one general-purpose silk used for everything.",
+    "occurrences": [
+      {"blockId": "spya-pn8bvd", "quote": "a single spider can produce up to seven different types of silk for different uses.", "reasoning": "States directly that one animal maintains multiple distinct silk 'products' rather than a single material."},
+      {"blockId": "spya-pn8bvd", "quote": "This is in contrast to insect silks, where an individual usually only produces a single type.", "reasoning": "Sharpens the point by contrasting it with the more familiar case of a single silk type, showing why spider silk diversity is notable."},
+      {"blockId": "spya-bgtqr0", "quote": "Meeting the specification for all these ecological uses requires different types of silk presenting different properties, as either a fibre, a structure of fibres, or a globule.", "reasoning": "Links the variety of ecological needs directly to the variety of silk types, explaining why multiple glands exist at all."},
+      {"blockId": "spya-nn5s8z", "quote": "Many species have different glands to produce silk with different properties for different purposes", "reasoning": "Generalizes the one-animal-many-silks idea across spider species, reinforcing it as a structural fact about spiders rather than one example."}
+    ]
+  },
+  {
+    "name": "Copying silk needs both the recipe and the machine",
+    "provenance": "introduced",
+    "statement": "Making artificial spider silk is not solved just by producing the right protein; researchers also have to recreate the physical spinning apparatus (the tapering duct, valve, and spigot) that turns that protein into a usable fibre, and without both pieces the fibre fails to match natural silk.",
+    "occurrences": [
+      {"blockId": "spya-wgee6t", "quote": "To artificially synthesise spider silk into fibres, two broad tasks are required. These are synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions (the funnel, valve, tapering duct, and spigot).", "reasoning": "States the two-part requirement directly as the organizing framework for the whole artificial-synthesis discussion."},
+      {"blockId": "spya-w7zvnj", "quote": "The molecular structure of unspun silk is both complex and long. Though this endows the fibres with desirable properties, it also complicates replication.", "reasoning": "Shows why the feedstock half of the problem is hard on its own, independent of the spinning-apparatus half."},
+      {"blockId": "spya-up6vkg", "quote": "Spider silks with comparatively simple molecular structure need complex ducts to be able to form an effective fibre.", "reasoning": "Makes clear that even simplified feedstock still requires the processing-conditions half, so neither task alone suffices."},
+      {"blockId": "spya-jzcepa", "quote": "Through genetic engineering, E. coli bacteria, yeasts, plants, silkworms, and animals other than silkworms have been used to produce spider silk-like proteins, which have different characteristics than those from a spider.", "reasoning": "The resulting proteins differing in characteristics only makes sense if getting the right protein is merely one of two necessary conditions, with the spinning process being the other missing piece."}
+    ]
+  },
+  {
+    "name": "Genes can be moved between species to make them build foreign proteins",
+    "provenance": "assumed",
+    "statement": "Inserting a gene from one organism into another causes the recipient organism's own cellular machinery to manufacture the original organism's protein, which is why bacteria, goats, or silkworms can be made to produce spider silk proteins without any spider being present.",
+    "whyYouNeedIt": "Passages describing E. coli, goats, and silkworms 'producing spider silk protein' only make sense if the reader already understands that transplanting a gene makes a host organism manufacture a foreign protein; the article never explains this mechanism itself, only naming the technique as 'genetic engineering' or pointing to Recombinant DNA as a separate topic.",
+    "occurrences": [
+      {"blockId": "spya-f399m7", "quote": "researchers from the Korea Advanced Institute of Science & Technology succeeded in making spider silk directly using E. coli modified with certain genes of the spider Nephila clavipes.", "reasoning": "The claim that modified bacteria make spider silk only follows if the reader already grasps that a spider gene inserted into bacteria causes the bacteria to produce that spider's protein."},
+      {"blockId": "spya-brz8bx", "quote": "Nexia produced spider silk protein in transgenic goats; the milk produced by the goats contained significant quantities of the protein, 1–2 grams of silk proteins per litre of milk.", "reasoning": "Understanding why goat milk would contain a spider protein requires assuming the gene-transfer concept, which the passage itself does not spell out."},
+      {"blockId": "spya-m99ub7", "quote": "AMSilk developed spidroin using bacteria.", "reasoning": "This terse claim relies entirely on the unstated assumption that bacteria can be engineered to manufacture a protein not naturally theirs."},
+      {"blockId": "spya-k662zp", "quote": "Recombinant DNA – DNA molecules formed by human agency at a molecular level generating novel DNA sequences", "reasoning": "Listing this as a 'See also' topic rather than explaining it in the body confirms the article treats the gene-transfer concept as background the reader must already bring."}
+    ]
+  },
+  {
+    "name": "Spiders cannot be farmed like silkworms",
+    "provenance": "assumed",
+    "statement": "Unlike silkworms, which have been domesticated and raised in mass for silk for centuries, spiders cannot practically be kept and harvested in large numbers, which is the real reason humans turned to forced hand-silking, painstaking hand-collection, and eventually genetic engineering in other species instead of simply farming spiders.",
+    "whyYouNeedIt": "Statements about the difficulty and labor of obtaining spider silk, and the move to re-engineer the proteins in bacteria or goats, only cohere if the reader supplies the fact that mass spider husbandry fails (because spiders are territorial and prone to killing each other) where silkworm farming succeeds; the article states the difficulty but never explains its cause.",
+    "occurrences": [
+      {"blockId": "spya-k8j9fe", "quote": "gathering silk from many spiders is more difficult than from silk-spinning organisms such as silkworms.", "reasoning": "The comparison to silkworms implies a farming contrast whose underlying cause (spiders don't tolerate crowding) is never stated but is needed to understand why the difficulty exists at all."},
+      {"blockId": "spya-jj2arg", "quote": "Neither Bon nor Termeyer were successful in producing commercially viable quantities.", "reasoning": "Explaining repeated historical failure to scale up silk harvesting requires assuming an inherent obstacle to keeping or milking many spiders, which the passage does not name."},
+      {"blockId": "spya-n7xhsh", "quote": "due to the difficulties in extracting and processing, the largest known piece of cloth made of spider silk is an 11-by-4-foot (3.4 by 1.2 m) textile with a golden tint made in Madagascar in 2009. Eighty-two people worked for four years to collect over one million golden orb spiders and extract silk from them.", "reasoning": "That collecting from a million individual wild spiders was necessary, rather than farming fewer spiders at high density, only makes sense if captive mass-rearing of spiders is assumed to be infeasible."}
+    ]
+  }
+]}

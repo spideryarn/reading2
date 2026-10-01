@@ -21,7 +21,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DRIVER_STALLED,
   RUNNING_A_WHILE,
-  STEP_USUALLY_A_COUPLE_OF_MINUTES,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
@@ -174,7 +173,7 @@ it("says what Stop is waiting for", () => {
 
 it("says a sketch usually takes minutes, because that one was measured", () => {
   render(job());
-  expect(host.textContent).toContain(STEP_USUALLY_A_COUPLE_OF_MINUTES);
+  expect(host.textContent).toContain("This step usually takes about a minute.");
 });
 
 /**

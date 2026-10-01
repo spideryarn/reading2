@@ -22,6 +22,8 @@ import {
   providerHttpFailure,
   authProviderRefused,
   highPowerNoRoom,
+  minimalQuotaReached,
+  alreadyOnYourShelf,
   ingestQuotaReached,
   type ReaderFacingFailure,
   articleHadNoText,
@@ -119,6 +121,11 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   ],
   /* One code, one wording: the paid form differs only in its date. */
   highPowerNoRoom: [highPowerNoRoom({ resetAt: new Date("2026-10-01T00:00:00Z") })],
+  /* One code, one wording, as for `highPowerNoRoom`: the other forms differ
+     only in the count that still fits and in the date. */
+  minimalQuotaReached: [minimalQuotaReached({ fits: 40, resetAt: new Date("2026-10-01T00:00:00Z") })],
+  /* Both branches: on the shelf, and archived. One code. */
+  alreadyOnYourShelf: [alreadyOnYourShelf({ archived: false }), alreadyOnYourShelf({ archived: true })],
   /* All four kinds, because `stepGaveUp` is a total map over `FailureKind` and
      a branch missing from here is a sentence that has been through none of the
      invariants below — which is the shape that let `NO_RESPONSE` and

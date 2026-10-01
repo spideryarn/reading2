@@ -69,6 +69,7 @@ export interface SharingPolicy {
  */
 export const STEP_SHARING = {
   fetch: "exclusive",
+  metadata: "exclusive",
   extract: "exclusive",
   blocks: "exclusive",
   hierarchy: "exclusive",

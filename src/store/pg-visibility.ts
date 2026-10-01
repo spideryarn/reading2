@@ -48,6 +48,8 @@ import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
 import { lockBillingAccount } from "./pg-billing.js";
+import { NOT_READ_YET_SHARE } from "../messages.js";
+import { NotProcessed } from "../not-processed.js";
 import { requireSlug } from "./require-slug.js";
 
 /**
@@ -94,6 +96,8 @@ export function lockedArticleQuery(
       slug: articles.slug,
       visibility: articles.visibility,
       publicAt: articles.publicAt,
+      /* A minimal paper may not be shared — plan 261001m. */
+      processing: articles.processing,
     })
     .from(articles)
     .where(ownedSlug(slug))
@@ -153,6 +157,15 @@ const rawPgVisibilityStore: VisibilityStore = {
 
       const [row] = await lockedArticleQuery(tx, slug);
       if (!row) throw notFound(slug);
+
+      /* **A paper not yet read through cannot be shared**: there is nothing to
+         read but a title and an abstract, and the public reader requires a tree
+         anyway. Under the lock, so a *Read this* landing at the same moment is
+         either before this (and the share goes through) or after it. Making one
+         private is never refused. */
+      if (to === "public" && row.processing === "minimal") {
+        throw new NotProcessed(NOT_READ_YET_SHARE.message);
+      }
 
       const from = row.visibility as Visibility;
       /* Already there. Return what is true, touch nothing, log nothing. */

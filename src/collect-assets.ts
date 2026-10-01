@@ -430,10 +430,15 @@ export function pdfFigureCaptionsIn(blocks: readonly Block[]): Map<string, strin
  * ever (docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md).
  * **`5` is the located route** — a model shown the page places a figure the
  * other two refused (src/pdf-figure-locate.ts) — and an article stored under
- * `4` has figures that route could now recover, so it reads stale too. Nothing
- * re-runs on its own; tests/collect-assets.test.ts pins both stamps.
+ * `4` has figures that route could now recover, so it reads stale too.
+ * **`6` is the composite route** — a multi-panel figure rendered from the
+ * model's box once the page binds it to its caption (`judgeLocatedRegion`,
+ * src/pdf-figure-region.ts; docs/plans/261001q-pdf-tables-and-composite-figures.md),
+ * and the locator asked about every refused figure, not only one beside a
+ * picture. Nothing re-runs on its own; tests/collect-assets.test.ts pins both
+ * stamps.
  */
-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/5";
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/6";
 
 /**
  * The cheap look before the parse — built once, from the registered name rather

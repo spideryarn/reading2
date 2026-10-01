@@ -1,0 +1,208 @@
+{
+  "style": "An antique hand-drawn exploration map in sepia ink and faded gold leaf, with little walled towns, roads, rivers and travellers standing in for the article's neurons, connections and discoveries — a register that lets a spine-with-a-fan argument read naturally as a journey down the page, with the article's own figures redrawn as map cartouches.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Voyage of the Question",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-rxcze4",
+          "quote": "brains take in sensory signals from the environment and use that information to generate adaptive behavior",
+          "depicts": "At the top of the map, a traveller stands at the map's edge where many thin signal-lines (sun rays, wavy water-lines, wind-marks) flow in from the surrounding land, and the traveller sets off down a path carrying what they've gathered.",
+          "title": "SIGNALS INTO BEHAVIOR"
+        },
+        {
+          "node": "n2",
+          "block": "spya-s0db2g",
+          "quote": "it is limited in its ability to reveal how different streams of information “interact”",
+          "depicts": "Two labelled currents run side by side and meet at a waterwheel, but the wheel itself is left blank and unmarked — the currents can be traced, but what the wheel does with them cannot be seen.",
+          "title": "TWO STREAMS AT A BLANK MILL"
+        },
+        {
+          "node": "n4",
+          "block": "spya-pjdgu6",
+          "quote": "the joint state of X1 and X2 can account for the activity of Y to some degree",
+          "depicts": "A cartouche redrawing FIGURE A: two tributary streams pour into one lake, and the ripple pattern where they meet is shaded a colour neither stream shows alone, set like an inset medallion on the map.",
+          "title": "TWO STREAMS, ONE LAKE"
+        },
+        {
+          "node": "n6",
+          "block": "spya-sw5ukx",
+          "quote": "used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures",
+          "depicts": "A cartouche redrawing FIGURE C: a thin slice of tissue laid on a gridded plate bristling with fine wires, dotted with hundreds of tiny marked points.",
+          "title": "FIVE-HUNDRED WIRES ON A SLICE"
+        },
+        {
+          "node": "s1",
+          "block": "spya-fud8q3",
+          "quote": "had 2.7 times the amount of synergy as the triads not in the rich club",
+          "depicts": "A walled inner district of the town glows far brighter than the outer streets; beside it a small ledger-cartouche echoing FIGURE D's chart shows the inner district's brightness measured several times over the outer streets'.",
+          "title": "THE BRIGHT INNER DISTRICT"
+        },
+        {
+          "node": "s2",
+          "block": "spya-sd9fzd",
+          "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+          "depicts": "A looping road curling back between two houses, drawn thick and glowing, beside a plain one-way road drawn thin and dim.",
+          "title": "THE LOOPING ROAD GLOWS"
+        },
+        {
+          "node": "s3",
+          "block": "spya-ybmve2",
+          "quote": "the peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "A hill whose brightest point is marked partway up its slope, not at the summit, with two paths climbing past it toward the dimmer top.",
+          "title": "THE MODEST PEAK"
+        },
+        {
+          "node": "s4",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A hand reaching to grasp an object, with many identical small torch-glyphs radiating out toward it along separate paths, every torch the same.",
+          "title": "THE REACHING HAND'S DUPLICATE SIGNAL"
+        },
+        {
+          "node": "n7",
+          "block": "spya-tz99zn",
+          "quote": "there are 2 k possible combinations of 0s and 1s",
+          "depicts": "A ledger board covered in rows of 0 and 1 notches that multiply and spill off the edge of the page.",
+          "title": "THE OVERFLOWING LEDGER OF 0S AND 1S"
+        },
+        {
+          "node": "n8",
+          "block": "spya-mczhkp",
+          "quote": "the construction of a time-resolved, “informational time series”",
+          "depicts": "A long scroll unrolling across the bottom of the map, marked with a single flowing line of light that shifts colour moment to moment along its length.",
+          "title": "THE MOMENT-BY-MOMENT SCROLL"
+        },
+        {
+          "node": "n9",
+          "block": "spya-sp50v3",
+          "quote": "neurons do not appear to blindly sum the number of inputs and fire in response to the total",
+          "depicts": "A gatekeeper at the final gate studies the particular pattern and order of arriving messengers rather than simply counting them, before deciding whether to open the gate.",
+          "title": "THE GATEKEEPER READS THE PATTERN"
+        }
+      ],
+      "prompt": "An antique hand-drawn exploration map on aged parchment, sepia ink with faded teal water and small gold-leaf highlights, running top to bottom as a single continuous journey. At the very top: SIGNALS INTO BEHAVIOR — a traveller at the map's edge gathering thin lines of sun, water and wind, setting off down a path. Below, two currents meet a blank, unmarked waterwheel: TWO STREAMS AT A BLANK MILL. Beneath that, a gold-framed cartouche (FIGURE A redrawn) shows two streams pouring into one lake whose central ripple glows a new colour: TWO STREAMS, ONE LAKE. Beside or just below it, a second cartouche (FIGURE C redrawn) shows a tissue slice on a wired grid dotted with hundreds of points: FIVE-HUNDRED WIRES ON A SLICE. From this recording-scene the map fans into four roadside scenes side by side, each self-contained within a loose shared frame or hedge-line to show they belong to one group: a walled bright inner district with a small chart-cartouche (FIGURE D redrawn) — THE BRIGHT INNER DISTRICT; a glowing looping road beside a dim straight one — THE LOOPING ROAD GLOWS; a hill with its brightest point short of the summit — THE MODEST PEAK; a reaching hand with radiating duplicate torches — THE REACHING HAND'S DUPLICATE SIGNAL. These four converge back into a single path leading down to an overflowing ledger of binary notches — THE OVERFLOWING LEDGER OF 0S AND 1S — then to an unrolling scroll with a shifting line of light — THE MOMENT-BY-MOMENT SCROLL — and finally, at the foot of the map, a gatekeeper studying the pattern of arriving messengers rather than counting them — THE GATEKEEPER READS THE PATTERN. Compass rose and faint hills fill empty corners sparingly; the page must stay mostly bare parchment, with every vignette large enough to read clearly and spread across the full width where the fan occurs. The only lettering anywhere on the page is the eleven titles exactly as given, in capitals beneath their scenes — no other words, numbers, banners, or inscriptions appear anywhere."
+    },
+    {
+      "sceneId": "pid-framework",
+      "title": "Inside the Cartographers' Workshop",
+      "vignettes": [
+        {
+          "node": null,
+          "block": "spya-pjdgu6",
+          "quote": "the joint state of X1 and X2 can account for the activity of Y to some degree",
+          "depicts": "The same framing cartouche as the overview: two tributary streams pouring into one lake, their shared ripple glowing a colour neither carries alone, opening this plate as the piece of the map being entered.",
+          "title": "TWO STREAMS, ONE LAKE"
+        },
+        {
+          "node": "a1",
+          "block": "spya-h5dz45",
+          "quote": "whether to fire an action potential or not",
+          "depicts": "A single gatehouse at the lake's edge, with many roads arriving from upstream houses, and one gate that is either fully open or fully shut.",
+          "title": "THE GATE'S YES-OR-NO"
+        },
+        {
+          "node": "a2",
+          "block": "spya-e94ury",
+          "quote": "the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation”",
+          "depicts": "Inside the gatehouse, a craftsman at a workbench visibly combines the light from the two incoming roads into a brighter new glow that neither road alone produced.",
+          "title": "THE WORKBENCH INSIDE THE GATE"
+        },
+        {
+          "node": "a3",
+          "block": "spya-t02v4p",
+          "quote": "it was not until the seminal work of Williams and Beer",
+          "depicts": "Two cartographers bent over a drafting table, drawing the first precise dividing lines through the lake's glow, marking the moment the division became exact.",
+          "title": "THE CARTOGRAPHERS' EXACT LINES"
+        },
+        {
+          "node": "a4",
+          "block": "spya-h5jzvm",
+          "quote": "Red(X₁, X₂;Y) is the information about Y that could be learned by observing X₁ or X₂",
+          "depicts": "A gold-framed cartouche (FIGURE A redrawn) held by the cartographers like a measuring instrument, its overlapping-circle zone lit the same shared colour as the glow learnable from either road alone.",
+          "title": "THE SHARED OVERLAP"
+        },
+        {
+          "node": "a5",
+          "block": "spya-bgsd4n",
+          "quote": "three known values (the mutual information terms) and four unknown values (the partial information terms)",
+          "depicts": "A ledger page with three filled columns of figures beside four blank columns awaiting entries.",
+          "title": "THREE KNOWN, FOUR BLANK COLUMNS"
+        },
+        {
+          "node": "a6",
+          "block": "spya-pvavq4",
+          "quote": "all subsets of X (including X itself) that can uniquely disclose information about Y",
+          "depicts": "A gold-framed cartouche (FIGURE B redrawn) shown as a trellis of linked roads climbing toward the gatehouse, each junction standing for one subset of the source roads.",
+          "title": "THE TRELLIS OF SUBSETS"
+        },
+        {
+          "node": "a7",
+          "block": "spya-m37w5y",
+          "quote": "it is possible to recursively quantify the value of every partial information atom",
+          "depicts": "The cartographers climbing the trellis rung by rung with measuring compasses, inscribing a small value at each junction in turn.",
+          "title": "MEASURING RUNG BY RUNG"
+        }
+      ],
+      "prompt": "An antique hand-drawn map plate, same sepia-and-gold-leaf hand as the overview, opening at the top with the framing cartouche TWO STREAMS, ONE LAKE — two tributary streams meeting in one lake with a glowing shared ripple — to show this plate is the inside of the overview's framework section. Below it, a single gatehouse with a plain open-or-shut gate: THE GATE'S YES-OR-NO. Beneath that, the same gatehouse now shown from inside, a craftsman at a workbench merging two road-lights into one new, brighter glow: THE WORKBENCH INSIDE THE GATE. Next, two cartographers bent over a drafting table drawing the first exact dividing lines through the lake's light: THE CARTOGRAPHERS' EXACT LINES. Beside them, held up like an instrument, a gold-leaf cartouche redrawing FIGURE A, its overlap-zone lit one shared colour: THE SHARED OVERLAP. Below, a ledger page with three filled columns and four blank ones waiting: THREE KNOWN, FOUR BLANK COLUMNS. Then a second gold-leaf cartouche redrawing FIGURE B as a climbing trellis of linked roads: THE TRELLIS OF SUBSETS. Finally, at the foot of the plate, the two cartographers climbing that same trellis rung by rung with brass compasses, marking a value at each junction: MEASURING RUNG BY RUNG. Arrange the scenes as a vertical sequence of workshop rooms opening one into the next down the page, parchment texture throughout, faint hill and hedge motifs only in the margins, the page kept mostly bare so every scene is large and legible across the plate's width. The only lettering anywhere is the eight titles exactly as given, in capitals under their scenes — no other words, numbers, or inscriptions appear."
+    },
+    {
+      "sceneId": "empirical-findings",
+      "title": "What the Surveyors Found in the Town",
+      "vignettes": [
+        {
+          "node": null,
+          "block": "spya-sw5ukx",
+          "quote": "used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures",
+          "depicts": "The overview's own cartouche reused: a tissue slice laid on a wired grid dotted with hundreds of points, opening this plate as the recording-scene it leads from.",
+          "title": "FIVE-HUNDRED WIRES ON A SLICE"
+        },
+        {
+          "node": "e2",
+          "block": "spya-kqkb58",
+          "quote": "was reliably about a quarter of the transfer entropy for that triad",
+          "depicts": "Three converging roads — two source-houses and one target gatehouse — with a measuring rod held against the strongest road, and a small cartouche (FIGURE D redrawn) beside it showing the gatehouse's glow consistently a quarter the size of the road's brightness.",
+          "title": "A QUARTER OF THE ROAD'S LIGHT"
+        },
+        {
+          "node": "e3",
+          "block": "spya-fud8q3",
+          "quote": "less than 40% of the neurons were in the rich club, the rich club triads accounted for",
+          "depicts": "A walled inner district, clearly smaller than half the town, glowing far brighter than the streets outside its walls, with a small signpost noting its modest size.",
+          "title": "SMALL DISTRICT, OUTSIZED GLOW"
+        },
+        {
+          "node": "e4",
+          "block": "spya-sd9fzd",
+          "quote": "triads with two feedback connections but no recurrent connections had 10% less synergy",
+          "depicts": "A thin, dim road running backward from the gatehouse to the two source-houses, with the gatehouse's own light slightly dulled compared to the rest of the map.",
+          "title": "THE DIM BACKWARD ROAD"
+        },
+        {
+          "node": "e5",
+          "block": "spya-ybmve2",
+          "quote": "past this level, the synergy began to decrease",
+          "depicts": "A traveller walking just past the hill's brightest point and on down the far slope, their carried torch visibly dimming with each step.",
+          "title": "PAST THE PEAK, THE LIGHT FADES"
+        },
+        {
+          "node": "e6",
+          "block": "spya-j4cy9j",
+          "quote": "it has been shown that bivariate analyses overestimate the significance of bivariate edges",
+          "depicts": "A surveyor measuring a road with a too-short rod and marking it stronger than it is, beside a second surveyor with a longer, more careful rod giving a smaller true reading.",
+          "title": "THE TOO-SHORT MEASURING ROD"
+        },
+        {
+          "node": "e7",
+          "block": "spya-t8fayf",
+          "quote": "the brain needs to send the “move” signal to distant muscles",
+          "depicts": "The reaching hand again, now shown with several separate paths each carrying an identical small torch toward a distant limb at the map's far edge.",
+          "title": "MANY TORCHES TO A DISTANT LIMB"
+        }
+      ],
+      "prompt": "An antique hand-drawn map plate, the same sepia-ink-and-gold-leaf hand throughout, opening at the top with the overview's own cartouche FIVE-HUNDRED WIRES ON A SLICE — a tissue slice on a wired grid dotted with points — to mark this plate as the inside of the overview's empirical-findings district. Below it, three roads converging on a gatehouse, a measuring rod against the strongest, with a small gold-leaf cartouche redrawing FIGURE D's chart: A QUARTER OF THE ROAD'S LIGHT. Beneath this, the map fans into a row of linked scenes sharing a loose boundary hedge: a small walled district glowing brighter than the wider town — SMALL DISTRICT, OUTSIZED GLOW; a thin dim backward road from gatehouse to source-houses — THE DIM BACKWARD ROAD; a traveller walking downhill past a torch-lit peak, flame dimming — PAST THE PEAK, THE LIGHT FADES. These three converge below into one surveying scene: two surveyors, one with a too-short rod giving an inflated reading and one with a longer rod giving a truer one — THE TOO-SHORT MEASURING ROD. At the foot of the plate, the reaching hand motif returns, now with several paths each carrying an identical small torch toward a distant limb at the map's edge: MANY TORCHES TO A DISTANT LIMB. Keep the parchment mostly bare, hills and hedges only as thin marginal lines, every scene large and spread across the plate's width rather than crowded into a narrow column. The only lettering anywhere on the page is the seven titles exactly as given, in capitals beneath their scenes — no other words, numbers, banners, or inscriptions appear anywhere on the plate."
+    }
+  ]
+}

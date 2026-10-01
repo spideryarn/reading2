@@ -295,7 +295,7 @@ under the lettering prompt and `google/gemini-3.1-flash-image` at 1K:
 | openai-huggingface | $0.2096–$0.3224 | ~$0.2040 (3) | 183–293 s + 37 s |
 
 So **$0.41–$0.62 an article, two thirds of it the brief**, against Sketch's
-$0.20, and comfortably inside the 760 s lease. Two things moved on 2026-09-04 and
+$0.20 (about $0.10 since it moved to `low` effort on 2026-10-01), and comfortably inside the 760 s lease. Two things moved on 2026-09-04 and
 they moved in opposite directions: a plate went from about $0.013 to **$0.068**,
 because it is priced on the wire now rather than arriving as a BYOK figure; and
 the brief got longer, because it writes a title for every vignette. The earlier
@@ -303,6 +303,10 @@ numbers — $0.23–$0.38 an article, 80–88% of it the brief — are in
 [`evals/results/illustrated-v2b/README.md`](../../evals/results/illustrated-v2b/README.md),
 and the before-and-after of the prompt that produced them is
 [§ Tuning the prompt](../plans/260903c-illustrated-diagram-sub-mode.md#tuning-the-prompt-illustrated2).
+
+**The brief call stays at `high` effort**, measured on 2026-10-01: at `low` and at `medium` both
+judges found the briefs worse — generic styles and riddle captions —
+[261001c § Illustrated](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
 
 Plates are stored content-addressed in the blob store, never base64 in the
 artefact, and a plate's media type is decided **from the signature, never from

@@ -1,0 +1,56 @@
+{"ideas": [
+  {
+    "name": "Working is the real test, not resemblance to the form",
+    "provenance": "introduced",
+    "statement": "A practice counts as science only if it produces real, reliable results, not merely if it copies the outward appearance of experiments, journals, and expert jargon.",
+    "whyYouNeedIt": "This is the whole point of the cargo cult comparison: the islanders reproduce every visible feature of an airstrip, yet nothing works, which is exactly Feynman's diagnosis of fields that look scientific but fail.",
+    "occurrences": [
+      {"blockId": "spya-fd2muf", "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land.", "reasoning": "States the core idea directly: correct form without working results is the failure mode being named."},
+      {"blockId": "spya-rub3a2", "quote": "That’s why the planes don’t land—but they don’t land.", "reasoning": "Reaffirms that the measure of success is the outcome, not the difficulty or form of the method."},
+      {"blockId": "spya-aww976", "quote": "There’s a witch doctor remedy that doesn’t work. It ought to be looked into: how do they know that their method should work?", "reasoning": "Applies the working-vs-form test to education, showing it as a general diagnostic rather than a one-off quip."}
+    ]
+  },
+  {
+    "name": "You are your own most dangerous source of bias",
+    "provenance": "introduced",
+    "statement": "The greatest threat to getting a result right is not outside fraud but the experimenter's own unconscious tendency to favor data and interpretations that confirm what they already expect.",
+    "whyYouNeedIt": "This is why the Millikan anecdote matters at all: later scientists weren't lying, they were unconsciously discarding inconvenient results, which only makes sense as an example if self-deception, not dishonesty, is the main danger.",
+    "occurrences": [
+      {"blockId": "spya-ed9mzv", "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.", "reasoning": "States the idea as the foundational principle underlying everything else in the talk."},
+      {"blockId": "spya-uj9v2h", "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong.", "reasoning": "Shows the mechanism of self-deception in action, which only explains the drift in measured values if this bias is assumed."},
+      {"blockId": "spya-az6z7k", "quote": "it’s this type of integrity, this kind of care not to fool yourself, that is missing to a large extent in much of the research in Cargo Cult Science", "reasoning": "Links the earlier diagnosis of cargo cult failure directly back to self-deception as the root cause."}
+    ]
+  },
+  {
+    "name": "Disclosing counter-evidence is part of the method, not an afterthought",
+    "provenance": "introduced",
+    "statement": "A scientific claim is only honestly presented if it is accompanied by every known fact, objection, and alternative explanation that could weaken it, not just the evidence that supports it.",
+    "occurrences": [
+      {"blockId": "spya-rxj5wa", "quote": "Details that could throw doubt on your interpretation must be given, if you know them.", "reasoning": "States the obligation directly as part of doing science correctly."},
+      {"blockId": "spya-qpwryx", "quote": "the idea is to try to give all of the information to help others to judge the value of your contribution; not just the information that leads to judgment in one particular direction or another", "reasoning": "Summarizes the principle as the generalizable rule behind the specific examples."},
+      {"blockId": "spya-bpyx8n", "quote": "So it’s the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with.", "reasoning": "Extends the idea past literal honesty to misleading omission, showing selective truth still violates the principle."}
+    ]
+  },
+  {
+    "name": "Selective publication fabricates false confidence",
+    "provenance": "introduced",
+    "statement": "If experiments or results are only made public when they turn out favorably, the resulting body of public knowledge will look far more certain and one-sided than the underlying reality actually is.",
+    "whyYouNeedIt": "This connects the cigarette advertising example and the senator anecdote to the same underlying mechanism: a reader must see that it is the asymmetric publishing filter, not any single lie, that creates distortion.",
+    "occurrences": [
+      {"blockId": "spya-jk7mj4", "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.", "reasoning": "States the mechanism explicitly and names the fix required."},
+      {"blockId": "spya-s05sub", "quote": "if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice.", "reasoning": "Applies the same filtering mechanism to policy advice, showing it generalizes beyond advertising."},
+      {"blockId": "spya-jk7mj4", "quote": "In other words, publication probability depends upon the answer. That should not be done.", "reasoning": "Names the general rule the examples are instances of."}
+    ]
+  },
+  {
+    "name": "A result only counts once its disturbing causes are ruled out",
+    "provenance": "assumed",
+    "statement": "An experimental finding is not trustworthy until the researcher has actively searched for and eliminated every alternative cue or variable that could produce the same appearance of an effect.",
+    "whyYouNeedIt": "The praise of Young's rat experiment and the criticism of the student's proposed Y-condition experiment only make sense if ruling out confounds, not just observing a correlation, is what makes a result scientifically solid.",
+    "occurrences": [
+      {"blockId": "spya-tf8rj2", "quote": "it was necessary first to repeat in her laboratory the experiment of the other person...and then change to Y and see if A changed. Then she would know that the real difference was the thing she thought she had under control.", "reasoning": "The advice only follows if isolating the true causal variable, rather than merely observing an outcome, is the standard for a valid result."},
+      {"blockId": "spya-npdc6n": None} if False else {"blockId": "spya-npdc6n", "quote": "So he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door.", "reasoning": "Young's effort to exhaust every possible cue is treated as what makes the experiment valuable, assuming ruled-out confounds equal real knowledge."},
+      {"blockId": "spya-yzzxkw", "quote": "That is the experiment that uncovers the clues that the rat is really using—not what you think it’s using.", "reasoning": "Calls this the 'A-Number-1 experiment' precisely because it eliminates confounds, presupposing that this elimination is what separates real science from illusion."}
+    ]
+  }
+]}

@@ -1,0 +1,82 @@
+{"ideas": [
+  {
+    "name": "Low power mathematically limits replication, independent of truth",
+    "provenance": "introduced",
+    "statement": "If a study's statistical power is low, then even a published 'significant' finding has a low mathematical probability of being found again in a repeat study, regardless of whether the original effect is real or fake.",
+    "occurrences": [
+      {"blockId": "spya-x7d5t5", "quote": "the probability of replicating a previous publication that rejected a null hypothesis in favor of an alternative is assuming significance is less than power. Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.", "reasoning": "States directly that replication probability is a mathematical function of power, not of whether the original claim was correct."},
+      {"blockId": "spya-zvfgme", "quote": "implying that a positive result would replicate with probability less than 10%, regardless of whether the positive result was a true positive or a false positive.", "reasoning": "Applies the formula to real meta-analytic data in psychology."},
+      {"blockId": "spya-hdubm3", "quote": "Low statistical power hinders replication for three reasons: (1) low-power replications have reduced ability to detect true effects, (2) low-power original studies produce biased effect size estimates leading to undersized replications, and (3) low-power original studies yield results unlikely to reflect true effects.", "reasoning": "Lays out the causal chain that depends on this mathematical relationship between power and replicability."}
+    ]
+  },
+  {
+    "name": "Flexible analysis choices inflate false positives even without cheating",
+    "provenance": "introduced",
+    "statement": "When researchers have many small, reasonable-seeming choices available in how they collect, clean, and analyze data, trying several of them and reporting only the one that 'worked' makes a true null result look statistically significant far more often than the stated 5% error rate suggests, even if no single choice was dishonest.",
+    "occurrences": [
+      {"blockId": "spya-umu7gf", "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\". The effect is similar to the file-drawer problem, as the paths not taken are not published.", "reasoning": "States the core mechanism of hidden multiple testing through undisclosed analytic flexibility."},
+      {"blockId": "spya-qsad7n", "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%.", "reasoning": "Quantifies how ordinary, non-malicious flexibility in analysis inflates false positives far above the nominal threshold."},
+      {"blockId": "spya-jp3k7e", "quote": "The probability that at least 1 out of 20 is significant is, by assumption of independence, .", "reasoning": "Illustrates the arithmetic by which multiple tested paths raise the chance of a spurious 'significant' result."}
+    ]
+  },
+  {
+    "name": "A significant p-value is not the probability the hypothesis is true",
+    "provenance": "introduced",
+    "statement": "Passing a significance test (say p<0.05) tells you about how surprising the data would be if nothing were going on, not about how likely it is that the hypothesis you favor is actually correct; those two probabilities can be very different once you factor in how plausible the hypothesis was to begin with.",
+    "occurrences": [
+      {"blockId": "spya-gn5b3a", "quote": "conditional on the statistical studying finding to be true, the posterior probability of actually being true is not , but", "reasoning": "Derives via Bayes' theorem that the post-test probability differs from both the significance level and the naive reading of a positive result."},
+      {"blockId": "spya-esjk29", "quote": "if the prior probability of the null hypothesis is , and the study found a positive result, then the posterior probability for is , and the replication probability is .", "reasoning": "Gives a worked numeric example showing how low the true probability of a real effect can be despite a nominally significant result."},
+      {"blockId": "spya-pknetn", "quote": "when statistical studies on extrasensory perception reject the null hypothesis at extremely low p-value (as in the case of Daryl Bem), it does not imply the alternative hypothesis \"ESP exists\".", "reasoning": "Applies the idea to a concrete case to show rejection of null hypothesis need not support the favored alternative."}
+    ]
+  },
+  {
+    "name": "In soft sciences most tested hypotheses are false before any data is collected",
+    "provenance": "introduced",
+    "statement": "In fields like social psychology, where any two variables tend to be weakly correlated with each other for countless incidental reasons, the vast majority of specific hypotheses researchers choose to test are false from the start, so even a well-run testing procedure will generate a large share of false 'positive' findings.",
+    "occurrences": [
+      {"blockId": "spya-dzsa7e", "quote": "a possible reason for the low rates of replicability in certain scientific fields is that a majority of tested hypotheses are false a priori.", "reasoning": "States the claim directly as an explanation for the low replication rate."},
+      {"blockId": "spya-jxfrbv", "quote": "in a situation where only 10% of tested hypotheses are actually true, one can calculate that as many as 36% of results will be false positives.", "reasoning": "Shows the arithmetic consequence of a low prior truth-rate for false-positive proportions among published results."},
+      {"blockId": "spya-rzjbzy", "quote": "in complex systems, such as social psychology, \"the null hypothesis is always false\", or \"everything is correlated\".", "reasoning": "Grounds the high false-positive-rate claim in the specific feature of soft sciences that weak universal correlations exist everywhere."}
+    ]
+  },
+  {
+    "name": "Failed replication can mean the true effect genuinely varies, not that it is fake",
+    "provenance": "introduced",
+    "statement": "When many well-run direct repeats of the same experiment still produce different-sized effects from each other, the discrepancy may reflect a real underlying phenomenon that is inherently sensitive to hidden factors, rather than evidence that the original finding was wrong or fraudulent.",
+    "occurrences": [
+      {"blockId": "spya-ddw4ya", "quote": "Heterogeneity (variance in research findings due to multiple true effect sizes rather than one) is measured by the I-squared statistic, which quantifies unexplained variation in effect sizes across studies.", "reasoning": "Introduces variation in true effect size, rather than error, as a distinct source of replication failure."},
+      {"blockId": "spya-r23rs2", "quote": "such differences could account for very little heterogeneity . According to Stanley and colleagues, this suggested that heterogeneity could have been a genuine characteristic of the phenomena being investigated.", "reasoning": "Shows that even exact replications vary, implying the variability is a property of the phenomenon rather than of sloppy replication."},
+      {"blockId": "spya-x02d6v", "quote": "if replication is defined by a subsequent study finding a sufficiently similar effect size to the original, replication success is not likely even if replications have very large sample sizes.", "reasoning": "Draws out the consequence that demanding a single fixed effect size as the bar for 'success' is itself flawed given real heterogeneity."}
+    ]
+  },
+  {
+    "name": "Individual career incentives diverge from the collective goal of true findings",
+    "provenance": "introduced",
+    "statement": "What helps an individual scientist's career—publishing often, producing striking positive results, avoiding unglamorous replication work—is not the same as what helps the field accumulate reliable knowledge, and when the two come apart, the career incentives tend to win.",
+    "occurrences": [
+      {"blockId": "spya-huxt52", "quote": "\"publish or perish\" culture created a situation whereby the goals and values of single scientists (e.g., publishability) are not aligned with the general goals of science (e.g., pursuing scientific truth).", "reasoning": "States directly the mismatch between personal and collective goals as the mechanism harming validity."},
+      {"blockId": "spya-jk4f5n", "quote": "although replication is in the best interests of academics and researchers as a group, features of academic psychological culture discourage replication by individual researchers... Replications \"bring less recognition and reward, including grant money, to their authors\".", "reasoning": "Shows the group/individual incentive split concretely in the case of replication work specifically."},
+      {"blockId": "spya-ftd2ng", "quote": "Under certain parameter settings, the population of labs converge to maximum productivity even at the price of very high false positive rates.", "reasoning": "Models how selection pressure on labs, rewarding output over accuracy, drives the system toward unreliable findings even without any dishonest actor."}
+    ]
+  },
+  {
+    "name": "Agreement across different methods is stronger evidence than one method repeated",
+    "provenance": "introduced",
+    "statement": "A finding that holds up when tested using several approaches with unrelated weaknesses is more trustworthy than the same finding repeated many times with one approach, because repeating one flawed method just reproduces its flaw, whereas convergence across different flaws is harder to fake.",
+    "occurrences": [
+      {"blockId": "spya-astgqn", "quote": "replication alone will get us only so far (and) might actually make matters worse ... [Triangulation] is the strategic use of multiple approaches to address one question. Each approach has its own unrelated assumptions, strengths and weaknesses. Results that agree across different methodologies are less likely to be artefacts.", "reasoning": "States the core claim that agreement across unrelated methods, not mere repetition, is what should build confidence."},
+      {"blockId": "spya-w073xf", "quote": "an overemphasis on repeating experiments could provide an unfounded sense of certainty about findings that rely on a single approach.", "reasoning": "Explains why pure replication can be misleading if the shared method itself carries a hidden flaw."}
+    ]
+  },
+  {
+    "name": "Findings are treated as settled once accepted, so early errors get built upon",
+    "provenance": "assumed",
+    "statement": "Published results are routinely used by later researchers as a trusted foundation—cited, extended, and built into new theories and practical decisions—without being re-verified, so an error that gets published can propagate widely before anyone checks it.",
+    "whyYouNeedIt": "Without assuming that publication functions as a stamp of trust that other work relies on, it would not matter that nonreplicable results get cited more, or that errors become 'canonized'; the alarm raised throughout the article only makes sense if unchecked results are treated as usable building blocks.",
+    "occurrences": [
+      {"blockId": "spya-wcf9y7", "quote": "When effects are wrongly stated as relevant in the literature, failure to detect this by replication will lead to the canonization of such false facts.", "reasoning": "This only matters as a problem if the field treats published 'facts' as settled and builds future work on them without re-checking."},
+      {"blockId": "spya-m3et6t", "quote": "papers that cannot be replicated are more likely to be cited... Nonreplicable publications are often cited more even after a replication study is published.", "reasoning": "The alarm here presumes citation functions as endorsement and reuse, not mere mention, which requires assuming downstream work trusts and builds on cited claims."},
+      {"blockId": "spya-dcd9k5": "spya-dcd9k5", "quote": "Ioannidis describes what he views as some of the problems and calls for reform, characterizing certain points for medical research to be useful again", "reasoning": "The call for medicine to be 'useful again' assumes that unreliable findings actually feed into patient-affecting decisions downstream, not just into the literature."}
+    ]
+  }
+]}

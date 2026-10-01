@@ -438,8 +438,10 @@ describe("RESET_ROLE", () => {
   it("calls every import step an import, labels a successor, and the rest extras", () => {
     for (const step of DEFAULT_INGEST_STEPS) expect(RESET_ROLE[step], step).toBe("import");
     expect(RESET_ROLE.labels).toBe("successor");
+    /* A minimal paper's step; a reset is refused on one, and never lists it. */
+    expect(RESET_ROLE.metadata).toBe("import");
     expect(extraSteps()).toEqual(
-      STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels"),
+      STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels" && s !== "metadata"),
     );
     /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f); fifteen since
        `simple` the same day (plan 260930i). */

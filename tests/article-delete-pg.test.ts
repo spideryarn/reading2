@@ -226,7 +226,7 @@ describe("an article with a job still on it", () => {
     const jobId = await givenJob({ status: "queued", ingestEventId: reservationId });
 
     const before = await usageFor(OWNER, FREE);
-    expect(before.inFlight).toBe(1);
+    expect(before.inFlightIngest).toBe(1);
 
     await expect(asOwner(() => pgShelfStore.destroy(SLUG))).rejects.toMatchObject({ status: 409 });
 
@@ -1013,7 +1013,7 @@ describe("a finished job still holding an unsettled slot", () => {
     const jobId = await givenJob({ status: "error", ingestEventId: reservationId });
 
     const before = await usageFor(OWNER, FREE);
-    expect(before.inFlight, "a reservation nobody settled is still in flight").toBe(1);
+    expect(before.inFlightIngest, "a reservation nobody settled is still in flight").toBe(1);
 
     await expect(asOwner(() => pgShelfStore.destroy(SLUG))).rejects.toMatchObject({ status: 500 });
 

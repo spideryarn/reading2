@@ -611,6 +611,9 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
       return REFEREE_TARGET[sub.view] ?? null;
     case "summary":
       return "simple";
+    /* Nothing to generate in either view: the tree is in the page's payload. */
+    case "structure":
+      return null;
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);

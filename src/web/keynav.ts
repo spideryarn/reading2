@@ -9,8 +9,10 @@
  * > left/right should jump to the prev/next L2 item, and so on.
  *
  * So the keys carry the *direction* and the pointer carries the *stride*. Over
- * the spine, ↓ is "next part"; over the prose it is "next paragraph"; anywhere
- * else it is "next section", the unit `?at=` stores. Left and right were the
+ * the spine, ↓ is "next part"; anywhere else it is "next paragraph" — the
+ * fallback was "next section", the unit `?at=` stores, until 2026-10-01, when
+ * Greg asked for ↑ / ↓ to "always do the same thing" and the section stride
+ * moved to ← / → in Structure (`acrossDepth` below). Left and right were the
  * step keys on the first try and were the wrong axis — moving through the piece
  * is a downward motion at every level — Greg, same day, "let's switch to using
  * up/down instead of left/right".
@@ -19,7 +21,8 @@
  * columns. The columns went with the Hierarchy mode
  * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md), and so did
  * that. ← / → are now the browser's, except in a mode that claims them —
- * Skim, whose stops they step (`horizontal` below).
+ * Skim and Quiz, whose stops and questions they step (`horizontal`
+ * below), and Structure, whose sections they step (`acrossDepth`).
  *
  * The table is deliberately not the source of the pointer's aim. Every zone
  * that means a granularity level tags itself with `data-nav-depth`, and this
@@ -396,6 +399,16 @@ export function useArrowNav(
    * not tear down and rebuild the listeners every render.
    */
   horizontal: ((dir: -1 | 1) => boolean) | null = null,
+  /**
+   * **← / → as a stride of their own** — the depth they step at, or `null`.
+   * Structure passes the section depth, so ← / → move to the previous or next
+   * lowest-level section (docs/project/keyboard.md § ← / → in Structure). The
+   * step is ↑ / ↓'s own — the same `stepTarget`, the same chain — so ← in the
+   * middle of a section goes to its start, exactly as ↑ does. A `horizontal`
+   * handler, when one is given, wins; the two are never both set today, since
+   * each belongs to one mode.
+   */
+  acrossDepth: number | null = null,
 ): void {
   const sideways = useRef(horizontal);
   sideways.current = horizontal;
@@ -485,14 +498,21 @@ export function useArrowNav(
            GPT Sol's review of plan 260930h, finding 1. */
         if ((e.target as Element | null)?.closest?.('dialog, [role="dialog"]')) return;
         const mine = sideways.current;
-        if (mine?.(across)) e.preventDefault();
+        if (mine) {
+          if (mine(across)) e.preventDefault();
+          return;
+        }
+        if (acrossDepth !== null && plan.starts[acrossDepth]) step(acrossDepth, across, e);
         return;
       }
 
-      const dir = e.key === "ArrowUp" ? -1 : 1;
       const d = currentAim();
       aim.current = d;
+      step(d, e.key === "ArrowUp" ? -1 : 1, e);
+    };
 
+    /** One step at depth `d`, chained from our own last target. */
+    const step = (d: number, dir: -1 | 1, e: KeyboardEvent) => {
       const target = stepTarget(
         plan.starts[d] ?? [],
         chain.current ?? measureRow(),
@@ -521,6 +541,10 @@ export function useArrowNav(
       window.removeEventListener("wheel", drop);
       window.removeEventListener("pointerdown", drop);
       window.clearTimeout(timer);
+      /* The timer that would have dropped the chain is gone, so drop it now:
+         otherwise a mode change mid-chain (which changes `acrossDepth`) leaves
+         a stale target that nothing ever expires. GPT Sol's plan review, 261001q. */
+      drop();
     };
-  }, [plan, blocks, fallbackDepth, enabled]);
+  }, [plan, blocks, fallbackDepth, enabled, acrossDepth]);
 }

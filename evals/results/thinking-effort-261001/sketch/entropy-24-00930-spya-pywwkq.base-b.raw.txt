@@ -1,0 +1,108 @@
+{
+  "caption": "The article runs as one long chain—problem, tools, their limits, the PID math that fixes those limits, then empirical findings that fan out and converge, then practical limits and future work—before looping back to restate the opening problem in sharper terms.",
+  "title": "Chain into a loop",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "From the problem of neural computation to its resolution",
+      "caption": "A single descending chain: the opening puzzle leads to tools, their blind spot, the PID framework that fills it, a fan of empirical findings that converge on one picture, and practical/future notes — before looping back to the opening claim, now sharpened.",
+      "height": 1520,
+      "items": [
+        {"kind":"node","id":"A","shape":"ellipse","x":260,"y":30,"w":240,"h":70,"text":"How brains compute","size":"md","tone":1,"block":"spya-rxcze4","detail":"Brains take in sensory signals and transform them into adaptive behavior, but how that transformation works is poorly understood."},
+        {"kind":"node","id":"B","shape":"box","x":260,"y":130,"w":240,"h":70,"text":"Lacked data and tools to study it","size":"sm","tone":1,"block":"spya-s9kmxa","detail":"Studying synergy needs huge amounts of data and the right analysis method; both were missing until recently."},
+        {"kind":"node","id":"C","shape":"hex","x":240,"y":230,"w":280,"h":80,"text":"Two measures of info flow","sub":"mutual info vs transfer entropy","size":"sm","tone":1,"block":"spya-mx45r0","detail":"Mutual information measures undirected shared dependence; transfer entropy measures directed, time-ordered information flow."},
+        {"kind":"node","id":"E","shape":"note","x":260,"y":340,"w":240,"h":70,"text":"Flow alone misses how inputs combine","size":"sm","tone":1,"block":"spya-s0db2g","detail":"Information transfer shows flow between pairs but not how a neuron integrates multiple sources into something new."},
+
+        {"kind":"region","x":24,"y":440,"w":712,"h":360,"label":"DECOMPOSING INFORMATION","style":"band","tone":2,"opens":"pid-framework"},
+        {"kind":"node","id":"F","shape":"diamond","x":260,"y":490,"w":240,"h":90,"text":"Whole ≠ sum of parts","sub":"synergy or redundancy","size":"sm","tone":2,"block":"spya-e94ury","detail":"If the joint information exceeds the sum of the individual parts, the excess is synergy; if it falls short, the deficit is redundancy."},
+        {"kind":"node","id":"G","shape":"hex","x":240,"y":610,"w":280,"h":80,"text":"Lattice of info atoms","sub":"redundant, unique, synergistic","size":"sm","tone":2,"block":"spya-k378fv","detail":"Partial information decomposition arranges all possible source combinations into an ordered lattice and solves for each unique atom."},
+        {"kind":"node","id":"H","shape":"note","x":260,"y":720,"w":240,"h":70,"text":"No agreed way to define redundancy","size":"sm","tone":2,"block":"spya-d2quz5","detail":"Close to a dozen competing redundancy functions exist, each with trade-offs, so the choice depends on the data at hand."},
+
+        {"kind":"region","x":24,"y":830,"w":712,"h":260,"label":"PID IN ACTION: FINDINGS","style":"band","tone":3,"opens":"pid-in-action"},
+        {"kind":"node","id":"I","shape":"box","x":60,"y":880,"w":200,"h":80,"text":"Synergy tracks feedforward flow","size":"xs","tone":3,"block":"spya-kqkb58","detail":"Across 25 recordings, synergy in a triad was reliably about a quarter of that triad's feedforward transfer entropy."},
+        {"kind":"node","id":"J","shape":"box","x":280,"y":880,"w":200,"h":80,"text":"Rich clubs do most computing","size":"xs","tone":3,"block":"spya-fud8q3","detail":"Under 40% of neurons sat in the rich club, yet rich-club triads accounted for about 88% of all network-wide synergy."},
+        {"kind":"node","id":"K","shape":"box","x":500,"y":880,"w":200,"h":80,"text":"More recurrent links, more synergy","size":"xs","tone":3,"block":"spya-sd9fzd","detail":"Triads with two recurrent connections had 50% more synergy than triads with none; feedback links were not reliably linked to synergy."},
+        {"kind":"node","id":"L","shape":"box","x":170,"y":980,"w":200,"h":80,"text":"Synergy peaks, then falls","sub":"with source correlation","size":"xs","tone":3,"block":"spya-hkhpex","detail":"Synergy rose with source-neuron similarity at short timescales but peaked around 7% of maximal mutual information, then declined."},
+        {"kind":"node","id":"M","shape":"box","x":390,"y":980,"w":200,"h":80,"text":"Movement boosts redundancy","sub":"in behaving monkeys","size":"xs","tone":3,"block":"spya-t8fayf","detail":"In macaques, redundant information rose sharply during the reach-and-grasp phase, plausibly to send a reliable 'move' signal."},
+        {"kind":"node","id":"N","shape":"box","x":260,"y":1120,"w":240,"h":70,"text":"Synergy reflects structure and task","size":"sm","tone":3,"block":"spya-b32ecw","detail":"Synergistic computation is shaped by local network position and by the behavioral state of the animal, not fixed per neuron."},
+
+        {"kind":"node","id":"O","shape":"box","x":260,"y":1220,"w":240,"h":70,"text":"Data type, sampling, tools limit PID","size":"sm","tone":4,"block":"spya-kmgwhs","detail":"Choosing a redundancy measure depends on discrete vs continuous data, and estimates need enough samples to avoid finite-size bias."},
+        {"kind":"node","id":"P","shape":"box","x":260,"y":1320,"w":240,"h":70,"text":"Next: local & multi-target PID","size":"sm","tone":4,"block":"spya-zz5xxs","detail":"Localizing PID to single moments, and extending it to multiple targets, opens time-resolved and richer multivariate analyses."},
+        {"kind":"node","id":"Q","shape":"ellipse","x":250,"y":1420,"w":260,"h":70,"text":"Patterns matter, not totals","size":"md","tone":4,"block":"spya-rc5z33","detail":"Synergy shows neurons respond to the pattern of inputs, not just their sum — a sharper answer to the opening question."},
+
+        {"kind":"edge","from":"A","to":"B","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"B","to":"C","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"C","to":"E","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"E","to":"F","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"F","to":"G","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"G","to":"H","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"H","to":"I","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"H","to":"J","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"H","to":"K","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"H","to":"L","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"H","to":"M","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"I","to":"N","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"J","to":"N","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"K","to":"N","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"L","to":"N","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"M","to":"N","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"N","to":"O","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"O","to":"P","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"P","to":"Q","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"Q:left","to":"A:left","via":"curve","line":"dashed","arrow":"end","label":"sharper answer"}
+      ]
+    },
+    {
+      "id": "pid-framework",
+      "title": "How PID turns the inequality into named pieces",
+      "caption": "A ladder: each step builds on the one before, from the raw problem of two parents and one target down to the practical need to pick a redundancy measure.",
+      "height": 920,
+      "items": [
+        {"kind":"node","id":"q2b0e5","shape":"box","x":260,"y":40,"w":240,"h":70,"text":"Split info into additive pieces","sub":"two parents, one target","size":"sm","tone":2,"block":"spya-q2b0e5","detail":"The goal: decompose the joint mutual information from two source neurons into non-overlapping named components."},
+        {"kind":"node","id":"h5jzvm","shape":"box","x":260,"y":150,"w":240,"h":70,"text":"Redundant + unique + synergy = total","size":"sm","tone":2,"block":"spya-h5jzvm","detail":"Redundancy is info either source alone discloses; unique is info only one source gives; synergy is info only the pair together gives."},
+        {"kind":"node","id":"bgsd4n","shape":"note","x":260,"y":260,"w":240,"h":70,"text":"One definition unlocks all four terms","size":"sm","tone":2,"block":"spya-bgsd4n","detail":"Three known mutual-information values and four unknown partial-information terms leave the system underdetermined without more input."},
+        {"kind":"node","id":"pvavq4","shape":"box","x":260,"y":370,"w":240,"h":70,"text":"List every possible source subset","size":"sm","tone":2,"block":"spya-pvavq4","detail":"General PID starts by defining every non-empty subset of sources that could uniquely disclose information about the target."},
+        {"kind":"node","id":"t8mg0s","shape":"hex","x":250,"y":480,"w":260,"h":80,"text":"One function builds the whole lattice","size":"sm","tone":2,"block":"spya-t8mg0s","detail":"Given an idealized redundancy function satisfying certain axioms, the subsets can be organized into a partially ordered lattice."},
+        {"kind":"node","id":"m37w5y","shape":"box","x":260,"y":590,"w":240,"h":70,"text":"Lattice orders sources by overlap","size":"sm","tone":2,"block":"spya-m37w5y","detail":"One combination of sources precedes another on the lattice if its information is subsumed by the other's."},
+        {"kind":"node","id":"aft2rx","shape":"hex","x":250,"y":700,"w":260,"h":80,"text":"Möbius inversion extracts each atom","size":"sm","tone":2,"block":"spya-aft2rx","detail":"Recursively subtracting what's already disclosed by simpler combinations isolates the information unique to each lattice node."},
+        {"kind":"node","id":"rc76qn","shape":"note","x":260,"y":810,"w":240,"h":70,"text":"Pick a redundancy measure that fits","size":"sm","tone":2,"block":"spya-rc76qn","detail":"No single accepted measure exists; choice depends on data type and number of sources, trading completeness for practicality."},
+
+        {"kind":"edge","from":"q2b0e5","to":"h5jzvm","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"h5jzvm","to":"bgsd4n","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"bgsd4n","to":"pvavq4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"pvavq4","to":"t8mg0s","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t8mg0s","to":"m37w5y","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"m37w5y","to":"aft2rx","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"aft2rx","to":"rc76qn","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "pid-in-action",
+      "title": "What the empirical studies found, in order",
+      "caption": "A spine of sequential findings from cultured cortical circuits, with a caveat hanging off to the side, continuing into behaving-animal results and a closing conclusion.",
+      "height": 940,
+      "items": [
+        {"kind":"node","id":"dk32tp","shape":"box","x":260,"y":30,"w":240,"h":70,"text":"Record hundreds of cultured neurons","size":"sm","tone":3,"block":"spya-dk32tp","detail":"512-channel arrays on mouse cortical cultures let the authors build effective networks via transfer entropy and extract thousands of triads."},
+        {"kind":"node","id":"kqkb58","shape":"box","x":260,"y":130,"w":240,"h":70,"text":"Synergy scales with feedforward flow","size":"sm","tone":3,"block":"spya-kqkb58","detail":"Across 25 recordings and several timescales, synergy was strongly correlated with the transfer entropy feeding each triad."},
+        {"kind":"node","id":"fud8q3","shape":"box","x":260,"y":230,"w":240,"h":70,"text":"Rich-club triads hold most synergy","size":"sm","tone":3,"block":"spya-fud8q3","detail":"Rich-club triads averaged 2.7 times the synergy of non-rich-club triads, accounting for ~88% of network-wide synergy."},
+        {"kind":"node","id":"sd9fzd","shape":"box","x":260,"y":330,"w":240,"h":70,"text":"Recurrent links add the most synergy","size":"sm","tone":3,"block":"spya-sd9fzd","detail":"Triads with two recurrent connections had 50% more synergy than the simplest triads; feedback links did not reliably help."},
+        {"kind":"node","id":"hkhpex","shape":"box","x":260,"y":430,"w":240,"h":70,"text":"Synergy rises, peaks, then falls","sub":"with source correlation","size":"sm","tone":3,"block":"spya-hkhpex","detail":"At short timescales synergy climbed with source similarity; it peaked near 7% of maximal mutual information and then dropped."},
+        {"kind":"node","id":"cs9fdy","shape":"box","x":260,"y":530,"w":240,"h":70,"text":"Redundancy keeps climbing regardless","sub":"overtaking synergy at long scales","size":"sm","tone":3,"block":"spya-cs9fdy","detail":"As timescales lengthened, redundancy rose steadily with similarity, eventually suppressing the net synergistic output."},
+        {"kind":"node","id":"j4cy9j","shape":"note","x":540,"y":580,"w":180,"h":70,"text":"Caveat: bivariate nets, cultures only","size":"xs","tone":3,"block":"spya-j4cy9j","detail":"Results rest on bivariate transfer-entropy networks, which can overstate connections, and on cultures rather than live behavior."},
+        {"kind":"node","id":"aqcngt","shape":"box","x":260,"y":630,"w":240,"h":70,"text":"Test real behaving monkeys instead","size":"sm","tone":3,"block":"spya-aqcngt","detail":"Macaque pre-motor and motor spiking during a multi-phase task was analyzed with multivariate transfer entropy and PID."},
+        {"kind":"node","id":"t8fayf","shape":"box","x":260,"y":730,"w":240,"h":70,"text":"Movement execution favors redundancy","size":"sm","tone":3,"block":"spya-t8fayf","detail":"Activity was generally synergy-dominated, but redundancy spiked during reach-and-grasp, perhaps to send a reliable 'move' command."},
+        {"kind":"node","id":"b32ecw","shape":"ellipse","x":260,"y":830,"w":240,"h":70,"text":"Synergy shows up at rest and in tasks","size":"md","tone":3,"block":"spya-b32ecw","detail":"Synergistic dynamics appear in both spontaneous activity and task-driven states, tracking behaviorally specific patterns."},
+
+        {"kind":"edge","from":"dk32tp","to":"kqkb58","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"kqkb58","to":"fud8q3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"fud8q3","to":"sd9fzd","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"sd9fzd","to":"hkhpex","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"hkhpex","to":"cs9fdy","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"cs9fdy","to":"j4cy9j","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"cs9fdy","to":"aqcngt","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"aqcngt","to":"t8fayf","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t8fayf","to":"b32ecw","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

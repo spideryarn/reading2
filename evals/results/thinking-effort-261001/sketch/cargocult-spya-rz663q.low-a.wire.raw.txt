@@ -1,0 +1,80 @@
+{"caption":"A chain down through five stages — investigating failed pseudoscience, naming the failure 'Cargo Cult Science', defining the missing integrity, showing self-deception even among honest scientists, then a run of case studies — ending in a loop back to the opening wish for honesty.","title":"Chain into case studies","scenes":[
+{"id":"overview","title":"Cargo Cult Science — overview","caption":"A funnel from scattered pseudoscience-hunting narrows to one diagnosis (missing integrity), which then fans out into case studies before looping back to the opening theme.","height":1180,"items":[
+ {"kind":"node","id":"intro","shape":"ellipse","x":260,"y":30,"w":240,"h":70,"text":"How not to fool yourself","sub":"commencement address","size":"md","block":"spya-wv9g0v"},
+
+ {"kind":"region","x":24,"y":130,"w":712,"h":230,"label":"HUNTING FOR PSEUDOSCIENCE","style":"band","tone":1,"opens":"inside-pseudoscience"},
+ {"kind":"node","id":"science_vs_super","shape":"box","x":48,"y":170,"w":200,"h":60,"text":"Science began by testing and discarding bad ideas","size":"sm","tone":1,"block":"spya-ddrr9m"},
+ {"kind":"node","id":"mysticism","shape":"box","x":280,"y":170,"w":200,"h":60,"text":"Esalen, isolation tanks, Uri Geller — nothing worked","size":"sm","tone":1,"block":"spya-q4502k"},
+ {"kind":"node","id":"edu_justice","shape":"box","x":512,"y":170,"w":200,"h":60,"text":"Reading and crime 'science' shows no real progress","size":"sm","tone":1,"block":"spya-aww976"},
+ {"kind":"node","id":"cocktail","shape":"box","x":280,"y":260,"w":200,"h":60,"text":"The cocktail-party test for topics nobody understands","size":"sm","tone":1,"block":"spya-wc4h5s"},
+
+ {"kind":"node","id":"cargo_cult","shape":"hex","x":260,"y":400,"w":260,"h":90,"text":"Named: 'Cargo Cult Science'","sub":"form without results","size":"lg","block":"spya-fd2muf"},
+
+ {"kind":"region","x":24,"y":520,"w":712,"h":200,"label":"WHAT INTEGRITY REQUIRES","style":"band","tone":2,"opens":"inside-integrity"},
+ {"kind":"node","id":"integrity","shape":"box","x":48,"y":560,"w":210,"h":70,"text":"Report everything that could prove you wrong","size":"sm","tone":2,"block":"spya-afgs74"},
+ {"kind":"node","id":"advertising","shape":"box","x":280,"y":560,"w":200,"h":70,"text":"Unlike ads: disclose the full implication, not just the true-sounding part","size":"sm","tone":2,"block":"spya-bpyx8n"},
+ {"kind":"node","id":"truth_out","shape":"box","x":512,"y":560,"w":200,"h":70,"text":"Careless work eventually gets found out","size":"sm","tone":2,"block":"spya-az6z7k"},
+
+ {"kind":"node","id":"millikan","shape":"box","x":260,"y":760,"w":260,"h":80,"text":"Millikan's flawed charge value crept toward truth only slowly","sub":"fooling yourself","size":"md","block":"spya-s9msxy"},
+
+ {"kind":"region","x":24,"y":880,"w":712,"h":260,"label":"CASE STUDIES IN POOR SCIENCE","style":"band","tone":3,"opens":"inside-cases"},
+ {"kind":"node","id":"psych_repeat","shape":"box","x":48,"y":920,"w":200,"h":60,"text":"Psychologists skip repeating prior experiments","size":"sm","tone":3,"block":"spya-w9nnq6"},
+ {"kind":"node","id":"young_rats","shape":"box","x":280,"y":920,"w":200,"h":60,"text":"Young's careful rat study — later ignored","size":"sm","tone":3,"block":"spya-fvenms"},
+ {"kind":"node","id":"rhine","shape":"box","x":512,"y":920,"w":200,"h":60,"text":"Rhine's ESP effects shrink, repeatability dismissed","size":"sm","tone":3,"block":"spya-rbpppq"},
+ {"kind":"node","id":"final_wish","shape":"ellipse","x":260,"y":1050,"w":240,"h":70,"text":"Wish: freedom to keep your integrity","size":"md","block":"spya-ndyj3t"},
+
+ {"kind":"edge","from":"intro","to":"science_vs_super","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"science_vs_super","to":"mysticism","via":"straight","arrow":"none"},
+ {"kind":"edge","from":"mysticism","to":"edu_justice","via":"straight","arrow":"none"},
+ {"kind":"edge","from":"edu_justice","to":"cocktail","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"mysticism","to":"cocktail","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"cocktail","to":"cargo_cult","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"cargo_cult","to":"integrity","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"integrity","to":"advertising","via":"straight","arrow":"none"},
+ {"kind":"edge","from":"advertising","to":"truth_out","via":"straight","arrow":"none"},
+ {"kind":"edge","from":"truth_out","to":"millikan","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"millikan","to":"psych_repeat","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"psych_repeat","to":"young_rats","via":"straight","arrow":"none"},
+ {"kind":"edge","from":"young_rats","to":"rhine","via":"straight","arrow":"none"},
+ {"kind":"edge","from":"rhine","to":"final_wish","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"final_wish:left","to":"intro:left","via":"curve","arrow":"end","line":"dashed","label":"returns to the theme"}
+]},
+
+{"id":"inside-pseudoscience","title":"Hunting for pseudoscience","caption":"Three converging lines of investigation — mysticism, education/justice, and a rule of thumb for spotting empty fields — all feed into Feynman's diagnosis.","height":560,"items":[
+ {"kind":"node","id":"p1","shape":"box","x":40,"y":60,"w":220,"h":70,"text":"Science began by testing ideas and discarding failures","size":"sm","block":"spya-ddrr9m"},
+ {"kind":"node","id":"p2","shape":"box","x":280,"y":60,"w":220,"h":70,"text":"Many still believe UFOs, astrology, ESP","size":"sm","block":"spya-bcgpc3"},
+ {"kind":"node","id":"p3","shape":"box","x":40,"y":160,"w":220,"h":70,"text":"Isolation tanks and Esalen explored firsthand","size":"sm","block":"spya-q4502k"},
+ {"kind":"node","id":"p4","shape":"box","x":280,"y":160,"w":220,"h":70,"text":"A reflexology session mistaken for anatomy","size":"sm","block":"spya-xm9a87"},
+ {"kind":"node","id":"p5","shape":"box","x":40,"y":260,"w":220,"h":70,"text":"Uri Geller's key-bending fails under test","size":"sm","block":"spya-mmhbvn"},
+ {"kind":"node","id":"p6","shape":"box","x":280,"y":260,"w":220,"h":70,"text":"Reading and crime 'experts' show no progress","size":"sm","block":"spya-aww976"},
+ {"kind":"node","id":"p7","shape":"box","x":40,"y":360,"w":220,"h":70,"text":"Good teachers are intimidated by pseudoscience's authority","size":"sm","block":"spya-re4634"},
+ {"kind":"node","id":"p8","shape":"box","x":280,"y":360,"w":220,"h":70,"text":"The cocktail-party test for empty fields","size":"sm","block":"spya-wc4h5s"},
+ {"kind":"node","id":"p9","shape":"hex","x":160,"y":460,"w":260,"h":80,"text":"Psychotherapy added to the suspect list","size":"md","block":"spya-ankp3d"},
+ {"kind":"edge","from":"p1","to":"p3","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"p2","to":"p4","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"p3","to":"p5","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"p4","to":"p6","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"p5","to":"p7","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"p6","to":"p8","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"p7","to":"p9","via":"curve","arrow":"end"},
+ {"kind":"edge","from":"p8","to":"p9","via":"curve","arrow":"end"}
+]},
+
+{"id":"inside-cases","title":"Case studies in poor science","caption":"A spine of examples, each showing a different way integrity breaks down, running from psychology to physics to parapsychology, ending in Feynman's closing wish.","height":780,"items":[
+ {"kind":"node","id":"c1","shape":"box","x":260,"y":40,"w":260,"h":70,"text":"Student told not to repeat a prior rat experiment","size":"sm","block":"spya-v0xcd7"},
+ {"kind":"node","id":"c2","shape":"box","x":260,"y":140,"w":260,"h":70,"text":"Should first replicate condition X before changing it","size":"sm","block":"spya-tf8rj2"},
+ {"kind":"node","id":"c3","shape":"box","x":260,"y":240,"w":260,"h":70,"text":"A physics run skips comparison data for 'new results'","size":"sm","block":"spya-m95kqm"},
+ {"kind":"node","id":"c4","shape":"box","x":260,"y":340,"w":260,"h":70,"text":"Young eliminates every clue rats could use to navigate","size":"sm","block":"spya-npdc6n"},
+ {"kind":"node","id":"c5","shape":"box","x":260,"y":440,"w":260,"h":70,"text":"Young's rigor called 'A-Number-1' — then forgotten","size":"sm","block":"spya-yzzxkw"},
+ {"kind":"node","id":"c6","shape":"box","x":260,"y":540,"w":260,"h":70,"text":"Later researchers ignore Young's careful controls","size":"sm","block":"spya-wye8g6"},
+ {"kind":"node","id":"c7","shape":"box","x":260,"y":640,"w":260,"h":70,"text":"Rhine's ESP effects shrink as controls improve","size":"sm","block":"spya-rbpppq"},
+ {"kind":"node","id":"c8","shape":"box","x":260,"y":740,"w":260,"h":70,"text":"Students trained to get only the 'right' PSI results","size":"sm","block":"spya-g203mu"},
+ {"kind":"edge","from":"c1","to":"c2","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"c2","to":"c3","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"c3","to":"c4","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"c4","to":"c5","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"c5","to":"c6","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"c6","to":"c7","via":"straight","arrow":"end"},
+ {"kind":"edge","from":"c7","to":"c8","via":"straight","arrow":"end"}
+]}
+]}

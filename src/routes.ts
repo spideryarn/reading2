@@ -334,12 +334,23 @@ import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } fro
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import {
+  NOT_READ_YET,
+  NOT_READ_YET_HIGH_POWER,
   placingFailed,
   UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
   UPLOAD_STILL_ARRIVING,
   UPLOAD_UNAVAILABLE,
 } from "./messages.js";
+import {
+  DuplicateUpload,
+  MINIMAL_STEPS,
+  UploadNotClaimed,
+  claimMinimalUploadInLock,
+  refuseMinimalUploadAtTheDoor,
+  processingOf,
+} from "./minimal-paper.js";
+import { NotProcessed } from "./not-processed.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import {
   confirmCheckout,
@@ -365,6 +376,8 @@ import type { VoucherCreated } from "./admin-vouchers.js";
 import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
+  withMinimalSlot,
+  withUpgradeSlot,
   withIngestSlot,
   withRetrySlot,
   type IngestSlot,
@@ -392,6 +405,7 @@ import {
   noteSlug,
   readUpload,
   recordsSurviveTheRequest,
+  type ClaimFailure,
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
@@ -400,7 +414,7 @@ import { authoredSentence, sayToReader } from "./reader-sentence.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
-import { isStepName, type StepName } from "./pipeline.js";
+import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { routeProfileIsStale } from "./skim.js";
 import {
@@ -4310,6 +4324,18 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  * without `done` as *expected* for a run it has already forgotten, rather than
  * as the broken-connection failure it is for any other run.
  */
+/**
+ * **A 409 for a paper not yet read through, before a route writes anything** —
+ * for the two streamed routes that record a row before they read the article
+ * (`search`, `runRefereeCriterion`). Every other caller of `loadArticle`
+ * reads it first and gets `NotProcessed` from there. One indexed read.
+ */
+async function refuseAPaperNotReadYet(slug: string): Promise<void> {
+  if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
+    throw new NotProcessed(NOT_READ_YET.message);
+  }
+}
+
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { id, criterion } = (body ?? {}) as Record<string, unknown>;
   if (typeof criterion !== "string" || criterion.trim() === "") {
@@ -4322,6 +4348,11 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     throw httpError(400, "A criterion must be 500 characters or fewer");
   }
 
+  /* Before `begin`, which writes the run and opens the stream: a paper not yet
+     read through is refused as an answer, not stored as a failed search and
+     reported as a fault. `loadArticle` below would refuse it too, inside the
+     stream. Plan 261001m. */
+  await refuseAPaperNotReadYet(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
     criterion.trim(),
@@ -4586,6 +4617,8 @@ async function runRefereeCriterion(
 ): Promise<void> {
   const { id, criterion, config } = readCriterionRequest(body);
 
+  /* Before `begin`, for `search`'s reason. */
+  await refuseAPaperNotReadYet(slug);
   const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
   const key = `${slug}/${row.id}`;
   refereeing.add(key);
@@ -5253,11 +5286,30 @@ export function parseJobRequest(body: unknown): {
    * load-bearing: *never accept a client-supplied object path*.
    */
   uploadId?: string;
+  /** With `uploadId` only: `"minimal"` queues the minimal job — `parseUploadLevel`. */
+  level?: "minimal";
+  /**
+   * With `slug` only: ***Read this*** on a minimal paper — the full import over
+   * the stored file, admitted like an ingest (plan 261001m).
+   */
+  readThis?: true;
 } {
-  const { url, slug, steps, force, useProfile, uploadId } = (body ?? {}) as Record<
+  const { url, slug, steps, force, useProfile, uploadId, readThis } = (body ?? {}) as Record<
     string,
     unknown
   >;
+  const level = parseUploadLevel(body);
+  if (level !== undefined && uploadId === undefined) {
+    throw httpError(400, "level goes with an uploadId");
+  }
+  if (readThis !== undefined) {
+    if (readThis !== true) throw httpError(400, "readThis must be true, or left out");
+    if (url !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
+      throw httpError(400, "readThis goes with a slug and nothing else");
+    }
+    if (!isSlug(slug)) throw httpError(400, "readThis needs the slug of the paper to read");
+    return { slug, readThis: true };
+  }
 
   const stepList = (value: unknown, field: string): StepName[] | undefined => {
     if (value === undefined) return undefined;
@@ -5305,6 +5357,7 @@ export function parseJobRequest(body: unknown): {
          the only place with no gap between deciding and inserting. */
       slug: "",
       uploadId,
+      ...(level ? { level } : {}),
       ...rest,
     };
   }
@@ -5360,6 +5413,19 @@ export function parseJobRequest(body: unknown): {
    limit never applies to anything on the critical path and `MAX_BODY_BYTES`
    above stays exactly as it is.
    ------------------------------------------------------------------------- */
+
+/**
+ * **`level`, on `POST /api/uploads` and `POST /api/jobs {uploadId}`**: absent
+ * for today's full import, `"minimal"` for a paper added with only its title,
+ * authors and abstract read (plan 261001m). Anything else is a 400 rather than
+ * a guess, because the two cost a hundredfold apart.
+ */
+function parseUploadLevel(body: unknown): "minimal" | undefined {
+  const { level } = (body ?? {}) as Record<string, unknown>;
+  if (level === undefined) return undefined;
+  if (level === "minimal") return "minimal";
+  throw httpError(400, 'level must be "minimal", or left out for the full import');
+}
 
 /** What the browser claims about the file it is about to send. All three are checked. */
 function parseUploadRequest(body: unknown): { filename: string; bytes: number; sha256: string } {
@@ -5431,7 +5497,17 @@ async function mintAnUpload(body: unknown): Promise<{
      rather than after transferring 11 MB — the same reason `uploadProblem` runs
      up here. The gate that actually decides is `POST /api/jobs`, which is
      serialised per owner; this one is allowed to be a moment out of date. */
-  await refuseUploadWithoutQuota(owner);
+  /* **A minimal upload asks the minimal question** — a batch-added paper at a
+     hundredth of an article (plan 261001m): does 0.01 fit, and are these bytes
+     already this reader's? Both refused here, before the file is sent; both
+     asked again under the lock at `POST /api/jobs`, which is the gate. Any
+     file a single upload takes is a minimal one too — Greg, 2026-10-01: *"it
+     should be possible to bulk-upload (a mix of) both PDFs and HTML etc"*. */
+  if (parseUploadLevel(body) === "minimal") {
+    await refuseMinimalUploadAtTheDoor(owner, claim.sha256);
+  } else {
+    await refuseUploadWithoutQuota(owner);
+  }
 
   const minted = await mintUpload({ ...claim, owner }, (key) => grants.sign(key), stagingKey);
   return {
@@ -5655,6 +5731,102 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
      `/add/upload/<id>` page reads the slug from here. */
   await noteSlug(uploadId, job.slug);
   return { kind: "job", job };
+}
+
+/**
+ * `POST /api/jobs { uploadId, level: "minimal" }` — **a paper added with only
+ * its title, authors and abstract read** (plan 261001m), at a hundredth of an
+ * article.
+ *
+ * `queueAnUpload`'s shape with one difference that is the point: **the claim
+ * moves inside the billing lock.** `withMinimalSlot`'s `inLock` runs the
+ * duplicate check and the claim in the reservation's own transaction
+ * (`claimMinimalUploadInLock`, src/minimal-paper.ts), so two tabs dropping one
+ * folder serialise on the owner's lock and the second sees the first's claimed
+ * upload. A duplicate, or a claim that lost, throws there and takes the
+ * reservation back with it. Then the job, over `["fetch", "metadata"]`,
+ * carrying the reservation; its claim creates the article `'minimal'`
+ * (`claimSession`, src/jobs.ts).
+ *
+ * Called, like `queueAnUpload`, only for an upload that is `pending` and has
+ * arrived: `resolveExistingUpload` answers the repeat before any slot.
+ */
+async function queueAMinimalUpload(uploadId: string): Promise<UploadOutcome> {
+  const owner = currentOwnerId();
+  const record = await readUpload(uploadId, owner);
+  if (!record) throw httpError(404, "No such upload");
+  let claimed: UploadRecord | undefined;
+  try {
+    return await withMinimalSlot(
+      {
+        ownerId: owner,
+        inLock: claimMinimalUploadInLock(
+          { id: uploadId, sha256: record.claimedSha256 },
+          (won) => {
+            claimed = won;
+          },
+        ),
+      },
+      async (slot) => {
+        if (!claimed) throw new Error("the minimal upload's claim reported no record");
+        const job = await enqueue({
+          slug: slugFromFilename(claimed.filename) || "document",
+          upload: { id: uploadId, filename: claimed.filename },
+          steps: [...MINIMAL_STEPS],
+          ...slot,
+        });
+        /* For `queueAnUpload`'s reason: `GET /api/uploads/:id` names the article. */
+        await noteSlug(uploadId, job.slug);
+        return { kind: "job", job };
+      },
+    );
+  } catch (err) {
+    if (err instanceof UploadNotClaimed) return await answerALostClaim(uploadId, err.why);
+    throw err;
+  }
+}
+
+/**
+ * **A claim that lost, answered** — `queueAnUpload`'s `taken` branch, which
+ * the minimal path shares: the job the winner made, else the article its record
+ * names, else the 409 nothing can do better than. `unknown` and `expired` are
+ * the same 404 and 410 as there.
+ */
+async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<UploadOutcome> {
+  if (why === "unknown") throw httpError(404, "No such upload");
+  if (why === "expired") throw httpError(410, UPLOAD_MISSING.message);
+  const already = await jobForUpload(uploadId);
+  if (already) return { kind: "job", job: already };
+  const fresh = await readUpload(uploadId, currentOwnerId());
+  if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+  throw httpError(409, "That upload is already being turned into an article.");
+}
+
+/**
+ * `POST /api/jobs { slug, readThis: true }` — ***Read this*** on a minimal paper.
+ *
+ * The full import over the stored file, the way Rebuild re-reads an uploaded
+ * PDF: today's default steps with `force: ["extract"]`, so the carried `fetch`
+ * — done, in the draft copied from the minimal revision, with the raw source
+ * pointer — is skipped and everything from `extract` on runs. Admitted by
+ * `withUpgradeSlot`: an ingest at the wall, credited the paper's own 2 points,
+ * one at a time per paper, its reservation bound to the article from birth.
+ * The publication that lands the tree flips `processing` and supersedes the
+ * minimal row (src/store/pg-session.ts).
+ *
+ * A paper that is not this reader's is a 404; one already read is a 409 with a
+ * plain sentence, because there is nothing to read again here — Rebuild is.
+ */
+async function queueReadThis(slug: string): Promise<Job> {
+  const owner = currentOwnerId();
+  const article = await processingOf(slug, owner);
+  if (!article) throw httpError(404, "No such article.");
+  if (article.processing !== "minimal") {
+    throw httpError(409, "This paper has already been read through, so there is nothing more to read.");
+  }
+  return await withUpgradeSlot({ ownerId: owner, articleId: article.id }, (slot) =>
+    enqueue({ slug, steps: [...DEFAULT_INGEST_STEPS], force: ["extract"], readThis: true, ...slot }),
+  );
 }
 
 /**
@@ -6695,6 +6867,27 @@ async function fileFeedback(
  * direction `ChatConflict` and a missing file both name no status at all, and
  * both are answered 409 and 404 by design. GPT Sol's review, 2026-08-27.
  */
+/**
+ * **The structured fields an error body may carry, and the only ones** — each
+ * one declared class, each its declared fields, as the note at the `send`
+ * below insists: never an error's own enumerable properties, which for a
+ * Drizzle failure carry bound parameters.
+ *
+ * - `NotProcessed` (src/not-processed.ts): `code: "not-processed"`, and the
+ *   paper when `loadArticle` threw it — what the not-yet-read page draws.
+ * - `DuplicateUpload` (src/minimal-paper.ts): `code: "duplicate"`, and the
+ *   article these bytes already are, when they are one.
+ */
+function declaredFields(err: unknown): Record<string, unknown> {
+  if (err instanceof NotProcessed) {
+    return { code: err.code, ...(err.paper ? { paper: err.paper } : {}) };
+  }
+  if (err instanceof DuplicateUpload) {
+    return { code: err.code, ...(err.article ? { article: err.article } : {}) };
+  }
+  return {};
+}
+
 function chosenByUs(err: unknown): boolean {
   return typeof (err as { status?: unknown } | null | undefined)?.status === "number";
 }
@@ -7023,7 +7216,7 @@ async function serveApi(
        Plan 260924a § Stage 2c. */
     const said =
       status >= 500 ? (authoredSentence(err) ?? UNEXPECTED_FAILURE.message) : (err as Error).message;
-    send(res, status, { error: said });
+    send(res, status, { error: said, ...declaredFields(err) });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);
@@ -8009,6 +8202,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const { on } = parseHighPowerRequest(await readBody(req));
       const slug = slugPart(captures, 1);
       const owner = currentOwnerId();
+      /* **Not on a paper that has not been read through** (plan 261001m): there
+         is no article for it to power, and charging for it would be a charge for
+         nothing. Here rather than in the store so both switches — the charged
+         one and the administrator's — ask it. Unlocked, and safe that way: a
+         paper only ever goes from minimal to full, so a stale answer can only
+         refuse a paper that has just been read. Switching off is never refused. */
+      if (on && (await processingOf(slug, owner))?.processing === "minimal") {
+        throw new NotProcessed(NOT_READ_YET_HIGH_POWER.message);
+      }
       send(
         res,
         200,
@@ -9568,9 +9770,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         if (!(await uploadHasArrived(uploadId))) {
           throw httpError(409, UPLOAD_STILL_ARRIVING.message);
         }
-        const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
-          queueAnUpload(uploadId, slot),
-        );
+        const outcome =
+          request.level === "minimal"
+            ? await queueAMinimalUpload(uploadId)
+            : await withIngestSlot({ ownerId: currentOwnerId() }, (slot) => queueAnUpload(uploadId, slot));
         /* **200, not 202**: nothing has been accepted, because there is nothing
            left to do. The file became this article a while ago and its job
            record has since been trimmed — `queueAnUpload` for why the record
@@ -9596,6 +9799,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
 
          `=== false`, so absent means yes: a client that has never heard of this
          field gets the profiled run, which is the default the panel offers. */
+      /* ***Read this*** — the full import of a minimal paper, over the file it
+         was added from, admitted like an ingest and crediting what the paper
+         already paid (`withUpgradeSlot`). Plan 261001m. */
+      if (request.readThis) {
+        send(res, 202, publicJob(await queueReadThis(request.slug)));
+        return;
+      }
       const profile =
         request.url !== undefined || request.useProfile === false
           ? null

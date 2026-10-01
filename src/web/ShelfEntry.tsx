@@ -25,6 +25,7 @@ import {
   Archive,
   ArchiveRestore,
   Check,
+  CircleDashed,
   Copy,
   Ellipsis,
   ExternalLink,
@@ -122,6 +123,27 @@ export function ArchivedMark() {
   );
 }
 
+/** The marker's words — Greg's: *"indicate in the UI that it hasn't been AI-processed yet"*. */
+export const NOT_PROCESSED_MARK = "Not AI-processed yet";
+
+/**
+ * **A paper with only its title, authors and abstract read** (plan 261001m) —
+ * on the card, in the table and on the paper's own page. Drawn from here, for
+ * `SharedBadge`'s reason, in `ArchivedMark`'s shape. `data-not-processed-mark`
+ * is what a test finds.
+ */
+export function NotProcessedBadge() {
+  return (
+    <span
+      data-not-processed-mark=""
+      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5 tw:text-muted-foreground"
+    >
+      <CircleDashed size={11} aria-hidden="true" />
+      {NOT_PROCESSED_MARK}
+    </span>
+  );
+}
+
 /* -------------------------------------------------------------- card ------ */
 
 /**
@@ -143,9 +165,18 @@ export function ShelfCard({
   shelf,
   note,
   archivedShown = false,
+  readThis,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
+  /**
+   * ***Read this* for a paper not read through yet**, drawn by the caller
+   * (`ReadThisButton`, ReadThis.tsx). A slot rather than an import because this
+   * file is shared with the lazy /admin and /design routes, and the button
+   * brings the job engine and the add page's mode list behind it —
+   * tests/eager-client-graph.test.ts § SHARED_WITH_READER.
+   */
+  readThis?: ReactNode;
   /**
    * What the meta line says — the sorted column's own account of this article.
    * Chosen by the page from `CARD_NOTES` rather than worked out here, so the
@@ -165,12 +196,15 @@ export function ShelfCard({
 
   // Only the facts this article actually has. A filtered join beats a chain of
   // `&&`s that can leave a stranded separator — same reasoning as Masthead.
-  const facts = [
-    entry.byline,
-    entry.siteName,
-    `~${entry.minutes} min`,
-    `${entry.blocks} blocks`,
-  ].filter(Boolean) as string[];
+  /* **A paper not read through yet** (plan 261001m) has no blocks, so no
+     length and no blocks to count; what it has is a title, its authors and an
+     abstract, and the one button that reads the rest. */
+  const minimal = entry.processing === "minimal";
+  const facts = (
+    minimal
+      ? [entry.byline, entry.siteName]
+      : [entry.byline, entry.siteName, `~${entry.minutes} min`, `${entry.blocks} blocks`]
+  ).filter(Boolean) as string[];
 
   return (
     <article className="tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
@@ -192,7 +226,7 @@ export function ShelfCard({
             }}
           />
         ) : (
-          <h2 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:font-prose tw:text-xl tw:leading-snug">
+          <h2 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:break-words tw:font-prose tw:text-xl tw:leading-snug">
             {/* The stretched link: a real `<a href>` whose ::after covers the
                 card, so the whole card is a click target and ⌘-click still
                 opens a tab. Everything interactive after this needs `relative`
@@ -218,7 +252,7 @@ export function ShelfCard({
 
       <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
         {facts.map((f, i) => (
-          <span key={f}>
+          <span key={f} className="tw:min-w-0 tw:max-w-full tw:break-words">
             {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
             {f}
           </span>
@@ -226,6 +260,7 @@ export function ShelfCard({
         {/* First of the chips: it is the one that says why this card is here
             at all when the reader's shelf, by default, would not show it. */}
         {isArchived(entry) && <ArchivedMark />}
+        {minimal && <NotProcessedBadge />}
         {/* Ahead of the fixture chip: of the two, this is the one that says
             something about who else can see the article. */}
         {entry.visibility === "public" && <SharedBadge />}
@@ -248,6 +283,23 @@ export function ShelfCard({
         </p>
       )}
 
+      {/* The abstract behind a disclosure — it is the paper's own words, and a
+          shelf of forty open abstracts would be a wall — then *Read this*.
+          `relative` so both sit above the card's stretched link. */}
+      {minimal && (
+        <div className="tw:relative tw:mt-3 tw:flex tw:flex-col tw:gap-3">
+          {entry.abstract && (
+            <details className="tw:text-xs tw:text-muted-foreground">
+              <summary className="tw:cursor-pointer tw:select-none">Abstract</summary>
+              <p className="tw:mt-2 tw:mb-0 tw:break-words tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+                {entry.abstract}
+              </p>
+            </details>
+          )}
+          {readThis}
+        </div>
+      )}
+
       {/* **Wraps, and the note keeps its `ml-auto` when it does.** The row is
           three things of unpredictable width — a word count, a question count,
           and a note that is whatever the current sort makes it ("opened 3 weeks
@@ -255,10 +307,12 @@ export function ShelfCard({
           is the one that gets squeezed. `gap-y-1` so a wrapped second line does
           not touch the gist above it. */}
       <p className="tw:mt-3 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
-        <span className="tw:inline-flex tw:items-center tw:gap-1.5">
-          <FileText size={13} />
-          {entry.words.toLocaleString()} words
-        </span>
+        {!minimal && (
+          <span className="tw:inline-flex tw:items-center tw:gap-1.5">
+            <FileText size={13} />
+            {entry.words.toLocaleString()} words
+          </span>
+        )}
         {entry.comments > 0 && (
           <span
             className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight"
@@ -808,26 +862,31 @@ export function Actions({
           </IconButton>
         </ActionTip>
 
-        <ActionTip
-          id="rerun"
-          armed={armed}
-          onArm={setArmed}
-          tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildUnavailable}
-          commits={canRerun && !rerunning}
-        >
-          {/* **The name says what the button will do** — re-fetch, rebuild
-              without fetching, or nothing and why. A screen reader gets no
-              card, so the parenthesis is the only place the reason reaches
-              it. GPT Sol, 2026-09-05; feedback 6B, 2026-09-30. */}
-          <IconButton
-            label={rerunLabel(hasWebUrl, canRerun, rerunning)}
-            titled={false}
-            onClick={() => void rerun()}
-            disabled={!canRerun || rerunning}
+{/* **Not on a paper that has not been read through** (plan 261001m):
+            there is nothing built to rebuild, the server refuses it
+            (`[np-read]`), and *Read this* on the card is the action. */}
+        {entry.processing !== "minimal" && (
+                  <ActionTip
+            id="rerun"
+            armed={armed}
+            onArm={setArmed}
+            tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildUnavailable}
+            commits={canRerun && !rerunning}
           >
-            <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
-          </IconButton>
-        </ActionTip>
+            {/* **The name says what the button will do** — re-fetch, rebuild
+                without fetching, or nothing and why. A screen reader gets no
+                card, so the parenthesis is the only place the reason reaches
+                it. GPT Sol, 2026-09-05; feedback 6B, 2026-09-30. */}
+            <IconButton
+              label={rerunLabel(hasWebUrl, canRerun, rerunning)}
+              titled={false}
+              onClick={() => void rerun()}
+              disabled={!canRerun || rerunning}
+            >
+              <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
+            </IconButton>
+          </ActionTip>
+        )}
 
         <ActionTip
           id="open"
@@ -1120,18 +1179,21 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
               <span>Edit title</span>
             </DropdownMenu.Item>
 
-            <DropdownMenu.Item
-              className={ITEM}
-              disabled={!canRerun || rerunning}
-              onSelect={() => void rerun()}
-            >
-              <RefreshCw
-                size={16}
-                aria-hidden="true"
-                className={`tw:shrink-0${rerunning ? " cmt-spinner" : ""}`}
-              />
-              <span>{rerunLabel(hasWebUrl, canRerun, rerunning)}</span>
-            </DropdownMenu.Item>
+            {/* Not on a paper not read through yet — the row's reason. */}
+            {entry.processing !== "minimal" && (
+              <DropdownMenu.Item
+                className={ITEM}
+                disabled={!canRerun || rerunning}
+                onSelect={() => void rerun()}
+              >
+                <RefreshCw
+                  size={16}
+                  aria-hidden="true"
+                  className={`tw:shrink-0${rerunning ? " cmt-spinner" : ""}`}
+                />
+                <span>{rerunLabel(hasWebUrl, canRerun, rerunning)}</span>
+              </DropdownMenu.Item>
+            )}
 
             {hasWebUrl ? (
               <DropdownMenu.Item className={ITEM} asChild>

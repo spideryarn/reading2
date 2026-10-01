@@ -430,18 +430,25 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* **True of both faces**, since 2026-09-10: the two columns and the nested
        list each show every part and the sections of the one the reader is in.
        It said "in two linked columns" until then, which a narrow band's list
-       would have contradicted. */
-    description: "The document's shape — every part, and the sections of the one you are in",
+       would have contradicted. **True of both views too**, since 2026-10-01:
+       it said "the sections of the one you are in", which Expanded (every
+       part's sections) contradicts. GPT Sol's plan review of 261001q. */
+    description: "The document's shape — every part, and its sections",
     /* Checked against the code rather than written from the plan, which is the
        failure this field has already had twice (docs/project/mode.md § The
-       card on the button). "Nothing to generate" is true: the tree arrives in
-       the page's own payload and this mode reaches no artefact and makes no
-       request. The rest is the one thing a press does not tell you — that what
-       you get depends on the room, and how to read each — and the reading order
-       of the columns is what a reader would otherwise have to infer from
-       watching the right-hand one change at a boundary.
-       StructureMode.tsx § `structureFace` is the switch. */
-    how: "The same already-built tree as Summary, so there is nothing to generate. With room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list that opens up around the part you are reading.",
+       card on the button). What a press does not tell you: that Fisheye
+       depends on the room, and how to read each face — the reading order of
+       the columns is what a reader would otherwise have to infer from watching
+       the right-hand one change at a boundary — that Expanded is there, and
+       the keys (tooltips.md § A shortcut is named on its card).
+       StructureMode.tsx § `structureFace` is the switch.
+
+       **No "nothing to generate" since 2026-10-01.** It opened this card as
+       "The same already-built tree as Summary, so there is nothing to
+       generate", and Greg asked for it to go (spya-ukr9dp): not much use to a
+       reader, and Summary was about to stop drawing parts and sections. It is
+       still true — the tree arrives in the page's own payload. */
+    how: "Fisheye opens up around the part you are reading: with room, two columns read left to right — the right-hand one is always the inside of the row marked in the left; without it, one nested list. Expanded shows every part and section with its summary. ← and → step section by section.",
     /* `columns` is about the wide face. `tree`, `map` and `outline` came from
        Outline on 2026-09-10 with its list: `outline` so the retired mode's own
        name still finds the mode that holds it, the other two because they were

@@ -1,0 +1,215 @@
+{
+  "style": "An illuminated manuscript page, with small framed scenes (vignettes) linked by vine-like connecting lines, rendered in ink and muted period pigment — fitting for an article built on 18th-century courtiers, old ethnographies, and Enlightenment philosophers",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "After Work, We'll Have Each Other",
+      "vignettes": [
+        {
+          "node": "thesis",
+          "block": "spya-ssae5k",
+          "quote": "We’ll always need humans to supply the human touch",
+          "depicts": "At the top of the page, two hands reaching toward each other across an empty workshop of idle machines, as a banner of thread connects them — the human touch, with the tools around them untended.",
+          "title": "THE HUMAN TOUCH"
+        },
+        {
+          "node": "a1",
+          "block": "spya-x4w0zk",
+          "quote": "whether parliamentary magistrates could wear a particular bit of ceremonial headgear in the presence of dukes",
+          "depicts": "A courtier in a powdered wig gesturing furiously at another man's hat in a grand hall, with onlooking nobles in rigid rows, as if the hat itself were the gravest matter in the kingdom.",
+          "title": "THE DUKE'S HEADGEAR"
+        },
+        {
+          "node": "b1",
+          "block": "spya-xn6rzj",
+          "quote": "All of the women served on the boards of prominent nonprofit institutions — the opera, the symphony, hospitals",
+          "depicts": "A row of elegantly dressed women seated at a long polished table beneath portraits, each holding a ledger, with miniature emblems of an opera mask, a violin, and a hospital cross above their heads.",
+          "title": "THE CHARITY BOARD"
+        },
+        {
+          "node": "c1",
+          "block": "spya-ghqg2t",
+          "quote": "The men might gamble at a local corner store — gambling is absolutely omnipresent in this world",
+          "depicts": "A knot of working men crowded around a small corner store counter, dice and cards scattered, deep in talk late into the evening while a single dim lamp burns overhead.",
+          "title": "GAMBLING AT THE CORNER STORE"
+        },
+        {
+          "node": "a2",
+          "block": "spya-cz0cgg",
+          "quote": "Aristocrats are basically chimpanzees",
+          "depicts": "A courtier in full court dress caught mid-gesture, his shadow cast on the wall behind him as the unmistakable hunched silhouette of an ape baring its teeth.",
+          "title": "ARISTOCRATS ARE CHIMPANZEES"
+        },
+        {
+          "node": "b2",
+          "block": "spya-mc24jb",
+          "quote": "It’s that illusion of being useful that’s satisfying",
+          "depicts": "A well-dressed woman mid-sentence at a charity meeting, her cheeks flushed, one hand half-raised to her mouth as if the words had slipped out by accident.",
+          "title": "THAT ILLUSION OF BEING USEFUL"
+        },
+        {
+          "node": "c2",
+          "block": "spya-dma27v",
+          "quote": "One of them was the destruction of the West End",
+          "depicts": "Rowhouses and tenements being pulled down by wrecking machinery, with small figures of families standing in the street watching their old neighborhood fall.",
+          "title": "THE DESTRUCTION OF THE WEST END"
+        },
+        {
+          "node": "pattern",
+          "block": "spya-qsfkqr",
+          "quote": "Russian princes and Bostonian Italian day laborers spent most of their time gossiping",
+          "depicts": "Three circles of whispering figures — a bewigged prince, a charity matron, and a laborer in shirtsleeves — each huddled in private conversation, their circles joined by a single braided cord running down the page.",
+          "title": "THREE CIRCLES OF GOSSIP"
+        },
+        {
+          "node": "d1",
+          "block": "spya-zd83ts",
+          "quote": "we can earn respect and dignity as adults from what we do, not who we know",
+          "depicts": "A craftsman at a workbench holding up a finished object to the light, admired by onlookers who are strangers to him, with no family crest or seal in sight.",
+          "title": "RESPECT FOR WHAT WE DO"
+        },
+        {
+          "node": "d2",
+          "block": "spya-sw09bu",
+          "quote": "about 85% of us are “somewhat” or “completely” satisfied with our jobs",
+          "depicts": "A long tally board with rows of small figures at work — a baker, a clerk, a carpenter — nine out of ten of them marked with a small bright star overhead.",
+          "title": "85 IN 100 SATISFIED"
+        },
+        {
+          "node": "final",
+          "block": "spya-dhj4jr",
+          "quote": "I like my job, and I like liberal individualism",
+          "depicts": "At the bottom of the page, a single modest figure at a writing desk, pen in hand, looking back up the page toward the idle machines at the top.",
+          "title": "I LIKE MY JOB"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, ink and faded pigment on aged parchment, drawn as a sequence of small framed scenes connected top to bottom by thin vine-like lines, like marginalia in an old chronicle. At the very top: two hands reaching across an idle workshop of untended machines, captioned THE HUMAN TOUCH. Below, three framed scenes side by side forming a row: left, a wigged courtier gesturing at another man's ceremonial hat before rigid rows of nobles, captioned THE DUKE'S HEADGEAR; center, elegant women seated at a long table with ledgers beneath an opera mask, violin, and hospital cross, captioned THE CHARITY BOARD; right, working men crowded around a corner store counter with scattered dice and cards under a dim lamp, captioned GAMBLING AT THE CORNER STORE. Beneath that same row, three more small scenes directly under each: under the courtier, his shadow on the wall shown as a hunched ape baring its teeth, captioned ARISTOCRATS ARE CHIMPANZEES; under the charity women, one flushed woman mid-confession with a hand half-raised to her mouth, captioned THAT ILLUSION OF BEING USEFUL; under the laborers, rowhouses being torn down by wrecking machinery as families watch, captioned THE DESTRUCTION OF THE WEST END. All three columns funnel downward into a single scene: three circles of whispering figures — a prince, a matron, a laborer — joined by one braided cord, captioned THREE CIRCLES OF GOSSIP. From this convergence, the cord splits into a new row flowing downward: a craftsman holding up a finished object to admiring strangers, captioned RESPECT FOR WHAT WE DO, beside a tally board of working figures with nine of ten marked by a small star, captioned 85 IN 100 SATISFIED. These two converge at the bottom into a final modest scene: a figure at a writing desk looking back up the page toward the idle machines at the very top, captioned I LIKE MY JOB. Use muted browns, ochres, and faded blue-greens, fine ink linework, hand-lettered capitals beneath each scene only, generous bare parchment between scenes, no other lettering anywhere on the page."
+    },
+    {
+      "sceneId": "zoom-aristocrats",
+      "title": "Versailles, Salons, and Apes",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-gs52t3",
+          "quote": "it was the greatest of the four great ages of light, surpassing Athens, Rome, and Florence at their peaks",
+          "depicts": "The opening scene of the plate: a vast glittering hall full of courtiers in silk and candlelight, with four faint ghostly pillars labeled in the composition as ages of light fading behind it.",
+          "title": "THE GREATEST AGE OF LIGHT"
+        },
+        {
+          "node": "n2",
+          "block": "spya-x4w0zk",
+          "quote": "whether parliamentary magistrates could wear a particular bit of ceremonial headgear in the presence of dukes",
+          "depicts": "A courtier pointing accusingly at another's hat before a seated row of dukes, the dispute drawn as the center of everyone's attention.",
+          "title": "THE DUKE'S HEADGEAR"
+        },
+        {
+          "node": "n3",
+          "block": "spya-wue7zn",
+          "quote": "Salons existed and philosophes attended them, but more for entertainment than for rational discourse",
+          "depicts": "A richly furnished salon room where guests lean toward each other whispering behind fans, while a single thinker holds a book unread in his lap, ignored.",
+          "title": "THE SALON'S IDLE PHILOSOPHER"
+        },
+        {
+          "node": "aside",
+          "block": "spya-k0yet6",
+          "quote": "I’m no Lilti, but I’ve read a lot of aristocratic memoirs, and all of them are like this",
+          "depicts": "A reader at a small desk beside a tall stack of leather-bound memoirs, one book open, comparing pages.",
+          "title": "A STACK OF MEMOIRS"
+        },
+        {
+          "node": "n4",
+          "block": "spya-f90g2h",
+          "quote": "who was seen speaking to whom, who’s too religious or not religious enough, who’s having an affair",
+          "depicts": "A Russian court scene with figures leaning in to murmur behind raised hands, each pointing subtly toward another across the room.",
+          "title": "WHO SPOKE TO WHOM"
+        },
+        {
+          "node": "n5",
+          "block": "spya-de69sf",
+          "quote": "Aristocratic dignity comes from honor, which is to say it comes from maintaining distinctions of family and class",
+          "depicts": "A nobleman standing before his family's coat of arms mounted on a wall, straightening his collar with evident pride, no tools or trade in sight.",
+          "title": "DIGNITY IN THE FAMILY CREST"
+        },
+        {
+          "node": "n6",
+          "block": "spya-cz0cgg",
+          "quote": "constantly, obsessively tracking alliances, challenges, displays of prowess, and attempts to get ahead",
+          "depicts": "A cluster of courtiers eyeing one another sidelong in a grand corridor, their postures mirroring a troop of apes watching for the next challenge to rank.",
+          "title": "TRACKING RANK AND CHALLENGE"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k26ath",
+          "quote": "The inmates of Versailles or St. Petersburg are hardly the inevitable product of a world without work",
+          "depicts": "At the bottom of the plate, the same grand hall now half in shadow, with an open door and a path leading out toward a plain, undecorated field beyond — a different possible way.",
+          "title": "NOT THE ONLY PATH"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, ink and muted pigment on aged parchment, continuing the register of the overview page. Open at the top with the overview's own vignette for this part: a vast glittering candlelit hall of courtiers in silk, with four faint ghostly pillars fading behind it, captioned THE GREATEST AGE OF LIGHT. Beneath it, a courtier pointing accusingly at another man's hat before seated dukes, captioned THE DUKE'S HEADGEAR. The scene flows down into a richly furnished salon where guests whisper behind fans while a thinker holds an unread book, captioned THE SALON'S IDLE PHILOSOPHER. From this, two branches: to one side, a reader at a desk beside a tall stack of leather memoirs comparing open pages, captioned A STACK OF MEMOIRS; directly below the salon, a Russian court scene of figures murmuring behind raised hands and pointing across the room, captioned WHO SPOKE TO WHOM. This leads down to a nobleman standing proudly before his family's coat of arms, straightening his collar, captioned DIGNITY IN THE FAMILY CREST, which flows into a cluster of courtiers eyeing each other sidelong in a corridor, their postures echoing apes watching for challenge, captioned TRACKING RANK AND CHALLENGE. At the very bottom of the page, the grand hall returns, now half in shadow, with an open door and a plain undecorated field visible beyond it, captioned NOT THE ONLY PATH. Render in fine ink linework with muted browns, golds, and dull blue-greens, generous bare parchment between scenes, hand-lettered capital titles beneath each vignette only, vines or thin connecting lines linking the scenes top to bottom in reading order, no other lettering anywhere on the page."
+    },
+    {
+      "sceneId": "zoom-work-matters",
+      "title": "Why Work Gives Respect",
+      "vignettes": [
+        {
+          "node": "hub",
+          "block": "spya-zd83ts",
+          "quote": "an alternative way to meet those needs",
+          "depicts": "The opening scene of the plate: a crossroads signpost where one path leads from a family crest toward a workshop door, suggesting work as an alternative route to standing.",
+          "title": "AN ALTERNATIVE ROAD"
+        },
+        {
+          "node": "s1",
+          "block": "spya-sw09bu",
+          "quote": "This is true even when the jobs themselves aren’t impactful or even particularly interesting",
+          "depicts": "A row of ordinary workers at plain tasks — sweeping, stacking, filing — each with a small contented expression despite the dullness of the work.",
+          "title": "CONTENT IN DULL WORK"
+        },
+        {
+          "node": "s4",
+          "block": "spya-n00hd0",
+          "quote": "a white assembly line worker, say, who wanted a promotion to utility man",
+          "depicts": "A factory worker at a conveyor line looking longingly toward a ladder leading up to a supervisor's post labeled only by a raised walkway, his hand half-extended toward it.",
+          "title": "WANTING THE PROMOTION"
+        },
+        {
+          "node": "s2",
+          "block": "spya-zjn6v8",
+          "quote": "A young Native man in Arizona who had become a Level 2-certified sommelier missed his job",
+          "depicts": "A young man in an apron behind a wine counter, holding a glass up to the light with quiet pride, a small map of the world sketched faintly behind him.",
+          "title": "THE SOMMELIER'S WINDOW"
+        },
+        {
+          "node": "s3",
+          "block": "spya-a5pt8y",
+          "quote": "the pride in a job well done, the skills they developed, or the recognition by bosses and peers",
+          "depicts": "An elderly man and woman seated together telling their life story to a young writer with a notebook, surrounded by small tools and ribbons representing a lifetime of trades.",
+          "title": "A LIFE'S WORK RECALLED"
+        },
+        {
+          "node": "equality",
+          "block": "spya-hdbtc0",
+          "quote": "When our dignity depends on our membership in a group, we start to police who else can join",
+          "depicts": "A gate guarded by two robed figures, scrutinizing a newcomer before it, deciding whether to let them pass into a walled enclosure of standing.",
+          "title": "GUARDING THE GATE"
+        },
+        {
+          "node": "commercial",
+          "block": "spya-tmepex",
+          "quote": "The possibility of friendship in a commercial society was a serious concern for Adam Smith, David Hume, and Adam Ferguson",
+          "depicts": "Three scholars in plain coats seated around a table in quiet discussion, an open ledger and a handshake sketched between two ordinary townsfolk visible through the window behind them.",
+          "title": "THE SCOTTISH PHILOSOPHERS"
+        },
+        {
+          "node": "final2",
+          "block": "spya-dhj4jr",
+          "quote": "I like my job, and I like liberal individualism",
+          "depicts": "At the bottom of the plate, a single modest figure at a writing desk, pen in hand, a small open window beside them showing both the workshop and the walled gate in the distance.",
+          "title": "I LIKE MY JOB"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, ink and muted pigment on aged parchment, continuing the same hand and palette as the earlier plates. Open at the top with the overview's own vignette for this part: a crossroads signpost where one path runs from a family crest toward a workshop door, captioned AN ALTERNATIVE ROAD. Below it, branching into a row of four small scenes: ordinary workers sweeping, stacking, and filing with small contented faces, captioned CONTENT IN DULL WORK; a factory worker at a conveyor line reaching toward a ladder up to a raised walkway, captioned WANTING THE PROMOTION; a young man behind a wine counter holding a glass to the light with a faint world map behind him, captioned THE SOMMELIER'S WINDOW; and an elderly couple telling their life story to a young writer with a notebook, surrounded by small tools and ribbons, captioned A LIFE'S WORK RECALLED. All four scenes funnel downward into a single image: a gate guarded by two robed figures scrutinizing a newcomer before a walled enclosure, captioned GUARDING THE GATE. From this, the page flows down into three scholars in plain coats seated in quiet discussion, with a handshake between ordinary townsfolk visible through a window behind them, captioned THE SCOTTISH PHILOSOPHERS. At the very bottom, a modest figure at a writing desk, pen in hand, with a small window beside them showing both the workshop and the distant gate, captioned I LIKE MY JOB. Render in fine ink linework, muted browns, ochres, and dull blue-greens, generous bare parchment between scenes, thin connecting vine-lines in reading order top to bottom, hand-lettered capital titles beneath each vignette only, no other lettering anywhere on the page."
+    }
+  ]
+}

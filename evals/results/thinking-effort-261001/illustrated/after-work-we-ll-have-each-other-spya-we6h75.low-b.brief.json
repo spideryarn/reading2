@@ -1,0 +1,285 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map, since the article charts historical societies as territories the argument travels through, with vignette scenes standing in for cities and regions",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Map of the Relational World",
+      "prompt": "An antique hand-drawn map in sepia ink and faded color washes on aged parchment, depicting a journey of territories connected by dotted trade-routes, in the style of a 17th-century cartographer's illustrated atlas page. At the top, a worried traveller stands at a signpost crossroads looking toward distant mechanical figures laboring in a factory-shaped region, two faint ghostly cheering hands floating above him, titled TWO CHEERS, UNEASY. Three roads lead down and outward to three walled territories drawn side by side: first, a gilded palace region where courtiers argue over a heraldic emblem while an unattended stage sits empty, titled PALACE OF PRECEDENCE; second, a manor region where well-dressed women sit at a long table with seating cards and ledgers, a mansion looming behind, titled LADIES WHO LUNCH; third, a crowded tenement region at night where men and women gather around a table gambling and talking, work-clothes hanging unused by the door, titled THE URBAN VILLAGERS. Beneath the palace territory, a smaller inset shows a powdered courtier standing beside a chained ape mirroring his posture, both inside a drawn cage of tiny rule-tablets, titled COURT AS CAGE. Beneath the manor territory, a woman at a podium casts a hollow empty shadow on the wall, titled ILLUSION OF USE. Beneath the tenement territory, a wrecking ball swings into the building as former neighbors flee with bundles and a condominium rises behind, titled THE WEST END FALLS. All three routes converge at the center of the map on a shared circular plaza where three separate walled circles of tiny figures meet around one carved crest, titled THE CLANNISH PATTERN. From this plaza a single road continues downward to a workshop region: a worker at a bench holds up a finished object to approving onlookers, no crest or banner nearby, titled RESPECT FOR THE WORK. Beside it, a procession of different tradesfolk — waitress, sommelier, clerk — each hold a tool of their trade and smile, titled WHAT WORK GIVES BACK. The road ends at the bottom of the map where the original worried traveller reappears beside a loom weaving two threads, one marked with a tiny padlock and one with a tiny open hand, looking back up toward the distant machines, titled THE LOOM OF BOTH. Compass rose and sea-serpent flourishes may fill empty corners sparingly; no lettering anywhere except the vignette titles.",
+      "vignettes": [
+        {
+          "block": "spya-eq7rkm",
+          "quote": "you'll be giving two cheers for the American work ethic",
+          "depicts": "A worried figure at a crossroads signpost, looking toward machines in the distance that do all the work, two faint ghostly cheering hands above.",
+          "title": "TWO CHEERS, UNEASY",
+          "node": "thesis"
+        },
+        {
+          "block": "spya-y827zc",
+          "quote": "Power and sex among apes",
+          "depicts": "A gilded palace hall where courtiers argue over a heraldic emblem, ignoring a stage where a play goes unwatched.",
+          "title": "PALACE OF PRECEDENCE",
+          "node": "a1"
+        },
+        {
+          "block": "spya-cz0cgg",
+          "quote": "Aristocrats are basically chimpanzees",
+          "depicts": "A court attendant in powdered wig standing stiffly beside a chained ape mimicking his posture, a cage of etiquette rules drawn around them both.",
+          "title": "COURT AS CAGE",
+          "node": "a2"
+        },
+        {
+          "block": "spya-dma27v",
+          "quote": "the destruction of the West End",
+          "depicts": "Wrecking ball swinging into a tenement block, former neighbors scattering with bundles, a condominium rising behind.",
+          "title": "THE WEST END FALLS",
+          "node": "c2"
+        },
+        {
+          "block": "spya-zd83ts",
+          "quote": "we can earn respect and dignity as adults from what we do, not who we know",
+          "depicts": "A worker at a bench holding up a finished item to onlookers who nod in approval, no crest or family banner in sight.",
+          "title": "RESPECT FOR THE WORK",
+          "node": "d1"
+        },
+        {
+          "block": "spya-t9qyhk",
+          "quote": "this is exactly what we see when we look at what Americans actually get out of work",
+          "depicts": "A line of workers of different trades — waitress, sommelier, visitor-center clerk — each holding a tool of their trade, smiling.",
+          "title": "WHAT WORK GIVES BACK",
+          "node": "d2"
+        },
+        {
+          "block": "spya-dhj4jr",
+          "quote": "I like my job, and I like liberal individualism",
+          "depicts": "The same worried figure from the opening crossroads, now standing beside a loom weaving two threads — one labeled by a small padlock (freedom), one by a small open hand (ties) — looking back toward the machines in the distance.",
+          "title": "THE LOOM OF BOTH",
+          "node": "final"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A worried figure at a crossroads signpost, looking toward machines in the distance that do all the work, two faint ghostly cheering hands above.",
+          "title": "TWO CHEERS, UNEASY"
+        },
+        {
+          "where": "A gilded palace hall where courtiers argue over a heraldic emblem, ignoring a stage where a play goes unwatched.",
+          "title": "PALACE OF PRECEDENCE"
+        },
+        {
+          "where": "Well-dressed women at a long table arranging seating cards and charity ledgers, a mansion behind them.",
+          "title": "LADIES WHO LUNCH"
+        },
+        {
+          "where": "A crowded tenement room where men and women gather around a table late at night, gambling and talking, work clothes hung on hooks by the door.",
+          "title": "THE URBAN VILLAGERS"
+        },
+        {
+          "where": "A court attendant in powdered wig standing stiffly beside a chained ape mimicking his posture, a cage of etiquette rules drawn around them both.",
+          "title": "COURT AS CAGE"
+        },
+        {
+          "where": "A woman at a charity gala podium, her shadow cast as a hollow, empty outline on the wall behind her.",
+          "title": "ILLUSION OF USE"
+        },
+        {
+          "where": "Wrecking ball swinging into a tenement block, former neighbors scattering with bundles, a condominium rising behind.",
+          "title": "THE WEST END FALLS"
+        },
+        {
+          "where": "Three separate circles of figures — courtiers, ladies, peer-group men — each drawing a wall around itself on the map, meeting at a shared center marked with a single crest.",
+          "title": "THE CLANNISH PATTERN"
+        },
+        {
+          "where": "A worker at a bench holding up a finished item to onlookers who nod in approval, no crest or family banner in sight.",
+          "title": "RESPECT FOR THE WORK"
+        },
+        {
+          "where": "A line of workers of different trades — waitress, sommelier, visitor-center clerk — each holding a tool of their trade, smiling.",
+          "title": "WHAT WORK GIVES BACK"
+        },
+        {
+          "where": "The same worried figure from the opening crossroads, now standing beside a loom weaving two threads — one labeled by a small padlock (freedom), one by a small open hand (ties) — looking back toward th",
+          "title": "THE LOOM OF BOTH"
+        }
+      ]
+    },
+    {
+      "sceneId": "zoom-aristocrats",
+      "title": "The Court Territory, Enlarged",
+      "prompt": "An antique hand-drawn map inset, in the same sepia ink and faded washes as a cartographer's atlas page, zooming into the court territory of the larger map. At the top, a grand candlelit palace hall glitters with courtiers in fine dress beneath a floating laurel wreath, titled VERSAILLES AT ITS HEIGHT. Below, two dukes argue fiercely over a feathered ceremonial hat held between them, genealogy scrolls scattered at their feet, titled THE DISPUTED HEADGEAR. Beside this, a drawing-room salon shows chattering guests behind fans while a philosopher's book lies closed and unread on a side table, titled SALON WITHOUT PHILOSOPHY. Tucked beside the salon as a small marginal inset, a historian at a writing desk surrounded by stacked memoirs points between two identical open pages, titled LILTI'S FINDING. Further down, a St. Petersburg court scene shows whispering courtiers leaning together behind a throne where a stern empress sits, titled CATHERINE'S COURT. Below that, a proud nobleman stands beside a stone family crest, turning his back on a tradesman who offers a crafted object, titled HONOR OVER DILIGENCE. Next, a row of posturing courtiers eyeing one another's rank is drawn directly beside a troop of apes in the same dominance poses, titled RANK ON DISPLAY. At the bottom of the plate, the palace appears crumbling into ruin at one edge while a fresh green path leads away from it toward open, undrawn land, titled A SANER STARTING POINT. The vignettes are arranged in a flowing vertical chain with thin dotted connecting routes as on a map, large enough to read clearly, filling the width of the page with sparse decorative border flourishes only in empty corners. No lettering anywhere except the vignette titles.",
+      "vignettes": [
+        {
+          "block": "spya-gs52t3",
+          "quote": "the greatest of the four great ages of light, surpassing Athens, Rome, and Florence at their peaks",
+          "depicts": "A grand palace hall glittering with candlelight and courtiers in fine dress, a laurel wreath hovering above the roofline.",
+          "title": "VERSAILLES AT ITS HEIGHT",
+          "node": "n1"
+        },
+        {
+          "block": "spya-x4w0zk",
+          "quote": "whether parliamentary magistrates could wear a particular bit of ceremonial headgear in the presence of dukes",
+          "depicts": "Two dukes in a heated dispute over a feathered ceremonial hat held between them, scrolls of genealogy scattered at their feet.",
+          "title": "THE DISPUTED HEADGEAR",
+          "node": "n2"
+        },
+        {
+          "block": "spya-wue7zn",
+          "quote": "Salons existed and philosophes attended them, but more for entertainment than for rational discourse",
+          "depicts": "A drawing-room salon where guests in wigs chat behind fans, a philosopher's book left closed and unread on a side table.",
+          "title": "SALON WITHOUT PHILOSOPHY",
+          "node": "n3"
+        },
+        {
+          "block": "spya-k0yet6",
+          "quote": "all of them are like this",
+          "depicts": "A historian figure at a writing desk surrounded by stacks of memoirs, pointing from one open page to another identical one.",
+          "title": "LILTI'S FINDING",
+          "node": "aside"
+        },
+        {
+          "block": "spya-f90g2h",
+          "quote": "who's offended or might offend or could be maneuvered into offending the empress",
+          "depicts": "A St. Petersburg court scene where whispering figures lean toward each other behind a throne, a stern empress seated above them.",
+          "title": "CATHERINE'S COURT",
+          "node": "n4"
+        },
+        {
+          "block": "spya-de69sf",
+          "quote": "Aristocratic dignity comes from honor, which is to say it comes from maintaining distinctions of family and class",
+          "depicts": "A nobleman standing proudly beside a family crest carved in stone, turning away from a tradesman offering a crafted object.",
+          "title": "HONOR OVER DILIGENCE",
+          "node": "n5"
+        },
+        {
+          "block": "spya-cz0cgg",
+          "quote": "constantly, obsessively tracking alliances, challenges, displays of prowess",
+          "depicts": "A row of courtiers posturing and eyeing one another's rank, drawn beside a troop of apes displaying dominance in identical poses.",
+          "title": "RANK ON DISPLAY",
+          "node": "n6"
+        },
+        {
+          "block": "spya-k26ath",
+          "quote": "Our own society will be evolving from a much saner starting point",
+          "depicts": "The same palace crumbling into ruin at one edge of the scene, while a fresh green path leads away from it toward open, undrawn land.",
+          "title": "A SANER STARTING POINT",
+          "node": "n7"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A grand palace hall glittering with candlelight and courtiers in fine dress, a laurel wreath hovering above the roofline.",
+          "title": "VERSAILLES AT ITS HEIGHT"
+        },
+        {
+          "where": "Two dukes in a heated dispute over a feathered ceremonial hat held between them, scrolls of genealogy scattered at their feet.",
+          "title": "THE DISPUTED HEADGEAR"
+        },
+        {
+          "where": "A drawing-room salon where guests in wigs chat behind fans, a philosopher's book left closed and unread on a side table.",
+          "title": "SALON WITHOUT PHILOSOPHY"
+        },
+        {
+          "where": "A historian figure at a writing desk surrounded by stacks of memoirs, pointing from one open page to another identical one.",
+          "title": "LILTI'S FINDING"
+        },
+        {
+          "where": "A St. Petersburg court scene where whispering figures lean toward each other behind a throne, a stern empress seated above them.",
+          "title": "CATHERINE'S COURT"
+        },
+        {
+          "where": "A nobleman standing proudly beside a family crest carved in stone, turning away from a tradesman offering a crafted object.",
+          "title": "HONOR OVER DILIGENCE"
+        },
+        {
+          "where": "A row of courtiers posturing and eyeing one another's rank, drawn beside a troop of apes displaying dominance in identical poses.",
+          "title": "RANK ON DISPLAY"
+        },
+        {
+          "where": "The same palace crumbling into ruin at one edge of the scene, while a fresh green path leads away from it toward open, undrawn land.",
+          "title": "A SANER STARTING POINT"
+        }
+      ]
+    },
+    {
+      "sceneId": "zoom-work-matters",
+      "title": "The Workshop Territory, Enlarged",
+      "prompt": "An antique hand-drawn map inset, in the same sepia ink and faded washes as a cartographer's atlas page, zooming into the workshop territory of the larger map. At the top center, a worker displays a finished piece of work to a gathered crowd of varied trades, with no family crest or banner among them, titled DIGNITY FROM THE WORK. Branching from this hub in four directions: a long tally board shows rows of small figures at their trades, most marked with a tiny smiling face beside a counting tally, titled MOST ARE SATISFIED; a line of workers of very different trades stand scowling, each with a small mechanical gear pinned mockingly to their coat, titled TREATED LIKE A ROBOT; a bartender in an apron stands before a shuttered casino speaking to a reporter with a notebook, titled WE WANT TO FEEL USEFUL; and an elderly figure recounts their life story to a seated writer with a notebook, a small remembered scene of tools and a handshake drawn above them, titled A LIFE STORY TOLD. These four routes converge lower on the page at a walled gate where a gatekeeper figure turns away a stranger while a huddled group remains inside, titled POLICING THE GATE. From the gate, a path leads to an open market square where two friends shake hands freely with no coin or contract between them, a gate standing open behind them, titled FRIENDSHIP SET FREE. At the bottom of the plate, a solitary figure sits at a workbench looking toward a horizon where both a workshop and a walled garden are visible, one hand resting hopefully on the bench, titled A WARY HOPE. Vignettes connected by thin dotted map-routes, arranged to fill the width of the page, large and clear, with only sparse border flourishes in empty corners. No lettering anywhere except the vignette titles.",
+      "vignettes": [
+        {
+          "block": "spya-sw09bu",
+          "quote": "about 85% of us are \"somewhat\" or \"completely\" satisfied with our jobs",
+          "depicts": "A long tally board with rows of small figures at their trades, most of them marked with a small smiling face, a counting tally beside them.",
+          "title": "MOST ARE SATISFIED",
+          "node": "s1"
+        },
+        {
+          "block": "spya-a5pt8y",
+          "quote": "the pride in a job well done, the skills they developed, or the recognition by bosses and peers",
+          "depicts": "An elderly figure recounting their life story to a seated writer with a notebook, a small scene of tools and a handshake drawn above them like a memory.",
+          "title": "A LIFE STORY TOLD",
+          "node": "s3"
+        },
+        {
+          "block": "spya-hdbtc0",
+          "quote": "When our dignity depends on our membership in a group, we start to police who else can join",
+          "depicts": "A gatekeeper figure standing at a walled gate, turning away a stranger while a group inside huddles together.",
+          "title": "POLICING THE GATE",
+          "node": "equality"
+        },
+        {
+          "block": "spya-hb8vvc",
+          "quote": "this sympathy between individuals would in turn serve as the basis of a more universalist social morality",
+          "depicts": "Two friends shaking hands freely in an open market square, no coin or contract between them, a gate standing open behind.",
+          "title": "FRIENDSHIP SET FREE",
+          "node": "commercial"
+        },
+        {
+          "block": "spya-dhj4jr",
+          "quote": "I hope the latter will survive it",
+          "depicts": "A solitary figure at a workbench looking up toward a horizon where both a workshop and a walled garden are visible, hand resting hopefully on the bench.",
+          "title": "A WARY HOPE",
+          "node": "final2"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A central workshop scene where a worker displays a finished piece of work to a gathered crowd of varied trades, no family crest in sight.",
+          "title": "DIGNITY FROM THE WORK"
+        },
+        {
+          "where": "A long tally board with rows of small figures at their trades, most of them marked with a small smiling face, a counting tally beside them.",
+          "title": "MOST ARE SATISFIED"
+        },
+        {
+          "where": "A line of workers of very different trades standing shoulder to shoulder, each with a small mechanical gear pinned mockingly to their coat, scowling.",
+          "title": "TREATED LIKE A ROBOT"
+        },
+        {
+          "where": "A bartender in an apron standing before a shuttered casino, speaking the words toward a reporter with notebook in hand.",
+          "title": "WE WANT TO FEEL USEFUL"
+        },
+        {
+          "where": "An elderly figure recounting their life story to a seated writer with a notebook, a small scene of tools and a handshake drawn above them like a memory.",
+          "title": "A LIFE STORY TOLD"
+        },
+        {
+          "where": "A gatekeeper figure standing at a walled gate, turning away a stranger while a group inside huddles together.",
+          "title": "POLICING THE GATE"
+        },
+        {
+          "where": "Two friends shaking hands freely in an open market square, no coin or contract between them, a gate standing open behind.",
+          "title": "FRIENDSHIP SET FREE"
+        },
+        {
+          "where": "A solitary figure at a workbench looking up toward a horizon where both a workshop and a walled garden are visible, hand resting hopefully on the bench.",
+          "title": "A WARY HOPE"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "profileHash": null
+}

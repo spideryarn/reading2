@@ -1,0 +1,252 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — gold-leafed roundels and ink linework on aged parchment, since the article's own imagery (ledgers split into parts, lattices, trellises, rich 'clubs') reads naturally as medieval emblem and diagram.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Spine and the Fan",
+      "prompt": "An illuminated manuscript page on aged cream parchment, ink linework with gold leaf accents, in a single vertical column of eleven roundels connected by a thin gilded spine running top to bottom, with two scenes (the rich-club citadel, the looping towers, the glowing hill, and the reaching monkey) drawn side by side within a single lightly-bordered enclosure to show they branch from one point and rejoin below. At the top: a brain of threads reaching into a grid of recording probes (RECORDING THOUSANDS OF NEURONS). Below it: twin towers joined by a one-way current from an hourglass to an open gate (PAST FLOWING INTO FUTURE). Next: a river under a bridge where two streams run side by side without mixing (FLOW WITHOUT MIXING). Then a framed region holding FIGURE A as overlapping circles of information beside a scholar's dozen mismatched rulers (A DOZEN RULERS FOR OVERLAP), feeding into a second framed region opening with FIGURE C as a cortical slice on a 512-square grid glowing with recorded points (512 CHANNELS ON A CORTICAL SLICE). From that scene the spine forks into four roundels set in a row: a glowing walled citadel among dim huts (THE RICH CLUB’S SHARE OF SYNERGY); three towers with a bright looping road and a fading dotted feedback path (LOOPS THAT ADD, SIGNALS THAT DON’T); a small hill glowing brightest at its crest (THE PEAK WHERE SYNERGY TURNS TO REDUNDANCY); and a monkey's reaching arm bundled with duplicate glowing threads (REACH-AND-GRASP: REDUNDANCY SURGES). The four roundels converge back onto the spine into a workbench with a tick-comb tool and a smooth-wave lens (DIFFERENT TOOLS FOR DIFFERENT DATA), and finally into a cascade of differently-shaded lights tumbling down a scree slope (AN AVALANCHE WITH CHANGING PROFILES) at the bottom of the page. Palette: faded umber ink, muted blue-green washes, gold leaf for the glowing/synergistic elements. Decorative vine-and-leaf border only at the page edges, kept thin so it never crowds the roundels; each roundel large enough to read clearly, using the full width of the page rather than a narrow central column. No lettering anywhere on the page except the short capitalized titles beneath each roundel exactly as given; no other text, numbers, or inscriptions.",
+      "vignettes": [
+        {
+          "block": "spya-s9kmxa",
+          "quote": "electrical and optical recording technologies that can record from hundreds or thousands of neurons",
+          "depicts": "A brain rendered as a hill of fine threads, each thread running to a fine grid of recording probes planted across it like seeds in a field, hundreds of tiny lit points along each thread.",
+          "node": "n1"
+        },
+        {
+          "block": "spya-p4pyuy",
+          "quote": "the transfer entropy from X’s past to Y’s future",
+          "depicts": "Two neurons drawn as twin towers linked by a single flowing current of ink that runs only one way, from an hourglass marked 'past' at one tower into an open gate marked 'future' at the other.",
+          "node": "n2"
+        },
+        {
+          "block": "spya-s0db2g",
+          "quote": "Information transfer captures the overall “flow” of information through the system",
+          "depicts": "A river running beneath a stone bridge where two separate streams meet at the bridge's pillars but pass under side by side without mixing, showing flow without any blending of the two currents.",
+          "node": "n3"
+        },
+        {
+          "block": "spya-rc76qn",
+          "quote": "There are, at present, close to a dozen competing redundancy functions",
+          "depicts": "FIGURE A redrawn as an illuminated roundel of overlapping circles of shared information, set beside a dozen different measuring rulers of unequal length laid out by a scholar, none agreeing with the others.",
+          "node": "n4"
+        },
+        {
+          "block": "spya-sw5ukx",
+          "quote": "512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse cortical slices",
+          "depicts": "FIGURE C redrawn as a thin sagittal slice of cortex laid upon a fine 512-square grid plate, with hundreds of small glowing dots scattered across the slice where neurons are recorded.",
+          "node": "n6"
+        },
+        {
+          "block": "spya-sd9fzd",
+          "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+          "depicts": "Three linked towers where a looping road circles back between two of them (bright and glowing) while a dotted path running back from the third tower fades to nothing.",
+          "node": "s2"
+        },
+        {
+          "block": "spya-ybmve2",
+          "quote": "The peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "A small hill on the map glowing brightest exactly at its crest, with the slope dimming both toward the flat ground below and toward a steeper far slope beyond the peak.",
+          "node": "s3"
+        },
+        {
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A monkey's arm reaching to grasp an object, with many duplicate glowing threads bundled together running from the head down to the hand, far more copies than along the arm's resting threads.",
+          "node": "s4"
+        },
+        {
+          "block": "spya-uktkdy",
+          "quote": "binary, spiking data, the relevant redundancy function will be different from when attempting to analyze largely Gaussian fMRI-BOLD data",
+          "depicts": "A workbench holding two different instruments side by side: a comb-like tool counting sharp on/off ticks, and a smooth curved lens for a soft rolling wave, neither usable for the other's material.",
+          "node": "n7"
+        },
+        {
+          "block": "spya-mczhkp",
+          "quote": "neuronal avalanches (a common signature of complex, critical dynamics in the nervous system) have distinct “computational profiles”",
+          "depicts": "A cascade of small lights tumbling down a slope like a scree-fall, each tumbling light a different shade from the one before it, showing the fall changing in character as it descends.",
+          "node": "n8"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE A",
+          "block": "spya-pjdgu6",
+          "sha256": "d8638efd4d4135b16e61fb5145d9946aea327df6f1fbd853489af49e7ead97ef",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE C",
+          "block": "spya-tfcqnh",
+          "sha256": "7e13e98ad3771a5f483530a4b2886eab82ed6187854258d696c4cc02a5d8d008",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "pid-framework",
+      "title": "Splitting the Ledger",
+      "prompt": "An illuminated manuscript page, ink and gold leaf on aged parchment, arranged as eight roundels in a single descending chain linked by a thin gilded vine, read top to bottom. At the top, framing the chamber: FIGURE A as overlapping circles of information beside a dozen mismatched rulers (A DOZEN RULERS FOR OVERLAP). Below it, a neuron at a fork between a lit lightning-bolt path and a dark path, threads feeding in without simply summing (TO FIRE OR NOT TO FIRE). Next, a neuron as a weaver's loom crossing colored threads into a new pattern (WEAVING INPUTS INTO COMPUTATION). Then two scholars dividing one pile of coins into smaller labeled piles with quill and ruler (SPLITTING THE LEDGER INTO PARTS). Next, FIGURE A again, now with a lone figure's telescope trained on a single circle, lighting only the sliver visible there (WHAT ONLY ONE SOURCE REVEALS). Then a locksmith turning one key while three other locks on a chain spring open by themselves (ONE KEY, THREE LOCKS SPRING FREE). Then FIGURE B redrawn as a wildly branching trellis beside a short tally-stick with only a few notches (ATOMS OUTGROWING KNOWN TERMS). Finally, at the bottom, a gardener's trellis with one fruit hanging at a high crossed junction, unreachable from any lower branch (FRUIT NOT FOUND ON LOWER BRANCHES). Palette: faded umber and soft sepia ink, restrained gold leaf on the lit/illuminated elements (lightning bolt, telescope's circle, open locks, high fruit), muted green for vines and trellises. A thin decorative vine border at the page edges only, never crowding the roundels — each roundel large and legible, spanning most of the page's width. No lettering anywhere except the short capitalized titles beneath each roundel exactly as given; no other words, numbers, or inscriptions appear on the page.",
+      "vignettes": [
+        {
+          "block": "spya-rc76qn",
+          "quote": "There are, at present, close to a dozen competing redundancy functions",
+          "depicts": "The same opening image as the overview's framework scene: FIGURE A as overlapping circles of information beside a scholar's dozen mismatched rulers, framing the chamber this plate opens into.",
+          "title": "A DOZEN RULERS FOR OVERLAP"
+        },
+        {
+          "block": "spya-h5dz45",
+          "quote": "whether to fire an action potential or not",
+          "depicts": "A single neuron at a fork in the road, one path lit by a small lightning bolt and the other dark, with many thin threads from parent neurons feeding into the fork but not simply adding together.",
+          "title": "TO FIRE OR NOT TO FIRE",
+          "node": "a1"
+        },
+        {
+          "block": "spya-e94ury",
+          "quote": "the target neuron can be thought of as performing a kind of integrating “computation”",
+          "depicts": "A neuron drawn as a weaver's loom, many colored threads from different sources crossing and interlacing into a new woven pattern on the loom's frame.",
+          "title": "WEAVING INPUTS INTO COMPUTATION",
+          "node": "a2"
+        },
+        {
+          "block": "spya-t02v4p",
+          "quote": "it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts",
+          "depicts": "Two scholars at a ledger, dividing one large pile of coins into several smaller labeled piles with a quill and ruler, the whole sum exactly accounted for among the smaller piles.",
+          "title": "SPLITTING THE LEDGER INTO PARTS",
+          "node": "a3"
+        },
+        {
+          "block": "spya-h5jzvm",
+          "quote": "the information about Y that could only be learned by observing Xᵢ",
+          "depicts": "FIGURE A redrawn with a lone figure holding a telescope trained only on one circle of the diagram, seeing a sliver that is lit only there and nowhere else in the overlapping circles.",
+          "title": "WHAT ONLY ONE SOURCE REVEALS",
+          "node": "a4"
+        },
+        {
+          "block": "spya-bgsd4n",
+          "quote": "If any of the unknown terms can be defined, then the other three emerge “for free”.",
+          "depicts": "A locksmith turning one key in a single lock, and three other locks on a chain springing open on their own the moment the first turns.",
+          "title": "ONE KEY, THREE LOCKS SPRING FREE",
+          "node": "a5"
+        },
+        {
+          "block": "spya-q9gytb",
+          "quote": "the number of distinct partial information atoms grows much faster than the number of known mutual information terms",
+          "depicts": "FIGURE B redrawn as a trellis branching wildly into many small fruiting knots, set beside a short tally-stick with only a few notches, showing the trellis far outgrowing the tally.",
+          "title": "ATOMS OUTGROWING KNOWN TERMS",
+          "node": "a6"
+        },
+        {
+          "block": "spya-aft2rx",
+          "quote": "information that is not accessible in any simpler combination of sources lower down on the lattice",
+          "depicts": "A gardener's trellis with a single fruit hanging at a high, particular junction of crossed vines, a fruit that cannot be reached by climbing any of the lower, simpler branches of the trellis.",
+          "title": "FRUIT NOT FOUND ON LOWER BRANCHES",
+          "node": "a7"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same opening image as the overview's framework scene: FIGURE A as overlapping circles of information beside a scholar's dozen mismatched rulers, framing the chamber this plate opens into.",
+          "title": "A DOZEN RULERS FOR OVERLAP"
+        },
+        {
+          "where": "A single neuron at a fork in the road, one path lit by a small lightning bolt and the other dark, with many thin threads from parent neurons feeding into the fork but not simply adding together.",
+          "title": "TO FIRE OR NOT TO FIRE"
+        },
+        {
+          "where": "A neuron drawn as a weaver's loom, many colored threads from different sources crossing and interlacing into a new woven pattern on the loom's frame.",
+          "title": "WEAVING INPUTS INTO COMPUTATION"
+        },
+        {
+          "where": "Two scholars at a ledger, dividing one large pile of coins into several smaller labeled piles with a quill and ruler, the whole sum exactly accounted for among the smaller piles.",
+          "title": "SPLITTING THE LEDGER INTO PARTS"
+        },
+        {
+          "where": "FIGURE A redrawn with a lone figure holding a telescope trained only on one circle of the diagram, seeing a sliver that is lit only there and nowhere else in the overlapping circles.",
+          "title": "WHAT ONLY ONE SOURCE REVEALS"
+        },
+        {
+          "where": "A locksmith turning one key in a single lock, and three other locks on a chain springing open on their own the moment the first turns.",
+          "title": "ONE KEY, THREE LOCKS SPRING FREE"
+        },
+        {
+          "where": "FIGURE B redrawn as a trellis branching wildly into many small fruiting knots, set beside a short tally-stick with only a few notches, showing the trellis far outgrowing the tally.",
+          "title": "ATOMS OUTGROWING KNOWN TERMS"
+        },
+        {
+          "where": "A gardener's trellis with a single fruit hanging at a high, particular junction of crossed vines, a fruit that cannot be reached by climbing any of the lower, simpler branches of the trellis.",
+          "title": "FRUIT NOT FOUND ON LOWER BRANCHES"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE A",
+          "block": "spya-pjdgu6",
+          "sha256": "d8638efd4d4135b16e61fb5145d9946aea327df6f1fbd853489af49e7ead97ef",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE B",
+          "block": "spya-atvpm9",
+          "sha256": "14effc5357e10e95d7fbbc4f068d20d48356e1b4a56e2a90c2837f2c2bddfcea",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "empirical-findings",
+      "title": "What the Recordings Showed",
+      "prompt": "An illuminated manuscript page, ink and gold leaf on aged parchment, arranged as seven roundels: the first stands alone at the top as a frame, then three roundels sit side by side in a row sharing one border beneath it, then the chain continues downward through two more roundels to a final scene. At the top: FIGURE C as a cortical slice on a glowing 512-square grid (512 CHANNELS ON A CORTICAL SLICE), opening the chamber. Below it, a single vessel pours a stream of ink into a smaller vessel that always fills to a quarter of the larger one's level (A QUARTER OF THE FLOW BECOMES SYNERGY), from which the chain forks into three side-by-side roundels: a glowing walled citadel among dim huts (THE RICH CLUB’S SHARE OF SYNERGY); three towers with a bright looping road and a fading dotted path (LOOPS THAT ADD, SIGNALS THAT DON’T); and a small hill glowing brightest at its crest (THE PEAK WHERE SYNERGY TURNS TO REDUNDANCY). The three converge back into a cartographer drawing a bridge far wider than the actual ford beneath it (A BRIDGE MEASURED TOO WIDE), and finally into a monkey's reaching arm bundled with duplicate glowing threads (REACH-AND-GRASP: REDUNDANCY SURGES) at the bottom. Palette: faded umber and sepia ink, muted blue-green washes, gold leaf reserved for the glowing/synergy elements (grid points, citadel, hill-crest, looping road). A thin vine-and-leaf border only at the page's outer edge, kept narrow so it never crowds the roundels; each roundel drawn large and legible, using the full width of the page. No lettering anywhere on the page except the short capitalized titles beneath each roundel exactly as given; no other words, numbers, or inscriptions appear.",
+      "vignettes": [
+        {
+          "block": "spya-sw5ukx",
+          "quote": "512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse cortical slices",
+          "depicts": "FIGURE C redrawn as a thin sagittal slice of cortex laid upon a fine 512-square grid plate, with hundreds of small glowing dots scattered across the slice where neurons are recorded, the same scene opening the overview's rich-club chamber.",
+          "node": "e1"
+        },
+        {
+          "block": "spya-kqkb58",
+          "quote": "synergy observed in a given triad was reliably about a quarter of the transfer entropy for that triad",
+          "depicts": "FIGURE D's scatter panel redrawn as a stream of ink pouring from a vessel labeled by its flow into a smaller vessel, the smaller vessel always filling to exactly one quarter of the larger one's level.",
+          "node": "e2"
+        },
+        {
+          "block": "spya-sd9fzd",
+          "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+          "depicts": "FIGURE D's connectivity panel redrawn as three linked towers with a bright looping road circling back between two of them, and a dotted path running back from the third tower fading to nothing.",
+          "node": "e4"
+        },
+        {
+          "block": "spya-ybmve2",
+          "quote": "The peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "FIGURE D's timescale panels redrawn as a small hill glowing brightest exactly at its crest, dimming toward flat ground on one side and a steeper far slope on the other.",
+          "node": "e5"
+        },
+        {
+          "block": "spya-j4cy9j",
+          "quote": "bivariate analyses overestimate the significance of bivariate edges",
+          "depicts": "A cartographer hunched over a map, drawing a bridge between two towns far wider and thicker than the narrow ford actually crossing the river beneath it.",
+          "node": "e6"
+        },
+        {
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A monkey's arm reaching to grasp an object, with many duplicate glowing threads bundled together running from the head down to the hand, far more copies than along the arm's resting threads.",
+          "node": "e7"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE C",
+          "block": "spya-tfcqnh",
+          "sha256": "7e13e98ad3771a5f483530a4b2886eab82ed6187854258d696c4cc02a5d8d008",
+          "ext": "png"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "profileHash": null
+}

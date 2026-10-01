@@ -465,7 +465,7 @@ describe("the Start this article again section", () => {
     expect(text).toContain("Debate uses two");
     /* The wait, not a price: what AI processing costs us is the administrator's
        alone since 2026-09-30 (plan 260930k § 3). */
-    expect(text).toContain("Sketch takes about two minutes");
+    expect(text).toContain("Sketch takes about a minute");
     expect(text).not.toMatch(/[$£€]\s?\d/);
     expect(text).toContain("one image call per plate");
     expect(text).toContain("arc costs another model call when you next open the reading view");

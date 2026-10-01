@@ -313,7 +313,7 @@ export const ARTICLE_TABLE_COVERAGE = {
    * It follows `ai_calls` and `realtime_sessions` above, and it is here at all
    * because of one column: `ingest_events.article_id`, added so that usage could
    * ask whether the article a charge produced is public right now — a public one
-   * costs half a slot (src/billing/half-units.ts). Before that column this table
+   * costs half a slot (src/billing/points.ts). Before that column this table
    * did not reach an article and this guard had nothing to say about it.
    */
   ingest_events: {

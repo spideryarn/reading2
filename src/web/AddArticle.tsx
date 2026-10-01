@@ -40,6 +40,7 @@ import {
 import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { addHref, navigate } from "./router.js";
+import { isMinimalJob } from "./read-this.js";
 import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
 import { useNow } from "./useNow.js";
 import type { Job, JobStep } from "../types.js";
@@ -150,7 +151,12 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
   // eight seconds late.
   const [, redraw] = useState(0);
   const now = Date.now();
-  const showing = queue.jobs.filter((j) => !dismissed.has(j.id) && !faded(j, now));
+  /* **Not a minimal paper's job**: a batch's files are one row each in
+     BatchPanel.tsx, and forty cards here for forty seconds-long jobs would bury
+     the one import a reader is watching. Plan 261001m. */
+  const showing = queue.jobs.filter(
+    (j) => !dismissed.has(j.id) && !faded(j, now) && !isMinimalJob(j),
+  );
 
   /* Two lists out of one, split on when the job ended rather than on what it
      is. Sorting is the server's — newest first, `listJobs` in src/jobs.ts — and

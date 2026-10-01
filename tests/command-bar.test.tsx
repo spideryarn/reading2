@@ -475,7 +475,8 @@ describe("the keyboard contract", () => {
        reader is offered. (It was Hierarchy until that went behind the
        experimental switch on 2026-09-12.) */
     type("structure");
-    expect(listed()).toEqual([MODE_LABEL.structure]);
+    /* Structure leads; its two views (Fisheye, Expanded) follow since 2026-10-01. */
+    expect(listed()[0]).toBe(MODE_LABEL.structure);
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("structure");
     expect(dialog().open).toBe(false);
@@ -1005,7 +1006,8 @@ describe("the changelog command", () => {
     openBar();
     /* An always-visible mode, typed by its own name. */
     type("structure");
-    expect(listed()).toEqual([MODE_LABEL.structure]);
+    /* Structure leads; its two views (Fisheye, Expanded) follow since 2026-10-01. */
+    expect(listed()[0]).toBe(MODE_LABEL.structure);
     press("Enter");
     expect(wentTo()).toBeNull();
   });

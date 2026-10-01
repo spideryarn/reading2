@@ -12,7 +12,7 @@
  *
  * docs/plans/260828aw-outline-mode.md has the intent, the ladder, and the reasoning.
  */
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import {
   outlineProjection,
@@ -75,6 +75,17 @@ interface Props {
    * re-attach on every render.
    */
   surfaceRef?: (el: HTMLElement | null) => void;
+  /**
+   * **Structure's Expanded view** (`?structure=expanded`): every part and
+   * section with its gist, and the panel scrolls instead of fitting a rung.
+   * The same tree, rows and keys as the fisheye list — an Expanded that was a
+   * component of its own would have had to copy the tree's keyboard contract
+   * (GPT Sol's plan review, 261001q, finding 8).
+   * docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md.
+   */
+  expanded?: boolean;
+  /** The Fisheye / Expanded toggle, drawn in the band's head row. */
+  head?: ReactNode;
 }
 
 export function OutlinePanel({
@@ -86,6 +97,8 @@ export function OutlinePanel({
   paragraphLabels,
   onJump,
   surfaceRef,
+  expanded = false,
+  head,
 }: Props) {
   const panelRef = useRef<HTMLElement | null>(null);
   const bandRef = useCallback(
@@ -96,6 +109,8 @@ export function OutlinePanel({
     [surfaceRef],
   );
   const measureRef = useRef<HTMLDivElement>(null);
+  /** The visible list, whose top is where the fit's room starts. */
+  const listRef = useRef<HTMLOListElement>(null);
   /**
    * **What the fit chose: a rung, and whether its titles are cut to one line.**
    *
@@ -152,19 +167,38 @@ export function OutlinePanel({
    */
   const allowParagraphs = beside && paragraphLabels;
 
+  /* None in Expanded, which draws everything and scrolls, so there is no fit to
+     measure — and no hidden copies for it to lay out. */
   const candidates = useMemo(
     () =>
-      RUNGS.map((r) =>
-        outlineProjection({
-          root,
-          supplementOf,
-          arcByRow,
-          focusRow,
-          rung: r,
-          allowParagraphs,
-        }),
-      ),
-    [root, supplementOf, arcByRow, focusRow, allowParagraphs],
+      expanded
+        ? []
+        : RUNGS.map((r) =>
+            outlineProjection({
+              root,
+              supplementOf,
+              arcByRow,
+              focusRow,
+              rung: r,
+              allowParagraphs,
+            }),
+          ),
+    [root, supplementOf, arcByRow, focusRow, allowParagraphs, expanded],
+  );
+  const everything = useMemo(
+    () =>
+      expanded
+        ? outlineProjection({
+            root,
+            supplementOf,
+            arcByRow,
+            focusRow,
+            rung: 1,
+            allowParagraphs: false,
+            expanded: true,
+          })
+        : null,
+    [root, supplementOf, arcByRow, focusRow, expanded],
   );
 
   /**
@@ -210,11 +244,22 @@ export function OutlinePanel({
          measurement through `candidates`. */
       setCovers(panel.getBoundingClientRect().right >= window.innerWidth - 8);
 
+      /* **From the visible list's own top**, not the panel's padding edge,
+         since the band grew a head row (the Fisheye / Expanded toggle,
+         2026-10-01): whatever sits above the list is room the list cannot use,
+         and this subtracts it whatever it is. GPT Sol's plan review, 261001q,
+         finding 5. The padding-edge sum stays as the fallback for a list not
+         yet in the DOM. */
       const pad = getComputedStyle(panel);
-      const avail =
-        panel.clientHeight -
-        (Number.parseFloat(pad.paddingTop) || 0) -
-        (Number.parseFloat(pad.paddingBottom) || 0);
+      const padBottom = Number.parseFloat(pad.paddingBottom) || 0;
+      const list = listRef.current;
+      const avail = list
+        ? panel.getBoundingClientRect().top +
+          panel.clientTop +
+          panel.clientHeight -
+          padBottom -
+          list.getBoundingClientRect().top
+        : panel.clientHeight - (Number.parseFloat(pad.paddingTop) || 0) - padBottom;
       /* Nothing to measure against yet — a band with no laid-out height would
          make every candidate "not fit" and pin the rung at 1 for ever. Leave
          it alone and wait for the observer. */
@@ -278,7 +323,55 @@ export function OutlinePanel({
   }, [candidates]);
 
   const chosen = candidates[rung - 1] ?? candidates[0];
-  const rows = chosen?.rows ?? [];
+  const rows = everything?.rows ?? chosen?.rows ?? [];
+
+  /**
+   * **Expanded follows the reader, and only when they cross a boundary.**
+   * Greg, spya-gxyhcc: "Ideally it would [scroll along with the text]. I
+   * suppose that could interfere with the fact that ideally the user would be
+   * able to scroll independently within the column … Let's try and avoid too
+   * much complexity for the v1."
+   *
+   * So the panel is scrolled when the row marked `now` *changes* — the reader
+   * has moved into another section — and at no other time. A reader who
+   * scrolls the column by hand keeps their place until the next boundary in
+   * the text. No pause timer and no "detached" state; add one only if the
+   * snap-back turns out to annoy. A row already fully in view is left where it
+   * is; one that is not goes a third of the way down, so what comes next is in
+   * view below it.
+   *
+   * **The list's own `scrollTop`, never `scrollIntoView`**, which scrolls
+   * every scrollable ancestor too — the page included. The list is the
+   * scroller rather than the band so the toggle above it stays put
+   * (outline-mode.css § Expanded). And a ResizeObserver re-runs it when the
+   * list comes back from nothing, because on a phone a band that has stepped
+   * aside is `display: none` (narrow-window.css § `band-away`) and returns at
+   * its old scroll with the reader somewhere else. GPT Sol's plan review,
+   * 261001q, finding 7.
+   */
+  const nowId = everything?.currentId ?? null;
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!expanded || !list) return;
+    const follow = () => {
+      if (nowId === null || list.clientHeight <= 0) return;
+      const row = list.querySelector<HTMLElement>(`#${CSS.escape(`outln-${nowId}`)}`);
+      if (!row) return;
+      const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+      const bottom = top + row.offsetHeight;
+      const inView = top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight;
+      if (!inView) list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+    };
+    follow();
+    let shown = list.clientHeight > 0;
+    const ro = new ResizeObserver(() => {
+      const now = list.clientHeight > 0;
+      if (now && !shown) follow();
+      shown = now;
+    });
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [expanded, nowId]);
 
   /**
    * Roving focus over one tab stop — the pattern Diagram mode already uses
@@ -335,10 +428,22 @@ export function OutlinePanel({
       jump(rows[i]);
     };
     switch (e.key) {
+      /* **↑ / ↓ are not this list's any more**, since 2026-10-01: they stepped
+         its rows, and each row is a part or a section, so with focus here ↓
+         jumped a section while with focus on the prose it stepped a block.
+         Greg, spya-b2wzjf: "up and down should always do the same thing".
+         So the key is left to `useArrowNav` (keynav.ts), which steps the
+         article one block, and the marked row follows because it is derived
+         from where the reader is. Letting go of a held row is the one thing
+         done here, or a row picked with Home would keep the mark while the
+         article moved on underneath it. ← / → step sections in this mode —
+         Reader.tsx. docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
       case "ArrowDown":
-        return step(focused + 1);
       case "ArrowUp":
-        return step(focused - 1);
+      case "ArrowLeft":
+      case "ArrowRight":
+        setFocusedId(null);
+        return;
       case "Home":
         return step(0);
       case "End":
@@ -354,7 +459,9 @@ export function OutlinePanel({
 
   return (
     <ModeSurface
-      feature="outln"
+      /* `outln-expanded` is the one that scrolls (outline-mode.css). */
+      feature={expanded ? "outln outln-expanded" : "outln"}
+      head={head}
       /* Structure's narrow face, so Structure's (i) (ModeSurface.tsx § `mode`). */
       mode="structure"
       /* The mode's name, which is what a screen reader should hear: since
@@ -373,13 +480,14 @@ export function OutlinePanel({
          that test file's own preamble. jsdom does no layout, so
          `scrollHeight <= clientHeight` reads `0 <= 0` there and passes on any
          code at all. It needs a browser. docs/project/browser-testing.md. */
-      data-outline-rung={rung}
+      data-outline-rung={expanded ? "expanded" : rung}
       /* And whether the titles had to be cut to fit — `fit` above. */
-      data-outline-clamp={fit.clamp ? "1" : "0"}
+      data-outline-clamp={!expanded && fit.clamp ? "1" : "0"}
     >
       <TooltipGroup delay={{ open: 150, close: 90 }} timeoutMs={400}>
         <ol
-          className={listClass(fit.clamp)}
+          ref={listRef}
+          className={listClass(!expanded && fit.clamp)}
           /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: `role="tree"` on a real <ol> is the W3C tree-view pattern — the list IS the widget, owning the single tab stop and the arrow keys. Swapping in a <div> to satisfy the rule would throw away the list semantics for any AT that ignores the role. */
           role="tree"
           aria-label="The article's structure"
@@ -411,24 +519,26 @@ export function OutlinePanel({
           Each rung twice — titles whole, then titles clamped — because the fit
           chooses between both sets (`fit` above), and the clamped rows are a
           different height. */}
-      <div className="outln-measure" aria-hidden="true" ref={measureRef}>
-        {[false, true].flatMap((clamp) =>
-          candidates.map((c) => (
-            <ol
-              className={listClass(clamp)}
-              key={`${c.rung}-${clamp ? "clamp" : "whole"}`}
-              data-rung={c.rung}
-              data-clamp={clamp ? "1" : "0"}
-            >
-              {c.rows.map((row) => (
-                <li key={row.node.id} className={rowClass(row, false)}>
-                  <RowBody row={row} />
-                </li>
-              ))}
-            </ol>
-          )),
-        )}
-      </div>
+      {expanded ? null : (
+        <div className="outln-measure" aria-hidden="true" ref={measureRef}>
+          {[false, true].flatMap((clamp) =>
+            candidates.map((c) => (
+              <ol
+                className={listClass(clamp)}
+                key={`${c.rung}-${clamp ? "clamp" : "whole"}`}
+                data-rung={c.rung}
+                data-clamp={clamp ? "1" : "0"}
+              >
+                {c.rows.map((row) => (
+                  <li key={row.node.id} className={rowClass(row, false)}>
+                    <RowBody row={row} />
+                  </li>
+                ))}
+              </ol>
+            )),
+          )}
+        </div>
+      )}
     </ModeSurface>
   );
 }

@@ -535,7 +535,7 @@ describe("the AI processing section", () => {
 
     const text = row("sketch")?.textContent ?? "";
     expect(text).toContain("One model call");
-    expect(text).toContain("about two minutes");
+    expect(text).toContain("about a minute");
     expect(text).not.toMatch(/[$£€]\s?\d/);
     expect(posts).toEqual([]);
   });

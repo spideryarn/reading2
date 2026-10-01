@@ -80,17 +80,27 @@
  */
 
 import { isAdmin } from "../admin.js";
-import { BILLING_NOT_AVAILABLE, highPowerNoRoom, ingestQuotaReached } from "../messages.js";
+import {
+  BILLING_NOT_AVAILABLE,
+  READ_THIS_ALREADY_RUNNING,
+  highPowerNoRoom,
+  ingestQuotaReached,
+  minimalQuotaReached,
+} from "../messages.js";
 import { errorFields, log } from "../log.js";
 import type { OwnerId } from "../owner.js";
 import {
   ingestEligibility,
   noteRefusal,
   releaseReservation,
+  reservationShapeOf,
   reserveIngest,
+  reserveMinimal,
+  reserveUpgrade,
+  runUnderBillingLock,
   switchOnHighPower,
 } from "../store/pg-billing.js";
-import type { HighPowerSwitch, Refused } from "../store/pg-billing.js";
+import type { HighPowerSwitch, InLock, MinimalRefused, Refused, Stale } from "../store/pg-billing.js";
 import { ingestProvenanceOf } from "../store/pg-jobs.js";
 import { syncSubscriptionFromStripe } from "./sync.js";
 
@@ -198,6 +208,45 @@ async function resyncAndRetry<T>(
 }
 
 /**
+ * **Ask the ledger, resync once if it says `stale`, and ask again** — the shape
+ * every admission here shares. A second `stale` is a 503 rather than a guess in
+ * either direction: this server cannot find out what the account is entitled
+ * to. Anything else the ledger answered goes back to the caller to turn into
+ * its own refusal.
+ */
+async function admitOrResync<A extends { readonly kind: string }>(
+  ownerId: string,
+  reserve: () => Promise<A | Stale>,
+  deps: AdmissionDeps,
+  what: string,
+): Promise<Exclude<A, Stale>> {
+  let admission: A | Stale = await reserve();
+  if (isStale(admission)) {
+    admission =
+      (await resyncAndRetry(
+        ownerId,
+        admission.customerId,
+        deps.sync ?? syncSubscriptionFromStripe,
+        reserve,
+      )) ?? admission;
+  }
+  if (isStale(admission)) {
+    /* 503 rather than a guess in either direction, and it is a real one: this
+       server cannot find out what this account is entitled to. */
+    logger.error(
+      { ownerId, subscriptionId: admission.subscriptionId },
+      `refusing ${what}: the stored subscription period does not contain now, after a resync`,
+    );
+    throw httpError(503, BILLING_NOT_AVAILABLE.message);
+  }
+  return admission as Exclude<A, Stale>;
+}
+
+function isStale(answer: { readonly kind: string }): answer is Stale {
+  return answer.kind === "stale";
+}
+
+/**
  * Take a slot for a new ingest, or throw the refusal the reader should see.
  *
  * @returns the reservation id, or `null` when quota is not enforced here.
@@ -208,29 +257,36 @@ async function admitIngest(
   deps: AdmissionDeps,
 ): Promise<string | null> {
   if (isAdmin(ownerId)) return null;
-
-  let admission = await reserveIngest(ownerId, slug);
-  if (admission.kind === "stale") {
-    admission =
-      (await resyncAndRetry(
-        ownerId,
-        admission.customerId,
-        deps.sync ?? syncSubscriptionFromStripe,
-        () => reserveIngest(ownerId, slug),
-      )) ?? admission;
-  }
-
+  const admission = await admitOrResync(ownerId, () => reserveIngest(ownerId, slug), deps, "an ingest");
   if (admission.kind === "refused") throw quotaRefusal(ownerId, admission);
-  if (admission.kind === "stale") {
-    /* 503 rather than a guess in either direction, and it is a real one: this
-       server cannot find out what this account is entitled to. */
-    logger.error(
-      { ownerId, subscriptionId: admission.subscriptionId },
-      "refusing an ingest: the stored subscription period does not contain now, after a resync",
-    );
-    throw httpError(503, BILLING_NOT_AVAILABLE.message);
-  }
   return admission.reservationId;
+}
+
+/**
+ * Run `body` holding a reservation, and give it back if no job took it — the
+ * release half every slot shares. See the header for why it is unconditional.
+ */
+async function holding<T>(
+  ownerId: string,
+  reservationId: string | null,
+  body: (slot: IngestSlot) => Promise<T>,
+): Promise<T> {
+  if (reservationId === null) return await body({});
+  try {
+    return await body({ ingestEventId: reservationId });
+  } finally {
+    /* Swallowed rather than thrown: a release that fails inside `finally` would
+       replace whatever `body` threw with a message about the ledger, and the
+       reader would be told about billing when their upload 404'd. A slot that
+       leaks is one support conversation; there is deliberately no expiry
+       (docs/project/billing.md § *Three things that look like improvements*). */
+    await releaseReservation(reservationId).catch((err: unknown) => {
+      logger.error(
+        { ownerId, ...errorFields(err) },
+        "could not give back an ingest slot that produced no job",
+      );
+    });
+  }
 }
 
 /**
@@ -250,27 +306,106 @@ export async function withIngestSlot<T>(
   deps: AdmissionDeps = {},
 ): Promise<T> {
   const reservationId = await admitIngest(intent.ownerId, intent.slug, deps);
-  if (reservationId === null) return await body({});
-  try {
-    return await body({ ingestEventId: reservationId });
-  } finally {
-    /* Swallowed rather than thrown: a release that fails inside `finally` would
-       replace whatever `body` threw with a message about the ledger, and the
-       reader would be told about billing when their upload 404'd. A slot that
-       leaks is one support conversation; there is deliberately no expiry
-       (docs/project/billing.md § *Three things that look like improvements*). */
-    await releaseReservation(reservationId).catch((err: unknown) => {
-      logger.error(
-        { ownerId: intent.ownerId, ...errorFields(err) },
-        "could not give back an ingest slot that produced no job",
-      );
-    });
+  return await holding(intent.ownerId, reservationId, body);
+}
+
+/**
+ * **402 for a minimal paper that does not fit**, saying how many still would
+ * (`minimalQuotaReached`). Its own sentence, because the rule is its own: a
+ * minimal paper must fit whole, so *the allowance is spent* can be false while
+ * this refuses.
+ */
+function minimalRefusal(ownerId: string, refused: MinimalRefused): Error {
+  logger.info(
+    { ownerId, fits: refused.fits, limit: refused.limit },
+    "minimal paper refused: the account is at its quota",
+  );
+  return httpError(
+    402,
+    minimalQuotaReached({
+      fits: refused.fits,
+      ...(refused.resetAt ? { resetAt: refused.resetAt } : {}),
+    }).message,
+  );
+}
+
+/**
+ * **`withIngestSlot` for a minimal paper** — 2 points, `admitsMinimal`, and the
+ * same release on every path.
+ *
+ * `inLock` is the seam Stage 3 of plan 261001m runs its duplicate check and
+ * upload claim through, in the reservation's own transaction under the owner's
+ * billing lock; see `InLock` in src/store/pg-billing.ts. **To decline, it
+ * throws**, which rolls the reservation back and reaches the route unchanged.
+ *
+ * The administrator reserves nothing, exactly as `admitIngest`, and `inLock`
+ * still runs, under the same lock with a null `reservationId`, so the
+ * duplicate check is serialised for them too.
+ */
+export async function withMinimalSlot<T>(
+  intent: { ownerId: OwnerId; slug?: string; inLock?: InLock },
+  body: (slot: IngestSlot) => Promise<T>,
+  deps: AdmissionDeps = {},
+): Promise<T> {
+  const { ownerId, slug, inLock } = intent;
+  if (isAdmin(ownerId)) {
+    if (inLock) await runUnderBillingLock(ownerId, inLock);
+    return await body({});
+  }
+  const options = { ...(slug ? { slug } : {}), ...(inLock ? { inLock } : {}) };
+  const admission = await admitOrResync(
+    ownerId,
+    () => reserveMinimal(ownerId, options),
+    deps,
+    "a minimal paper",
+  );
+  if (admission.kind === "refused") throw minimalRefusal(ownerId, admission);
+  return await holding(ownerId, admission.reservationId, body);
+}
+
+/**
+ * **`withIngestSlot` for *Read this* on a minimal paper** — an ingest at the
+ * wall, credited the paper's own 2 points when they are in this window
+ * (`reserveUpgrade`), with its reservation bound to the article from birth.
+ *
+ * Refused like an ingest (`ingestQuotaReached`, sharing offer and all); a
+ * second press while one is in flight is a 409 (`READ_THIS_ALREADY_RUNNING`);
+ * an article that is not this owner's (or has no live minimal charge to
+ * upgrade) is a 404. The administrator reserves nothing, exactly as
+ * `admitIngest`.
+ */
+export async function withUpgradeSlot<T>(
+  intent: { ownerId: OwnerId; articleId: string },
+  body: (slot: IngestSlot) => Promise<T>,
+  deps: AdmissionDeps = {},
+): Promise<T> {
+  const { ownerId, articleId } = intent;
+  if (isAdmin(ownerId)) return await body({});
+  const admission = await admitOrResync(
+    ownerId,
+    () => reserveUpgrade(ownerId, articleId),
+    deps,
+    "Read this",
+  );
+  switch (admission.kind) {
+    case "admitted":
+      return await holding(ownerId, admission.reservationId, body);
+    case "refused":
+      throw quotaRefusal(ownerId, admission);
+    case "in-flight":
+      throw httpError(409, READ_THIS_ALREADY_RUNNING.message);
+    case "not-found":
+      throw httpError(404, "No such article on your shelf.");
+    default: {
+      const never: never = admission;
+      throw new Error(`unhandled Read this admission ${JSON.stringify(never)}`);
+    }
   }
 }
 
 /**
  * The same, for `POST /api/jobs/:id/retry`, which reserves **only** if the
- * attempt it repeats spent a slot.
+ * attempt it repeats spent a slot — and **reserves the same kind again**.
  *
  * `Job.url` cannot be asked that question — a step re-run recovers a URL from
  * the article it names, so a re-run's job carries one exactly as an ingest does.
@@ -282,18 +417,48 @@ export async function withIngestSlot<T>(
  * the eventual success costs exactly one, and a reader out of allowance cannot
  * retry a failed ingest for ever.
  *
+ * **The old reservation's kind decides the new one** (Opus's review of 261001m):
+ * a retried minimal paper reserves 2 points through `withMinimalSlot`, not 200,
+ * and may carry Stage 3's duplicate/claim work into that same locked
+ * transaction through `minimalInLock`;
+ * a retried *Read this* goes back through `withUpgradeSlot`, bound to the same
+ * article and credited the same way; anything else is an ordinary ingest.
+ * `reservationShapeOf` reads it off the ledger row.
+ *
  * A job that is not this owner's, or is not there at all, reserves nothing — the
  * retry then answers 404 on its own, and a refusal here would have told a
  * stranger the job exists.
  */
 export async function withRetrySlot<T>(
-  intent: { jobId: string; ownerId: OwnerId },
+  intent: { jobId: string; ownerId: OwnerId; minimalInLock?: InLock },
   body: (slot: IngestSlot) => Promise<T>,
   deps: AdmissionDeps = {},
 ): Promise<T> {
   const previous = await ingestProvenanceOf(intent.jobId, intent.ownerId);
   if (!previous?.ingestEventId) return await body({});
-  return await withIngestSlot({ ownerId: intent.ownerId, slug: previous.slug }, body, deps);
+  const shape = await reservationShapeOf(previous.ingestEventId, intent.ownerId);
+  const { ownerId } = intent;
+  const named = previous.slug ? { slug: previous.slug } : {};
+  switch (shape?.kind) {
+    case "minimal":
+      return await withMinimalSlot(
+        { ownerId, ...named, ...(intent.minimalInLock ? { inLock: intent.minimalInLock } : {}) },
+        body,
+        deps,
+      );
+    case "upgrade":
+      return await withUpgradeSlot({ ownerId, articleId: shape.articleId }, body, deps);
+    case "ingest":
+    case undefined:
+      /* Undefined is a job naming a reservation this owner's ledger does not
+         have — unreachable (`jobs.ingest_event_id`'s foreign key is composite on
+         the owner), and an ordinary ingest is the price that cannot be gamed. */
+      return await withIngestSlot({ ownerId, ...named }, body, deps);
+    default: {
+      const never: never = shape;
+      throw new Error(`unhandled reservation shape ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 /**

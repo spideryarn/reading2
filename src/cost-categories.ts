@@ -243,6 +243,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "pdf-frontmatter": "step-driven",
   /* A refused figure, located inside the `assets` step. src/pdf-figure-locate.ts. */
   "pdf-figure-locate": "step-driven",
+  /* A batch-added paper's title, authors and abstract, read inside the bulk
+     import's `metadata` step. src/paper-metadata.ts. */
+  "paper-metadata": "step-driven",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and
      awaited before the handler returns — request scope, owner-attributed,
      triggered by a reader opening their shelf. Nobody waits on it, but it is

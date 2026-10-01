@@ -921,8 +921,8 @@ piece you ask about, what kind of question you set, and how you pitch it.
  * It is also why this stage's freshness hash covers the tree.
  *
  * **The reader goes here and nowhere earlier.** The article part above carries
- * the cache breakpoint, and this stage shares that prefix with `ideas`,
- * `sketch` and `timeline` (`ARTICLE_RENDERER` in src/models.ts), so the one
+ * the cache breakpoint, and this stage shares that prefix with `ideas` and
+ * `timeline` (`ARTICLE_RENDERER` in src/models.ts), so the one
  * thing that varies per reader is in this, the last part.
  *
  * With no profile this varying user message is byte-for-byte what it was before

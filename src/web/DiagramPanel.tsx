@@ -94,6 +94,7 @@ import { DIAGRAM_SUB_MODES } from "./sub-modes.js";
    `visibleKinds` below is this file's caller. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { PublicSketch } from "../public-types.js";
+import { SKETCH_WAIT } from "./sketch-cost.js";
 import { SketchView } from "./SketchView.js";
 import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
@@ -283,7 +284,7 @@ const KIND_UI: Record<
   /* The odd one out, and the card has to say so before it is pressed: the three
      above are geometry over the article's own tree, and this one is a model's
      drawing. Its `how` leads with the price because it is the only picture here
-     that costs two minutes and cannot be redrawn for free. */
+     that costs a model call and a minute's wait, and cannot be redrawn for free. */
   sketch: {
     label: DIAGRAM_SUB_MODES.sketch.label,
     icon: PenLine,
@@ -300,7 +301,7 @@ const KIND_UI: Record<
        `MIN_LINKED_SHARE` 0.5 (src/sketch-scene.ts) — so "down the page is
        reading order" and "click a box to jump there" were describing the good
        case as the guarantee. ⟨Sol⟩, 2026-08-30. */
-    how: "Costs one model call and about two minutes, and is never drawn until you ask. It mostly runs down the page with the article, and nothing is to scale. Boxes that point at a passage jump there when clicked; not all of them do.",
+    how: `Costs one model call and ${SKETCH_WAIT}, and is never drawn until you ask. It mostly runs down the page with the article, and nothing is to scale. Boxes that point at a passage jump there when clicked; not all of them do.`,
   },
   /* The fifth, and the only one whose input is another picture rather than the
      article. Its `blurb` has to say that it is an *interpretation* before the
@@ -1626,8 +1627,8 @@ export function DiagramPanel({
                      It matters more here than in the bottom bar, and that is
                      the reason this one is written up rather than just deleted:
                      the third chip is the **sketch**, and selecting it now
-                     starts a job on its own (docs/plans/260831ai-…) — 121–194
-                     seconds and about $0.20. An arrow press must not be able to
+                     starts a job on its own (docs/plans/260831ai-…) — 30–101
+                     seconds at `low`. An arrow press must not be able to
                      buy that. Dock.tsx § DockModes has the full reasoning and
                      the cost of the tab stops;
                      tests/arrows-belong-to-the-article.test.tsx holds it. */
@@ -1638,7 +1639,7 @@ export function DiagramPanel({
                        token is minted here rather than in `onKind`: `?diagram=`
                        is query state, so Back and Forward move it too, and a
                        pasted `?mode=diagram&diagram=sketch` must not buy a
-                       two-minute, $0.20 model call. Opening Diagram itself
+                       model call. Opening Diagram itself
                        costs nothing, so only these two chips arm anything.
 
                        **Two of them since 2026-09-03**, and the second is

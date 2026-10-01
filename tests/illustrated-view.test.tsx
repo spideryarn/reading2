@@ -871,7 +871,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
          became what each step is. */
       for (const said of [
         "one model call",
-        "about two minutes",
+        "about a minute",
         "a brief plus one image call per plate",
         "four to seven minutes",
       ]) {

@@ -40,9 +40,24 @@ and the drawing.
 - **The gutter is one generated `<style>` element**, never a prop into `TableView`, which would
   re-render every row whenever one block crossed a step. `gutterCss`,
   [`ReadingTimeStyle.tsx`](../../src/web/ReadingTimeStyle.tsx), gutter.css § reading time.
+- **The hairline gets lighter, not darker.** It is `--ink` — near-white on the dark page — at an
+  opacity of `level × (level + 1) × 0.025`: nothing unread, 0.05 for a glance, 0.50 once read
+  through. Zero at level 0 is required, not tidy: the 2px line is not clipped by its zero-wide strip.
+  Greg, 2026-10-01, when the `title` said "darker" and he saw it brighten:
+
+  > there's no visible line at first, and then for stuff I've been reading a lot, there is a visible
+  > line, and that visible line would have to be, you know, whitish to show up against the default
+  > black background.
+  >
+  > — Greg, 2026-10-01 (spya-mn3ruw)
+
 - **The hairline says what it is on hover**, since 2026-09-29, because Greg found it and could not
-  tell what it meant (SPIDERYARN-READING2-4S). It is a `span.blk-read` with a `title`, last in the
-  gutter, and its hover strip is zero wide on a row with no reading time. Nothing yet on touch.
+  tell what it meant (SPIDERYARN-READING2-4S). It is a `span.blk-read`, last in the gutter, and its
+  hover strip is zero wide on a row with no reading time. **A rich card since 2026-10-01**, not a
+  `title`: the reading view's one delegated card (`BlockLinkCard.tsx` § `ReadingCard`), placed at the
+  pointer's height rather than the paragraph's top
+  ([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
+  Nothing yet on touch.
   **The line is drawn inside its own strip** since 2026-10-01: it used to sit 2px outside it, so
   pointing at the line found nothing and Greg asked again (SPIDERYARN-READING2-84,
   [261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md)).

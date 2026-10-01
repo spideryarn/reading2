@@ -1,0 +1,92 @@
+{"ideas": [
+  {
+    "name": "Simple-looking systems can compute anything",
+    "provenance": "introduced",
+    "statement": "Even programs that look structurally simple can carry out computation as sophisticated as any other process, so their behavior cannot generally be predicted except by actually running them.",
+    "occurrences": [
+      {"blockId": "spya-b9z7g9", "quote": "even programs (or fragments of them) that are very simple in their structure can end up doing computation that is in a sense as sophisticated as anything", "reasoning": "states the core claim that simplicity of structure does not imply simplicity of behavior"},
+      {"blockId": "spya-s247px", "quote": "Ultimately it's computational irreducibility—and our inability to know in general what a program will do except in effect by explicitly running it.", "reasoning": "names irreducibility as the direct source of unforeseeable bugs"},
+      {"blockId": "spya-k8dhyb", "quote": "if one runs this machine for inputs from 0 to 14 everything works just fine—but suddenly at n = 15, instead of giving output 15 + 1 = 16, the machine gives 20!", "reasoning": "gives a concrete case where a tiny machine's behavior outruns the simple rule we expected"}
+    ]
+  },
+  {
+    "name": "Pockets of reducibility survive inside irreducibility",
+    "provenance": "introduced",
+    "statement": "Even when a system's overall behavior cannot be predicted without running it, there will always be some specific facts or properties about it that can still be guaranteed in advance.",
+    "occurrences": [
+      {"blockId": "spya-gj554s", "quote": "There are—as we'll discuss—necessarily \"pockets of computational reducibility\" in which we can expect to make progress.", "reasoning": "introduces the concept that guarantees are still possible despite general unpredictability"},
+      {"blockId": "spya-y9hee0", "quote": "One important feature of computational irreducibility is that whenever it's present, there must also be pockets of computational reducibility present.", "reasoning": "states the principle directly as a general law"},
+      {"blockId": "spya-zz4up4", "quote": "One can think of proofs as taking advantage of pockets of computational reducibility, to provide finite summaries of infinite things.", "reasoning": "connects the concept to why finite proofs of correctness can exist at all"}
+    ]
+  },
+  {
+    "name": "A bug only exists relative to a chosen specification",
+    "provenance": "introduced",
+    "statement": "Whether some behavior counts as a bug depends entirely on what simpler standard (a formula, a restated program, a rule like 'never run out of memory') you are comparing the program against, not on anything intrinsic to the code.",
+    "occurrences": [
+      {"blockId": "spya-mhwnwh", "quote": "To tell if a program has a bug we have to know what the program is supposed to do—or is not supposed to do. And for this we have to have some kind of precise specification.", "reasoning": "states directly that bugs are defined only relative to an external specification"},
+      {"blockId": "spya-tzs7f4", "quote": "There are several different types of specifications that end up being used.", "reasoning": "shows that many different kinds of standards can play the specification role, reinforcing relativity of the bug concept"},
+      {"blockId": "spya-uj4rfn", "quote": "whatever constraint we give, there'll somehow always be machines that will insidiously escape it", "reasoning": "shows the pattern holding across many different specification types, generalizing the idea"}
+    ]
+  },
+  {
+    "name": "Proving correctness costs the same unbounded effort as running the program",
+    "provenance": "introduced",
+    "statement": "Searching for a formal proof that a program behaves a certain way is not a shortcut around computational irreducibility: it takes a similarly unbounded amount of work, and when the claim is false, no amount of searching ever produces a proof.",
+    "occurrences": [
+      {"blockId": "spya-ymdpn2", "quote": "we don't get any fundamental advantage by trying to make a proof rather than just running the Turing machine. In both cases we have to expend a potentially unbounded amount of computational effort.", "reasoning": "states explicitly that proof search and exhaustive computation are equally costly"},
+      {"blockId": "spya-zkkrs3", "quote": "But now—however far we go—we never find a proof", "reasoning": "shows the practical consequence: searching forever in a buggy machine's case yields nothing"},
+      {"blockId": "spya-ypka68", "quote": "because, in fact, the result we're trying to prove isn't true, so there isn't a proof. And we know that because, if we test sufficiently many cases of the Turing machine, we can explicitly find the bug.", "reasoning": "ties absence of proof directly to the existence of a counterexample found by brute testing, equating the two approaches"}
+    ]
+  },
+  {
+    "name": "Total predictability makes running a program pointless",
+    "provenance": "introduced",
+    "statement": "If you could fully foresee everything a program would do, there would be no reason to actually run it — you could just write down the answer directly; so any program worth running must have some unforeseeable part, which tends to drag in a lot of unforeseeability.",
+    "whyYouNeedIt": "This is the hinge that explains why bugs and computational usefulness are two sides of the same coin, rather than something to be engineered away.",
+    "occurrences": [
+      {"blockId": "spya-nd4kn9", "quote": "if you can completely foresee what a program will do, what's the point of running it? Why not, in effect, just immediately \"write down the answer\", without ever having to run the program?", "reasoning": "states the tradeoff between usefulness and predictability directly"},
+      {"blockId": "spya-uj0h88", "quote": "Computational irreducibility is in a sense what makes computation powerful. But it's also what makes it unpredictable.", "reasoning": "reaffirms that the same property that gives programs their power is what makes bugs inevitable"}
+    ]
+  },
+  {
+    "name": "Testing many cases cannot rule out rare, arbitrarily hidden bugs",
+    "provenance": "introduced",
+    "statement": "Generalizing from many successful test cases to a universal rule fails in the presence of computational irreducibility, because a bug can be made as rare and as deeply buried as one likes, so no finite amount of sampling guarantees it has been found.",
+    "occurrences": [
+      {"blockId": "spya-ym6u26", "quote": "Scientific induction would say yes. But if there's a \"bug\" it won't be.", "reasoning": "states directly that induction from observed cases can fail"},
+      {"blockId": "spya-f7mn34", "quote": "the number of samples might just not be large enough to ever hit a bug—given the density of bugs that are present.", "reasoning": "makes explicit that sample size versus bug rarity determines detection, not certainty"},
+      {"blockId": "spya-xrvkvy", "quote": "it's the smallness of the probability of a \"bug\"", "reasoning": "frames bug rarity as itself unbounded, akin to the busy-beaver problem, which is why testing can never be guaranteed sufficient"}
+    ]
+  },
+  {
+    "name": "Good language design hides irreducibility inside primitives",
+    "provenance": "introduced",
+    "statement": "A well-designed programming language packs most of the hard, unpredictable computation into its built-in primitives, so that the parts a person actually writes stay close to human intention and are less likely to misbehave.",
+    "occurrences": [
+      {"blockId": "spya-wx09gt", "quote": "What a well-designed language does is to provide as primitives lumps of computational work that are things humans typically actually want.", "reasoning": "states the mechanism by which language design reduces bug propensity"},
+      {"blockId": "spya-x8ag2t", "quote": "most of the computational irreducibility has been packed into the primitives of the language, so that what's left over is the part that's accessible to us humans", "reasoning": "explicitly locates where the irreducibility goes and why what remains is tractable"},
+      {"blockId": "spya-s0e3qm", "quote": "in Wolfram Language it's the short program that's the one that does what you want, without what you consider bugs.", "reasoning": "gives the practical corollary that shortness in a good language correlates with correctness"}
+    ]
+  },
+  {
+    "name": "Seeing the whole computation beats summarizing it",
+    "provenance": "introduced",
+    "statement": "The best practical defense against bugs is to make the entire unfolding process of a computation visible to human perception, rather than relying on summary statistics or partial descriptions, because full visibility can sometimes let you directly see that no bug is possible.",
+    "occurrences": [
+      {"blockId": "spya-qexzj4", "quote": "the most important thing is to try to \"see inside\" what the program is doing, in as complete but human accessible a way as possible", "reasoning": "states the practical strategy directly"},
+      {"blockId": "spya-fg7dg2", "quote": "If the behavior of a cellular automaton is \"visually simple\", we can immediately tell that it won't show bugs.", "reasoning": "shows how visual completeness yields certainty that statistics alone couldn't"},
+      {"blockId": "spya-r32r9j", "quote": "even tiny fragments of programs can be run on their own, giving one at least the raw material to \"see in detail what a program is doing\"", "reasoning": "extends the visibility strategy to a language-design feature that enables it"}
+    ]
+  },
+  {
+    "name": "Mathematics mostly avoids ruliology's bugs by staying human-scale",
+    "provenance": "introduced",
+    "statement": "Mainstream pure mathematics largely escapes the rampant surprises of computational irreducibility not because its subject matter is immune to it, but because mathematicians deliberately focus on human-graspable structures that happen to sit in reducible pockets; experimental mathematics, which samples broadly instead, runs into the same irreducibility and surprises as ruliology.",
+    "occurrences": [
+      {"blockId": "spya-whd6dc", "quote": "pure mathematics as it's normally practiced tends to concentrate on what amount to more \"human-level\" questions, that in effect exist in pockets of computational reducibility, that avoid the generic computational irreducibility of ruliology", "reasoning": "states explicitly why ordinary mathematics mostly dodges ruliology-style bugs"},
+      {"blockId": "spya-kdks69", "quote": "serious experimental mathematics is methodologically just like ruliology... directly exposed to computational irreducibility—with all the surprises and \"bugs\" that brings", "reasoning": "contrasts experimental mathematics with mainstream mathematics to show the difference comes from method, not subject matter"},
+      {"blockId": "spya-zcpn8u", "quote": "somehow in the mainstream of pure mathematics, such issues are not very common", "reasoning": "names the puzzle that the idea then resolves"}
+    ]
+  }
+]}

@@ -1,0 +1,231 @@
+{
+  "version": "ideas/3",
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5.2fd04a5eb4dc04ad.c739bef19c4aba3e",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-rzex4n",
+      "name": "Moral status tracks capacity for conscious experience",
+      "provenance": "assumed",
+      "statement": "Whether something deserves ethical consideration, including protection from suffering, depends substantially on whether it can actually have conscious experiences, not merely on how it behaves.",
+      "whyYouNeedIt": "The argument that we must determine whether AI is really conscious (rather than just useful or humanlike) before deciding on rights or welfare policy only matters if moral standing is tied to real experience rather than to behavior or usefulness.",
+      "occurrences": [
+        {
+          "blockId": "spya-e68t9h",
+          "quote": "It matters for the AI systems themselves, since — if they are conscious, whether now or in the future — with consciousness comes moral status, the potential for suffering and, perhaps, rights.",
+          "reasoning": "The ethical stakes described only follow if moral status is grounded in consciousness itself.",
+          "start": 59
+        },
+        {
+          "blockId": "spya-ryg483",
+          "quote": "Things capable of conscious experiences have ethical and moral standing that other things do not.",
+          "reasoning": "States the assumption as a premise for the whole ethical discussion that follows.",
+          "start": 156
+        },
+        {
+          "blockId": "spya-n0bnf9",
+          "quote": "we might give AI systems \"rights\" that they don't actually need, since they would not actually be conscious, restricting our ability to control them for no good reason",
+          "reasoning": "The worry about mistaken rights only makes sense if rights are supposed to track genuine consciousness rather than mere appearance.",
+          "start": 13
+        }
+      ]
+    },
+    {
+      "id": "spya-xakc5g",
+      "name": "Substrate independence is the hidden premise of digital-mind theories",
+      "provenance": "assumed",
+      "statement": "The claim that software and hardware can be cleanly separated, so that the same computation runs identically on any sufficiently powerful material, is a design choice built into Turing machines, not a fact about all information-processing systems.",
+      "whyYouNeedIt": "Without recognizing that substrate independence is an assumption rather than a given, the argument that brains might not be substrate-independent would not register as a real challenge to computational functionalism.",
+      "occurrences": [
+        {
+          "blockId": "spya-dfujdu",
+          "quote": "Turing computation is, in principle, substrate independent: it does not depend on any particular material basis.",
+          "reasoning": "States the premise that the rest of the critique depends on examining.",
+          "start": 315
+        },
+        {
+          "blockId": "spya-p4vmm0",
+          "quote": "This matters because the idea of the brain as a meat-based (universal) Turing machine rests precisely on this sharp separation of scales, on the substrate independence that motivated Turing's definition in the first place.",
+          "reasoning": "Shows the whole argument collapses if this premise is not first granted as the thing at stake.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-ahtr6e",
+          "quote": "The supposed conclusion is that properties like cognition and consciousness must be substrate independent",
+          "reasoning": "The neural-replacement thought experiment only seems to work if one already accepts substrate independence as the live question.",
+          "start": 283
+        }
+      ]
+    },
+    {
+      "id": "spya-hwcxxw",
+      "name": "Living systems resist entropy through continuous self-production",
+      "provenance": "assumed",
+      "statement": "Life is a process of actively maintaining and regenerating one's own material organization against physical decay (autopoiesis), happening continuously in real time rather than in discrete abstract steps.",
+      "whyYouNeedIt": "The claim that life, not just computation, might be necessary for consciousness only makes sense if life is understood this way, as a distinctive physical-temporal activity that algorithms by definition lack.",
+      "occurrences": [
+        {
+          "blockId": "spya-cf8rt8",
+          "quote": "This process is called autopoiesis, from the Greek for \"self-production.\" Autopoiesis is arguably a defining and distinctive characteristic of living systems.",
+          "reasoning": "Introduces the concept but the subsequent argument assumes its importance without re-arguing it each time.",
+          "start": 454
+        },
+        {
+          "blockId": "spya-v52g4f",
+          "quote": "Living systems must continuously resist the decay and disorder that lies along the trajectory to entropic sameness mandated by the inviolable second law of thermodynamics.",
+          "reasoning": "This claim about time and decay only supports the brain-vs-computer argument if one already accepts self-maintenance against entropy as what makes biological activity different.",
+          "start": 109
+        },
+        {
+          "blockId": "spya-vys3vj",
+          "quote": "This drive to stay alive doesn't bottom out anywhere in particular. It reaches deep into the interior of each cell, into the molecular furnaces of metabolism.",
+          "reasoning": "The leap from metabolism to consciousness presumes that self-sustaining life processes are the relevant causal bedrock.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-thx804",
+      "name": "Intelligence and consciousness are separable properties",
+      "provenance": "introduced",
+      "statement": "Intelligence is about capacity to do things (achieving goals flexibly), while consciousness is about there being something it is like to be a system; the two happen to co-occur in humans but need not go together elsewhere.",
+      "whyYouNeedIt": "This separation is what makes it coherent to say AI could be highly intelligent yet not conscious at all.",
+      "occurrences": [
+        {
+          "blockId": "spya-nj888h",
+          "quote": "Intelligence and consciousness are different things.",
+          "reasoning": "States the core distinction directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-xm96be",
+          "quote": "AI systems can reasonably lay claim to intelligence in some form, since they can certainly do things, but it is harder to say whether there is anything-it-is-like-to-be ChatGPT.",
+          "reasoning": "Applies the distinction to real AI systems.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-cqh2pq",
+          "quote": "We certainly should not just assume that consciousness will come along for the ride as AI gets smarter",
+          "reasoning": "Draws out the consequence of treating the two as separable.",
+          "start": 205
+        }
+      ]
+    },
+    {
+      "id": "spya-v4f4qx",
+      "name": "Human psychological biases drive false attributions of mind",
+      "provenance": "introduced",
+      "statement": "Anthropocentrism, human exceptionalism, and anthropomorphism combine to make people see consciousness in anything that displays humanlike traits like language, regardless of whether it is actually present.",
+      "occurrences": [
+        {
+          "blockId": "spya-cvaqgs",
+          "quote": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.",
+          "reasoning": "Names the mechanism explicitly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-k6fpme",
+          "quote": "One aspect of intelligent behavior that's turned out to be particularly effective at making some people think that AI could be conscious is language.",
+          "reasoning": "Shows the bias operating concretely on LLMs.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-t29n67",
+          "quote": "When we say that AI systems \"hallucinate,\" we implicitly confer on them a capacity for experience.",
+          "reasoning": "Shows how language itself encodes and reinforces the bias.",
+          "start": 393
+        }
+      ]
+    },
+    {
+      "id": "spya-nzktqj",
+      "name": "An exponential curve feels like an inflection point from anywhere on it",
+      "provenance": "introduced",
+      "statement": "On any genuinely exponential growth curve, every position looks like the dramatic turning point, which makes the feeling of imminent breakthrough an unreliable signal of where you actually stand.",
+      "occurrences": [
+        {
+          "blockId": "spya-cke6sj",
+          "quote": "Crucially, things seem this way wherever you are on the curve — that's what makes it exponential.",
+          "reasoning": "States the mathematical property directly.",
+          "start": 444
+        },
+        {
+          "blockId": "spya-cke6sj",
+          "quote": "But on an exponential curve, every point is an inflection point.",
+          "reasoning": "Draws out the consequence for judging AI progress.",
+          "start": 716
+        }
+      ]
+    },
+    {
+      "id": "spya-dt4v20",
+      "name": "Perception is controlled hallucination driven by prediction",
+      "provenance": "introduced",
+      "statement": "What we consciously experience is the brain's best guess about the causes of its sensory signals, continually corrected by prediction error, rather than a direct readout of the world.",
+      "occurrences": [
+        {
+          "blockId": "spya-dp8sem",
+          "quote": "what we consciously perceive depends on the brain's best guesses about what's going on in the world, rather than on a direct readout of sensory inputs",
+          "reasoning": "States the predictive processing framework directly.",
+          "start": 36
+        },
+        {
+          "blockId": "spya-xhvztm",
+          "quote": "Conscious experience in this light is a kind of controlled hallucination",
+          "reasoning": "Names the core idea explicitly.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-d7nvdr",
+      "name": "Simulation does not instantiate the thing simulated",
+      "provenance": "introduced",
+      "statement": "Running a detailed computer model of a process (digestion, a rainstorm, a brain) reproduces its describable pattern but not its actual causal powers, unless the modeled thing is itself nothing but a computation.",
+      "occurrences": [
+        {
+          "blockId": "spya-npjt4j",
+          "quote": "Computational simulations generally lack the causal powers and intrinsic properties of the things being simulated.",
+          "reasoning": "States the idea directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-cepmwf",
+          "quote": "An algorithmic simulation of a continuous process is just that — a simulation, not the process itself.",
+          "reasoning": "Reinforces the map/territory distinction.",
+          "start": 87
+        },
+        {
+          "blockId": "spya-xvm37k",
+          "quote": "If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.",
+          "reasoning": "Applies the idea to mind-uploading.",
+          "start": 277
+        }
+      ]
+    },
+    {
+      "id": "spya-h0qh0e",
+      "name": "Seeming conscious and being conscious create distinct kinds of risk",
+      "provenance": "introduced",
+      "statement": "Machines that merely appear to have feelings pose their own set of social and psychological dangers, separate from and independent of whether any machine is ever actually conscious.",
+      "occurrences": [
+        {
+          "blockId": "spya-x63ycg",
+          "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not",
+          "reasoning": "States the distinction directly.",
+          "start": 80
+        },
+        {
+          "blockId": "spya-p8ky7g",
+          "quote": "Machines that seem conscious pose serious ethical issues distinct from those posed by actually conscious machines.",
+          "reasoning": "Makes explicit that this is a separate risk category.",
+          "start": 110
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-01T18:29:27.543Z",
+  "elapsedMs": 31844
+}

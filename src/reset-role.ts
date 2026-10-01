@@ -50,6 +50,9 @@ export type ResetRole = "import" | "successor" | "extra";
  */
 export const RESET_ROLE = {
   fetch: "import",
+  /* Never in a reset's list — a reset is refused on a minimal article, and a
+     full one's revision only carries this run row from the day it was minimal. */
+  metadata: "import",
   extract: "import",
   blocks: "import",
   hierarchy: "import",
