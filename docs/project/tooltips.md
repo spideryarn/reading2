@@ -160,7 +160,8 @@ discovered.
 segment on the reading view (a press there can start a run), the loose mode links on the metadata
 page (they only navigate), either of those seen by a visitor (who gets `VisitorBand`, not a
 generator), and either of them where the artefact already exists (nothing runs). So *"opening it
-runs a model pass"* is false on three of the four; describe the artefact rather than the gesture.
+runs a model pass"* is false on three of the four; the catalogue describes the artefact rather than
+the gesture.
 On 2026-09-07 four of the fourteen mode cards opened that way in first draft, and only a
 cross-family review caught them —
 [new-mode.md § The card on the button](new-mode.md#the-card-on-the-button).

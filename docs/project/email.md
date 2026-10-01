@@ -140,8 +140,8 @@ failed lookup says so in the mail rather than stopping it. The address is the re
 it goes through `oneLine` in `src/email.ts` and never into a subject —
 [261001b](../plans/261001b-admin-sign-up-email-carries-the-address.md).
 
-**Where a reader's address comes from, if you need it for a mail of your own.** There is no
-address on our own tables; Supabase Auth holds it. Two ways in, both already written:
+**Where the existing mail paths get a reader's address.** There is no address on our own tables;
+Supabase Auth holds it. The two paths are:
 
 - **Inside a signed-in request**: the verified user the auth wrapper hands the route
   ([`src/routes.ts`](../../src/routes.ts) passes `user.email` to `noteArrival` in
@@ -150,9 +150,9 @@ address on our own tables; Supabase Auth holds it. Two ways in, both already wri
   [`src/store/admin-accounts.ts`](../../src/store/admin-accounts.ts), which asks the Auth Admin API
   and never throws — it answers `found` or `unavailable` with a reason.
 
-Sending is `sendEmail` or `notifyAdmin` in `src/email.ts`, whose `SendResult` (`sent`, `skipped`,
-`failed`) is what a caller retries on; the sign-up notice's give-the-row-back retry above is the one
-worked example.
+Sending is `sendEmail` or `notifyAdmin` in `src/email.ts`. Their `SendResult` (`sent`, `skipped`,
+`failed`) lets each caller decide whether to retry; the sign-up notice's give-the-row-back retry
+above is the one worked example.
 
 ## See also
 

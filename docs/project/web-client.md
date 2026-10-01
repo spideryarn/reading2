@@ -101,7 +101,8 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 
 - **`src/web/lib/api.ts` § `apiFetch`, `fetchOk`, `readJson`** — any call to our own API: the
   session, offline, and an error the reader can be shown ([§ Reading an API response](#reading-an-api-response)).
-- **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: `begin`, `delta`s, one `done`.
+- **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: an optional `begin`, `delta`s,
+  then exactly one `done` or `error`.
   The lower-level `readEvents` is what most older hooks loop over by hand —
   [comments.md § streaming](comments.md#streaming).
 - **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's

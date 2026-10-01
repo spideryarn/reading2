@@ -42,14 +42,14 @@ article on a phone (§ below), so its header and sort rows are rows like the she
 browser is [browser-control.md](browser-control.md). Three things learned the hard way on
 2026-10-01, in [261001e](../plans/261001e-masthead-facts-line-overflows-a-phone.md):
 
-- **Find the culprit by injection, not by reading the CSS.** List the elements whose right edge
-  is past the viewport, then inject one rule at a time (`display: none` on a suspect, a candidate
-  fix) and watch `scrollWidth` come back to 390. The first guess there — the figures — was wrong.
+- **Injection, rather than reading the CSS, found the culprit.** Listing the elements whose right
+  edge was past the viewport, then injecting one rule at a time (`display: none` on a suspect, a
+  candidate fix), brought `scrollWidth` back to 390. The first guess there — the figures — was wrong.
 - **Inline items made `white-space: nowrap` one by one, with no whitespace between them, leave no
   wrap opportunity anywhere in the run**, so the whole tail of the line becomes one unbreakable
   piece. `display: inline-block` on the items keeps each whole and lets the line break between
   them.
-- **Pin it in real Chrome, with a control.** jsdom cannot see a line break.
+- **The regression is pinned in real Chrome, with a control.** jsdom cannot see a line break.
   [`tests/masthead-facts-wrap-in-chrome.test.tsx`](../../tests/masthead-facts-wrap-in-chrome.test.tsx),
   after [`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts), is the
   pattern: the real component rendered to markup, the token and reader sheets inlined, a 390px

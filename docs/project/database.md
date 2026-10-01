@@ -1,6 +1,8 @@
 # Database
 
-**The database is Supabase Postgres, and since 2026-09-05 everything is in it.**
+**The database is Supabase Postgres, and since 2026-09-05 all relational application data is in
+it.** Raw source documents and article images use the blob seam: Supabase Storage when credentials
+are present, and `data/_blobs/` as the local fallback, described below.
 
 > We were using flat JSON files initially, but we're moving everything to Postgres/Supabase to run
 > across Vercel webservers that don't have a shared filesystem.
@@ -13,7 +15,8 @@ not have, so the choice is a database or no deploy. The work is
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); the migrations are under `drizzle/` and
 the schema is [`src/db/schema.ts`](../../src/db/schema.ts).
 
-**Where to look for an article's data.** Every table is in the `spideryarn` schema, not `public`, so
+**Where to look for an article's data.** Every application table is in the `spideryarn` schema, not
+`public`, so
 a query or a dashboard filtered to `public` finds nothing. An article's AI artefacts — quotes, ideas,
 timeline, glossary and the rest — are `jsonb` columns on `spideryarn.article_revisions`, and
 `articles.current_revision_id` points at the published one; they are not tables of their own. The

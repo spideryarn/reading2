@@ -213,8 +213,8 @@ these is a section of `browser-testing.md` that does not apply here.
 
 - **A same-URL `goto` after a rebuild can serve the old bundle.** It is not a reload, so the browser
   may answer from its in-memory document; on 2026-09-08 a fleet change looked as if it had not worked
-  until `?v=2` was added to the URL. Something the change *added* is the assertion that tells the two
-  builds apart.
+  until `?v=2` was added to the URL. In that check, an assertion on something the change *added*
+  distinguished the two builds.
 - **The Playwright MCP's screenshots land in the checkout, not the scratchpad.** It refuses paths
   outside its allowed roots, and the scratchpad is not one, so a briefed absolute path fails or is
   quietly replaced. With no `filename` it writes `.playwright-mcp/page-<timestamp>.png` under the cwd

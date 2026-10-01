@@ -669,8 +669,8 @@ The measurements, both reviews and the two bugs the tests found after the review
 
 ## Where the pieces are
 
-Adding another per-reader setting beside the profile: the recipe is
-[experimental-features.md § Where it lives](experimental-features.md#where-it-lives).
+The experimental switch is the existing per-reader setting beside the profile; its layers are
+traced in [experimental-features.md § Where it lives](experimental-features.md#where-it-lives).
 
 | | |
 |---|---|

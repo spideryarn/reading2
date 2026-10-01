@@ -1107,7 +1107,7 @@ one line each; the postmortem has the case and the test that now pins it:
   `node -e 'while(1){}'` loops) reproduced it in seconds —
   [260930a](../postmortems/260930a-a-fixed-window-stands-in-for-a-condition.md).
 - **A corpus whose membership is typed by hand.** A named slug survives after the property it was
-  kept for has gone; derive membership from the bytes —
+  kept for has gone; the replacement derives membership from the bytes —
   [260908c](../postmortems/260908c-a-fixture-recruited-as-evidence-for-a-property-it-never-established.md).
 - **jsdom rewrites a literal `new URL("<string>", import.meta.url)`** into a dev-server URL, so
   the module behaves differently under a component test than anywhere else —
@@ -1116,7 +1116,7 @@ one line each; the postmortem has the case and the test that now pins it:
   it; the count of collected files and tests could —
   [260830d](../postmortems/260830d-a-constant-that-dragged-in-the-shelf.md).
 
-### Test the join: mutate the composition root
+### The join is visible at the composition root
 
 Unit tests that inject their own fakes cannot see whether the real objects are wired together. On
 2026-09-09, turning `shared ??= make()` into `shared = make()` in `tools/fleet/routes-actions.ts` — two callers,
@@ -1125,8 +1125,9 @@ on that branch turned out to have imaginary coverage, and both sat at a composit
 Sixteen fleet features shipped tested and doing nothing for the same reason: the join is never in the
 diff, so a checklist built from the parts cannot contain it —
 [260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md),
-[260831e](../postmortems/260831e-a-write-path-with-no-reader.md). The mutation that finds it is in
-the wiring — a singleton made fresh, a mount line dropped, the wrong gate passed — not in a unit.
+[260831e](../postmortems/260831e-a-write-path-with-no-reader.md). The mutations that exposed those
+failures were in the wiring — a singleton made fresh, a mount line dropped, or the wrong gate
+passed — not in a unit.
 
 ### A source-scanning guard reads the comments too
 

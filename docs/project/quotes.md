@@ -764,8 +764,8 @@ wrong — but worth knowing.
   is smaller — but it is the same harm. A separate landing, noted here because this is where the
   shape of the fix is written down.
 - **No copy button.** Worth having; it needs a decision about whether it copies the quote, the quote
-  and a citation, or a deep link. One already exists to lift rather than write again: `CopyButton`
-  in [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx), with its card and its touch behaviour.
+  and a citation, or a deep link. [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) already has a
+  private `CopyButton`, with its card and its touch behaviour.
 - **No keyboard traversal of the list**, the same gap the glossary and ideas panels have, for the
   same reason ([keyboard.md](keyboard.md) — ↑ / ↓ belong to the article). The rows and the ⓘ are
   ordinary tab stops, so everything is *reachable*; what is missing is a fast way through.

@@ -162,4 +162,76 @@ No P0; three P1s.
 (updated at the end of each stage)
 
 - **Stage 0, done.** Twelve in-sample probes and keys, four held-out probes and keys, on
-  `4a7862f3`. The diagnostic score is [score-before.md](261001i-probes/score-before.md).
+  `4a7862f3`. The diagnostic score is [score-before.md](261001i-probes/score-before.md): mean 8.9/14
+  on the old rubric. Its most useful finding is the cross-cutting misses — lessons that live only in
+  recent plans, the browser-check rule, what a visitor sees, facts buried deep in long docs, shared
+  code no doc names, no recipe for non-mode work.
+- **Stage 1, done.** Five trawls, each in `261001i-probes/trawl-*.md`. In one line each: the small
+  utilities are mostly single-path, but the streamed-call and pipeline-call shells are hand-rolled
+  7 and ~17 times (A); ~45 stale claims, concentrated in two removals (the filesystem store, Hierarchy
+  mode), every stale count a number copied out of code, Debate/Structure/Tweets with no owning doc,
+  16 docs linking to no entry point (B); the product rules reached their docs but working-practice
+  rules from postmortems mostly did not, and 72 of 139 postmortems are linked from no evergreen doc
+  (C); 32 memories already in docs, ~47 that should be (D); 15 paraphrases of Greg with his words
+  in a plan (E).
+- **Stage 2, done (`7b95f77d`, `cc594a14`).** The backlink check, red-first: 42 docs did not link up
+  to their owner; each got an `Up:` line. `documentation-policy.md` updated (before/after in the
+  debrief). One factual correction in `code-quality-overview.md` (the `REQUIRE_POSTGRES` mechanism,
+  gone since 2026-09-05; the conclusion it supported still holds).
+- **Stages 3–4, done (`cc594a14`, `cb24adb7`).** Five writers in parallel on disjoint files
+  ([writer-brief.md](261001i-probes/writer-brief.md), reports `report-W1…W5.md`): new owner docs for
+  Debate, Structure and Tweets; Sketch and Illustrated split out of `diagram.md`; shared-code lists in
+  `architecture.md` and `web-client.md`, header comments in eight canonical modules; drift cut back to
+  citations; ~40 traps moved from memory and postmortems into their docs; Greg's words restored.
+  Two `database.md` sentences W4 generalised were reverted to the original rule wording by the
+  orchestrator and became a proposal; one `new-mode.md` sentence was cut to its non-instruction form.
+  The rule-wording proposals are in [proposals.md](261001i-probes/proposals.md).
+  **Found on the way:** `feedback-reports.md`'s hash pin in `tools/overseer/standing-jobs.ts` has not
+  matched the file since `9ee632ce`, so the feedback-sweep standing job may be refusing to dispatch
+  (proposals J0).
+
+- **Stage review (GPT Sol, round 1, workspace-write)**:
+  [261001i-docs-and-signposting-sweep-code-review-sol.md](261001i-docs-and-signposting-sweep-code-review-sol.md).
+  No P0. Sol fixed seven P1s inside the stage: two wrong claims about model wires and storage
+  (C1, C2), a streamed-answer contract and an email retry claim that did not match the code
+  (C5, C6), a backlink test that a link inside a code block could satisfy (C4 — it now parses the
+  markdown, with eight new negative controls, and Sol mutated it to see it go red), and
+  instruction-shaped wording that had slipped into thirteen places despite the brief (C3: rewritten
+  as facts, knowledge kept). C9 narrowed one policy sentence to *evergreen* docs. C7 is already
+  proposal K5; C8, a stale "seven pipeline stages" in a source comment, the orchestrator fixed.
+  The diff is read; every `src/` change is still comment-only. All Greg quotes checked verbatim by
+  Sol. Its fixes are unreviewed code by somebody else; nothing in them went to a second round because
+  nothing in them is a rule or a P0/P1 left open.
+
+## Code-duplication candidates, for the Overseer
+
+From [trawl-A-duplication.md](261001i-probes/trawl-A-duplication.md), ranked by ease × value. None
+was refactored here. The docs now name the canonical one in each case, so a third copy is less
+likely while these wait.
+
+1. **Threshold slider rows** — easy, high. `src/web/ThresholdSlider.tsx` has one caller; Glossary,
+   Citations, Quotes (and probably Search) each carry their own copy of the same markup. Logic is
+   already shared in `src/web/threshold.ts`. Needs a browser check per panel.
+2. **`Metadata.tsx` § `ago`** — easy, medium. A private relative-time that never refreshes and never
+   switches to a date; `src/web/relative-time.ts` § `timeAgo` with `useNow` is the house one. Plan
+   260825e already asked for this.
+3. **Small private copies** — easy, low-medium: `src/pdf-read.ts`'s `escapeHtml` skips `'` (use
+   `src/html.ts`); `src/labels.ts` exports a second `allOrStop` that can hang and auto-import can
+   pick it (rename or un-export); four spinner classes running one keyframe (rename `cmt-spinner` to
+   something neutral).
+4. **Abortable sleep and `Retry-After`** — easy-medium, medium. `src/embeddings.ts` § `sleep`
+   resolves on abort where `src/concurrency.ts` § `sleepUnlessAborted` rejects; `src/ai-call.ts` and
+   `src/fetch.ts` each parse `Retry-After` and already disagree on 0 and decimals.
+5. **The streamed-call shell** — medium, high. `src/stream-run.ts` § `runStream` has three callers;
+   `search.ts`, `converse.ts`, `link-summary.ts`, `quiz-mark.ts` and the three referee runners
+   hand-roll it (the largest clone pair in the repo, 188 lines). The referee runners extract items
+   mid-stream, so `runStream` may need an `onDelta` hook. Note `src/ai-call.ts`'s header argues the
+   copies are "duplication that is not duplication" — settle that first.
+6. **Client answer-stream loop** — medium, medium. `src/web/lib/sse.ts` § `readAnswerStream` has two
+   callers; seven hooks loop over `readEvents` by hand.
+7. **The pipeline Messages-wire shell** — medium-hard, high. ~17 stage modules repeat stream →
+   throttled progress → `finalMessage` → refusal → truncation → join text → parse. A first step is
+   two helpers (`messageText`, `progressEvery`).
+8. **Artefact-mode hook state** — hard, medium. ~13 hooks declare the same state shape around
+   `useOrderedRead` / `useStepJob` / `useAutoRun`; a generic `useArtefact<T>` has to fit every mode's
+   quirks.

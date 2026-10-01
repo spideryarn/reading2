@@ -100,8 +100,8 @@ will read is not doing its job, however true it is.
   research, postmortems — are owned at directory level instead, and are not indexed item by item;
   follow whatever indexing convention the repo already has.
 - **A doc may be linked from many places.** That is fine — one *owner*, many links.
-- **Every doc links back up to its owner**, near the top, so a reader who arrived mid-tree can find
-  the rest of the area.
+- **Every evergreen doc links back up to its owner**, near the top, so a reader who arrived mid-tree
+  can find the rest of the area. Dated collections keep the directory-level convention above.
 - **An index line says when you would open the doc**, not a fact from inside it. "Open it for the
   four dating states" lets a reader decide; "↑ / ↓ take the step" makes them open it to find out.
 - **An area with code gets a doc that owns it**, even a short one. Without one, its intent ends up

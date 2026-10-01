@@ -34,6 +34,7 @@ import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { globSync } from "node:fs";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { describe, expect, it } from "vitest";
 
 // infra/hetzner/README.md is named explicitly rather than picked up by a glob,
@@ -439,9 +440,9 @@ describe("docs have exactly one owner", () => {
   it("links each claimed doc back up to its owner", () => {
     const orphanedUp: string[] = [];
     for (const [owner, children] of owned) {
-      const up = linksToOwner(owner);
       for (const child of children) {
-        if (!up.test(readFileSync(path.join("docs/project", child), "utf8"))) {
+        const body = readFileSync(path.join("docs/project", child), "utf8");
+        if (!linksToOwner(body, owner)) {
           orphanedUp.push(`${child} → ${owner}`);
         }
       }
@@ -450,19 +451,52 @@ describe("docs have exactly one owner", () => {
   });
 
   it("recognises a link up to an owner, and nothing else", () => {
-    const up = linksToOwner("architecture.md");
-    expect(up.test("see [architecture.md](architecture.md).")).toBe(true);
-    expect(up.test("[the pipeline](architecture.md#pipeline)")).toBe(true);
-    expect(up.test("[x](./architecture.md)")).toBe(true);
+    const up = (md: string) => linksToOwner(md, "architecture.md");
+    expect(up("see [architecture.md](architecture.md).")).toBe(true);
+    expect(up("[the pipeline](architecture.md#pipeline)")).toBe(true);
+    expect(up("[x](./architecture.md)")).toBe(true);
     // A mention is not a link; nor is a different doc whose name ends the same.
-    expect(up.test("as `architecture.md` says")).toBe(false);
-    expect(up.test("[x](not-architecture.md)")).toBe(false);
+    expect(up("as `architecture.md` says")).toBe(false);
+    expect(up("[x](not-architecture.md)")).toBe(false);
+    expect(up("```md\n[x](architecture.md)\n```")).toBe(false);
+    expect(up("<!-- [x](architecture.md) -->")).toBe(false);
+    expect(up("`[x](architecture.md)`")).toBe(false);
+    expect(up("    [x](architecture.md)")).toBe(false);
+    expect(up("~~~md\n[x](architecture.md)\n~~~")).toBe(false);
+    expect(up("\\[x](architecture.md)")).toBe(false);
+    expect(up("![x](architecture.md)")).toBe(false);
+    expect(up("<pre>\n[x](architecture.md)\n</pre>")).toBe(false);
   });
 });
 
-/** A markdown link to `owner`, from a sibling in `docs/project/`. */
-function linksToOwner(owner: string): RegExp {
-  return new RegExp(`\\]\\((?:\\./)?${owner.replace(".", "\\.")}[)#]`);
+/** Rendered markdown link targets, excluding code, comments and plain mentions. */
+function markdownLinkTargets(md: string): string[] {
+  const targets: string[] = [];
+  interface MarkdownNode {
+    type?: string;
+    url?: string;
+    children?: MarkdownNode[];
+  }
+  const visit = (node: MarkdownNode): void => {
+    if (node.type === "link" && node.url !== undefined) targets.push(node.url);
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(fromMarkdown(md) as MarkdownNode);
+  return targets;
+}
+
+/** Whether rendered markdown links to `owner`, from a sibling in `docs/project/`. */
+function linksToOwner(md: string, owner: string): boolean {
+  const target = new RegExp(`^(?:\\./)?${owner.replace(".", "\\.")}(?:#.*)?$`);
+  let from = 0;
+  for (;;) {
+    const occurrence = md.indexOf(owner, from);
+    if (occurrence === -1) return false;
+    const lineEnd = md.indexOf("\n", occurrence);
+    const prefix = md.slice(0, lineEnd === -1 ? md.length : lineEnd);
+    if (markdownLinkTargets(prefix).some((url) => target.test(url))) return true;
+    from = occurrence + owner.length;
+  }
 }
 
 /**

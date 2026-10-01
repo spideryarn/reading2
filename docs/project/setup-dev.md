@@ -328,10 +328,10 @@ model, the one call that does not go through OpenRouter ([ai-gateway.md](ai-gate
 **Every one of those in the table goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
 whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol
 the request is written in — and that axis has its own doc: [ai-gateway.md](ai-gateway.md). The short
-version is that the pipeline stages (`PIPELINE_TASKS`) speak Anthropic's Messages shape
-([`src/messages-stream.ts`](../../src/messages-stream.ts)) and everything else speaks OpenAI's
-chat/completions shape ([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)), both to
-OpenRouter.
+version is that `PIPELINE_TASKS` names the article-reading tasks on Anthropic's Messages shape
+([`src/messages-stream.ts`](../../src/messages-stream.ts)); the pipeline's `debate` and
+`pdf-frontmatter` tasks, like the request-path calls, speak OpenAI's chat/completions shape
+([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)). Both go to OpenRouter.
 
 ### Three spellings, and only one of them is a name
 

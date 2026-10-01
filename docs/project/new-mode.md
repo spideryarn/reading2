@@ -49,21 +49,22 @@ For things this checklist does not hold:
 - **Checking it in a browser**: [browser-control.md](browser-control.md), then
   [browser-testing.md](browser-testing.md); `CLAUDE.md` § Delegating says who does it.
 
-## Not a mode?
+## Adjacent shapes that reuse part of the machinery
 
-Two shapes borrow half this page:
+Two existing shapes borrow half this page:
 
 - **A pipeline step with no band** (a line on the Metadata page, a preprocessing pass like
   `crossrefs`) takes [§ The artefact](#the-artefact-if-the-mode-shows-one) and
-  [§ Its cost](#its-cost) and skips the client tables; adding the step itself is
-  [architecture.md § Stage ownership](architecture.md#stage-ownership) (an entry in `STEPS`), and
-  whether it runs on every import is `DEFAULT_INGEST_STEPS` in
+  [§ Its cost](#its-cost) and skips the client tables. Existing steps have an entry in `STEPS`,
+  described in [architecture.md § Stage ownership](architecture.md#stage-ownership), and whether
+  one runs on every import is recorded in `DEFAULT_INGEST_STEPS` in
   [`src/pipeline.ts`](../../src/pipeline.ts) —
   [ingest-queue.md § `STEP_ORDER` is not the default list](ingest-queue.md#step_order-is-not-the-default-list).
-- **A per-reader setting** follows the experimental switch, a column on the reader's profile row:
-  [experimental-features.md § Where it lives](experimental-features.md#where-it-lives). (A view
-  choice that should travel in a shared link is a URL param instead — [url-state.md](url-state.md).
-  A preference for this browser only, like the add page's tick box, is `localStorage` —
+- **A per-reader setting** is exemplified by the experimental switch, a column on the reader's
+  profile row:
+  [experimental-features.md § Where it lives](experimental-features.md#where-it-lives). (View
+  choices carried in a shared link are URL parameters — [url-state.md](url-state.md). The add
+  page's browser-only tick box instead uses `localStorage` —
   [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) § `readAutoModes`, which says why.)
 
 ## The client
@@ -165,12 +166,13 @@ Then the residue, which is why this page exists:
 
 A mode that shows nothing generated — Plain, Search — stops here.
 
-## What Greg has asked of modes, across the board
+## Patterns requested for existing modes
 
-Nothing checks these; each was asked of one mode in words that reach for the others. Each names the
-mode doc that holds its machinery.
+Nothing checks these. Each was asked of a particular mode and later implemented by the other named
+modes; each item points to the mode doc that holds its machinery.
 
-- **Once generated, the mode's items are marked in the main text, in every mode.** Asked first of
+- **Generated Glossary, Quotes and Citations items are marked in the main text in every mode.**
+  Asked first of
   the Glossary (Greg, 2026-08-26: *"Glossary entries should always be underlined in the verbatim
   text column, even outside Glossary mode"*), then of Quotes, then of Citations:
 
@@ -184,7 +186,8 @@ mode doc that holds its machinery.
   How it was done without making every reader fetch every list:
   [260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), and
   [citations.md § Marked in the prose, in every mode](citations.md#marked-in-the-prose-in-every-mode).
-- **A list of rated items opens in a prioritised order, with a threshold the reader can move.**
+- **The rated lists in Glossary and FAQ open in a prioritised order, with a threshold the reader
+  can move.**
 
   > perhaps we could even consider using the same approach we use for the glossary and other
   > places, where we give each question a rating for something like how difficult and how
@@ -198,7 +201,6 @@ mode doc that holds its machinery.
   [`ThresholdSlider`](../../src/web/ThresholdSlider.tsx); the reasoning is
   [glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is) and
   [faq.md § A few big questions first](faq.md#a-few-big-questions-first-and-a-threshold).
-- **No description line in the band** — the residue item above, with Greg's words.
 
 ## The card on the button
 

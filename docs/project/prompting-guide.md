@@ -132,10 +132,11 @@ happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts
   measured side corroborate the claim (`captionPrintedOn` in
   [`src/pdf-figures.ts`](../../src/pdf-figures.ts)) before the join is trusted.
   [260924a](../postmortems/260924a-a-figure-paired-on-the-transcripts-page-claim.md).
-- **One bad item should not fail the whole list.** The labels step threw on one malformed pair and
-  lost the batch with no retry, though the caller already had a graded answer — re-ask for what is
-  missing, forgive a bounded gap. The fix classes each fault as either "this item is missing" or
-  "this draw is broken", and names the terminal error with a `code` so Sentry can tell them apart.
+- **One bad item and a broken draw are different failures.** The labels step threw on one malformed
+  pair and lost the batch with no retry, though the caller already had a graded answer. The fix
+  re-asks for what is missing, forgives a bounded gap, classes each fault as either "this item is
+  missing" or "this draw is broken", and names the terminal error with a `code` so Sentry can tell
+  them apart.
   [260924a](../postmortems/260924a-a-malformed-label-pair-kills-the-step-without-a-retry.md).
 
 ## Measuring a prompt change
