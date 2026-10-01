@@ -165,6 +165,8 @@ const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
  */
 const STEPS = [
   "fetch",
+  /* A minimal paper's title, authors and abstract (plan 261001m). */
+  "metadata",
   "extract",
   "blocks",
   "hierarchy",

@@ -1,6 +1,8 @@
 # Bulk import of many papers: a stepping stone
 
-Status: **Building** (2026-10-01, evening). Feedback reports `spya-chhzxv` and `spya-eym66s`, both
+Status: **Built** (2026-10-01, late evening): Stages 1–4 are on `dev` with their Sol reviews, plus
+the migration `20261001211225_bulk_import_minimal`. A browser check at 1280px and 390px passed;
+its screenshots are `261001m-bulk-shot-*.png`. Nothing is deployed: the Overseer deploys. Feedback reports `spya-chhzxv` and `spya-eym66s`, both
 Greg's own. Greg answered § Questions for Greg the same day. His words and the design they decide
 are § Greg's answers and § The build. Everything from § *The request, in four parts* down to
 § *Questions for Greg* is the plan as it stood before he answered, kept so the first review reads
@@ -104,7 +106,7 @@ What each answer changes:
     ▼
   shelf card: title · authors · "Not AI-processed yet" · abstract ▸ · [Read this]
     │
-  [Read this] = POST /api/jobs {slug, process: true}
+  [Read this] = POST /api/jobs {slug, readThis: true}
     │  admitted like an ingest, at 0.99 (the 0.01 already paid is credited)
     │  steps: today's ingest from extract on, over the stored file (Rebuild already does this)
     ▼
@@ -355,7 +357,7 @@ above are built. All eight findings are taken.
    - The duplicate check under the lock, the publish gate, and the target-bound settlement that
      flips `processing` and supersedes the minimal row.
    - `listArticles`, the `NOT_PROCESSED` 409, and the guards.
-   - `POST /api/jobs {slug, process: true}`.
+   - `POST /api/jobs {slug, readThis: true}`.
 4. **The browser.**
    - The job engine's terminal seam, `batchUpload.ts` and `BatchPanel.tsx`.
    - The shelf card's marker and *Read this*.
@@ -378,6 +380,13 @@ Each stage gets Sol's code review, and the gates are run, before it is committed
 - Searching minimal papers by their abstracts, and embeddings of them (`spya-eym66s`'s
   "searchable"). The abstract is stored, so this is a later step that needs no new import.
 - The reader profile reading the abstracts: the "system knows me" half of `spya-chhzxv`.
+- **Found by the browser check, left for later:**
+  - The shelf's allowance box is not refreshed when a batch finishes. It went on saying *"0 of 3
+    articles used"* after five minimal papers, until the next fetch changed it to *"0 articles
+    added, on an allowance of 3"* with the papers sentence. Both are true, because minimal papers
+    are not articles, but the box should re-read the plan when a batch ends.
+  - Opening a minimal paper's page logs its 409 (`NOT_PROCESSED`) as a console error, although
+    that is the expected answer.
 
 ## The request, in four parts
 

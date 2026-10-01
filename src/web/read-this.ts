@@ -3,7 +3,7 @@
  * title, authors and abstract read (plan
  * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md).
  *
- * `POST /api/jobs { slug, process: true }`, through the job engine's action
+ * `POST /api/jobs { slug, readThis: true }`, through the job engine's action
  * seam so the job is found and driven at once, wherever the reader goes next.
  * Pressed from the shelf card and from the paper's own page; one function, so
  * the two cannot disagree about what pressing it does.
@@ -61,7 +61,7 @@ export async function readThis(slug: string): Promise<ReadThisOutcome> {
   const epoch = jobEngine.epoch();
   const generate = readAutoModes();
   try {
-    const job = await post<Job>({ slug, process: true });
+    const job = await post<Job>({ slug, readThis: true });
     /* A POST may outlive the reader who made it. Do not register one reader's
        job in the next reader's watcher map, even though the callback below is
        fenced as a second line of defence. */

@@ -462,7 +462,7 @@ takes may be one: a PDF or a web page.
      withMinimalSlot, and in its locked transaction: the duplicate check again, then the claim
      → job ["fetch", "metadata"], carrying the reservation; its claim creates the article 'minimal'
   publication: no blocks, no tree — allowed only because the article is minimal and metadata ran
-  POST /api/jobs {slug, process: true}                    Read this
+  POST /api/jobs {slug, readThis: true}                    Read this
      withUpgradeSlot → the default steps, force ["extract"], over the stored file
   the publication that lands the tree: processing → 'full', the ingest charged, the minimal row superseded
 ```
@@ -581,7 +581,7 @@ snapshot is reported on the next microtask. `tests/job-engine-terminal.test.ts` 
 `tests/batch-upload.test.ts` hold the two halves.
 
 ***Read this* from the browser** is `readThis` in [`read-this.ts`](../../src/web/read-this.ts):
-`POST /api/jobs {slug, process: true}` through the engine's action seam, so the job is driven at
+`POST /api/jobs {slug, readThis: true}` through the engine's action seam, so the job is driven at
 once from the shelf card or the paper's page. It keeps the add page's *Generate the main modes*
 promise: when the box was ticked (the same stored choice, `readAutoModes`), it watches the job and
 queues the modes once it is `done` — through `watchTerminal`, because the card that was pressed may

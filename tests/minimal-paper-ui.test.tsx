@@ -4,7 +4,7 @@
  *
  * - the shelf card shows the marker, the authors, the abstract behind a
  *   disclosure and *Read this*, and no word count and no Rebuild;
- * - *Read this* posts `{ slug, process: true }` and never fires by itself;
+ * - *Read this* posts `{ slug, readThis: true }` and never fires by itself;
  * - the reading address turns the owned route's `409 not-processed` into the
  *   paper's own page, with its DOI linked only when it is a DOI, and a
  *   different 409 is still an error;
@@ -186,7 +186,7 @@ describe("the shelf card of a paper not read through yet", () => {
     expect(container.querySelector("[data-not-processed-mark]")).toBeNull();
   });
 
-  it("Read this posts { slug, process: true }, once, and shows it running", async () => {
+  it("Read this posts { slug, readThis: true }, once, and shows it running", async () => {
     answer = () =>
       new Response(
         JSON.stringify({
@@ -200,7 +200,7 @@ describe("the shelf card of a paper not read through yet", () => {
     render(card(MINIMAL));
     await act(async () => buttonNamed(/^Read this$/)?.click());
     await settle();
-    expect(calls).toEqual([{ url: "/api/jobs", body: { slug: "a-paper", process: true } }]);
+    expect(calls).toEqual([{ url: "/api/jobs", body: { slug: "a-paper", readThis: true } }]);
     expect(container.querySelector("[role=status]")?.textContent).toContain("Reading it through");
     expect(buttonNamed(/^Read this$/), "Read this still pressable while it runs").toBeUndefined();
 
@@ -237,7 +237,7 @@ describe("the shelf card of a paper not read through yet", () => {
     await act(async () => buttonNamed(/^Read this$/)?.click());
     await act(async () => jobEngine.receive([{ ...queued, status: "done" } as never]));
     await settle();
-    expect(calls).toEqual([{ url: "/api/jobs", body: { slug: "a-paper", process: true } }]);
+    expect(calls).toEqual([{ url: "/api/jobs", body: { slug: "a-paper", readThis: true } }]);
   });
 
   it("says the server's refusal beside the button", async () => {

@@ -3109,7 +3109,7 @@ export interface EnqueueRequest {
    */
   pump?: boolean;
   /**
-   * ***Read this* on a minimal paper** — set by `POST /api/jobs {slug, process:
+   * ***Read this* on a minimal paper** — set by `POST /api/jobs {slug, readThis:
    * true}` and nothing else. It is not what lets the job through: a reader's
    * job passes `refuseOnAMinimalArticle` on its reservation, which the ledger
    * vouches for. It is the administrator's way through, who reserves nothing.

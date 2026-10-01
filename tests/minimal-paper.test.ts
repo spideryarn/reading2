@@ -703,10 +703,10 @@ describe("Read this", () => {
     const slug = await addMinimal(READER, "read-me.html", pageBytes("read me"));
     expect((await pointsUsed(READER)) - before).toBe(2);
 
-    const queued = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, process: true }));
+    const queued = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, readThis: true }));
     expect(queued.status, String(queued.body.error)).toBe(202);
     /* A second press while the first runs is one at a time. */
-    const twice = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, process: true }));
+    const twice = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, readThis: true }));
     expect(twice.status).toBe(409);
 
     const job = await drive(READER, String(queued.body.id));
@@ -735,7 +735,7 @@ describe("Read this", () => {
     const before = await pointsUsed(READER);
     const slug = await addMinimal(READER, "fail-then-read.html", pageBytes("fail then read"));
 
-    const queued = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, process: true }));
+    const queued = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, readThis: true }));
     expect(queued.status).toBe(202);
     const failed = await drive(READER, String(queued.body.id), partsWith({ failExtract: true }));
     expect(failed.status).toBe("error");
@@ -762,7 +762,7 @@ describe("Read this", () => {
   it("is refused on a paper already read, and on somebody else's", async () => {
     vi.spyOn(metadataReaders, "html").mockResolvedValue(found());
     const slug = await addMinimal(READER, "theirs.html", pageBytes("theirs"));
-    const stranger = await call(DUPER, "POST", "/api/jobs", { slug, process: true });
+    const stranger = await call(DUPER, "POST", "/api/jobs", { slug, readThis: true });
     expect(stranger.status).toBe(404);
   });
 });

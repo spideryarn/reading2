@@ -5292,9 +5292,9 @@ export function parseJobRequest(body: unknown): {
    * With `slug` only: ***Read this*** on a minimal paper — the full import over
    * the stored file, admitted like an ingest (plan 261001m).
    */
-  process?: true;
+  readThis?: true;
 } {
-  const { url, slug, steps, force, useProfile, uploadId, process: readThis } = (body ?? {}) as Record<
+  const { url, slug, steps, force, useProfile, uploadId, readThis } = (body ?? {}) as Record<
     string,
     unknown
   >;
@@ -5303,12 +5303,12 @@ export function parseJobRequest(body: unknown): {
     throw httpError(400, "level goes with an uploadId");
   }
   if (readThis !== undefined) {
-    if (readThis !== true) throw httpError(400, "process must be true, or left out");
+    if (readThis !== true) throw httpError(400, "readThis must be true, or left out");
     if (url !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
-      throw httpError(400, "process goes with a slug and nothing else");
+      throw httpError(400, "readThis goes with a slug and nothing else");
     }
-    if (!isSlug(slug)) throw httpError(400, "process needs the slug of the paper to read");
-    return { slug, process: true };
+    if (!isSlug(slug)) throw httpError(400, "readThis needs the slug of the paper to read");
+    return { slug, readThis: true };
   }
 
   const stepList = (value: unknown, field: string): StepName[] | undefined => {
@@ -5803,7 +5803,7 @@ async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<Up
 }
 
 /**
- * `POST /api/jobs { slug, process: true }` — ***Read this*** on a minimal paper.
+ * `POST /api/jobs { slug, readThis: true }` — ***Read this*** on a minimal paper.
  *
  * The full import over the stored file, the way Rebuild re-reads an uploaded
  * PDF: today's default steps with `force: ["extract"]`, so the carried `fetch`
@@ -9802,7 +9802,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* ***Read this*** — the full import of a minimal paper, over the file it
          was added from, admitted like an ingest and crediting what the paper
          already paid (`withUpgradeSlot`). Plan 261001m. */
-      if (request.process) {
+      if (request.readThis) {
         send(res, 202, publicJob(await queueReadThis(request.slug)));
         return;
       }
