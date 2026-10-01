@@ -32,7 +32,7 @@ file name is the earlier report's.
 > Perhaps this could be a reusable text-input-box auto-save component that we could reuse in other
 > places (e.g. Article/Metadata/Why are you reading), etc?
 
-**Ending: Shipped.** On `dev` as `COMMIT`, not deployed.
+**Ending: Shipped.** On `dev` as `bc4ac3f2`, not deployed.
 
 What we did ([plan 261001l](../plans/261001l-autosave-about-you-and-honest-mic-fallback.md)):
 
