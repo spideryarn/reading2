@@ -17,7 +17,7 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { articles } from "../src/billing/half-units.js";
+import { articles } from "../src/billing/points.js";
 import { FREE } from "../src/billing/tiers.js";
 import type { Entitlement } from "../src/billing/tiers.js";
 import { usageSql } from "../src/store/pg-billing.js";
@@ -47,12 +47,13 @@ describe("the usage query", () => {
     const { sql, params } = dialect.sqlToQuery(usageSql(HOSTILE_OWNER, PAID));
     expect(sql).not.toContain("2026-09-01");
     expect(sql).not.toContain("drop table");
-    /* Nine values: the owner, and the two bounds **four times** — the charged
+    /* Eleven values: the owner, and the two bounds **five times** — the charged
        predicate is built once per counted column: ingests at full price and at
-       half, and since 260930k High-powered AI upgrades at full price and at half.
-       Duplicated binds rather than a duplicated *statement*, which is the
-       property this file is actually about. */
-    expect(params).toHaveLength(9);
+       half, since 260930k High-powered AI upgrades at full price and at half,
+       and since 261001m minimal papers charged and not superseded. Duplicated
+       binds rather than a duplicated *statement*, which is the property this
+       file is actually about. */
+    expect(params).toHaveLength(11);
     expect(params).toContain("2026-09-01T00:00:00.000Z");
     expect(params).toContain("2026-10-01T00:00:00.000Z");
   });
@@ -63,7 +64,7 @@ describe("the usage query", () => {
     const free = dialect.sqlToQuery(usageSql("owner", FREE));
     const paid = dialect.sqlToQuery(usageSql("owner", PAID));
     expect(free.params).toHaveLength(1);
-    expect(paid.params).toHaveLength(9);
+    expect(paid.params).toHaveLength(11);
     expect(free.sql).not.toContain("timestamptz");
     expect(paid.sql).toContain("timestamptz");
   });

@@ -1,10 +1,13 @@
-# Keyboard: ↑ / ↓ take the step; ← / → step Trajectory and Quiz
+# Keyboard: ↑ / ↓ take the step; ← / → step Trajectory, Quiz and Structure
 
-> **Status, 2026-09-29.** The stride belonged to the gist columns of Hierarchy mode, which was removed
-> that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). **← / → no longer move a stride; they step Trajectory stops
-> and, since 2026-09-30, Quiz's questions (both further down), and are the browser's everywhere else.** ↑ / ↓ still take the step in
-> the article. Everything here about columns, the pointer's level, the aim and the `L1 / L2` buttons is
-> history.
+> **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
+> steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
+> stepped a section, and a focused row in Structure's list stepped the list. **← / → step
+> Trajectory's stops, Quiz's questions, and Structure's lowest-level sections** (all three further
+> down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
+> mode, removed on 2026-09-29
+> ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); everything here about
+> columns, the pointer's level, the aim and the `L1 / L2` buttons is history.
 
 > Ok, let's add keyboard shortcuts. As an experiment, I want to use left and right arrows, and what
 > they do should depend on where my mouse is. If it's in the L2 column, say, left/right should jump
@@ -76,7 +79,7 @@ whichever column you walk it to.
 | The `Text` column (the prose) | one paragraph — the leaf level, which is 1:1 with blocks |
 | The leaf column beside the prose | the same: one paragraph |
 | The spine, anywhere on it | **parts (L1)** |
-| The masthead, the controls bar, anywhere else | sections — the same unit `?at=` stores |
+| The masthead, the controls bar, a mode's band, anywhere else | **one block**, as over the prose — since 2026-10-01; it was sections, the unit `?at=` stores, until Greg asked for ↑ / ↓ to "always do the same thing" (spya-b2wzjf). The section stride is now ← / → in Structure, below. |
 
 The spine is one zone rather than two. It draws parts as bands and marks the one you are in, so L1
 is what it is *about*; its click targets are L2 only because a 1px tick is unhittable, which is a
@@ -233,6 +236,40 @@ rather than to "a dialog is open", because the comment dialog is modeless and a 
 back into the page means the page (`tests/keynav-horizontal.test.ts`).
 `tests/quiz-panel.test.tsx` § "← and → step the path" pins all of it. The plan is
 [260930h](../plans/260930h-quiz-and-remember-controls-as-icons-arrow-keys-step-the-quiz.md).
+
+## ← / → in Structure
+
+> It looks like it's behaving differently when I press up and down when the focus is on structure
+> mode. Instead, what I'd suggest is up and down should always do the same thing, i.e. jump to the
+> next block in the text, as they do if the focus is on the text.
+>
+> Perhaps there's something to be said for using left and right in structure mode. … I'm going to
+> suggest that left and right should basically jump between the smallest sections. So left and right
+> would jump to the previous or next low-level-heading/section.
+>
+> — Greg, 2026-10-01, spya-b2wzjf
+
+**While Structure is the mode, ← / → step the lowest-level sections** — `sectionDepth`, the unit
+`?at=` stores and that ↓ stepped over the band until that day. Not a handler like Trajectory's and
+Quiz's but a second stride inside `useArrowNav` (`acrossDepth`), so it is ↑ / ↓'s own step: the same
+`stepTarget`, the same chain for rapid presses, every guard above, and the key back to the browser at
+either end. A handler, when a mode hands one in, wins; no mode does both.
+
+**← in the middle of a section goes to that section's start**, as ↑ does and as ← on Trajectory's
+first stop does: the heading you are under is the previous heading in reading order. A second press
+goes to the one before. That was a choice, GPT Sol argued the other way in the plan review, and a
+strict "previous section" is one line in `useArrowNav`.
+
+**And ↑ / ↓ are no longer the list's.** Structure's narrow face is a `role="tree"` whose ↑ / ↓ used
+to step its rows and jump to each — a part or a section a press, so "focus on Structure" stepped
+differently from "focus on the text". It now leaves all four arrows to `useArrowNav` and only lets go
+of a row held by Home or End, so the mark follows the reader again; Home, End, Enter and Space are
+still the tree's (`OutlinePanel.tsx` § `onKeyDown`). **The spine keeps its part stride**: an aim the
+reader takes on purpose, which this report did not mention.
+
+`tests/keynav-horizontal.test.ts` § "with an across depth (Structure)" and
+`tests/outline-panel.test.tsx` § "leaves ↑ / ↓ to the article" pin it. The plan is
+[261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md).
 
 ## The aim is visible before you press anything
 

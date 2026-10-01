@@ -31,8 +31,8 @@
 /* The wire's own union, over the database's row type. One set of arms, written
    where the browser can read it — see `Purchase` for why it is a parameter. */
 import type { Purchase, SwitchFrom } from "../billing-plan.js";
-import { articles } from "./half-units.js";
-import type { Articles } from "./half-units.js";
+import { articles } from "./points.js";
+import type { Articles } from "./points.js";
 import type { QuotaRules } from "./quota-adjustment.js";
 import type { ChoiceRules } from "./subscription.js";
 
@@ -296,7 +296,7 @@ export function choiceRules(tiers: readonly TierRow[], now: Date): ChoiceRules {
  */
 function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) => Articles | null {
   /* **The boundary where a tier row becomes a count of articles**, and one of
-     the four there are — see src/billing/half-units.ts. Everything downstream of
+     the four there are — see src/billing/points.ts. Everything downstream of
      it, the stored delta and the clamp included, stays in that unit until
      `budgetFor` at the admission seam. */
   return (priceId) => {

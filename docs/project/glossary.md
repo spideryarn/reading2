@@ -333,9 +333,12 @@ opened. Four things follow, and three of them are the interesting part:
 - **The line got quieter.** A wash behind one pressed term is a highlight; the same wash behind every
   term in the piece is a mottled paragraph the reader cannot turn off. The standing mark is the
   dotted rule alone (`mark.term` in [`styles/annotations.css`](../../src/web/styles/annotations.css)); the wash moved to the
-  pressed one.
+  pressed one. **And then a little louder again** on 2026-10-01 — 2px at 70% rather than 1px at
+  45% — because [cross-references](cross-references.md) had arrived as a heavier dotted line and
+  Greg could not tell the two apart, and wanted the glossary the more prominent (spya-sxvq2j,
+  [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
 - **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
-  *different* mark — `mark.term[data-open]`, which is exactly what the open comment and the pressed
+  *different* mark — `mark.term[data-term-open]`, which is exactly what the open comment and the pressed
   search hit already do. `open` on `TermSelection` carries it.
 - **The principle moved rather than lost.** What the section below objects to is the *article
   acquiring explanation* on the model's initiative. The underline is now a standing property of the

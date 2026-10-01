@@ -49,20 +49,20 @@ import { log } from "../log.js";
 import type { OwnerId } from "../owner.js";
 import {
   accountSnapshot,
-  atTheWall,
   entitlementFromRow,
-  halfUnitsUsed,
   hasLapsed,
   ingestsUsed,
+  minimalUsed,
   sharingWouldMakeRoom,
   usageFor,
+  wallUsed,
 } from "../store/pg-billing.js";
 import type { BillingRow, Stale } from "../store/pg-billing.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { giftsFor } from "../store/pg-vouchers.js";
 import { planEndsAt } from "../billing-plan.js";
 import type { BillingSummary, Purchase, ReaderPlan, TierOffer } from "../billing-plan.js";
-import { budgetFor, privateHeadroom } from "./half-units.js";
+import { admitsIngest, budgetFor, ingestHeadroom } from "./points.js";
 import { stripeConfigured } from "./stripe.js";
 import { subscriptionState, tiersToOffer } from "./tiers.js";
 import type { Entitlement, Standing, TierRow } from "./tiers.js";
@@ -220,15 +220,23 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
      src/store/pg-billing.ts). A page that showed only settled successes would
      say a slot was free and then watch the server refuse it.
 
-     **Three integers and no half-units**, which is the rule ../billing-plan.ts
-     states at length: `used` is a count of ingests, `sharedHalfPrice` is how
-     many of them are cheap right now, and whether the wall would refuse is asked
-     of the wall rather than reconstructed from the pair. */
+     **Integers and no points**, which is the rule ../billing-plan.ts states at
+     length: `used` is a count of ingests, `sharedHalfPrice` is how many of them
+     are cheap right now, `minimal` is how many papers are not yet AI-processed,
+     and whether the wall would refuse is asked of the wall rather than
+     reconstructed from them. `atLimit` means *cannot add an ordinary article*
+     — `admitsIngest`, the predicate the wall itself asks (Sol's plan review of
+     261001m, P1). */
   const used = ingestsUsed(usage);
+  const spent = wallUsed(usage);
+  const budget = budgetFor(entitlement.limit);
   const counted = {
     used,
     sharedHalfPrice: usage.chargedHalfPrice,
-    atLimit: atTheWall(entitlement, usage),
+    atLimit: !admitsIngest(spent, budget),
+    /* Papers at a hundredth each, charged or in flight: a plain count, never a
+       fraction of an article (`ReaderPlan.minimal`). */
+    minimal: minimalUsed(usage),
     /* Upgrades, apart from the ingests: `used` is articles added, and one
        high-powered article is not two of those (`ReaderPlan.highPower`). */
     highPower: usage.highPowerFullPrice + usage.highPowerHalfPrice,
@@ -268,7 +276,7 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
   const [firstGift, ...moreGifts] = await giftsFor(ownerId);
   const gifts = firstGift ? { gifts: [firstGift, ...moreGifts] as const } : {};
   /* Further private articles — the wall's own answer, never `limit − used`. */
-  const remaining = privateHeadroom(halfUnitsUsed(usage), budgetFor(entitlement.limit));
+  const remaining = ingestHeadroom(spent, budget);
 
   if (hasLapsed(row)) {
     /* **No `used` on this arm**, so the page cannot print "40 of 3" — see
@@ -280,7 +288,7 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
       limit: entitlement.limit,
       /* **Further private articles, which is the wall's own answer** rather than
          `limit - used`: the two are no longer two ends of one ratio now that a
-         public ingest costs half. `privateHeadroom` argues that its division is
+         public ingest costs half. `ingestHeadroom` argues that its division is
          exact, and it can never exceed the limit, which is what this arm of the
          union exists to guarantee. */
       remaining,
@@ -289,7 +297,7 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
 
   /* **Asked of the ledger, and only at the wall.** The free arm's copy offers
      sharing as a way out, and whether that is true cannot be worked out from the
-     three counts above — a charged row that predates `ingest_events.article_id`
+     counts above — a charged row that predates `ingest_events.article_id`
      cannot be cheapened at all, and an account that has unshared everything is
      past the point where sharing everything would help. One grouped aggregate,
      for the readers who are being refused and nobody else. See

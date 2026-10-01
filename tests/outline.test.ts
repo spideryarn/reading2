@@ -381,3 +381,94 @@ describe("monotonicity", () => {
     }
   });
 });
+
+/* **Expanded** — `?structure=expanded`, Greg 2026-10-01 (spya-gxyhcc): every
+   part and section, each with its gist, rather than the fisheye's one open
+   part. docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
+describe("Expanded draws everything above the paragraphs", () => {
+  const expanded = (focusRow: number, r = root, supplementOf = geometry.supplementOf) =>
+    outlineProjection({
+      root: r,
+      supplementOf,
+      arcByRow: null,
+      focusRow,
+      rung: 1,
+      allowParagraphs: true,
+      expanded: true,
+    });
+
+  it("draws every part's sections, with gists, and no paragraphs, wherever the reader is", () => {
+    const parts = (root?.children ?? []).filter((p) => !geometry.supplementOf.has(p.node.id));
+    const sections = parts.flatMap((p) => p.children);
+    expect(sections.length, "fixture: sections in more than one part").toBeGreaterThan(
+      parts[0]!.children.length,
+    );
+    for (const focusRow of [0, blocks.length - 1]) {
+      const { rows } = expanded(focusRow);
+      const drawn = new Set(rows.map((r) => r.node.id));
+      for (const s of sections) expect(drawn.has(s.node.id), s.node.id).toBe(true);
+      /* No paragraph: a drawn row is never a node without children below the
+         sections. */
+      for (const r of rows) expect(r.level).toBeLessThanOrEqual(2);
+      const gisted = rows.filter((r) => r.level === 2 && r.sentence);
+      expect(gisted.length).toBe(sections.filter((s) => s.gist).length);
+    }
+  });
+
+  it("does not fade with distance", () => {
+    const { rows } = expanded(blocks.length - 1);
+    expect(new Set(rows.filter((r) => !r.now).map((r) => r.tier))).toEqual(new Set(["near"]));
+    expect(rows.filter((r) => r.now).map((r) => r.tier)).toEqual(["cur"]);
+  });
+
+  /* A tree deeper than part → section (GPT Sol's plan review, finding 6), with
+     an untitled section between the part and its sub-section. */
+  function deepTree(): { tree: Tree; blocks: Block[] } {
+    const nodes: Record<NodeId, TreeNode> = {};
+    const bl: Block[] = [];
+    const id = (n: number) => `spya-d${String(n).padStart(4, "0")}`;
+    for (let i = 0; i < 4; i++) {
+      bl.push({ id: id(i), tag: "p", kind: "text", text: `${i}`, words: 1, html: `<p>${i}</p>`, gistable: true });
+    }
+    const leaf = (n: number, parent: NodeId, depth: number): NodeId => {
+      const lid = `n-leaf-${n}`;
+      nodes[lid] = { id: lid, depth, parent, children: [], range: [id(n), id(n)], title: "", navLabel: `para ${n}` };
+      return lid;
+    };
+    nodes["n-root"] = { id: "n-root", depth: 0, parent: null, children: ["n-a", "n-b"], range: [id(0), id(3)], title: "Root" };
+    nodes["n-a"] = { id: "n-a", depth: 1, parent: "n-root", children: ["n-a1"], range: [id(0), id(1)], title: "Part A", gist: "A's gist" };
+    nodes["n-a1"] = { id: "n-a1", depth: 2, parent: "n-a", children: ["n-a1x"], range: [id(0), id(1)], title: "" };
+    nodes["n-a1x"] = {
+      id: "n-a1x",
+      depth: 3,
+      parent: "n-a1",
+      children: [leaf(0, "n-a1x", 4), leaf(1, "n-a1x", 4)],
+      range: [id(0), id(1)],
+      title: "Deep sub-section",
+      gist: "the deep one's gist",
+    };
+    nodes["n-b"] = { id: "n-b", depth: 1, parent: "n-root", children: ["n-b1"], range: [id(2), id(3)], title: "Part B", gist: "B's gist" };
+    nodes["n-b1"] = {
+      id: "n-b1",
+      depth: 2,
+      parent: "n-b",
+      children: [leaf(2, "n-b1", 3), leaf(3, "n-b1", 3)],
+      range: [id(2), id(3)],
+      title: "Section B1",
+      gist: "B1's gist",
+    };
+    return { tree: { version: "1", generator: "test", slug: "deep", rootId: "n-root", nodes }, blocks: bl };
+  }
+
+  it("walks a deeper tree, through an untitled section, and marks the deepest row the reader is in", () => {
+    const { tree: t, blocks: b } = deepTree();
+    const g = buildGeometry(t, b);
+    const r = buildSummaryTree(t, b, g.leafDepth);
+    const { rows, currentId } = expanded(0, r, g.supplementOf);
+    expect(rows.map((x) => x.node.id)).toEqual(["n-a", "n-a1x", "n-b", "n-b1"]);
+    expect(rows.find((x) => x.node.id === "n-a1x")?.sentence).toBe("the deep one's gist");
+    expect(rows.find((x) => x.node.id === "n-a1x")?.level).toBe(3);
+    /* The sub-section is not a paragraph, so it may be the one marked. */
+    expect(currentId).toBe("n-a1x");
+  });
+});

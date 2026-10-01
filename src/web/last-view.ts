@@ -70,6 +70,7 @@ export const REMEMBERED = [
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
   "summary", // which of three plain-words levels — only a slider gesture spends
+  "structure", // fisheye or expanded — nothing to generate either way
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
   "dhue", // what a dot's colour means

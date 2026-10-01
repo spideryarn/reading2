@@ -51,6 +51,7 @@ import { Button } from "@/components/ui/button";
 import { type ChosenFile, formatBytes, uploadLimits, uploadProblem } from "../uploads.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { addUploadHref, navigate } from "./router.js";
+import { batchUpload } from "./batchUpload.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 
@@ -168,6 +169,20 @@ export function UploadPicker({
    */
   function take(files: FileList | null): boolean {
     if (!files || files.length === 0) return false;
+    /* **Two or more go to the batch**, which adds each with only its title,
+       authors and abstract read, at a hundredth of an article (batchUpload.ts,
+       plan 261001m — Greg: *"bulk upload only does the minimal step"*). It used
+       to refuse with *"One at a time, please"*. A pick of several is its own
+       commit, like a drop: there is no single file for Add to send. Ahead of
+       the busy check, because the batch has its own queue and a single
+       transfer in flight does not stand in its way. One file is unchanged. */
+    if (files.length > 1) {
+      setChosen(null);
+      setProblem(null);
+      file.current = null;
+      batchUpload.add(Array.from(files));
+      return false;
+    }
     /* **A transfer already in flight owns this control until it is done.** It
        used to overwrite the file and the name on screen while the *first* one
        went on uploading underneath the second one's name and then navigated to
@@ -177,11 +192,6 @@ export function UploadPicker({
        file picker as well as the drop. */
     if (busy) {
       setProblem("That upload is still going. Wait for it, or stop it first.");
-      return false;
-    }
-    if (files.length > 1) {
-      setChosen(null);
-      setProblem("One at a time, please — drop a single file.");
       return false;
     }
     // Named separately because `File` is a `ChosenFile` and nothing more is
@@ -263,6 +273,8 @@ export function UploadPicker({
         ref={input}
         type="file"
         accept="application/pdf,.pdf,text/html,.html,.htm"
+        /* Several at once go to the batch — see `take`. */
+        multiple
         className="tw:hidden"
         onChange={(e) => {
           take(e.target.files);
@@ -278,7 +290,7 @@ export function UploadPicker({
         /* The words the dashed box used to say. They were the only thing
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
-        title="Choose a PDF or an HTML file — or drop one anywhere on this box"
+        title="Choose a PDF or an HTML file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
         /* **The caps, for somebody who cannot see the caption.** The line under
            this row states them; this is what makes a screen reader read it out
            as part of the control rather than as a stray paragraph after it.
@@ -473,8 +485,9 @@ export function UploadPicker({
        * notice before 50 MB goes.
        *
        * `take` returning false is a refusal it has already explained (not a
-       * PDF, too large, more than one, one already going), so there is nothing
-       * to send and the reason is already on screen.
+       * PDF, too large, one already going), so there is nothing to send and
+       * the reason is already on screen — or several files, which it has
+       * already handed to the batch.
        */
       onDrop={(e) => {
         e.preventDefault();

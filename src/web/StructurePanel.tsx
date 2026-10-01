@@ -46,7 +46,7 @@
  * *part*, which is a different fact and belongs to the column rather than to the
  * band.
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { ModeSurface } from "./ModeSurface.js";
 import {
@@ -427,6 +427,7 @@ export function StructurePanel({
   allowParagraphs,
   onJump,
   surfaceRef,
+  head,
 }: {
   root: SummaryNode | null;
   /**
@@ -447,6 +448,12 @@ export function StructurePanel({
    * and choose the face. A stable function (a state setter).
    */
   surfaceRef?: (el: HTMLElement | null) => void;
+  /**
+   * The Fisheye / Expanded toggle, in the band's head row. The columns'
+   * capacities are measured from the grid, which takes the height left below
+   * it, so a head row costs the fit nothing to account for.
+   */
+  head?: ReactNode;
 }) {
   /**
    * **Projected once, unwindowed.** The measuring copies below and the visible
@@ -585,7 +592,13 @@ export function StructurePanel({
   const nothing = proj.columnA.rows.length === 0;
 
   return (
-    <ModeSurface label="Structure" feature="struct" mode="structure" {...(surfaceRef ? { ref: surfaceRef } : {})}>
+    <ModeSurface
+      label="Structure"
+      feature="struct"
+      mode="structure"
+      head={head}
+      {...(surfaceRef ? { ref: surfaceRef } : {})}
+    >
       {nothing ? (
         /* **A sentence, not an error.** A piece with no parts is a real article
            — a short one the hierarchy stage put under a single root — so this

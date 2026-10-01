@@ -896,6 +896,10 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      unchanged; what changed is that "we decided this step has no stamp" and
      "somebody forgot a row" are now different things on the page. */
   fetch: null,
+  /* Existence, like `extract`: it writes `meta`, and `meta` has no stamp. Product
+     traffic runs it once, in the job that minted the article; an administrator's
+     explicit forced standalone run is the only way it runs again. */
+  metadata: null,
   extract: null,
   blocks: null,
   hierarchy: "labels",

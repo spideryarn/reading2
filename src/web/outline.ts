@@ -170,6 +170,17 @@ interface Input {
    * substitution principle 1 forbids.
    */
   allowParagraphs: boolean;
+  /**
+   * **Structure's Expanded sub-mode** (`?structure=expanded`): every part and
+   * every section under it, each with its gist, and every part's arc — rather
+   * than the fisheye's one open part. `rung` and `allowParagraphs` are ignored,
+   * and no paragraph row is drawn: they are navLabels pointing at prose that is
+   * beside them, and "the summaries" Greg asked to see are the gists. Through
+   * this function rather than a second walk, so the marks agree with the rows
+   * for the reason this file's header gives.
+   * docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md.
+   */
+  expanded?: boolean;
 }
 
 const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.endRow;
@@ -191,6 +202,7 @@ export function outlineProjection({
   focusRow,
   rung,
   allowParagraphs,
+  expanded = false,
 }: Input): OutlineProjection {
   if (!root) return { rows: [], currentId: null, rung };
 
@@ -205,6 +217,9 @@ export function outlineProjection({
     entry: SummaryNode,
     level: number,
     extra: { sentence?: string; arc?: string } = {},
+    /* A paragraph row, which is never marked current. Its own flag rather than
+       `level === 3`, because Expanded draws a sub-section at level 3 too. */
+    paragraph = false,
   ): OutlineRow | null => {
     const text = rowText(entry);
     /* No text of any kind — no row. Never a blank one: an empty line in a list
@@ -232,7 +247,7 @@ export function outlineProjection({
       ...(extra.sentence !== undefined && { sentence: extra.sentence }),
       ...(extra.arc !== undefined && { arc: extra.arc }),
       supplement,
-      here: level === 3 && PARAGRAPHS_ARE_NEVER_CURRENT ? false : contains(entry, focusRow),
+      here: paragraph && PARAGRAPHS_ARE_NEVER_CURRENT ? false : contains(entry, focusRow),
       now: false,
       before: entry.endRow < focusRow,
       tier: "far",
@@ -241,7 +256,39 @@ export function outlineProjection({
     return row;
   };
 
-  for (const part of parts) {
+  /**
+   * **Expanded: every node above the paragraphs, at any depth, with its gist.**
+   * A tree may be deeper than part → section (tests/supplement.test.ts has a
+   * valid depth-4 one), so this recurses rather than stopping at level 2 as
+   * the fisheye does — GPT Sol's plan review, 261001q, finding 6. Below the
+   * sections a leaf is a paragraph and gets no row. A node with no text gets
+   * no row either, but its
+   * children are still walked: a section with no title must not take its
+   * sub-sections with it. Deeper than 3 is drawn at 3's indent, which is as
+   * far as the stylesheet goes.
+   */
+  const expand = (entry: SummaryNode, depth: number) => {
+    const supplement = supplementOf.has(entry.node.id);
+    const arc = depth === 1 && !supplement ? arcByRow?.get(entry.startRow)?.text : undefined;
+    const gist = supplement ? undefined : entry.gist;
+    push(entry, Math.min(depth, 3), {
+      ...(gist !== undefined && { sentence: gist }),
+      ...(arc !== undefined && { arc }),
+    });
+    /* The apparatus gets one row and stops, as in the fisheye. */
+    if (supplement) return;
+    for (const child of entry.children) {
+      /* A part's children are drawn whatever they hold, as the fisheye draws
+         them — a section with no children of its own is still a section (the
+         `revistes-ub-30977` case in `rowText` above). Below that, only a node
+         with children: a childless one there is a paragraph. */
+      if (depth === 1 || child.children.length > 0) expand(child, depth + 1);
+    }
+  };
+
+  if (expanded) {
+    for (const part of parts) expand(part, 1);
+  } else for (const part of parts) {
     const isCurrent = part === currentPart;
     const supplement = supplementOf.has(part.node.id);
     /* The apparatus gets one row and stops. It is outside the argument, has no
@@ -271,7 +318,7 @@ export function outlineProjection({
       ) {
         continue;
       }
-      for (const para of section.children) push(para, 3);
+      for (const para of section.children) push(para, 3, {}, true);
     }
   }
 
@@ -293,7 +340,11 @@ export function outlineProjection({
 
   const cur = rows.findIndex((r) => r.now);
   rows.forEach((row, i) => {
-    row.tier = cur === -1 ? "far" : tierByDistance(Math.abs(i - cur));
+    /* Expanded is not a fisheye, so nothing fades with distance: every row is
+       drawn as the fisheye draws the rows beside the reader, and the one they
+       are in keeps its emphasis. */
+    if (expanded) row.tier = i === cur ? "cur" : "near";
+    else row.tier = cur === -1 ? "far" : tierByDistance(Math.abs(i - cur));
   });
 
   return { rows, currentId, rung };

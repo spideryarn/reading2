@@ -27,8 +27,28 @@ The article's tree, in the band, with two faces chosen by the band's width. It s
 >
 > — Greg, 2026-09-28, in [260928a](../plans/260928a-structure-two-columns-readable.md)
 
+> Add a toggle to Structure mode to switch between the Fisheye submode (which should be the default,
+> and which is what we're using now), and Expanded mode (which would show everything fully, all of
+> the summaries and everything expanded and visible).
+>
+> — Greg, 2026-10-01, spya-gxyhcc, in [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md)
+
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## Fisheye and Expanded
+
+Two views, chosen by chips in the band's head row and kept in `?structure=`
+([url-state.md](url-state.md)). **Fisheye**, the default, is everything below: the two faces, each
+opened up around where you are reading. **Expanded** is one list in every band width — every part
+and every section under it, at any depth, each with its gist, and each part's arc — and it is the
+one time this band scrolls. It is the list face's own component with an `expanded` prop
+(`OutlinePanel`), built by the same `outlineProjection`, so the rows, the marks and the keyboard are
+the list's. It follows the reader only when they cross into another section, so a reader who
+scrolls the column by hand keeps their place until then. No paragraph rows: the summaries Greg
+asked to see are the gists. The plan, and GPT Sol's review of it, is
+[261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
+it are [keyboard.md § ← / → in Structure](keyboard.md).
 
 ## The two faces, and how it got here
 

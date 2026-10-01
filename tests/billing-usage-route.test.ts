@@ -253,8 +253,9 @@ describe("GET /api/billing/usage", () => {
       sharedHalfPrice: 0,
       /* No High-powered AI upgrades counted (260930k). */
       highPower: 0,
+      minimal: 0,
       atLimit: false,
-      /* The whole allowance is still ahead of them (`privateHeadroom`). */
+      /* The whole allowance is still ahead of them (`ingestHeadroom`). */
       remaining: FREE_LIFETIME_INGESTS,
     });
     /* Nothing to manage: the Stripe customer that would hold a billing history
@@ -283,6 +284,7 @@ describe("GET /api/billing/usage", () => {
       /* Nothing shared, so nothing is cheap — and three of three is the wall. */
       sharedHalfPrice: 0,
       highPower: 0,
+      minimal: 0,
       atLimit: true,
       /* Further private articles: none, from the wall's own arithmetic. */
       remaining: 0,
@@ -340,6 +342,7 @@ describe("GET /api/billing/usage", () => {
       used: 2,
       sharedHalfPrice: 0,
       highPower: 0,
+      minimal: 0,
       atLimit: false,
       periodEnd: period.end.toISOString(),
       endsAt: null,
@@ -765,6 +768,9 @@ describe("the admin page's ingest aggregate", () => {
       highPowerInPeriod: 0,
       highPowerLifetimeShared: 0,
       highPowerInPeriodShared: 0,
+      minimalLifetime: 0,
+      minimalInPeriod: 0,
+      minimalInFlight: 0,
     });
   });
 
@@ -785,6 +791,9 @@ describe("the admin page's ingest aggregate", () => {
       highPowerInPeriod: 0,
       highPowerLifetimeShared: 0,
       highPowerInPeriodShared: 0,
+      minimalLifetime: 0,
+      minimalInPeriod: 0,
+      minimalInFlight: 0,
     });
   });
 });

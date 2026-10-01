@@ -1,0 +1,3212 @@
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index ca259b0d0..7b0c18012 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -444,7 +444,7 @@ Three smaller things in the picker that are easy to get wrong and are worth not
+ ### A minimal upload, and Read this
+ 
+ **Built 2026-10-01, the server half** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md),
+-Stage 3; the browser is Stage 4). A *minimal paper* is a file added with only its title, authors,
++Stage 3; the browser is Stage 4, [§ Many at once](#many-at-once)). A *minimal paper* is a file added with only its title, authors,
+ abstract and DOI read — no blocks, no tree — at a hundredth of an article
+ ([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)). It
+ is an ordinary shelf entry whose `articles.processing` is `'minimal'`. Any file a single upload
+@@ -519,6 +519,75 @@ back. A failed *Read this* releases its reservation and the paper stays minimal;
+ through `withUpgradeSlot`, bound to the same paper. `tests/minimal-paper.test.ts` holds all of it
+ against a real database, through the real routes.
+ 
++### Many at once
++
++**The browser half, built 2026-10-01** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md)
++Stage 4). Drop or pick **two or more** files on the add box and each becomes a minimal paper; one
++file is today's full import, unchanged. The file input takes `multiple`, and a mix of PDFs and web
++pages is fine — each file gets the same `uploadProblem` check a single upload does.
++
++> … if you upload multiple PDFs at the same time, ideally it would be possible to do that. … by
++> default, maybe it wouldn't run AI processing when you do that, only when you open each of them for
++> the first time.
++>
++> — Greg, 2026-10-01 (report `spya-eym66s`)
++
++**[`batchUpload.ts`](../../src/web/batchUpload.ts)** is a module singleton, bound to the reader in
++`useJobSession` beside `uploadEngine` and for its reason: the shelf unmounts when the reader goes
++elsewhere, and the batch must not. For each file:
++
++```
++  waiting ─► hashing ─► sending ─► reading ─► on the shelf
++   (a slot)   (one worker)  grant + PUT   POST /api/jobs {uploadId, level: "minimal"}
++                                          and held until watchTerminal says the job ENDED
++```
++
++- **Three in flight, and in flight lasts until the job has ended**, however it ends. Backpressure,
++  not a defence: the allowance is the defence.
++- **One hashing worker.** A file's `arrayBuffer()` is read when it reaches the front, the digest is
++  kept and handed to `requestGrant` (which takes it, and `level`, from a caller that has one), and
++  the buffer goes. A thousand-file drop is never in memory together.
++- **Identical bytes in one drop are one paper** — the second says *The same file as …* and sends
++  nothing. Across drops, tabs and the archive it is the server's duplicate check: a `409` with
++  `code: "duplicate"`, said as *Already on your shelf* (or *archived*, or *being added*), linked
++  when the body names the article.
++- **The allowance stops the queue.** A `402` at the grant or the job marks that file and every file
++  not yet started *Not started: out of allowance*, with the server's `[pay-minimal]` sentence once
++  and a link to `/pricing`. Files already past their grant finish. A new drop asks again.
++- **It hears every ending**, through the job engine's `watchTerminal` (below): `done` is *On your
++  shelf* with a link, `error` is *Couldn't read this one* with the job's sentence and **Retry**
++  (`POST /api/jobs/:id/retry`; a failed job POST re-posts without re-sending, and a failed send
++  starts again), `cancelled` is *Stopped*, and a job that vanished is *Out of sight: look on your
++  shelf*. None of them stalls the queue.
++- **Stop** stops everything not yet queued — waiting files, and files being hashed or sent, whose
++  transfer is aborted and grant given back (`DELETE /api/uploads/:id`). **A file whose job is
++  already running is left to finish**, for the reason `uploadEngine.cancel` refuses during
++  `queueing`: its reservation is made and its work is seconds long.
++- **Up to 1,000 files in one drop**; beyond that the panel says how many were not taken.
++- A sign-out fences everything, as for one upload.
++
++**[`BatchPanel.tsx`](../../src/web/BatchPanel.tsx)**, under the add box on the shelf: one row per
++file, a counts line, Stop, and *Keep this tab open while it works* — the tab is the worker
++(§ The browser is the worker). Rows wrap at 390px. A minimal paper's job is left out of the add
++box's own job list, which would otherwise draw forty cards for forty seconds-long jobs.
++
++**The terminal seam** is `jobEngine.watchTerminal(jobId, onEnd)`
++([`jobEngine.ts`](../../src/web/jobEngine.ts)), Sol's plan-review P1. It is fed by every list
++reconciliation **and** by every `/advance` response, because the drive loop runs behind a hidden tab
++and the poll does not. A job is *vanished* only when a list **that began after the watcher was
++registered** leaves it out; a list already on the wire knew nothing of it. A pending watcher keeps
++the busy cadence armed, a teardown drops every watcher uncalled, and a job already terminal in the
++snapshot is reported on the next microtask. `tests/job-engine-terminal.test.ts` and
++`tests/batch-upload.test.ts` hold the two halves.
++
++***Read this* from the browser** is `readThis` in [`read-this.ts`](../../src/web/read-this.ts):
++`POST /api/jobs {slug, process: true}` through the engine's action seam, so the job is driven at
++once from the shelf card or the paper's page. It keeps the add page's *Generate the main modes*
++promise: when the box was ticked (the same stored choice, `readAutoModes`), it watches the job and
++queues the modes once it is `done` — through `watchTerminal`, because the card that was pressed may
++be long gone by then. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
++has the card and the page.
++
+ ## The add page
+ 
+ > Add a url that I can use to add something directly, e.g. `/add/[my-full-url-here]` or
+diff --git a/docs/project/library.md b/docs/project/library.md
+index 25cecea78..42c90bb95 100644
+--- a/docs/project/library.md
++++ b/docs/project/library.md
+@@ -922,6 +922,43 @@ came out of GPT Sol's review of the built code, 2026-09-04; the argument for eac
+ [`src/store/public-library.ts`](../../src/store/public-library.ts) and
+ [security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
+ 
++### A paper not read through yet
++
++> Each paper should be shown on the shelf as normal, but indicate in the UI that it hasn't been
++> AI-processed yet.
++>
++> — Greg, 2026-10-01
++
++A file added in a batch has only its title, authors, abstract and DOI read
++([ingest-queue.md § Many at once](ingest-queue.md#many-at-once)), and its `LibraryEntry` says
++`processing: "minimal"`, with `abstract` and `doi` beside it and every count at 0. It is an ordinary
++card, with four differences, all in [`ShelfCard`](../../src/web/ShelfEntry.tsx):
++
++- **The marker.** *Not AI-processed yet*, in `ArchivedMark`'s shape (`NotProcessedBadge`), on the
++  meta line of the card and in the title cell of the table.
++- **No numbers it does not have.** The meta line keeps the byline and drops length and blocks; the
++  word count goes; the table's Words cell is a dash and sorts last.
++- **The abstract, behind a closed `<details>`**, because forty open abstracts would be a wall.
++- ***Read this*, with its cost beside it** — *Uses 0.99 of an article from your allowance*
++  ([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)).
++  It is `ReadThisButton` ([`ReadThis.tsx`](../../src/web/ReadThis.tsx)), handed to the card by
++  `Library` as a slot, because `ShelfEntry.tsx` is shared with the lazy `/admin` and `/design`
++  routes and the button brings the job engine behind it (`tests/eager-client-graph.test.ts`). It
++  reads the job engine, so a press here and one on the paper's own page are the same job, and the
++  card shows it running. The table has no button: a row opens the paper's page, which has one.
++
++**Rebuild is not drawn** on a minimal card, in the row or in the "⋯" menu. That breaks *five
++buttons, always five* (§ When a button cannot do its job) on purpose: there is nothing built to
++rebuild, the server refuses it, and *Read this* is the action. Edit, Open, Copy and Archive stay.
++
++**Opening it is free.** The card's link goes to the reading address as usual, where the owned route
++answers `409 not-processed` and the page draws the paper — title, authors, abstract, DOI as a
++`doi.org` link when it has the DOI shape, *Open the PDF* for a PDF, and *Read this*
++([`UnreadPaperPage.tsx`](../../src/web/article/UnreadPaperPage.tsx)). Nothing starts by itself: the
++plan's answer 6, so a reader skimming twenty titles spends nothing. When a *Read this* job on that
++paper ends `done`, the page loads the article in place. `tests/minimal-paper-ui.test.tsx` holds the
++card and the page.
++
+ ### Where the numbers on it come from, and why nobody derives them twice
+ 
+ Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by
+diff --git a/src/web/AddArticle.tsx b/src/web/AddArticle.tsx
+index 6bde559b0..87b203ae8 100644
+--- a/src/web/AddArticle.tsx
++++ b/src/web/AddArticle.tsx
+@@ -40,6 +40,7 @@ import {
+ import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+ import { addHref, navigate } from "./router.js";
++import { isMinimalJob } from "./read-this.js";
+ import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
+ import { useNow } from "./useNow.js";
+ import type { Job, JobStep } from "../types.js";
+@@ -150,7 +151,12 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
+   // eight seconds late.
+   const [, redraw] = useState(0);
+   const now = Date.now();
+-  const showing = queue.jobs.filter((j) => !dismissed.has(j.id) && !faded(j, now));
++  /* **Not a minimal paper's job**: a batch's files are one row each in
++     BatchPanel.tsx, and forty cards here for forty seconds-long jobs would bury
++     the one import a reader is watching. Plan 261001m. */
++  const showing = queue.jobs.filter(
++    (j) => !dismissed.has(j.id) && !faded(j, now) && !isMinimalJob(j),
++  );
+ 
+   /* Two lists out of one, split on when the job ended rather than on what it
+      is. Sorting is the server's — newest first, `listJobs` in src/jobs.ts — and
+diff --git a/src/web/BatchPanel.tsx b/src/web/BatchPanel.tsx
+new file mode 100644
+index 000000000..a8cf5f393
+--- /dev/null
++++ b/src/web/BatchPanel.tsx
+@@ -0,0 +1,220 @@
++/**
++ * **The batch on the shelf** — one row per file, what it is doing, and Stop.
++ *
++ * Draws `batchUpload` (batchUpload.ts) and nothing else; renders nothing while
++ * there is no batch. On the shelf under the add box, because that is where the
++ * files were dropped. Plan
++ * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md § The batch,
++ * in the browser; docs/project/ingest-queue.md § Many at once.
++ *
++ * **Narrow windows**: every row is a wrapping flex line whose filename may
++ * shrink and truncate, so at 390px a row becomes two lines and the page never
++ * scrolls sideways (docs/project/narrow-windows.md). The list scrolls inside
++ * itself past a few dozen rows, so a thousand files do not push the shelf a
++ * mile down the page.
++ */
++import { useSyncExternalStore } from "react";
++import { ArrowRight, FileText, X } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { formatBytes } from "../uploads.js";
++import {
++  BATCH_MAX_FILES,
++  type BatchRow,
++  type BatchSnapshot,
++  type BatchState,
++  batchUpload,
++  rowIsLive,
++} from "./batchUpload.js";
++import { Link } from "./Link.js";
++import { PRICING_HREF, readHref } from "./router.js";
++
++/** What the panel needs of the engine. A prop so a test can hand it a fake. */
++export interface BatchSource {
++  subscribe(onChange: () => void): () => void;
++  getSnapshot(): BatchSnapshot;
++  cancel(): void;
++  retry(rowId: number): void;
++  dismiss(): void;
++}
++
++/** The short words for a state. The longer sentence, when there is one, goes under. */
++export function stateLabel(state: BatchState, bytes: number): string {
++  switch (state.kind) {
++    case "waiting":
++      return "Waiting";
++    case "hashing":
++      return "Checking the file";
++    case "sending":
++      return state.sent > 0 ? `Sending, ${formatBytes(state.sent)} of ${formatBytes(bytes)}` : "Sending";
++    case "reading":
++      return "Reading its title and abstract";
++    case "shelved":
++      return "On your shelf";
++    case "duplicate":
++      if (state.message.includes("[up-dup-archived]")) return "Already on your shelf, archived";
++      if (state.message.includes("[up-dup-wait]")) return "Already being added";
++      return "Already on your shelf";
++    case "same-file":
++      return `The same file as ${state.as}`;
++    case "refused":
++      return "Not a file this can add";
++    case "no-room":
++      return "Not started: out of allowance";
++    case "failed":
++      return "Couldn't read this one";
++    case "lost":
++      return "Out of sight: look on your shelf";
++    case "stopped":
++      return "Stopped";
++    default: {
++      const unreachable: never = state;
++      throw new Error(`Unknown batch state: ${String(unreachable)}`);
++    }
++  }
++}
++
++/** Where a row's link goes, when it has one. */
++function slugOf(state: BatchState): string | null {
++  if (state.kind === "shelved") return state.slug;
++  if (state.kind === "duplicate") return state.slug;
++  return null;
++}
++
++/** The counts line: only the counts that are not zero. */
++export function batchSummary(rows: readonly BatchRow[]): string {
++  let shelved = 0;
++  let already = 0;
++  let going = 0;
++  let failed = 0;
++  let noRoom = 0;
++  let other = 0;
++  for (const r of rows) {
++    const k = r.state.kind;
++    if (k === "shelved") shelved += 1;
++    else if (k === "duplicate" || k === "same-file") already += 1;
++    else if (rowIsLive(r.state)) going += 1;
++    else if (k === "failed") failed += 1;
++    else if (k === "no-room") noRoom += 1;
++    else other += 1;
++  }
++  const parts = [
++    `${shelved} of ${rows.length} on your shelf`,
++    already > 0 && `${already} already there`,
++    going > 0 && `${going} still going`,
++    failed > 0 && `${failed} couldn't be read`,
++    noRoom > 0 && `${noRoom} out of allowance`,
++    other > 0 && `${other} not added`,
++  ].filter(Boolean);
++  return parts.join(" · ");
++}
++
++export function BatchPanel({ source = batchUpload }: { source?: BatchSource }) {
++  const snapshot = useSyncExternalStore(source.subscribe, source.getSnapshot);
++  const { rows, overflow } = snapshot;
++  if (rows.length === 0 && overflow === 0) return null;
++
++  const live = rows.some((r) => rowIsLive(r.state));
++  /* Stop is about files that have not been queued; a running job is left to finish. */
++  const stoppable = rows.some(
++    (r) => r.state.kind === "waiting" || r.state.kind === "hashing" || r.state.kind === "sending",
++  );
++  /* The allowance's own sentence, once for the batch rather than once a row. */
++  const noRoom = rows.find((r) => r.state.kind === "no-room")?.state;
++
++  return (
++    <section
++      aria-label="Files being added"
++      className="tw:mb-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4"
++    >
++      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
++        <h2 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:text-sm tw:font-semibold">
++          Adding {rows.length} {rows.length === 1 ? "file" : "files"} without AI processing
++        </h2>
++        {stoppable && (
++          <Button type="button" variant="outline" size="sm" onClick={() => source.cancel()}>
++            Stop
++          </Button>
++        )}
++        {!live && (
++          <Button
++            type="button"
++            variant="ghost"
++            size="icon-sm"
++            aria-label="Clear this list"
++            title="Clear this list"
++            onClick={() => source.dismiss()}
++          >
++            <X size={14} />
++          </Button>
++        )}
++      </div>
++
++      <p aria-live="polite" className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-muted-foreground">
++        {batchSummary(rows)}
++      </p>
++      <p className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-muted-foreground">
++        {live
++          ? "Keep this tab open while it works. Each counts as 1/100 of an article, and only its title, authors and abstract are read; press Read this on a paper to read the whole of it."
++          : "Each paper is on your shelf with only its title, authors and abstract read. Press Read this on one to read the whole of it."}
++      </p>
++      {overflow > 0 && (
++        <p className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-destructive">
++          {`One drop takes up to ${BATCH_MAX_FILES.toLocaleString()} files, so the other ${overflow.toLocaleString()} were not added. Drop them again once these are done.`}
++        </p>
++      )}
++      {noRoom?.kind === "no-room" && (
++        <p className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-destructive">
++          {noRoom.message}{" "}
++          <Link
++            href={PRICING_HREF}
++            className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight"
++          >
++            Plans and prices
++            <ArrowRight size={12} />
++          </Link>
++        </p>
++      )}
++
++      <ul className="tw:mt-3 tw:mb-0 tw:flex tw:max-h-96 tw:list-none tw:flex-col tw:gap-1.5 tw:overflow-y-auto tw:p-0">
++        {rows.map((row) => (
++          <BatchRowLine key={row.id} row={row} onRetry={() => source.retry(row.id)} />
++        ))}
++      </ul>
++    </section>
++  );
++}
++
++function BatchRowLine({ row, onRetry }: { row: BatchRow; onRetry: () => void }) {
++  const { state } = row;
++  const slug = slugOf(state);
++  const bad = state.kind === "failed" || state.kind === "refused";
++  /* The longer sentence a row carries, said under it. A duplicate's and an
++     allowance refusal's are already said by the label and the panel. */
++  const detail = state.kind === "failed" || state.kind === "refused" ? state.message : null;
++
++  return (
++    <li data-batch-state={state.kind} className="tw:text-xs">
++      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:gap-y-0.5">
++        <FileText size={12} aria-hidden="true" className="tw:shrink-0 tw:self-center tw:text-muted-foreground" />
++        <span className="tw:min-w-0 tw:max-w-full tw:flex-1 tw:basis-40 tw:truncate tw:text-foreground">
++          {slug ? (
++            <Link href={readHref(slug)} className="tw:text-foreground tw:hover:text-highlight">
++              {row.filename}
++            </Link>
++          ) : (
++            row.filename
++          )}
++        </span>
++        <span className={bad ? "tw:text-destructive" : "tw:text-muted-foreground"}>
++          {stateLabel(state, row.bytes)}
++        </span>
++        {state.kind === "failed" && (
++          <Button type="button" variant="outline" size="xs" onClick={onRetry}>
++            Retry
++          </Button>
++        )}
++      </div>
++      {detail && <p className="tw:mt-0.5 tw:mb-0 tw:pl-5 tw:text-muted-foreground">{detail}</p>}
++    </li>
++  );
++}
+diff --git a/src/web/Library.tsx b/src/web/Library.tsx
+index 43dc4183c..a837c8a30 100644
+--- a/src/web/Library.tsx
++++ b/src/web/Library.tsx
+@@ -58,6 +58,8 @@ import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "
+    trigger the corner and the dock draw, in a third shape. FeedbackButton.tsx §
+    `FEEDBACK_SHAPE.masthead`. */
+ import { FeedbackTrigger } from "./FeedbackButton.js";
++import { BatchPanel } from "./BatchPanel.js";
++import { ReadThisButton } from "./ReadThis.js";
+ import { FreeAllowance } from "./FreeAllowance.js";
+ import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js";
+ import { capRows } from "./lib/row-cap.js";
+@@ -593,6 +595,11 @@ export function Library({
+ 
+       <AddArticle queue={queue} />
+ 
++      {/* **Several files dropped at once**, each added with only its title,
++          authors and abstract read — nothing at all while there is no batch.
++          BatchPanel.tsx; plan 261001m. */}
++      <BatchPanel />
++
+       {/* **The free allowance**, for Free and lapsed readers only — what is
+           used, what is left, and a collapsed *How free articles work*. Below
+           the add box because that is the act it counts. FreeAllowance.tsx;
+@@ -766,6 +773,11 @@ export function Library({
+                     shelf={shelf}
+                     note={note(row.original, now)}
+                     archivedShown={archivedOn}
++                    readThis={
++                      row.original.processing === "minimal" ? (
++                        <ReadThisButton slug={row.original.slug} />
++                      ) : undefined
++                    }
+                   />
+                 </li>
+               ))}
+diff --git a/src/web/ReadThis.tsx b/src/web/ReadThis.tsx
+new file mode 100644
+index 000000000..96ce39d6e
+--- /dev/null
++++ b/src/web/ReadThis.tsx
+@@ -0,0 +1,109 @@
++/**
++ * ***Read this*, for a paper not read through yet.** Drawn on the shelf card
++ * (handed to `ShelfCard` by Library.tsx) and on the paper's own page
++ * (UnreadPaperPage.tsx), so the two say the same words and press the same
++ * function (`readThis`, read-this.ts). Plan
++ * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md.
++ *
++ * > Each paper should be shown on the shelf as normal, but indicate in the UI
++ * > that it hasn't been AI-processed yet.
++ * >
++ * > — Greg, 2026-10-01
++ *
++ * **One click, and never by itself.** Opening a paper does not start the
++ * import: that would spend 0.99 of an article on a click that did not say so,
++ * and a reader skimming twenty titles would spend twenty (the plan's answer 6).
++ * So the button states its cost beside it, in the words billing.md uses.
++ */
++import { useState, useSyncExternalStore } from "react";
++import { LoaderCircle } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import type { Job } from "../types.js";
++import { jobEngine } from "./jobEngine.js";
++import { QuotaNotice } from "./QuotaNotice.js";
++import { READ_THIS_COST, readThis, readThisJobFor } from "./read-this.js";
++
++/* The marker is `NotProcessedBadge` in ShelfEntry.tsx, beside `ArchivedMark`. */
++
++/** What the running import is doing, in the step's own words. */
++function runningLine(job: Job): string {
++  const step = job.steps.find((s) => s.status === "running");
++  return step ? `Reading it through: ${step.label}` : "Reading it through";
++}
++
++/**
++ * The button, its cost, and what it is doing once pressed.
++ *
++ * It reads the job engine rather than remembering the click, for
++ * JobProgress.tsx's reason: a *Read this* pressed in another tab, or on the
++ * card before the reader opened the page, is the same job. `subscribeQuietly`,
++ * because a card on the shelf must not buy the idle poll (jobEngine.ts § When
++ * it polls); a running job is polled every second anyway.
++ *
++ * `onStarted` tells the caller the job it started — the paper's page follows
++ * that job and loads the article when it is done.
++ */
++export function ReadThisButton({
++  slug,
++  onStarted,
++  size = "sm",
++}: {
++  slug: string;
++  onStarted?: (job: Job) => void;
++  size?: "sm" | "default";
++}) {
++  const snapshot = useSyncExternalStore(jobEngine.subscribeQuietly, jobEngine.getSnapshot);
++  const [pressing, setPressing] = useState(false);
++  /** Held from the POST's answer until the engine's list shows the job. */
++  const [started, setStarted] = useState<Job | null>(null);
++  const [failure, setFailure] = useState<string | null>(null);
++
++  const seen = started ? snapshot.jobs.find((j) => j.id === started.id) : undefined;
++  const running =
++    readThisJobFor(snapshot.jobs, slug) ?? (started && !seen ? started : undefined);
++  /* The job this button started, if it ended badly: its own sentence, and the
++     button again, which is the retry — the reservation went back when it failed. */
++  const ended =
++    seen?.status === "error"
++      ? (seen.error ?? "Reading it through stopped before it finished. Pressing Read this again usually works.")
++      : null;
++
++  async function press(): Promise<void> {
++    if (pressing || running) return;
++    setPressing(true);
++    setFailure(null);
++    const outcome = await readThis(slug);
++    setPressing(false);
++    if (outcome.ok) {
++      setStarted(outcome.job);
++      onStarted?.(outcome.job);
++    } else {
++      setFailure(outcome.message);
++    }
++  }
++
++  return (
++    /* `relative`, so on the shelf card it sits above the card's stretched link. */
++    <div className="tw:relative tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1">
++      {running ? (
++        <span
++          role="status"
++          className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground"
++        >
++          <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" />
++          {runningLine(running)}
++        </span>
++      ) : (
++        <>
++          <Button type="button" size={size} disabled={pressing} onClick={() => void press()}>
++            Read this
++          </Button>
++          <span className="tw:text-xs tw:text-muted-foreground">{READ_THIS_COST}</span>
++        </>
++      )}
++      <div aria-live="polite" className="tw:basis-full">
++        <QuotaNotice message={failure ?? ended} className="tw:m-0 tw:text-xs tw:text-destructive" />
++      </div>
++    </div>
++  );
++}
+diff --git a/src/web/ShelfEntry.tsx b/src/web/ShelfEntry.tsx
+index a1e295c8f..939f43f5e 100644
+--- a/src/web/ShelfEntry.tsx
++++ b/src/web/ShelfEntry.tsx
+@@ -25,6 +25,7 @@ import {
+   Archive,
+   ArchiveRestore,
+   Check,
++  CircleDashed,
+   Copy,
+   Ellipsis,
+   ExternalLink,
+@@ -122,6 +123,27 @@ export function ArchivedMark() {
+   );
+ }
+ 
++/** The marker's words — Greg's: *"indicate in the UI that it hasn't been AI-processed yet"*. */
++export const NOT_PROCESSED_MARK = "Not AI-processed yet";
++
++/**
++ * **A paper with only its title, authors and abstract read** (plan 261001m) —
++ * on the card, in the table and on the paper's own page. Drawn from here, for
++ * `SharedBadge`'s reason, in `ArchivedMark`'s shape. `data-not-processed-mark`
++ * is what a test finds.
++ */
++export function NotProcessedBadge() {
++  return (
++    <span
++      data-not-processed-mark=""
++      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5 tw:text-muted-foreground"
++    >
++      <CircleDashed size={11} aria-hidden="true" />
++      {NOT_PROCESSED_MARK}
++    </span>
++  );
++}
++
+ /* -------------------------------------------------------------- card ------ */
+ 
+ /**
+@@ -143,9 +165,18 @@ export function ShelfCard({
+   shelf,
+   note,
+   archivedShown = false,
++  readThis,
+ }: {
+   entry: LibraryEntry;
+   shelf: Shelf;
++  /**
++   * ***Read this* for a paper not read through yet**, drawn by the caller
++   * (`ReadThisButton`, ReadThis.tsx). A slot rather than an import because this
++   * file is shared with the lazy /admin and /design routes, and the button
++   * brings the job engine and the add page's mode list behind it —
++   * tests/eager-client-graph.test.ts § SHARED_WITH_READER.
++   */
++  readThis?: ReactNode;
+   /**
+    * What the meta line says — the sorted column's own account of this article.
+    * Chosen by the page from `CARD_NOTES` rather than worked out here, so the
+@@ -165,12 +196,15 @@ export function ShelfCard({
+ 
+   // Only the facts this article actually has. A filtered join beats a chain of
+   // `&&`s that can leave a stranded separator — same reasoning as Masthead.
+-  const facts = [
+-    entry.byline,
+-    entry.siteName,
+-    `~${entry.minutes} min`,
+-    `${entry.blocks} blocks`,
+-  ].filter(Boolean) as string[];
++  /* **A paper not read through yet** (plan 261001m) has no blocks, so no
++     length and no blocks to count; what it has is a title, its authors and an
++     abstract, and the one button that reads the rest. */
++  const minimal = entry.processing === "minimal";
++  const facts = (
++    minimal
++      ? [entry.byline, entry.siteName]
++      : [entry.byline, entry.siteName, `~${entry.minutes} min`, `${entry.blocks} blocks`]
++  ).filter(Boolean) as string[];
+ 
+   return (
+     <article className="tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+@@ -226,6 +260,7 @@ export function ShelfCard({
+         {/* First of the chips: it is the one that says why this card is here
+             at all when the reader's shelf, by default, would not show it. */}
+         {isArchived(entry) && <ArchivedMark />}
++        {minimal && <NotProcessedBadge />}
+         {/* Ahead of the fixture chip: of the two, this is the one that says
+             something about who else can see the article. */}
+         {entry.visibility === "public" && <SharedBadge />}
+@@ -248,6 +283,23 @@ export function ShelfCard({
+         </p>
+       )}
+ 
++      {/* The abstract behind a disclosure — it is the paper's own words, and a
++          shelf of forty open abstracts would be a wall — then *Read this*.
++          `relative` so both sit above the card's stretched link. */}
++      {minimal && (
++        <div className="tw:relative tw:mt-3 tw:flex tw:flex-col tw:gap-3">
++          {entry.abstract && (
++            <details className="tw:text-xs tw:text-muted-foreground">
++              <summary className="tw:cursor-pointer tw:select-none">Abstract</summary>
++              <p className="tw:mt-2 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
++                {entry.abstract}
++              </p>
++            </details>
++          )}
++          {readThis}
++        </div>
++      )}
++
+       {/* **Wraps, and the note keeps its `ml-auto` when it does.** The row is
+           three things of unpredictable width — a word count, a question count,
+           and a note that is whatever the current sort makes it ("opened 3 weeks
+@@ -255,10 +307,12 @@ export function ShelfCard({
+           is the one that gets squeezed. `gap-y-1` so a wrapped second line does
+           not touch the gist above it. */}
+       <p className="tw:mt-3 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+-        <span className="tw:inline-flex tw:items-center tw:gap-1.5">
+-          <FileText size={13} />
+-          {entry.words.toLocaleString()} words
+-        </span>
++        {!minimal && (
++          <span className="tw:inline-flex tw:items-center tw:gap-1.5">
++            <FileText size={13} />
++            {entry.words.toLocaleString()} words
++          </span>
++        )}
+         {entry.comments > 0 && (
+           <span
+             className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight"
+@@ -808,26 +862,31 @@ export function Actions({
+           </IconButton>
+         </ActionTip>
+ 
+-        <ActionTip
+-          id="rerun"
+-          armed={armed}
+-          onArm={setArmed}
+-          tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildUnavailable}
+-          commits={canRerun && !rerunning}
+-        >
+-          {/* **The name says what the button will do** — re-fetch, rebuild
+-              without fetching, or nothing and why. A screen reader gets no
+-              card, so the parenthesis is the only place the reason reaches
+-              it. GPT Sol, 2026-09-05; feedback 6B, 2026-09-30. */}
+-          <IconButton
+-            label={rerunLabel(hasWebUrl, canRerun, rerunning)}
+-            titled={false}
+-            onClick={() => void rerun()}
+-            disabled={!canRerun || rerunning}
++{/* **Not on a paper that has not been read through** (plan 261001m):
++            there is nothing built to rebuild, the server refuses it
++            (`[np-read]`), and *Read this* on the card is the action. */}
++        {entry.processing !== "minimal" && (
++                  <ActionTip
++            id="rerun"
++            armed={armed}
++            onArm={setArmed}
++            tip={hasWebUrl ? TIPS.rerun : canRerun ? TIPS.rebuild : TIPS.rebuildUnavailable}
++            commits={canRerun && !rerunning}
+           >
+-            <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
+-          </IconButton>
+-        </ActionTip>
++            {/* **The name says what the button will do** — re-fetch, rebuild
++                without fetching, or nothing and why. A screen reader gets no
++                card, so the parenthesis is the only place the reason reaches
++                it. GPT Sol, 2026-09-05; feedback 6B, 2026-09-30. */}
++            <IconButton
++              label={rerunLabel(hasWebUrl, canRerun, rerunning)}
++              titled={false}
++              onClick={() => void rerun()}
++              disabled={!canRerun || rerunning}
++            >
++              <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
++            </IconButton>
++          </ActionTip>
++        )}
+ 
+         <ActionTip
+           id="open"
+@@ -1120,18 +1179,21 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
+               <span>Edit title</span>
+             </DropdownMenu.Item>
+ 
+-            <DropdownMenu.Item
+-              className={ITEM}
+-              disabled={!canRerun || rerunning}
+-              onSelect={() => void rerun()}
+-            >
+-              <RefreshCw
+-                size={16}
+-                aria-hidden="true"
+-                className={`tw:shrink-0${rerunning ? " cmt-spinner" : ""}`}
+-              />
+-              <span>{rerunLabel(hasWebUrl, canRerun, rerunning)}</span>
+-            </DropdownMenu.Item>
++            {/* Not on a paper not read through yet — the row's reason. */}
++            {entry.processing !== "minimal" && (
++              <DropdownMenu.Item
++                className={ITEM}
++                disabled={!canRerun || rerunning}
++                onSelect={() => void rerun()}
++              >
++                <RefreshCw
++                  size={16}
++                  aria-hidden="true"
++                  className={`tw:shrink-0${rerunning ? " cmt-spinner" : ""}`}
++                />
++                <span>{rerunLabel(hasWebUrl, canRerun, rerunning)}</span>
++              </DropdownMenu.Item>
++            )}
+ 
+             {hasWebUrl ? (
+               <DropdownMenu.Item className={ITEM} asChild>
+diff --git a/src/web/UploadPicker.tsx b/src/web/UploadPicker.tsx
+index 9a9b9cc43..74a1eed31 100644
+--- a/src/web/UploadPicker.tsx
++++ b/src/web/UploadPicker.tsx
+@@ -51,6 +51,7 @@ import { Button } from "@/components/ui/button";
+ import { type ChosenFile, formatBytes, uploadLimits, uploadProblem } from "../uploads.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+ import { addUploadHref, navigate } from "./router.js";
++import { batchUpload } from "./batchUpload.js";
+ import { type Transfer, uploadEngine } from "./uploadEngine.js";
+ import { useUpload } from "./useUpload.js";
+ 
+@@ -168,6 +169,20 @@ export function UploadPicker({
+    */
+   function take(files: FileList | null): boolean {
+     if (!files || files.length === 0) return false;
++    /* **Two or more go to the batch**, which adds each with only its title,
++       authors and abstract read, at a hundredth of an article (batchUpload.ts,
++       plan 261001m — Greg: *"bulk upload only does the minimal step"*). It used
++       to refuse with *"One at a time, please"*. A pick of several is its own
++       commit, like a drop: there is no single file for Add to send. Ahead of
++       the busy check, because the batch has its own queue and a single
++       transfer in flight does not stand in its way. One file is unchanged. */
++    if (files.length > 1) {
++      setChosen(null);
++      setProblem(null);
++      file.current = null;
++      batchUpload.add(Array.from(files));
++      return false;
++    }
+     /* **A transfer already in flight owns this control until it is done.** It
+        used to overwrite the file and the name on screen while the *first* one
+        went on uploading underneath the second one's name and then navigated to
+@@ -179,11 +194,6 @@ export function UploadPicker({
+       setProblem("That upload is still going. Wait for it, or stop it first.");
+       return false;
+     }
+-    if (files.length > 1) {
+-      setChosen(null);
+-      setProblem("One at a time, please — drop a single file.");
+-      return false;
+-    }
+     // Named separately because `File` is a `ChosenFile` and nothing more is
+     // wanted here; the bytes stay where they are until there is somewhere to
+     // send them.
+@@ -263,6 +273,8 @@ export function UploadPicker({
+         ref={input}
+         type="file"
+         accept="application/pdf,.pdf,text/html,.html,.htm"
++        /* Several at once go to the batch — see `take`. */
++        multiple
+         className="tw:hidden"
+         onChange={(e) => {
+           take(e.target.files);
+@@ -278,7 +290,7 @@ export function UploadPicker({
+         /* The words the dashed box used to say. They were the only thing
+            advertising that dropping works at all, so they move to the title of
+            the control that replaced it rather than disappearing. */
+-        title="Choose a PDF or an HTML file — or drop one anywhere on this box"
++        title="Choose a PDF or an HTML file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
+         /* **The caps, for somebody who cannot see the caption.** The line under
+            this row states them; this is what makes a screen reader read it out
+            as part of the control rather than as a stray paragraph after it.
+@@ -473,8 +485,9 @@ export function UploadPicker({
+        * notice before 50 MB goes.
+        *
+        * `take` returning false is a refusal it has already explained (not a
+-       * PDF, too large, more than one, one already going), so there is nothing
+-       * to send and the reason is already on screen.
++       * PDF, too large, one already going), so there is nothing to send and
++       * the reason is already on screen — or several files, which it has
++       * already handed to the batch.
+        */
+       onDrop={(e) => {
+         e.preventDefault();
+diff --git a/src/web/article/ArticlePage.tsx b/src/web/article/ArticlePage.tsx
+index cf9478c63..14b7affd6 100644
+--- a/src/web/article/ArticlePage.tsx
++++ b/src/web/article/ArticlePage.tsx
+@@ -46,6 +46,7 @@ import { PublicMetadataPage } from "../PublicPages.js";
+ import { useRenderCount } from "../perf.js";
+ import { FeedbackTrigger } from "../FeedbackButton.js";
+ import { useArticleAccess } from "./access.js";
++import { UnreadPaperPage } from "./UnreadPaperPage.js";
+ 
+ /**
+  * One article, fetched **once for all of its views**.
+@@ -97,7 +98,11 @@ export function ArticlePage({
+      re-runs that file. src/web/last-view.ts has the whole of it, including why
+      a shared link always beats the memory. */
+   useLastView(slug);
+-  const access = useArticleAccess(slug, readerId);
++  /* Bumped by the not-yet-read page once *Read this* is done, to load the
++     article it made in place. */
++  const [attempt, setAttempt] = useState(0);
++  const reread = useCallback(() => setAttempt((n) => n + 1), []);
++  const access = useArticleAccess(slug, readerId, attempt);
+   const signedIn = readerId !== null;
+   const slow = useSlow(access.kind === "loading");
+ 
+@@ -150,6 +155,12 @@ export function ArticlePage({
+      its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
+   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
+ 
++  /* **Yours, and not read through yet** (plan 261001m): the paper's title,
++     authors and abstract, and *Read this*. It draws its own corner pair. Every
++     view of the article — the metadata page, the thread — lands here too,
++     because none of them has an article to draw. */
++  if (access.kind === "unread") return <UnreadPaperPage paper={access.paper} onRead={reread} />;
++
+   /* **The corner pair, on the two branches with no bar to put it in.**
+      `App` stopped drawing the corner Feedback trigger on the `read` route on
+      2026-09-06, because the pages that mount a `Dock` draw it in the bar
+diff --git a/src/web/article/UnreadPaperPage.tsx b/src/web/article/UnreadPaperPage.tsx
+new file mode 100644
+index 000000000..4c769515c
+--- /dev/null
++++ b/src/web/article/UnreadPaperPage.tsx
+@@ -0,0 +1,162 @@
++/**
++ * **A paper of yours that has not been read through yet** — what the reading
++ * address shows for a minimal paper (plan
++ * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md § The thin
++ * article). The owned route answers `409 not-processed` with the paper in the
++ * body (src/not-processed.ts); `useArticleAccess` turns that into
++ * `{ kind: "unread", paper }` and this draws it: the title, the authors, the
++ * abstract, the DOI, the file, and *Read this*.
++ *
++ * > Opening a minimal paper does **not** start the full import by itself. It
++ * > shows the paper — title, authors, abstract, the PDF — with *Read this* one
++ * > click away.
++ *
++ * — the plan's answer 6, on Greg's report `spya-eym66s`. Opening it is free; the
++ * button says what it costs.
++ *
++ * **When the job ends `done`, the article is loaded in place** (`onRead`, which
++ * asks `useArticleAccess` again). It follows *any* *Read this* job on this
++ * paper, not only one pressed here, so a paper whose import was started from
++ * the shelf card opens by itself when it is ready.
++ *
++ * No `Dock`, so the corner pair is drawn here, as on ArticlePage's other
++ * no-dock branches.
++ */
++import { useEffect, useSyncExternalStore } from "react";
++import { Check, Circle, LoaderCircle } from "lucide-react";
++import { APP_NAME, SEP, clamp } from "../../title-text.js";
++import type { Job, UnreadPaper } from "../../types.js";
++import { FeedbackTrigger } from "../FeedbackButton.js";
++import { HomeLogo } from "../HomeLogo.js";
++import { jobEngine } from "../jobEngine.js";
++import { useDocumentTitle } from "../page-title.js";
++import { ReadThisButton } from "../ReadThis.js";
++import { readThisJobFor } from "../read-this.js";
++import { NotProcessedBadge } from "../ShelfEntry.js";
++import { SourceLink } from "../SourceLink.js";
++
++/** The DOI shape the metadata step keeps (src/paper-metadata.ts); anything else is not linked. */
++const DOI_SHAPE = /^10\.\d{4,9}\/\S+$/;
++
++/** `https://doi.org/<doi>`, or null for a value that is not a DOI. */
++export function doiHref(doi: string | undefined): string | null {
++  if (!doi || !DOI_SHAPE.test(doi)) return null;
++  return `https://doi.org/${doi.split("/").map(encodeURIComponent).join("/")}`;
++}
++
++/** "A, B and C". */
++function names(authors: readonly string[]): string {
++  if (authors.length <= 1) return authors[0] ?? "";
++  return `${authors.slice(0, -1).join(", ")} and ${authors[authors.length - 1]}`;
++}
++
++export function UnreadPaperPage({
++  paper,
++  onRead,
++}: {
++  paper: UnreadPaper;
++  /** The *Read this* job is done: load the article. */
++  onRead: () => void;
++}) {
++  useDocumentTitle([clamp(paper.title), APP_NAME].join(SEP));
++  const snapshot = useSyncExternalStore(jobEngine.subscribeQuietly, jobEngine.getSnapshot);
++  const running = readThisJobFor(snapshot.jobs, paper.slug);
++  const runningId = running?.id ?? null;
++
++  /* Follow the running job to its end. `watchTerminal` hears `done` from the
++     list and from `/advance` alike, and drops itself on a sign-out. */
++  useEffect(() => {
++    if (!runningId) return;
++    return jobEngine.watchTerminal(runningId, (ended) => {
++      if (ended.kind === "done") onRead();
++    });
++  }, [runningId, onRead]);
++
++  const doi = doiHref(paper.doi);
++
++  return (
++    <>
++      <HomeLogo />
++      <FeedbackTrigger variant="corner" />
++      <main className="tw:mx-auto tw:max-w-2xl tw:px-4 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-16 tw:font-sans">
++        <p className="tw:m-0 tw:text-xs">
++          <NotProcessedBadge />
++        </p>
++        <h1 className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-2xl tw:leading-snug tw:break-words">
++          {paper.title}
++        </h1>
++        {paper.authors.length > 0 && (
++          <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-muted-foreground">{names(paper.authors)}</p>
++        )}
++
++        <p className="tw:mt-4 tw:mb-0 tw:text-sm tw:text-muted-foreground">
++          Only its title, authors and abstract have been read so far. Read this reads the whole
++          paper, so you can open it in every mode.
++        </p>
++        <div className="tw:mt-3">
++          <ReadThisButton slug={paper.slug} size="default" />
++        </div>
++        {running && <Steps job={running} />}
++
++        {paper.abstract && (
++          <section className="tw:mt-8">
++            <h2 className="tw:m-0 tw:text-sm tw:font-semibold">Abstract</h2>
++            <p className="tw:mt-2 tw:mb-0 tw:font-prose tw:text-[1.05rem] tw:leading-relaxed tw:whitespace-pre-line">
++              {paper.abstract}
++            </p>
++          </section>
++        )}
++
++        <ul className="tw:mt-8 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-1.5 tw:p-0 tw:text-sm">
++          {doi && (
++            <li className="tw:break-words">
++              DOI{" "}
++              <a href={doi} target="_blank" rel="noreferrer noopener" className="tw:text-highlight">
++                {paper.doi}
++              </a>
++            </li>
++          )}
++          {/* `GET /api/source/:slug` serves a PDF and nothing else
++              (`readPdf`, src/store/pg-source.ts) — an HTML source from our own
++              origin would be stored XSS — so a web page gets no link. */}
++          {paper.kind === "pdf" && (
++            <li>
++              <SourceLink slug={paper.slug} className="tw:cursor-pointer tw:bg-transparent tw:border-0 tw:p-0 tw:text-highlight tw:underline">
++                Open the PDF
++              </SourceLink>
++              {paper.filename && (
++                <span className="tw:ml-2 tw:break-all tw:text-muted-foreground">{paper.filename}</span>
++              )}
++            </li>
++          )}
++          {paper.kind !== "pdf" && paper.filename && (
++            <li className="tw:break-all tw:text-muted-foreground">{paper.filename}</li>
++          )}
++        </ul>
++      </main>
++    </>
++  );
++}
++
++/** The import's steps as it runs, in the server's own words — the add card's account, compact. */
++function Steps({ job }: { job: Job }) {
++  return (
++    <ol aria-label="Reading it through" className="tw:mt-4 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0 tw:text-xs">
++      {job.steps.map((step) => (
++        <li key={step.name} className="tw:flex tw:items-center tw:gap-2 tw:text-muted-foreground">
++          {step.status === "running" ? (
++            <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" />
++          ) : step.status === "done" || step.status === "skipped" ? (
++            <Check size={12} aria-hidden="true" className="tw:text-highlight" />
++          ) : (
++            <Circle size={12} aria-hidden="true" />
++          )}
++          <span className={step.status === "running" ? "tw:text-foreground" : undefined}>{step.label}</span>
++        </li>
++      ))}
++      <li className="tw:mt-1 tw:text-muted-foreground">
++        Keep a Spideryarn tab open while it reads. It opens here when it is done.
++      </li>
++    </ol>
++  );
++}
+diff --git a/src/web/article/access.ts b/src/web/article/access.ts
+index b111ebd74..3f236a3d9 100644
+--- a/src/web/article/access.ts
++++ b/src/web/article/access.ts
+@@ -13,10 +13,10 @@
+  */
+ 
+ import { useEffect, useState } from "react";
+-import type { Article, Comment, Crossref } from "../../types.js";
++import type { Article, Comment, Crossref, UnreadPaper } from "../../types.js";
+ import { sanitizeArticle } from "../sanitize.js";
+ import type { SavedSearch } from "../useSearch.js";
+-import { apiFetch, readJson } from "../lib/api.js";
++import { apiFetch, detailsOf, readJson } from "../lib/api.js";
+ import { loadPublicArticle } from "../public-api.js";
+ import { beginArticleLoad, rehostImages, type ArticleLoad } from "../rehost.js";
+ import { renderArticleMaths } from "../maths.js";
+@@ -67,6 +67,14 @@ type ArticleAccess =
+    */
+   | { kind: "reauth-required" }
+   | { kind: "owned"; article: Article }
++  /**
++   * **Yours, and not read through yet** — a paper added with only its title,
++   * authors and abstract (plan 261001m). The owned route answers 409
++   * `not-processed` with the paper in the body, and the page draws it with
++   * *Read this* (UnreadPaperPage.tsx). Never the public route: a minimal paper
++   * cannot be shared.
++   */
++  | { kind: "unread"; paper: UnreadPaper }
+   | {
+       kind: "public";
+       article: Article;
+@@ -174,7 +182,15 @@ const LOADING: ArticleAccess = { kind: "loading" };
+  * `{res, path, method}` and never the request, so it cannot read a header even
+  * by accident. docs/reusable/silent-success.md.
+  */
+-export function useArticleAccess(slug: string, readerId: string | null): ArticleAccess {
++export function useArticleAccess(
++  slug: string,
++  readerId: string | null,
++  /**
++   * Bumped to ask again with nothing else changed — the not-yet-read page does,
++   * once *Read this* has finished, so the article it made is loaded in place.
++   */
++  attempt = 0,
++): ArticleAccess {
+   /**
+    * The answer, **and both facts it is an answer about**: which article, and
+    * **which reader**.
+@@ -208,6 +224,7 @@ export function useArticleAccess(slug: string, readerId: string | null): Article
+     access: ArticleAccess;
+   } | null>(null);
+ 
++  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is the ask-again signal, deliberately unread inside.
+   useEffect(() => {
+     /* Both can change under us — the slug via back/forward or a pasted link,
+        the reader by signing in or out in another tab. Guard the response so a
+@@ -253,7 +270,8 @@ export function useArticleAccess(slug: string, readerId: string | null): Article
+          a load fetching and its blobs allocated for the rest of the session. */
+       load.release();
+     };
+-  }, [slug, readerId]);
++    /* `attempt` is read only as a dependency: a new value is a new load. */
++  }, [slug, readerId, attempt]);
+ 
+   /**
+    * **Both, and synchronously.**
+@@ -316,7 +334,7 @@ export async function resolveAccess(
+   load: ArticleLoad,
+ ): Promise<ResolvedAccess> {
+   const found = await findArticle(slug, signedIn, load.signal);
+-  if (found.kind === "not-shared" || found.kind === "reauth-required") {
++  if (found.kind === "not-shared" || found.kind === "reauth-required" || found.kind === "unread") {
+     return { access: found, withImages: NO_SECOND_ANSWER };
+   }
+   /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
+@@ -444,6 +462,7 @@ async function findArticle(
+   | { kind: "not-shared" }
+   | { kind: "reauth-required" }
+   | { kind: "owned"; article: Article }
++  | { kind: "unread"; paper: UnreadPaper }
+   | { kind: "public"; article: PublicArticle; sessionUnconfirmed: boolean }
+ > {
+   /**
+@@ -462,7 +481,11 @@ async function findArticle(
+        quietly retried against the public route and rendered as somebody else's
+        shared document. */
+     if (res.status === 401) sessionUnconfirmed = true;
+-    else if (res.status !== 404) {
++    else if (res.status === 409) {
++      /* **Yours, not read through yet**, or some other 409 — which goes on to
++         the error page with its own sentence, as before. */
++      return { kind: "unread", paper: await unreadPaperFrom(res) };
++    } else if (res.status !== 404) {
+       return { kind: "owned", article: await readJson<Article>(res) };
+     }
+   }
+@@ -488,4 +511,34 @@ async function findArticle(
+   if (read.kind === "not-shared")
+     return sessionUnconfirmed ? { kind: "reauth-required" } : { kind: "not-shared" };
+   return { kind: "public", article: read.body, sessionUnconfirmed };
+-}
+\ No newline at end of file
++}
++
++/**
++ * The paper a `409 not-processed` carries, or the refusal itself rethrown.
++ *
++ * Checked for shape rather than cast: it is our own server's body, but a
++ * different 409 on this route must reach the reader as its own sentence, not
++ * as a page drawn from `undefined`.
++ */
++async function unreadPaperFrom(res: Response): Promise<UnreadPaper> {
++  try {
++    await readJson<unknown>(res);
++  } catch (err) {
++    const details = detailsOf(err);
++    if (details.code === "not-processed" && isUnreadPaper(details.paper)) return details.paper;
++    throw err;
++  }
++  throw new Error("The article route answered 409 with no refusal in it.");
++}
++
++function isUnreadPaper(value: unknown): value is UnreadPaper {
++  const p = value as Partial<UnreadPaper> | null;
++  return (
++    typeof p === "object" &&
++    p !== null &&
++    typeof p.slug === "string" &&
++    typeof p.title === "string" &&
++    Array.isArray(p.authors) &&
++    p.authors.every((a) => typeof a === "string")
++  );
++}
+diff --git a/src/web/batchUpload.ts b/src/web/batchUpload.ts
+new file mode 100644
+index 000000000..decfc3841
+--- /dev/null
++++ b/src/web/batchUpload.ts
+@@ -0,0 +1,619 @@
++/**
++ * **Many files at once, each added with only its title, authors and abstract
++ * read** — the browser half of a bulk import. Plan
++ * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md § The batch,
++ * in the browser; the story is in docs/project/ingest-queue.md § Many at once.
++ *
++ * > if you upload multiple PDFs at the same time, ideally it would be possible
++ * > to do that. … by default, maybe it wouldn't run AI processing when you do
++ * > that, only when you open each of them for the first time.
++ * >
++ * > — Greg, 2026-10-01 (report `spya-eym66s`)
++ *
++ * For each file: hash it once, ask for a minimal grant, PUT the bytes, queue
++ * the minimal job, and **hold the slot until that job has ended**, however it
++ * ends. Three files at most are in that state at once — backpressure, not a
++ * defence (the allowance is the defence).
++ *
++ * ## A module singleton, like `uploadEngine`
++ *
++ * For `uploadEngine`'s reason: the reader goes off and does something else,
++ * which unmounts the shelf, and whatever is holding the queue must not unmount
++ * with it. It is bound to a reader through `start` / `stop` in `useJobSession`
++ * (useJobs.ts), and every reply is fenced by the session and by the row's own
++ * attempt, so a sign-out mid-batch cannot post the next file as whoever signs
++ * in next. `createBatchUpload(deps)` is what the tests drive, with no network.
++ *
++ * ## Memory
++ *
++ * One hashing worker. A file's `arrayBuffer()` is read only when the file
++ * reaches the front of the hashing line, the digest is kept, and the buffer
++ * goes — so a drop of a thousand PDFs is never in memory together. The PUT
++ * sends the `File` itself, which the browser streams. GPT Sol, plan review P2-7.
++ *
++ * ## What Stop means
++ *
++ * The single upload's Stop, applied to every file that has not yet been
++ * queued: one waiting stops, one being hashed or sent is aborted and its grant
++ * given back (`DELETE /api/uploads/:id`). **A file whose job is already
++ * running is left to finish**, for the reason `uploadEngine.cancel` refuses
++ * during `queueing`: by then the reservation is made and the work is seconds
++ * long, and saying *stopped* about a paper that then lands on the shelf is the
++ * worst state available.
++ */
++import { uploadProblem } from "../uploads.js";
++import type { Job } from "../types.js";
++import { jobEngine, send, type TerminalOutcome } from "./jobEngine.js";
++import { apiFetch, detailsOf, statusOf } from "./lib/api.js";
++import { describeFetchFailure } from "./lib/describe-failure.js";
++import { type Grant, type UploadProgress, putFile, requestGrant, sha256Hex } from "./upload.js";
++
++/** How many files are in flight at once. In flight lasts until the job has ended. */
++export const BATCH_CONCURRENCY = 3;
++
++/** The most files one drop takes. The panel's sake; the allowance is the defence. */
++export const BATCH_MAX_FILES = 1000;
++
++/** What a retry of a failed row starts again from. */
++export type RetryFrom =
++  /** Nothing reached the server that can be reused: hash, grant and send again. */
++  | { from: "start" }
++  /** The bytes are in Storage; only `POST /api/jobs` failed. */
++  | { from: "queue"; uploadId: string }
++  /** The job ran and failed: `POST /api/jobs/:id/retry`. */
++  | { from: "job"; jobId: string };
++
++/**
++ * Where one file has got to. A union, for `TransferPhase`'s reason in
++ * uploadEngine.ts: the states differ in what they carry and in what a retry
++ * means.
++ */
++export type BatchState =
++  /** Not started: waiting for one of the three slots. */
++  | { kind: "waiting" }
++  /** Its bytes are being read to take the digest. */
++  | { kind: "hashing" }
++  /** The grant is asked for, or the PUT is going. */
++  | { kind: "sending"; sent: number }
++  /** Queued, and its job is running — `jobId` is null while the POST is out. */
++  | { kind: "reading"; jobId: string | null }
++  /** On the shelf. */
++  | { kind: "shelved"; slug: string }
++  /** Already on the shelf (or archived, or on its way from another upload). The server's sentence. */
++  | { kind: "duplicate"; slug: string | null; message: string }
++  /** The same bytes as a file earlier in this drop. */
++  | { kind: "same-file"; as: string }
++  /** Not a file an upload takes — the same check a single upload makes. */
++  | { kind: "refused"; message: string }
++  /** Not started, or not queued, because the allowance has no room. The server's `[pay-…]` sentence. */
++  | { kind: "no-room"; message: string }
++  /** It failed, with the sentence, and where Retry starts from. */
++  | { kind: "failed"; message: string; retry: RetryFrom }
++  /** Its job left the list before this tab saw how it ended. */
++  | { kind: "lost" }
++  /** Stop was pressed before it was queued, or its job was cancelled. */
++  | { kind: "stopped" };
++
++export interface BatchRow {
++  readonly id: number;
++  readonly filename: string;
++  readonly bytes: number;
++  readonly state: BatchState;
++}
++
++export interface BatchSnapshot {
++  readonly rows: readonly BatchRow[];
++  /** Files beyond `BATCH_MAX_FILES` in the last drop, which were not taken. */
++  readonly overflow: number;
++}
++
++const EMPTY: BatchSnapshot = { rows: [], overflow: 0 };
++
++/** What `POST /api/jobs { uploadId }` answers when the file is already that article. */
++interface AlreadyAnArticle {
++  article: string;
++}
++
++export interface BatchUploadDeps {
++  /** SHA-256 of the file as hex. Called by one worker, one file at a time. */
++  hash(file: File): Promise<string>;
++  requestGrant(
++    file: File,
++    signal: AbortSignal,
++    claim: { sha256: string; level: "minimal" },
++  ): Promise<Grant>;
++  putFile(
++    grant: Grant,
++    file: File,
++    options: { onProgress?: (p: UploadProgress) => void; signal?: AbortSignal },
++  ): Promise<void>;
++  /** `POST /api/jobs { uploadId, level: "minimal" }`. */
++  queue(uploadId: string): Promise<Job | AlreadyAnArticle>;
++  /** `POST /api/jobs/:id/retry` — the replacement job. */
++  retryJob(jobId: string): Promise<Job>;
++  /** `DELETE /api/uploads/:id`. Fire and forget. */
++  cancelUpload(uploadId: string): Promise<void>;
++  /** The job engine's action seam and its terminal seam. */
++  jobs: {
++    epoch(): number;
++    actionSucceeded(epoch: number): void;
++    actionFailed(message: string, status: number | null, epoch: number): void;
++    watchTerminal(jobId: string, onEnd: (outcome: TerminalOutcome) => void): () => void;
++  };
++  /** Registered while files are in flight. Returns the way to undo it. */
++  guardUnload(): () => void;
++}
++
++export interface BatchUpload {
++  /** Bind to a reader. Idempotent for the same key; a different one tears down first. */
++  start(readerId: string): void;
++  /** Sign-out: fence everything, abort every transfer, and forget the batch. */
++  stop(): void;
++  subscribe(onChange: () => void): () => void;
++  getSnapshot(): BatchSnapshot;
++  /** Take these files. Beyond `BATCH_MAX_FILES` they are counted, not taken. */
++  add(files: readonly File[]): void;
++  /** The Stop button — see the header. */
++  cancel(): void;
++  /** Another go at a failed row, from where it failed. */
++  retry(rowId: number): void;
++  /** Clear a batch that has nothing left in flight. */
++  dismiss(): void;
++  /** Back to a fresh engine. For tests of the singleton. */
++  reset(): void;
++}
++
++/** Whether a row still holds a slot or is waiting for one. */
++export function rowIsLive(state: BatchState): boolean {
++  return (
++    state.kind === "waiting" ||
++    state.kind === "hashing" ||
++    state.kind === "sending" ||
++    state.kind === "reading"
++  );
++}
++
++/** What the engine keeps about a row that nothing renders. */
++interface Inner {
++  file: File;
++  sha: string | null;
++  uploadId: string | null;
++  controller: AbortController | null;
++  /** Bumped by Stop and by Retry; a reply from an older attempt writes nothing. */
++  attempt: number;
++  unwatch: (() => void) | null;
++}
++
++export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
++  let snapshot: BatchSnapshot = EMPTY;
++  const subscribers = new Set<() => void>();
++  let readerId: string | null = null;
++  /** The session fence. Bumped by `stop` and `reset`. */
++  let fence = 0;
++  let nextId = 1;
++  const inner = new Map<number, Inner>();
++  /** Rows holding one of the slots, from hashing until their job has ended. */
++  const active = new Set<number>();
++  /** Which row first had these bytes, in this batch. */
++  const seen = new Map<string, number>();
++  /** The allowance said no: start nothing more from this drop. */
++  let outOfRoom: string | null = null;
++  let hashTail: Promise<unknown> = Promise.resolve();
++  let releaseGuard: (() => void) | null = null;
++
++  const notify = (): void => {
++    for (const s of subscribers) s();
++  };
++
++  const setRow = (id: number, state: BatchState): void => {
++    snapshot = {
++      ...snapshot,
++      rows: snapshot.rows.map((r) => (r.id === id ? { ...r, state } : r)),
++    };
++    notify();
++  };
++
++  const stateOf = (id: number): BatchState | undefined =>
++    snapshot.rows.find((r) => r.id === id)?.state;
++
++  const guard = (): void => {
++    const on = active.size > 0;
++    if (on && !releaseGuard) releaseGuard = deps.guardUnload();
++    if (!on && releaseGuard) {
++      releaseGuard();
++      releaseGuard = null;
++    }
++  };
++
++  /** One worker: each file's bytes are read only when it is this file's turn. */
++  const hashInTurn = (file: File): Promise<string> => {
++    const turn = hashTail.then(() => deps.hash(file));
++    hashTail = turn.catch(() => undefined);
++    return turn;
++  };
++
++  /** Mark everything not yet started as out of room, with the server's sentence. */
++  const noRoomForTheRest = (message: string): void => {
++    outOfRoom = message;
++    snapshot = {
++      ...snapshot,
++      rows: snapshot.rows.map((r) =>
++        r.state.kind === "waiting" ? { ...r, state: { kind: "no-room", message } } : r,
++      ),
++    };
++    notify();
++  };
++
++  /**
++   * A refusal from one of our routes, sorted into the three answers that are
++   * not *failed*: the allowance (402), and a duplicate (409 `code:
++   * "duplicate"`, with the slug it already is when there is one).
++   */
++  const refused = (id: number, err: unknown, retry: RetryFrom): void => {
++    const message = describeFetchFailure(err instanceof Error ? err : new Error(String(err)));
++    const status = statusOf(err);
++    if (status === 402) {
++      setRow(id, { kind: "no-room", message });
++      noRoomForTheRest(message);
++      return;
++    }
++    const details = detailsOf(err);
++    if (status === 409 && details.code === "duplicate") {
++      const slug = typeof details.article === "string" ? details.article : null;
++      setRow(id, { kind: "duplicate", slug, message });
++      return;
++    }
++    setRow(id, { kind: "failed", message, retry });
++  };
++
++  /** Start rows while there is a slot and something waiting. */
++  const pump = (): void => {
++    if (readerId === null) return;
++    for (const row of snapshot.rows) {
++      if (active.size >= BATCH_CONCURRENCY) break;
++      if (row.state.kind !== "waiting" || active.has(row.id)) continue;
++      void run(row.id, { from: "start" });
++    }
++    guard();
++  };
++
++  /** Wait for the job to end, and say how it ended on the row. */
++  const follow = (
++    id: number,
++    it: Inner,
++    job: Job,
++    epoch: number,
++    live: () => boolean,
++  ): Promise<void> =>
++    new Promise<void>((resolve) => {
++      setRow(id, { kind: "reading", jobId: job.id });
++      /* Watched **before** the engine is poked, so the list that poke asks for
++         is one that began after the watcher — the only kind allowed to say the
++         job has vanished. */
++      it.unwatch = deps.jobs.watchTerminal(job.id, (ended) => {
++        it.unwatch = null;
++        if (live()) {
++          switch (ended.kind) {
++            case "done":
++              setRow(id, { kind: "shelved", slug: ended.job.slug });
++              break;
++            case "error":
++              setRow(id, {
++                kind: "failed",
++                message: ended.job.error ?? COULD_NOT_READ,
++                retry: { from: "job", jobId: ended.job.id },
++              });
++              break;
++            case "cancelled":
++              setRow(id, { kind: "stopped" });
++              break;
++            case "vanished":
++              setRow(id, { kind: "lost" });
++              break;
++            default: {
++              const unreachable: never = ended;
++              throw new Error(`Unknown ending: ${String(unreachable)}`);
++            }
++          }
++        }
++        resolve();
++      });
++      deps.jobs.actionSucceeded(epoch);
++    });
++
++  /**
++   * Hash, grant and PUT: the part of a row before its job. The upload id once
++   * the bytes are in Storage, or null when the row has already been given its
++   * ending (a duplicate, the allowance, a failure, a Stop).
++   */
++  const sendIt = async (id: number, it: Inner, live: () => boolean): Promise<string | null> => {
++    if (it.sha === null) {
++      setRow(id, { kind: "hashing" });
++      let sha: string;
++      try {
++        sha = await hashInTurn(it.file);
++      } catch {
++        if (live()) {
++          setRow(id, { kind: "failed", message: COULD_NOT_READ_FILE, retry: { from: "start" } });
++        }
++        return null;
++      }
++      if (!live()) return null;
++      it.sha = sha;
++    }
++    const first = seen.get(it.sha);
++    if (first !== undefined && first !== id) {
++      const of = snapshot.rows.find((r) => r.id === first);
++      setRow(id, { kind: "same-file", as: of?.filename ?? "another file" });
++      return null;
++    }
++    seen.set(it.sha, id);
++    /* The allowance said no while this one was being hashed. */
++    if (outOfRoom !== null) {
++      setRow(id, { kind: "no-room", message: outOfRoom });
++      return null;
++    }
++
++    const controller = new AbortController();
++    it.controller = controller;
++    setRow(id, { kind: "sending", sent: 0 });
++    let grant: Grant;
++    try {
++      grant = await deps.requestGrant(it.file, controller.signal, {
++        sha256: it.sha,
++        level: "minimal",
++      });
++    } catch (err) {
++      if (live()) refused(id, err, { from: "start" });
++      return null;
++    }
++    if (!live()) {
++      /* Stopped while the grant was out: give it straight back. */
++      void deps.cancelUpload(grant.uploadId).catch(() => {});
++      return null;
++    }
++    it.uploadId = grant.uploadId;
++    try {
++      await deps.putFile(grant, it.file, {
++        onProgress: (p) => {
++          if (live()) setRow(id, { kind: "sending", sent: p.sent });
++        },
++        signal: controller.signal,
++      });
++    } catch (err) {
++      if (!live()) return null;
++      if ((err as Error).name === "AbortError") {
++        setRow(id, { kind: "stopped" });
++        return null;
++      }
++      /* A 409 from Storage means the bytes are already at our key — see
++         `sendBytes` in uploadEngine.ts. Anything else is a failure. */
++      if (statusOf(err) !== 409) {
++        setRow(id, { kind: "failed", message: (err as Error).message, retry: { from: "start" } });
++        return null;
++      }
++    }
++    if (!live()) return null;
++    it.controller = null;
++    return grant.uploadId;
++  };
++
++  const run = async (id: number, from: RetryFrom): Promise<void> => {
++    const it = inner.get(id);
++    if (!it) return;
++    it.attempt += 1;
++    const attempt = it.attempt;
++    const session = fence;
++    const live = () => session === fence && it.attempt === attempt;
++    active.add(id);
++    guard();
++
++    try {
++      let step: RetryFrom = from;
++
++      if (step.from === "start") {
++        const uploadId = await sendIt(id, it, live);
++        if (uploadId === null) return;
++        step = { from: "queue", uploadId };
++      }
++
++      setRow(id, { kind: "reading", jobId: null });
++      const epoch = deps.jobs.epoch();
++      let job: Job;
++      try {
++        if (step.from === "queue") {
++          const outcome = await deps.queue(step.uploadId);
++          if (!live()) return;
++          if ("article" in outcome) {
++            deps.jobs.actionSucceeded(epoch);
++            setRow(id, { kind: "shelved", slug: outcome.article });
++            return;
++          }
++          job = outcome;
++        } else {
++          job = await deps.retryJob(step.jobId);
++          if (!live()) return;
++        }
++      } catch (err) {
++        if (!live()) return;
++        const message = describeFetchFailure(err instanceof Error ? err : new Error(String(err)));
++        deps.jobs.actionFailed(message, statusOf(err), epoch);
++        refused(id, err, step);
++        return;
++      }
++      await follow(id, it, job, epoch, live);
++    } finally {
++      /* Only the attempt that is still current gives the slot back: a Stop has
++         already taken it, and a Retry holds it now. */
++      if (live()) {
++        active.delete(id);
++        it.controller = null;
++        /* The bytes are not wanted once the row is done with; the digest stays. */
++        pump();
++      }
++    }
++  };
++
++  const clear = (): void => {
++    fence += 1;
++    for (const it of inner.values()) {
++      it.controller?.abort();
++      it.unwatch?.();
++    }
++    inner.clear();
++    active.clear();
++    seen.clear();
++    outOfRoom = null;
++    hashTail = Promise.resolve();
++    if (releaseGuard) {
++      releaseGuard();
++      releaseGuard = null;
++    }
++    snapshot = EMPTY;
++  };
++
++  return {
++    start(key) {
++      if (readerId === key) return;
++      clear();
++      readerId = key;
++      notify();
++    },
++
++    stop() {
++      clear();
++      readerId = null;
++      notify();
++    },
++
++    subscribe(onChange) {
++      subscribers.add(onChange);
++      return () => {
++        subscribers.delete(onChange);
++      };
++    },
++
++    getSnapshot: () => snapshot,
++
++    add(files) {
++      if (readerId === null || files.length === 0) return;
++      /* A new drop is a new question for the allowance: the reader may have
++         made room since the last one said no. */
++      outOfRoom = null;
++      const taken = files.slice(0, BATCH_MAX_FILES);
++      const rows: BatchRow[] = taken.map((file) => {
++        const id = nextId++;
++        const wrong = uploadProblem({ name: file.name, type: file.type, size: file.size });
++        if (!wrong) {
++          inner.set(id, {
++            file,
++            sha: null,
++            uploadId: null,
++            controller: null,
++            attempt: 0,
++            unwatch: null,
++          });
++        }
++        return {
++          id,
++          filename: file.name,
++          bytes: file.size,
++          state: wrong ? { kind: "refused", message: wrong } : { kind: "waiting" },
++        };
++      });
++      snapshot = {
++        rows: [...snapshot.rows, ...rows],
++        overflow: Math.max(0, files.length - BATCH_MAX_FILES),
++      };
++      notify();
++      pump();
++    },
++
++    cancel() {
++      let changed = false;
++      const rows = snapshot.rows.map((r) => {
++        const s = r.state.kind;
++        if (s !== "waiting" && s !== "hashing" && s !== "sending") return r;
++        const it = inner.get(r.id);
++        if (it) {
++          it.attempt += 1;
++          it.controller?.abort();
++          it.controller = null;
++          if (it.uploadId) void deps.cancelUpload(it.uploadId).catch(() => {});
++        }
++        active.delete(r.id);
++        changed = true;
++        return { ...r, state: { kind: "stopped" } as BatchState };
++      });
++      if (!changed) return;
++      snapshot = { ...snapshot, rows };
++      notify();
++      guard();
++    },
++
++    retry(rowId) {
++      const state = stateOf(rowId);
++      if (state?.kind !== "failed" || !inner.has(rowId)) return;
++      /* Ahead of the waiting rows: the reader asked for this one by name. */
++      void run(rowId, state.retry);
++    },
++
++    dismiss() {
++      if (snapshot.rows.some((r) => rowIsLive(r.state))) return;
++      for (const it of inner.values()) it.unwatch?.();
++      inner.clear();
++      seen.clear();
++      outOfRoom = null;
++      snapshot = EMPTY;
++      notify();
++    },
++
++    reset() {
++      clear();
++      readerId = null;
++      subscribers.clear();
++    },
++  };
++}
++
++/** A job that failed with no sentence of its own. Should not happen; said plainly if it does. */
++const COULD_NOT_READ = "This file could not be read. Trying again sometimes works.";
++
++/** The browser could not read the file off the disk to take its digest. */
++const COULD_NOT_READ_FILE =
++  "This browser could not read that file off your disk. Choosing it again usually works.";
++
++const post = <T>(url: string, body: unknown) =>
++  send<T>(url, {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify(body),
++  });
++
++/** The live one. */
++export const batchUpload: BatchUpload = createBatchUpload({
++  /* Arrows rather than the functions themselves, so this module can be
++     imported where upload.ts is mocked without the mock naming all three. */
++  hash: (file) => sha256Hex(file),
++  requestGrant: (file, signal, claim) => requestGrant(file, signal, claim),
++  putFile: (grant, file, options) => putFile(grant, file, options),
++  queue: (uploadId) => post<Job | AlreadyAnArticle>("/api/jobs", { uploadId, level: "minimal" }),
++  retryJob: (jobId) => send<Job>(`/api/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" }),
++  cancelUpload: async (uploadId) => {
++    await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
++  },
++  jobs: {
++    epoch: () => jobEngine.epoch(),
++    actionSucceeded: (epoch) => jobEngine.actionSucceeded(epoch),
++    actionFailed: (message, status, epoch) => jobEngine.actionFailed(message, status, epoch),
++    watchTerminal: (jobId, onEnd) => jobEngine.watchTerminal(jobId, onEnd),
++  },
++  guardUnload() {
++    const warn = (e: BeforeUnloadEvent): void => {
++      e.preventDefault();
++      e.returnValue = "";
++    };
++    window.addEventListener("beforeunload", warn);
++    return () => window.removeEventListener("beforeunload", warn);
++  },
++});
+diff --git a/src/web/jobEngine.ts b/src/web/jobEngine.ts
+index b89bd19a6..2e9167909 100644
+--- a/src/web/jobEngine.ts
++++ b/src/web/jobEngine.ts
+@@ -169,6 +169,40 @@ export interface JobsSnapshot {
+   authFailed: boolean;
+ }
+ 
++/**
++ * **How a watched job ended**, as `watchTerminal` reports it.
++ *
++ * `vanished` is the one that is not a status: the job was registered, and a
++ * list that *began after the registration* left it out — retention took it, or
++ * it was forgotten in another tab. It is never inferred from a list that was
++ * already in flight when the watcher arrived, because that list was asked
++ * before the watcher existed and its silence says nothing.
++ */
++export type TerminalOutcome =
++  | { kind: "done"; job: Job }
++  | { kind: "error"; job: Job }
++  | { kind: "cancelled"; job: Job }
++  | { kind: "vanished" };
++
++/** The outcome a job's status means, or null while it is still going. */
++function terminalOf(job: Job): TerminalOutcome | null {
++  switch (job.status) {
++    case "done":
++      return { kind: "done", job };
++    case "error":
++      return { kind: "error", job };
++    case "cancelled":
++      return { kind: "cancelled", job };
++    case "queued":
++    case "running":
++      return null;
++    default: {
++      const unreachable: never = job.status;
++      throw new Error(`Unknown job status: ${String(unreachable)}`);
++    }
++  }
++}
++
+ /** What the engine needs from the world. Injected so a test can be a pure function. */
+ export interface JobEngineDeps {
+   /** `GET /api/jobs` — every job this reader can see. */
+@@ -299,6 +333,31 @@ export interface JobEngine {
+    * it. See `tests/job-engine-completions.test.tsx`.
+    */
+   receive(jobs: Job[]): void;
++  /**
++   * **Tell me once when this job ends, however it ends.** Returns the way to
++   * stop listening.
++   *
++   * Fed by both of the engine's accounts of a job: every list reconciliation
++   * and every `/advance` response. The second matters because the drive loop
++   * keeps going while the tab is hidden and the poll does not, so a job this
++   * tab drives to its end behind a hidden tab is heard the moment it ends
++   * rather than when somebody looks. And it hears every ending, not only
++   * `done` — `error`, `cancelled`, and `vanished` (see `TerminalOutcome`) — so
++   * a caller that holds a slot until the job ends, which is what the batch
++   * upload does, is never left holding it for a job that failed.
++   *
++   * **Session-fenced like everything else here.** A teardown (sign-out, a
++   * different reader) drops every watcher without calling it: whoever
++   * registered them belongs to the same session and is fenced by it too.
++   *
++   * A pending watcher keeps the busy cadence armed, so a job absent from the
++   * list that came back is asked about again rather than waited on for ever. A
++   * job already terminal in the current snapshot is reported on the next
++   * microtask, never synchronously inside this call.
++   *
++   * Plan 261001m § What Sol's plan review changed, item 4.
++   */
++  watchTerminal(jobId: string, onEnd: (outcome: TerminalOutcome) => void): () => void;
+   /** Back to the state a fresh engine is in. For tests of the singleton. */
+   reset(): void;
+ }
+@@ -386,6 +445,44 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+    */
+   const autoAttempts = new Set<string>();
+ 
++  /**
++   * **Every list request is numbered when it starts**, so a watcher can tell a
++   * list asked after it arrived from one that was already on the wire. Only the
++   * first kind may say a job has vanished. Never reset, like `generation`.
++   */
++  let listsStarted = 0;
++  /** `watchTerminal`'s registrations: whose job, the callback, and the list number it arrived at. */
++  const watchers = new Map<
++    symbol,
++    { id: string; onEnd: (outcome: TerminalOutcome) => void; since: number }
++  >();
++
++  /** Report an ending to everyone watching that job, once each, and forget them. */
++  const endWatchers = (id: string, outcome: TerminalOutcome): void => {
++    for (const [key, w] of [...watchers]) {
++      if (w.id !== id) continue;
++      watchers.delete(key);
++      w.onEnd(outcome);
++    }
++  };
++
++  /** What one list says to the watchers. `startedAt` is the list's own number. */
++  const tellWatchers = (jobs: Job[], startedAt: number): void => {
++    if (watchers.size === 0) return;
++    const byId = new Map(jobs.map((j) => [j.id, j]));
++    for (const [key, w] of [...watchers]) {
++      if (!watchers.has(key)) continue;
++      const job = byId.get(w.id);
++      if (job) {
++        const outcome = terminalOf(job);
++        if (outcome) endWatchers(w.id, outcome);
++        continue;
++      }
++      /* Absent from a list that was asked after the watcher arrived. */
++      if (startedAt > w.since) endWatchers(w.id, { kind: "vanished" });
++    }
++  };
++
+   /* A bound session, and nothing else. See the header: a mounted subscriber
+      picks the cadence, it does not grant permission to ask. With no session the
+      engine is asleep — no timer, no listener, and no drive loop. */
+@@ -448,7 +545,14 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+        have cost every owner the moment it stopped being route-scoped. A quiet
+        subscriber is not watching in this sense; the busy cadence above needs
+        nobody at all, and neither does an action still owed its poll. */
+-    if (!isBusy(snapshot.jobs) && subscribers.size === 0 && !reconciliationOwed()) return;
++    if (
++      !isBusy(snapshot.jobs) &&
++      subscribers.size === 0 &&
++      !reconciliationOwed() &&
++      watchers.size === 0
++    ) {
++      return;
++    }
+     timer = setTimeout(() => {
+       timer = undefined;
+       void poll();
+@@ -511,13 +615,16 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+     return failures;
+   };
+ 
+-  const apply = (jobs: Job[]) => {
++  /* `startedAt` is the number of the list request this answers; `receive`, a
++     test's input with no request behind it, counts as one asked now. */
++  const apply = (jobs: Job[], startedAt: number = ++listsStarted) => {
+     const first = !seeded;
+     seeded = true;
+ 
+     const kept = sameJobs(snapshot.jobs, jobs) ? snapshot.jobs : jobs;
+     recordCompletions(jobs, first);
+     set({ jobs: kept, loaded: true, error: null, driverFailures: pruneDriverFailures(jobs) });
++    tellWatchers(jobs, startedAt);
+ 
+     /* **Including on the first list**, unlike the completions above. A job left
+        unfinished by a closed tab or a restarted server is exactly what a fresh
+@@ -552,16 +659,18 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+     }
+     const mine = generation;
+     const requestedAtStart = reconciliationRequested;
++    listsStarted += 1;
++    const startedAt = listsStarted;
+     inFlight = true;
+     try {
+       const jobs = await deps.listJobs();
+       if (pollWasOvertaken(mine)) return;
+-      apply(jobs);
++      apply(jobs, startedAt);
+       /* A 200 whose body cannot be applied did not reconcile anything. Mark it
+          paid only after `apply`, so its throw reaches the retry path while the
+          obligation is still live. */
+       reconciliationCompleted = Math.max(reconciliationCompleted, requestedAtStart);
+-      schedule(isBusy(jobs) ? BUSY_MS : IDLE_MS);
++      schedule(isBusy(jobs) || watchers.size > 0 ? BUSY_MS : IDLE_MS);
+     } catch (err) {
+       if (pollWasOvertaken(mine)) return;
+       if (statusOf(err) === 401) {
+@@ -651,6 +760,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+     try {
+       const advanced = await deps.advance(id);
+       if (mine !== generation) return null;
++      /* The server's own account of the job it has just worked on — the one
++         that still arrives while the tab is hidden and the poll is not. */
++      const ended = terminalOf(advanced.job);
++      if (ended) endWatchers(id, ended);
+       if (snapshot.driverFailures[id]) {
+         const { [id]: _ok, ...rest } = snapshot.driverFailures;
+         set({ driverFailures: rest });
+@@ -708,6 +821,9 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+        a different shelf, and one of these pairs may name an article they have
+        never seen. See `beginAutoAttempt`. */
+     autoAttempts.clear();
++    /* Dropped without a word: whoever registered them belongs to the session
++       that is ending, and is fenced by it too. */
++    watchers.clear();
+     /* The *sequence* stays where it is, so a cursor a subscriber captured under
+        the old session can never be met by a new session's event. Only the
+        events themselves go. */
+@@ -828,7 +944,28 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
+       autoAttempts.add(key);
+       return true;
+     },
+-    receive: apply,
++    receive: (jobs) => apply(jobs),
++    watchTerminal(jobId, onEnd) {
++      const key = Symbol(jobId);
++      const mine = generation;
++      watchers.set(key, { id: jobId, onEnd, since: listsStarted });
++      const known = snapshot.jobs.find((j) => j.id === jobId);
++      const already = known ? terminalOf(known) : null;
++      if (already) {
++        queueMicrotask(() => {
++          if (mine !== generation || !watchers.has(key)) return;
++          watchers.delete(key);
++          onEnd(already);
++        });
++      } else if (timer === undefined && !inFlight) {
++        /* Something has to go on asking — see the note on the interface.
++           `schedule` declines while hidden, paused or asleep, as it should. */
++        schedule(BUSY_MS);
++      }
++      return () => {
++        watchers.delete(key);
++      };
++    },
+     reset() {
+       started = false;
+       sessionKey = null;
+diff --git a/src/web/library-columns.tsx b/src/web/library-columns.tsx
+index a28a74d85..dc17e40ce 100644
+--- a/src/web/library-columns.tsx
++++ b/src/web/library-columns.tsx
+@@ -38,7 +38,7 @@ import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
+ import { Link } from "./Link.js";
+ import { exactly, timeAgo } from "./relative-time.js";
+ import { readHref } from "./router.js";
+-import { Actions, ArchivedMark, SharedBadge } from "./ShelfEntry.js";
++import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
+ import type { Shelf } from "./ShelfEntry.js";
+ import { TitleEditor } from "./TitleEditor.js";
+ import { Tooltip } from "./Tooltip.js";
+@@ -243,7 +243,9 @@ export function libraryColumns(
+     {
+       id: "length",
+       header: "Words",
+-      accessorFn: (e) => e.words,
++      /* None to count on a paper not read through yet: missing, so it sorts
++         last whichever way the arrow points, rather than as the shortest. */
++      accessorFn: (e) => (e.processing === "minimal" ? undefined : e.words),
+       sortDescFirst: true,
+       sortingFn: numberOrMissing<LibraryEntry>(),
+       meta: {
+@@ -252,7 +254,15 @@ export function libraryColumns(
+         ends: ["shortest first", "longest first"],
+         numeric: true,
+       },
+-      cell: ({ row }) => <Count value={row.original.words} />,
++      cell: ({ row }) =>
++        row.original.processing === "minimal" ? (
++          <span className="tw:opacity-40">
++            <span aria-hidden="true">—</span>
++            <span className="tw:sr-only">not read through yet</span>
++          </span>
++        ) : (
++          <Count value={row.original.words} />
++        ),
+     },
+     {
+       id: "actions",
+@@ -377,6 +387,12 @@ function TitleCell({
+               <ArchivedMark />{" "}
+             </>
+           )}
++          {/* A paper with only its title and abstract read (plan 261001m). */}
++          {entry.processing === "minimal" && (
++            <>
++              <NotProcessedBadge />{" "}
++            </>
++          )}
+           {entry.visibility === "public" && (
+             <>
+               <SharedBadge titled={false} />{" "}
+diff --git a/src/web/read-this.ts b/src/web/read-this.ts
+new file mode 100644
+index 000000000..04a41c0cf
+--- /dev/null
++++ b/src/web/read-this.ts
+@@ -0,0 +1,96 @@
++/**
++ * ***Read this*** — the full import of a paper that was added with only its
++ * title, authors and abstract read (plan
++ * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md).
++ *
++ * `POST /api/jobs { slug, process: true }`, through the job engine's action
++ * seam so the job is found and driven at once, wherever the reader goes next.
++ * Pressed from the shelf card and from the paper's own page; one function, so
++ * the two cannot disagree about what pressing it does.
++ *
++ * **And the add page's tick box after it.** A single upload queues the main
++ * modes once its import is done when *Generate the main modes* is ticked
++ * (auto-modes.ts, read from the same stored choice). *Read this* is the same
++ * import, so it keeps the same promise — but the shelf card may unmount long
++ * before the job ends, so the wait is the engine's (`watchTerminal`), not a
++ * component's. Session-fenced: a sign-out drops the watcher uncalled.
++ */
++import type { Job, StepName } from "../types.js";
++import { queueAutoModes, readAutoModes } from "./auto-modes.js";
++import { jobEngine, send } from "./jobEngine.js";
++import { statusOf } from "./lib/api.js";
++import { describeFetchFailure } from "./lib/describe-failure.js";
++
++/** What pressing it answered: the job, or the server's sentence. */
++export type ReadThisOutcome = { ok: true; job: Job } | { ok: false; message: string };
++
++const post = <T>(body: unknown) =>
++  send<T>("/api/jobs", {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify(body),
++  });
++
++/**
++ * A mode job, posted the way `useJobs`'s `run` posts one — through the action
++ * seam, fenced to the session — but with no component behind it.
++ */
++async function runStep(request: { slug: string; steps: StepName[] }): Promise<Job | null> {
++  const epoch = jobEngine.epoch();
++  try {
++    const job = await post<Job>(request);
++    jobEngine.actionSucceeded(epoch);
++    return job;
++  } catch (err) {
++    jobEngine.actionFailed(
++      describeFetchFailure(err instanceof Error ? err : new Error(String(err))),
++      statusOf(err),
++      epoch,
++    );
++    return null;
++  }
++}
++
++/** Press *Read this* on `slug`. */
++export async function readThis(slug: string): Promise<ReadThisOutcome> {
++  const epoch = jobEngine.epoch();
++  const generate = readAutoModes();
++  try {
++    const job = await post<Job>({ slug, process: true });
++    if (generate) {
++      /* Watched before the poke, so the list the poke asks for may say the job
++         has gone (jobEngine.ts § watchTerminal). */
++      jobEngine.watchTerminal(job.id, (ended) => {
++        if (ended.kind !== "done" || jobEngine.epoch() !== epoch) return;
++        void queueAutoModes(runStep, slug);
++      });
++    }
++    jobEngine.actionSucceeded(epoch);
++    return { ok: true, job };
++  } catch (err) {
++    const message = describeFetchFailure(err instanceof Error ? err : new Error(String(err)));
++    jobEngine.actionFailed(message, statusOf(err), epoch);
++    return { ok: false, message };
++  }
++}
++
++/** The *Read this* job running on `slug` in this snapshot, if there is one. */
++export function readThisJobFor(jobs: readonly Job[], slug: string): Job | undefined {
++  return jobs.find(
++    (j) =>
++      j.slug === slug &&
++      (j.status === "queued" || j.status === "running") &&
++      j.steps.some((s) => s.name === "extract"),
++  );
++}
++
++/** What the button says it costs. billing.md § A minimal paper costs a hundredth. */
++export const READ_THIS_COST = "Uses 0.99 of an article from your allowance.";
++
++/** Whether a job is a minimal paper's, by its steps — `isMinimalJob` in src/minimal-paper.ts. */
++export function isMinimalJob(job: Job): boolean {
++  return (
++    job.steps.some((s) => s.name === "metadata") &&
++    job.steps.every((s) => s.name === "fetch" || s.name === "metadata")
++  );
++}
+diff --git a/src/web/upload.ts b/src/web/upload.ts
+index e54d2261f..986a135f3 100644
+--- a/src/web/upload.ts
++++ b/src/web/upload.ts
+@@ -58,7 +58,7 @@ export interface Grant {
+  * are and a plain-`http` LAN address is not. Nothing in this app is served over
+  * plain http to another machine, and if it ever is, this is where it fails.
+  */
+-async function sha256Hex(file: File): Promise<string> {
++export async function sha256Hex(file: File): Promise<string> {
+   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+ }
+@@ -255,13 +255,28 @@ const NETWORK_FAILED =
+  * (see `sha256Hex`). It is also the slow part for a large file — tens of
+  * milliseconds per megabyte — which is why `uploadEngine` shows a phase for it.
+  */
+-export async function requestGrant(file: File, signal?: AbortSignal): Promise<Grant> {
+-  const sha256 = await sha256Hex(file);
++export async function requestGrant(
++  file: File,
++  signal?: AbortSignal,
++  /**
++   * What a batch already knows. `sha256` is the digest it took once, in its
++   * one hashing worker (`batchUpload.ts`), so the file is not read a second
++   * time here; `level: "minimal"` asks for a paper added with only its title,
++   * authors and abstract read (plan 261001m). A single upload passes neither.
++   */
++  claim: { sha256?: string; level?: "minimal" } = {},
++): Promise<Grant> {
++  const sha256 = claim.sha256 ?? (await sha256Hex(file));
+   return readJson<Grant>(
+     await apiFetch("/api/uploads", {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+-      body: JSON.stringify({ filename: file.name, bytes: file.size, sha256 }),
++      body: JSON.stringify({
++        filename: file.name,
++        bytes: file.size,
++        sha256,
++        ...(claim.level ? { level: claim.level } : {}),
++      }),
+       ...(signal ? { signal } : {}),
+     }),
+   );
+diff --git a/src/web/useJobs.ts b/src/web/useJobs.ts
+index 6989ae204..38e6cf2db 100644
+--- a/src/web/useJobs.ts
++++ b/src/web/useJobs.ts
+@@ -23,6 +23,7 @@
+ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+ import type { Job, ResetResponse, StepName } from "../types.js";
+ import { jobEngine, send } from "./jobEngine.js";
++import { batchUpload } from "./batchUpload.js";
+ import { uploadEngine } from "./uploadEngine.js";
+ import { statusOf } from "./lib/api.js";
+ import { describeFetchFailure } from "./lib/describe-failure.js";
+@@ -221,9 +222,13 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
+        transfer, which is exactly the mistake the comment above warns about for
+        the job list. */
+     uploadEngine.start(readerId);
++    /* And the batch (batchUpload.ts), for the same reason: it holds a reader's
++       files and posts their jobs. */
++    batchUpload.start(readerId);
+     return () => {
+       jobEngine.stop();
+       uploadEngine.stop();
++      batchUpload.stop();
+     };
+   }, [readerId]);
+ 
+diff --git a/tests/batch-upload.test.ts b/tests/batch-upload.test.ts
+new file mode 100644
+index 000000000..2d4b81588
+--- /dev/null
++++ b/tests/batch-upload.test.ts
+@@ -0,0 +1,366 @@
++/**
++ * **The batch upload, driven with no network** — `createBatchUpload(deps)`.
++ *
++ * Plan 261001m § The batch, in the browser: at most three files in flight,
++ * where in flight lasts until the file's job has ENDED; identical bytes in one
++ * drop are one paper; a duplicate is said, not failed; the allowance stops the
++ * rest with nothing half-sent; an error or a cancel does not stall the queue;
++ * a sign-out fences everything; Retry starts from where it failed.
++ */
++import { beforeEach, describe, expect, it } from "vitest";
++import type { Job } from "../src/types.js";
++import {
++  BATCH_CONCURRENCY,
++  BATCH_MAX_FILES,
++  type BatchState,
++  type BatchUploadDeps,
++  createBatchUpload,
++} from "../src/web/batchUpload.js";
++import type { TerminalOutcome } from "../src/web/jobEngine.js";
++import { HttpError } from "../src/web/lib/api.js";
++import type { Grant } from "../src/web/upload.js";
++
++const pdf = (name: string, content = name) =>
++  new File([content], name, { type: "application/pdf" });
++
++const job = (id: string, status: Job["status"], extra: Partial<Job> = {}): Job =>
++  ({ id, slug: `slug-${id}`, status, steps: [], ...extra }) as unknown as Job;
++
++/** Let every pending promise settle. */
++const settle = async () => {
++  for (let i = 0; i < 20; i++) await Promise.resolve();
++  await new Promise((r) => setTimeout(r, 0));
++};
++
++interface World {
++  deps: BatchUploadDeps;
++  grants: string[];
++  puts: { name: string; signal?: AbortSignal }[];
++  queued: string[];
++  retried: string[];
++  cancelledUploads: string[];
++  /** End a watched job. */
++  end(jobId: string, outcome: TerminalOutcome): void;
++  watching(): string[];
++  /** What the next grant for this filename does instead of succeeding. */
++  grantFails: Map<string, Error>;
++  queueFails: Map<string, Error>;
++  /** Grants held open until released. */
++  holdGrants: boolean;
++  heldGrants: (() => void)[];
++  holdPuts: boolean;
++  heldPuts: (() => void)[];
++  guards: number;
++}
++
++function world(): World {
++  const watchers = new Map<string, (o: TerminalOutcome) => void>();
++  const w: World = {
++    grants: [],
++    puts: [],
++    queued: [],
++    retried: [],
++    cancelledUploads: [],
++    grantFails: new Map(),
++    queueFails: new Map(),
++    holdGrants: false,
++    heldGrants: [],
++    holdPuts: false,
++    heldPuts: [],
++    guards: 0,
++    end(jobId, outcome) {
++      const cb = watchers.get(jobId);
++      if (!cb) throw new Error(`nobody is watching ${jobId}`);
++      watchers.delete(jobId);
++      cb(outcome);
++    },
++    watching: () => [...watchers.keys()],
++    deps: {
++      hash: async (file) => `sha-${await file.text()}`,
++      requestGrant: async (file, signal, claim) => {
++        expect(claim.level).toBe("minimal");
++        expect(claim.sha256).toMatch(/^sha-/);
++        w.grants.push(file.name);
++        if (w.holdGrants) await new Promise<void>((r) => w.heldGrants.push(r));
++        const fail = w.grantFails.get(file.name);
++        if (fail) throw fail;
++        if (signal.aborted) throw new DOMException("aborted", "AbortError");
++        return { uploadId: `u-${file.name}`, url: "x", expiresAt: "", slug: file.name } as Grant;
++      },
++      putFile: async (_grant, file, options) => {
++        w.puts.push({ name: file.name, ...(options.signal ? { signal: options.signal } : {}) });
++        if (w.holdPuts) {
++          await new Promise<void>((resolve, reject) => {
++            w.heldPuts.push(resolve);
++            options.signal?.addEventListener("abort", () =>
++              reject(new DOMException("Upload cancelled", "AbortError")),
++            );
++          });
++        }
++      },
++      queue: async (uploadId) => {
++        w.queued.push(uploadId);
++        const fail = w.queueFails.get(uploadId);
++        if (fail) throw fail;
++        return job(`j-${uploadId}`, "queued");
++      },
++      retryJob: async (jobId) => {
++        w.retried.push(jobId);
++        return job(`${jobId}-again`, "queued");
++      },
++      cancelUpload: async (uploadId) => {
++        w.cancelledUploads.push(uploadId);
++      },
++      jobs: {
++        epoch: () => 1,
++        actionSucceeded: () => {},
++        actionFailed: () => {},
++        watchTerminal: (jobId, onEnd) => {
++          watchers.set(jobId, onEnd);
++          return () => watchers.delete(jobId);
++        },
++      },
++      guardUnload: () => {
++        w.guards += 1;
++        return () => {
++          w.guards -= 1;
++        };
++      },
++    },
++  };
++  return w;
++}
++
++let w: World;
++let batch: ReturnType<typeof createBatchUpload>;
++
++beforeEach(() => {
++  w = world();
++  batch = createBatchUpload(w.deps);
++  batch.start("reader-1");
++});
++
++const states = () => batch.getSnapshot().rows.map((r) => r.state.kind);
++const stateOf = (name: string): BatchState => {
++  const row = batch.getSnapshot().rows.find((r) => r.filename === name);
++  if (!row) throw new Error(`no row for ${name}`);
++  return row.state;
++};
++
++describe("the batch", () => {
++  it("holds three in flight until their jobs END, not until they are queued", async () => {
++    batch.add(["a", "b", "c", "d", "e"].map((n) => pdf(`${n}.pdf`)));
++    await settle();
++    expect(BATCH_CONCURRENCY).toBe(3);
++    expect(states()).toEqual(["reading", "reading", "reading", "waiting", "waiting"]);
++    expect(w.grants, "a fourth file was started while three jobs were running").toEqual([
++      "a.pdf",
++      "b.pdf",
++      "c.pdf",
++    ]);
++    expect(w.guards, "the tab is not held open while files are in flight").toBe(1);
++
++    w.end("j-u-a.pdf", { kind: "done", job: job("j-u-a.pdf", "done", { slug: "a-paper" }) });
++    await settle();
++    expect(stateOf("a.pdf")).toEqual({ kind: "shelved", slug: "a-paper" });
++    expect(stateOf("d.pdf").kind).toBe("reading");
++    expect(stateOf("e.pdf").kind).toBe("waiting");
++  });
++
++  it("treats identical bytes in one drop as one paper", async () => {
++    batch.add([pdf("one.pdf", "same"), pdf("copy-of-one.pdf", "same"), pdf("two.pdf", "other")]);
++    await settle();
++    expect(stateOf("copy-of-one.pdf")).toEqual({ kind: "same-file", as: "one.pdf" });
++    expect(w.grants).toEqual(["one.pdf", "two.pdf"]);
++  });
++
++  it("says a duplicate the server found, with its slug, and moves on", async () => {
++    w.grantFails.set(
++      "a.pdf",
++      new HttpError("That file is already on your shelf, so it was not added again. [up-dup]", 409, {
++        code: "duplicate",
++        article: "the-paper",
++      }),
++    );
++    batch.add([pdf("a.pdf"), pdf("b.pdf")]);
++    await settle();
++    const a = stateOf("a.pdf");
++    expect(a.kind).toBe("duplicate");
++    expect(a.kind === "duplicate" && a.slug).toBe("the-paper");
++    expect(a.kind === "duplicate" && a.message).toContain("[up-dup]");
++    expect(stateOf("b.pdf").kind).toBe("reading");
++    expect(w.puts.map((p) => p.name), "a duplicate's bytes were sent").toEqual(["b.pdf"]);
++  });
++
++  it("hears a duplicate from the job POST too", async () => {
++    w.queueFails.set(
++      "u-a.pdf",
++      new HttpError("That file is already being added. [up-dup-wait]", 409, { code: "duplicate" }),
++    );
++    batch.add([pdf("a.pdf")]);
++    await settle();
++    expect(stateOf("a.pdf")).toMatchObject({ kind: "duplicate", slug: null });
++  });
++
++  it("stops the rest when the allowance says no, sending nothing more", async () => {
++    w.holdPuts = true;
++    batch.add(["a", "b", "c", "d", "e", "f"].map((n) => pdf(`${n}.pdf`)));
++    await settle();
++    /* a, b and c are mid-PUT. */
++    expect(states().slice(0, 3)).toEqual(["sending", "sending", "sending"]);
++    w.holdPuts = false;
++    for (const release of w.heldPuts.splice(0)) release();
++    await settle();
++    /* The next file's grant is refused 402. */
++    w.grantFails.set(
++      "d.pdf",
++      new HttpError("A paper added without AI processing counts as 1/100 … [pay-minimal]", 402),
++    );
++    w.end("j-u-a.pdf", { kind: "done", job: job("j-u-a.pdf", "done") });
++    await settle();
++    expect(stateOf("d.pdf").kind).toBe("no-room");
++    expect(stateOf("e.pdf").kind).toBe("no-room");
++    expect(stateOf("f.pdf").kind).toBe("no-room");
++    expect(stateOf("f.pdf")).toMatchObject({ message: expect.stringContaining("[pay-minimal]") });
++    /* The two still running are left to finish. */
++    expect(stateOf("b.pdf").kind).toBe("reading");
++    w.end("j-u-b.pdf", { kind: "done", job: job("j-u-b.pdf", "done") });
++    w.end("j-u-c.pdf", { kind: "done", job: job("j-u-c.pdf", "done") });
++    await settle();
++    expect(w.grants, "a file was started after the allowance said no").toEqual([
++      "a.pdf",
++      "b.pdf",
++      "c.pdf",
++      "d.pdf",
++    ]);
++    expect(w.guards).toBe(0);
++  });
++
++  it.each([
++    ["error", { kind: "failed" }],
++    ["cancelled", { kind: "stopped" }],
++    ["vanished", { kind: "lost" }],
++  ] as const)("frees the slot when a job ends %s", async (how, expected) => {
++    batch.add(["a", "b", "c", "d"].map((n) => pdf(`${n}.pdf`)));
++    await settle();
++    const outcome: TerminalOutcome =
++      how === "vanished"
++        ? { kind: "vanished" }
++        : { kind: how, job: job("j-u-a.pdf", how, { error: "It could not be read. [x-y]" }) };
++    w.end("j-u-a.pdf", outcome);
++    await settle();
++    expect(stateOf("a.pdf")).toMatchObject(expected);
++    expect(stateOf("d.pdf").kind, "the queue stalled behind an ending that was not done").toBe(
++      "reading",
++    );
++  });
++
++  it("retries a failed job through /retry, and follows the new job", async () => {
++    batch.add([pdf("a.pdf")]);
++    await settle();
++    w.end("j-u-a.pdf", {
++      kind: "error",
++      job: job("j-u-a.pdf", "error", { error: "The AI service is busy. [ai-busy]" }),
++    });
++    await settle();
++    const failed = stateOf("a.pdf");
++    expect(failed).toMatchObject({ kind: "failed", retry: { from: "job", jobId: "j-u-a.pdf" } });
++    const row = batch.getSnapshot().rows[0];
++    batch.retry(row?.id ?? -1);
++    await settle();
++    expect(w.retried).toEqual(["j-u-a.pdf"]);
++    expect(stateOf("a.pdf")).toEqual({ kind: "reading", jobId: "j-u-a.pdf-again" });
++    w.end("j-u-a.pdf-again", { kind: "done", job: job("j-u-a.pdf-again", "done", { slug: "a" }) });
++    await settle();
++    expect(stateOf("a.pdf")).toEqual({ kind: "shelved", slug: "a" });
++    expect(w.grants, "a retry of the job sent the file again").toEqual(["a.pdf"]);
++  });
++
++  it("retries a failed job POST without sending the bytes again", async () => {
++    w.queueFails.set("u-a.pdf", new HttpError("That upload is still arriving. [up-x]", 409));
++    batch.add([pdf("a.pdf")]);
++    await settle();
++    expect(stateOf("a.pdf")).toMatchObject({ kind: "failed", retry: { from: "queue" } });
++    w.queueFails.clear();
++    batch.retry(batch.getSnapshot().rows[0]?.id ?? -1);
++    await settle();
++    expect(w.puts).toHaveLength(1);
++    expect(w.queued).toEqual(["u-a.pdf", "u-a.pdf"]);
++    expect(stateOf("a.pdf").kind).toBe("reading");
++  });
++
++  it("Stop ends what has not been queued, gives back its grant, and leaves running jobs alone", async () => {
++    w.holdPuts = true;
++    batch.add(["a", "b", "c", "d"].map((n) => pdf(`${n}.pdf`)));
++    await settle();
++    /* Let a through to its job; b and c are mid-PUT; d waits. */
++    w.heldPuts.shift()?.();
++    await settle();
++    expect(states()).toEqual(["reading", "sending", "sending", "waiting"]);
++    batch.cancel();
++    await settle();
++    expect(states()).toEqual(["reading", "stopped", "stopped", "stopped"]);
++    expect(w.puts[1]?.signal?.aborted, "the PUT was not aborted").toBe(true);
++    expect(w.cancelledUploads.sort()).toEqual(["u-b.pdf", "u-c.pdf"]);
++    expect(w.queued).toEqual(["u-a.pdf"]);
++    w.end("j-u-a.pdf", { kind: "done", job: job("j-u-a.pdf", "done", { slug: "a" }) });
++    await settle();
++    expect(stateOf("a.pdf").kind).toBe("shelved");
++    expect(stateOf("d.pdf").kind, "Stop was undone by a slot coming free").toBe("stopped");
++    expect(w.grants).toEqual(["a.pdf", "b.pdf", "c.pdf"]);
++  });
++
++  it("is fenced by a sign-out: nothing lands in the next reader's batch", async () => {
++    w.holdGrants = true;
++    batch.add([pdf("a.pdf"), pdf("b.pdf")]);
++    await settle();
++    batch.stop();
++    batch.start("reader-2");
++    for (const release of w.heldGrants.splice(0)) release();
++    await settle();
++    expect(batch.getSnapshot().rows).toEqual([]);
++    expect(w.puts, "a signed-out reader's bytes went up").toEqual([]);
++    expect(w.queued).toEqual([]);
++    expect(w.guards).toBe(0);
++  });
++
++  it("does nothing with no reader bound", async () => {
++    batch.stop();
++    batch.add([pdf("a.pdf")]);
++    await settle();
++    expect(batch.getSnapshot().rows).toEqual([]);
++    expect(w.grants).toEqual([]);
++  });
++
++  it("refuses a file a single upload would refuse, and takes the rest", async () => {
++    batch.add([new File(["x"], "notes.txt", { type: "text/plain" }), pdf("a.pdf")]);
++    await settle();
++    expect(stateOf("notes.txt").kind).toBe("refused");
++    expect(stateOf("a.pdf").kind).toBe("reading");
++  });
++
++  it("takes an HTML file beside the PDFs", async () => {
++    batch.add([new File(["<html>"], "page.html", { type: "text/html" }), pdf("a.pdf")]);
++    await settle();
++    expect(stateOf("page.html").kind).toBe("reading");
++  });
++
++  it(`takes ${BATCH_MAX_FILES} files from one drop, and counts the rest`, () => {
++    w.holdGrants = true;
++    const files = Array.from({ length: BATCH_MAX_FILES + 2 }, (_, i) => pdf(`${i}.pdf`));
++    batch.add(files);
++    expect(batch.getSnapshot().rows).toHaveLength(BATCH_MAX_FILES);
++    expect(batch.getSnapshot().overflow).toBe(2);
++  });
++
++  it("clears a finished batch, and not a live one", async () => {
++    batch.add([pdf("a.pdf")]);
++    await settle();
++    batch.dismiss();
++    expect(batch.getSnapshot().rows).toHaveLength(1);
++    w.end("j-u-a.pdf", { kind: "done", job: job("j-u-a.pdf", "done") });
++    await settle();
++    batch.dismiss();
++    expect(batch.getSnapshot().rows).toEqual([]);
++  });
++});
+diff --git a/tests/job-engine-terminal.test.ts b/tests/job-engine-terminal.test.ts
+new file mode 100644
+index 000000000..e869e46f9
+--- /dev/null
++++ b/tests/job-engine-terminal.test.ts
+@@ -0,0 +1,191 @@
++/**
++ * **`watchTerminal` — the job engine telling a caller once when a job ends.**
++ *
++ * The batch upload holds one of its three slots until the file's job has
++ * ended, so a seam that hears only `done` would stall the batch on the first
++ * failure, and one that hears only the poll would stall it behind a hidden tab.
++ * Plan 261001m § What Sol's plan review changed, item 4: done, error and
++ * cancelled; completion while the tab is hidden; completion seen only through
++ * `/advance`; a job trimmed before the next poll.
++ */
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Job } from "../src/types.js";
++import {
++  type Advanced,
++  createJobEngine,
++  type JobEngineDeps,
++  type TerminalOutcome,
++} from "../src/web/jobEngine.js";
++
++const job = (id: string, status: Job["status"]): Job =>
++  ({ id, slug: `slug-${id}`, status, steps: [] }) as unknown as Job;
++
++/** The list the next poll answers with, and how many polls there were. */
++let list: Job[] = [];
++let polls = 0;
++/** What the next `/advance` says, by job id. Missing means "still busy". */
++let advanceAnswer: Record<string, Job["status"]> = {};
++let hidden = false;
++let onVisibility: (() => void) | null = null;
++/** A list request held open until the test lets it go. */
++let held: { resolve: (jobs: Job[]) => void } | null = null;
++let hold = false;
++
++const deps: JobEngineDeps = {
++  listJobs: () => {
++    polls += 1;
++    if (hold) {
++      return new Promise<Job[]>((resolve) => {
++        held = { resolve };
++      });
++    }
++    return Promise.resolve(list);
++  },
++  advance: async (id): Promise<Advanced> => {
++    const status = advanceAnswer[id] ?? "running";
++    const done = status !== "running" && status !== "queued";
++    return { job: job(id, status), ran: null, busy: !done, done };
++  },
++  visible: () => !hidden,
++  watchVisibility: (cb) => {
++    onVisibility = cb;
++    return () => {
++      onVisibility = null;
++    };
++  },
++};
++
++const settle = (ms = 0) => vi.advanceTimersByTimeAsync(ms);
++
++beforeEach(() => {
++  list = [];
++  polls = 0;
++  advanceAnswer = {};
++  hidden = false;
++  onVisibility = null;
++  held = null;
++  hold = false;
++  vi.useFakeTimers();
++});
++
++afterEach(() => {
++  vi.useRealTimers();
++});
++
++/** An engine started for one reader, its first poll landed on `initial`. */
++async function started(initial: Job[] = []) {
++  list = initial;
++  const engine = createJobEngine(deps);
++  engine.start("reader-1");
++  await settle();
++  return engine;
++}
++
++function watch(engine: ReturnType<typeof createJobEngine>, id: string) {
++  const heard: TerminalOutcome[] = [];
++  engine.watchTerminal(id, (o) => heard.push(o));
++  return heard;
++}
++
++describe("watchTerminal", () => {
++  it.each([
++    ["done", "done"],
++    ["error", "error"],
++    ["cancelled", "cancelled"],
++  ] as const)("hears a job that ends %s in the list", async (status, kind) => {
++    /* `/advance` never answers terminal here, so the list is the only source. */
++    const engine = await started([job("j1", "running")]);
++    const heard = watch(engine, "j1");
++    list = [job("j1", status)];
++    await settle(1000);
++    expect(heard.map((o) => o.kind)).toEqual([kind]);
++    /* Once only, however many more lists say so. */
++    await settle(3000);
++    expect(heard).toHaveLength(1);
++  });
++
++  it("hears a completion that only /advance reports, behind a hidden tab", async () => {
++    const engine = await started([job("j1", "running")]);
++    const heard = watch(engine, "j1");
++    hidden = true;
++    onVisibility?.();
++    const pollsWhenHidden = polls;
++    /* The list would still say running; nobody asks it while hidden. */
++    advanceAnswer.j1 = "done";
++    await settle(10_000);
++    expect(polls, "polled while hidden").toBe(pollsWhenHidden);
++    expect(heard.map((o) => o.kind)).toEqual(["done"]);
++  });
++
++  it("hears an error that only /advance reports", async () => {
++    const engine = await started([job("j1", "running")]);
++    const heard = watch(engine, "j1");
++    advanceAnswer.j1 = "error";
++    await settle(5000);
++    expect(heard.map((o) => o.kind)).toEqual(["error"]);
++  });
++
++  it("reports a job trimmed before the next poll as vanished", async () => {
++    const engine = await started([job("j1", "running")]);
++    const heard = watch(engine, "j1");
++    list = [];
++    await settle(1000);
++    expect(heard.map((o) => o.kind)).toEqual(["vanished"]);
++  });
++
++  it("never calls a job vanished from a list that was asked before it was watched", async () => {
++    const engine = await started([]);
++    hold = true;
++    engine.poke();
++    await settle();
++    expect(held, "the poll did not go out").not.toBeNull();
++    /* The POST that made j1 lands while that list is on the wire. */
++    const heard = watch(engine, "j1");
++    hold = false;
++    held?.resolve([]);
++    await settle();
++    expect(heard, "an older list's silence was read as a vanishing").toEqual([]);
++    /* The next list, asked after, does count — and here it has the job. */
++    list = [job("j1", "done")];
++    await settle(1000);
++    expect(heard.map((o) => o.kind)).toEqual(["done"]);
++  });
++
++  it("keeps asking while a watcher waits, even with nothing busy and nobody subscribed", async () => {
++    const engine = await started([]);
++    const before = polls;
++    const heard = watch(engine, "j1");
++    /* The job appears only on a later list. */
++    await settle(1000);
++    expect(polls).toBeGreaterThan(before);
++    expect(heard.map((o) => o.kind)).toEqual(["vanished"]);
++  });
++
++  it("reports a job already terminal in the snapshot, but not synchronously", async () => {
++    const engine = await started([job("j1", "error")]);
++    const heard = watch(engine, "j1");
++    expect(heard, "called inside watchTerminal").toEqual([]);
++    await settle();
++    expect(heard.map((o) => o.kind)).toEqual(["error"]);
++  });
++
++  it("drops every watcher, uncalled, when the session ends", async () => {
++    const engine = await started([job("j1", "running")]);
++    const heard = watch(engine, "j1");
++    engine.stop();
++    engine.start("reader-2");
++    list = [job("j1", "done")];
++    await settle(2000);
++    expect(heard, "a previous reader's watcher heard the next reader's list").toEqual([]);
++  });
++
++  it("stops listening when the caller unsubscribes", async () => {
++    const engine = await started([job("j1", "running")]);
++    const heard: TerminalOutcome[] = [];
++    const off = engine.watchTerminal("j1", (o) => heard.push(o));
++    off();
++    list = [job("j1", "done")];
++    await settle(1000);
++    expect(heard).toEqual([]);
++  });
++});
+diff --git a/tests/minimal-paper-ui.test.tsx b/tests/minimal-paper-ui.test.tsx
+new file mode 100644
+index 000000000..f72924c48
+--- /dev/null
++++ b/tests/minimal-paper-ui.test.tsx
+@@ -0,0 +1,386 @@
++// @vitest-environment jsdom
++/**
++ * **A paper not read through yet, in the browser** — plan 261001m stage 4.
++ *
++ * - the shelf card shows the marker, the authors, the abstract behind a
++ *   disclosure and *Read this*, and no word count and no Rebuild;
++ * - *Read this* posts `{ slug, process: true }` and never fires by itself;
++ * - the reading address turns the owned route's `409 not-processed` into the
++ *   paper's own page, with its DOI linked only when it is a DOI, and a
++ *   different 409 is still an error;
++ * - the batch panel says each file's state, links what landed, offers Retry,
++ *   and says the tab must stay open;
++ * - the add box hands two or more files to the batch and one to the single
++ *   upload, as before.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { LibraryEntry, UnreadPaper } from "../src/types.js";
++import { ReaderFacingError } from "../src/web/lib/reader-facing.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/** Every request the page made, and what the next one answers. */
++const calls: { url: string; body: unknown }[] = [];
++let answer: () => Response = () => new Response("{}", { status: 200 });
++
++/* The real module drags the Supabase client in behind it; this is the slice
++   the code under test reaches, with the real module's error shape — a
++   reader-facing error carrying `status` and `details`. */
++vi.mock("../src/web/lib/api.js", () => {
++  const readJson = async (res: Response) => {
++    const text = await res.text();
++    const body = text ? JSON.parse(text) : null;
++    if (!res.ok) {
++      const { error, ...details } = (body ?? {}) as Record<string, unknown>;
++      throw Object.assign(new ReaderFacingError(String(error)), { status: res.status, details });
++    }
++    return body;
++  };
++  return {
++    apiFetch: async (url: string, init?: RequestInit) => {
++      calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
++      return answer();
++    },
++    fetchOk: async () => new Response(null, { status: 200 }),
++    readJson,
++    statusOf: (err: { status?: unknown } | null) =>
++      typeof err?.status === "number" ? err.status : null,
++    detailsOf: (err: { details?: unknown } | null) =>
++      (err?.details as Record<string, unknown> | undefined) ?? {},
++  };
++});
++
++const stored = new Map<string, string>();
++Object.defineProperty(window, "localStorage", {
++  configurable: true,
++  value: {
++    getItem: (key: string) => stored.get(key) ?? null,
++    setItem: (key: string, value: string) => void stored.set(key, value),
++    removeItem: (key: string) => void stored.delete(key),
++    clear: () => stored.clear(),
++  },
++});
++
++const { ShelfCard } = await import("../src/web/ShelfEntry.js");
++const { ReadThisButton } = await import("../src/web/ReadThis.js");
++const { UnreadPaperPage, doiHref } = await import("../src/web/article/UnreadPaperPage.js");
++const { resolveAccess } = await import("../src/web/article/access.js");
++const { BatchPanel, batchSummary } = await import("../src/web/BatchPanel.js");
++const { batchUpload } = await import("../src/web/batchUpload.js");
++const { UploadPicker } = await import("../src/web/UploadPicker.js");
++const { jobEngine } = await import("../src/web/jobEngine.js");
++
++const MINIMAL: LibraryEntry = {
++  slug: "a-paper",
++  title: "On the Reading of Papers",
++  byline: "Ada Lovelace, Charles Babbage",
++  addedAt: "2026-10-01T10:00:00.000Z",
++  words: 0,
++  minutes: 0,
++  blocks: 0,
++  parts: 0,
++  sections: 0,
++  comments: 0,
++  opens: 0,
++  sourceReusable: true,
++  has: { arc: false, tweets: false, glossary: false },
++  processing: "minimal",
++  abstract: "We read papers, and say how.",
++  doi: "10.1234/abcd.5678",
++};
++
++const shelf = {
++  renaming: null,
++  report: () => {},
++  archive: () => Promise.resolve(),
++  restore: () => Promise.resolve(),
++  beginRename: () => {},
++  cancelRename: () => {},
++  rename: () => Promise.resolve(),
++} as unknown as Parameters<typeof ShelfCard>[0]["shelf"];
++
++let container: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  calls.length = 0;
++  stored.clear();
++  answer = () => new Response("{}", { status: 200 });
++  jobEngine.reset();
++  batchUpload.reset();
++  container = document.createElement("div");
++  document.body.append(container);
++  root = createRoot(container);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  container.remove();
++});
++
++const render = (el: React.ReactElement) => act(() => root.render(el));
++const settle = () => act(async () => new Promise((r) => setTimeout(r, 0)));
++const buttonNamed = (name: RegExp) =>
++  [...container.querySelectorAll("button")].find((b) =>
++    name.test(b.getAttribute("aria-label") ?? b.textContent ?? ""),
++  );
++
++/** The card as Library.tsx draws it, with *Read this* in its slot for a minimal paper. */
++const card = (entry: LibraryEntry) =>
++  createElement(ShelfCard, {
++    entry,
++    shelf,
++    note: "added 1 Oct",
++    readThis:
++      entry.processing === "minimal" ? createElement(ReadThisButton, { slug: entry.slug }) : undefined,
++  });
++
++describe("the shelf card of a paper not read through yet", () => {
++  it("says so, shows the authors and the abstract, and offers Read this — not Rebuild, not words", () => {
++    render(card(MINIMAL));
++    expect(container.querySelector("[data-not-processed-mark]")?.textContent).toContain(
++      "Not AI-processed yet",
++    );
++    expect(container.textContent).toContain("Ada Lovelace, Charles Babbage");
++    const details = container.querySelector("details");
++    expect(details?.textContent).toContain("We read papers, and say how.");
++    expect(details?.open, "the abstract is open by default").toBe(false);
++    expect(buttonNamed(/^Read this$/)).toBeDefined();
++    expect(container.textContent).toContain("0.99 of an article");
++    expect(container.textContent).not.toContain("words");
++    expect(container.textContent).not.toContain("blocks");
++    expect(buttonNamed(/Rebuild|Re-fetch/i), "Rebuild offered on a paper with nothing built").toBe(
++      undefined,
++    );
++    expect(calls, "drawing the card asked for something").toEqual([]);
++  });
++
++  it("keeps Rebuild on an ordinary article", () => {
++    const full: LibraryEntry = { ...MINIMAL, processing: "full", words: 2400, blocks: 60, url: "https://example.com/a" };
++    render(card(full));
++    expect(buttonNamed(/Re-fetch|Rebuild/i)).toBeDefined();
++    expect(container.querySelector("[data-not-processed-mark]")).toBeNull();
++  });
++
++  it("Read this posts { slug, process: true }, once, and shows it running", async () => {
++    answer = () =>
++      new Response(
++        JSON.stringify({
++          id: "j1",
++          slug: "a-paper",
++          status: "queued",
++          steps: [{ name: "extract", label: "Reading the text", status: "pending" }],
++        }),
++        { status: 202 },
++      );
++    render(card(MINIMAL));
++    await act(async () => buttonNamed(/^Read this$/)?.click());
++    await settle();
++    expect(calls).toEqual([{ url: "/api/jobs", body: { slug: "a-paper", process: true } }]);
++    expect(container.querySelector("[role=status]")?.textContent).toContain("Reading it through");
++    expect(buttonNamed(/^Read this$/), "Read this still pressable while it runs").toBeUndefined();
++  });
++
++  it("says the server's refusal beside the button", async () => {
++    answer = () =>
++      new Response(
++        JSON.stringify({ error: "This paper is already being read through. [pay-reading]" }),
++        { status: 409 },
++      );
++    render(card(MINIMAL));
++    await act(async () => buttonNamed(/^Read this$/)?.click());
++    await settle();
++    expect(container.textContent).toContain("[pay-reading]");
++  });
++});
++
++const PAPER: UnreadPaper = {
++  slug: "a-paper",
++  title: "On the Reading of Papers",
++  authors: ["Ada Lovelace", "Charles Babbage", "Mary Somerville"],
++  abstract: "We read papers, and say how.",
++  doi: "10.1234/abcd.5678",
++  filename: "reading.pdf",
++  kind: "pdf",
++  addedAt: "2026-10-01T10:00:00.000Z",
++};
++
++describe("the reading address of a paper not read through yet", () => {
++  const load = () =>
++    ({ signal: new AbortController().signal, release: () => {} }) as unknown as Parameters<
++      typeof resolveAccess
++    >[2];
++
++  it("turns the owned route's 409 not-processed into the paper's page", async () => {
++    answer = () =>
++      new Response(
++        JSON.stringify({ error: "Not read through yet. [np-read]", code: "not-processed", paper: PAPER }),
++        { status: 409 },
++      );
++    const { access } = await resolveAccess("a-paper", true, load());
++    expect(access).toEqual({ kind: "unread", paper: PAPER });
++  });
++
++  it("leaves any other 409 an error, with its own sentence", async () => {
++    answer = () => new Response(JSON.stringify({ error: "Something else. [x-y]" }), { status: 409 });
++    await expect(resolveAccess("a-paper", true, load())).rejects.toThrow("Something else. [x-y]");
++  });
++
++  it("draws the title, the authors, the abstract, the DOI and the PDF, and does not start the import", () => {
++    render(createElement(UnreadPaperPage, { paper: PAPER, onRead: () => {} }));
++    expect(container.querySelector("h1")?.textContent).toBe(PAPER.title);
++    expect(container.textContent).toContain("Ada Lovelace, Charles Babbage and Mary Somerville");
++    expect(container.textContent).toContain("We read papers, and say how.");
++    expect(container.textContent).toContain("Not AI-processed yet");
++    const doi = container.querySelector<HTMLAnchorElement>("a[href^='https://doi.org/']");
++    expect(doi?.href).toBe("https://doi.org/10.1234/abcd.5678");
++    expect(buttonNamed(/Open the PDF/)).toBeDefined();
++    expect(buttonNamed(/^Read this$/)).toBeDefined();
++    expect(container.textContent).toContain("Uses 0.99 of an article from your allowance.");
++    expect(calls, "opening the paper started something").toEqual([]);
++  });
++
++  it("links a DOI only when it is one, and offers no file for a web page", () => {
++    expect(doiHref("not a doi")).toBeNull();
++    expect(doiHref("javascript:alert(1)")).toBeNull();
++    expect(doiHref(undefined)).toBeNull();
++    render(
++      createElement(UnreadPaperPage, {
++        paper: { ...PAPER, doi: "javascript:alert(1)", kind: "html", filename: "page.html" },
++        onRead: () => {},
++      }),
++    );
++    expect(container.querySelector("a[href^='javascript']")).toBeNull();
++    expect(container.querySelector("a[href^='https://doi.org/']")).toBeNull();
++    expect(buttonNamed(/Open the PDF/)).toBeUndefined();
++  });
++
++  it("loads the article when the Read this job is done", async () => {
++    const onRead = vi.fn();
++    render(createElement(UnreadPaperPage, { paper: PAPER, onRead }));
++    const steps = [{ name: "extract", label: "Reading the text", status: "running" }];
++    await act(async () => {
++      jobEngine.receive([{ id: "j1", slug: "a-paper", status: "running", steps } as never]);
++    });
++    expect(container.textContent).toContain("Reading the text");
++    await act(async () => {
++      jobEngine.receive([{ id: "j1", slug: "a-paper", status: "done", steps } as never]);
++    });
++    expect(onRead).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe("the batch panel", () => {
++  const rows = [
++    { id: 1, filename: "a.pdf", bytes: 10, state: { kind: "shelved", slug: "a-paper" } },
++    { id: 2, filename: "b.pdf", bytes: 10, state: { kind: "reading", jobId: "j2" } },
++    {
++      id: 3,
++      filename: "c.pdf",
++      bytes: 10,
++      state: { kind: "failed", message: "The AI service is busy. [ai-busy]", retry: { from: "job", jobId: "j3" } },
++    },
++    {
++      id: 4,
++      filename: "d.pdf",
++      bytes: 10,
++      state: {
++        kind: "duplicate",
++        slug: "old",
++        message: "That file is already on your shelf, in your archived articles … [up-dup-archived]",
++      },
++    },
++    { id: 5, filename: "e.pdf", bytes: 10, state: { kind: "no-room", message: "No room. [pay-minimal]" } },
++    { id: 6, filename: "f.pdf", bytes: 10, state: { kind: "waiting" } },
++  ] as const;
++  const fake = (over: Partial<{ overflow: number }> = {}) => {
++    const snap = { rows, overflow: over.overflow ?? 0 };
++    return {
++      subscribe: () => () => {},
++      getSnapshot: () => snap as never,
++      cancel: vi.fn(),
++      retry: vi.fn(),
++      dismiss: vi.fn(),
++    };
++  };
++
++  it("says each file's state, links what landed, and keeps the tab-open sentence", () => {
++    const source = fake();
++    render(createElement(BatchPanel, { source }));
++    const text = container.textContent ?? "";
++    expect(text).toContain("On your shelf");
++    expect(text).toContain("Reading its title and abstract");
++    expect(text).toContain("Couldn't read this one");
++    expect(text).toContain("[ai-busy]");
++    expect(text).toContain("Already on your shelf, archived");
++    expect(text).toContain("Not started: out of allowance");
++    expect(text).toContain("Keep this tab open while it works");
++    expect(container.querySelector("a[href='/read/a-paper']")?.textContent).toBe("a.pdf");
++    expect(container.querySelector("a[href='/read/old']")?.textContent).toBe("d.pdf");
++    expect(container.querySelector("a[href='/pricing']"), "no way to more room").not.toBeNull();
++    buttonNamed(/^Retry$/)?.click();
++    expect(source.retry).toHaveBeenCalledWith(3);
++    buttonNamed(/^Stop$/)?.click();
++    expect(source.cancel).toHaveBeenCalledTimes(1);
++  });
++
++  it("says when a drop was more than one batch takes", () => {
++    render(createElement(BatchPanel, { source: fake({ overflow: 7 }) }));
++    expect(container.textContent).toContain("the other 7 were not added");
++  });
++
++  it("counts plainly", () => {
++    expect(batchSummary(rows as never)).toBe(
++      "1 of 6 on your shelf · 1 already there · 2 still going · 1 couldn't be read · 1 out of allowance",
++    );
++  });
++
++  it("draws nothing with no batch", () => {
++    render(createElement(BatchPanel, {}));
++    expect(container.innerHTML).toBe("");
++  });
++});
++
++describe("the add box", () => {
++  function mountPicker() {
++    const slots = (s: { pdfButton: React.ReactNode; uploadStatus: React.ReactNode }) =>
++      createElement("div", null, s.pdfButton, s.uploadStatus);
++    render(createElement(UploadPicker, null as never, slots as never));
++    const input = container.querySelector<HTMLInputElement>("input[type=file]");
++    if (!input) throw new Error("no file input");
++    return input;
++  }
++
++  function choose(input: HTMLInputElement, files: File[]) {
++    Object.defineProperty(input, "files", { configurable: true, value: files });
++    act(() => {
++      input.dispatchEvent(new Event("change", { bubbles: true }));
++    });
++  }
++
++  it("takes several files, and hands two or more to the batch", () => {
++    batchUpload.start("reader-1");
++    const add = vi.spyOn(batchUpload, "add").mockImplementation(() => {});
++    const input = mountPicker();
++    expect(input.multiple).toBe(true);
++    const files = [
++      new File(["a"], "a.pdf", { type: "application/pdf" }),
++      new File(["<html>"], "b.html", { type: "text/html" }),
++    ];
++    choose(input, files);
++    expect(add).toHaveBeenCalledWith(files);
++    expect(container.textContent).not.toContain("One at a time");
++    add.mockRestore();
++  });
++
++  it("keeps one file as today's single upload", () => {
++    const add = vi.spyOn(batchUpload, "add").mockImplementation(() => {});
++    const input = mountPicker();
++    choose(input, [new File(["a"], "a.pdf", { type: "application/pdf" })]);
++    expect(add).not.toHaveBeenCalled();
++    expect(container.textContent).toContain("a.pdf");
++    add.mockRestore();
++  });
++});
