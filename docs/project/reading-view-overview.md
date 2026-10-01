@@ -150,8 +150,9 @@ readers never are.
   argument has got to. It opens no band, generates nothing, and hides its notes on a window too
   narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
   at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
-  band you choose; where there is no room for both (under 900px), whichever you pressed last
-  wins — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
+  band you choose; where there is no room for both (under 900px) but room for the column alone
+  (612px with the rail, 600 without), whichever you pressed last wins, and below that the notes
+  stay hidden — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
   [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
   to the text, the middle for the text, the right for what is. Behind the switch. It has no doc of
   its own yet; the plans are the reference —
