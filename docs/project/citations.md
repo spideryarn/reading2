@@ -369,7 +369,8 @@ Greg's words and the shared half). The code and the route keep the old name
 
 1. **The forced web search** — `searchFirst` from [`src/dig-deeper.ts`](../../src/dig-deeper.ts),
    aimed with the work's title, authors, year and its own link when the article gave one, and the
-   first paragraph that cites it (*Searching the web…*). Its pages, and any matching passages from
+   first citing passage that has any text, clipped (`CONTEXT_CHARS` in `src/dig-deeper.ts`)
+   (*Searching the web…*). Its pages, and any matching passages from
    the reader's other articles, go after the cache breakpoint in `investigatePart`. A search that
    fails stops the press before anything else is spent, and the row keeps what it had.
 2. ***Look it up*'s quick check** — unless the row already has a current reading that checked out —
@@ -453,9 +454,11 @@ quote, so a harmless lapse does not stop an answer.
 
 **Kept, private, and hidden when out of date.** One row per work in `citation_investigations`,
 replaced by a second press. It is attached to an owner row only while its fingerprint matches.
-The fingerprint covers everything sent: the article, the work's fields and link, `why` and the
-citing passages, the reader's profile, *Look it up*'s match, the prompt version and the model — and
-the model is `DIG_DEEPER_MODEL` on both the write and the read, so an environment override cannot
+The fingerprint covers what can be rebuilt on read: the article, the work's fields and link, `why`
+and the citing passages, the reader's profile, *Look it up*'s current match, the prompt and
+paper-selection versions, and the model's generation. The search's findings and the paper's fetched
+content are not in it — they are a dated snapshot of what was read (`investigateContextHash` in
+[`src/citation-investigate-context.ts`](../../src/citation-investigate-context.ts)). The model is `DIG_DEEPER_MODEL` on both the write and the read, so an environment override cannot
 make the two disagree and hide a kept answer. Dig deeper bumped `CITATION_INVESTIGATE_VERSION`, so an
 answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. It never
 reaches a visitor, and it is in all three exports. A failed *Dig deeper again* leaves the earlier
@@ -469,9 +472,12 @@ and daily count, and a global daily fuse sized so that fuse × `INVESTIGATE_PRES
 press's worst case, now on Opus with the search) stays under a $20-a-day ceiling. The comment on
 that constant carries the arithmetic and says which figures are estimated and which measured. The
 lease covers every deadline in a press — the forced search, the quick check, the registry and the
-paper's 25 seconds, the passages call, the answer — plus a margin. Exa is pinned, with 8 results of at most
-8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)). It is the
-`citation-investigate` job on the gateway, with `citation-paper-passages` inside it.
+paper's 25 seconds, the passages call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by
+`INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS`
+([`citation-investigate.ts`](../../src/citation-investigate.ts)) — separate from the forced
+search's `DIG_MAX_RESULTS`. On the gateway a press can record up to four jobs: `dig-deeper-search`,
+`citations-find` when the quick check runs, `citation-paper-passages` when the paper's passages are
+picked, and `citation-investigate` for the streamed answer.
 
 ## Already an article here
 

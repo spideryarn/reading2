@@ -45,7 +45,7 @@ until you know what they are for.
  │             │ ┊philosophy of mind… │                         │
  │             │ ┊ ↗ en.wikipedia.org │                         │
  │             │ ┌───────────────────┐│                         │
- │             │ │WEB SEARCH      🌐 ││   ← or, before anybody  │
+ │             │ │FROM A WEB SEARCH🌐 ││   ← or, before anybody  │
  │             │ │Seth uses it in the││     pressed it:         │
  │             │ │sense Chalmers…    ││   [🌐 Dig deeper]       │
  │             │ │ ↗ plato.stanford  ││                         │
@@ -562,8 +562,8 @@ aliases. The prompt now names both as examples of what not to do, and the re-run
 
 `background` is the model's memory. **Nothing in the batch call is checked against anything**, and
 the `url` it sometimes offers is a guess at a canonical page rather than a page it visited. So the
-open entry carries a **Dig deeper** button (*Check the web* until 2026-10-01), and pressing it is
-what turns a remembered answer into a checked one:
+open entry carries a **Dig deeper** button (*Check the web* until 2026-10-01), and pressing it adds
+a separate answer, from a forced web search, beside the remembered one:
 
 ```
 POST /api/glossary/:slug/:id/lookup   →  SSE: delta…, then done { entry } | error
@@ -587,11 +587,14 @@ searching to the model, which on anything it thought it knew chose not to. Asked
 >
 > — Greg, 2026-10-01
 
-There were three such places, and they are now one action, **Dig deeper** — *Digging deeper…* while
-it runs, *Dig deeper again* under an answer already there: this button, a comment's re-ask (*Search
-the web* until then — [comments.md § pushing back](comments.md#pushing-back)) and Citations'
-*Investigate* ([citations.md § Dig deeper](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
-The shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts). Every press:
+There were three such places, and they are now one action, **Dig deeper**: this button, a comment's
+re-ask (*Search the web* until then — [comments.md § pushing back](comments.md#pushing-back)) and
+Citations' *Investigate* ([citations.md § Dig deeper](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+Glossary and Citations say *Digging deeper…* while it runs and *Dig deeper again* over a kept
+answer; a comment hides the button while it runs and keeps calling the re-ask *Dig deeper*. The
+shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts) — steps 1 and 2 below and the model;
+step 3 is the glossary's and a comment's, and Citations' is
+[its own](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand). A press:
 
 1. **Runs a web search, forced by code rather than left to the model.** `searchFirst` makes one
    quick-tier call (the `dig-deeper-search` job) with `tool_choice: "required"` and the Exa engine,
@@ -603,7 +606,8 @@ The shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts). Every press:
    `librarySearch.searchLibrary` — owner-scoped, free, and literal. Best-effort: nothing found is an
    answer, and a failure there does not fail the press. The answer names such an article by its
    title; it cannot link to the passage yet.
-3. **Answers on the high-power model**, `DIG_DEEPER_MODEL`, whatever the article's
+3. **Answers on the high-power model** (glossary and comments; Citations hands the findings to
+   `investigatePart` and streams `citation-investigate`), `DIG_DEEPER_MODEL`, whatever the article's
    [High-powered AI](high-powered-ai.md) switch says and whatever `SPIDERYARN_EXPLAIN_MODEL` is set
    to (the `dig-deeper` job). The findings go in the last user part, after the cache breakpoint,
    fenced as untrusted text; the cached prefix is byte-identical to a plain explain's, and the model
@@ -611,7 +615,7 @@ The shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts). Every press:
 
 The searches the answer reports are the search step's plus its own, and its sources are both sets,
 deduped. That is why the tooltip says the sources are what it **found**, not what it cited: a
-plain-text answer cannot say which ones it leaned on. A press measured at about 2.4× a first explain
+plain-text answer cannot say which ones it leaned on. A glossary or comment press measured at about 2.4× a first explain
 on a cold article and 4× on a warm one; the figures are the plan's § The cost line, and it has an
 allowance, [below](#the-allowance-dig-deeper-has-and-look-up-does-not). The probes, the design and
 GPT Sol's two reviews are
@@ -658,8 +662,8 @@ nothing saying so. `loadGlossary` attaches lookups at read time, so the panel st
 `entry.lookup`.
 
 **It is `explain` with a different selection** — the same function comments use
-([`src/explain.ts`](../../src/explain.ts)), handed the dig's findings, with the form of the term the
-article really uses as the quote and, since 2026-09-04, **the first block of the article that uses it** as the anchor, found by
+([`src/explain.ts`](../../src/explain.ts)), handed the dig's findings, with the matching glossary form — the name or an alias — as
+the quote and, since 2026-09-04, **the first block of the article that uses it** as the anchor, found by
 scanning rather than read out of `entry.blocks`. It was `entry.blocks[0]` and nothing else, which
 made a term used in five places uncheckable the moment the first of them changed — see
 [The two ways it refuses](#the-two-ways-it-refuses-and-why-they-used-to-be-one) below.
@@ -900,14 +904,14 @@ until 2026-09-29, when Greg asked for it to go to save a phone two lines
 this panel's and a comment's, which share one — takes the `dig-deeper` allowance
 (`DIG_DEEPER_RATE_POLICY` in [`src/dig-deeper.ts`](../../src/dig-deeper.ts): so many an hour and a
 day per reader, two at once, and a global fuse across every reader a day). It is taken after every
-refusal that costs nothing and before anything that does, so a refused press is an ordinary JSON 429
-or 503 (`[dig-resting]`) and changes nothing. Citations' Dig deeper keeps its own allowance
+refusal that costs nothing and before anything that does, so a refused press is an ordinary JSON 429,
+or a 503 carrying `[dig-resting]`, and changes nothing. Citations' Dig deeper keeps its own allowance
 ([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)); a comment's first
 answer, the tick-box, spends none.
 
 **This box has no rate limit, no quota and no single-flight guard.** So **an owner with one article
 of their own can drive paid `explain` calls as fast as they can post**, each of which may run up to
-eight web searches. Ownership decides *which* article, not *how many* requests;
+`MAX_SEARCHES` web searches (`src/explain.ts`). Ownership decides *which* article, not *how many* requests;
 `withSpendAttribution` records the spend rather than authorising it; and this request never enters
 the job queue, so the queue's concurrency cap is not a limit on it. Raised by GPT Sol's review of the
 built code, 2026-09-04, and in

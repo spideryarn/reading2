@@ -951,7 +951,7 @@ own words. Greg decided they should go out:
 
 **What a visitor gets:** the passage, the reader's own words, the model's answer, and its citations.
 **What they may do with it:** read it, step through the list, and nothing else — no edit box, no
-delete, no retry, no *search the web*, and no follow-up composer. Absent, not disabled: a greyed-out
+delete, no retry, no *Dig deeper*, and no follow-up composer. Absent, not disabled: a greyed-out
 box that says "ask a follow-up" is an invitation to press it, and the press would spend the owner's
 money.
 
@@ -1075,9 +1075,10 @@ actually argue for. Chat is the one that had to earn its place; the argument is 
 ### And since 2026-08-26, a third caller of this same call
 
 The glossary's **Dig deeper** button ([glossary.md § Digging deeper into a
-term](glossary.md#digging-deeper-into-a-term)) calls `explain` directly, with the term's name as the
-quote, the block it first appears in as the anchor, and the dig's findings. Not a copy of it — the
-function. Its *Look up* box does the same without a dig.
+term](glossary.md#digging-deeper-into-a-term)) calls `explainStream` directly, with the first
+matching glossary form — the name or an alias — as the quote, the first block it matches as the
+anchor, and the dig's findings. Not a copy of it — the function. Its *Look up* box calls the same
+stream without a dig, quoting the exact characters it matched.
 
 That is worth knowing here rather than only there, for two reasons. **A change to `SYSTEM` in
 [`src/explain.ts`](../../src/explain.ts) now changes what a glossary entry's checked answer says**,
@@ -1088,8 +1089,10 @@ glossary should be the same mechanism as comments with a different prompt, not a
 second half — one storage artefact, one anchor model — is still open.
 
 One practical consequence: because the article half of the prompt is one cached prefix
-([prompt-caching.md](prompt-caching.md)), a glossary lookup on a piece somebody has already asked a
-question about is a cache hit rather than a fresh read of the whole article.
+([prompt-caching.md](prompt-caching.md)), a call can reuse an earlier one's read of the whole
+article — but only on the same model. A typed *Look up* can reuse an ordinary comment's prefix; a
+*Dig deeper* press is always `DIG_DEEPER_MODEL`, so on a standard-power article the first dig writes
+that model's copy and later digs read it.
 
 ## See also
 

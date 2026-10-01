@@ -130,7 +130,7 @@ and will answer "no" again. A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
 `jb-` is a job. `gl-` is the glossary's *Dig deeper* (was *Check the web*) refusing —
-`[gl-not-quoted]` because the article names the term rather than quoting it, `[gl-stale]` because the list was written for an
+`[gl-not-quoted]` because none of the names the glossary holds for the term appears in the article, `[gl-stale]` because the list was written for an
 older version of the piece
 ([glossary.md § The two ways it refuses](glossary.md#the-two-ways-it-refuses-and-why-they-used-to-be-one)).
 `up-` is the upload record — a file the server took delivery of and then refused — and `pick-` is
