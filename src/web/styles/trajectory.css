@@ -369,8 +369,7 @@
 /* **The way to a whole mode is an icon with a tooltip** (SPIDERYARN-READING2-5C,
    icons.md § Navigation): quiet, at the end of what opened. */
 .traj-sense { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 0.3rem; }
-.traj-sense > p,
-.traj-sense > .traj-passage { flex: 1 1 100%; }
+.traj-sense > p { flex: 1 1 100%; }
 .traj-open {
   display: inline-flex;
   align-items: center;
@@ -387,43 +386,6 @@
 }
 .traj-open:hover { background: var(--page); }
 .traj-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-
-/* **The FAQ's question, above the stop** (SPIDERYARN-READING2-5C): the row's
-   frame, so it reads as the question the passage below answers. */
-.traj-asks {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.35rem 0.5rem 0.1rem calc(0.4rem + 1.4em + 0.55rem);
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--surface-raised);
-  box-shadow: inset 3px 0 0 var(--highlight);
-  font-size: 0.85rem;
-  line-height: 1.4;
-}
-.traj-ask-q {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  font-style: italic;
-  text-align: left;
-  cursor: pointer;
-}
-.traj-ask-q svg { flex: none; align-self: center; color: var(--ink-faint); }
-.traj-ask-q:hover span,
-.traj-ask-q.on span { text-decoration: underline; text-decoration-color: var(--highlight); }
-.traj-ask .traj-sense { margin-bottom: 0.2rem; }
-.traj-passage p { margin: 0; }
-.traj-passage + .traj-passage { margin-top: 0.3rem; }
-.traj-passage-at { color: var(--ink-faint); font-size: 0.75rem; }
-.traj-passage-here { color: var(--ink-faint); font-style: italic; }
-.traj-ask-tip { max-width: min(16rem, calc(100vw - 1.75rem)); font-size: 0.8rem; line-height: 1.4; }
-.traj-row.current:has(.traj-asks) .traj-go { border-radius: 0; }
 
 /* **Where am I**: a button laid over the row's position mark, beside the row's
    own button rather than in it (Sol, plan 260929f F5). Invisible — the mark

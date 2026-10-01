@@ -22,9 +22,7 @@
  * *already* written about this paragraph — src/web/stop-card.ts gathers it.
  * Nothing on it is generated for it, nothing starts a run, and when there is
  * nothing there is no card and no sentence asking for one. Term and idea chips
- * open to one line and an icon into their mode; the FAQ question sits above
- * the row and opens its checked passages there. Events still link into their
- * mode. The tying-together is the juxtaposition, not a synthesis (Sol F21).
+ * open to one line and an icon into their mode; events link into theirs. The tying-together is the juxtaposition, not a synthesis (Sol F21).
  *
  * ## The head is pinned, and the list follows the stop
  *
@@ -47,7 +45,6 @@
  */
 import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  BadgeQuestionMark,
   BookA,
   ChevronLeft,
   ChevronRight,
@@ -69,7 +66,7 @@ import { PurposeLine } from "./TrajectoryPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
-import type { CardQuestion, CardTarget, StopCard } from "./stop-card.js";
+import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
@@ -106,16 +103,14 @@ export interface TrajectoryRow {
 
 /**
  * **Which snippet is open on the current stop** — one at a time across the
- * row and its card (Sol, plan 260929f F4): a term's sense, an idea's
- * statement, or a FAQ question's passages. Held by the panel, not the card,
- * because a question sits above the row and the rest below it, and the list's
- * follow-scroll has to re-measure when one opens. `stop` ties it to the stop it
- * was opened on, so it is hidden during a step before the cleanup effect
- * forgets it permanently.
+ * card (Sol, plan 260929f F4): a term's sense or an idea's statement. Held by
+ * the panel, not the card, because the list's follow-scroll has to re-measure
+ * when one opens. `stop` ties it to the stop it was opened on, so it is hidden
+ * during a step before the cleanup effect forgets it permanently.
  */
 interface OpenSnippet {
   stop: string;
-  kind: "term" | "idea" | "faq";
+  kind: "term" | "idea";
   id: string;
 }
 
@@ -519,9 +514,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
       view.card !== null &&
       (snippetOpen.kind === "term"
         ? view.card.terms.some((term) => term.entry.id === snippetOpen.id)
-        : snippetOpen.kind === "idea"
-          ? view.card.ideas.some((idea) => idea.id === snippetOpen.id)
-          : view.card.questions.some((question) => question.id === snippetOpen.id));
+        : view.card.ideas.some((idea) => idea.id === snippetOpen.id));
     if (!exists) setSnippet(null);
   }, [currentId, snippetOpen, view.card]);
 
@@ -685,8 +678,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                         </span>
                       </button>
                     );
-                    const questions = row.current ? (view.card?.questions ?? []) : [];
-                    const below = row.current && view.card !== null && cardHasBelow(view.card);
+                    const below = row.current && view.card !== null && !cardIsEmpty(view.card);
                     return (
                       <li
                         key={row.quoteId}
@@ -694,20 +686,6 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                         data-stop={row.quoteId}
                         {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
-                        {/* **The question first, then the passage** (Greg,
-                            SPIDERYARN-READING2-5C): FAQ's question, above the
-                            row rather than under it, as a sibling of the row's
-                            button so opening it cannot also press the row. */}
-                        {questions.length > 0 && (
-                          <StopQuestions
-                            questions={questions}
-                            place={row.place}
-                            open={snippet?.kind === "faq" ? snippet.id : null}
-                            onToggle={(id) => toggle("faq", id)}
-                            onOpen={view.onOpen}
-                            canOpen={view.canOpen}
-                          />
-                        )}
                         <div className="traj-line">
                         {/* Always wrapped, enabled only while the row is cut, so the
                             button is never remounted as its row becomes current.
@@ -770,93 +748,10 @@ export function TrajectoryPanel({ access, view, away }: Props) {
   );
 }
 
-/** Whether the card under the row has anything — the FAQ question sits above it now. */
-function cardHasBelow(card: StopCard): boolean {
-  return card.terms.length > 0 || card.ideas.length > 0 || card.events.length > 0;
-}
-
-/**
- * **The FAQ's question, above the stop** — Greg, SPIDERYARN-READING2-5C: *"I
- * kind of like the idea of situating the quote in terms of the question for
- * which it's an answer. But if so, maybe the question should go first and add
- * a tooltip."* Pressing it opens, in place, **every** passage FAQ pairs with it
- * — FAQ answers only in the article's own words — and an icon opens FAQ.
- *
- * The tooltip says what the pairing is and is not (Sol, 260929f F3): FAQ
- * pairs a question with a *paragraph*, by the model's reading, and its words
- * there may not be the stop's quote.
- */
-function StopQuestions({
-  questions,
-  place,
-  open,
-  onToggle,
-  onOpen,
-  canOpen,
-}: {
-  questions: readonly CardQuestion[];
-  place: string | null;
-  open: string | null;
-  onToggle(id: string): void;
-  onOpen(target: CardTarget): void;
-  canOpen(target: CardTarget): boolean;
-}) {
-  const where = place ? ` in ${place}` : "";
-  return (
-    <div className="traj-asks">
-      {questions.map((q) => (
-        <div key={q.id} className="traj-ask">
-          <Tooltip
-            content={
-              <p>
-                A question the FAQ wrote. It pairs it with a passage in this paragraph{where} — the model's
-                reading. Press for its passages.
-              </p>
-            }
-            placement="top"
-            className="traj-ask-tip"
-          >
-            <button
-              type="button"
-              className={`traj-ask-q${open === q.id ? " on" : ""}`}
-              aria-expanded={open === q.id}
-              onClick={() => onToggle(q.id)}
-            >
-              <BadgeQuestionMark size={14} aria-hidden="true" />
-              <span>{q.question}</span>
-            </button>
-          </Tooltip>
-          {open === q.id && (
-            <div className="traj-sense">
-              {q.passages.map((p) => (
-                <div key={`${p.blockId}:${p.start}`} className="traj-passage">
-                  {/* The stop's own quote is right below: say so rather than repeat it. */}
-                  {p.here ? (
-                    <p className="traj-passage-here">This stop's passage, below</p>
-                  ) : (
-                    <>
-                      <p>“{p.quote}”</p>
-                      {p.place && <p className="traj-passage-at">{p.place}</p>}
-                    </>
-                  )}
-                </div>
-              ))}
-              {canOpen({ kind: "faq" }) && (
-                <OpenIn label="Open FAQ" icon={<BadgeQuestionMark size={16} />} onOpen={() => onOpen({ kind: "faq" })} />
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /**
  * **The stop card** — see the file header. One cluster per artefact that has
  * something for this paragraph, in a fixed order: the words first (they are
- * what trips a skimmer), then the ideas and the study. The FAQ question went
- * above the row (`StopQuestions`).
+ * what trips a skimmer), then the ideas and the study.
  *
  * **Terms and ideas are chips that open in place** — the sense of a term, the
  * statement of an idea — so the reader can stay in Trajectory (Greg,

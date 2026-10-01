@@ -52,13 +52,13 @@ v2, the scrapbook, is built on top of that:
     glossary's own matcher, over every term. A term an earlier stop on this pass also uses says
     *"also at stop k"*;
   - the ideas it bears on — links into Ideas until 2026-09-29, chips that open in place since;
-  - the FAQ question it answers — as text on the card until 2026-09-29, above the row since;
   - where it sits in the study, as links into Timeline when that experimental control is available,
     and as text when it is hidden.
 
-  An artefact that is stale contributes nothing. When nothing is there, there is no card, and no
-  sentence asking you to make one. The card reads through read-only hooks (`useIdeasRead`,
-  `useFaqRead`, `useTimelineRead`, beside `useGlossaryRead`), so it cannot start a run. Nothing on
+  The FAQ question the paragraph answers was there too, from 2026-09-28 until it was removed on
+  2026-10-01 (below). An artefact that is stale contributes nothing. When nothing is there, there is
+  no card, and no sentence asking you to make one. The card reads through read-only hooks
+  (`useIdeasRead`, `useTimelineRead`, beside `useGlossaryRead`), so it cannot start a run. Nothing on
   it is generated for it: what ties the pieces together is seeing them side by side, not a new
   summary of them.
 
@@ -217,9 +217,10 @@ quotes both whole):
 > — Greg, 2026-09-29
 
 - **Ideas open in place**, as the terms do: a chip opens the idea's statement under it. One snippet
-  is open at a time across the stop — a term, an idea or a question — and stepping on closes it.
-- **The FAQ question goes first.** It was on the card under the quote, where it read as an
-  afterthought; it now sits above the row, with FAQ's icon. Its tooltip says what it is: a question
+  is open at a time across the stop — a term, an idea or (until 2026-10-01) a question — and
+  stepping on closes it.
+- **The FAQ question goes first** (removed altogether on 2026-10-01, below). It was on the card
+  under the quote, where it read as an afterthought; it moved above the row, with FAQ's icon. Its tooltip says what it is: a question
   the FAQ wrote, which the FAQ pairs with a passage in this paragraph — the model's reading, and
   pairing by paragraph, so FAQ's words there may not be the stop's quote. Pressing it opens every
   passage FAQ points to for it, with their sections: FAQ answers only in the article's own words.
@@ -267,6 +268,12 @@ you read, the question what you took after. Nothing was added to the card or the
 the question repeated the cue, and a question as its own stop would braid a second ordered path into
 the route. Both, and the pass's questions at the end of a pass, are deferred in
 [260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
+
+**The FAQ question at a stop is gone** — Greg, 2026-10-01, SPIDERYARN-READING2-8Z (report
+spya-bjbcxp): *"Remove the FAQ snippets (they don't add much)"*. The question above the current
+row, and the passages it opened, were removed, and Trajectory no longer reads the FAQ at all. The
+terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
+thing: the question to read the passage with.
 
 ### What we tried for v2
 
@@ -397,7 +404,7 @@ better for every mode that reads it.
 **The scrapbook is v2, and it is a real stage, not a maybe.** Beside each stop, gathered from
 whatever the other modes have *already* produced for this article — quotes inside the passage, the
 glossary terms it uses, the ideas it bears on, the gist of the section it sits in, timeline events,
-citations, FAQ questions it answers, and so on. It does not start new runs of those modes by
+citations, FAQ questions it answers (tried, and removed on 2026-10-01), and so on. It does not start new runs of those modes by
 default; it shows what is there. Everything in it is already addressed by block id, so gathering it
 is a lookup.
 
@@ -539,13 +546,14 @@ measured on the three test articles before anything was kept
   stop, and the gist line was the thing the scrapbook spike dropped for giving the finding away. If
   real reading keeps meeting a skipped section, a plain link to its opening passage is the next step.
 
-### 7. Should opening Trajectory also make the Glossary, FAQ and Timeline?
+### 7. Should opening Trajectory also make the Glossary and Timeline?
 
 **What you asked.** *"If there are other modes that should also run first as part of generating
 Trajectory, queue them first too."* (2026-09-28). The Overseer read that as: when Trajectory is
 first opened, also start Glossary, Ideas, FAQ and Timeline for the article if they have not been
 made, so the card under each stop has something in it. **Only part of that was built, so this is
-yours to decide.**
+yours to decide.** FAQ has dropped out of it: the card stopped showing the FAQ's question on
+2026-10-01, so making the FAQ would no longer fill anything in.
 
 **Background.** Two different things use the other modes:
 
@@ -553,31 +561,32 @@ yours to decide.**
   article's **Ideas**, so each pass covers as many key points as it can. So Ideas now *are* made
   first, in the same job as the Quotes and the route. That part of your request is done.
 - **The card under the current stop** — the terms the passage uses (Glossary), the ideas it bears on
-  (Ideas), the question it answers (FAQ), where it sits in the study (Timeline). Today the card shows
-  whatever of these already exists, and simply leaves out what does not. It never starts a run.
+  (Ideas), where it sits in the study (Timeline). Today the card shows whatever of these already
+  exists, and simply leaves out what does not. It never starts a run.
 
-The question is whether opening Trajectory should also **make Glossary, FAQ and Timeline** when they
-are missing, purely so the card fills in.
+The question is whether opening Trajectory should also **make Glossary and Timeline** when they are
+missing, purely so the card fills in.
 
 **Why it was not built.** Nothing was broken. It was left out because:
 
 - **Cost to the reader, on a press they did not make for it.** On the entropy paper, Glossary, FAQ and
-  Timeline together cost about $0.20, against about $0.02 for the route. A first open from nothing
+  Timeline together cost about $0.20 (measured before FAQ dropped out), against about $0.02 for the
+  route. A first open from nothing
   is already $0.13 and 95 seconds with Quotes and Ideas (measured on *Cargo Cult Science*); this would
   roughly double or triple the spend, for modes the reader did not open.
 - **Your words were "run first as part of generating Trajectory"**, and these three do not generate
   it: the route never reads them. GPT Sol and an Opus arbiter both read the sentence that way.
 - **It needs extra machinery**: a second job, and a way for the card to notice when each of those
-  finishes (the read it uses today does not). FAQ and Timeline are also still behind the experimental
+  finishes (the read it uses today does not). Timeline is also still behind the experimental
   switch, so for most readers only Glossary would run anyway.
 
 **Options.**
 
 - **A. As it is now** (default taken). The route makes what it needs (Quotes, Ideas); the card
   shows whatever else exists. Nothing extra is spent. On a fresh article the card has ideas but no
-  terms, questions or events until the reader opens those modes.
+  terms or events until the reader opens those modes.
 - **B. Make them automatically on the first open**, as the Overseer read your request: Glossary for
-  everyone, FAQ and Timeline for readers with the switch on. About $0.10–0.20 more per article, said
+  everyone, Timeline for readers with the switch on. About $0.10–0.20 more per article, said
   in the empty state before the press, and the card fills in over the next minute or two. The route
   does not wait for them.
 - **C. A button on the card: "Fill in the card"**, which makes the missing ones on request and says

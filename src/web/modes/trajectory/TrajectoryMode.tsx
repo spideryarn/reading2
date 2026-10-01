@@ -26,7 +26,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Quote, Tree, TrajectoryDepth, TrajectoryStop } from "../../../types.js";
 import type {
-  PublicFaq,
   PublicGlossary,
   PublicIdeas,
   PublicTimeline,
@@ -57,7 +56,6 @@ import { TrajectoryPanel, type TrajectoryRow } from "../../TrajectoryPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
 import type { GlossaryRead } from "../../useGlossary.js";
 import { useIdeasRead } from "../../useIdeas.js";
-import { useFaqRead } from "../../useFaq.js";
 import { useTimelineRead } from "../../useTimeline.js";
 
 /**
@@ -242,13 +240,11 @@ export function TrajectoryBand({
      hooks carry no job machinery at all, so the card cannot be the reason any
      of these is generated (Sol F22). The glossary is `Reader`'s own read. The
      Ideas are the exception above: made by the route's job, never by the card. */
-  const faq = useFaqRead(slug);
   const timeline = useTimelineRead(slug);
   const sources = useMemo<CardSources>(
     () => ({
       glossary: { value: glossary.status === "ready" ? glossary.glossary : null, stale: glossary.stale },
       ideas: { value: ideas.status === "ready" ? ideas.ideas : null, stale: ideas.stale },
-      faq: { value: faq.status === "ready" ? faq.faq : null, stale: faq.stale },
       timeline: { value: timeline.status === "ready" ? timeline.timeline : null, stale: timeline.stale },
     }),
     [
@@ -258,9 +254,6 @@ export function TrajectoryBand({
       ideas.status,
       ideas.ideas,
       ideas.stale,
-      faq.status,
-      faq.faq,
-      faq.stale,
       timeline.status,
       timeline.timeline,
       timeline.stale,
@@ -315,7 +308,7 @@ type WalkProps = Pick<
  * which is the whole of why this is a second band rather than a flag on the
  * first (src/web/reader-capability.ts; `VisitorTimelineBand` is the sibling).
  * The card's sources are the payload's copies, never `useIdeasRead` or
- * `useFaqRead`: those are owner reads. A stored artefact on a shared link
+ * `useTimelineRead`: those are owner reads. A stored artefact on a shared link
  * carries no freshness (src/public-types.ts § `PublicArtefactSet`), so each is
  * handed over as not stale.
  */
@@ -325,7 +318,6 @@ export function VisitorTrajectoryBand({
   glossary,
   ideas,
   timeline,
-  faq,
   ...walk
 }: WalkProps & {
   route: PublicTrajectory;
@@ -333,18 +325,15 @@ export function VisitorTrajectoryBand({
   glossary: PublicGlossary | undefined;
   ideas: PublicIdeas | undefined;
   timeline: PublicTimeline | undefined;
-  /** The payload's FAQ, since 2026-09-29 (plan 260929c stage 2). */
-  faq: PublicFaq | undefined;
 }) {
   useRenderCount("VisitorTrajectoryBand");
   const sources = useMemo<CardSources>(
     () => ({
       glossary: { value: glossary ?? null, stale: false },
       ideas: { value: ideas ?? null, stale: false },
-      faq: { value: faq ?? null, stale: false },
       timeline: { value: timeline ?? null, stale: false },
     }),
-    [glossary, ideas, timeline, faq],
+    [glossary, ideas, timeline],
   );
   const { away, ...rest } = walk;
   const view = useTrajectoryMode({ ...rest, sources, stops: route.stops, quotes });
@@ -698,20 +687,10 @@ function useTrajectoryMode({
   /* **The stop card**, gathered for the current stop only, from what the
      other modes have already written. "Also at stop k" counts along this
      pass, so the route goes in as its stops' blocks. */
-  const placeOf = useCallback(
-    (block: BlockId) => {
-      const path = sectionPathOf(block, index, tree);
-      return path.length > 0 ? path.join(" › ") : null;
-    },
-    [index, tree],
-  );
   const routeBlocks = useMemo(() => route.map((s) => blockOf(s.quoteId)), [route, blockOf]);
   const card = useMemo(
-    () =>
-      stopBlock === null
-        ? null
-        : gatherStopCard({ blockId: stopBlock, blocks, route: routeBlocks, sources, placeOf, quote }),
-    [stopBlock, blocks, routeBlocks, sources, placeOf, quote],
+    () => (stopBlock === null ? null : gatherStopCard({ blockId: stopBlock, blocks, route: routeBlocks, sources })),
+    [stopBlock, blocks, routeBlocks, sources],
   );
 
   return {

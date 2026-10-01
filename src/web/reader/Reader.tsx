@@ -1066,10 +1066,6 @@ export function Reader({
           void setEventId(target.id);
           void setMode("timeline");
           return;
-        /* No `?faq=` selection exists, so FAQ opens at the top of its list. */
-        case "faq":
-          void setMode("faq");
-          return;
         default: {
           const never: never = target;
           return never;
@@ -2234,7 +2230,6 @@ export function Reader({
               glossary={artefacts.glossary}
               ideas={artefacts.ideas}
               timeline={artefacts.timeline}
-              faq={artefacts.faq}
               blocks={article.blocks}
               tree={article.tree}
               quoteMarks={quotes.found}

@@ -50,6 +50,8 @@ globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.
 let trajectoryBody: unknown = null;
 /** The Ideas the stop card may show, or `null` for none (404). */
 let ideasBody: unknown = null;
+/** The FAQ a stop card must not show (SPIDERYARN-READING2-8Z), or `null` for none (404). */
+let faqBody: unknown = null;
 /** A held Ideas read, for the prerequisite-loading race. */
 let ideasReply: Promise<Response> | null = null;
 /** Every request, so a test can say the card started no job. */
@@ -71,6 +73,8 @@ vi.mock("../src/web/lib/api.js", async () => {
       return ideasReply ?? (ideasBody === null
         ? new Response(null, { status: 404 })
         : new Response(JSON.stringify(ideasBody), { status: 200 }));
+    if (url.startsWith("/api/faq/"))
+      return faqBody === null ? new Response(null, { status: 404 }) : new Response(JSON.stringify(faqBody), { status: 200 });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
     return new Response(null, { status: 404 });
   };
@@ -301,6 +305,7 @@ beforeEach(() => {
   posted.length = 0;
   quotesRead = QUOTES_READ;
   ideasBody = null;
+  faqBody = null;
   ideasReply = null;
   finishers.length = 0;
   trajectoryBody = TRAJECTORY_BODY;
@@ -398,17 +403,6 @@ const CARD: StopCard = {
     { entry: { ...TERM, id: "spya-te3def", name: "synergy", senseHere: "Information only the pair carries." }, alsoAt: null },
   ],
   ideas: [{ id: "spya-id2abc", name: "Synergy is not redundancy", statement: "The pair carries information neither does alone." }],
-  questions: [
-    {
-      id: "q1",
-      question: "How was synergy measured?",
-      passages: [
-        { blockId: "spya-tr2abc" as BlockId, quote: "We measured it with PID.", start: 4, place: "Methods", here: false },
-        { blockId: "spya-tr4ghj" as BlockId, quote: "Synergy peaked mid-range.", start: 8, place: "Results", here: false },
-        { blockId: "spya-tr3def" as BlockId, quote: "The stop's own words.", start: 0, place: "Results", here: true },
-      ],
-    },
-  ],
   events: [{ id: "spya-ev2abc", label: "Recordings made" }],
 };
 
@@ -713,32 +707,6 @@ describe("the panel", () => {
     ]);
     expect(text(".traj-card")).toContain("Recordings made");
     expect(text(".traj-card")).not.toContain(TERM.senseHere!);
-    /* The FAQ question is not on the card any more: it sits above the row. */
-    expect(text(".traj-card")).not.toContain("How was synergy measured?");
-  });
-
-  it("puts the FAQ question above the row, outside its button, and opens every passage it points to (5C)", async () => {
-    await draw(owner(), view({ card: CARD }));
-    const row = host.querySelector<HTMLElement>(".traj-row.current")!;
-    const ask = row.querySelector<HTMLButtonElement>(".traj-ask-q")!;
-    const go = row.querySelector<HTMLButtonElement>(".traj-go")!;
-    /* First in the row, and not inside the row's button. */
-    expect(ask.compareDocumentPosition(go) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(ask.closest(".traj-go")).toBeNull();
-    expect(ask.textContent).toContain("How was synergy measured?");
-    expect(ask.getAttribute("aria-expanded")).toBe("false");
-    await act(async () => ask.click());
-    expect(calls, "opening the question must not press the row").toEqual([]);
-    expect(ask.getAttribute("aria-expanded")).toBe("true");
-    const opened = text(".traj-ask .traj-sense");
-    expect(opened).toContain("We measured it with PID.");
-    expect(opened).toContain("Synergy peaked mid-range.");
-    expect(opened).toContain("Results");
-    /* The stop's own quote is named, not repeated above itself. */
-    expect(opened).toContain("This stop's passage, below");
-    expect(opened).not.toContain("The stop's own words.");
-    await act(async () => host.querySelector<HTMLButtonElement>('.traj-ask [aria-label="Open FAQ"]')!.click());
-    expect(calls).toEqual(["open faq"]);
   });
 
   it("opens a term chip to its one-line sense, and Glossary by an icon, not the words (5C)", async () => {
@@ -763,7 +731,8 @@ describe("the panel", () => {
     /* The idea's opening closed the term's. */
     expect(chips().map((c) => c.getAttribute("aria-expanded"))).toEqual(["false", "false", "true"]);
     expect(text(".traj-card .traj-sense")).toContain("The pair carries information neither does alone.");
-    await act(async () => host.querySelector<HTMLButtonElement>(".traj-ask-q")!.click());
+    /* Pressed again, it closes. */
+    await act(async () => chips()[2]!.click());
     expect(chips().map((c) => c.getAttribute("aria-expanded"))).toEqual(["false", "false", "false"]);
     await act(async () => chips()[2]!.click());
     await act(async () => host.querySelector<HTMLButtonElement>('.traj-card [aria-label="Open in Ideas"]')!.click());
@@ -1870,6 +1839,36 @@ describe("the scrapbook, walked", () => {
     await act(async () => chips()[1]!.click());
     await act(async () => host.querySelector<HTMLButtonElement>('.traj-card [aria-label="Open in Ideas"]')!.click());
     expect(opened).toEqual(["idea spya-id4ghj"]);
+  });
+
+  it("shows no FAQ question on a stop, even when the FAQ pairs one with its paragraph (SPIDERYARN-READING2-8Z)", async () => {
+    faqBody = {
+      faq: {
+        version: "faq/t",
+        generator: "t",
+        slug: "a-route",
+        sourceHash: "h",
+        questions: [
+          {
+            id: "spya-fq2abc",
+            question: "Did they ever leave the laboratory?",
+            passages: [{ blockId: B[2]!, quote: "never left the laboratory", start: 0 }],
+          },
+        ],
+        dropped: {},
+        generatedAt: "",
+        elapsedMs: 0,
+      },
+      stale: false,
+      outdated: false,
+    };
+    await mount();
+    expect(current()).toBe(Q[2]);
+    /* The stop card is there, so the gathering ran over this paragraph. */
+    expect(host.querySelector(".traj-row.current .traj-card")).not.toBeNull();
+    expect(host.textContent).not.toContain("Did they ever leave the laboratory?");
+    /* Trajectory no longer reads the FAQ at all (Greg: "they don't add much"). */
+    expect(requested.some((r) => r.url.startsWith("/api/faq/"))).toBe(false);
   });
 
   it("shows the Ideas the route's own job found, without a reload (Sol F61)", async () => {

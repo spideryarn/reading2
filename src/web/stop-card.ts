@@ -1,14 +1,15 @@
 /**
  * **What sits under a Trajectory stop** — the scrapbook's card, gathered from
  * what the other modes have *already* written for this article: the glossary
- * terms the passage uses, the ideas it bears on, the FAQ question it answers,
- * and where it sits in the study's timeline.
+ * terms the passage uses, the ideas it bears on, and where it sits in the
+ * study's timeline. The FAQ question it answers used to sit above the stop;
+ * it was removed on 2026-10-01 (Greg, SPIDERYARN-READING2-8Z: *"Remove the FAQ
+ * snippets (they don't add much)"*).
  *
  * Pure: the artefacts, the stop's block and the route in, the clusters out.
  * Nothing here fetches or generates; the band reads the artefacts through the
- * read-only hooks (`useGlossaryRead`, `useIdeasRead`, `useFaqRead`,
- * `useTimelineRead`), so "nothing on the card starts a run" is structural
- * (Sol F22).
+ * read-only hooks (`useGlossaryRead`, `useIdeasRead`, `useTimelineRead`), so
+ * "nothing on the card starts a run" is structural (Sol F22).
  *
  * The rules, each from docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Stage 3 in detail and its revision after Sol's review:
@@ -30,7 +31,6 @@
 import type {
   Block,
   BlockId,
-  Faq,
   Glossary,
   GlossaryEntry,
   Ideas,
@@ -54,7 +54,6 @@ export interface Fresh<T> {
 export interface CardSources {
   glossary: Fresh<Pick<Glossary, "entries">>;
   ideas: Fresh<Pick<Ideas, "ideas">>;
-  faq: Fresh<Pick<Faq, "questions">>;
   timeline: Fresh<Pick<Timeline, "events">>;
 }
 
@@ -71,36 +70,6 @@ export interface CardIdea {
   statement: string;
 }
 
-/** One of the passages FAQ pairs with a question: the article's own words. */
-export interface CardPassage {
-  blockId: BlockId;
-  quote: string;
-  /** Distinguishes repeated copies of the same words in one block, as in FAQ. */
-  start: number;
-  /** The section path, `Results › Robustness`, or `null` where the tree does not cover it. */
-  place: string | null;
-  /**
-   * **This is the stop's own quote** — the same block, and the words of one
-   * are all visible in the stop quote. Established by the source offsets where
-   * the Quote has them, or conservatively by the words for an older Quote, not
-   * the block alone (Sol, plan 260929f F3), so the panel can say "this passage"
-   * rather than repeat the quote the reader is looking at.
-   */
-  here: boolean;
-}
-
-export interface CardQuestion {
-  id: string;
-  question: string;
-  /**
-   * **Every** passage FAQ pairs with it, this paragraph's included (Sol,
-   * plan 260929f F3): the pairing is by block, so FAQ's words in this
-   * paragraph may not be the stop's quote, and "the others" cannot be told
-   * apart by block alone.
-   */
-  passages: CardPassage[];
-}
-
 export interface CardEvent {
   id: string;
   label: string;
@@ -108,17 +77,15 @@ export interface CardEvent {
 
 /**
  * Where a card link goes: a mode and the selection it opens on (`?term=`,
- * `?idea=`, `?event=`). FAQ has no selection in the address, so its link opens
- * the list at the top.
+ * `?idea=`, `?event=`).
  */
 export type CardTarget =
   | { kind: "term"; id: string }
   | { kind: "idea"; id: string }
-  | { kind: "event"; id: string }
-  | { kind: "faq" };
+  | { kind: "event"; id: string };
 
 /** The mode a card link opens — total, so a new kind cannot fall into another's switch (Sol, 260929f F8). */
-export function modeForCardTarget(target: CardTarget): "glossary" | "ideas" | "timeline" | "faq" {
+export function modeForCardTarget(target: CardTarget): "glossary" | "ideas" | "timeline" {
   switch (target.kind) {
     case "term":
       return "glossary";
@@ -126,8 +93,6 @@ export function modeForCardTarget(target: CardTarget): "glossary" | "ideas" | "t
       return "ideas";
     case "event":
       return "timeline";
-    case "faq":
-      return "faq";
     default: {
       const never: never = target;
       return never;
@@ -138,19 +103,13 @@ export function modeForCardTarget(target: CardTarget): "glossary" | "ideas" | "t
 export interface StopCard {
   terms: CardTerm[];
   ideas: CardIdea[];
-  questions: CardQuestion[];
   events: CardEvent[];
 }
 
-const EMPTY: StopCard = { terms: [], ideas: [], questions: [], events: [] };
+const EMPTY: StopCard = { terms: [], ideas: [], events: [] };
 
 export function cardIsEmpty(card: StopCard): boolean {
-  return (
-    card.terms.length === 0 &&
-    card.ideas.length === 0 &&
-    card.questions.length === 0 &&
-    card.events.length === 0
-  );
+  return card.terms.length === 0 && card.ideas.length === 0 && card.events.length === 0;
 }
 
 /** The value, unless there is none or it is stale (F19). */
@@ -168,10 +127,6 @@ export function gatherStopCard(opts: {
    */
   route: readonly (BlockId | null)[];
   sources: CardSources;
-  /** A block's section path, for the FAQ passages. Absent: no place is shown. */
-  placeOf?: (blockId: BlockId) => string | null;
-  /** The stop's own quote, to recognise a FAQ passage that is already visible below. */
-  quote?: { text: string; start?: number } | null;
 }): StopCard {
   const { blockId, sources } = opts;
   const byId = new Map(opts.blocks.map((b) => [b.id, b]));
@@ -192,7 +147,6 @@ export function gatherStopCard(opts: {
   return {
     terms: termsAt(usable(sources.glossary), blockId, textOf, opts.route),
     ideas: ideasAt(usable(sources.ideas), blockId),
-    questions: questionsAt(usable(sources.faq), blockId, opts.placeOf ?? (() => null), opts.quote ?? null),
     events: eventsAt(usable(sources.timeline), blockId),
   };
 }
@@ -235,57 +189,6 @@ function ideasAt(ideas: Pick<Ideas, "ideas"> | null, blockId: BlockId): CardIdea
   return ideas.ideas
     .filter((idea) => idea.occurrences.some((o) => o.blockId === blockId))
     .map((idea) => ({ id: idea.id, name: idea.name, statement: idea.statement }));
-}
-
-function questionsAt(
-  faq: Pick<Faq, "questions"> | null,
-  blockId: BlockId,
-  placeOf: (blockId: BlockId) => string | null,
-  quote: { text: string; start?: number } | null,
-): CardQuestion[] {
-  if (!faq) return [];
-  const mine = quote === null ? "" : squash(quote.text);
-  const same = (p: { blockId: BlockId; quote: string; start: number }) => {
-    if (p.blockId !== blockId || quote === null || mine === "") return false;
-    /* Both offsets are in the same `block.text` space. Besides proving that the
-       FAQ's whole passage is visible in the stop quote, they distinguish two
-       copies of the same words in one paragraph. Old Quotes may lack `start`,
-       so their deliberately conservative fallback is words-only. */
-    if (quote.start !== undefined) {
-      return p.start >= quote.start && p.start + p.quote.length <= quote.start + quote.text.length;
-    }
-    const theirs = squash(p.quote);
-    if (theirs === mine) return true;
-    /* Only hide a FAQ passage that is wholly visible in the stop quote. A
-       longer FAQ passage containing the stop would hide words not shown below.
-       Require a real sentence so a few shared words do not count. */
-    return theirs.length >= SAME_PASSAGE_MIN && mine.includes(theirs);
-  };
-  return faq.questions
-    .filter((q) => q.passages.some((p) => p.blockId === blockId))
-    .map((q) => ({
-      id: q.id,
-      question: q.question,
-      passages: q.passages.map((p) => ({
-        blockId: p.blockId,
-        quote: p.quote,
-        start: p.start,
-        here: same(p),
-        place: placeOf(p.blockId),
-      })),
-    }));
-}
-
-/** How long a legacy FAQ passage must be before containment alone counts as the same passage. */
-const SAME_PASSAGE_MIN = 40;
-
-/** Case, spacing and quotation marks aside — enough to see one quote inside another. */
-function squash(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[\u201c\u201d\u2018\u2019"']/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function eventsAt(timeline: Pick<Timeline, "events"> | null, blockId: BlockId): CardEvent[] {

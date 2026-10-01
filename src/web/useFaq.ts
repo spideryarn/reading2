@@ -69,9 +69,9 @@ export interface UseFaq {
  * **The read alone** — `GET /api/faq/:slug` and what it said, with no job
  * machinery: no `useStepJob`, no `useAutoRun`, no verb that spends.
  *
- * Split out for Trajectory's stop card (Sol F22), which shows the question a
- * passage answers only when the FAQ already exists. `useGlossaryRead` is the
- * model; `useFaq` layers its job on this and behaves exactly as before.
+ * Split out for Trajectory's stop card (Sol F22), which showed the question a
+ * passage answers until 2026-10-01 (SPIDERYARN-READING2-8Z) and reads it no
+ * longer. `useGlossaryRead` is the model; `useFaq` layers its job on this.
  */
 export interface FaqRead {
   status: FaqStatus;
