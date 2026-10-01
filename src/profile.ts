@@ -6,7 +6,10 @@
  * *this* article, which is not. Nothing downstream is told there were two,
  * because nothing downstream has a reason to treat them differently — and two
  * fields threaded through five call sites is ten chances for one of them to
- * forget the second.
+ * forget the second. Each half keeps its label inside the string, and that is
+ * enough for the one stage that weighs them differently: the quiz lets the
+ * reason lead and *About you* choose within it (src/quiz.ts,
+ * `QUIZ_READER_RULES`) — read off the labels by the model, never parsed apart.
  *
  * docs/plans/260826t-reader-profile.md has the design; docs/project/reader-profile.md
  * is the operating manual once it is built.

@@ -690,7 +690,7 @@ function EventDetail({
                   onJump(f.blockId);
                 }}
               >
-                <span className="tl-quote">
+                <span className={`tl-quote${f.whole ? " tl-quote-moved" : ""}`}>
                   {f.whole ? "whole paragraph — the exact words have moved" : f.short}
                 </span>
               </button>

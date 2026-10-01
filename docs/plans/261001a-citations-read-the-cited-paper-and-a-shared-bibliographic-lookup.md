@@ -301,6 +301,11 @@ existing allowance. The outside services are free; the cache and the global limi
   the foreign keys. Two migrations, two deploys, ~400–600 lines. The full move — no JSON at all, one
   row per work per revision — is 1.5–3k lines through `loadCitations`, the public projection, three
   exports, chat and the re-run path, and needs a *ran* marker to tell *not run* from *found nothing*.
+- **A cited work whose only title is an author–year label** (`Santoro et al 2016`, gwern's style)
+  and that has no reference entry: its registry record is *inconclusive*, so the paper is not read
+  and no registry by-line is drawn. After the final review, 3 of 12 works in the real run. A first
+  author and a year cannot tell a mistyped identifier from the right one; what could is a second
+  identity signal — the quick check's matched page agreeing with the identifier, say.
 - **An author–year PDF bibliography.** 6K splits a numbered list at its own numbers; an author–year
   list has none, and its entries run together in the text layer. Needs a splitter on `Surname, I.`
   starts, measured on real PDFs.
@@ -340,6 +345,55 @@ Every finding taken:
 - **P-10 — "current" overclaimed.** Taken: a dated snapshot.
 - **P-11 — surfaces and stage order.** Taken: six stages in Sol's order; every projection named.
 
+## Real runs, 2026-10-01
+
+`scripts/probes/261001a-paper-read-probe.ts`, on three local articles (the Antikythera mechanism,
+spider silk, gwern's *The Scaling Hypothesis*), real Crossref, DataCite and publishers.
+
+**The free part, twelve works, first run**: read 3, unreadable 5, not-the-full-text 1, identity
+conflict 2, not confirmed 1. Three of those outcomes were wrong, and are fixed:
+
+- **An author–year label is not a title.** gwern cites `Santoro et al 2016` with an arXiv link; the
+  registry's title can never agree with a label, so the identifier the article itself linked was
+  called a conflict — and stage 5 would have told the reader so. The first fix accepted the
+  registry's first author and year, but final code review found that this lets a one-digit-wrong
+  arXiv id confirm another `Smith et al 2020` paper. Now that pair makes the record *inconclusive*,
+  not a conflict; it becomes agreement only when the article's own reference entry also contains
+  the registry title (`authorYearLabel`, `registryIdentifiesCitation` in `paper-evidence.ts`, shared
+  with `citation-registry.ts`).
+- **A running-header title vanished from page 1.** arXiv templates repeat the title on every page,
+  so furniture removal stripped it from page 1 too, and the title check could not succeed. The
+  identity check now reads page 1 with its furniture kept, but a title found only there counts only
+  when its first author is in the following by-line — an issue or proceedings header cannot certify
+  another paper merely because the identifier agrees. What is chunked and sent is unchanged.
+- **A publisher's suffix on a DOI.** `doi.org/10.1101/2020.06.26.174482.full` is not a DOI; the
+  lookup and the paper's address drop bioRxiv's and the observed BioOne route suffixes. The rule is
+  deliberately publisher-shaped rather than generic: DOI suffixes are opaque, so a real DOI may
+  itself end `.pdf`, `.full` or `v2`.
+
+**After the first fixes, before the review hardening above**: read 6 (every arXiv row), unreadable 5
+(nature.com and Wiley turn us away; two DOIs doi.org could not resolve before the address fix),
+not-the-full-text 1 (Google Books). A read took 0.5–2.6 s. Peak RSS of the probe process grew from
+600 to 930 MB over twelve reads in one process; one press reads one paper. The `Santoro et al 2016`
+row has no reference entry carrying its title, so the hardened rule deliberately leaves that one
+unconfirmed rather than accepting an identity that the article does not independently corroborate.
+
+**The paid part, five presses, $0.90**: $0.14–$0.21 a press; the passages call cost ~3¢ and took
+2.6–8.2 s, and offered three passages each time, all three kept by code every time — so the
+quotes a reader sees are the paper's own characters. **And it found a P0**: all three presses that
+read the paper then failed with *"the web search came back with nothing to read"* and kept nothing.
+With the paper in hand the model ran no search, and both the code and the `citation_investigations`
+CHECK still required at least one extract. The two presses that could not read the paper finished
+normally. Fixed in the commit after this one, with a test of exactly that shape — the harness's fake
+stream always returned an extract, so no test could see it.
+
+A known limit, accepted: a bioRxiv PDF's line numbers are in its text layer, so a passage can read
+*better than120 recurrent networks*. It is still the paper's own characters.
+
 ## Landed
 
-(Filled in per stage.)
+- Plan and review: 7881483a.
+- Stage 1, the lookup: f6691763. Stage 2, the paper as evidence: 229d363b. Stage 4, PDF entry
+  identifiers: 6b2afb28. Stages 3, 5 and 6: 5bfff263, merged in 4b37a249 (stage 3's migration
+  re-stamped to follow dev's). Two guards I had not run, fixed on reports from peers: db-schema-drift
+  (dc7dd1cc) and client-imports (c3040a72).

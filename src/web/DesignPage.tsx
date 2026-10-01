@@ -352,7 +352,7 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
   },
 ];
 
-/** The four type stacks, and what each is allowed to be used for. */
+/** The type stacks, and what each is allowed to be used for. */
 const FACES: { token: string; used: string }[] = [
   { token: "--font-reading", used: "the article, and the reader's own words in a comment" },
   /* The table's column headers wore this until 2026-09-05, when that row lost
@@ -363,6 +363,11 @@ const FACES: { token: string; used: string }[] = [
   { token: "--font-mono", used: "counts and anything that wants to line up" },
   { token: "--font-id", used: "block ids, and only block ids" },
   { token: "--font-brand", used: "the wordmark, and only the wordmark" },
+  /* The per-voice faces, read only by styles/voices.css and only with the
+     Experimental switch on. docs/plans/261001d-typeface-per-voice.md. */
+  { token: "--font-author", used: "experimental: the article, and verbatim quotes of it" },
+  { token: "--font-ai", used: "experimental: anything a model wrote" },
+  { token: "--font-reader", used: "experimental: anything the reader typed" },
 ];
 
 /**

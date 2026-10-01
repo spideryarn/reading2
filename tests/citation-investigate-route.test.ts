@@ -55,6 +55,7 @@ await pgReady({
 
 const { handleApi } = await import("../src/routes.js");
 const { investigateCitation } = await import("../src/store/index.js");
+const { pgCitationInvestigationStore } = await import("../src/store/pg-citation-investigations.js");
 
 let article: ScratchArticle | undefined;
 const realFetch = globalThis.fetch;
@@ -437,5 +438,59 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
     await secondHandled;
     expect(again.lookups()).toBe(0);
     expect(frames(second.body()).some((f) => f.name === "lookup")).toBe(false);
+  });
+});
+
+/* The P0 of 2026-10-01: with the paper read, the model may answer from it and
+   search nothing. The CHECK `citation_investigations_counts` must take that
+   row, and only that one — an answer with no extract and no paper read stays
+   refused by the database as well as by the code. Its own entry id, so the
+   rows above are untouched. */
+describe("the store's CHECK on extracts", () => {
+  const ZERO = "spya-zerex2";
+  const BASE = {
+    answer: "From the paper's own text.",
+    sources: [],
+    extractsRead: 0,
+    longestExtractWords: 0,
+    matchedHost: null,
+    searches: 0,
+    searchesFrom: "server_tool_use_details",
+    model: "test/model",
+    at: "2026-10-01T12:00:00.000Z",
+    contextHash: "0123456789abcdef",
+    promptVersion: "citation-investigate/test",
+  };
+  const save = async (inv: Parameters<typeof pgCitationInvestigationStore.save>[2]) =>
+    runAsOwner(TEST_OWNER, () => pgCitationInvestigationStore.save(SLUG, ZERO, inv));
+
+  it("keeps an answer with no extract when the paper was read", async () => {
+    await save({
+      ...BASE,
+      paper: {
+        state: "read",
+        requestedUrl: "https://arxiv.org/pdf/2001.08361",
+        finalUrl: "https://arxiv.org/pdf/2001.08361v1",
+        host: "arxiv.org",
+        words: 11200,
+        sentWords: 4900,
+        chunks: ["c1", "c2"],
+        matchedBy: "arxiv",
+        evidenceSha: "e".repeat(64),
+        selectionVersion: "paper-selection/1",
+        readAt: "2026-10-01T12:00:00.000Z",
+        passages: [],
+      },
+    });
+    const [row] = await getDb()
+      .select({ extractsRead: citationInvestigations.extractsRead, paperState: citationInvestigations.paperState })
+      .from(citationInvestigations)
+      .where(and(eq(citationInvestigations.articleId, article?.articleId ?? ""), eq(citationInvestigations.entryId, ZERO)));
+    expect(row).toEqual({ extractsRead: 0, paperState: "read" });
+  });
+
+  it("refuses an answer with no extract when the paper was not read", async () => {
+    await expect(save({ ...BASE, paper: { state: "no-address", readAt: "2026-10-01T12:00:00.000Z" } })).rejects.toThrow();
+    await expect(save(BASE)).rejects.toThrow();
   });
 });

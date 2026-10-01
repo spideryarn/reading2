@@ -762,16 +762,18 @@ function Turn({
         </span>
       ) : (
         prose !== "" && (
-          <CitedMarkdown
-            text={prose}
-            blocks={blocks}
-            onJump={onJump}
-            partial={message.status === "pending"}
-            /* Chat's `LINKING TO THE WEB` rule governs this prompt too — it is
-               interpolated into all three — so an address in the prose is one a
-               tool returned. src/web/Cited.tsx § links. */
-            links
-          />
+          <div className="cnd-answer">
+            <CitedMarkdown
+              text={prose}
+              blocks={blocks}
+              onJump={onJump}
+              partial={message.status === "pending"}
+              /* Chat's `LINKING TO THE WEB` rule governs this prompt too — it is
+                 interpolated into all three — so an address in the prose is one a
+                 tool returned. src/web/Cited.tsx § links. */
+              links
+            />
+          </div>
         )
       )}
       {message.status === "pending" && (

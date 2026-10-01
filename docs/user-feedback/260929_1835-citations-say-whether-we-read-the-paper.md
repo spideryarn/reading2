@@ -42,3 +42,32 @@ Not done: reading the full paper. That needs new fetching machinery. It is writt
 later stage in the plan, for Greg to decide.
 
 Plan: [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
+
+## Follow-up, 2026-10-01: Citations reads the paper itself
+
+Greg answered the open call, relayed by the Overseer: *"Oh, Citations definitely needs to read the
+paper! Especially the References/Bibliography section. Otherwise it's useless!"* **Shipped** on
+`dev`, not deployed.
+
+- **Investigate now reads the cited paper itself** when it can: the row's own DOI or arXiv link, or
+  the page the quick check matched. Only a PDF's text is counted as the paper. Code must confirm
+  it is this work (the title at the top of page one, plus its identifier or first author), and a DOI
+  whose registry title disagrees with the article's is refused before anything is fetched.
+- **The row says what was read**, dated: *we read the paper itself: a PDF from arxiv.org, 9,000
+  words…*, or why we could not (the publisher turned us away, only an abstract page, we could not
+  confirm it was this work).
+- **Up to three passages from the paper**, each found by code in the text the AI was shown, with
+  the page number. The streamed answer still may not quote. Any words shown as the paper's are the
+  paper's own characters.
+- **The article's own reference list** was already read for HTML and for numbered PDF lists (6J and
+  6K). Now a DOI or arXiv id in a PDF's entry becomes the row's link, which is what lets the paper be
+  reached from a PDF article.
+
+Real runs on twelve works: four papers read (every arXiv row whose identity was clear). nature.com and
+Wiley turn us away. Three gwern-style rows titled only *Santoro et al 2016* are left unconfirmed on
+purpose, because an author and a year cannot catch a mistyped identifier. About 22¢ a press.
+Citations as database rows was weighed with GPT Sol and Opus and deferred; the plan says why and
+what it would take.
+
+Plan: [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
+Commits 229d363b, 6b2afb28, 5bfff263, bed811d5.

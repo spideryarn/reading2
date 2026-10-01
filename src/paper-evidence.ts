@@ -188,7 +188,9 @@ export function paperAddress(workUrl: string, matchedPageUrl?: string | null): P
   /* `identityOf`'s DOI has no `?`, `#` or whitespace, so it is already a path. */
   if (id.doi) {
     const workId = parseWorkId(`doi:${id.doi}`);
-    if (workId) return { url: `https://doi.org/${id.doi}`, from: "doi", id: workId };
+    /* From the normalised id, not the row's: `parseWorkId` drops a publisher's
+       path suffix (`….full`, `….abstract`), which doi.org does not resolve. */
+    if (workId) return { url: `https://doi.org/${workId.slice("doi:".length)}`, from: "doi", id: workId };
   }
   if (id.arxiv) {
     /* `arxivPdfUrl` keeps a version the article cited (`v1`); `identityOf` does not. */
@@ -400,6 +402,83 @@ export function registryTitleAgrees(registryTitle: string, citationTitle: string
   return want.filter((w) => have.has(w)).length / want.length >= 0.8;
 }
 
+/** Lower-cased, diacritics dropped: "Gödel" and "GODEL" are one surname. */
+function folded(value: string): string {
+  return tokens(value.normalize("NFKD").replace(/\p{M}/gu, "")).join(" ");
+}
+
+const SURNAME_PARTICLE = "(?:(?:van|von|de|der|den|del|della|di|da|du|dos|le|la|ter|ten)\\s+)*";
+/** One capitalised surname, hyphen or apostrophe allowed inside — no digits, no second word. */
+const SURNAME = `${SURNAME_PARTICLE}\\p{Lu}[\\p{L}'’\\-]*\\p{L}`;
+const LABEL_YEAR = "(?:1[5-9]|20)\\d{2}[a-z]?";
+/**
+ * The whole title is `X et al YYYY`, `X et al. (YYYY)`, `X & Y YYYY`,
+ * `X and Y YYYY` or `X YYYY`. Anchored at both ends, so a real title that
+ * merely contains a year ("Deep Learning in 2016") is not one.
+ */
+const AUTHOR_YEAR_LABEL = new RegExp(
+  `^(${SURNAME})(?:,?\\s+et\\s+al\\.?|\\s+(?:&|and)\\s+${SURNAME})?,?\\s+(\\(${LABEL_YEAR}\\)|${LABEL_YEAR})$`,
+  "u",
+);
+
+/**
+ * **A citation "title" that is only an author–year label** — gwern's
+ * `Santoro et al 2016` — as its first surname (folded) and year, or null.
+ * Such a title names no words a registry title could share, so title agreement
+ * cannot judge it; `registryIdentifiesCitation` judges it by author and year.
+ */
+export function authorYearLabel(title: string): { surname: string; year: number } | null {
+  const m = AUTHOR_YEAR_LABEL.exec(title.trim());
+  if (!m?.[1] || !m[2]) return null;
+  return { surname: folded(m[1]), year: Number(m[2].replace(/\D/g, "")) };
+}
+
+function yearIn(year: string | null | undefined): number | null {
+  const m = year?.match(/\b(?:1[5-9]|20)\d{2}\b/)?.[0];
+  return m ? Number(m) : null;
+}
+
+/**
+ * **Does a registry record name the cited work?** One rule for every caller
+ * that stores or acts on the answer (this file's read, and
+ * src/citation-registry.ts's row field):
+ *
+ * - `"title"` — the titles agree, by `registryTitleAgrees`;
+ * - `"label"` — the citation's title is only an author–year label, the first
+ *   author and year agree, and the article's own reference entry contains the
+ *   registry title;
+ * - `"label-unconfirmed"` — author and year agree but the article gives no
+ *   title with which to distinguish two same-surname papers from that year;
+ * - `null` — neither: the identifier points at another work.
+ *
+ * A record with no year never agrees by label: the surname alone is too weak.
+ */
+export function registryIdentifiesCitation(
+  record: RegistryRecord,
+  citation: { title: string; year?: string | null; reference?: string | null },
+): "title" | "label" | "label-unconfirmed" | null {
+  if (registryTitleAgrees(record.title, citation.title)) return "title";
+  const label = authorYearLabel(citation.title);
+  const first = record.authors[0]?.family;
+  if (!label || !first || record.year === undefined) return null;
+  if (folded(first) !== label.surname) return null;
+  const rowYear = yearIn(citation.year);
+  if (record.year !== label.year || (rowYear !== null && rowYear !== label.year)) return null;
+
+  /* A first surname and year are not identity: Smith et al. 2020 plus an
+     arXiv id mistyped by one digit can describe the wrong Smith paper from
+     2020, whose registry title and PDF then corroborate each other. Require
+     the article's own reference entry to carry the registry title before it
+     may stand in for an author–year label. With no entry the match is
+     deliberately inconclusive, not an alarming conflict. */
+  const want = tokens(record.title.replace(/<[^>]*>/g, " "));
+  const have = tokens(citation.reference ?? "");
+  const titleInReference =
+    want.length > 0 &&
+    have.some((_, from) => from + want.length <= have.length && want.every((word, offset) => have[from + offset] === word));
+  return titleInReference ? "label" : "label-unconfirmed";
+}
+
 /** arXiv's own DOI (`10.48550/arxiv.1706.03762`) is an arXiv id by another name. */
 function arxivOfDoi(doi: string): string | null {
   return /^10\.48550\/arxiv\.(.+)$/i.exec(doi)?.[1]?.toLowerCase() ?? null;
@@ -408,13 +487,22 @@ function arxivOfDoi(doi: string): string | null {
 const bareArxiv = (id: string) => id.toLowerCase().replace(/v\d+$/, "");
 
 export interface IdentityInput {
-  /** The citation's title and authors, as the article gives them. */
+  /** The citation's title and authors, as the article gives them — the title the page-1 check looks for. */
   title: string;
+  /**
+   * The registry's title, when the registry record has agreed with the
+   * citation (`registryIdentifiesCitation`): accepted on page 1 as well as
+   * `title`, because an article may shorten a title ("…for CNNs") or give only
+   * an author–year label. Never set from a record that did not agree.
+   */
+  registryTitle?: string;
   authors: string | null;
   /** The row's identifier, when it has one. */
   id: WorkIdentifier | null;
-  /** The PDF's first-page lines, preserving the boundary that distinguishes its title from prose about another work. */
+  /** Page 1 after repeated furniture was removed, preserving title/prose line boundaries. */
   firstPageLines: readonly string[];
+  /** Page 1 before repeated furniture was removed. A title found only here needs the author too. */
+  firstPageLinesWithFurniture?: readonly string[];
   /** Where the PDF came from, after redirects. */
   finalUrl: string;
   /** The landing page's meta tags, when there was a landing page. */
@@ -432,9 +520,9 @@ export interface IdentityInput {
  * lines, but require the joined run to be exactly the title's tokens. A landing
  * page's `citation_title` is the other, stronger route below.
  */
-function titleInFirstPageHeading(lines: readonly string[], title: string): boolean {
+function titleInFirstPageHeading(lines: readonly string[], title: string): { from: number; to: number } | null {
   const want = tokens(title);
-  if (want.length === 0) return false;
+  if (want.length === 0) return null;
   const starts = Math.min(lines.length, 8);
   for (let from = 0; from < starts; from++) {
     let candidate = "";
@@ -442,28 +530,33 @@ function titleInFirstPageHeading(lines: readonly string[], title: string): boole
       candidate += `${candidate ? " " : ""}${lines[to] ?? ""}`;
       const have = tokens(candidate);
       if (have.length > want.length) break;
-      if (have.length === want.length && have.every((word, i) => word === want[i])) return true;
+      if (have.length === want.length && have.every((word, i) => word === want[i])) return { from, to };
     }
   }
-  return false;
+  return null;
 }
 
-/**
- * **Is this document the cited work?** The plan's four rules, in the order
- * that makes the rest meaningless:
- *
- * 1. a different identifier on the document — the landing page's DOI, or the
- *    arXiv id of the final address — refuses, whatever the title says;
- * 2. the citation's title must be a heading-shaped run near the top of the
- *    first page, or be the landing page's `citation_title` — not merely occur
- *    in prose where a different paper cites it;
- * 3. and then an identifier agreeing, or
- * 4. the first author's surname in the same window.
- *
- * `resultIsTheWork` is never called here: given a synthesised DOI URL its
- * identifier branch would skip the title altogether (Sol P-2).
- */
-export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: MatchedBy } | { ok: false; why: NotConfirmedWhy } {
+/** A furniture-only title tied to this PDF by the adjacent first-author by-line. */
+function titleWithNearbyAuthor(lines: readonly string[], titles: readonly string[], surname: string | null): boolean {
+  if (surname === null) return false;
+  return titles.some((title) => {
+    const span = titleInFirstPageHeading(lines, title);
+    if (span === null) return false;
+    /* A real repeated title is followed by its by-line. An issue header can
+       coexist with the target author's name later in an abstract or table of
+       contents; that is not attachment to this PDF. */
+    return tokens(lines.slice(span.to + 1, span.to + 4).join(" ")).includes(surname);
+  });
+}
+
+interface PaperIdentifiers {
+  rowDoi: string | null;
+  rowArxiv: string | null;
+  docDoi: string | null;
+  docArxiv: string | null;
+}
+
+function paperIdentifiers(input: IdentityInput): PaperIdentifiers {
   const rowDoi = input.id?.startsWith("doi:") ? input.id.slice(4) : null;
   const rowArxiv = input.id?.startsWith("arxiv:")
     ? bareArxiv(input.id.slice(6))
@@ -473,29 +566,72 @@ export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: Ma
   const docDoi = input.meta?.doi ?? null;
   const finalArxiv = identityOf(input.finalUrl).arxiv;
   const docArxiv = finalArxiv ? bareArxiv(finalArxiv) : docDoi ? arxivOfDoi(docDoi) : null;
+  return { rowDoi, rowArxiv, docDoi, docArxiv };
+}
 
-  if (rowDoi && docDoi && docDoi !== rowDoi && !(rowArxiv && docArxiv === rowArxiv)) {
-    return { ok: false, why: "different-identifier" };
-  }
-  if (rowArxiv && docDoi && docArxiv === null) return { ok: false, why: "different-identifier" };
-  if (rowArxiv && docArxiv && docArxiv !== rowArxiv) return { ok: false, why: "different-identifier" };
+function identifiersConflict({ rowDoi, rowArxiv, docDoi, docArxiv }: PaperIdentifiers): boolean {
+  if (rowDoi && docDoi && docDoi !== rowDoi && !(rowArxiv && docArxiv === rowArxiv)) return true;
+  if (rowArxiv && docDoi && docArxiv === null) return true;
+  return !!(rowArxiv && docArxiv && docArxiv !== rowArxiv);
+}
+
+function identifierMatch({ rowDoi, rowArxiv, docDoi, docArxiv }: PaperIdentifiers): MatchedBy | null {
+  if (rowDoi && docDoi === rowDoi) return "doi";
+  if (rowArxiv && docArxiv === rowArxiv) return "arxiv";
+  return null;
+}
+
+/**
+ * **Is this document the cited work?** The plan's four rules, in the order
+ * that makes the rest meaningless:
+ *
+ * 1. a different identifier on the document — the landing page's DOI, or the
+ *    arXiv id of the final address — refuses, whatever the title says;
+ * 2. the citation's title — or the registry's, once the registry record has
+ *    agreed with the citation — must be a heading-shaped run near the top of
+ *    the first page, or be the landing page's `citation_title` — not merely
+ *    occur in prose where a different paper cites it;
+ * 3. and then an identifier agreeing, or
+ * 4. the first author's surname in the same window.
+ *
+ * `resultIsTheWork` is never called here: given a synthesised DOI URL its
+ * identifier branch would skip the title altogether (Sol P-2).
+ */
+export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: MatchedBy } | { ok: false; why: NotConfirmedWhy } {
+  const identifiers = paperIdentifiers(input);
+  if (identifiersConflict(identifiers)) return { ok: false, why: "different-identifier" };
 
   /* Keep this window physically inside page one. The first 2,000 characters
      of the whole document can reach page two when the title page is sparse. */
-  const window = tokens(input.firstPageLines.join(" ").slice(0, IDENTITY_WINDOW_CHARS));
-  const titleOnPage = titleInFirstPageHeading(input.firstPageLines, input.title);
-  const titleInMeta = titleNamesWork(input.meta?.title, input.title) === "whole";
+  const identityLines = input.firstPageLinesWithFurniture ?? input.firstPageLines;
+  const window = tokens(identityLines.join(" ").slice(0, IDENTITY_WINDOW_CHARS));
+  /* An author–year label is not a title the PDF can corroborate. It may only
+     lead to the registry title after the article's own reference entry names
+     that title (`registryIdentifiesCitation`). */
+  const titles = [
+    ...(authorYearLabel(input.title) === null ? [input.title] : []),
+    ...(input.registryTitle ? [input.registryTitle.replace(/<[^>]*>/g, " ")] : []),
+  ];
+  const titleOnPage = titles.some((title) => titleInFirstPageHeading(input.firstPageLines, title) !== null);
+  const titleInMeta = titles.some((title) => titleNamesWork(input.meta?.title, title) === "whole");
   const surname =
     surnameOf(input.authors) ??
     (input.registry?.authors[0] ? surnameOf(input.registry.authors[0].family) : null);
   const authorOnPage = surname !== null && window.includes(surname);
+  const furnitureTitleWithByline = titleWithNearbyAuthor(identityLines, titles, surname);
   /* Landing-page metadata identifies the page, not necessarily the PDF it
      linked. If the PDF itself does not carry the title as a heading, tie it to
      the work with the first author before trusting the page's title. */
-  if (!titleOnPage && !(titleInMeta && authorOnPage)) return { ok: false, why: "title-not-found" };
+  /* Repeated furniture can be an issue or proceedings header naming another
+     work. It restores the title only when the PDF itself also carries the
+     first author on page 1; identifier agreement alone is tautological for a
+     mistyped DOI/arXiv id. Landing metadata has the same attachment risk. */
+  if (!titleOnPage && !furnitureTitleWithByline && !(titleInMeta && authorOnPage)) {
+    return { ok: false, why: "title-not-found" };
+  }
 
-  if (rowDoi && docDoi === rowDoi) return { ok: true, matchedBy: "doi" };
-  if (rowArxiv && docArxiv === rowArxiv) return { ok: true, matchedBy: "arxiv" };
+  const matchedBy = identifierMatch(identifiers);
+  if (matchedBy !== null) return { ok: true, matchedBy };
 
   if (authorOnPage) return { ok: true, matchedBy: "title-author" };
   return { ok: false, why: "no-second-signal" };
@@ -505,7 +641,10 @@ export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: Ma
 
 export interface PaperEvidenceInput {
   /** The work as *Investigate* describes it — its title, authors, link, `why` and citing passages. */
-  work: Pick<InvestigateContext, "title" | "authors" | "url" | "why" | "passages">;
+  work: Pick<InvestigateContext, "title" | "authors" | "url" | "why" | "passages"> & {
+    year?: string | null;
+    reference?: string | null;
+  };
   /** The page the quick check matched, when it matched one. */
   matchedPageUrl?: string | null;
 }
@@ -562,7 +701,8 @@ export async function readPaperEvidence(
   const requestedUrl = address.url;
 
   const registry = await askRegistry(deps.lookup, address.id);
-  if (registry?.kind === "found" && address.id && !registryTitleAgrees(registry.record.title, work.title)) {
+  const agreed = registry?.kind === "found" ? registryIdentifiesCitation(registry.record, work) : null;
+  if (registry?.kind === "found" && address.id && agreed === null) {
     return logged(
       {
         state: "identity-conflict",
@@ -594,9 +734,11 @@ export async function readPaperEvidence(
     authors: work.authors,
     id: address.id,
     firstPageLines: paper.pages[0]?.lines ?? [],
+    ...(paper.pages[0]?.linesWithFurniture ? { firstPageLinesWithFurniture: paper.pages[0].linesWithFurniture } : {}),
     finalUrl: paper.url,
     ...(paper.meta ? { meta: paper.meta } : {}),
-    ...(registry?.kind === "found" ? { registry: registry.record } : {}),
+    ...(registry?.kind === "found" && agreed !== "label-unconfirmed" ? { registry: registry.record } : {}),
+    ...(registry?.kind === "found" && (agreed === "title" || agreed === "label") ? { registryTitle: registry.record.title } : {}),
   });
   if (!identity.ok) {
     return logged(

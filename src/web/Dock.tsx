@@ -202,7 +202,8 @@ import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, orderDrawer, passageOf } from "./comment-nav.js";
-import { armActivationForMode } from "./activation.js";
+import { armActivationForMode, armActivationForSubMode } from "./activation.js";
+import { withSubMode, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
@@ -327,7 +328,14 @@ interface Props {
    * to the reading view rather than a switch that would have nothing to switch.
    */
   mode?: Mode;
-  onMode?(next: Mode): void;
+  /**
+   * `sub` is given only by the command bar's sub-mode rows (since 2026-10-01,
+   * SPIDERYARN-READING2-77): open `next` **with that chip chosen**, writing the
+   * mode and the sub-mode's parameters as one history entry
+   * (`subModeParams` in sub-modes.ts). The press has already been armed for the
+   * sub-mode by then — `useActivateSubMode` — so the receiver arms nothing for it.
+   */
+  onMode?(next: Mode, sub?: SubMode): void;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -1470,6 +1478,39 @@ function useActivateMode(
 }
 
 /**
+ * **Opening a mode with one of its sub-modes chosen** — the command bar's
+ * sub-mode rows (Greg, 2026-10-01, SPIDERYARN-READING2-77), and
+ * `useActivateMode`'s twin for the same two reasons: one callback so the arm
+ * and the move cannot drift apart, and the same two arrangements.
+ *
+ * **It arms the sub-mode, never the mode.** `armActivationForMode` for Diagram
+ * would arm whatever `?diagram=` says *now*, and the row is about to change it —
+ * a sketch token while Illustrated mounts, unclaimed and waiting for a Back to
+ * spend it (activation.ts § `activationForDiagram` walks through exactly that).
+ * `armActivationForSubMode` arms what the chip itself would.
+ *
+ * Off the reading view it is a link to the article in that sub-mode and arms
+ * nothing, as a mode row there is (§ `useActivateMode`).
+ */
+function useActivateSubMode(
+  slug: string,
+  search: string,
+  onMode: Props["onMode"],
+): (sub: SubMode) => void {
+  return useCallback(
+    (sub: SubMode) => {
+      if (onMode === undefined) {
+        navigate(readHref(slug, withSubMode(search, sub), "article"));
+        return;
+      }
+      armActivationForSubMode(slug, sub);
+      onMode(sub.mode, sub);
+    },
+    [slug, search, onMode],
+  );
+}
+
+/**
  * **Where a mode is, from a page that is not the reading view** — the href
  * `DockModeLinks` draws and the command bar's mode rows follow there, one
  * function so the two doors cannot land in different places.
@@ -1596,6 +1637,7 @@ export function Dock({
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
   const activateMode = useActivateMode(slug, search, diagram, onMode);
+  const activateSubMode = useActivateSubMode(slug, search, onMode);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It
@@ -1864,6 +1906,10 @@ export function Dock({
            `visibleModes` any other way. */
         modes={visible}
         activateMode={activateMode}
+        activateSubMode={activateSubMode}
+        /* For Diagram's pictures, the one visibility `modes` cannot carry. */
+        experimentalOn={experimental.on}
+        diagram={diagram}
         /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. */
@@ -2993,6 +3039,9 @@ function DockCommandBar({
   isVisitor,
   modes,
   activateMode,
+  activateSubMode,
+  experimentalOn,
+  diagram,
   article,
   openComments,
   bar,
@@ -3001,6 +3050,9 @@ function DockCommandBar({
   isVisitor: boolean;
   modes: readonly ModeUi[];
   activateMode(next: Mode): void;
+  activateSubMode(sub: SubMode): void;
+  experimentalOn: boolean;
+  diagram: DiagramKind;
   /**
    * **Which article the bar's Metadata row (and, until 2026-09-29, Tweets row) is about**, since
    * 2026-09-08 — the same `slug` and carried `search` the Dock's own links to
@@ -3021,6 +3073,9 @@ function DockCommandBar({
     <CommandBar
       modes={modes.map((m) => m.mode)}
       activateMode={activateMode}
+      activateSubMode={activateSubMode}
+      experimentalOn={experimentalOn}
+      diagram={diagram}
       article={article}
       openComments={openComments}
       open={bar.open}

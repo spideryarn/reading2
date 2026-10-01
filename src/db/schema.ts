@@ -3776,7 +3776,8 @@ export const citationFinds = spideryarn.table(
  *
  * **Only an answer that passed every check is a row**: a clean `finished`
  * ending, the in-stream quote guard, and at least one search result with a
- * non-empty extract. `sources` are exactly those results, safeUrl-filtered —
+ * non-empty extract, unless the paper itself was read. `sources` are exactly
+ * those results, safeUrl-filtered —
  * a variable list, as `glossary_lookups.citations` — and `extracts_read`,
  * `longest_extract_words` and `matched_host` are code's account of what was
  * read, never the model's.
@@ -3795,7 +3796,7 @@ export const citationInvestigations = spideryarn.table(
     answer: text("answer").notNull(),
     /** The results with a non-empty extract, every URL through `safeUrl`. */
     sources: jsonb("sources").$type<Citation[]>().notNull().default([]),
-    /** How many results came back with a non-empty extract. At least one. */
+    /** How many results came back with a non-empty extract. At least one unless `paperState` is `read`. */
     extractsRead: integer("extracts_read").notNull(),
     /** Words in the longest of those extracts — *the longest about W words*. */
     longestExtractWords: integer("longest_extract_words").notNull(),
@@ -3893,9 +3894,14 @@ export const citationInvestigations = spideryarn.table(
       "citation_investigations_entry_id_format",
       sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
     ),
+    /* At least one extract — unless the paper itself was read, when the model
+       may answer from it alone and search nothing (the P0 of 2026-10-01).
+       `coalesce`, because a CHECK that evaluates to NULL passes: a bare
+       `paper_state = 'read'` would let a pre-stage-3 row (state NULL) through
+       with no extract. */
     check(
       "citation_investigations_counts",
-      sql`${t.extractsRead} >= 1 and ${t.longestExtractWords} >= 0 and (${t.searches} is null or ${t.searches} >= 0)`,
+      sql`${t.extractsRead} >= 0 and (${t.extractsRead} >= 1 or coalesce(${t.paperState} = 'read', false)) and ${t.longestExtractWords} >= 0 and (${t.searches} is null or ${t.searches} >= 0)`,
     ),
     check("citation_investigations_answer", sql`char_length(${t.answer}) > 0`),
   ],

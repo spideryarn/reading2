@@ -35,6 +35,7 @@ import {
 } from "../annotations/AnnotationsColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
+import { useVoiceFaces } from "../useVoiceFaces.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
@@ -110,8 +111,12 @@ import {
   spineParam,
   threadParam,
   rememberParam,
+  diagramParam,
+  refereeParam,
+  summaryParam,
   type Mode,
 } from "../params.js";
+import { subModeParams } from "../sub-modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
@@ -268,6 +273,7 @@ export function Reader({
    * stranger's at zero.
    */
   const experimental = useExperimental();
+  useVoiceFaces(experimental.on);
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -688,6 +694,20 @@ export function Reader({
     mode: modeParam,
     remember: rememberParam,
     thread: threadParam,
+  });
+  /* **A mode and one of its sub-modes, in one pushed entry** — the command
+     bar's sub-mode rows (Dock.tsx § `useActivateSubMode`; Greg, 2026-10-01,
+     SPIDERYARN-READING2-77). One write so one Back undoes the trip, and so no
+     band mounts on the old sub-mode for a frame. Which keys, and that Quiz
+     clears `thread`, is `subModeParams` in sub-modes.ts — the same answer the
+     metadata page builds its href from. */
+  const [, setSubNav] = useQueryStates({
+    mode: modeParam,
+    remember: rememberParam,
+    thread: threadParam,
+    diagram: diagramParam,
+    referee: refereeParam,
+    summary: summaryParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
@@ -2891,13 +2911,16 @@ export function Reader({
            hook call at the top of this component. */
         experimental={experimental}
         mode={mode}
-        onMode={(next) => {
+        onMode={(next, sub) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old
              entry for ~50ms, so inferring intent from the address races. Back
              and Forward never call this callback and therefore never arm. */
           armTrajectoryOpening(trajectoryArrival.current, mode, next);
-          void setMode(next);
+          /* A sub-mode row has already armed its chip's press (Dock.tsx §
+             `useActivateSubMode`); this only moves the band, sub-mode and all. */
+          if (sub === undefined) void setMode(next);
+          else void setSubNav(subModeParams(sub), { history: "push" });
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */
           setBandAway(false);

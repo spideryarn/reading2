@@ -1,0 +1,340 @@
+{
+  "arm": "r2-bothA-1",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": "I want to apply this to my own recordings, so I need to know the practical problems: what makes PID hard to use on real data.",
+  "about": "An electrophysiologist who records spiking activity from multi-electrode arrays in cortical slices and cultures. I already know entropy, mutual information and transfer entropy well, but I have never used PID.",
+  "at": "2026-10-01T01:27:06.487Z",
+  "provenance": {
+    "gitHead": "4e65a05ca1f6a7e1e281c6dafc34847a9b3705fe",
+    "quizDirty": true,
+    "quizSourceSha256": "f6abe5fc740d7ffcb38dfd4d66468a2cc424e6dd0eee34c5582c86e137893786",
+    "model": "claude-sonnet-5"
+  },
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "questions": [
+    {
+      "question": "According to the article, what limitation of transfer entropy (measuring information flow) motivated the introduction of partial information decomposition?",
+      "referenceAnswer": "Transfer entropy only captures the flow of information from source to target, but it can't reveal how multiple sources interact to jointly produce information about the target that isn't reducible to their individual contributions — i.e. it can't show integration or computation.",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Transfer entropy can't show how multiple sources jointly interact to produce information beyond their individual contributions.",
+      "question": "In the two-parent version of PID, what does synergistic information refer to?",
+      "referenceAnswer": "It is the information about the target that can only be learned by observing the joint states of both parent neurons together, not from either parent alone.",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "Synergy is information disclosed only by the joint state of both sources together, not by either source alone.",
+      "question": "In the two-parent case, why can't the redundant, unique, and synergistic terms be solved directly from the known mutual information values?",
+      "referenceAnswer": "There are only three known mutual information values (joint and the two marginals) but four unknown partial information terms (redundancy, two unique terms, and synergy), making the system of equations underdetermined.",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "Solving the underdetermined system requires independently defining a redundancy function, since Shannon theory alone doesn't provide one.",
+      "question": "What problem does the article identify about the state of redundancy functions across the field?",
+      "referenceAnswer": "There is no single universally accepted redundancy measure; close to a dozen competing functions exist, each with its own trade-offs, so the right choice may depend on the context.",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "There is no single accepted redundancy measure, and the choice depends on context.",
+      "question": "Which redundancy measure did most of the neuroscience studies discussed actually use, and what criticism has been raised against it?",
+      "referenceAnswer": "Most studies used the original Imin measure proposed by Williams and Beer, but it has been criticized for producing unintuitive results.",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "Imin is the most commonly used redundancy measure despite being criticized for unintuitive behavior.",
+      "question": "How does increasing the number of parent/source neurons affect the practical feasibility of a full PID analysis?",
+      "referenceAnswer": "The number of distinct partial information atoms grows extremely fast with the number of parents, following the Dedekind numbers; for six parents there are already 7,828,354 atoms, most of them uninterpretable, making a complete decomposition intractable for neurons with many inputs.",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    },
+    {
+      "premise": "The number of PID atoms explodes combinatorially as the number of parent neurons grows.",
+      "question": "Given this explosion, what simplification did most neuroscience PID studies adopt to keep analyses tractable?",
+      "referenceAnswer": "Most studies restricted analysis to triads: just two source/parent neurons connecting to a single target, rather than attempting larger combinations of inputs.",
+      "evidence": [
+        "spya-q9gytb"
+      ]
+    },
+    {
+      "premise": "Studies typically restrict PID to triads of two sources and one target to keep the analysis tractable.",
+      "question": "How does the choice of redundancy function depend on whether data are discrete (like spikes) versus continuous (like LFPs)?",
+      "referenceAnswer": "Some functions (Imin, IBROJA, Isx) only work on discrete variables, others (minimum mutual information, Gaussian dependency decomposition) are exact for Gaussian continuous data but not discrete, and Iccs can handle either but may give counterintuitive results; there is currently no well-established redundancy function for non-normal continuous signals like LFPs.",
+      "evidence": [
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "No redundancy function is well-suited to non-normal continuous signals like LFPs, so discretizing such data is sometimes necessary.",
+      "question": "If continuous data must be discretized for PID, what practical recommendation does the article give to avoid problems?",
+      "referenceAnswer": "Keep the number of bins low, ideally binarizing the data, to avoid finite-size effects and an explosion of the joint probability space.",
+      "evidence": [
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "Fine discretization risks finite-size effects and an exploding joint probability space.",
+      "question": "Why does sample size become an increasing concern as the number of interacting neurons (k) in a PID analysis grows?",
+      "referenceAnswer": "Building a k-dimensional joint probability distribution for binary spiking data requires enough samples to cover all 2^k possible state combinations, and with many neurons there usually isn't enough data to reliably estimate all these probabilities, causing undersampling that can severely distort entropy and mutual information estimates.",
+      "evidence": [
+        "spya-tz99zn"
+      ]
+    },
+    {
+      "premise": "Undersampling from too few data relative to the state space can distort entropy and mutual information estimates.",
+      "question": "What specific bias does the naive plug-in entropy estimator introduce when probabilities are estimated from a finite dataset?",
+      "referenceAnswer": "It consistently underestimates true entropy and overestimates mutual information, so two processes that are actually uncorrelated can appear to show nonzero mutual information.",
+      "evidence": [
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "premise": "The plug-in entropy estimator can make uncorrelated processes falsely appear to share mutual information.",
+      "question": "What precaution does the article recommend when running PID or other information-theoretic analyses to guard against this estimation bias?",
+      "referenceAnswer": "Use appropriate null-model comparisons and make sure the limitations of the chosen entropy estimator are properly understood.",
+      "evidence": [
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "question": "What key difference does the article note between how the DIT toolbox and the IDTxl package expect their input data?",
+      "referenceAnswer": "DIT operates on pre-built joint probability distributions, so a user must construct the multivariate distribution from time series by hand before using it, whereas IDTxl works directly on time series and includes its own algorithms for transfer entropy inference.",
+      "evidence": [
+        "spya-cqrzab",
+        "spya-ng5zs5"
+      ]
+    },
+    {
+      "premise": "DIT requires pre-built probability distributions while IDTxl works directly on time series.",
+      "question": "Which software package does the article single out as the only one able to perform time-resolved, local PID, and what capability does that give it?",
+      "referenceAnswer": "SxPID, because its underlying redundancy function is localizable, it can compute PID values for individual moments or configurations rather than only an average over the whole dataset, enabling time-resolved analysis.",
+      "evidence": [
+        "spya-ng5zs5"
+      ]
+    },
+    {
+      "premise": "SxPID supports local, time-resolved PID because its redundancy function is localizable.",
+      "question": "What limitation does the article note about the original Imin measure with respect to this kind of local, time-resolved analysis?",
+      "referenceAnswer": "Imin, along with several later refinements, does not satisfy the property of being localizable, so it cannot be used to compute PID for individual moments in time.",
+      "evidence": [
+        "spya-ckpq7e"
+      ]
+    },
+    {
+      "question": "What caveat does the article raise about how the effective networks used to select computational triads were originally constructed in the cortical culture studies?",
+      "referenceAnswer": "Those networks were built using bivariate transfer entropy analyses, which have been shown to overestimate the significance of connections between pairs of neurons.",
+      "evidence": [
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "premise": "The triads analyzed were drawn from networks built with bivariate transfer entropy, which can overestimate connection significance.",
+      "question": "What additional caveat does the article raise about generalizing the organotypic culture findings to the intact brain?",
+      "referenceAnswer": "Although cultures reproduce many key properties of intact cortical circuits, the demands placed on neurons in a behaving animal are certain to differ from those in a dish, so it remains unclear whether the same patterns would hold in vivo.",
+      "evidence": [
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "question": "What does the existence of synergy in the empirical data suggest about how individual neurons respond to their inputs, as opposed to a simple threshold model?",
+      "referenceAnswer": "Neurons do not simply sum the number of active inputs and fire based on the total, as a basic threshold or complex contagion model would predict; instead they are sensitive to the particular joint patterns of incoming activity.",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "premise": "Synergy shows neurons are sensitive to the joint pattern of their inputs rather than just the total number active.",
+      "question": "Beyond this pattern-sensitivity at the single-neuron level, what did the broader body of studies show about what shapes how much synergistic processing a neuron performs?",
+      "referenceAnswer": "The amount of synergy is shaped by a neuron's local network environment — such as rich-club membership, connectivity motifs like recurrent connections, and clustering — as well as by the behavioral or task state of the animal.",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    }
+  ]
+}

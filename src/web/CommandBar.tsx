@@ -34,6 +34,13 @@
  *     jump and an "ask this article" would each need the bar to grow an
  *     *argument*, and it has one text box and it is the filter.
  *
+ *     **And on 2026-10-01, sub-modes** (SPIDERYARN-READING2-77): *"In the
+ *     Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram,
+ *     etc."* A fourth arm, `submode`, drawn after the mode rows and before the
+ *     pages, which opens its mode with that chip pressed — armed as the chip
+ *     arms, never as the mode does. `subModeRows` below, src/web/sub-modes.ts,
+ *     and docs/plans/261001d-command-bar-lists-sub-modes.md.
+ *
  *     On the reading view, a mode row's Enter opens it **exactly as pressing
  *     its Dock button does** — same activation, same generate-on-open, same
  *     cost. On the Metadata page it follows the mode link drawn there and arms
@@ -97,13 +104,15 @@
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PUBLIC_SHELF_LABEL } from "../messages.js";
-import { modeGenerates } from "./activation.js";
+import { MODE_LABEL } from "../title-text.js";
+import { modeGenerates, subModeGenerates } from "./activation.js";
 import { useFeedbackOpen } from "./FeedbackButton.js";
 import {
   commandId,
   commandText,
   modeCommand,
   rankCommands,
+  subModeCommand,
   type Command,
 } from "./command-match.js";
 import type { Mode } from "./params.js";
@@ -116,6 +125,9 @@ import {
   navigate,
   readHref,
 } from "./router.js";
+import { shownBehindTheSwitch } from "./experimental-visibility.js";
+import type { DiagramKind } from "./diagram.js";
+import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
 /**
@@ -410,7 +422,46 @@ export const GENERATES_MARKER = "generates";
  * chances to disagree with it.
  */
 function commandGenerates(command: Command): boolean {
-  return command.kind === "mode" ? modeGenerates(command.mode) : command.generates === true;
+  switch (command.kind) {
+    case "mode":
+      return modeGenerates(command.mode);
+    /* Its chip's answer, from the same table that arms it (activation.ts §
+       `subModeTarget`), for the reason the mode arm is a lookup. */
+    case "submode":
+      return subModeGenerates(command.sub);
+    default:
+      return command.generates === true;
+  }
+}
+
+/**
+ * **The sub-mode rows to offer**: every sub-mode of every mode the Dock drew,
+ * in Dock order and then chip order — and, inside a mode, only the chips that
+ * mode would draw with the switch as it is (Diagram's pictures are the one
+ * case: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
+ * and `visibleModes` in Dock.tsx share). A mode the Dock did not draw offers
+ * no sub-mode at all, so the experimental switch is decided once, upstream.
+ *
+ * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
+ * own second rule, so with the switch off and a shared `diagram=trail` link
+ * open, the bar offers Trail exactly where the chips do. GPT Sol, plan review.
+ */
+function subModeRows(
+  modes: readonly Mode[],
+  experimentalOn: boolean,
+  diagram: DiagramKind,
+): readonly Command[] {
+  return modes.flatMap((mode) =>
+    subModesOf(mode)
+      .filter((sub) =>
+        shownBehindTheSwitch({
+          experimental: subModeWords(sub).experimental,
+          on: experimentalOn,
+          current: sub.mode === "diagram" && sub.view === diagram,
+        }),
+      )
+      .map(subModeCommand),
+  );
 }
 
 /**
@@ -438,6 +489,24 @@ interface Props {
    */
   activateMode(next: Mode): void;
   /**
+   * **Opening a mode with one of its sub-modes chosen** — `Dock` §
+   * `activateSubMode`, the sub-mode rows' counterpart of `activateMode`, and
+   * like it the one place the arming and the move are paired.
+   */
+  activateSubMode(sub: SubMode): void;
+  /**
+   * **Whether the reader's experimental switch is on**, for the one decision
+   * `modes` cannot carry: which of Diagram's pictures to offer
+   * (`subModeRows`).
+   */
+  experimentalOn: boolean;
+  /**
+   * **The picture the address names**, already degraded by `diagramInSearch`
+   * (params.ts) — the chip row shows it whatever the switch says, so the bar
+   * does too.
+   */
+  diagram: DiagramKind;
+  /**
    * **The article the bar is standing on**, or `undefined` — see
    * `CommandBarArticle`, which carries the whole of why this is optional when
    * today it is always given.
@@ -458,6 +527,9 @@ interface Props {
 export function CommandBar({
   modes,
   activateMode,
+  activateSubMode,
+  experimentalOn,
+  diagram,
   article,
   openComments,
   open,
@@ -519,9 +591,12 @@ export function CommandBar({
   const commands = useMemo(
     () => [
       ...modes.map(modeCommand),
+      /* After every mode and before every page: the mode rows stay exactly the
+         Dock's, first, and a sub-mode loses a tie to its own mode. */
+      ...subModeRows(modes, experimentalOn, diagram),
       ...besideTheModes({ article, openComments, openFeedback }),
     ],
-    [modes, article, openComments, openFeedback],
+    [modes, experimentalOn, diagram, article, openComments, openFeedback],
   );
   const results = useMemo(() => rankCommands(draft, commands), [draft, commands]);
   const index = Math.min(selected, Math.max(0, results.length - 1));
@@ -591,7 +666,8 @@ export function CommandBar({
   const activate = useCallback(
     (command: Command) => {
       /* **Three verbs, and the switch is the whole of the difference between
-         the three kinds of row.** A mode is armed exactly as its Dock button
+         the kinds of row** — a sub-mode is the mode verb with a chip already
+         pressed (2026-10-01). A mode is armed exactly as its Dock button
          arms it (call 1); a page is navigated to exactly as a `<Link>`
          navigates — `navigate` is what Link.tsx calls once it has decided the
          reader wants to stay in this tab, which a reader pressing Enter in a
@@ -606,6 +682,12 @@ export function CommandBar({
       switch (command.kind) {
         case "mode":
           activateMode(command.mode);
+          break;
+        /* A mode with its chip already pressed — the chip's arming, never the
+           mode's (activation.ts § `subModeTarget` says why that matters for
+           Diagram). */
+        case "submode":
+          activateSubMode(command.sub);
           break;
         case "page":
           navigate(command.href);
@@ -624,7 +706,7 @@ export function CommandBar({
       setSelected(0);
       onClose();
     },
-    [activateMode, onClose],
+    [activateMode, activateSubMode, onClose],
   );
 
   return (
@@ -774,6 +856,15 @@ export function CommandBar({
                   activate(command);
                 }}
               >
+                {/* A sub-mode says which mode it is in, muted, before its own
+                    name — `Remember › Quiz` — so *Simple* is not a mystery and
+                    the pictures read as Diagram's. Outside `cmdbar-name`, which
+                    stays the row's own label. */}
+                {command.kind === "submode" && (
+                  <span className="cmdbar-parent tw:shrink-0 tw:text-muted-foreground">
+                    {MODE_LABEL[command.sub.mode]} ›
+                  </span>
+                )}
                 <span className="cmdbar-name tw:font-medium tw:text-ink">
                   {commandText(command).label}
                 </span>

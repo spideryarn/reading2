@@ -403,11 +403,13 @@ describe("the request", () => {
       expect(system).toMatch(/by its site/);
       expect(system, "the old instruction to describe a result as this work").not.toMatch(/describe a result as this work/i);
       expect(system, "the old instruction to say the work itself was not found").not.toMatch(/work itself was not found/);
+      expect(system).toMatch(/Use any search results\s+provided below/);
+      expect(system).not.toContain("You read search results about it");
       const second = (messages[1]?.content as { text: string }[] | undefined)?.[1]?.text ?? "";
       expect(second, "the second part invites the claim again").not.toMatch(/Describe a result as this work/);
     }
     expect(CITATION_INVESTIGATE_VERSION, "the prompt changed, so stored answers must detach").toBe(
-      "citation-investigate/5",
+      "citation-investigate/6",
     );
   });
 
@@ -482,7 +484,7 @@ describe("what is kept", () => {
       searches: 1,
       searchesFrom: "server_tool_use_details",
       at: "2026-09-30T12:00:00.000Z",
-      promptVersion: "citation-investigate/5",
+      promptVersion: "citation-investigate/6",
     });
     expect(h.finished).toEqual(["lease-1"]);
   });
@@ -1150,6 +1152,43 @@ describe("the paper itself (plan 261001a stage 3)", () => {
       if (previous === undefined) delete process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
       else process.env.SPIDERYARN_CITATIONS_FIND_MODEL = previous;
     }
+  });
+
+  /* The P0 of 2026-10-01: in 3 of 3 paid presses with the paper read, the
+     model answered from the paper and searched nothing, and the press threw
+     NOTHING_READ after the money was spent. Every test above defaulted the
+     stream's evidence to EVIDENCE, so this never ran. */
+  it.each([
+    ["no extract", [EVIDENCE[2] as SearchEvidence]],
+    ["no search at all", []],
+    ["no evidence reported", null],
+  ] as const)("keeps an answer written from the paper read when the web search gave %s", async (_, evidence) => {
+    const h = harness({ deltas: ["An answer from the paper."], paper: paperRead(), evidence: evidence as SearchEvidence[] | null });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(events.at(-1)?.type).toBe("done");
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0]).toMatchObject({ extractsRead: 0, sources: [], longestExtractWords: 0, matchedHost: null });
+    expect(h.saved[0]?.paper?.state).toBe("read");
+  });
+
+  it.each([
+    { state: "no-address" } as PaperEvidence,
+    { state: "unreadable", requestedUrl: "https://doi.org/10.1038/x", host: "nature.com", why: "refused" } as PaperEvidence,
+    { state: "not-the-full-text", requestedUrl: "https://doi.org/10.1/y", finalUrl: "https://pub.example/y", host: "pub.example" } as PaperEvidence,
+    {
+      state: "not-confirmed",
+      requestedUrl: "https://arxiv.org/pdf/1",
+      finalUrl: "https://arxiv.org/pdf/1",
+      host: "arxiv.org",
+      why: "title-not-found",
+    } as PaperEvidence,
+  ])("still refuses an answer with no extract when the paper is $state", async (paper) => {
+    const h = harness({ deltas: ["An answer from memory."], paper, evidence: [] });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect((error as Error).message).toMatch(/\[cite-no-extract\]$/);
+    expect(events.some((e) => e.type === "done")).toBe(false);
+    expect(h.saved).toHaveLength(0);
   });
 
   it("fails the press when the paper reader throws a fault of ours", async () => {

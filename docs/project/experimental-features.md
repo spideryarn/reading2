@@ -196,6 +196,11 @@ here, not consent; `/privacy` says we keep it. Fable argued for recording for ev
 time cannot be backfilled —
 [260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
 
+**Nor is the reading view's type: a face for each voice**, since 2026-10-01 — the article in a serif,
+anything a model wrote in Courier, anything the reader typed in Arial. Greg asked for a v1 *to try*,
+and Courier summaries are a lot to hand every paying reader as an experiment.
+[typography.md § A face per voice](typography.md#a-face-per-voice-experimental-since-2026-10-01).
+
 **And one control on the Metadata page: *Start this article again*** — a block inside *Re-run AI
 processing* since 2026-09-29 rather than a section of its own (a reset, and optionally
 the modes made again), since 2026-09-28. It re-reads the article with today's pipeline, so a

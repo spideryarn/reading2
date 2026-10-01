@@ -1,0 +1,306 @@
+{
+  "arm": "new-none-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": null,
+  "about": null,
+  "at": "2026-10-01T01:15:32.031Z",
+  "provenance": {
+    "gitHead": "c64700b6a34af3d4096b1c2e399187951e48f07f",
+    "quizDirty": true,
+    "quizSourceSha256": "953ae95d9946f0b9e74ceef0117df4e9b9b3ae8eb75f66a564f31cd7262badd0",
+    "model": "claude-sonnet-5"
+  },
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 5,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 5,
+    "gaps": 4
+  },
+  "questions": [
+    {
+      "question": "According to the article, what two things historically limited the study of how neural circuits process information?",
+      "referenceAnswer": "A lack of large enough datasets to reveal multivariate dependencies among neurons, and a lack of analytical approaches capable of extracting interpretable insight from such data.",
+      "evidence": [
+        "spya-s9kmxa",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "One limitation was a lack of data large enough to reveal multivariate dependencies among neurons.",
+      "question": "What kind of recent technological advance has helped overcome this data limitation?",
+      "referenceAnswer": "New electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond resolution.",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "question": "What does mutual information measure about the relationship between two neurons' activity?",
+      "referenceAnswer": "It measures how much knowing one neuron's activity reduces uncertainty about the other's, capturing a kind of nonlinear correlation or shared dependency between their spiking patterns, without indicating any direction of flow.",
+      "evidence": [
+        "spya-f6sbgx",
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Transfer entropy tracks the directed flow of information from a source neuron's past to a target neuron's future.",
+      "question": "Why is tracking this kind of information flow, on its own, not enough to understand how neurons process or combine information from multiple sources?",
+      "referenceAnswer": "Flow measures like transfer entropy only tell how each individual source's past relates to the target's future; they cannot reveal how two or more sources interact jointly to produce information about the target that is not reducible to either source alone, which is what counts as genuine processing or computation.",
+      "evidence": [
+        "spya-s0db2g",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "premise": "Understanding processing requires knowing how two sources interact jointly beyond what either explains alone.",
+      "question": "What does partial information decomposition (PID) break the total joint mutual information between sources and a target into?",
+      "referenceAnswer": "It splits the total information into redundant information (shared by the sources), unique information (available from only one source), and synergistic information (available only from the sources' joint state).",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "PID splits total information into redundant, unique, and synergistic components.",
+      "question": "What does it mean for information about a target to be synergistic, and why does the article treat synergy as a sign of computation?",
+      "referenceAnswer": "Synergistic information is information about the target that is disclosed only by the joint pattern of the sources together and cannot be learned from either source alone; because this joint pattern is irreducible to its parts, it indicates the target is performing an integrating computation on its inputs rather than just summing them.",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "Synergy is information only available from the sources' joint pattern, taken as a sign of computation.",
+      "question": "In contrast, what does it mean for information about the target to be redundant?",
+      "referenceAnswer": "Redundant information is information about the target that is disclosed by more than one source individually, so it gets double-counted if you simply add up each source's separate contribution.",
+      "evidence": [
+        "spya-e94ury",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "Redundant and synergistic information are two of the four unknown quantities in the basic two-source decomposition.",
+      "question": "Why do researchers need to choose a specific redundancy function before they can compute a PID, rather than simply deriving it from the mutual information terms?",
+      "referenceAnswer": "The mutual information terms leave an underdetermined system of equations with more unknown partial information quantities than known values, and classical Shannon theory provides no unique solution, so a particular measure of redundancy must be chosen to fix the decomposition; no single universally accepted measure exists, and different measures have different trade-offs and limitations.",
+      "evidence": [
+        "spya-bgsd4n",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "Synergy tracked feedforward information flow, suggesting that densely connected 'rich club' neurons might process disproportionately more information.",
+      "question": "How did the average synergy of triads located in cortical rich clubs compare to triads outside the rich club?",
+      "referenceAnswer": "Rich club triads had about 2.7 times more synergy on average than triads outside the rich club, and despite making up less than 40% of neurons, rich club triads accounted for around 88% of the network-wide synergy.",
+      "evidence": [
+        "spya-fud8q3",
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "premise": "Rich clubs had disproportionately high synergy, prompting the researchers to examine what connectivity patterns drive this.",
+      "question": "How did having more recurrent connections between the two source neurons in a triad relate to synergy, compared to having more feedback connections from the target back to the sources?",
+      "referenceAnswer": "More recurrent connections between source neurons were associated with greater synergy, while more feedback connections from the target to the sources tended to be associated with slightly reduced synergy rather than increased synergy.",
+      "evidence": [
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "question": "At short, synaptic-range timescales, how did synergy relate to the similarity (mutual information) between the two source neurons' activity?",
+      "referenceAnswer": "At synaptic timescales, synergy increased as the mutual information between source neurons increased, meaning more similar converging input streams produced more synergistic processing.",
+      "evidence": [
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "premise": "At short synaptic timescales, synergy rose as source neurons became more similar.",
+      "question": "What happened to synergy when the researchers looked at much longer timescales and higher similarity between source neurons?",
+      "referenceAnswer": "Synergy only increased up to a point, peaking when mutual information was about 7% of its maximal value, and then declined as similarity increased further, with redundancy taking over as the dominant mode at high similarity.",
+      "evidence": [
+        "spya-ybmve2",
+        "spya-cs9fdy"
+      ]
+    },
+    {
+      "question": "In the study of macaques performing a multi-phase behavioral task, how did the balance between synergy and redundancy change during the movement execution phase compared to other phases?",
+      "referenceAnswer": "Although brain activity was generally dominated by synergy, the relative amount of redundant information increased dramatically during movement execution, which the authors interpreted as the brain duplicating the 'move' signal to ensure reliable transmission to distant muscles.",
+      "evidence": [
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "premise": "Local PID resolves information atoms moment-by-moment rather than as expected values.",
+      "question": "What new kind of analysis does the multi-target extension called integrated information decomposition (ΦID) make possible, beyond classic single-target PID?",
+      "referenceAnswer": "ΦID allows decomposition of information shared about multiple targets at once, such as how the joint past of two sources synergistically constrains the joint future of two targets, which single-target PID cannot address.",
+      "evidence": [
+        "spya-cds6mm"
+      ]
+    }
+  ]
+}

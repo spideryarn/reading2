@@ -255,6 +255,19 @@ passage, *which* question — and it has one text box and it is the filter. A qu
 nothing says `No command matches.` and nothing else: no search fallback, no "did you mean", an honest
 empty state preferred to a helpful guess.
 
+**Sub-modes have rows of their own since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
+Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Remember › Quiz*,
+*Diagram › Illustrated*, *Referee › Claims*, *Summary › Simple* and the rest sit after the mode rows
+and before the pages, and Enter opens the mode with that chip already pressed: armed as the chip
+arms (Quiz writes questions, Illustrated paints), never as the mode does, and with the same
+`generates` marker rule. Only a mode the Dock draws offers its sub-modes, and Diagram offers the
+pictures its chip row would. A sub-mode here means a control that **replaces the whole band** —
+Remember, Diagram, Referee and Summary's plain-words levels; the names live once, in
+[`src/web/sub-modes.ts`](../../src/web/sub-modes.ts), and the chips read them from there. Orderings
+and matchers inside a mode (Quotes' rank, Search's Words | Meaning) are not offered, by decision
+rather than oversight —
+[261001d](../plans/261001d-command-bar-lists-sub-modes.md).
+
 Three pieces of it are worth knowing about:
 
 - **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for

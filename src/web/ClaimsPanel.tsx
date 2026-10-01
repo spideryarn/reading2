@@ -663,7 +663,7 @@ function ClaimRow({
                 can check what it may say — it is about the model's line, and it
                 says the passage survived, because a referee who watches a line
                 vanish will otherwise wonder what went with it. */}
-            {p.withheld && <p className="clm-why">{REASONING_WITHHELD}</p>}
+            {p.withheld && <p className="clm-why clm-why-withheld">{REASONING_WITHHELD}</p>}
           </li>
         ))}
       </ul>
