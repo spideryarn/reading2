@@ -444,11 +444,7 @@ export interface DeleteOperation extends Registered, Held {
    * begins a fresh Remember conversation only once the delete has been
    * answered, and a refused delete means the old one is still the article's
    * Remember conversation on the server — so a fresh one beside it would have
-   * its first turn folded into a thread this tab is hiding. If the thread is
-   * still entirely local the reducer retires this special delete locally. If
-   * its last naming turn dies before `begin`, the reducer sends the idempotent
-   * DELETE under the only name it has: unlike Chat, Remember offers no later
-   * send that could release a held mutation. Plan 261001m, F1.
+   * its first turn folded into a thread this tab is hiding. Plan 261001m, F1.
    */
   restoreOnFailure?: boolean;
 }
@@ -1109,6 +1105,28 @@ export function writerOf(state: ChatState, messageId: string): Operation | undef
 export function attemptOf(op: Operation | undefined): string | null {
   if (!op) return null;
   return op.kind === "turn" || op.kind === "recovery" ? op.attempt : null;
+}
+
+/**
+ * **Is this conversation stored, and is this tab doing nothing to it?** It has
+ * at least one message, the server has named it (it is not in `unnamed`), and
+ * no operation of any kind — a turn being answered, a recovery, a spoken
+ * exchange, a rename, a delete — is still out for it.
+ *
+ * Remember's Start over is offered only then. A DELETE of such a conversation
+ * is never held and races no write from this tab, so a delete aimed at an
+ * empty, unnamed or half-answered conversation — each of which needed its own
+ * reducer machinery to unwind — cannot be asked for. Plan 261001m, after GPT
+ * Sol's two code reviews.
+ */
+export function isSettled(state: ChatState, threadId: string): boolean {
+  if (state.unnamed.has(threadId)) return false;
+  const thread = state.base.find((t) => t.id === threadId);
+  if (!thread || thread.messages.length === 0) return false;
+  for (const op of state.operations.values()) {
+    if (op.kind !== "load" && op.threadId === threadId) return false;
+  }
+  return true;
 }
 
 /** Answers this tab has lost the stream of and is asking the server about. */

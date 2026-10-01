@@ -175,6 +175,12 @@ interface Props {
   onDiscard(id: string): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
+  /**
+   * **May Remember offer Start over now?** Only when its one conversation is
+   * stored, named by the server and has nothing of this tab's in flight — see
+   * `settled` in useChat.ts. Chat's delete ignores it.
+   */
+  canStartOver: boolean;
   /** Answer the last question again, over the top of the answer it has. */
   onRetry(messageId: string): void;
   /** Rewrite one of the reader's questions. Discards everything after it. */
@@ -343,6 +349,7 @@ export function ChatPanel({
   onDiscard,
   onRename,
   onDelete,
+  canStartOver,
   onRetry,
   onEdit,
   onStop,
@@ -490,9 +497,12 @@ export function ChatPanel({
                conversation; no rename, which only the list offered. The same
                two-press delete chat has, relabelled for what it does here —
                the band first finishes Live, then begins the fresh conversation
-               once the server has confirmed the delete. An entirely local empty
-               thread needs no request. Plan 261001m § 4 and F1. */
-            open && (
+               once the server has confirmed the delete. **Not rendered at all**
+               until the conversation is stored and settled (`canStartOver`):
+               an empty one has nothing to start over from, and one still being
+               answered or not yet named by the server would need a DELETE held
+               for a name. Plan 261001m § 4 and F1. */
+            open && canStartOver && (
               <ArmedDelete
                 key={open.id}
                 onDelete={() => onDelete(open.id)}
@@ -739,13 +749,15 @@ const SHORT_VIEWPORT = "(max-height: 500px)";
  * rows growing to 360px: a spoken Remember turn is a paragraph or three, and a
  * box that stops at 160px turns the reader's own words into a four-line
  * scrolling window they cannot read back before sending. On a short viewport
- * Remember rests at two rows and grows to about half the band (45% of the
- * viewport), so the transcript stays in view. Plan 261001m § 5.
+ * Remember rests at two rows and grows to 30% of the viewport, so the
+ * transcript stays in view. 45% was the first figure, and at 844×390 a
+ * six-line answer left one clipped line of transcript above the box (browser
+ * check, 2026-10-01). Plan 261001m § 5.
  */
 function boxSize(remember: boolean, short: boolean): { rows: number; roof: () => number } {
   if (!remember) return { rows: 1, roof: () => 160 };
   if (!short) return { rows: 6, roof: () => 360 };
-  return { rows: 2, roof: () => Math.round(window.innerHeight * 0.45) };
+  return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
 
 /** How long an armed delete stays armed. */

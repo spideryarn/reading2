@@ -35,9 +35,19 @@ let stored: ChatThread[] = [];
 /** A DELETE waits for this to be called, with the status it should answer. */
 let releaseDelete: ((status: number) => void) | null = null;
 
-/** An answer that says nothing and does not close. The reply is not the point. */
+/** The last answer's stream, so a test can speak for the server. */
+let answer: ReadableStreamDefaultController<Uint8Array> | null = null;
+function frame(event: string, data: unknown): void {
+  answer?.enqueue(new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+}
+
+/** An answer that says nothing and does not close unless a test makes it. */
 function stream(): Response {
-  const body = new ReadableStream<Uint8Array>({ start() {} });
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      answer = controller;
+    },
+  });
   return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
@@ -119,6 +129,7 @@ beforeEach(() => {
   renders.length = 0;
   stored = [];
   releaseDelete = null;
+  answer = null;
   livePhase = "idle";
   liveThreadId = null;
   stopLive.mockReset();
@@ -249,6 +260,77 @@ describe("Remember opens its one conversation and never a list", () => {
     stored = [empty, REMEMBER];
     await mount("remember", "?mode=remember");
     expect(last()?.threadId).toBe(REMEMBER.id);
+  });
+});
+
+/**
+ * **Start over is offered only on a stored, settled conversation** — named by
+ * the server, at least one message, nothing of this tab's in flight for it. So
+ * its DELETE is never held waiting for a name that may never come, which is
+ * what two rounds of reducer machinery used to unwind. Plan 261001m.
+ */
+describe("Start over is offered only on a settled conversation", () => {
+  const deletes = () => calls.filter((c) => c.method === "DELETE");
+
+  it("is not offered on an empty Remember conversation, and pressing anyway sends nothing", async () => {
+    stored = [CHAT];
+    await mount("remember", "?mode=remember");
+    const fresh = shown()[0] as ChatThread;
+    expect(fresh.messages).toHaveLength(0);
+    expect(last()?.canStartOver).toBe(false);
+
+    await act(async () => prop<(id: string) => void>("onDelete")(fresh.id));
+    await settle();
+    expect(deletes()).toHaveLength(0);
+    expect(last()?.threadId).toBe(fresh.id);
+  });
+
+  it("is not offered while the first answer is pending, and is once it is stored and settled", async () => {
+    stored = [];
+    await mount("remember", "?mode=remember");
+    const guessed = last()?.threadId as string;
+
+    await act(async () => prop<(q: string) => void>("onSend")("What I took"));
+    await settle();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    expect(last()?.canStartOver, "offered before the server named it").toBe(false);
+    await act(async () => prop<(id: string) => void>("onDelete")(guessed));
+    await settle();
+    expect(deletes(), "a DELETE left for a conversation the server has not named").toHaveLength(0);
+
+    /* Named, but its answer is still arriving. */
+    await act(async () =>
+      frame("begin", {
+        threadId: "spya-srv001",
+        title: "What I took",
+        messageId: "spya-srva01",
+        questionId: "spya-srvq01",
+      }),
+    );
+    await settle();
+    expect(last()?.threadId).toBe("spya-srv001");
+    expect(last()?.canStartOver, "offered while the answer was still streaming").toBe(false);
+
+    await act(async () => {
+      frame("done", { text: "And here is the answer." });
+      answer?.close();
+    });
+    await settle();
+    expect(last()?.canStartOver).toBe(true);
+
+    await act(async () => prop<(id: string) => void>("onDelete")("spya-srv001"));
+    await settle();
+    expect(deletes()).toHaveLength(1);
+    expect(deletes()[0]?.url).toContain("spya-srv001");
+    await act(async () => releaseDelete?.(200));
+    await settle();
+  });
+
+  it("is offered on a stored conversation with nothing in flight", async () => {
+    stored = [REMEMBER];
+    await mount("remember", "?mode=remember");
+    expect(last()?.threadId).toBe(REMEMBER.id);
+    expect(last()?.canStartOver).toBe(true);
   });
 });
 

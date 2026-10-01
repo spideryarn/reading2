@@ -72,6 +72,7 @@ function paint(thread: ChatThread, kind: "chat" | "remember" = "remember", stanc
         onDiscard: () => {},
         onRename: () => {},
         onDelete: () => {},
+        canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
         onStop: () => {},
@@ -195,6 +196,7 @@ function props(over: Record<string, unknown>) {
     onDiscard: () => {},
     onRename: () => {},
     onDelete: () => {},
+    canStartOver: true,
     onRetry: () => {},
     onEdit: () => {},
     onStop: () => {},
@@ -230,6 +232,18 @@ describe("Remember's panel is one conversation", () => {
     expect(host.querySelector('button[title^="Rename"]')).toBeNull();
     const startOver = host.querySelector<HTMLButtonElement>("button.chat-icon.danger");
     expect(startOver?.title).toMatch(/^Start over/);
+  });
+
+  /* The band decides it (`settled` in useChat.ts) and the panel only obeys:
+     an empty, unnamed or still-answering conversation has no Start over, so
+     its DELETE can never be held waiting for a name. Plan 261001m. */
+  it("draws no Start over when the band says the conversation is not settled", () => {
+    const open = rememberThread();
+    act(() =>
+      root.render(createElement(ChatPanel, props({ threads: [open], threadId: open.id, canStartOver: false }))),
+    );
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector("button.chat-icon.danger")).toBeNull();
   });
 
   it("leaves chat's header as it was", () => {

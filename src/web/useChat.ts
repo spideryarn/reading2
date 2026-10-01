@@ -61,7 +61,7 @@ import {
   settledAnswer,
   stopAnswer,
 } from "./chat/effects.js";
-import { asOpId, writerOf } from "./chat/model.js";
+import { asOpId, isSettled, writerOf } from "./chat/model.js";
 
 /* `mergedArrival`, `withoutEmpty` and `withServerIds` live in ./chat/model.ts,
    where `reduce` can use them: a module that imports the module importing it is
@@ -328,6 +328,12 @@ export interface ChatApi {
    * 261001m, GPT Sol's F1.
    */
   deleting: boolean;
+  /**
+   * **Stored, and nothing in flight for it from this tab** — see `isSettled`
+   * in chat/model.ts. One reader: Remember offers Start over only when this is
+   * true, so its DELETE always targets a conversation the server has named.
+   */
+  settled(threadId: string): boolean;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
 }
@@ -925,6 +931,8 @@ export function useChat(slug: string): ChatApi {
     [state.operations],
   );
 
+  const settled = useCallback((threadId: string) => isSettled(state, threadId), [state]);
+
   return {
     /* `ChatApi` promises a plain array and nothing mutates it — ChatPanel
        copies before it sorts. The projection is `readonly` so that the reducer
@@ -947,6 +955,7 @@ export function useChat(slug: string): ChatApi {
     rename,
     remove,
     deleting,
+    settled,
     error: state.error,
   };
 }

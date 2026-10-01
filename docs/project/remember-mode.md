@@ -298,14 +298,15 @@ one begun locally — and `?thread=` is only synced to it afterwards, so neither
 nor the first frame of a load ever shows a list. Delete stays, as **Start over**. An active Live
 conversation finishes writing its last exchange before the DELETE starts, and the fresh thread is
 not begun until that DELETE has finished: begun sooner, a spoken or typed turn could be appended to
-the old thread a moment before the delete cascaded it away. An empty conversation that never left
-the tab is discarded locally; if its opening request dies before the server names it, its held Start
-over is sent under the only thread id the tab has rather than leaving the band on a loading
-placeholder no request can end. The DELETE is harmless if the opening request wrote nothing.
+the old thread a moment before the delete cascaded it away. **Start over is offered only once the
+conversation is stored and settled** — it has a message, the server has named it, and nothing this
+tab started for it (an answer, a spoken exchange) is still out (`settled` in `useChat.ts`). So its
+DELETE always names a thread the server knows and never has to wait for one, and an empty, unnamed
+or half-answered conversation simply has no button.
 
 **The box is smaller on a short screen.** Six rows at rest on a desktop; on a viewport under 500px
 tall — a landscape phone, where the band is about 338px — it is two rows at rest and grows with
-what is said, up to about half the band, so the transcript stays in view.
+what is said, up to 30% of the screen's height, so the transcript stays in view.
 
 The floating `ChatDialog` opens only for a thread whose summary says it **is** a chat — a positive
 test. `!== "remember"` was the first version and had its default backwards: an unknown thread (a

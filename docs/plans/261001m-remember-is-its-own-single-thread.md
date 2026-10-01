@@ -130,7 +130,8 @@ resolve the stored kind when there is one; for a fresh id whose turn will be fol
 
 At rest the Remember box is six rows (`rows={remember ? 6 : 1}`) and grows to 360px. On a short
 viewport (`(max-height: 500px)` — the landscape phone; a laptop is never that short) the at-rest
-box is two rows; it still grows with what is typed or dictated, capped at roughly half the band, so
+box is two rows; it still grows with what is typed or dictated, capped at 30% of the viewport height (45% was tried first and, in the browser check, left one
+clipped line of transcript after six typed lines at 844×390), so
 the transcript stays visible. Measured with Playwright at 844×390 before and after.
 
 ## Stages
@@ -220,3 +221,27 @@ from (
 
 Zero means the fold moves nothing and the migration only creates the index. Anything else: hold
 it for Greg. Measured 0 on 2026-10-01 at about 15:20.
+
+## Code review: what Sol found, and the one place I took a different route
+
+Round 1 ([261001m-remember-own-thread-code-review-sol.md](261001m-remember-own-thread-code-review-sol.md)),
+Sol fixing as it went: **C1 (P1)** Start over could wait forever on a loading placeholder when the
+thread it deleted had never been named by the server; **C2 (P1)** Start over could DELETE while
+Live was still flushing its last spoken exchange, which could write into the deleted thread;
+**C3 (P3)** a test left nuqs's URL queue running after teardown. All taken; commit `7ab05e350`.
+
+Round 2 ([261001m-remember-own-thread-code-review-2-sol.md](261001m-remember-own-thread-code-review-2-sol.md)),
+narrow, on those fixes: no batching hole between `setResetting("deleting")` and `remove()`
+(`useSyncExternalStore` updates the snapshot synchronously); but **R2-1 (P1)** C1's fix could send a
+DELETE to a provisional id the server had since folded into a different thread — a no-op that let
+Start over claim success. Sol fixed it with more reducer machinery for deleting a thread the server
+had not named yet.
+
+**Not taken as built: the case was removed instead of handled.** Everything in C1 and R2-1 exists
+for one moment — pressing Start over before the server has named a brand-new Remember conversation,
+or while its answer is still arriving. So Start over is now offered only on a conversation that is
+stored, server-named and has nothing in flight. A Remember delete then always targets a known,
+settled id and is never held, and the unnamed-delete paths in `src/web/chat/reduce.ts` go
+(`forgetLocalThread`, `releaseUnstoredDelete` and the superseded-turn branch). The cost: a
+reader cannot Start over in the second or two while an answer is arriving. That is the same as
+pressing it a moment later. C2 and C3 stay.

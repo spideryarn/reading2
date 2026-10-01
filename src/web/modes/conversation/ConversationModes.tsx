@@ -354,6 +354,7 @@ export function ConversationBand({
     rename,
     remove,
     deleting,
+    settled,
     speak,
     error,
   } = useChat(slug);
@@ -637,9 +638,7 @@ export function ConversationBand({
   }, [remembering, loaded, theRemember, deleting, resetting, startNew]);
 
   /* A failed DELETE restores the old thread; a successful one leaves none. In
-     either case the operation retiring is what lets Remember draw again. The
-     reducer may also finish an entirely local, unnamed delete without ever
-     entering `deleting`, which this same condition covers. */
+     either case the operation retiring is what lets Remember draw again. */
   useEffect(() => {
     if (resetting !== "deleting" || deleting) return;
     resettingNow.current = false;
@@ -742,13 +741,20 @@ export function ConversationBand({
         void setThread(id);
         setFocusNonce((n) => n + 1);
       }}
+      /* **Start over is offered only on a settled conversation** — stored,
+         named by the server, nothing of this tab's still out for it (`settled`
+         in useChat.ts). So its DELETE is never held waiting for a name, and
+         never races this tab's own write. Plan 261001m. */
+      canStartOver={remembering && current !== null && settled(current)}
       onRename={rename}
       onDelete={(id) => {
         /* **Start over.** The conversation leaves the screen at once, and the
            fresh one is begun only when the server has answered — see the
            Remember effect above. If the server refuses, the old one comes back. */
         if (remembering) {
-          if (resettingNow.current) return;
+          /* The panel offers no button otherwise; this is the same rule held
+             where the request is made, not a second one. */
+          if (resettingNow.current || !settled(id)) return;
           resettingNow.current = true;
           setResetting("stopping-live");
           void (async () => {
