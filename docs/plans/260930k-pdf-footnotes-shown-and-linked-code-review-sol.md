@@ -1,0 +1,9 @@
+Verdict: **APPROVE after one low-severity fix; no remaining functional blockers found.**
+
+1. **Low — fixed:** numeric labels accepted `0`, `00`, `000`, and superscript-zero forms despite the specified `1–999` range. This could strip the zero or create a false marker. I tightened [src/pdf-read.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb-69-pdf-footnotes/src/pdf-read.ts:1915) and added a regression test in [pdf-footnotes.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb-69-pdf-footnotes/tests/pdf-footnotes.test.ts:165). The test failed before the fix and passes afterward.
+
+2. **No further correctness findings:** probes confirmed piece boundaries are correct; footnote/endnote cursors and shared claims behave as specified; duplicate labels remain conservative; continuations join correctly; all text is escaped; multiple marker offsets, uncertainty, and trailing lists render correctly. Stage 3 preserves `value="25"`, `buildNoteIndex` reads it, note blocks remain supplements, citations/carry-over/client rendering remain sound, and IDs are deterministic and matching-independent. Downstream title, figures, assets, word counts, and scoring introduce no new regression. The existing visible-but-nongating `pdf-score` treatment remains the plan’s documented decision.
+
+3. **Advisory for the author:** scoped lint reports complexity notices for `renderHtml` (29), `candidatesIn` (29), and `findMarkers` (39), against an advisory maximum of 25. I did not refactor correct, measured matcher logic during this review.
+
+4. **Verification:** requested suite passed: **7 files, 164 tests**. The normal `npm run typecheck` wrapper hit sandbox `tsx` IPC permission failure; the identical script run through `node --import tsx` passed all projects and 2,474 covered files. Full `npm test` could not start because local Postgres was unavailable. No prompt constants were changed and nothing was committed.

@@ -20,7 +20,8 @@
  * ## A marker is recognised twice, and both halves are needed
  *
  * The attribute is fast and it is ours — stage 2 scrubs every copy of it off the
- * page before writing its own, so a hostile article cannot forge one. A *buggy*
+ * page before writing its own, and a PDF's HTML is written whole by
+ * `renderHtml` (src/pdf-read.ts), so a hostile article cannot forge one. A *buggy*
  * pipeline can, though, and that is what the second half catches: resolve the
  * href through `internalTarget` — the same resolver a click goes through, so the
  * card and the jump can never disagree — and check that the block it lands on is
@@ -270,8 +271,22 @@ function countCitations(blocks: readonly NoteBlock[], byNote: Map<string, Note>)
   for (const note of byNote.values()) {
     if (note.ordinal !== 0) continue;
     note.ordinal = ++numbered;
-    note.label = String(note.ordinal);
+    note.label = printedNumber(note) ?? String(note.ordinal);
   }
+}
+
+/**
+ * The number the note's own `<li value>` says it has, if any.
+ *
+ * Only the PDF renderer writes one: a transcribed note whose marker it could
+ * not find in the prose still knows the number printed beside it, and takes
+ * that number off its text on the promise that it is drawn here
+ * (src/pdf-read.ts § `renderNotes`). Counting instead would draw `3` beside a
+ * note the page printed as `25`.
+ */
+function printedNumber(note: Note): string | null {
+  const value = /^<li\b[^>]*?\svalue="(\d{1,4})"/.exec(note.blocks[0]?.html ?? "")?.[1];
+  return value ?? null;
 }
 
 /**

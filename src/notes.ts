@@ -645,8 +645,11 @@ function collectTufte(doc: Document): Candidate[] {
  * carry-over key, re-mints the id of every paragraph that cites one. Two notes
  * reading exactly alike ("Ibid.") get a counter appended, because an id has to
  * be unique before it can be anything else.
+ *
+ * Exported for the PDF renderer (src/pdf-read.ts § `renderNotes`), which writes
+ * this same note shape from a transcription and must mint the same identity.
  */
-function mintNoteId(text: string, taken: Set<string>): string {
+export function mintNoteId(text: string, taken: Set<string>): string {
   const digest = createHash("sha256").update(text).digest("hex").slice(0, 10);
   let id = `spya-note-${digest}`;
   for (let n = 2; taken.has(id); n++) id = `spya-note-${digest}-${n}`;
