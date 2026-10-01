@@ -913,13 +913,12 @@ export function Reader({
    * somehow in the main text"*. So this is the whole list, in every mode,
    * whether or not the band has ever been opened — `citeMarks` in annotate.ts.
    *
-   * **Owner-only, and that is the seam rather than a check.** `POLICY.citations`
-   * is `owners-only`, and the public projection these rows' URLs would pass
-   * through is not built — so a visitor's `artefacts` carries no citations and
-   * `works` is empty for them, which is the whole of the enforcement. There is
-   * deliberately no `?? artefacts?.citations` fallback here, unlike `terms`
-   * above: that would be the line that quietly shipped a half-working card onto
-   * a shared link. docs/project/citations.md § Who sees it.
+   * **The prose marks and their cards stay owner-only.** A visitor does have a
+   * public projection of the list in the Citations band since 260929c, but this
+   * prose path deliberately has no `?? artefacts?.citations` fallback, unlike
+   * `terms` above. So `works` is empty for them, and the card's owner-only
+   * `inSpideryarn` line has the named `showInSpideryarn` lock as well.
+   * docs/project/citations.md § Who sees it.
    *
    * **Every work, not only those above the threshold bar**, which departs from
    * what quotes mode does and follows what the glossary does. `?citebar=` is
@@ -938,8 +937,10 @@ export function Reader({
    *
    * `NO_WORKS` is a module constant rather than a fresh `[]` because two memos
    * below key on it by identity, and an article with no citations is the
-   * ordinary case. Empty for a visitor, which is the whole of what keeps this
-   * feature owner-only — see `citeSelections`.
+   * ordinary case. Empty for a visitor: the prose marks are owner-only even
+   * though a visitor's band now has a public projection (260929c) — see
+   * `citeSelections`. Not the only lock: `showInSpideryarn` below names the
+   * owner-only part of the card.
    */
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
 
@@ -2884,6 +2885,9 @@ export function Reader({
            things (ProseHoverCard.tsx § canAddToShelf) and today's shared
            condition is a coincidence worth keeping visible. */
         canAddToShelf={owner !== null}
+        /* The citation half's "already an article here" line: owner-only,
+           named here as the band names it (plan 261001i). */
+        showInSpideryarn={owner !== null}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

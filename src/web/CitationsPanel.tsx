@@ -1073,22 +1073,30 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
 export const CITE_HERE_HOW: Record<CitedMatchedBy, string> = {
   doi: "the same DOI",
   arxiv: "the same arXiv id",
+  "guessed-id": "the DOI or arXiv id we found for your uploaded PDF",
   address: "the same address",
   title: "the same title — check it is the same work",
 };
 
-/** The row's label for a work that is already an article here. */
+/**
+ * The row's label for a work that is already an article here. An archived copy
+ * says so: it is off the shelf, and a reader who went looking there would not
+ * find it (plan 261001i).
+ */
 export function citeHereLabel(match: CitedInSpideryarn): string {
-  return match.whose === "yours" ? "In your library" : "On the public shelf";
+  if (match.whose === "public") return "On the public shelf";
+  return match.archived ? "In your library · archived" : "In your library";
 }
 
 /**
  * **This work is already an article here** — SPIDERYARN-READING2-5R, plan
  * 260930b. A link to *our* page, so `Link` and the same tab, not a link out.
  * A title match names the article it matched, because that is the one a reader
- * should check: the same words are not the same identity.
+ * should check: the same words are not the same identity. Drawn by the band's
+ * row and by the prose hover card (ProseHoverCard.tsx § `CiteCard`, plan
+ * 261001i), so the two cannot word it differently.
  */
-function InSpideryarn({ match }: { match: CitedInSpideryarn }) {
+export function InSpideryarn({ match }: { match: CitedInSpideryarn }) {
   return (
     <p className="cite-here">
       <Link href={readHref(match.slug)} title={`Open “${match.title}” here — matched by ${CITE_HERE_HOW[match.matchedBy]}`}>

@@ -17,7 +17,8 @@ first the goal, the background and any jargon in plain words, then each option e
 example of it in use, an ASCII diagram where the shape matters, what it costs and gives up — and
 then what would decide between them. A bare list of labels is not a question yet. (Greg, 2026-09-09:
 *"Often I get asked a question and I don't understand what the question is asking, or the options,
-or how to choose between them."*)
+or how to choose between them."*) The whole of how to ask — how many at once, clustered, in what
+order — is [ask-me-questions.md](ask-me-questions.md).
 
 **Prioritise by a combination of ease and value**, unless told otherwise: the most value for the
 least effort first, and the costly, low-value item last or not at all.

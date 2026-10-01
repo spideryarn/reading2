@@ -16,6 +16,11 @@
  *   or an `arxiv.org` abstract/PDF path, parsed by host. Not a DOI anywhere in
  *   a URL — a publisher's query string or a lookalike host can carry somebody
  *   else's (GPT Sol, plan review).
+ * - **guessed-id** — the same, against the DOI or arXiv address **we found**
+ *   for the reader's own upload (`guessedUrl`), which has no address of its
+ *   own. By identifier only, never by address, in the identifier tier (see
+ *   `TIER`), and reported as ours rather
+ *   than as the article's (plan 261001i).
  * - **address** — the work's own address and the candidate's ask a server for
  *   the same thing: `sameTarget`, unchanged, so `http` and `https` stay two
  *   pages as they do everywhere else. Never a Scholar search: that address is
@@ -46,9 +51,20 @@ export interface CitedCandidate {
   displayTitle: string | null;
   /** The extracted byline — a fact about the document, as on the public shelf. */
   byline: string | null;
+  /** The reader's own article, archived. Never true for a stranger's — the store's `where`. */
+  archived: boolean;
+  /** The canonical address we found for the reader's own upload; null for anything else. */
+  guessedUrl: string | null;
 }
 
-const RANK: Record<CitedMatchedBy, number> = { doi: 0, arxiv: 1, address: 2, title: 3 };
+/**
+ * How strong a match is. An identifier is one tier whether the article's
+ * address is it or we found it for the reader's upload: a canonical guess was
+ * built only after the PDF's identifier and title agreed (src/source-guess.ts),
+ * so it is not weaker evidence, and ranking it lower would put a stranger's
+ * public copy above the reader's own (GPT Sol, plan 261001i review).
+ */
+const TIER: Record<CitedMatchedBy, number> = { doi: 0, arxiv: 0, "guessed-id": 0, address: 1, title: 2 };
 
 /** A DOI as the resolver path carries it: `10.` + registrant + `/` + suffix. */
 const DOI_BODY = "10\\.\\d{4,9}\\/[^\\s\"'<>?#]+";
@@ -99,6 +115,14 @@ export function identityOf(url: string): { doi?: string; arxiv?: string } {
   return {};
 }
 
+/** Which identifier, if any, the work's `idKey` shares with the address that is one. */
+function sameIdentifier(idKey: string, url: string): "doi" | "arxiv" | null {
+  const id = identityOf(url);
+  if (id.doi !== undefined && idKey === `doi:${id.doi}`) return "doi";
+  if (id.arxiv !== undefined && idKey === `arxiv:${id.arxiv}`) return "arxiv";
+  return null;
+}
+
 /** How this work matches this candidate, or null. The strongest rule wins. */
 export function matchOf(
   work: Pick<CitedWork, "title" | "authors" | "year" | "url" | "linkFrom">,
@@ -107,10 +131,10 @@ export function matchOf(
   const { idKey } = keysOf(work);
   if (idKey !== null) {
     for (const url of candidate.urls) {
-      const id = identityOf(url);
-      if (id.doi !== undefined && idKey === `doi:${id.doi}`) return "doi";
-      if (id.arxiv !== undefined && idKey === `arxiv:${id.arxiv}`) return "arxiv";
+      const same = sameIdentifier(idKey, url);
+      if (same !== null) return same;
     }
+    if (candidate.guessedUrl !== null && sameIdentifier(idKey, candidate.guessedUrl) !== null) return "guessed-id";
   }
   if (work.linkFrom !== "search" && work.url && candidate.urls.some((u) => sameTarget(work.url, u))) {
     return "address";
@@ -144,8 +168,9 @@ export function authorsAgree(
 }
 
 /**
- * At most one article per work: the strongest match, then the reader's own copy
- * before a public one, then slug order — so the answer never depends on the
+ * At most one article per work: the strongest tier of match, then the reader's
+ * own live copy, then their archived one, then a public one, then the article's
+ * own identifier before our guess, then slug order — so the answer never depends on the
  * order the database returned rows in.
  */
 export function matchCited(
@@ -166,6 +191,7 @@ export function matchCited(
         whose: best.c.mine ? "yours" : "public",
         matchedBy: best.by,
         title: best.c.displayTitle ?? best.c.matchTitle ?? best.c.slug,
+        ...(best.c.mine && best.c.archived ? { archived: true as const } : {}),
       });
     }
   }
@@ -176,8 +202,11 @@ function better(
   a: { c: CitedCandidate; by: CitedMatchedBy },
   b: { c: CitedCandidate; by: CitedMatchedBy },
 ): boolean {
-  if (RANK[a.by] !== RANK[b.by]) return RANK[a.by] < RANK[b.by];
+  if (TIER[a.by] !== TIER[b.by]) return TIER[a.by] < TIER[b.by];
   if (a.c.mine !== b.c.mine) return a.c.mine;
+  if (a.c.archived !== b.c.archived) return !a.c.archived;
+  /* Two of the reader's copies, equally strong: the article's own identifier before ours. */
+  if ((a.by === "guessed-id") !== (b.by === "guessed-id")) return b.by === "guessed-id";
   return a.c.slug < b.c.slug;
 }
 

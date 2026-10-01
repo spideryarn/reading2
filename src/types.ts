@@ -3929,7 +3929,12 @@ export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "con
  * How a cited work was matched to an article here, strongest first. `title` is
  * the weakest — the same words, not the same identity — and the row says so.
  */
-export type CitedMatchedBy = "doi" | "arxiv" | "address" | "title";
+/**
+ * `guessed-id` — the DOI or arXiv id **we found** for the reader's own upload
+ * (`upload_source_guesses`, a `canonical` row), not one the article itself
+ * carries; said as ours, plan 261001i.
+ */
+export type CitedMatchedBy = "doi" | "arxiv" | "guessed-id" | "address" | "title";
 
 export interface CitedInSpideryarn {
   slug: string;
@@ -3938,6 +3943,11 @@ export interface CitedInSpideryarn {
   matchedBy: CitedMatchedBy;
   /** The matched article's title as the reader would see it on that shelf. */
   title: string;
+  /**
+   * The reader's own article, archived: off their shelf, still theirs to open
+   * by link (plan 261001i). Absent otherwise — never on a public match.
+   */
+  archived?: true;
 }
 
 /**

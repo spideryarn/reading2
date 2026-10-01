@@ -202,6 +202,7 @@ function Harness({ url, canAdd }: { url: string; canAdd: boolean }) {
         onFollowNote={() => {}}
         lookUpLinks={canAdd}
         canAddToShelf={canAdd}
+        showInSpideryarn={false}
       />
     </>
   );
