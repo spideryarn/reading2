@@ -47,7 +47,7 @@ sub-mode changes costs nothing.
 
 Also check honestly: does the inventory table in the plan claim protection for anything that runs in
 the parent? Is anything in it false? Are the docs (docs/project/web-client.md § A mode that breaks,
-docs/project/new-mode.md table row, docs/project/ideas.md, docs/project/logging.md) accurate?
+docs/project/mode.md table row, docs/project/ideas.md, docs/project/logging.md) accurate?
 
 ## Evidence
 

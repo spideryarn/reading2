@@ -16,7 +16,7 @@ they are a held-out measurement.
 1. **Truth.** The writers replaced stale claims about the code with new claims and citations. Sample
    them hard — especially `architecture.md` (the pipeline diagram, § Shared code (server), the
    counts replaced by citations), `web-client.md` § Shared code (client), `comments.md` § streaming,
-   `database.md`, `ai-gateway.md`, `ingest-queue.md`'s new lead block, `email.md`, `new-mode.md`'s
+   `database.md`, `ai-gateway.md`, `ingest-queue.md`'s new lead block, `email.md`, `mode.md`'s
    new sections, `url-state.md`'s new parameter rows, and the new `debate.md`, `structure.md`,
    `tweets.md`. For each claim you check, open the code: does the cited file hold the cited symbol,
    and does the sentence say what the code does? A wrong signpost is worse than none.

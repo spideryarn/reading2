@@ -2898,7 +2898,7 @@ export type StepName =
      the subset of these names that share a byte-exact cached article prefix on
      the Messages wire; this step is on chat/completions, shares no such prefix,
      and therefore takes no row in `STAGE_EFFORT` or `ARTICLE_RENDERER` and none
-     in `cacheArticleForStep`. Stated here because new-mode.md lists both tables
+     in `cacheArticleForStep`. Stated here because mode.md lists both tables
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
   | "debate"

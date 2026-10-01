@@ -222,7 +222,7 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
  * It said "the fourteen middle-band modes" until 2026-09-07, and the number came
  * out rather than being incremented: nothing counts the modes, and a count in a
  * comment is one of the eight places promoting Quotes had to edit arithmetic
- * (docs/project/new-mode.md § Moving a mode in or out of the switch).
+ * (docs/project/mode.md § Moving a mode in or out of the switch).
  *
  * Here rather than in src/web/page-title.ts because the server composes this
  * title too — `/read/<slug>?mode=glossary` is served with `· Glossary` already

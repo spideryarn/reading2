@@ -197,7 +197,7 @@ Metadata section"*.
 when it last wrote — the dimmed placeholder is already there, and it is **one place rather than
 nine**. The reading view's band is a space whose whole design is about not accumulating
 affordances ([reading-view-overview.md](../project/reading-view-overview.md),
-[new-mode.md](../project/new-mode.md)); adding a control to each of nine panels is nine new
+[mode.md](../project/mode.md)); adding a control to each of nine panels is nine new
 affordances bought for one feature.
 
 **And the in-mode half is already built for six of the nine, which is the second half of the

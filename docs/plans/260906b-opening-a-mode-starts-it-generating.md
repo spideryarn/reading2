@@ -184,8 +184,8 @@ Candidates and is the file this stage has to keep green; it grows the positive c
 - [`CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx) § `startBrief` — the same, and it keeps
   the search-engine warning at full strength.
 - [`diagram.md`](../project/diagram.md), [`quiz.md`](../project/quiz.md),
-  [`referee-mode.md`](../project/referee-mode.md), [`new-mode.md`](../project/new-mode.md) —
-  new-mode.md's residue list should name arming as a thing a new artefact-backed mode has to decide.
+  [`referee-mode.md`](../project/referee-mode.md), [`mode.md`](../project/mode.md) —
+  mode.md's residue list should name arming as a thing a new artefact-backed mode has to decide.
 - GPT Sol review of the built code, per
   [code-quality-overview.md](../project/code-quality-overview.md).
 

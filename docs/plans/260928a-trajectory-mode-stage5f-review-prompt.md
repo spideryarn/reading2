@@ -6,7 +6,7 @@ files: `src/mode-catalog.ts`, `tests/dock-experimental-modes.test.tsx`,
 `docs/project/experimental-features.md`, `docs/project/trajectory.md`. See `git diff HEAD`.
 
 Spec: the plan's 5f and F34 (in `docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md`)
-and `docs/project/new-mode.md` § Moving a mode in or out of the switch. Greg asked: "take Trajectory
+and `docs/project/mode.md` § Moving a mode in or out of the switch. Greg asked: "take Trajectory
 and Quotes modes out of Experimental features, i.e. into mainstream features." Quotes was already out.
 
 The Overseer's condition for pushing this: the rule on who may trigger a paid run (non-owners —

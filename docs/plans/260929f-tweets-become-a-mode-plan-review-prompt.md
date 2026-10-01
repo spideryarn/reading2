@@ -7,7 +7,7 @@ src/types.ts (Tweet, TweetThread), src/models.ts (ARTICLE_RENDERER), src/source-
 src/pipeline.ts (the tweets step), src/public/dto.ts, src/web/layout.ts (BandShape, bandWidth),
 src/web/router.ts (parseRoute, settleAddress, liftLegacyAbout), src/read-address.ts,
 src/web/useAutoRun.ts, src/web/last-view.ts, src/web/shared-inventory.ts, src/web/Dock.tsx,
-src/web/CommandBar.tsx, and docs/project/new-mode.md (the checklist for adding a mode). The FAQ mode
+src/web/CommandBar.tsx, and docs/project/mode.md (the checklist for adding a mode). The FAQ mode
 (src/faq.ts, src/web/useFaq.ts, src/web/modes/faq/) is the closest precedent.
 
 What I would least like to be wrong about:
@@ -21,7 +21,7 @@ What I would least like to be wrong about:
    (before parseRoute decides not-found) for owner and visitor, SPA navigation and a hard load
    (vercel.json rewrites)? Anything server-side (src/public/page-head.ts, page.ts) that must change?
 3. Dropping useAutoRunOnArrival for useAutoRun: is anything lost that Greg asked for (260915e)?
-4. Anything the plan misses in new-mode.md's checklist or in the visitor/sharing path.
+4. Anything the plan misses in mode.md's checklist or in the visitor/sharing path.
 
 Also say if a simpler shape would get most of the value. Output: numbered findings, each with
 severity (must-fix / should-fix / nit), file:line evidence, and the change you propose. End with a

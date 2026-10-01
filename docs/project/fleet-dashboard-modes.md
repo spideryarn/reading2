@@ -13,7 +13,7 @@ button in the bar along the bottom, a panel above, and a name in the URL hash.
 This is the checklist for adding one. Why the dashboard exists and where it is going is
 [overseer-direction.md](overseer-direction.md); running it on the box is
 [hetzner-remote-server-box.md](hetzner-remote-server-box.md#after-tailscale-up-give-the-fleet-dashboard-the-address).
-**Do not confuse it with [new-mode.md](new-mode.md)**, which is the same word for the reading view's
+**Do not confuse it with [mode.md](mode.md)**, which is the same word for the reading view's
 tabs in a different application; the two share a vocabulary and no code.
 
 Four sessions added tabs to this page on the night of 2026-09-08 and each worked the mechanism out

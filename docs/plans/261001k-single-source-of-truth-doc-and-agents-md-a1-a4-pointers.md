@@ -82,13 +82,13 @@ Renamed from `single-source-of-truth.md` at Greg's request, relayed by the Overs
 **A5.** AGENTS.md's "worth reading before you touch" line drops `granularity-zoom.md`. Evidence from
 the 261001i probes for what replaces it ([diagnosis.md](261001i-probes/diagnosis.md)):
 `security-map.md` was unopened in every run of P11 (what a visitor sees) — a stable miss on the one
-area where a miss is a leak; `new-mode.md` § Adjacent shapes / § Where else to look was one of the
+area where a miss is a leak; `mode.md` § Adjacent shapes / § Where else to look was one of the
 three signposts that did the most work (P02, P10, P11). `security-map.md` is a severity choice, not a demonstrated probe win — P11's
 diagnosed gap was a missing visitor-mode table, and a miss there is a leak to a stranger.
 `ingest-queue.md`'s lead block was the one change with held-out evidence, but it helped as a
 signpost reached in context, not as a must-read, so it stays where it is. So the line becomes three: `block-ids.md`
 (any id resolution), `security-map.md` (anything a visitor, a signed-out user or a model can reach),
-`new-mode.md` (adding or changing a mode). Each with a when-to-open blurb. `granularity-zoom.md`'s
+`mode.md` (adding or changing a mode). Each with a when-to-open blurb. `granularity-zoom.md`'s
 opening is rewritten to say what it is now — the tree that Structure, Summary, Diagram and the Spine
 draw, with `structure.md` and `hierarchy.md` as the live owners — and that the tabular sections below
 are history. The "one of the features this app is for" wording moves to Structure in

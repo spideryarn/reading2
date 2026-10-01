@@ -18,6 +18,6 @@ No P1 findings. The production dispatch is sound, but I found one P2 test gap an
 - Collapsing the siblings into one slot does not create cross-mode reuse: every non-null case has a distinct top-level type. The conversation key is not needed for that conclusion.
 - The large wiring test is load-bearing for setter wiring—the Timeline mutation is meaningful—but its pending-request and article-change claims are overstated as above.
 - The `NO_FOUND` identity claim is real. `hitMarks`, `hitStrength`, `hitHues`, and `hitBlocks` all memoize on `passages` identity; a fresh empty array would invalidate all four and hand new maps into `TableView`.
-- `new-mode.md` and `url-state.md` are otherwise accurate. Article-access and position files are byte-untouched by the commit.
+- `mode.md` and `url-state.md` are otherwise accurate. Article-access and position files are byte-untouched by the commit.
 
 Validation: the four focused files pass, 29/29. Typechecking passed all three projects and confirmed all 1,418 files are covered.

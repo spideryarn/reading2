@@ -99,7 +99,7 @@ The validation algorithm has unstable priority rules ([plan:60](/home/greg/code/
 
 The general instruction to cover “every client total” is useful, but the plan should explicitly include:
 
-- a passage resolver/search-hit branch, required when a mode marks prose ([new-mode.md:53](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-mode/docs/project/new-mode.md:53));
+- a passage resolver/search-hit branch, required when a mode marks prose ([mode.md:53](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-mode/docs/project/mode.md:53));
 - the new `PassageSlots` state and reset lifecycle, which is not an exhaustive map today ([passages.ts:71](/home/greg/code/spideryarn2/.claude/worktrees/trajectory-mode/src/web/reader/passages.ts:71));
 - URL history semantics: depth changes should likely push history, stop stepping should replace, and a depth change plus fallback-stop correction should be atomic;
 - the corresponding `url-state.md` documentation update.

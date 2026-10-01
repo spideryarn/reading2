@@ -104,7 +104,7 @@ export function TweetsPanel({
       label="Tweets"
       feature="gloss tweets"
       /* **A head only when there is a thread**: the counts and *Copy the
-         thread*, which is not the mode's name (new-mode.md § the band's
+         thread*, which is not the mode's name (mode.md § the band's
          chrome). No thread, no row. */
       head={
         ready && thread ? (

@@ -1,7 +1,7 @@
 You are GPT Sol, doing the CODE review of stage 2 (client side) of plan
 docs/plans/260930i-simple-summaries-eli15-sub-mode.md in the Spideryarn repo (this worktree). Read CLAUDE.md,
 the plan (ledger included), your plan review (…-review-sol.md) and stage-1 review (…-stage1-review-sol.md),
-docs/project/new-mode.md, and the new section of docs/project/summaries.md ("Simple — a plain-words orientation").
+docs/project/mode.md, and the new section of docs/project/summaries.md ("Simple — a plain-words orientation").
 
 The stage is commits 5bcbe6ad and 3286c269 (view each with `show`). Templates it copied: FAQ's client
 (0e947eb4, 81905905) and Remember's Quiz chip (src/web/QuizPanel.tsx, src/web/useQuiz.ts).
