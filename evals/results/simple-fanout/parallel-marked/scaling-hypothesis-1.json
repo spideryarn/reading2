@@ -1,0 +1,164 @@
+{
+ "arm": "parallel-marked",
+ "slug": "scaling-hypothesis",
+ "run": 1,
+ "at": "2026-10-01T10:27:32.678Z",
+ "wallMs": 16054,
+ "costUsd": 0.060046,
+ "calls": [
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 5635,
+   "doneMs": 7167,
+   "input": 1854,
+   "cacheRead": 26870,
+   "cacheWrite": 0,
+   "output": 519
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 1,
+   "firstTextMs": 11325,
+   "doneMs": 15938,
+   "input": 1804,
+   "cacheRead": 26870,
+   "cacheWrite": 0,
+   "output": 1427
+  },
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 2,
+   "firstTextMs": 7484,
+   "doneMs": 16049,
+   "input": 1859,
+   "cacheRead": 26870,
+   "cacheWrite": 0,
+   "output": 1343
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 123,
+   "paragraphs": 3,
+   "readyMs": 7167,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 329,
+   "paragraphs": 4,
+   "readyMs": 16049,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 219,
+   "paragraphs": 4,
+   "readyMs": 15938,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 1511,
+ "text": {
+  "brief": [
+   {
+    "text": "This piece is about GPT-3, a giant computer program trained to predict the next word in text. It explains how making it much bigger, instead of giving it clever new tricks, changed what it could do.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c"
+    ]
+   },
+   {
+    "text": "This matters because almost no one expected sheer size to work this well. GPT-3 could suddenly follow instructions and learn new tasks from just a few examples, something smaller versions could not do.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c"
+    ]
+   },
+   {
+    "text": "The big idea is called the scaling hypothesis: if you keep making neural networks bigger, and feed them more data and computing power, they keep getting smarter on their own. The piece also argues that as the task gets harder, the network is forced to stop memorizing shortcuts and start learning real, general skills.",
+    "ids": [
+     "spya-ag750z",
+     "spya-m3gtj6",
+     "spya-wq498y"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This piece is about GPT-3, a huge AI language model that works by predicting the next word in text, and what its success means for the \"scaling hypothesis\": the idea that simply making neural networks (programs loosely modeled on brain cells) much bigger, with more data and computing power, can make them far smarter.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z"
+    ]
+   },
+   {
+    "text": "This matters because GPT-3 surprised researchers: beyond learning facts, it learned to follow instructions and pick up brand-new tasks from just a few examples, without being specially trained for them. The author argues this \"meta-learning\" (learning how to learn) suggests huge models trained on raw, unlabeled text could become key building blocks for future AI.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-suzdvz"
+    ]
+   },
+   {
+    "text": "A central idea is the \"blessings of scale\": oddly, hard problems get easier for neural networks as they grow, rather than harder. The author suggests a huge model works like a vast collection of smaller guesses, and training on data hard and varied enough eventually favors guesses that generalize over ones that just memorize shortcuts.",
+    "ids": [
+     "spya-jwq3zr",
+     "spya-sfkxh8",
+     "spya-grkhs8"
+    ]
+   },
+   {
+    "text": "Another idea, the \"pretraining thesis,\" holds that predicting text as accurately as a human would require real understanding, since the hardest, rarest errors can only be fixed by genuine reasoning. The piece also criticizes AI experts who long dismissed this approach, and asks what research labs will do now that scaling seems to keep working.",
+    "ids": [
+     "spya-rjwfkb",
+     "spya-m9r8zx",
+     "spya-rbx2kz"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This is an essay by Gwern about GPT-3, a giant text-predicting AI program released in 2020, and what it reveals about the future of artificial intelligence. It argues for the \"scaling hypothesis\": the idea that simply making neural networks (computer programs loosely modeled on brain cells) much bigger, and training them on much more data and computing power, makes them steadily smarter, without needing cleverer designs.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-suzdvz"
+    ]
+   },
+   {
+    "text": "GPT-3 was built the same basic way as the earlier, smaller GPT-2, just scaled up about 100 times, yet it did something nobody expected: it learned to pick up brand-new tasks just from a few examples typed into a prompt, a skill called meta-learning (learning how to learn). The essay says this matters because GPT-3 learned this purely from predicting text, not from any special training for it, suggesting that huge unsupervised models (trained on raw, unlabeled data) could become key building blocks for future AI, and that researchers' public dismissals of this possibility have been unreliable.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-ypbup8",
+     "spya-m9r8zx"
+    ]
+   },
+   {
+    "text": "The author calls this pattern the \"blessings of scale\": unlike most research, where small problems are easy and big ones get harder, in deep learning hard, large-scale problems often become easier to solve than small ones once models and data are big enough. The piece explains this partly through a \"pretraining\" idea: a model trained to predict text keeps having to get better at harder and harder things, from spelling to grammar to reasoning, because easy shortcuts run out, and this logically pushes it toward real understanding if pushed far enough.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-ce0ts7",
+     "spya-rjwfkb"
+    ]
+   },
+   {
+    "text": "Gwern contrasts this scaling hypothesis with mainstream AI researchers and labs, who mostly doubted huge scale would work and have since been proven wrong repeatedly over the past decade, from early neural networks to AlphaGo to GPT-3 itself. He concludes that expert predictions about AI risk and progress deserve little trust, since the same confident dismissals keep being wrong, and that the 2020s will show whether this scaling trend keeps going or hits a wall.",
+    "ids": [
+     "spya-cty5hx",
+     "spya-b93jbz",
+     "spya-m9r8zx"
+    ]
+   }
+  ]
+ }
+}

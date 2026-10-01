@@ -1,0 +1,156 @@
+{
+ "arm": "parallel-marked",
+ "slug": "entropy-24-00930-spya-pywwkq",
+ "run": 1,
+ "at": "2026-10-01T10:25:34.966Z",
+ "wallMs": 11021,
+ "costUsd": 0.0425434,
+ "calls": [
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 1,
+   "firstTextMs": 2575,
+   "doneMs": 6732,
+   "input": 1855,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 393
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 9,
+   "firstTextMs": 4665,
+   "doneMs": 8893,
+   "input": 1805,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 691
+  },
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 10,
+   "firstTextMs": 6391,
+   "doneMs": 11014,
+   "input": 1860,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 957
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 159,
+   "paragraphs": 3,
+   "readyMs": 6732,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 295,
+   "paragraphs": 4,
+   "readyMs": 11014,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 221,
+   "paragraphs": 3,
+   "readyMs": 8893,
+   "check": "flagged",
+   "flags": 1
+  }
+ },
+ "reasoningTokens": 351,
+ "text": {
+  "brief": [
+   {
+    "text": "This article is about how scientists try to figure out what brain cells are doing when they share and combine information. It introduces a method called partial information decomposition, which splits the information that two or more neurons carry about another neuron's activity into separate pieces.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "This matters because understanding how neurons process information, not just pass it along, is one of the biggest open questions in neuroscience. New recording tools can now capture activity from thousands of neurons at once, so better analysis methods are needed to make sense of it all.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-s9kmxa"
+    ]
+   },
+   {
+    "text": "A key idea is synergy: information that only shows up when you look at two neurons together, not from either one alone, as if the target neuron is combining clues to make a decision. Studies described here found synergy was higher in densely connected hub neurons called rich clubs, in circuits with more loop-like recurrent connections, and when input signals were moderately similar to each other.",
+    "ids": [
+     "spya-e94ury",
+     "spya-fud8q3",
+     "spya-hkhpex"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This article is a review about how scientists try to measure \"information processing\" in brain circuits, meaning how groups of neurons combine signals from other neurons to produce their own activity. It introduces a method called partial information decomposition, which splits the information that two or more neurons give about a target neuron into separate pieces: information they share (redundant), information only one gives (unique), and information that only appears when you look at them together (synergistic).",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-wer4cd"
+    ]
+   },
+   {
+    "text": "The piece argues this matters because simply tracking information flow between neurons does not show how neurons actually combine or transform signals into something new. The synergistic piece in particular shows when a neuron is doing more than just adding up its inputs, acting like it is computing something from the pattern of inputs together.",
+    "ids": [
+     "spya-s0db2g",
+     "spya-u5ra3d"
+    ]
+   },
+   {
+    "text": "Using recordings from mouse brain cell cultures and from monkeys doing tasks, the authors found synergy is higher in \"rich clubs,\" the best-connected neurons, which packed 2.7 times more synergy than other neurons despite being under 40% of cells. Synergy also rose with more feedback loops between source neurons and with moderate similarity between input signals, though too much similarity made information redundant instead. In monkeys, the balance between synergy and redundancy also shifted depending on what task stage the animal was in, suggesting these patterns relate to behavior.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-ybmve2"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This article is a review explaining how scientists can study the way brains \"process information\" by using a mathematical tool called partial information decomposition, or PID. It explains what PID is, how it has been used to study real neurons, and what practical steps are needed to apply it.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "The piece argues that understanding how neurons combine signals from multiple other neurons is a basic unanswered question in neuroscience. Just measuring whether information flows from one neuron to another is not enough: it does not show how neurons combine different streams of input into something new. PID helps by splitting the information several neurons jointly carry about a target neuron into separate pieces: information that is redundant (carried by either source alone), information unique to one source, and information that is synergistic, meaning it only appears when you look at both sources together, as a sign of real computation.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-s0db2g",
+     "spya-u5ra3d"
+    ]
+   },
+   {
+    "text": "Using recordings from hundreds of neurons in mouse brain cultures, the authors found that synergy (joint, combined information) was higher among densely connected \"rich club\" neurons, was linked to more feedforward and recurrent (mutual) connections between source neurons, and rose when source neurons' activity was moderately similar, falling off when they became too similar. Similar patterns, including rich clubs and synergy linked to connectivity, turned up in brain recordings from macaque monkeys performing a task, and synergy levels shifted depending on which part of the task the animal was doing.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-hkhpex"
+    ]
+   },
+   {
+    "text": "The review also covers practical issues: PID needs a way to define \"redundant information,\" which has no single agreed formula; it needs large amounts of data to work reliably; and it becomes mathematically explosive with many neurons. It closes by pointing to newer extensions, such as time-resolved and multi-target versions of PID, as promising next steps.",
+    "ids": [
+     "spya-rc76qn",
+     "spya-aby2dp",
+     "spya-z39m3x"
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,164 @@
+{
+ "arm": "parallel-marked",
+ "slug": "entropy-24-00930-spya-pywwkq",
+ "run": 3,
+ "at": "2026-10-01T10:26:03.991Z",
+ "wallMs": 10500,
+ "costUsd": 0.0432934,
+ "calls": [
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 7590,
+   "doneMs": 7917,
+   "input": 1855,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 479
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 1,
+   "firstTextMs": 6456,
+   "doneMs": 8718,
+   "input": 1805,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 704
+  },
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 1,
+   "firstTextMs": 6426,
+   "doneMs": 10494,
+   "input": 1860,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 933
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 126,
+   "paragraphs": 3,
+   "readyMs": 7917,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 198,
+   "paragraphs": 3,
+   "readyMs": 8718,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 269,
+   "paragraphs": 5,
+   "readyMs": 10494,
+   "check": "flagged",
+   "flags": 1
+  }
+ },
+ "reasoningTokens": 525,
+ "text": {
+  "brief": [
+   {
+    "text": "This article is about a way to study how brain cells work together to process information. It explains a math tool called partial information decomposition, which breaks down what a neuron learns from its inputs into separate pieces.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-u0wm5e"
+    ]
+   },
+   {
+    "text": "This matters because scientists still don't know exactly how neurons combine signals from many other neurons to decide whether to fire. The tool helps reveal when neurons are doing real computation, not just adding up signals.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-h5dz45"
+    ]
+   },
+   {
+    "text": "The key idea is synergy: information that only shows up when you look at two input neurons together, not from either one alone. Studies found synergy is higher in densely connected hub neurons called rich clubs, and in circuits with more loop-like (recurrent) connections, showing that network structure shapes how neurons compute.",
+    "ids": [
+     "spya-e94ury",
+     "spya-fud8q3",
+     "spya-sd9fzd"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This article reviews a method called partial information decomposition (PID), used to study how brain circuits process information. Brains take in signals and transform them into useful patterns, but how neurons actually do this transforming is not well understood. The review explains PID's core ideas and then shows how it has been used on real recordings of neurons.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-rxcze4"
+    ]
+   },
+   {
+    "text": "The article says this matters because basic questions about information processing in the brain are still open, and new recording technology now produces huge amounts of neural data that need a way to be interpreted. PID offers a way to pull apart how neurons combine signals from multiple sources, rather than just tracking signals moving from one neuron to another.",
+    "ids": [
+     "spya-s9kmxa",
+     "spya-gzwbsr",
+     "spya-s0db2g"
+    ]
+   },
+   {
+    "text": "A key idea is synergy: information about a neuron's activity that only shows up when you look at two or more input neurons together, not from either one alone. The review reports that synergy is common in neural circuits, is especially strong in densely connected \"rich club\" neurons, increases with more interconnections among input neurons, and peaks when input neurons' activity is moderately, not highly, similar. In monkeys performing tasks, synergy patterns also shifted depending on the behavior being performed.",
+    "ids": [
+     "spya-e94ury",
+     "spya-fud8q3",
+     "spya-sd9fzd"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This is a review article about studying how brain circuits handle information. It introduces a statistical tool called partial information decomposition, or PID, which breaks down how two or more source neurons jointly shape the activity of a target neuron.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "The piece says this matters because it is still unclear how neurons actually combine signals from many inputs into a decision to fire. Simple measures like mutual information (how much knowing one neuron's activity tells you about another's) or transfer entropy (how much a neuron's past activity predicts another's future activity) can show that information flows between neurons, but not how it is combined or transformed.",
+    "ids": [
+     "spya-s0db2g",
+     "spya-qjdbvj",
+     "spya-f6sbgx"
+    ]
+   },
+   {
+    "text": "PID splits the information two source neurons give about a target into redundant information (available from either source alone), unique information (only from one source), and synergistic information (only visible when both sources are considered together, reflecting a kind of combined computation). Using recordings from mouse brain tissue in dishes, the authors found synergy was higher in densely connected \"rich club\" neurons, grew with more recurrent connections between sources, and peaked when source neurons' activity was moderately, not highly, similar.",
+    "ids": [
+     "spya-h5jzvm",
+     "spya-fud8q3",
+     "spya-sd9fzd"
+    ]
+   },
+   {
+    "text": "A study in monkeys performing a task extended these findings to living, behaving animals, showing synergy patterns shifted depending on the task stage, such as redundancy rising sharply during movement execution. The article also discusses practical issues, like choosing a method to define \"redundant information\" (there is no single agreed-upon way), data size limits, and available software.",
+    "ids": [
+     "spya-t8fayf",
+     "spya-rc76qn",
+     "spya-cqrzab"
+    ]
+   },
+   {
+    "text": "Finally, it points to future directions, including localizing the decomposition to single moments in time and extending it to cases with more than one target neuron.",
+    "ids": [
+     "spya-z39m3x",
+     "spya-xn6y4f"
+    ]
+   }
+  ]
+ }
+}

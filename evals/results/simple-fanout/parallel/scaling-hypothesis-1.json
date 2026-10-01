@@ -1,0 +1,162 @@
+{
+ "arm": "parallel",
+ "slug": "scaling-hypothesis",
+ "run": 1,
+ "at": "2026-10-01T10:20:36.748Z",
+ "wallMs": 13914,
+ "costUsd": 0.203504,
+ "calls": [
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 7251,
+   "doneMs": 9587,
+   "input": 28724,
+   "cacheRead": 0,
+   "cacheWrite": 0,
+   "output": 792
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 1,
+   "firstTextMs": 6935,
+   "doneMs": 12711,
+   "input": 28674,
+   "cacheRead": 0,
+   "cacheWrite": 0,
+   "output": 1135
+  },
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 2,
+   "firstTextMs": 7842,
+   "doneMs": 13910,
+   "input": 28729,
+   "cacheRead": 0,
+   "cacheWrite": 0,
+   "output": 1198
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 125,
+   "paragraphs": 3,
+   "readyMs": 9587,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 234,
+   "paragraphs": 4,
+   "readyMs": 12711,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 295,
+   "paragraphs": 4,
+   "readyMs": 13910,
+   "check": "flagged",
+   "flags": 1
+  }
+ },
+ "reasoningTokens": 1403,
+ "text": {
+  "brief": [
+   {
+    "text": "This piece is about GPT-3, a giant computer program trained to predict the next word in text. It asks a big question: does just making AI programs bigger make them smarter?",
+    "ids": [
+     "spya-suzdvz",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters because GPT-3 surprised almost everyone. Making it much bigger than earlier versions did not stop working or run out of benefits, as many expected. Instead it learned new skills, like following instructions or solving puzzles from just a few examples, without being specially trained to do those things.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c"
+    ]
+   },
+   {
+    "text": "The piece calls this learning-from-a-few-examples trick \"meta-learning\": learning how to learn new tasks. It backs an idea called the scaling hypothesis: that simple neural networks, given enough size, data, and computing power, naturally become more capable, even gaining skills nobody built in on purpose.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-ag750z",
+     "spya-sfkxh8"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This piece is about GPT-3, a huge artificial intelligence model built by OpenAI in 2020 that predicts text one word at a time, after being fed enormous amounts of internet writing. It argues for the \"scaling hypothesis\": the idea that making neural networks (brain-inspired learning systems) much bigger, with more data and computing power, is itself the path to much smarter AI, with no need for clever new designs.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z"
+    ]
+   },
+   {
+    "text": "The piece says this matters because GPT-3 did more than learn facts: it showed \"meta-learning\", meaning it could follow instructions and pick up new tasks from just a few examples, something it was never specifically trained to do. Its performance kept improving smoothly as it grew, with no sign of leveling off, suggesting even bigger models could unlock more surprising abilities.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c",
+     "spya-asr663"
+    ]
+   },
+   {
+    "text": "A core idea is the \"blessings of scale\": unlike most research, where hard problems stay hard, deep learning problems often get easier as the model, data, and computing power all grow larger. The piece also explains \"pretraining\": training a model simply to guess the next bit of text forces it to learn grammar, facts, and even reasoning, because only real understanding keeps improving its guesses once the easy patterns are used up.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-n4zu5k",
+     "spya-rjwfkb"
+    ]
+   },
+   {
+    "text": "Finally, the piece criticizes AI experts who confidently predicted scaling would stop working, noting they rarely admit being wrong, and argues their forecasts about AI's future risks should not be trusted either.",
+    "ids": [
+     "spya-b93jbz",
+     "spya-m9r8zx"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This is a long essay about GPT-3, a huge text-generating computer program released in 2020, and what it means for building smarter machines. The program works by predicting the next word in text, trained on huge amounts of internet writing. The author argues GPT-3 supports the scaling hypothesis: the idea that artificial intelligence does not need clever new designs, just much bigger networks of simple computing units trained on much more data and computing power.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z"
+    ]
+   },
+   {
+    "text": "The piece says this matters because GPT-3 surprised almost everyone. Earlier, similar but smaller programs could only do specific tasks they were trained for, like summarizing text. GPT-3, just by being made far bigger, learned to follow instructions and pick up brand-new tasks from only a few examples, without being specially trained for that skill at all. The author argues this shows raw scale can produce genuinely new abilities, not just better memory of facts.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-fvqe70"
+    ]
+   },
+   {
+    "text": "The essay calls this pattern the blessings of scale: unlike most research, where small problems are easy and big ones get harder, in these networks problems that fail at small size often get solved smoothly once the network and its training data are large enough. One explanation offered is that a big network effectively contains countless smaller sub-solutions; simple shortcuts win early on, but true, general solutions eventually win out once there is enough varied data to expose the shortcuts' limits.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-wq498y"
+    ]
+   },
+   {
+    "text": "The author also notes that decades ago, researcher Hans Moravec predicted computers would become cheap enough for roughly insect-level, then human-level, artificial intelligence around the 2010s–2020s, a timeline the essay says is holding up. Despite this, the essay argues, most AI labs and commentators still doubt that scale alone is the answer, a disagreement it treats as the central, unresolved argument of the 2020s.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-emqjaa",
+     "spya-cxnhav"
+    ]
+   }
+  ]
+ }
+}

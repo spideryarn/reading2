@@ -1,0 +1,144 @@
+{
+ "arm": "one-call",
+ "slug": "olah-a4-spya-ujr7p0",
+ "run": 2,
+ "at": "2026-10-01T10:33:42.258Z",
+ "wallMs": 45572,
+ "costUsd": 0.0692438,
+ "calls": [
+  {
+   "levels": [
+    "fuller",
+    "simple",
+    "brief"
+   ],
+   "startMs": 1,
+   "firstTextMs": 39480,
+   "doneMs": 45546,
+   "input": 5374,
+   "cacheRead": 4079,
+   "cacheWrite": 0,
+   "output": 5768
+  }
+ ],
+ "levels": {
+  "simple": {
+   "ok": true,
+   "words": 189,
+   "paragraphs": 4,
+   "readyMs": 43617,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 259,
+   "paragraphs": 4,
+   "readyMs": 40711,
+   "check": "passed",
+   "flags": 0
+  },
+  "brief": {
+   "ok": true,
+   "words": 103,
+   "paragraphs": 3,
+   "readyMs": 45546,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 4302,
+ "text": {
+  "brief": [
+   {
+    "text": "This note explains how computer brain models called neural networks store information. It looks at an idea called \"distributed representations\", where many neurons share the work. The note says this idea is really two different tricks: \"composition\" and \"superposition\".",
+    "ids": [
+     "spya-zhbm9s",
+     "spya-nwuh77",
+     "spya-fyxmks"
+    ]
+   },
+   {
+    "text": "This matters because splitting information into separate parts helps us understand how networks really work. The note says this is needed to avoid an explosion of possibilities.",
+    "ids": [
+     "spya-nwuh77",
+     "spya-v47ca7"
+    ]
+   },
+   {
+    "text": "\"Composition\" combines simple features, like color and shape, using separate neurons. \"Superposition\" packs more features than there are neurons, like fitting 16 numbers into 4 bits. The note says these two tricks actually compete with each other.",
+    "ids": [
+     "spya-qcd003",
+     "spya-bzhkhu",
+     "spya-xcrca8"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This is an informal note about how neural networks (computer models inspired by the brain) store information in their neurons. It looks at an old idea called \"distributed representations\", where information is spread across many neurons instead of one neuron per idea. The note says this idea is really two different ideas mixed together, called \"composition\" and \"superposition\".",
+    "ids": [
+     "spya-zhbm9s",
+     "spya-nwuh77",
+     "spya-fyxmks"
+    ]
+   },
+   {
+    "text": "This matters because breaking representations into separate, independent parts helps us understand how neural networks actually work. The note says this is necessary to avoid a problem where possibilities explode as more features are added.",
+    "ids": [
+     "spya-nwuh77",
+     "spya-v47ca7"
+    ]
+   },
+   {
+    "text": "In \"composition\", simple features like color and shape get their own neurons and combine to describe things, like a green square. This uses far fewer neurons than giving every object its own neuron. It also lets the network apply what it learned about one object to a similar new one.",
+    "ids": [
+     "spya-qcd003",
+     "spya-g8cztv",
+     "spya-s9fc6n"
+    ]
+   },
+   {
+    "text": "In \"superposition\", a network instead squeezes in more features than it has neurons, somewhat like how 4 bits can represent 16 numbers. This only works if the features rarely combine together. The note says composition and superposition are actually competing strategies, though they can sometimes mix.",
+    "ids": [
+     "spya-bzhkhu",
+     "spya-xcrca8",
+     "spya-vefv29"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This is an informal note by Chris Olah, published May 4, 2023, about how neural networks store information inside their neurons. It looks at a classic idea called \"distributed representations\" — the idea that information is spread across many neurons rather than one neuron per thing. The note argues this idea actually contains two separate ideas, which it calls \"composition\" and \"superposition\", and that people often mix them up.",
+    "ids": [
+     "spya-zhbm9s",
+     "spya-nwuh77",
+     "spya-fyxmks"
+    ]
+   },
+   {
+    "text": "This matters because breaking a network's representations into separate, independent pieces is necessary to escape a problem called the curse of dimensionality — roughly, the way possibilities explode as you add more features. Doing that is seen as essential for truly understanding how neural networks work inside.",
+    "ids": [
+     "spya-nwuh77",
+     "spya-v47ca7"
+    ]
+   },
+   {
+    "text": "In \"composition\", separate simple features — like color and shape — are represented by separate neurons and then combined to describe an object, such as a green square. This way needs far fewer neurons than giving every object its own neuron. It also lets a network apply what it learned about one combination, like green circles, to a new one, like green squares.",
+    "ids": [
+     "spya-qcd003",
+     "spya-g8cztv",
+     "spya-s9fc6n"
+    ]
+   },
+   {
+    "text": "In \"superposition\", a network instead packs far more features than it has neurons, the way 4 bits of information can represent 16 different numbers. This trick only works if the features don't need to combine freely, and getting the information back out requires more than just simple addition — it needs extra processing. The note argues composition and superposition are competing strategies for using the same limited space, though a network can mix both when a feature combination is rare.",
+    "ids": [
+     "spya-bzhkhu",
+     "spya-xcrca8",
+     "spya-vefv29"
+    ]
+   }
+  ]
+ }
+}
