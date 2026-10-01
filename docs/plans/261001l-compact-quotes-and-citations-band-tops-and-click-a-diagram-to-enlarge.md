@@ -143,8 +143,10 @@ reason that has expired.
 ## Changed by GPT Sol's plan review
 
 - **A press on the Sketch counts only if it is a real pointer press** — not keyboard or assistive
-  activation (`pointerType ""`, `detail 0`), not the end of a selection drag, not one already
-  handled. `src/web/enlargePress.ts`, shared by both views with the double-click guard.
+  activation (`detail 0`), not the end of a selection drag, not one already handled.
+  `pointerType ""` is deliberately accepted because the Pointer Events standard also permits it
+  for a real pointer whose device type the browser cannot detect. `src/web/enlargePress.ts`, shared
+  by both views with the double-click guard.
 - **The handler and the zoom cursor are on the in-band copy only** (`.enlarges`), and a plain
   Sketch node does not inherit the zoom cursor.
 - Each panel computes its order options once and derives both the head and the order row from them,

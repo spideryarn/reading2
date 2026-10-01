@@ -205,7 +205,7 @@ export const QUOTE_BAR_DEFAULT = 0.6;
  * three copies of "which positions exist" is how the count under the reader's
  * hand comes to disagree with the list under it.
  */
-export function barStops(quotes: Quote[]): number[] {
+export function barStops(quotes: readonly Quote[]): number[] {
   const seen = new Set<number>();
   for (const quote of quotes) {
     const p = priorityOf(quote);
@@ -379,7 +379,7 @@ export function visibleQuotes(
  * the first question — and a bar that hides nothing right now is one drag from
  * hiding something, which is why `effectiveRank` does not fall back on it.
  */
-export function canPrioritise(quotes: Quote[]): boolean {
+export function canPrioritise(quotes: readonly Quote[]): boolean {
   return barStops(quotes).length > 1;
 }
 

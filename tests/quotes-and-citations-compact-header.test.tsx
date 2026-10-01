@@ -324,7 +324,27 @@ describe("the states the fold depends on", () => {
     await act(async () =>
       root.render(
         createElement(CitationsPanel, {
-          access: { kind: "visitor", citations: { citations: WORKS, capped: false } },
+          access: {
+            kind: "visitor",
+            /* The public boundary narrows `linkFrom` by excluding the owner's
+               private `web` result; this fixture is explicitly a DOI list. */
+            citations: {
+              citations: WORKS.map((work) => ({
+                id: work.id,
+                title: work.title,
+                why: work.why,
+                mentions: work.mentions,
+                citedAt: work.citedAt,
+                firstCited: work.firstCited,
+                citedInBody: work.citedInBody,
+                url: work.url ?? "https://doi.org/10.1000/xyz",
+                linkFrom: "doi" as const,
+                relevance: work.relevance ?? 0,
+                influence: work.influence ?? 0,
+              })),
+              capped: false,
+            },
+          },
           order: "prioritised",
           onOrder: noop,
           bar: null,

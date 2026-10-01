@@ -614,6 +614,50 @@ describe("a press on the plate", () => {
     expect(host.querySelector(".ill-in-full")).not.toBeNull();
   });
 
+  /* Found by the browser pass at 1280×800: the second click of a real
+     double-click landed on a *what it depicts* row inside the overlay, which
+     closes it and jumps the article — so the picture opened and shut again. */
+  it("is not undone by the second click of a double-click landing on a row inside it", async () => {
+    serving();
+    const jumps: BlockId[] = [];
+    await mount((id) => jumps.push(id));
+    const dialog = stub();
+    await act(async () => {
+      host.querySelector(".ill-scroll img.ill-plate")?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    await settle();
+    const row = dialog.querySelector(".ill-row");
+    expect(row, "no row inside the overlay").not.toBeNull();
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open"), "the double-click's second half shut the overlay").toBe(true);
+    expect(jumps).toEqual([]);
+  });
+
+  it("enlarges for a real click whose pointer type is unknown", async () => {
+    serving();
+    await mount();
+    const dialog = stub();
+    const plate = host.querySelector<HTMLImageElement>(".ill-scroll img.ill-plate");
+    expect(plate, "no plate in the band to press").not.toBeNull();
+
+    /* Pointer Events permits `""` when the device type cannot be detected. It
+       is therefore not proof of keyboard/AT activation; the click count is the
+       reliable distinction here (`detail: 0` for non-pointer activation). */
+    const click = new MouseEvent("click", { bubbles: true, detail: 1 });
+    Object.defineProperty(click, "pointerType", { value: "" });
+    await act(async () => {
+      plate?.dispatchEvent(click);
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open"), "an unclassified pointer press did not open the overlay").toBe(true);
+  });
+
   it("is not undone by the second click of a double-click landing on the backdrop", async () => {
     serving();
     await mount();

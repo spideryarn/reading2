@@ -1312,10 +1312,18 @@ function SketchBody({
         /* Light dismiss. The dialog box fills the viewport and the panel sits
            inside it, so "the target is the dialog itself" means the press landed
            outside the panel — including on the `::backdrop` underneath. */
+        /* **The second click of the double-click that opened it is nobody's
+           press**, wherever it lands — the backdrop, Close, a row that jumps.
+           Swallowed before any of them hears it. enlargePress.ts
+           § laterClickOfMany. */
+        onClickCapture={(e) => {
+          if (laterClickOfMany(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
         onClick={(e) => {
-          /* Not the second click of the double-click that opened it —
-             enlargePress.ts § laterClickOfMany. */
-          if (e.target === dialog.current && !laterClickOfMany(e)) setFull(false);
+          if (e.target === dialog.current) setFull(false);
         }}
       >
         {/* Mounted only while open, so the picture's state lives in exactly one
