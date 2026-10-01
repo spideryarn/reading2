@@ -32,6 +32,45 @@ export type ClaimantUsage =
   | { readonly kind: "paid"; readonly tierId: string }
   | { readonly kind: "unknown" };
 
+/** Where one voucher email has got to. The table's own five. */
+export type VoucherEmailStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
+
+/**
+ * **One delivery** — the latest of its kind for a voucher — as the Status cell
+ * draws it. docs/plans/261001p-voucher-emails-to-recipient-and-creator.md.
+ * No address: `detail` is a reason (`Resend answered 422`, `not production`,
+ * `creator address unavailable`), never who it went to.
+ */
+export interface VoucherEmailState<K extends "gift" | "claimed" = "gift" | "claimed"> {
+  readonly id: string;
+  /** `gift` to the recipient; `claimed` to the creator. */
+  readonly kind: K;
+  readonly status: VoucherEmailStatus;
+  readonly attempts: number;
+  readonly detail: string | null;
+  readonly updatedAt: string;
+  /** When the current or last attempt was reserved; null if none ever was. */
+  readonly attemptStartedAt: string | null;
+  /** Whether `POST /api/admin/voucher-emails/:id/retry` would take it — the server's own predicate. */
+  readonly retryable: boolean;
+}
+
+/** The latest delivery of each kind; null where there has been none. */
+export interface VoucherEmails {
+  readonly gift: VoucherEmailState<"gift"> | null;
+  readonly claimed: VoucherEmailState<"claimed"> | null;
+}
+
+/**
+ * What `POST /api/admin/vouchers` answers: 201 with `queued` for a new voucher,
+ * whose email goes after the response; 200 with `replayed` for the same body
+ * under an id that already exists, which queues nothing.
+ */
+export interface VoucherCreated {
+  readonly id: string;
+  readonly email: "queued" | "replayed";
+}
+
 /** One voucher as `/admin/vouchers` draws it. Admin-only: it carries the note. */
 export interface AdminVoucher {
   readonly id: string;
@@ -48,5 +87,7 @@ export interface AdminVoucher {
   readonly claimantEmail: string | null;
   /** Present only for a claimed voucher. */
   readonly claimant?: ClaimantUsage;
+  /** Its emails, the latest of each kind. */
+  readonly emails: VoucherEmails;
 }
 

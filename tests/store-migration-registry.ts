@@ -2601,6 +2601,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the Auth lookup replaced — nothing reaches GoTrue, so the private
      clone is enough. */
   "tests/billing-vouchers.test.ts": "private-postgres",
+  /* 261001p: the voucher emails' outbox. The same shape as the file above, with
+     a stem of its own; every send goes to an injected fetch, never Resend. */
+  "tests/billing-voucher-emails.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",
