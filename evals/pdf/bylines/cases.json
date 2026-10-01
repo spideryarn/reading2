@@ -125,6 +125,53 @@
     "affiliations": []
    }
   ],
+  "adversarialDrops": [
+   {
+    "how": "drop Niki and Jakob, replace them with mailbox words",
+    "answer": [
+     {
+      "name": "Ashish Vaswani",
+      "affiliations": [
+       "Niki Parmar Jakob Uszkoreit Google Brain Google Brain Google Research Google Research"
+      ]
+     },
+     {
+      "name": "Noam Shazeer",
+      "affiliations": []
+     },
+     {
+      "name": "nikip",
+      "affiliations": []
+     },
+     {
+      "name": "usz",
+      "affiliations": []
+     },
+     {
+      "name": "Llion Jones",
+      "affiliations": [
+       "Google Research"
+      ]
+     },
+     {
+      "name": "Aidan N. Gomez",
+      "affiliations": [
+       "University of Toronto"
+      ]
+     },
+     {
+      "name": "Łukasz Kaiser",
+      "affiliations": [
+       "Google Brain"
+      ]
+     },
+     {
+      "name": "Illia Polosukhin",
+      "affiliations": []
+     }
+    ]
+   }
+  ],
   "notes": "Row-major reading of a 4-column grid: names row, institution row, email row, with the marker row (∗ ∗ † ∗) between. Polosukhin has no institution or email row here."
  },
  {

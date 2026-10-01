@@ -201,9 +201,28 @@ describe("verifyAuthors", () => {
       /* Fused: a greedy domain would read "eduDeepMind" as its top-level label. */
       const fused = "Qihong Lu Princeton University qlu@princeton.eduDeepMind";
       expect(verifyAuthors([one("Qihong Lu", ["Princeton University"])], fused, [fused]).authors).toBeNull();
+      /* Lower-case fused: the top-level label is not one an address ends in (code review P1-3). */
+      const lower = "Alice Adams Acme University alice@acme.edubob";
+      expect(verifyAuthors([one("Alice Adams", ["Acme University"])], lower, [lower]).authors).toBeNull();
       /* The control: punctuation straight after the address is not a word. */
       const comma = "Qihong Lu Princeton University qlu@princeton.edu, Po-Hsuan Chen Princeton University pchen@princeton.edu";
       expect(verifyAuthors(lu.slice(0, 2), comma, [comma]).authors).toHaveLength(2);
+    });
+
+    it("never takes a word inside an email address as an author's name", () => {
+      const byline = "Alice Adams Acme University Bob Brown alice@acme.edu carol@beta.edu";
+      const answer = [one("Alice Adams", ["Acme University Bob Brown"]), one("carol")];
+      expect(verifyAuthors(answer, byline, [byline])).toMatchObject({
+        authors: null,
+        note: expect.stringMatching(/as printed/),
+      });
+
+      /* It keeps looking past the mailbox: the later printed Acme is a name. */
+      const repeated = "Alice Adams alice@acme.edu Acme";
+      expect(verifyAuthors([one("Alice Adams"), one("Acme")], repeated, [repeated]).authors?.map((a) => a.name)).toEqual([
+        "Alice Adams",
+        "Acme",
+      ]);
     });
   });
 
@@ -278,6 +297,17 @@ describe("verifyAuthors", () => {
         "Hunan Cancer Hospital, Changsha, China",
         "2 Health Service Center",
       ]));
+
+    it("refuses names-only when a stacked gap could hide an address-less author", () => {
+      const byline = "Alice Adams Acme University Bob Brown alice@acme.edu Carol Clark";
+      const verdict = verifyAuthors(
+        [one("Alice Adams", ["Acme University Bob Brown"]), one("Carol Clark", ["Nowhere Institute"])],
+        byline,
+        [byline],
+      );
+      expect(verdict).toMatchObject({ authors: null, note: expect.stringMatching(/as printed/) });
+      expect("names" in verdict).toBe(false);
+    });
 
     it("Webb et al.: two lines of the affiliation block run together, and three good names", () => {
       const byline = "Taylor Webb1,*, Keith J. Holyoak1\n, and Hongjing Lu1,2";

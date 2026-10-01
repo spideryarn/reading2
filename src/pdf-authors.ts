@@ -101,13 +101,16 @@ const BETWEEN_NAMES = /^(?:\p{N}+|\p{L}|and|by|with|et|und|y|e)$/u;
  * start before it, whitespace, `,`, `;` or the end after it, and a top-level
  * label in lower case. That last rule is what stops a fused tail being eaten:
  * `alice@acme.eduDeepMind` is not an address, so `DeepMind` stays a word the
- * check has to account for (GPT Sol, plan review of 261001l, P1-2). A braced
+ * check has to account for (GPT Sol, plan review of 261001l, P1-2). And the
+ * top-level label is two letters or one of a short list, so a lower-case fused
+ * tail — `alice@acme.edubob` — is not an address either (code review, P1-3);
+ * a rarer top-level domain refuses the list, which is the safe way to be wrong. A braced
  * group, `{qlu,pchen}@princeton.edu`, is one address per name in the braces;
  * the text layer often spaces it, `{ karen,az } @robots.ox.ac.uk`, and
  * `} @ deepmind.com`.
  */
 const EMAIL =
-  /(?<=^|\s)(?:\{\s*([^{}@\s,]+(?:\s*,\s*[^{}@\s,]+)*)\s*\}\s*@\s*|[A-Za-z0-9._%+-]+@)(?:[A-Za-z0-9-]+\.)+[a-z]{2,24}(?=$|[\s,;])/gu;
+  /(?<=^|\s)(?:\{\s*([^{}@\s,]+(?:\s*,\s*[^{}@\s,]+)*)\s*\}\s*@\s*|[A-Za-z0-9._%+-]+@)(?:[A-Za-z0-9-]+\.)+(?:[a-z]{2}|com|edu|org|net|gov|mil|int|info|io|ai|dev|app|tech)(?=$|[\s,;])/gu;
 
 /** Where each email in `text` is, and how many people's addresses it holds. */
 function emailsIn(text: string): { start: number; end: number; count: number }[] {
@@ -326,13 +329,22 @@ interface FoundSpan {
   nextWord: number;
 }
 
-/** A name: every word exact but the last, which may carry a glued marker after it. */
-const findName = (have: Word[], want: string[], fromWord: number): FoundSpan | null => {
+/**
+ * A name: every word exact but the last, which may carry a glued marker after
+ * it. `unavailable` keeps address words from being mistaken for printed names.
+ */
+const findName = (
+  have: Word[],
+  want: string[],
+  fromWord: number,
+  unavailable: (word: number) => boolean,
+): FoundSpan | null => {
   /* A proposal with no words in it — `--- ***` — names nobody, and without this
      the empty run "matches" at the first position and the span is read off a
      last word that does not exist. */
   if (want.length === 0) return null;
   for (let s = fromWord; s + want.length <= have.length; s++) {
+    if (want.some((_w, i) => unavailable(s + i))) continue;
     const last = want.length - 1;
     const ok = want.every((w, i) => {
       const h = have[s + i]!.folded;
@@ -418,6 +430,11 @@ export function verifyAuthors(
   const accounts: Accounting[] = [];
   /* The first author of the current block: the one after the last gap that held anything. */
   let blockStart = 0;
+  /* Names-only is safe only when the names were separated by markers and glue.
+     If a model-proposed affiliation helped account for a gap, a failed
+     affiliation elsewhere must not turn that uncertain segmentation into a
+     clean byline with a printed person missing. */
+  let usedGapAccounting = false;
   let nextNameWord = 0;
   /* The first affiliation that failed, if one has. The names are still checked
      to the end — a bad name refuses everything, as it always did — and only then
@@ -429,7 +446,7 @@ export function verifyAuthors(
        an independent existential check: the model can reverse two real names
        or repeat the first one and both still pass. */
     const want = words(proposed.name);
-    const at = findName(byline, want, nextNameWord);
+    const at = findName(byline, want, nextNameWord, (word) => mailAt(word) !== null);
     if (!at) return refuse(`named somebody not printed in the byline (author ${n + 1})`);
     /* **Nobody skipped.** What lies between the previous name and this one —
        or before the first — must be nobody, or the list has left out someone
@@ -438,7 +455,10 @@ export function verifyAuthors(
        stacked block: `gapIsNobody`. */
     const gap = gapIsNobody(byline, nextNameWord, at.nextWord - want.length, mailAt, accounts.slice(blockStart), null);
     if (gap === null) return refuse(`left out somebody printed before author ${n + 1}`);
-    if (gap === "accounted") blockStart = n;
+    if (gap === "accounted") {
+      blockStart = n;
+      usedGapAccounting = true;
+    }
     nextNameWord = at.nextWord;
     const rawName = oneLine(bylineText.slice(at.start, at.end));
     /* The page's markers for this name, both the ones the model copied into
@@ -458,10 +478,15 @@ export function verifyAuthors(
   }
   /* And after the last name, for every list: until 261001l the ordinary list
      did not check here, and dropped a trailing author (260930e, C4). */
-  if (gapIsNobody(byline, nextNameWord, byline.length, mailAt, accounts.slice(blockStart), accounts) === null) {
+  const trailing = gapIsNobody(byline, nextNameWord, byline.length, mailAt, accounts.slice(blockStart), accounts);
+  if (trailing === null) {
     return refuse(`left unaccounted words after author ${answer.length}`);
   }
+  if (trailing === "accounted") usedGapAccounting = true;
   if (affiliationFailed !== null) {
+    if (usedGapAccounting) {
+      return refuse("could not safely separate every printed author after an affiliation failed");
+    }
     return {
       authors: null,
       names: out.map((a) => a.name),

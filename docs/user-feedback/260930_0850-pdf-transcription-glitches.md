@@ -68,3 +68,26 @@ transcription are listed in the plan.
 Still open for Greg: the trailing-author gap in the author check (on awaiting-approval.md).
 
 Plan: [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).
+
+## Follow-up, 2026-10-01: stacked bylines and the trailing-author gap
+
+> perhaps gather a whole bunch of different examples of different ways authors can be presented and
+> create a little eval of this. It's not super-important though, so maybe start with just a v1
+> improvement, and defer more complicated improvements to a future plan.
+>
+> — Greg, 2026-10-01
+
+**Ending: Shipped** — on `dev` as COMMIT_PLACEHOLDER, not deployed. A PDF's author list is now taken
+when the byline prints name / institution / email per author (NeurIPS), or the names together and
+their addresses after (`{jacobdevlin,…}@google.com`), as long as there is one address per author.
+The address count is what proves nobody was left out; an institution the model names is never
+proof on its own. And the check now also looks after the last name, so a trailing author can no
+longer be dropped (the gap left open above).
+
+A new eval of 39 real bylines (`evals/pdf/bylines/`, in `npm test`): the old check let a dropped
+author through in 60 of 739 derived answers, the new one in none; it takes 26 of the 39 clean
+lists against 25. Six bylines the old check took (at the price of those drops) are now left as
+printed; the shapes still to do, and the one risk the brief accepts — the model calling a person an
+affiliation where no address count can catch it — are in the plan.
+
+Plan: [261001l](../plans/261001l-pdf-stacked-bylines.md).

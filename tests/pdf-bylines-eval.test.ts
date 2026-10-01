@@ -5,7 +5,7 @@
  *
  * The number that must not move is **silent drops**: of the answers derived to
  * leave a printed author out, how many the check took. Measured when the eval
- * was written: 60 of 738 on the check as it was, 0 after. The positives are
+ * was written: 60 of 739 on the check as it was, 0 after. The positives are
  * pinned per case too, so a change that takes more or fewer real bylines shows
  * up here by name, and `npx tsx evals/pdf/bylines.mts --old=…` says why.
  */
@@ -66,7 +66,7 @@ const EXPECTED: Record<string, "list" | "names" | "refused"> = {
 describe("the byline eval (evals/pdf/bylines/)", () => {
   const scores = cases.map((c) => scoreCase(verifyAuthors, c));
 
-  it("never takes an answer that leaves a printed author out", () => {
+  it("refuses every generated and hand-written dropped-author answer in the corpus", () => {
     const drops = scores.flatMap((s) => s.silentDrops.map((d) => `${s.id}: ${d}`));
     expect(drops).toEqual([]);
     /* The negatives exist: a scorer that derived nothing would pass the line above. */
@@ -86,5 +86,9 @@ describe("the byline eval (evals/pdf/bylines/)", () => {
     expect(derived.find((d) => d.how === "drop 2, passed off as 1's affiliation")?.answer).toEqual([
       { name: "Alice Adams", affiliations: ["Acme", "Bob Brown Beta"] },
     ]);
+  });
+
+  it("includes hand-written adversarial answers that generic author deletion cannot derive", () => {
+    expect(scores.find((s) => s.id === "attention-rows")?.dropsTried).toBe(30);
   });
 });

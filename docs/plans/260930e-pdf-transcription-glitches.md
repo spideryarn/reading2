@@ -230,7 +230,7 @@ record as the page prints it, and red before the change.
 - **Stacked NeurIPS-style bylines** (Lu et al.): letting the words between two names be the previous
   author's verified affiliation and email. Real and common in ML papers, but it loosens the "nobody
   skipped" check, which is the one that stops an author being dropped — it wants its own tests and
-  review, not a line in this plan.
+  review, not a line in this plan. **Done 2026-10-01 in [261001l](261001l-pdf-stacked-bylines.md).**
 - **A glued ORCID glyph** (`XChristopher`): the one re-read of that paper came out clean
   (`X Christopher` in the text layer, the model dropped it); one sample of a stochastic process, so
   not fixed on that evidence and not fixed blind either.
@@ -267,4 +267,4 @@ Verdict *"ready after three fixes"*, which it made, each with a test red first; 
 | C1 | **Ours, from F6.** With the targets computed before mending, a one-word continuation the mend empties (`or` + `ange` + `sphere of 15 cm.`) broke the chain, and the third piece became a paragraph of its own | `renderHtml` gives an emptied record its target's block, so the chain carries through it |
 | C2 | The names-only arm could drop authors printed after the last name the model gave (`Mei-jun Ou` of five) | Names-only only when nothing but markers and glue follows the last verified name; otherwise the byline as printed |
 | C3 | `ENDS_A_SENTENCE` missed non-Latin sentence ends (`。`) | `\p{Sentence_Terminal}` and any closing punctuation |
-| C4 | **Pre-existing, not changed:** the ordinary author list has the same trailing-author gap C2 closed for the new arm — `[Mei-jun Ou]` against a two-name byline stores one author. Trailing words cannot be told from an affiliation fused onto the byline record, which is the stacked-byline question deferred above | For Greg, with the stacked-byline work |
+| C4 | **Pre-existing, not changed:** the ordinary author list has the same trailing-author gap C2 closed for the new arm — `[Mei-jun Ou]` against a two-name byline stores one author. Trailing words cannot be told from an affiliation fused onto the byline record, which is the stacked-byline question deferred above | Closed 2026-10-01 in [261001l](261001l-pdf-stacked-bylines.md) |

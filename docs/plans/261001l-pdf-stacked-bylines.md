@@ -78,11 +78,18 @@ arm, as before.
 
 ### What v1 still gets wrong, named
 
-- **A person printed with no address of their own, before the addresses, passed off as an
-  affiliation**: `Alice Adams Acme University Bob Brown alice@acme.edu` with the model calling
-  `Acme University Bob Brown` Alice's affiliation. Needs a layout with an address-less author in
-  that position *and* that misreading; not guarded, and not seen in the eval.
-- **An email fused to a lower-case word** (`alice@acme.edudeepmind`) reads as one address.
+- **The model labels a printed person as an affiliation, where the page gives no count to catch
+  it.** One class, three shapes, all from the code review: a person with no address of their own
+  printed before the addresses (`Alice Adams Acme University Bob Brown alice@acme.edu`, Alice given
+  `Acme University Bob Brown`); a trailing person after a marker word that is the previous author's
+  (`Alice Adams1,2 Bob Brown2`, Alice given `Bob Brown` behind the `2`); and a truncated label
+  (`Alice Adams3 3M Company`, Alice given `M Company`). **This is the class Greg's brief accepts**
+  — "let the words between two names be the previous author's affiliation and email when they
+  look like one" — and no text-only rule separates an institution from a name (plan review P2-6).
+  It needs the model to misread *and* the layout to line up; none of the eval's 739 negatives
+  reach it. The marker path could be removed to shrink it, and costs nothing on the eval's text
+  layer, but the ARNN byline as the *transcription* gives it (the affiliation fused into the
+  byline record, which is what production reads) would then be refused; kept.
 - **Single letters are glue** (existing): `Alice Adams, J., Carol Clark` passes without `J.` — an
   initials-only author. Pre-existing, kept because spaced letter markers are common (Elsevier).
 - **Some refusals the old check did not make, deliberately.** Trailing text that is neither shape
@@ -122,10 +129,12 @@ model, and runs in `npm test` (`tests/pdf-bylines-eval.test.ts`) as well as by h
   removed is refused (derived negatives). This is the score that must not go down. Plus the
   review's harder negatives (P1-3), derived the same way: the dropped author's name and
   affiliation handed to the previous author as an affiliation; the same with an unrelated failing
-  affiliation added, so the names-only arm is exercised; and two adjacent authors dropped.
+  affiliation added, so the names-only arm is exercised; and two adjacent authors dropped. A
+  hand-written row-major negative also replaces two printed authors with words taken from their
+  email addresses, a substitution generic deletion cannot derive.
 
-Hand-written adversarial cases live in the unit tests: an email fused to a one-word author, a
-braced group of two in one stacked gap.
+Other hand-written adversarial cases live in the unit tests: an email fused to a one-word author,
+a braced group of two in one stacked gap, and a mailbox word offered as an author's name.
 
 Removing an author from a fixed answer measures the checker, not the model's segmentation; running
 the real authors pass over the eval PDFs is listed under Future.
@@ -134,8 +143,8 @@ the real authors pass over the eval PDFs is listed under Future.
 
 ```
 npx tsx evals/pdf/bylines.mts --old=src/pdf-authors-old.ts     # old = origin/dev before this plan
-old: 25 list, 1 names only, 13 refused of 39; silent drops 60 of 738
-new: 26 list, 1 names only, 12 refused of 39; silent drops 0 of 738
+old: 25 list, 1 names only, 13 refused of 39; silent drops 60 of 739
+new: 26 list, 1 names only, 12 refused of 39; silent drops 0 of 739
 ```
 
 Newly taken: both Attention variants, Lu et al., PyTorch (21 authors), DDPM, word2vec, Christiano,
@@ -187,6 +196,22 @@ GPT Sol, read-only, 2026-10-01 —
 | P2-4 | Earlier/all-author scopes right only with safe evidence; use one-use permissions | Grids deferred; each affiliation accounts once |
 | P2-5 | Single letters as glue can drop an initials-only author | Pre-existing; named above, not changed |
 | P2-6 | A narrower v1: email-delimited stacked blocks only, C4 closed conservatively | Taken |
+
+## The code review, and what was done with it
+
+GPT Sol, write-enabled, 2026-10-01 —
+[261001l-pdf-stacked-bylines-code-review-sol.md](261001l-pdf-stacked-bylines-code-review-sol.md).
+Verdict *"not ready"*: three findings fixed by the reviewer, test first, and three left open. All
+read and checked.
+
+| | Finding | Done |
+|---|---|---|
+| 1 | An address-less author before the addresses, passed off as an affiliation | Named, above — the class the brief accepts |
+| 2 | A marker-led trailing "affiliation" can be a person (`Alice Adams1 1 Bob Brown`) or a truncation (`3M Company` → `M Company`) | Named, above; removing the path was measured (no eval cost, but the transcribed ARNN shape refused) and declined |
+| 3 | A lower-case fused tail (`alice@acme.edubob`) read as an address | Fixed by us: the top-level label is two letters or one of a short list; test red first |
+| 4 | A word inside an address could be matched as an author's name (`carol` from `carol@beta.edu`) | Fixed by the reviewer: names skip address words; test |
+| 5 | With an affiliation failing elsewhere, finding 1 became a names-only byline missing a person | Fixed by the reviewer: names-only refuses whenever a gap was accounted rather than glue; test |
+| 6 | The eval could not express finding 4 | Fixed by the reviewer: hand-written `adversarialDrops` on a case; 739 negatives |
 
 ## Shipped
 

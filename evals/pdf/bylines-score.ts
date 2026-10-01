@@ -11,9 +11,9 @@
  *
  * - **positives**: the correct answer — taken as a list, as names only, or
  *   refused (the reader then gets the byline as printed);
- * - **silent drops**: answers derived to leave a printed author out, which
- *   must all be refused. Taking one as a list or as names is the failure that
- *   matters, and it must stay at zero.
+ * - **silent drops**: generated and hand-written answers that leave a printed
+ *   author out, which must all be refused. Taking one as a list or as names is
+ *   the failure that matters, and it must stay at zero.
  */
 import type { AuthorAnswer, AuthorsVerdict } from "../../src/pdf-authors.js";
 
@@ -24,6 +24,8 @@ export interface BylineCase {
   bylineText: string;
   pages: string[];
   answer: AuthorAnswer[];
+  /** Hand-written omissions/replacements that deletion alone cannot express. */
+  adversarialDrops?: Dropped[];
   notes?: string;
 }
 
@@ -86,7 +88,7 @@ export interface CaseScore {
 export function scoreCase(verify: Verify, c: BylineCase): CaseScore {
   const verdict = verify(c.answer, c.bylineText, c.pages);
   const positive = outcomeOf(verdict);
-  const dropped = droppedAnswers(c.answer);
+  const dropped = [...droppedAnswers(c.answer), ...(c.adversarialDrops ?? [])];
   const silentDrops = dropped
     .filter((d) => outcomeOf(verify(d.answer, c.bylineText, c.pages)) !== "refused")
     .map((d) => d.how);
