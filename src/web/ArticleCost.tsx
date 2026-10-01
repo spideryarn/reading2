@@ -30,7 +30,7 @@ import {
 import { CARD } from "./card.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
-type Load =
+export type ArticleCostLoad =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
   | { kind: "ready"; cost: ArticleCost };
@@ -44,19 +44,34 @@ export function lineName(line: ArticleCostLine): string {
   return `${name.replaceAll("_", " ")}${detail.replaceAll("_", " ")}`;
 }
 
-export function ArticleCostBody({ slug }: { slug: string }) {
-  const [load, setLoad] = useState<Load>({ kind: "loading" });
+/**
+ * **The ledger read, one level above the body that draws it.** The section is
+ * shut by default and shows the total on its heading (Greg, 2026-10-01,
+ * SPIDERYARN-READING2-7G), and a shut section does not mount its children — so
+ * the read cannot live inside them, or the heading would have nothing to say
+ * until somebody opened it. Call it only where the administrator check has
+ * already passed: calling it is the request.
+ */
+export function useArticleCost(slug: string): ArticleCostLoad {
+  /* **Tagged with the slug it answers.** Without the tag, a new `slug` would
+     render the previous article's total for one frame before the effect below
+     set it loading — nothing on the metadata page does that today, since the
+     page is keyed by slug and remounts, but the hook should not rely on its
+     caller for it. GPT Sol, plan review. */
+  const [state, setState] = useState<{ slug: string; load: ArticleCostLoad }>({
+    slug,
+    load: { kind: "loading" },
+  });
 
   useEffect(() => {
     let live = true;
-    setLoad({ kind: "loading" });
     void (async () => {
       try {
         const res = await apiFetch(`/api/admin/articles/${encodeURIComponent(slug)}/cost`);
         const cost = await readJson<ArticleCost>(res);
-        if (live) setLoad({ kind: "ready", cost });
+        if (live) setState({ slug, load: { kind: "ready", cost } });
       } catch (e) {
-        if (live) setLoad({ kind: "failed", message: (e as Error).message });
+        if (live) setState({ slug, load: { kind: "failed", message: (e as Error).message } });
       }
     })();
     return () => {
@@ -64,6 +79,47 @@ export function ArticleCostBody({ slug }: { slug: string }) {
     };
   }, [slug]);
 
+  return state.slug === slug ? state.load : { kind: "loading" };
+}
+
+/** The sums the heading and the body both say, from one place so they cannot disagree. */
+function totals(cost: ArticleCost) {
+  const lines = [...cost.lines].sort((a, b) => articleCostLineNanos(b) - articleCostLineNanos(a));
+  return {
+    lines,
+    total: lines.reduce((n, l) => n + articleCostLineNanos(l), 0),
+    calls: lines.reduce((n, l) => n + l.calls, 0),
+    unpriced: lines.reduce((n, l) => n + l.unpricedCalls, 0),
+  };
+}
+
+function totalLine(total: number, isFloor: boolean): string {
+  return `${isFloor ? "At least " : ""}${formatSpendNanos(total)}`;
+}
+
+/**
+ * **The one line on the shut heading** — the total and the call count, or
+ * `none recorded`, and `…` while it loads. Null when the read failed: the failure is drawn in the body, which the section then refuses to
+ * shut (Metadata.tsx § `CostSection`).
+ */
+export function articleCostSummary(load: ArticleCostLoad): string | null {
+  if (load.kind === "loading") return "…";
+  if (load.kind === "failed") return null;
+  const { total, calls, unpriced } = totals(load.cost);
+  /* **A silent live conversation makes the figure a floor too**, though the
+     body says so in a line of its own rather than with a `+`: the heading is
+     all a shut section shows, so it must not read as the whole bill while the
+     qualification sits hidden underneath. GPT Sol, plan review P1. */
+  const silent = load.cost.silentLiveSessions ?? 0;
+  if (load.cost.lines.length === 0) {
+    return silent > 0
+      ? `none priced · ${silent} live ${silent === 1 ? "conversation" : "conversations"} unreported`
+      : "none recorded";
+  }
+  return `${totalLine(total, unpriced > 0 || silent > 0)} · ${calls} ${calls === 1 ? "call" : "calls"}`;
+}
+
+export function ArticleCostBody({ load }: { load: ArticleCostLoad }) {
   if (load.kind === "loading") {
     return <p className="tw:m-0 tw:text-sm tw:text-ink-faint">Reading the ledger…</p>;
   }
@@ -78,10 +134,7 @@ export function ArticleCostBody({ slug }: { slug: string }) {
 }
 
 function CostTable({ cost }: { cost: ArticleCost }) {
-  const lines = [...cost.lines].sort((a, b) => articleCostLineNanos(b) - articleCostLineNanos(a));
-  const total = lines.reduce((n, l) => n + articleCostLineNanos(l), 0);
-  const calls = lines.reduce((n, l) => n + l.calls, 0);
-  const unpriced = lines.reduce((n, l) => n + l.unpricedCalls, 0);
+  const { lines, total, calls, unpriced } = totals(cost);
   const computed = lines.reduce((n, l) => n + l.computedCalls, 0);
   const nonOk = lines.reduce((n, l) => n + l.nonOkCalls, 0);
   /* **The fee is on buying credits, so it applies to this pocket only** — not
@@ -99,8 +152,7 @@ function CostTable({ cost }: { cost: ArticleCost }) {
         <>
           <p className="tw:m-0 tw:mb-3" data-testid="article-cost-total">
             <span className="tw:text-lg tw:font-semibold tw:tabular-nums">
-              {unpriced > 0 ? "At least " : ""}
-              {formatSpendNanos(total)}
+              {totalLine(total, unpriced > 0 || (cost.silentLiveSessions ?? 0) > 0)}
             </span>{" "}
             <span className="tw:text-ink-faint">
               over {calls} {calls === 1 ? "call" : "calls"}

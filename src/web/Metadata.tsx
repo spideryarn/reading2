@@ -280,7 +280,7 @@ import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
-import { ArticleCostBody } from "./ArticleCost.js";
+import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
@@ -1003,15 +1003,13 @@ export function Metadata({
             rows that has now gone to the foot of the page.
 
             The order it lands in is: what this article is (the three sections
-            above), then the decisions about where it goes (this and Export),
-            then the reader's own work on it, then the machinery. The previous
-            arrangement had the one irreversible control on the page — a public
-            link cannot be un-rung (messages.ts § SHARING_CANNOT_UNRING) —
-            below two screenfuls of notes and file paths.
-
-            Still above Archive, and Archive is still last: nothing that takes
-            the article off the shelf sits above something somebody came here to
-            read.
+            above), then the decision about who can read it (this), then the
+            reader's own work on it, then the machinery and the controls at the
+            foot. The previous arrangement had the one irreversible control on
+            the page — a public link cannot be un-rung (messages.ts §
+            SHARING_CANNOT_UNRING) — below two screenfuls of notes and file
+            paths. Export moved to the foot on 2026-10-01; it no longer sits
+            beside this section.
 
             **Not offered on the fixture.** That address has no row of its own
             (`showingFixture` above), so the `PUT` behind the switch would 404,
@@ -1115,19 +1113,11 @@ export function Metadata({
           </div>
         </Section>
 
-        {/* -------------------------------------------------- 8. export it --
-            Below sharing because both are decisions about where this article's
-            data goes, and above the machinery because this one is a thing the
-            owner does rather than a thing we did. Still above Archive, which
-            stays last. */}
-        <ExportSection slug={slug} offer={hasShelfRow} />
-
         {/* ------------------------------------------- 9. technical details --
             Everything that is true, is ours rather than the reader's, and has
             no bearing on reading the article: the two identifiers, the PDF's
-            fingerprint, which stages have run, and the one thing this page
-            cannot do yet. Shut, so the page ends at Export for anybody not
-            looking for it. Greg, 2026-09-03. */}
+            fingerprint and which stages have run. Shut, so it costs one line
+            for anybody not looking for it. Greg, 2026-09-03. */}
         <TechnicalDetails
           slug={slug}
           provenance={provenance}
@@ -1144,11 +1134,15 @@ export function Metadata({
             for admin users, can you include a section that shows cost
             estimates"*. Beside the technical details it is one of, and above
             the controls. docs/plans/260930f-article-cost-on-the-metadata-page.md. */}
-        {isAdmin(user?.id) && (
-          <Section label="What it cost">
-            <ArticleCostBody slug={slug} />
-          </Section>
-        )}
+        {isAdmin(user?.id) && <CostSection slug={slug} />}
+
+        {/* -------------------------------------------------- 9⅓. export it --
+            Under the machinery since 2026-10-01 — Greg (SPIDERYARN-READING2-7H):
+            *"move "Export" section further down"*. As far down as it goes
+            without parting Re-run from Archive (4Z) or Archive from Delete, and
+            near the Delete control, whose "Export it first" scrolls here.
+            docs/plans/261001c-metadata-cost-shut-with-its-total-and-export-further-down.md. */}
+        <ExportSection slug={slug} offer={hasShelfRow} />
 
         {/* ------------------------------------- 9½. re-run AI processing --
             One section for both ways of asking again — a mode at a time, or
@@ -1168,11 +1162,10 @@ export function Metadata({
         />
 
         {/* ---------------------------------------------- 10. archiving it --
-            Last on the page, and last on purpose: the control that takes the
-            article off the shelf belongs past everything somebody might have
-            come here to read, not beside it. Under the technical section rather
-            than over it for the same reason — that is the least urgent thing
-            here, and it is still not something to scroll this button past. */}
+            First of the two endings at the foot: the reversible control that
+            takes the article off the shelf, followed only by permanent
+            deletion. Both belong past everything somebody might have come here
+            to read. */}
         <Section label="Archive this article">
           <ArchiveArticle archive={archive} fixture={showingFixture} />
         </Section>
@@ -1272,9 +1265,8 @@ function SharingSection({
           below it as the only boxed thing here, so the *warning* looked more
           like a card than the switch did.
 
-          `${CARD} p-4`, matching `ExportSection` rather than "In one
-          sentence"'s `p-5`: both of these are a control with a sentence beside
-          it, and the two sit next to each other. */}
+          `${CARD} p-4`, matching the compact control cards elsewhere on the
+          page rather than "In one sentence"'s `p-5`. */}
       <div className={`${CARD} tw:p-4`}>
         <AccessSharing
           slug={slug}
@@ -1654,6 +1646,28 @@ function RerunRow({
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * **What it cost, shut, with the total on its heading.** Greg, 2026-10-01
+ * (SPIDERYARN-READING2-7G): *"default to collapsed (to save vertical space),
+ * showing only the total figure/summary."* The read is here rather than in the
+ * body because a shut section does not mount its body (ArticleCost.tsx §
+ * `useArticleCost`). Mounted only behind `isAdmin`, so nobody else's page makes
+ * the request at all.
+ *
+ * **A failed read is not shut away**: the section stops being collapsible and
+ * the alert shows, as *Technical details* does with its error — postmortem
+ * 260903d, a shut section that sealed the error in.
+ */
+function CostSection({ slug }: { slug: string }) {
+  const load = useArticleCost(slug);
+  const failed = load.kind === "failed";
+  return (
+    <Section label="What it cost" collapsible={!failed} aside={articleCostSummary(load)}>
+      <ArticleCostBody load={load} />
+    </Section>
   );
 }
 
@@ -2121,9 +2135,9 @@ function SubHeading({ children }: { children: ReactNode }) {
  *
  * **That row has gone**, on 2026-09-07: its one entry was *"Re-run a stage"* and
  * it shipped as *Generate it again*. Since 2026-09-29 it is the shut *Re-run AI
- * processing* section immediately below this one. Which is the second half of
- * the story this paragraph tells: burying it here is exactly why nobody found
- * it. See `RerunSection` above, and the note where `SOON` stood.
+ * processing* section near the foot, immediately above Archive. Which is the
+ * second half of the story this paragraph tells: burying it here is exactly why
+ * nobody found it. See `RerunSection` above, and the note where `SOON` stood.
  *
  * ## The rule this section inherits, and must not break
  *
