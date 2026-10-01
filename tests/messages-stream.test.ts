@@ -212,6 +212,21 @@ describe("streamMessage — the recording lifecycle", () => {
     }
   });
 
+  it("does not let a throwing start listener break the SDK stream", async () => {
+    const t = stubTransport(cannedStream());
+    try {
+      const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
+      call.onStart(() => {
+        throw new Error("listener exploded");
+      });
+      await expect(call.finalMessage()).resolves.toMatchObject({
+        content: [{ type: "text", text: "ok" }],
+      });
+    } finally {
+      t.restore();
+    }
+  });
+
   it("records exactly one call, with the cost that was on the wire", async () => {
     const t = stubTransport(cannedStream());
     try {

@@ -64,6 +64,7 @@ import {
   keyFingerprint,
   recordSpend,
 } from "./ai-spend.js";
+import { log } from "./log.js";
 import { NOT_CONFIGURED } from "./messages.js";
 import { isHighPowerModel, type ModelPower, type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
@@ -382,7 +383,7 @@ export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
 /**
  * What `streamMessage` hands back.
  *
- * **Three things, and deliberately not the stream.** A stage used to get the
+ * **Four functions, and deliberately not the stream.** A stage used to get the
  * SDK's own `MessageStream`, which has its own `finalMessage()` on it — so the
  * ordinary-looking `await call.stream.finalMessage()` was a working call that
  * recorded nothing, and nothing counted it. That was fine while the numbers only
@@ -425,7 +426,7 @@ export interface MeteredCall {
  * was a weaker guarantee than the other wire's and was written down as one.
  *
  * It is closed. The stream, the meter and `meterStream` are private; what comes
- * back is three functions. GPT Sol asked for it before the numbers became
+ * back is four functions. GPT Sol asked for it before the numbers became
  * database rows, on the grounds that a documented bypass under a ledger is a
  * ledger that looks complete.
  *
@@ -579,10 +580,19 @@ export function streamMessage(
     },
     onStart: (listener) => {
       let fired = false;
-      stream.on("streamEvent", (event: { type: string }) => {
+      stream.on("streamEvent", (event) => {
         if (fired || event.type !== "message_start") return;
         fired = true;
-        listener();
+        /* The SDK calls raw-event listeners inline while it is assembling the
+           message. A callback exception therefore becomes a stream failure
+           unless it stops here. `onStart` is a notification seam, not part of
+           parsing the provider's answer; log a safe, content-free line and let
+           the stream continue. */
+        try {
+          listener();
+        } catch {
+          log("model").warn("a message-stream start listener threw; the model stream was left running");
+        }
       });
     },
     finalMessage,

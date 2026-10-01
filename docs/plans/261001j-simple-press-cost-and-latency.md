@@ -32,7 +32,8 @@ point 4). Measured below: marked-and-together is the most expensive arm.
 own pieces: the level prompts, the article rendering, `streamMessage`, `buildLevel` and the fidelity
 checker. Each press is three levels at `high`, no profile, no retries, run one at a time. The
 articles are the PID paper (3 runs) and two controls, Olah's *A4* and Gwern's *Scaling Hypothesis*
-(2 runs each): 7 presses an arm, $5.4 in all.
+(2 runs each): 7 presses an arm, about $5.4 in writer calls across both batches. The quick-tier
+checks are outside the cost comparison.
 
 **Cold, or the numbers lie.** The first batch's cached arms mostly read a cache an earlier run had
 left, and looked cheaper than they are. The second batch opens every press with its own one-line
@@ -47,8 +48,8 @@ the results directory and the report, labelled.
 | **staggered on Fuller's stream start** | **0.090** | 10.8 s | **16.2 s · 20.3 s** | 21/21 | 5/21 |
 | one call for all three (warm cache) | 0.112 | 40.7 s | 45.6 s · 133 s | 21/21 | 1/21 |
 
-Times exclude the guard, which adds one quick check (3.5–5 s) after each level in every arm alike.
-"Ready" is when that level's text is complete.
+Times and dollar figures exclude the guard, which adds one quick check (3.5–5 s) after each level
+in every arm alike. "Ready" is when that level's text is complete.
 
 - **One call for all three is out**, on latency, as 261001b found for two: reasoning rose from about
   1,100 tokens a press to 4,300, and the wait to 17–133 s. Streaming it would not help: nothing is
@@ -73,14 +74,18 @@ first three calls cost $0.090, as the spike said; the retries took the press to 
 
 - **`src/simple-summary.ts`**: when the article clears the model's cache floor (`underCacheFloor`),
   the article is marked, `FIRST_LEVEL` (Fuller, the slowest to write) is asked first, and Brief and
-  Simple wait until its stream begins. If its call ends without beginning, they go then. If it
-  *fails* before beginning, the press is lost anyway, so they wait for the abort instead of opening
-  two billed calls into it (Sol's plan review, P1; the first build let them). Below the floor
+  Simple wait until its stream begins. If its call ends successfully without the raw start event,
+  they go then. If it *fails*, refuses or truncates before beginning, the press is lost anyway, so
+  they wait for the abort instead of opening two billed calls into it (Sol's plan review, P1; the
+  first build let them). Below the floor
   nothing can be cached, so the three go together, unmarked, as before.
 - **A job that already marks the article** (`cacheArticle`, when another step shares it) still
   staggers. If an earlier step, FAQ say, has already warmed the cache, that costs the 3–7 s wait
   for nothing. Ordinary presses run Simple alone, so this is left as it is; skipping the stagger
   needs knowing the cache is warm, which `cacheArticleForStep`'s own comment explains nobody can.
+  The hint cannot override the selected model's physical floor: a shorter prefix runs together and
+  unmarked. The 512–1,023-token range therefore staggers and marks on Opus, but runs together and
+  unmarked on Sonnet.
 - **`MeteredCall.onStart`** in `src/messages-stream.ts`: once, on `message_start`. Additive, no
   other caller changed. The Overseer agreed it before it was written.
 - Retries — the guard's and validation's — read the same cache at a tenth of the price, once
@@ -148,3 +153,14 @@ exactly the papers where the guard matters it would show a reader a claim and th
   section's flag rate, retry case and per-level times corrected, and option 3 tied to asking the
   reader's level first; P2, no tail claim for start over text; P2, cache reads are a tenth of the
   price, not free. Noted, not changed: P2, a job with an already-warm cache still staggers.
+- Code: [261001j-simple-press-cost-and-latency-code-review-sol.md](261001j-simple-press-cost-and-latency-code-review-sol.md)
+  (diff: [261001j-simple-press-cost-and-latency-code-review.diff](261001j-simple-press-cost-and-latency-code-review.diff)).
+  No P0; accepted with Sol's fixes, all kept:
+  - a Fuller refusal or truncation without `message_start` now holds the others until the abort,
+    as a failed call does;
+  - a job already cancelled opens no call at all, and the waiters race the abort;
+  - a throwing `onStart` listener can no longer fail the stream;
+  - the marker follows the selected model's cache floor, not the job's sharing hint (below the
+    floor a marker silently does nothing, so this changes no bill);
+  - the spike's own gate can no longer hang, and its guard calls are now recorded.
+  It mutated the stagger and the marking off and saw five and two tests fail.

@@ -68,6 +68,7 @@ interface RunFile {
   run: number;
   at: string;
   wallMs: number;
+  /** Writer calls only. Guard calls are recorded in the ledger but kept out of the arm comparison. */
   costUsd: number | null;
   calls: CallTiming[];
   levels: Partial<Record<Level, LevelResult>>;
@@ -141,16 +142,19 @@ async function runArm(arm: Arm, runs: number, slugs: string[], cold: boolean): P
             { power: "standard" },
           );
           let all = "";
-          const started = new Promise<void>((resolve) => {
+          type StartState = "started" | "ended" | "failed";
+          let markStarted: (state: StartState) => void = () => {};
+          const started = new Promise<StartState>((resolve) => {
+            markStarted = resolve;
             const withStart = call as unknown as { onStart?: (l: () => void) => void };
             if (arm === "stagger-start") {
               if (!withStart.onStart) throw new Error("stagger-start needs MeteredCall.onStart");
-              withStart.onStart(() => resolve());
+              withStart.onStart(() => markStarted("started"));
             }
             call.onText((d) => {
               if (timing.firstTextMs === null) {
                 timing.firstTextMs = at();
-                if (arm !== "stagger-start") resolve();
+                if (arm !== "stagger-start") markStarted("started");
               }
               all += d;
               onDelta?.(all);
@@ -164,6 +168,14 @@ async function runArm(arm: Arm, runs: number, slugs: string[], cold: boolean): P
             timing.output = m.usage.output_tokens;
             return m.content.map((b) => (b.type === "text" ? b.text : "")).join("");
           });
+          /* Production releases its gate when a successful call ends without
+             the expected raw event. The spike must not hang on that same path;
+             a rejection also releases the timing gate so `press` can report
+             the actual call failure. */
+          void done.then(
+            () => markStarted("ended"),
+            () => markStarted("failed"),
+          );
           return { started, done };
         };
 
@@ -206,7 +218,9 @@ async function runArm(arm: Arm, runs: number, slugs: string[], cold: boolean): P
             raws.fuller = raw;
             ready.fuller = at();
           });
-          await first.started;
+          const firstState = await first.started;
+          /* Do not turn a failed first request into two more paid calls. */
+          if (firstState === "failed") await fullerDone;
           await Promise.all([fullerDone, one("simple"), one("brief")]);
         };
 
@@ -236,30 +250,42 @@ async function runArm(arm: Arm, runs: number, slugs: string[], cold: boolean): P
 
         /* Validate and check each level, outside the timed press (the guard's own
            latency is measured in 261001h and 261001i). */
-        await Promise.all(
-          LEVELS.map(async (level) => {
-            if (levels[level]) return;
-            const raw = raws[level];
-            if (raw === undefined) {
-              levels[level] = { ok: false, error: "no answer", readyMs: null };
-              return;
-            }
-            try {
-              const paragraphs = simple.buildLevel(parseJsonAnswer<unknown>(raw, level), level, evidenceIds, simple.emptyDropped());
-              text[level] = paragraphs;
-              const checked = await checkLevel(paragraphs, textOf);
-              levels[level] = {
-                ok: true,
-                words: simple.paragraphWords(paragraphs),
-                paragraphs: paragraphs.length,
-                readyMs: ready[level] ?? null,
-                check: checked.outcome.kind === "failed" ? `failed:${checked.outcome.failure}` : checked.outcome.kind,
-                flags: checked.outcome.kind === "flagged" ? checked.outcome.flags.length : 0,
-              };
-            } catch (err) {
-              levels[level] = { ok: false, error: String(err).slice(0, 200), readyMs: ready[level] ?? null };
-            }
-          }),
+        /* A separate collector keeps quick-tier checker cost out of the writer
+           arm comparison while still putting every paid check in `ai_calls`.
+           The original spike called these after the writer collector closed,
+           so they were paid but explicitly dropped as unscoped. */
+        await collectSpend(
+          async () => {
+            await Promise.all(
+              LEVELS.map(async (level) => {
+                if (levels[level]) return;
+                const raw = raws[level];
+                if (raw === undefined) {
+                  levels[level] = { ok: false, error: "no answer", readyMs: null };
+                  return;
+                }
+                try {
+                  const paragraphs = simple.buildLevel(parseJsonAnswer<unknown>(raw, level), level, evidenceIds, simple.emptyDropped());
+                  text[level] = paragraphs;
+                  const checked = await checkLevel(paragraphs, textOf);
+                  levels[level] = {
+                    ok: true,
+                    words: simple.paragraphWords(paragraphs),
+                    paragraphs: paragraphs.length,
+                    readyMs: ready[level] ?? null,
+                    check: checked.outcome.kind === "failed" ? `failed:${checked.outcome.failure}` : checked.outcome.kind,
+                    flags: checked.outcome.kind === "flagged" ? checked.outcome.flags.length : 0,
+                  };
+                } catch (err) {
+                  levels[level] = { ok: false, error: String(err).slice(0, 200), readyMs: ready[level] ?? null };
+                }
+              }),
+            );
+          },
+          {
+            attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: slug },
+            sink: (row) => costStore.record(row),
+          },
         );
         const file: RunFile = { arm, cold, slug, run: n, at: new Date(t0).toISOString(), wallMs, costUsd, calls, levels, reasoningTokens: reasoning, text };
         fs.writeFileSync(out, `${JSON.stringify(file, null, 1)}\n`);

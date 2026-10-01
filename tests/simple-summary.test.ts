@@ -839,7 +839,12 @@ describe("the staggered fan-out (plan 261001j)", () => {
   /* The same ids as the small fixture, with enough words to clear the cache floor. */
   const FILLER = Array.from({ length: 400 }, (_, i) => `word${i}`).join(" ");
   const LONG = BLOCKS.map((b) => (b.treatment === "supplement" ? b : { ...b, text: `${b.text} ${FILLER}` }));
-  const run = (blocks: Block[], extra: { cacheArticle?: boolean } = {}) =>
+  /* Roughly 700 tokens: cacheable by Opus, below Sonnet's measured floor. */
+  const MIDDLE = BLOCKS.map((b) => (b.treatment === "supplement" ? b : { ...b, text: `${b.text} ${"x".repeat(600)}` }));
+  const run = (
+    blocks: Block[],
+    extra: { cacheArticle?: boolean; power?: "standard" | "high"; signal?: AbortSignal; guard?: boolean } = {},
+  ) =>
     generateSimpleSummary({ power: "standard", article: { ...example, slug: "simple-test", blocks }, profile: null, guard: false, ...extra });
   const marked = (i: number) =>
     "cache_control" in ((sent[i]?.body as { system?: Record<string, unknown>[] } | undefined)?.system?.[0] ?? {});
@@ -879,6 +884,32 @@ describe("the staggered fan-out (plan 261001j)", () => {
     expect(out.simpleSummary.levels.fuller).toEqual(FULLER);
   });
 
+  it("keeps a validation retry on the shared cache and stores the same result", async () => {
+    answer = { simple: ["{ not json", JSON.stringify(answerOf(SIMPLE))] };
+    const out = await run(LONG);
+    expect(sent).toHaveLength(4);
+    expect(sent.map((_, i) => marked(i))).toEqual([true, true, true, true]);
+    expect(out.simpleSummary.levels.simple).toEqual(SIMPLE);
+  });
+
+  it("keeps a guard retry on the shared cache and stores the checked replacement", async () => {
+    const replacement = [para("Could a model learn to read?", INTRO.id), para("It read faster.", RESULT.id)];
+    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(replacement))] };
+    let firstBrief = true;
+    checkerReply = (user) => {
+      if (firstBrief && user.includes("Can a model read?")) {
+        firstBrief = false;
+        return flagFirst(user);
+      }
+      return okFor(user);
+    };
+    const out = await run(LONG, { guard: true });
+    expect(sent).toHaveLength(4);
+    expect(sent.map((_, i) => marked(i))).toEqual([true, true, true, true]);
+    expect(out.simpleSummary.levels.brief).toEqual(replacement);
+    expect(out.simpleSummary.check?.levels.brief).toMatchObject({ retriedAfterFlag: true, stored: 2 });
+  });
+
   /* Sol's plan review, P1: the wait used to end on the failure itself, and the
      other two could open (billable) calls before the press was aborted. */
   it("opens no other call when the first call fails before it begins", async () => {
@@ -888,6 +919,17 @@ describe("the staggered fan-out (plan 261001j)", () => {
     await tick();
     expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
   });
+
+  it.each(["refusal", "max_tokens"])(
+    "opens no other call when Fuller ends without starting and reports %s",
+    async (reason) => {
+      neverStart = true;
+      stop = reason;
+      await expect(run(LONG)).rejects.toThrow();
+      await tick();
+      expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
+    },
+  );
 
   it("fails as before, without hanging, when the first fails before it begins", async () => {
     neverStart = true;
@@ -904,9 +946,35 @@ describe("the staggered fan-out (plan 261001j)", () => {
     await pending;
   });
 
-  it("still marks a short article when the job says another step shares it, as before", async () => {
+  it("does not let cacheArticle mark a prefix below the model's physical cache floor", async () => {
     await run(BLOCKS, { cacheArticle: true });
-    expect([0, 1, 2].map(marked)).toEqual([true, true, true]);
+    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
+  });
+
+  it("uses Opus's lower cache floor for both marking and staggering", async () => {
+    await run(MIDDLE, { cacheArticle: true });
+    expect(sent).toHaveLength(3);
+    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
+
+    sent.length = 0;
+    const start = gate();
+    const final = gate();
+    startGate = start.promise;
+    finalGate = final.promise;
+    const pending = run(MIDDLE, { power: "high", cacheArticle: true });
+    await tick();
+    expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
+    expect(marked(0)).toBe(true);
+    start.open();
+    final.open();
+    await pending;
+  });
+
+  it("opens no call when the job was already aborted", async () => {
+    const job = new AbortController();
+    job.abort();
+    await expect(run(LONG, { signal: job.signal })).rejects.toThrow();
+    expect(sent).toHaveLength(0);
   });
 });
 

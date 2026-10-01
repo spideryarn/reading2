@@ -598,7 +598,10 @@ export async function generateSimpleSummary(opts: {
   profile: string | null;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
-  /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
+  /**
+   * The pipeline's shared-article hint. Simple now marks every prefix its own
+   * three calls can cache, so this cannot override the selected model's floor.
+   */
   cacheArticle?: boolean;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
@@ -637,8 +640,14 @@ export async function generateSimpleSummary(opts: {
      cold, $0.142 a press became $0.090, for about two seconds more wait (16.2 s
      median against 14.2). Below the cache floor nothing can be cached, so
      the three go together, unmarked, as before. */
-  const stagger = !underCacheFloor(article, modelFor("simple", opts.power));
-  const markArticle = opts.cacheArticle === true || stagger;
+  const cacheable = !underCacheFloor(article, modelFor("simple", opts.power));
+  const stagger = cacheable;
+  /* `cacheArticle` used to be the only reason Simple marked its one request.
+     Now the press itself supplies three readers, so every cacheable article is
+     marked regardless of that pipeline hint. Conversely the hint cannot lower
+     the selected model's physical floor: below it a marker is accepted and
+     silently does nothing. */
+  const markArticle = cacheable;
   /* How the first level's first call got going: its stream began; it ended
      without saying so; or it failed before it began. Settled once, so a call
      that never begins never strands the others. */
@@ -672,6 +681,7 @@ export async function generateSimpleSummary(opts: {
   };
 
   let writerCalls = 0;
+  let firstStarted = false;
 
   /** One request for one level: its answer, or a failure with usage when the provider answered. */
   const askLevel = async (
@@ -703,7 +713,12 @@ export async function generateSimpleSummary(opts: {
       );
       writerCalls += 1;
       call.onText(onText);
-      if (level === FIRST_LEVEL) call.onStart(() => begun("started"));
+      if (level === FIRST_LEVEL) {
+        call.onStart(() => {
+          firstStarted = true;
+          begun("started");
+        });
+      }
       /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
          is what records what this call cost. src/messages-stream.ts. */
       message = await call.finalMessage();
@@ -711,8 +726,13 @@ export async function generateSimpleSummary(opts: {
       if (level === FIRST_LEVEL) begun("failed");
       throw anthropicCallFailed(err);
     }
-    if (level === FIRST_LEVEL) begun("ended");
     if (wasRefused(message)) {
+      /* With no raw start event, a refusal did not make the cache readable and
+         has already lost the press. Keep the waiters closed until the outer
+         failure path aborts them. If it did start, `begun` is already settled
+         and the siblings were legitimately opened while the outcome was still
+         unknown. */
+      if (level === FIRST_LEVEL) begun("failed");
       return {
         failure: stageFailure(MODEL_REFUSED, {
           authored: `the model answered the "${level}" request with stop_reason: refusal`,
@@ -721,6 +741,7 @@ export async function generateSimpleSummary(opts: {
       };
     }
     if (message.stop_reason === "max_tokens") {
+      if (level === FIRST_LEVEL) begun("failed");
       return {
         failure: truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
           outputTokens: message.usage.output_tokens,
@@ -735,6 +756,10 @@ export async function generateSimpleSummary(opts: {
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("");
+    /* A complete usable response is the fallback for a provider/SDK path that
+       succeeds without exposing `message_start`: the cache write is finished,
+       so the other two calls cannot be stranded. */
+    if (level === FIRST_LEVEL) begun(firstStarted ? "started" : "ended");
     return { raw, usage: message.usage };
   };
 
@@ -754,6 +779,9 @@ export async function generateSimpleSummary(opts: {
    * failure has none to report here, while the ledger still records its call.
    */
   const writeLevel = async (level: SimpleLevel) => {
+    /* A cancelled job must not open even the first paid request. The checks
+       after the stagger wait cover cancellation while Fuller is in flight. */
+    signal.throwIfAborted();
     const usages: Anthropic.Usage[] = [];
     const checked = { calls: 0, inputTokens: 0, outputTokens: 0 };
     /** A valid attempt the checker flagged, kept in case the retry it bought cannot be stored. */
@@ -782,7 +810,11 @@ export async function generateSimpleSummary(opts: {
          attempt has no flagged fallback), and the abort follows a few ticks
          later. Wait for it rather than opening two calls into it — they would
          be billed (Sol's plan review, P1). */
-      if ((await firstBegun) === "failed") await untilAborted;
+      const first = await Promise.race([
+        firstBegun,
+        untilAborted.then(() => "aborted" as const),
+      ]);
+      if (first === "failed") await untilAborted;
       signal.throwIfAborted();
     }
     for (let attempt = 1; ; attempt += 1) {
