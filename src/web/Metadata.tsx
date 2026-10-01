@@ -276,7 +276,7 @@ import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
-import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
+import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
@@ -284,6 +284,7 @@ import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCo
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
+import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { PageContents } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
@@ -549,13 +550,42 @@ export function Metadata({
    * already walking this article's directory, so one more read answers it for
    * free, which is the same argument its `comments` count already makes.
    *
-   * `null` means "not seeded yet", so an empty box the reader has cleared is
-   * tellable from one that has not loaded. Same distinction `SummaryPanel`
-   * holds for its steer.
+   * `saved === null` means "not seeded yet", so an empty box the reader has
+   * cleared is tellable from one that has not loaded. Same distinction
+   * `SummaryPanel` holds for its steer.
+   *
+   * The save is [`useAutosavedText`](./useAutosavedText.ts), shared with
+   * `/profile` since 2026-10-01, when the box began saving itself after a pause
+   * (spya-czbj9r): one save at a time, written back only over what was sent,
+   * flushed when the tab is hidden and sent with `keepalive` as it closes.
+   *
+   * Here, and only here, an empty box means **clear it**: this box was seeded
+   * with the stored sentence, so the reader can see what they are erasing. The
+   * add page's box cannot, and never sends an empty one (src/web/purpose.ts).
+   * `savePurpose` also forgets the link cards' summaries, which were written
+   * from the sentence being replaced.
    */
-  const [purposeDraft, setPurposeDraft] = useState<string | null>(null);
-  const [purposeSaved, setPurposeSaved] = useState<string | null>(null);
-  const [purposeError, setPurposeError] = useState<string | null>(null);
+  const purpose = useAutosavedText({
+    save: async (text) => {
+      /* The server's answer, not what was typed: it trims and settles line
+         endings, and the box must show the string that was actually stored.
+         Read from `purpose` rather than from `entry`: the shelf card
+         deliberately does not carry it (src/routes.ts § patchShelf). */
+      const stored = (await savePurpose(slug, text === "" ? null : text)) ?? "";
+      /* The glossary row's verdict (`glossaryRun`) is judged against this
+         sentence, so one read before the save may be wrong after it — plan
+         261001i § 3, GPT Sol's plan review. */
+      void refresh();
+      return stored;
+    },
+    leave: (text) =>
+      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: text === "" ? null : text }),
+      }),
+  });
+  const seedPurpose = purpose.seed;
   /**
    * **Seeded once per article, not on every read of it.**
    *
@@ -574,45 +604,8 @@ export function Metadata({
   useEffect(() => {
     if (!provenance || seededPurposeFor.current === slug) return;
     seededPurposeFor.current = slug;
-    const value = provenance.purpose ?? "";
-    setPurposeDraft(value);
-    setPurposeSaved(value);
-  }, [provenance, slug]);
-
-  /* Blur, or Cmd/Ctrl+Enter — the same moment `TitleEditor` on the shelf
-     commits at, and no debounce, because there is no debounce anywhere in this
-     client and this is not the place to introduce one. */
-  function commitPurpose(): void {
-    if (purposeDraft === null || purposeSaved === null) return;
-    if (purposeDraft === purposeSaved) return;
-    const sending = purposeDraft;
-    setPurposeError(null);
-    /* Here, and only here, an empty box means **clear it**: this box was seeded
-       with the stored sentence, so the reader can see what they are erasing.
-       The add page's box cannot, and never sends an empty one (src/web/purpose.ts).
-
-       `savePurpose` also forgets the link cards' summaries, which were written
-       from the sentence being replaced. */
-    savePurpose(slug, sending === "" ? null : sending)
-      .then((purpose) => {
-        /* The server's answer, not what was typed: it trims and settles line
-           endings, and the box must show the string that was actually stored —
-           otherwise every prompt carries something the reader cannot see.
-
-           Read from `purpose` rather than from `entry`: the shelf card
-           deliberately does not carry it, because only this page renders it and
-           putting it on the card would send it with every card on the homepage.
-           src/routes.ts § patchShelf. */
-        const stored = purpose ?? "";
-        setPurposeSaved(stored);
-        setPurposeDraft(stored);
-        /* The glossary row's verdict (`glossaryRun`) is judged against this
-           sentence, so one read before the save may be wrong after it — plan
-           261001i § 3, GPT Sol's plan review. */
-        void refresh();
-      })
-      .catch((e: Error) => setPurposeError(e.message));
-  }
+    seedPurpose(provenance.purpose ?? "");
+  }, [provenance, slug, seedPurpose]);
 
   /**
    * Where the reader was in the article, so this page can say — and so "back to
@@ -1058,24 +1051,14 @@ export function Metadata({
               label="Why you're reading this one"
               placeholder="e.g. I want the evidence, not the history"
               hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
-              value={purposeDraft ?? ""}
-              onChange={setPurposeDraft}
-              onCommit={commitPurpose}
+              value={purpose.draft}
+              onChange={purpose.setDraft}
+              onCommit={purpose.commit}
               max={MAX_PURPOSE_CHARS}
-              disabled={purposeDraft === null}
+              disabled={purpose.saved === null}
               rows={2}
+              save={purpose.state}
             />
-            <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
-              {purposeError ? (
-                <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
-                  <TriangleAlert size={12} /> Not saved — {purposeError}
-                </span>
-              ) : provenance === null ? (
-                slow ? "Loading…" : ""
-              ) : (
-                "Saved when you click away, or with ⌘↵."
-              )}
-            </p>
 
             {/* The global half, shown rather than edited. A reader looking at
                 "why is this glossary written like this" needs both answers, and

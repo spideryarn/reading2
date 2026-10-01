@@ -606,6 +606,20 @@ the Feedback draft itself is the next step, and is named in the plan.
    `getUserMedia` and `SpeechRecognition` both work there — but the grant is keyed to the full
    origin *including the port*, and Vite's port moves. A plausible share of why the microphone
    seemed to behave better on `spideryarn.com` than on a laptop.
+8. **A chosen microphone's id stops resolving while the microphone is still there.** Greg on an
+   iPhone with AirPods, 2026-09-29: *"The microphone you chose isn't available. Using another one.
+   … Weirdly, it did actually seem to work."* The `exact` request for the remembered id failed and
+   the plain one opened — very possibly the same AirPods under another id (why the id went stale on
+   iOS was not established; route changes and WebKit's own default-input choice are both
+   candidates). So the browser's **name** for a chosen device is now remembered beside its id, and
+   a fallback that is the one input carrying that name, and whose own id is the input's, is the
+   same microphone: no warning, and its new id is adopted. Anything less still warns, now naming
+   both. A choice stored before names were kept is warned about once and forgotten.
+   [`mic-devices.ts` § `judgeFallback`](../../src/web/mic-devices.ts),
+   [261001l](../plans/261001l-autosave-about-you-and-honest-mic-fallback.md). The same report
+   wondered whether the clean-up step had run: it had — every one of those dictations reached
+   `openai/gpt-transcribe` and came back `ok`, and on Safari, which has no live words, the text in
+   the box *is* that transcript. There is no separate rewrite after it (§ The ums come out).
 
 ## The codes
 

@@ -80,6 +80,7 @@ function render(): HTMLButtonElement {
         onChange: () => {},
         onCommit: () => {},
         max: 500,
+        save: { kind: "clean" },
       }),
     );
   });

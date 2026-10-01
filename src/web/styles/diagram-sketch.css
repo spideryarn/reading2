@@ -305,6 +305,12 @@
    hit target would be whatever the model happened to draw. */
 .sk-hit { fill: transparent; stroke: none; }
 .sk-node.links, .sk-node.opens { cursor: pointer; }
+/* **In the band, a press on the background enlarges the picture** (plan
+   261001l), so the background says so — and only in the band, which is the
+   copy with `.enlarges`. A plain node selects rather than enlarges, so it must
+   not inherit the zoom; one that links or opens keeps its pointer above. */
+.sk-svg.enlarges { cursor: zoom-in; }
+.sk-svg.enlarges .sk-node:not(.links, .opens) { cursor: default; }
 .sk-node.links:hover .sk-shape, .sk-node.opens:hover .sk-shape {
   fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.3);
 }

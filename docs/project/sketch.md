@@ -184,6 +184,14 @@ z-index budget. Inside, the picture is drawn to the window's width rather than t
 760, so the text arrives at 17–20px and the shape is still whole — nothing about
 the layout changed, only its scale.
 
+**A press on the picture's background is Enlarge too**, in the band — Greg,
+2026-09-11 (`spya-mghbv7`). A node still selects and a region's name still opens a
+scene; only a real pointer press counts, never the listbox's keys or the end of a
+selection drag; and the second click of a double-click does not shut what the first
+opened ([`enlargePress.ts`](../../src/web/enlargePress.ts),
+[261001l](../plans/261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md)).
+Illustrated's plate does the same.
+
 **Widening the column was the other option Greg offered and it is worse.** The
 band's width is the output of a negotiation in
 [`layout.ts`](../../src/web/layout.ts) between the rail, the band and

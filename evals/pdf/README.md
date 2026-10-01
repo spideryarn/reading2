@@ -37,6 +37,15 @@ the document you supply**, so a cut shorter than three pages has no furniture se
 three-page cut of a long paper usually still does not reproduce the whole document's. That is why
 every fixture there keeps a `pass0-full.json` measured before it was cut.
 
+## And 39 bylines, for the author check
+
+[`bylines/cases.json`](bylines/cases.json) asks *does the author check take a correct list, and
+never let a printed author go*: real bylines as the text layer gives them, each with a fixed correct
+answer, so it is free, deterministic, and gated in `npm test`
+([`tests/pdf-bylines-eval.test.ts`](../../tests/pdf-bylines-eval.test.ts)). Runner, old vs new:
+[`bylines.mts`](bylines.mts). Plan:
+[261001l](../../docs/plans/261001l-pdf-stacked-bylines.md).
+
 ## The three
 
 | | Document | The slot it fills |

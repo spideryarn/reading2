@@ -49,7 +49,7 @@
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";
-import { BookOpen, Cpu, SlidersHorizontal, TriangleAlert, User, UserCheck, Wallet } from "lucide-react";
+import { BookOpen, Cpu, SlidersHorizontal, User, UserCheck, Wallet } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { BackLink } from "./BackLink.js";
@@ -240,27 +240,16 @@ export function ProfilePage() {
             hint="Used on every article — the glossary, the ideas, chat, explanations and threads. It changes what gets explained and how much, never what the article says."
             value={profile.draft}
             onChange={profile.setDraft}
-            onCommit={profile.flush}
+            onCommit={profile.commit}
             max={MAX_PROFILE_CHARS}
-            disabled={profile.profile === null}
+            disabled={profile.saved === null}
             rows={5}
+            /* Saved, and said — by the box. A save that fails while the box
+               goes on showing what you typed is the whole hazard here: the
+               profile you believe every glossary is written to is a string the
+               server never got. */
+            save={profile.state}
           />
-          {/* Saved, and said. A save that fails while the box goes on showing
-              what you typed is the whole hazard here — the profile you believe
-              every glossary is written to is a string the server never got. */}
-          <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
-            {profile.error ? (
-              <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
-                <TriangleAlert size={12} /> Not saved — {profile.error}
-              </span>
-            ) : profile.saving ? (
-              "Saving…"
-            ) : profile.profile === null ? (
-              "Loading…"
-            ) : (
-              "Saved when you click away, or with ⌘↵."
-            )}
-          </p>
           <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-ink-faint">
             Changing this marks everything already written as{" "}
             <em className="tw:not-italic tw:text-muted-foreground">written for an older profile</em>

@@ -32,12 +32,6 @@
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
-.quotes-rank-label {
-  margin-right: 0.15rem;
-  color: var(--ink-faint);
-  font-size: 0.83rem;
-  text-transform: lowercase;
-}
 .quotes-rank-btn {
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;
