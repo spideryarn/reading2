@@ -1609,9 +1609,13 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (seen !== artifactSeq.current) return;
       /* A live microphone, a transcript on its way, or a retry in flight is not
          "the last dictation" — and `clearRecording` would drop it to `idle`.
-         Each of those moved `artifactSeq` when it began, so this is the second
-         lock on the door rather than the first. */
-      if (phaseNow.current !== "idle") return;
+         `phaseNow` is render state: immediately after `start()` or `retry()` it
+         can still say `idle`. The refs are written synchronously, so they close
+         that render gap; `phaseNow` covers the transcript-draining interval,
+         whose session has already been removed. Each operation also moved
+         `artifactSeq`, so this is the second lock on the door rather than the
+         first. */
+      if (session.current || retryUpload.current || phaseNow.current !== "idle") return;
       clearRecording();
     },
     [clearRecording],
@@ -1672,6 +1676,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          that is genuinely open, and `transcribed.current?.()` would splice a
          stale transcript into the middle of a live dictation's span. */
       if (!mounted.current || retryGeneration.current !== mine || session.current) return;
+      retryUpload.current = null;
       setPhase("idle");
       if (results.some((r) => !r.ok && "abandoned" in r)) return;
       /* What came back this time is kept for the next go, whatever happens to

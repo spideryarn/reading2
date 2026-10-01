@@ -17,7 +17,7 @@
  *    per-stretch rule would then chime again ten seconds later, for ever.
  *    GPT Sol's plan review, F3.
  */
-import { act, createElement, type ReactNode, useState } from "react";
+import { act, createElement, StrictMode, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DictationStrip } from "../src/web/DictationStrip.js";
@@ -175,5 +175,17 @@ describe("the chime", () => {
     const set = chimeProbe(ctx);
     set(true, null);
     expect(notes).toHaveLength(0);
+  });
+
+  it("plays only once when StrictMode repeats the effect", () => {
+    const { ctx, notes } = fakeContext();
+    function AlreadyQuiet(): ReactNode {
+      useQuietChime(true, 1000, ctx);
+      return null;
+    }
+    act(() => root.render(createElement(StrictMode, null, createElement(AlreadyQuiet))));
+    /* Two oscillators are the two notes of one chime. A repeated effect would
+       produce four. */
+    expect(notes).toHaveLength(2);
   });
 });

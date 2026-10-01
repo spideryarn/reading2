@@ -776,4 +776,62 @@ describe("dismissing what the last dictation left", () => {
     expect(h.get().phase).toBe("listening");
     h.unmount();
   });
+
+  it("does nothing in the render gap after a microphone starts", () => {
+    const h = drive();
+    act(() => {
+      h.get().toggle();
+      /* `start` has moved the artifact and installed the Session, but React has
+         not rendered `phase: opening` yet. A phase ref alone still says idle. */
+      h.get().dismiss(h.get().artifact());
+    });
+    expect(h.get().armed, "dismiss hid a live opening session").toBe(true);
+    expect(h.get().phase).toBe("opening");
+    h.unmount();
+  });
+
+  it("does nothing in the render gap after a Retry starts", async () => {
+    transcribeFails = true;
+    const h = drive();
+    await pressAndOpen(h);
+    recorders.at(-1)?.emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await settle();
+    expect(h.get().canRetry).toBe(true);
+
+    /* Keep this retry genuinely in flight while the synchronous render gap is
+       inspected. A response here would test completion timing instead. */
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+    act(() => {
+      h.get().retry();
+      /* As above: the request ref is live before `phase` has rendered. */
+      h.get().dismiss(h.get().artifact());
+    });
+    expect(h.get().transcribing, "dismiss cancelled a retry before its render").toBe(true);
+    expect(h.get().recording).not.toBeNull();
+    h.unmount();
+  });
+
+  it("can dismiss a retry after that retry has finished", async () => {
+    transcribeFails = true;
+    const h = drive();
+    await pressAndOpen(h);
+    recorders.at(-1)?.emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await settle();
+    expect(h.get().canRetry).toBe(true);
+
+    act(() => h.get().retry());
+    await settle();
+    expect(h.get().phase).toBe("idle");
+    const seen = h.get().artifact();
+    act(() => h.get().dismiss(seen));
+    expect(h.get().error).toBeNull();
+    expect(h.get().recording).toBeNull();
+    h.unmount();
+  });
 });
