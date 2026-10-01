@@ -192,3 +192,21 @@ whatever address the local admin account has.
   - The claim's contract, stated plainly: the claim and its queued notice commit together, so a
     failed queue insert rolls the claim back, the plan is still served, and the next visit tries
     again.
+- 2026-10-01: **built and landed** in `374ea318a` (server), `b743dd3b9` (client) and `b68513105`
+  (review fixes and docs). The migration was regenerated as `20261001191310_billing_voucher_emails`
+  after go-deeper's `dig_deeper_bucket` landed first (identical SQL; applied locally). Beyond the
+  plan: a gift Retry also requires the voucher still to have the address the delivery was frozen
+  with; an address change moves still-queued gift emails for the old address to `skipped: address
+  changed`; and the Resend error-name allowlist was checked against Resend's live errors page.
+  - **GPT Sol code review** ([answer](261001p-voucher-emails-code-review-sol.md)): *conditional
+    approve*, six findings, all fixed by the reviewer and read here. A superseded attempt now stops
+    before calling Resend (checked again after the creator lookup), and a concurrent-key 409 stays
+    `sending` rather than claiming failure. A thrown send keeps only its error class and is shown
+    as *may or may not have gone*, and the Resend response id is no longer logged. Retry also has a
+    same-tick guard, and nothing re-reads after unmount. Its sandbox could not reach Postgres; the
+    lead ran those suites: 563 passed across ten files, and typecheck is green.
+  - **Browser check** (Playwright, system Chrome, 390 and 1280): create, Retry (one request even on a
+    double-click), address change (a new delivery row, checked in the database), revoke (Retry
+    gone), no sideways page scroll at either width, no console errors. The *Email to you* line
+    after a real claim was not exercised in the browser; the tests cover it.
+  - **Real sends**: one of each kind to `hello@spideryarn.com` only, both accepted by Resend.
