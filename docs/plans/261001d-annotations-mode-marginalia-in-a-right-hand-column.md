@@ -55,8 +55,10 @@ column (checked 2026-10-01 03:15 — `docs/plans/`, `docs/user-feedback/`, `git 
 
 ## Two product views, and what they agreed
 
-Opus and GPT Sol were each given the same brief (`logs/fb7e/product-brief.md` in the worktree,
-not committed) and answered independently. They agreed on every structural question:
+Opus and GPT Sol were each given the same brief
+([261001d-annotations-mode-product-brief.md](261001d-annotations-mode-product-brief.md)) and
+answered independently — [Opus](261001d-annotations-mode-product-opus.md),
+[GPT Sol](261001d-annotations-mode-product-sol.md). They agreed on every structural question:
 
 1. **A mode, not a toggle, for v1.** `?mode=annotations` opens no left band and draws the right
    column. A separate right-column toggle that coexists with a left band means two optional
@@ -161,7 +163,8 @@ Firefox lack). The collision rule is ten lines; everything else is our own glue 
 
 ## GPT Sol's plan review, and what changed
 
-`logs/fb7e/plan-review-sol.md` in the worktree (not committed); verdict *build with fixes*, no P0.
+[261001d-annotations-mode-plan-review-sol.md](261001d-annotations-mode-plan-review-sol.md), on
+[its prompt](261001d-annotations-mode-plan-review-prompt.md); verdict *build with fixes*, no P0.
 
 | | Finding | Taken? |
 |---|---|---|
@@ -186,7 +189,16 @@ and in Annotations alike; 0 overlapping notes at every width; no horizontal scro
 or 800; at 500px no notes and the narrow line clear of the dock; a selection across two annotated
 paragraphs carried none of the notes; no console errors of ours. What it found wrong was the head.
 
-Greg asked for GPT Astra's help with the look (7K), so the screenshots went to Astra with the
+The screenshots are in [261001d-annotations-mode-shots/](261001d-annotations-mode-shots/): the
+first pass unprefixed, the second (after the design pass, before the twelve-word paragraph rule and
+the 0.5rem note padding) as `v2-`. In the review files they are named by their old paths,
+`logs/fb7e/shots/<name>.png`; the file names are unchanged. Two are not kept because they were
+byte-identical to one that is: `1600-dark.png` is `1600-annotations.png` (the app is dark by
+default), and `v2-arc-hover.png` is `v2-arc-click.png`.
+
+Greg asked for GPT Astra's help with the look (7K), so the screenshots went to Astra
+([its answer](261001d-annotations-mode-design-review-astra.md), on
+[its prompt](261001d-annotations-mode-design-review-prompt.md)) with the
 channel-budget constraints. Its eight points, and what happened to each:
 
 | | Astra said | Taken? |
@@ -202,8 +214,9 @@ channel-budget constraints. Its eight points, and what happened to each:
 
 ## GPT Sol's code review
 
-Write-capable, on `1a60d690..07ef6ce6` (`logs/fb7e/code-review-sol.md` in the worktree, not
-committed). Verdict **land**. It fixed two P2s itself, each with a test seen red first, and
+Write-capable, on `1a60d690..07ef6ce6`:
+[261001d-annotations-mode-code-review-sol.md](261001d-annotations-mode-code-review-sol.md), on
+[its prompt](261001d-annotations-mode-code-review-prompt.md). Verdict **land**. It fixed two P2s itself, each with a test seen red first, and
 reported one P3:
 
 - **C1, fixed** — the head did not share the shell's `top` transition, so it jumped when a
