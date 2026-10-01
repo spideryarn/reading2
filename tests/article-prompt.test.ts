@@ -234,6 +234,34 @@ describe("visibleBlocksLine", () => {
   it("is empty for an empty screen, like readerPositionLine", () => {
     expect(visibleBlocksLine([])).toBe("");
   });
+
+  it("replaces only the position line and leaves the cached prefix and suffix order untouched", () => {
+    const shared = {
+      meta,
+      blocks,
+      history: [],
+      question: "what does this mean?",
+      at: "spya-aaaaaa",
+      profile: "About the reader: familiar with biology.",
+      anchor: { blockId: "spya-bbbbbb" } as const,
+      help: true,
+    };
+    const at = buildConverseMessages(shared);
+    const visible = buildConverseMessages({
+      ...shared,
+      visible: ["spya-bbbbbb", "spya-cccccc"],
+    });
+    const atTail = at.at(-1)!.content as string;
+    const visibleTail = visible.at(-1)!.content as string;
+
+    expect(visibleTail).toBe(
+      atTail.replace(
+        readerPositionLine(shared.at),
+        visibleBlocksLine(["spya-bbbbbb", "spya-cccccc"]),
+      ),
+    );
+    expect(cachedText(visible)).toBe(cachedText(at));
+  });
 });
 
 describe("the three request-path builders share one article", () => {

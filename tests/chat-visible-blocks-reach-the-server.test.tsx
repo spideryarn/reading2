@@ -110,8 +110,8 @@ async function settle(turns = 4): Promise<void> {
   }
 }
 
-async function mount(withGetter: boolean): Promise<void> {
-  history.replaceState(null, "", `/a-piece?mode=chat&thread=${STORED.id}`);
+async function mount(kind: "chat" | "remember"): Promise<void> {
+  history.replaceState(null, "", `/a-piece?mode=${kind}&thread=${STORED.id}`);
   await act(async () => {
     root.render(
       createElement(
@@ -121,8 +121,7 @@ async function mount(withGetter: boolean): Promise<void> {
           slug: "a-piece",
           blocks: new Map<string, string>(),
           onJump: () => {},
-          kind: "chat" as const,
-          ...(withGetter ? { onScreen: () => screen } : {}),
+          ...(kind === "chat" ? { kind, onScreen: () => screen } : { kind }),
         }),
       ),
     );
@@ -150,7 +149,7 @@ async function press(name: string, ...args: unknown[]): Promise<void> {
 
 describe("the blocks on screen, sent with a chat question", () => {
   it("are read when Send is pressed in an open conversation, not when the band rendered", async () => {
-    await mount(true);
+    await mount("chat");
     screen = ["spya-aaaaaa", "spya-bbbbbb"];
     await press("onSend", "What does this paragraph mean?");
     expect(posted()).toHaveLength(1);
@@ -158,14 +157,14 @@ describe("the blocks on screen, sent with a chat question", () => {
   });
 
   it("go with the box that starts a new conversation too", async () => {
-    await mount(true);
+    await mount("chat");
     screen = ["spya-cccccc"];
     await press("onSendNew", "Something else", false);
     expect(posted()[0]?.visible).toEqual(["spya-cccccc"]);
   });
 
   it("go with an edited question, read at Save", async () => {
-    await mount(true);
+    await mount("chat");
     screen = ["spya-dddddd"];
     await press("onEdit", "spya-q1q1q1", "A better question");
     expect(posted()).toHaveLength(1);
@@ -174,14 +173,14 @@ describe("the blocks on screen, sent with a chat question", () => {
   });
 
   it("are left out when nothing is on screen, rather than sent as an empty list", async () => {
-    await mount(true);
+    await mount("chat");
     screen = [];
     await press("onSend", "Why?");
     expect(posted()[0]).not.toHaveProperty("visible");
   });
 
-  it("are not sent by a band given no getter — Remember, and every caller before this", async () => {
-    await mount(false);
+  it("are not sent by Remember, whose prop type forbids a getter", async () => {
+    await mount("remember");
     await press("onSend", "Why?");
     expect(posted()).toHaveLength(1);
     expect(posted()[0]).not.toHaveProperty("visible");

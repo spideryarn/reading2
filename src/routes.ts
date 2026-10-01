@@ -2864,6 +2864,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (visible !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
     throw httpError(400, "visible only applies to a chat");
   }
+  /* `storedKind` was read outside `inTurnOrder`. If two first turns carrying the
+     same optimistic id arrive together, the other one can create a Remember
+     thread after that read. Make chat explicit on the authoritative store write
+     whenever `visible` is present, so `withTurn`'s transactional kind check
+     refuses the collision before inserting either message. Without this, the
+     request could append a screenful to a Remember thread even though the fast
+     check above had correctly seen no thread yet. */
+  const beginKind = !wantsRetry && !wantsEdit
+    ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
+    : undefined;
   const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
@@ -3053,9 +3063,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        `withTurn` refuses it again inside the store's transaction, because
        `inTurnOrder` is per-process and this one is not. Here for the status
        code and the sentence; there for the guarantee. */
-    if (wantedKind) {
+    if (beginKind) {
       const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && existing.kind !== wantedKind) {
+      if (existing && existing.kind !== beginKind) {
         throw httpError(409, "That conversation is already a different kind");
       }
     }
@@ -3102,7 +3112,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             threadId,
             question: (question as string).trim(),
             ...(wanted ? { anchor: wanted } : {}),
-            ...(wantedKind ? { kind: wantedKind } : {}),
+            ...(beginKind ? { kind: beginKind } : {}),
             /* Onto the **pending** reply row, inside the same write as the
                question — see `ChatMessage.stance`. Only meaningful on a Remember turn;
                `withTurn` writes whatever it is given and the check constraint

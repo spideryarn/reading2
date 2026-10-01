@@ -129,9 +129,28 @@ Not taken, and why:
 ## The paid check: not run
 
 `evals/chat-visible/run.ts` is written (production's `converse`, one article, a fixed six-block
-"screen"; four questions about elsewhere in the piece under both arms, twice; three pointing at
-the screen under both arms, once; measures the share of cited ids that are on screen). Its first
-run on 2026-10-01 got **402 from OpenRouter: the box's dev key is out of credit**, so there is no
+"screen"; four questions quoting known off-screen blocks under both arms, twice; three pointing at
+the screen under both arms, once; measures the share of renderable cited ids that are on screen).
+Its first run on 2026-10-01 got **402 from OpenRouter: the box's dev key is out of credit**, so there is no
 measurement yet. Nothing was spent. Run it once credit is back:
 
     npx tsx evals/chat-visible/run.ts what-if-we-had-bigger-brains-imagining-minds-beyond-ours
+
+## What the code review found (GPT Sol, 2026-10-01, `--sandbox workspace-write`)
+
+It fixed four things in the working tree, checked here before committing:
+
+- **High: a race past the chat-only rule.** `storedKind` is read outside `inTurnOrder`, so two
+  first turns on one optimistic id could let a `visible` request append to a Remember thread made
+  in between. A turn carrying `visible` now writes `kind: "chat"` explicitly (`beginKind` in
+  `streamChat`), so `withTurn`'s transactional kind check refuses the collision.
+- **Medium: the Reader prop could vanish with every test green.** `ConversationBand`'s props are now
+  a union by kind: chat must pass `onScreen`, Remember may not. Deleting `onScreen={chatOnScreen}`
+  from Reader now fails `npm run typecheck` (watched).
+- **Medium: the eval measured the wrong thing.** Broad "elsewhere" questions could legitimately
+  cite the screen. It now quotes known off-screen blocks, counts production's `citedBlockIds`, and
+  runs sequentially with arm order reversed on the second repeat.
+- **Low:** a `buildConverseMessages` test that the article prefix is byte-identical and only the
+  position line is replaced.
+
+Its sandbox could not reach Postgres, so the route test was run here: green.

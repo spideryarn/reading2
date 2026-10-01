@@ -298,6 +298,62 @@ function before(a: ChatThread, b: ChatThread): boolean {
   return a.id < b.id;
 }
 
+/**
+ * `kind` — which mode mounted the band, chat or Remember — and what goes with
+ * each.
+ *
+ * **One component for both, and not two.** Everything in here is the same for
+ * either: one `useChat(slug)`, one `?thread=`, one focus nonce, one
+ * once-per-visit latch. A near-copy would have been a second chat state
+ * machine beside the first, which is what GPT Sol's review of
+ * docs/plans/260827ah-review-mode.md (finding 7) said not to build — and the
+ * unmount/remount path around this one already has a race worth not having
+ * twice.
+ *
+ * **Not `ThreadKind`.** The union grew a third member on 2026-09-01 and this
+ * band is for two of them — see `ConversationKind` above.
+ */
+type ConversationVisibilityByKind = {
+  chat: {
+    /**
+     * The blocks on screen now, read when the reader presses Send or Save and
+     * sent with the question. Reader owns it because Reader knows whether a
+     * band is lying over the prose, when it answers `[]`.
+     *
+     * Required on chat rather than optional for every band: otherwise Reader
+     * can omit the one prop that connects the DOM reading to the request and
+     * all lower-level payload tests still pass (GPT Sol, code review of
+     * docs/plans/261001q-chat-knows-the-blocks-on-screen.md).
+     */
+    kind: "chat";
+    onScreen: () => readonly BlockId[];
+  };
+  remember: {
+    /** Remember must never report a screenful to its prompt. */
+    kind: "remember";
+    onScreen?: never;
+  };
+};
+
+type ConversationBandProps = {
+  slug: string;
+  blocks: Map<string, string>;
+  onJump(id: BlockId): void;
+  /**
+   * A question to open a fresh conversation with, unsent — see `ChatHandoff`.
+   * Only chat mode is handed one.
+   */
+  handoff?: ChatHandoff | null | undefined;
+  /** The band has taken `handoff` (or refused it); the owner should forget it. */
+  onHandoffTaken?: (() => void) | undefined;
+  /**
+   * **The Recall | Quiz control**, when this band is the Recall half of
+   * Remember. Absent in chat mode. Built by `RememberBand` above and passed straight
+   * through to `ChatPanel`, which is where it is drawn.
+   */
+  subMode?: React.ReactNode;
+} & ConversationVisibilityByKind[ConversationKind];
+
 export function ConversationBand({
   slug,
   blocks,
@@ -307,47 +363,7 @@ export function ConversationBand({
   handoff,
   onHandoffTaken,
   onScreen,
-}: {
-  slug: string;
-  blocks: Map<string, string>;
-  onJump(id: BlockId): void;
-  /**
-   * The blocks on screen now, read when the reader presses Send or Save and sent
-   * with the question — chat mode only. Reader owns it because Reader knows
-   * whether the band is lying over the prose, in which case it answers `[]`.
-   * Remember is given none: its prompt is not to guess how far the reader has
-   * got. docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
-   */
-  onScreen?: (() => readonly BlockId[]) | undefined;
-  /**
-   * A question to open a fresh conversation with, unsent — see `ChatHandoff`.
-   * Only chat mode is handed one.
-   */
-  handoff?: ChatHandoff | null | undefined;
-  /** The band has taken `handoff` (or refused it); the owner should forget it. */
-  onHandoffTaken?: (() => void) | undefined;
-  /**
-   * Which mode mounted this — chat, or Remember.
-   *
-   * **One component for both, and not two.** Everything in here is the same for
-   * either: one `useChat(slug)`, one `?thread=`, one focus nonce, one
-   * once-per-visit latch. A near-copy would have been a second chat state
-   * machine beside the first, which is what GPT Sol's review of
-   * docs/plans/260827ah-review-mode.md (finding 7) said not to build — and the
-   * unmount/remount path around this one already has a race worth not having
-   * twice.
-   *
-   * **Not `ThreadKind`.** The union grew a third member on 2026-09-01 and this
-   * band is for two of them — see `ConversationKind` above.
-   */
-  kind: ConversationKind;
-  /**
-   * **The Recall | Quiz control**, when this band is the Recall half of
-   * Remember. Absent in chat mode. Built by `RememberBand` above and passed straight
-   * through to `ChatPanel`, which is where it is drawn.
-   */
-  subMode?: React.ReactNode;
-}) {
+}: ConversationBandProps) {
   useRenderCount("ConversationBand");
   const {
     threads: everyThread,

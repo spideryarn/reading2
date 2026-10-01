@@ -69,7 +69,7 @@ async function mount(thread: string | null) {
   history.replaceState(null, "", `/a-piece?mode=chat${thread ? `&thread=${thread}` : ""}`);
   await act(async () => {
     root.render(createElement(NuqsAdapter, null, createElement(ConversationBand, {
-      slug: "a-piece", blocks: new Map(), onJump: () => {}, kind: "chat",
+      slug: "a-piece", blocks: new Map(), onJump: () => {}, kind: "chat", onScreen: () => [],
     })));
   });
   await act(async () => { await vi.waitFor(() => expect(panel.loaded).toBe(true)); });

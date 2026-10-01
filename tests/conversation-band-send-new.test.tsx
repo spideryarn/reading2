@@ -131,6 +131,7 @@ async function mount(thread: string | null): Promise<void> {
           blocks: new Map<string, string>(),
           onJump: () => {},
           kind: "chat" as const,
+          onScreen: () => [],
         }),
       ),
     );
