@@ -641,8 +641,9 @@ export async function generateSimpleSummary(opts: {
    * **One level, with one second chance when its answer fails validation.**
    * All-or-none over three calls turns each level's small failure rate into a
    * press that fails about one time in twelve (plan 261001b § Ledger: 22 of 24
-   * stored all three; the losses were a level one word over its ceiling, a
-   * level whose ids matched no passage, and a stray character after the JSON).
+   * stored all three on the shipped settings; the losses there were a level one
+   * word over its ceiling and a level whose ids matched no passage, and an
+   * earlier run lost one to a stray character after the JSON).
    * Each is a fresh sample's problem, so that level alone is asked again —
    * once. A failed *call* (network, refusal, truncation, an abort) is not
    * retried here: those have their own handling, and the job can be re-run.

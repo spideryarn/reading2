@@ -98,6 +98,7 @@ import { partsOf } from "../src/arc.js";
 import type { Article } from "../src/article-input.js";
 import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
+import { SIMPLE_LEVELS } from "../src/types.js";
 import { STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
@@ -411,19 +412,21 @@ function scriptFor(stage: Stage, article: Article): string[] {
       ];
     }
     case "simple": {
-      /* Two paragraphs, each on a body block — the fewest `buildSimpleSummary`
-         keeps, so a stub whose ids stopped resolving throws here rather than
-         testing nothing. */
+      /* One answer per level — the stage makes a call for each of
+         `SIMPLE_LEVELS` (plan 261001b). Three paragraphs, each on a body
+         block, is inside every level's limits, and the ids must resolve, so a
+         stub whose ids stopped resolving throws here rather than testing
+         nothing. */
       const second = article.blocks.find((b) => b.id !== block.id && isBodyEvidence(b));
       if (!second) throw new Error("the fixture has no second body block");
-      return [
-        JSON.stringify({
-          paragraphs: [
-            { text: "This piece is about something.", ids: [block.id] },
-            { text: "It matters for a reason it gives.", ids: [second.id] },
-          ],
-        }),
-      ];
+      const answer = JSON.stringify({
+        paragraphs: [
+          { text: "This piece is about something.", ids: [block.id] },
+          { text: "It matters for a reason it gives.", ids: [second.id] },
+          { text: "Its key idea is one it states.", ids: [block.id] },
+        ],
+      });
+      return SIMPLE_LEVELS.map(() => answer);
     }
     case "sketch":
       return [JSON.stringify(sketchAnswer(article))];
