@@ -289,7 +289,7 @@ export interface CollectPdfFiguresOptions {
    * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2.
    */
   locate: FigureLocator | null;
-  /** At most this many locator calls for the article. `MAX_LOCATE_CALLS` by default. */
+  /** At most this many locator calls for the article; may lower, never widen, `MAX_LOCATE_CALLS`. */
   maxLocateCalls?: number;
   blobs?: RawSourceStore;
   signal?: AbortSignal;
@@ -790,7 +790,13 @@ async function locatedRoute(
   } catch {
     return [];
   }
-  const maxCalls = options.maxLocateCalls ?? MAX_LOCATE_CALLS;
+  /* The override exists to make a smaller ceiling testable; it may not widen
+     the production policy. Normalise hostile/accidental numeric values too,
+     so NaN cannot turn the comparison below off. */
+  const requestedCalls = options.maxLocateCalls ?? MAX_LOCATE_CALLS;
+  const maxCalls = Number.isFinite(requestedCalls)
+    ? Math.max(0, Math.min(MAX_LOCATE_CALLS, Math.floor(requestedCalls)))
+    : MAX_LOCATE_CALLS;
   const choices: {
     marker: PdfFigureMarker;
     identity: string;
@@ -798,7 +804,14 @@ async function locatedRoute(
     page: number;
     box: PageBox | null;
   }[] = [];
-  const regions: { marker: PdfFigureMarker; raster: DecodedRaster; page: number; box: PageBox }[] = [];
+  const regions: {
+    marker: PdfFigureMarker;
+    raster: DecodedRaster;
+    identity: string;
+    pictureIdentities: readonly string[];
+    page: number;
+    box: PageBox;
+  }[] = [];
   let looks = 0;
 
   for (const marker of [...held].sort((a, b) => a.page - b.page)) {
@@ -866,7 +879,14 @@ async function locatedRoute(
       const picture = usable.find((u) => u.page === verdict.page && u.key === verdict.key);
       const paint = read.paints.find((p) => p.page === verdict.page && p.key === verdict.key);
       if (picture) {
-        choices.push({ marker, identity: picture.identity, raster: picture.raster, page: verdict.page, box: paint?.box ?? null });
+        const view = read.views.get(verdict.page);
+        choices.push({
+          marker,
+          identity: picture.identity,
+          raster: picture.raster,
+          page: verdict.page,
+          box: paint && view ? visiblePaintBox(paint, view) : null,
+        });
       }
       continue;
     }
@@ -880,11 +900,20 @@ async function locatedRoute(
      nothing here can say which, so neither is kept. */
   const overlaps = (a: { page: number; box: PageBox }, b: { page: number; box: PageBox | null }) =>
     a.page === b.page && b.box !== null && overlapArea(a.box, b.box) > 0;
-  const keptPictures = choices.filter(
-    (c) => choices.filter((o) => o.identity === c.identity).length === 1 && !regions.some((r) => overlaps(r, c)),
+  const sharesPicture = (a: { pictureIdentities: readonly string[] }, identity: string) =>
+    a.pictureIdentities.includes(identity);
+  const regionsConflict = (a: (typeof regions)[number], b: (typeof regions)[number]) =>
+    overlaps(a, b) ||
+    a.identity === b.identity ||
+    a.pictureIdentities.some((identity) => b.pictureIdentities.includes(identity));
+  const keptPictures = choices.filter((c) =>
+    choices.filter((o) => o.identity === c.identity).length === 1 &&
+    !regions.some((r) => overlaps(r, c) || sharesPicture(r, c.identity)),
   );
   const keptRegions = regions.filter(
-    (r) => !regions.some((o) => o !== r && overlaps(r, o)) && !choices.some((c) => overlaps(r, c)),
+    (r) =>
+      !regions.some((o) => o !== r && regionsConflict(r, o)) &&
+      !choices.some((c) => overlaps(r, c) || sharesPicture(r, c.identity)),
   );
   return [...keptPictures, ...keptRegions].map(({ marker, raster }) => ({ marker, raster }));
 }
@@ -907,7 +936,13 @@ async function compositeRegion(
   cuts: FigurePages,
   options: CollectPdfFiguresOptions,
   signal: AbortSignal,
-): Promise<{ raster: DecodedRaster; page: number; box: PageBox } | null> {
+): Promise<{
+  raster: DecodedRaster;
+  identity: string;
+  pictureIdentities: readonly string[];
+  page: number;
+  box: PageBox;
+} | null> {
   const answered = answeredBox(answer, sent);
   if (!answered) return null;
   let layout: PageLayout | null | undefined;
@@ -931,21 +966,41 @@ async function compositeRegion(
   });
   if (!verdict.ok) return null;
   const crop = verdict.containment[0]?.box ?? verdict.region;
-  /* Not mostly a picture another route already gave a figure. */
+  /* Which decoded pictures this region mostly holds. The identities travel
+     with the choice so a repeat on another page cannot be stored under a
+     second caption merely because its page-space boxes do not overlap. */
+  const pictureIdentities = new Set<string>();
   for (const picture of usable) {
-    if (picture.page !== answered.page || !taken.includes(picture.identity)) continue;
-    const paint = paints.find((p) => p.key === picture.key);
-    if (paint && overlapArea(paint.box, crop) >= 0.5 * overlapArea(paint.box, paint.box)) return null;
+    if (picture.page !== answered.page) continue;
+    const visible = paints
+      .filter((p) => p.key === picture.key)
+      .map((p) => visiblePaintBox(p, viewFromLayout(layout)))
+      .filter((box): box is PageBox => box !== null);
+    if (visible.some((box) => overlapArea(box, crop) >= 0.5 * overlapArea(box, box))) {
+      pictureIdentities.add(picture.identity);
+    }
   }
+  if ([...pictureIdentities].some((identity) => taken.includes(identity))) return null;
   const [vx0, vy0, vx1, vy1] = layout.view;
   try {
+    if (signal.aborted) return null;
+    const page = await cuts.cut(answered.page);
+    if (signal.aborted) return null;
     const rendered = await renderPdfRegion({
-      onePagePdf: (await cuts.cut(answered.page)).bytes,
+      onePagePdf: page.bytes,
       region: verdict.region,
       containment: verdict.containment,
       view: { width: vx1 - vx0, height: vy1 - vy0 },
     });
-    return rendered.ok ? { raster: rendered.raster, page: answered.page, box: crop } : null;
+    return rendered.ok
+      ? {
+          raster: rendered.raster,
+          identity: pictureIdentity(rendered.raster),
+          pictureIdentities: [...pictureIdentities],
+          page: answered.page,
+          box: crop,
+        }
+      : null;
   } catch {
     return null;
   }
@@ -954,6 +1009,26 @@ async function compositeRegion(
 /** The area two boxes share. */
 function overlapArea(a: PageBox, b: PageBox): number {
   return Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+}
+
+function viewFromLayout(layout: PageLayout): PageBox {
+  const [x0, y0, x1, y1] = layout.view;
+  return { x0, y0, x1, y1 };
+}
+
+/** The part of a paint the page can show; the located judge uses this same geometry. */
+function visiblePaintBox(
+  paint: { box: PageBox; clip: PageBox | null },
+  view: PageBox,
+): PageBox | null {
+  if (!paint.clip) return null;
+  const box = {
+    x0: Math.max(paint.box.x0, paint.clip.x0, view.x0),
+    y0: Math.max(paint.box.y0, paint.clip.y0, view.y0),
+    x1: Math.min(paint.box.x1, paint.clip.x1, view.x1),
+    y1: Math.min(paint.box.y1, paint.clip.y1, view.y1),
+  };
+  return box.x1 > box.x0 && box.y1 > box.y0 ? box : null;
 }
 
 /**

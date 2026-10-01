@@ -280,6 +280,16 @@ covers the whole-page case only.
   the gate change), asked and stored; a box around prose, refused. Red on the collector
   and locator before the change, by swapping the committed files back in. The
   `pdf-figures/6` stamp is pinned in `tests/collect-assets.test.ts`.
+- GPT Sol's code review of stage 2 ([261001q-code-review-2-sol.md](261001q-code-review-2-sol.md),
+  briefed with Greg's bar) fixed five P1s in place: two located regions with the same
+  picture or render on different pages refuse both; a captionless table (a ruled grid with
+  cell text, or a text-only row grid) is refused `mostly-table`; prose is measured against
+  the crop, not the page, so a narrow column of text cannot pass; `maxLocateCalls` can
+  only lower the cap; the abort signal is checked before cutting and before rendering.
+  Text inside several small closed boxes is read as a flowchart's labels, not prose.
+  **The trade-off kept:** the ruled-grid test could refuse a heatmap annotated with values
+  in every cell. That is the "mostly a table" refusal Greg named as real, and it needs three
+  full-span rules each way and four lines of text inside the grid before it fires.
 - The real paper, by hand: `collectPdfFigures` with the real locator on the production
   PDF (three calls) — all three figures stored, at 1502×928, 1335×1188 and 1124×375, the
   renders looked at: each figure whole with its labels and nothing else. A box around

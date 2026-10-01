@@ -11,7 +11,8 @@
  */
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { collectPdfFigures } from "../src/collect-pdf-figures.js";
+import { collectPdfFigures, MAX_LOCATE_CALLS } from "../src/collect-pdf-figures.js";
+import { readPdfPageLayouts } from "../src/pdf-figure-layout.js";
 import type { FigureLocator } from "../src/pdf-figure-locate.js";
 import { encodeFigurePng } from "../src/pdf-figures.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
@@ -20,8 +21,8 @@ const PROSE = "This paragraph is ordinary body text that runs across the whole c
 const PHOTOS_CAPTION = "Fig 1. Two panels of the same experiment, side by side for comparison.";
 const CHARTS_CAPTION = "Fig 2. Differences in kinase levels at presentation and at relapse.";
 
-function marker(page: number) {
-  return { ref: `pdffig1-${String(page).padStart(4, "0")}${"0".repeat(28)}.${page}.1`, page, ordinal: 1 };
+function marker(page: number, ordinal = 1) {
+  return { ref: `pdffig1-${String(page).padStart(4, "0")}${"0".repeat(28)}.${page}.${ordinal}`, page, ordinal };
 }
 
 /** A bucket in a Map, create-only — tests/collect-pdf-figures.test.ts's. */
@@ -97,6 +98,23 @@ async function chartsPdf(): Promise<Uint8Array> {
   return doc.save();
 }
 
+/** Two pages with the same drawing but different captions outside the crop. */
+async function repeatedChartsPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (const caption of ["Fig 1. First claim about this chart.", "Fig 2. A different claim about this chart."]) {
+    const page = doc.addPage([595, 842]);
+    for (const x of [100, 300]) {
+      page.drawLine({ start: { x, y: 520 }, end: { x, y: 640 }, thickness: 1, color: rgb(0, 0, 0) });
+      page.drawLine({ start: { x, y: 520 }, end: { x: x + 150, y: 520 }, thickness: 1, color: rgb(0, 0, 0) });
+      page.drawLine({ start: { x: x + 10, y: 530 }, end: { x: x + 140, y: 630 }, thickness: 2, color: rgb(0, 0, 0) });
+      page.drawText("Pre", { x: x + 5, y: 508, size: 8, font });
+    }
+    page.drawText(caption, { x: 60, y: 470, size: 9, font });
+  }
+  return doc.save();
+}
+
 /** `box_2d` for a page box on a 595 × 842 page. */
 function box2d(x0: number, y0: number, x1: number, y1: number): number[] {
   return [
@@ -154,7 +172,62 @@ describe("a composite figure the model boxed", () => {
     const m = marker(1);
     const pdf = await photosPdf();
     const { locate } = scripted({ page: 1, box_2d: box2d(55, 340, 540, 395) });
-    const run = await collectPdfFigures({ locate, captions: new Map([[m.ref, PHOTOS_CAPTION]]), markers: [m], pdf, blobs: fakeBlobs() });
+    const layoutReads: number[][] = [];
+    const run = await collectPdfFigures({
+      locate,
+      captions: new Map([[m.ref, PHOTOS_CAPTION]]),
+      markers: [m],
+      pdf,
+      blobs: fakeBlobs(),
+      readLayouts: async (options) => {
+        layoutReads.push([...options.pages]);
+        return readPdfPageLayouts(options);
+      },
+    });
+    /* This makes the wiring assertion red if the composite judge is simply
+       skipped: the bitmap/drawn routes do not need a layout for this page. */
+    expect(layoutReads).toEqual([[1]]);
     expect(run.entries[0]).toMatchObject({ status: "failed", reason: "ambiguous" });
+  }, 120_000);
+
+  it("gives neither caption an identical composite repeated on another page", async () => {
+    const one = marker(1);
+    const two = marker(2);
+    const captions = new Map([
+      [one.ref, "Fig 1. First claim about this chart."],
+      [two.ref, "Fig 2. A different claim about this chart."],
+    ]);
+    const pdf = await repeatedChartsPdf();
+    const asked: string[] = [];
+    const locate: FigureLocator = async (request) => {
+      asked.push(request.caption);
+      const page = request.caption.startsWith("Fig 1") ? 1 : 2;
+      return { ok: true, answer: { page, box_2d: box2d(95, 500, 455, 645) } };
+    };
+    const run = await collectPdfFigures({ locate, captions, markers: [one, two], pdf, blobs: fakeBlobs() });
+    expect(asked).toHaveLength(2);
+    expect(run.entries.map((entry) => entry.status)).toEqual(["failed", "failed"]);
+    expect(run.located).toBe(0);
+  }, 120_000);
+
+  it("does not let the test override widen the production call ceiling", async () => {
+    const pdf = await chartsPdf();
+    const markers = Array.from({ length: MAX_LOCATE_CALLS + 1 }, (_, i) => marker(1, i + 1));
+    const captions = new Map(markers.map((m, i) => [m.ref, `Figure ${i + 10}. Not printed on this page.`]));
+    let calls = 0;
+    const locate: FigureLocator = async () => {
+      calls += 1;
+      return { ok: true, answer: { page: null, box_2d: null } };
+    };
+    const run = await collectPdfFigures({
+      locate,
+      maxLocateCalls: MAX_LOCATE_CALLS + 100,
+      captions,
+      markers,
+      pdf,
+      blobs: fakeBlobs(),
+    });
+    expect(calls).toBe(MAX_LOCATE_CALLS);
+    expect(run.locateCalls).toBe(MAX_LOCATE_CALLS);
   }, 120_000);
 });
