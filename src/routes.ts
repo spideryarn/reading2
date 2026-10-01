@@ -4214,8 +4214,6 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   } catch (err) {
     captureFailure(err, { route: "search", slug, id: run.id });
     patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
-  } finally {
-    searching.delete(key);
   }
 
   try {
@@ -4239,6 +4237,11 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     );
     captureFailure(storeErr, { route: "search", slug, phase: "record-result" });
   } finally {
+    /* Not released until the answer is stored. Released straight after the
+       model call, a GET landing before `finish` swept this row — past the
+       grace, nothing else protects it — and the answer then stored nothing.
+       GPT Sol, docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+    searching.delete(key);
     res.end();
   }
 }

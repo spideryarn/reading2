@@ -50,7 +50,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { searchRuns } from "../db/schema.js";
@@ -256,20 +256,28 @@ const rawPgSearchStore: SearchStore = {
          are watching. Full behavioural parity needs an insertion ordinal, which
          is a column and has not been paid for. Recorded in
          docs/plans/260826e-postgres-storage-implementation.md. */
+      /* **And a `pending` row past the cap is skipped, not deleted** — 2026-10-01.
+         It is a search somebody is still waiting on, possibly in another tab or
+         process, and deleting it made its fenced `finish` update nothing: no
+         `done`, "The search stopped arriving", and the paid answer gone on
+         reload. It becomes trimmable once it finishes or the sweep fails it,
+         and the next `begin` takes it then. So the cap is thirty plus however
+         many older searches are still running.
+         docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
       const others = await tx
-        .select({ id: searchRuns.id })
+        .select({ id: searchRuns.id, status: searchRuns.status })
         .from(searchRuns)
         .where(and(eq(searchRuns.articleId, articleId), notInArray(searchRuns.id, [decided.id])))
         .orderBy(sql`${searchRuns.createdAt} desc`, sql`${searchRuns.id} desc`)
         .offset(MAX_RUNS - 1);
-      if (others.length) {
+      const past = others.filter((r) => r.status !== "pending").map((r) => r.id);
+      if (past.length) {
         await tx.delete(searchRuns).where(
           and(
             eq(searchRuns.articleId, articleId),
-            inArray(
-              searchRuns.id,
-              others.map((r) => r.id),
-            ),
+            inArray(searchRuns.id, past),
+            // Repeated in SQL for the reason the reset's predicate is above.
+            ne(searchRuns.status, "pending"),
           ),
         );
       }

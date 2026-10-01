@@ -109,6 +109,18 @@ export interface SearchApi {
   ask(criterion: string): string;
   /** The same criterion again — for a run whose model call failed. */
   retry(id: string): void;
+  /**
+   * The requests this tab has out, by the id the **server** is using — which
+   * `begin` can change, see `send`. A `pending` row loaded by the opening GET
+   * is not here: it may belong to another process, or to one that died, and
+   * this tab gets no later news of it.
+   */
+  running: ReadonlySet<string>;
+  /**
+   * Is this (trimmed) question already out from this tab? Read from a ref, so
+   * two presses inside one React batch both see the first.
+   */
+  isRunning(criterion: string): boolean;
   remove(id: string): void;
   /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
   recolour(id: string, colour: number | null): void;
@@ -132,8 +144,43 @@ function withChoice(run: SearchRun, colour: number | null | undefined): SearchRu
   return colour === null || colour === undefined ? rest : { ...rest, colour };
 }
 
-export function useSearch(slug: string): SearchApi {
+export function useSearch(
+  slug: string,
+  {
+    onRenamed,
+  }: {
+    /**
+     * `begin` answered under a different id from the one sent — the caller's
+     * `?runs=` still names the old one. Called once, before any hit arrives.
+     */
+    onRenamed?: (from: string, to: string) => void;
+  } = {},
+): SearchApi {
+  const renamed = useRef(onRenamed);
+  renamed.current = onRenamed;
   const [runs, setRuns] = useState<SearchRun[]>([]);
+
+  /**
+   * What this tab has in flight: the server's id → the trimmed question, and
+   * the `send` that owns the entry, so a late `finally` from an earlier
+   * attempt cannot clear a later one's.
+   *
+   * It lives here rather than in the panel because only `send` knows the id
+   * the server is actually using. The panel used to record the id it asked
+   * under; when `begin` answered with another, that id fell out of `runs` and
+   * the guard let the same question be paid for again while it ran.
+   * docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
+   */
+  const inFlight = useRef(new Map<string, { criterion: string; owner: symbol }>());
+  const [flights, setFlights] = useState(0);
+  const flown = useCallback(() => setFlights((n) => n + 1), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `flights` is the trigger and not an input — it is bumped whenever the ref changes, and the ref supplies what to read.
+  const running = useMemo(() => new Set(inFlight.current.keys()), [flights]);
+  const isRunning = useCallback(
+    (criterion: string) =>
+      [...inFlight.current.values()].some((f) => f.criterion === criterion.trim()),
+    [],
+  );
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -196,15 +243,22 @@ export function useSearch(slug: string): SearchApi {
    */
   const patching = useRef(new Map<string, Promise<void>>());
 
-  // Switching article throws the tombstones away with the runs they name.
+  /** `recolour`, for `send`'s rename, which is declared above it. */
+  const recolourLater = useRef<(id: string, colour: number | null) => void>(() => {});
+
+  // Switching article throws the tombstones away with the runs they name —
+  // and the in-flight list, so a question still out on the last article does
+  // not refuse the same words on this one.
   useEffect(() => {
     const gone = deleted.current;
     const picks = chosen.current;
     const chains = patching.current;
+    const flying = inFlight.current;
     return () => {
       gone.clear();
       picks.clear();
       chains.clear();
+      flying.clear();
     };
   }, [slug]);
 
@@ -324,6 +378,48 @@ export function useSearch(slug: string): SearchApi {
          after the `begin` frame addresses the row by this, not by `id`. */
       let liveId = id;
       let settled = false;
+      const owner = Symbol(id);
+      inFlight.current.set(id, { criterion: criterion.trim(), owner });
+      flown();
+      /** Off the in-flight list — only if this `send` still owns the entry. */
+      const land = () => {
+        if (inFlight.current.get(liveId)?.owner !== owner) return;
+        inFlight.current.delete(liveId);
+        flown();
+      };
+      /**
+       * `begin` answered under another id. `withRun` minted one because the id
+       * we sent was taken by a row it would not reset — most often a retry of
+       * a run whose stream dropped here while the server was still answering
+       * it. Drop the row we rendered under our own id, or the reader sees two
+       * of the same search; then move everything this tab keeps by id.
+       *
+       * **Every** per-id thing, not only the two the bug was about (GPT Sol's
+       * plan review). The in-flight entry and `?runs=`, or the guard and the
+       * marks lose the search the reader is watching. The tombstone, or a row
+       * deleted in the gap before `begin` comes back on `done` — and the
+       * server's row is deleted now, since our DELETE named an id it never
+       * had. And a colour chosen in that gap, or it is lost on screen and
+       * on reload.
+       */
+      const follow = (to: string) => {
+        const stale = liveId;
+        setRuns((prev) => prev.filter((r) => r.id !== stale));
+        liveId = to;
+        const flight = inFlight.current.get(stale);
+        if (flight?.owner === owner) {
+          inFlight.current.delete(stale);
+          inFlight.current.set(to, flight);
+          flown();
+        }
+        if (deleted.current.has(stale)) {
+          deleted.current.add(to);
+          void forget(to);
+          return;
+        }
+        if (chosen.current.has(stale)) recolourLater.current(to, chosen.current.get(stale) ?? null);
+        renamed.current?.(stale, to);
+      };
 
       void (async () => {
         try {
@@ -357,14 +453,7 @@ export function useSearch(slug: string): SearchApi {
                  moment, which is the true thing to do rather than a side
                  effect worth avoiding. */
               if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
-              if (begun.id !== liveId) {
-                // `beginRun` reset a different existing id than the one we
-                // sent — drop the row we rendered optimistically under our
-                // own, or the reader ends up with two of the same search.
-                const stale = liveId;
-                setRuns((prev) => prev.filter((r) => r.id !== stale));
-                liveId = begun.id;
-              }
+              if (begun.id !== liveId) follow(begun.id);
               if (!gone) put(begun);
               continue;
             }
@@ -408,10 +497,12 @@ export function useSearch(slug: string): SearchApi {
           const message = describeFetchFailure(e as Error);
           setError(message);
           put({ id: liveId, criterion, createdAt, status: "error", hits: [], error: message });
+        } finally {
+          land();
         }
       })();
     },
-    [slug, put, forget],
+    [slug, put, forget, flown],
   );
 
   const ask = useCallback(
@@ -504,16 +595,21 @@ export function useSearch(slug: string): SearchApi {
     [slug],
   );
 
+  recolourLater.current = recolour;
+
   const remove = useCallback(
     (id: string) => {
       deleted.current.add(id);
       setRuns((prev) => prev.filter((r) => r.id !== id));
+      // Deleting it frees the question at once, as it always has: asking it
+      // again is a new search the reader chose, not an impatient press.
+      if (inFlight.current.delete(id)) flown();
       // If a POST is still out, its `.then` re-sends the DELETE once the write
       // it is racing has definitely landed. Doing it only here would let the
       // POST write the row back after we deleted it.
       void forget(id);
     },
-    [forget],
+    [forget, flown],
   );
 
   /**
@@ -544,6 +640,8 @@ export function useSearch(slug: string): SearchApi {
     loadError,
     ask,
     retry,
+    running,
+    isRunning,
     remove,
     recolour,
     error,

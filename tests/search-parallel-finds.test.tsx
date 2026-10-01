@@ -108,13 +108,20 @@ interface Posted {
   stream: ReturnType<typeof openStream>;
 }
 
-function server(saved: SearchRun[] = []): Posted[] {
+/**
+ * `renamed` maps an id the client sends to the id the server answers `begin`
+ * with — what `withRun` does when a "retry" names a row that has not actually
+ * failed on the server, so it mints instead of resetting.
+ */
+function server(saved: SearchRun[] = [], renamed: Record<string, string> = {}): Posted[] {
   const posted: Posted[] = [];
   answer = (_url, init) => {
     const method = (init.method ?? "GET").toUpperCase();
     if (method === "GET") return Promise.resolve(json({ runs: saved }));
     if (method === "POST") {
-      const { id, criterion } = JSON.parse(String(init.body)) as { id: string; criterion: string };
+      const sent = JSON.parse(String(init.body)) as { id: string; criterion: string };
+      const { criterion } = sent;
+      const id = renamed[sent.id] ?? sent.id;
       const stream = openStream();
       posted.push({ id, criterion, stream });
       stream.frame("begin", run(id, criterion, "pending"));
@@ -446,6 +453,58 @@ describe("Search: several meaning-searches at once", () => {
     click(enabled);
     await flush();
     expect(posted.map((p) => p.criterion)).toEqual([FIRST, FIRST]);
+  });
+
+  it("keeps refusing the question when the server answers a retry under a new id, and keeps it ticked", async () => {
+    /* The deferred finding from docs/plans/260930f-parallel-searches.md: the
+       guard recorded the id this tab sent, `begin` answered with another one,
+       and the sent id fell out of the list — so the same question could be
+       paid for again while it was still running, and the search the reader was
+       watching dropped out of `?runs=`.
+       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+    const message = "The model service was unavailable. Try again. [ai-500]";
+    const sentId = "spya-r8x3tf";
+    const serverId = "spya-w4n7pk";
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${sentId}`);
+    const posted = server([{ ...run(sentId, FIRST, "error"), error: message }], {
+      [sentId]: serverId,
+    });
+    mount();
+    await flush();
+    expect(ticked()).toEqual([FIRST]);
+
+    click(must<HTMLButtonElement>(`button.srch-icon[title="${message}"]`));
+    await flush();
+    expect(posted.map((p) => p.id)).toEqual([serverId]);
+
+    // The same question, while the renamed run is still open: refused.
+    type(FIRST);
+    enter();
+    await flush();
+    expect(posted, "an identical search was sent while the renamed one was running").toHaveLength(1);
+    expect(ticked(), "the renamed search dropped out of ?runs=").toEqual([FIRST]);
+    // The URL itself, past nuqs's throttle: `ticked()` reads rows by question,
+    // so it cannot see a stale id left beside the live one.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+    const inUrl = new URLSearchParams(location.search).get("runs") ?? "";
+    expect(inUrl).toContain(serverId);
+    expect(inUrl).not.toContain(sentId);
+
+    // Positive control: a different question goes.
+    type(SECOND);
+    enter();
+    await flush();
+    expect(posted).toHaveLength(2);
+
+    // And once the renamed run has finished, the question is free again.
+    finish(posted[0] as Posted);
+    await flush();
+    type(FIRST);
+    enter();
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual([FIRST, SECOND, FIRST]);
   });
 
   it("keeps a legacy run seed when it appends, and removes that id on delete", async () => {

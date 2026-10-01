@@ -140,6 +140,11 @@ describe("the colour the reader picked", () => {
   });
 });
 
+/** Every run marked finished, so the cap can apply to it. */
+function done(runs: SearchRun[]): SearchRun[] {
+  return runs.map((r) => ({ ...r, status: "done" as const }));
+}
+
 describe("withRun — which run a begin produces", () => {
   /* The decision itself, with no store under it. `pgSearchStore.begin` runs it
      and `tests/store-searches-pg.test.ts` drives all three of its branches
@@ -187,13 +192,33 @@ describe("withRun — which run a begin produces", () => {
   it("keeps at most MAX_RUNS, oldest first", () => {
     // The oldest end, deliberately: the searches you come back to are the ones
     // you ran recently.
+    // Each one finished, because a `pending` run is never trimmed — see below.
     let runs: SearchRun[] = [];
     for (let i = 0; i < MAX_RUNS + 3; i++) {
-      ({ runs } = withRun(runs, `criterion ${i}`, undefined, at));
+      ({ runs } = withRun(done(runs), `criterion ${i}`, undefined, at));
     }
     expect(runs).toHaveLength(MAX_RUNS);
     expect(runs[0]?.criterion).toBe("criterion 3");
     expect(runs[MAX_RUNS - 1]?.criterion).toBe(`criterion ${MAX_RUNS + 2}`);
+  });
+
+  it("never trims a run that is still pending, however many newer ones begin", () => {
+    /* The deferred finding from docs/plans/260930f-parallel-searches.md: the
+       trim used to spare only the run it had just written, so thirty newer
+       searches begun while an old one was still running deleted it mid-call.
+       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+    let { runs, run: slow } = withRun([], "the slow one", undefined, at);
+    for (let i = 0; i < MAX_RUNS + 3; i++) {
+      ({ runs } = withRun(
+        runs.map((r) => (r.id === slow.id ? r : { ...r, status: "done" as const })),
+        `criterion ${i}`,
+        undefined,
+        at,
+      ));
+    }
+    expect(runs.find((r) => r.id === slow.id)?.status).toBe("pending");
+    // Everything else is still held to the cap: thirty, plus the one running.
+    expect(runs).toHaveLength(MAX_RUNS + 1);
   });
 });
 
