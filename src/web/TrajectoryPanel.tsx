@@ -692,8 +692,10 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                           ) : (
                             <span className="traj-place">{row.place ?? "—"}</span>
                           )}
-                          {words && <span className="traj-words">“{words.shown}”</span>}
+                          {/* The cue before the quote: it is the question to
+                              read the passage with (Greg, SPIDERYARN-READING2-8J). */}
                           {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
+                          {words && <span className="traj-words">“{words.shown}”</span>}
                         </span>
                       </button>
                     );

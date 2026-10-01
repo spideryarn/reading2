@@ -37,6 +37,7 @@ import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { useVoiceFaces } from "../useVoiceFaces.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
+import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
 import { countsTowardReadingTime } from "../../block-policy.js";
@@ -2485,6 +2486,11 @@ export function Reader({
         />
       )}
       {owner && <ReadingTimeStyle levels={owner.readingTime.levels} />}
+      {/* The band's links to the paragraphs on screen, lit — for every mode,
+          and only while a band and the prose are both painted (Sol, plan
+          review of 261001n). OnScreenLinksStyle.tsx. */}
+      <OnScreenLinksStyle enabled={bandOpen && fit.modeW > 0} layoutKey={layoutKey} />
+
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}

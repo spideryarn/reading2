@@ -456,6 +456,22 @@ describe("the panel", () => {
     expect(host.textContent).not.toContain("What earlier work missed");
   });
 
+  it("puts the cue above the quote on the current row (Greg, SPIDERYARN-READING2-8J)", async () => {
+    await draw(
+      owner(),
+      view({
+        rows: [
+          { quoteId: Q[0]!, n: 1, place: "Results", cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [] },
+        ],
+      }),
+    );
+    const what = host.querySelector(".traj-row.current .traj-what");
+    const order = [...(what?.children ?? [])]
+      .map((el) => el.className)
+      .filter((c) => c === "traj-place" || c === "traj-cue" || c === "traj-words");
+    expect(order).toEqual(["traj-place", "traj-cue", "traj-words"]);
+  });
+
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [

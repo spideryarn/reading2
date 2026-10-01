@@ -39,7 +39,8 @@ v2, the scrapbook, is built on top of that:
   characters, an instruction or a question naming what to *look for* in the passage, never what it
   found — *"Look for how rich-club membership changes the comparison."* It stands on its own and
   never mentions another stop, because a reader can arrive at a stop from anywhere. The current row
-  shows it, and a route written before cues shows its old role instead (`PROMPT_VERSION`
+  shows it — above the quote since 2026-10-01, so the question comes before the passage it is asked
+  of (Greg, `SPIDERYARN-READING2-8J`, plan 261001n) — and a route written before cues shows its old role instead (`PROMPT_VERSION`
   `trajectory/5` marks those as out of date).
 - **The next stop's cue under the door.** Under **Next stop ›** in the prose, in small muted
   italics, so the door says where it leads.
