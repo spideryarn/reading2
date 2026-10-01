@@ -71,7 +71,6 @@
  * here, and `tests/store-artefacts-pg.test.ts` is what covers it.
  */
 import { cp, mkdtemp, rm } from "node:fs/promises";
-import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,10 +80,12 @@ import { isBodyEvidence } from "../src/block-policy.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { BASELINE, STAMP_SOURCE } from "../src/store/artifacts.js";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import type { Quiz } from "../src/types.js";
 import { renderProfile } from "../src/profile.js";
+import { QUIZ_READER_RULES, QUIZ_SYSTEM } from "../src/quiz.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
@@ -367,6 +368,29 @@ describe("the reader's reason for reading", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).not.toContain("WHY THIS READER IS HERE");
     expect(sent[0]).not.toContain("Why they are reading this piece");
+    /* 261001c, GPT Sol's plan review F8: not even the rules for a reader, so a
+       no-profile request is the one every quiz got before 6Q. */
+    expect(sent[0]).not.toContain("IF THE REQUEST SAYS WHO IS READING");
+    const params = JSON.parse(sent[0] ?? "{}") as { system: { text: string }[] };
+    expect(params.system.map((p) => p.text)).not.toContain(QUIZ_READER_RULES);
+    /* The article and the constant prompt, nothing else. That QUIZ_SYSTEM was
+       byte-identical to the pre-6Q prompt when 261001c landed was checked once,
+       by diff against b74507c9^ (the plan says so); a digest pinned here would
+       go red at every deliberate edit to it or to the shared plainWords text,
+       which is a reason to change a prompt, not a bug in this one. */
+    expect(params.system).toHaveLength(2);
+    expect(params.system[1]?.text).toBe(QUIZ_SYSTEM);
+  });
+
+  it("brings the reader rules, after the article and uncached, only with a profile", async () => {
+    await runAndWrite(PROFILE);
+    const params = JSON.parse(sent[0] ?? "{}") as {
+      system: { text: string; cache_control?: unknown }[];
+    };
+    const at = params.system.findIndex((p) => p.text === QUIZ_READER_RULES);
+    expect(at).toBe(2);
+    expect(params.system[1]?.text).toBe(QUIZ_SYSTEM);
+    expect(params.system[at]?.cache_control).toBeUndefined();
   });
 
   it("does not make the quiz stale when it changes — no automatic rewrite", async () => {

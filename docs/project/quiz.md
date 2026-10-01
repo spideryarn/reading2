@@ -356,7 +356,7 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
   reading time off there is no tick-box at all.
 - The tick-box is per visit, not remembered.
 
-## Shaped by why you are reading
+## Shaped by who you are and why you are reading
 
 Greg, 2026-09-30 (SPIDERYARN-READING2-6Q):
 
@@ -374,16 +374,46 @@ asked on the add page and in Trajectory. The quiz job already carried it — `PO
 the rendered profile onto every job — and the stage now hands it to the prompt. With a reason, the
 path heads for the takeaways that matter for it and spends most of its steps on the parts that bear
 on it; it is still a path, still anchored, and never says a reason was given. With none, the prompt
-has the same user message byte-for-byte (`tests/profile-prompts.test.ts`); the constant system
-instructions now include the conditional goal rules on every call. The plan and its measurement are
+has the same user message byte-for-byte (`tests/profile-prompts.test.ts`). The later 261001c change
+also restored the pre-6Q system bytes: reader rules are now a separate system block, sent only when
+a profile exists and after the article's cache breakpoint. The original plan and measurement are
 [260930j](../plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md).
 
+6Q kept *About you* to the vocabulary a question assumes. Greg reversed that the next day:
+
+> yes, Quiz should definitely adapt heavily based on User-profile and Why-are-you-reading
+>
+> — Greg, 2026-10-01
+
+The prompt (`QUIZ_READER_RULES`, a system block sent only with a profile) tells both halves to shape
+**which parts** the quiz asks about, **what kind** of question it sets (someone applying the piece
+gets more *how is it done, where does it break*), and **how it is pitched** (a question the reader
+could answer from their own field without the piece is left out). The reason leads where both are
+given; *About you* chooses within it. **The counterweight:** the last steps — normally three or four
+in a twenty-question path, one or two in a short one — ask for the piece's conclusion and its main
+evidence, taken from setup rather than from the reader's goal; in a long path, one closing question
+is not enough.
+
+**It is on `dev` as a partial step, not as the finished request.** It was shipped because readers
+come out no worse on any measure, and better on the failure Greg named. Holding it would have kept
+the rule he overruled. What the measurement did and did not show:
+
+The measurement did not establish the main About claim. Across one article and two runs per arm,
+both judges failed all three About bars: no measured pitch change, no predicted movement towards
+findings and data, and no formal-topic gap between the electrophysiologist and tool-author profiles.
+The goal still changed question kind (`APPLY` 53–55% against 7–20% with no profile), as the old
+prompt already did. Four of six round-2 goal/profile runs met the 65% on-goal floor; the range was
+61–79%. The balance improved without meeting its bar: every run had one or two questions on the
+conclusion or its support, against three of six old runs with neither, but only three of six had
+both and none had the required three central questions. The evidence therefore supports a modest
+balance improvement, not the claim that the quiz yet adapts heavily to *About you*. Plan, exact
+numbers and review conclusion:
+[261001c](../plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md).
+
 - **Not the shared profile machinery.** `profileSection` promises the profile changes *"nothing
-  about its proportions"*, and `PROFILE_RULES` lets it govern what words are spent on; the quiz needs
-  the first broken for the goal and the second kept from the *About you* line. So it has its own
-  section and rules in [`src/quiz.ts`](../../src/quiz.ts), and *About you* moves only the vocabulary
-  a question assumes. The job carries both halves as one string; carrying the purpose alone would be
-  a second field on every job, and was passed over for v1.
+  about its proportions"*, and `PROFILE_RULES` speaks of words spent and carries rules the quiz has
+  no use for; the quiz needs the proportions to move and a balance rule in its own terms. So it has
+  its own section and rules in [`src/quiz.ts`](../../src/quiz.ts).
 - **Not in the stamp, and no `profileHash`.** Changing your goal never rewrites a quiz; *Write them
   again* is a forced run and picks up the goal at the press. A `profileHash` would put the quiz in
   the *make public* dialog as personalised (`ProfileCarrying`, src/store/pg.ts) though visitors

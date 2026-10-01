@@ -1,0 +1,1379 @@
+diff --git a/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md b/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md
+new file mode 100644
+index 00000000..e6baef2e
+--- /dev/null
++++ b/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md
+@@ -0,0 +1,229 @@
++# The quiz adapts heavily to who is reading and why
++
++Status: planned 2026-10-01, revised after GPT Sol's plan review. Follow-up to
++SPIDERYARN-READING2-6Q ([260930j](260930j-quiz-questions-shaped-by-the-readers-reading-goal.md), note
++[260930_2200](../user-feedback/260930_2200-quiz-shaped-by-your-reading-goal.md)).
++
++6Q shipped the reading goal (*Why you're reading this one*) moving the quiz, and deliberately kept
++*About you* to vocabulary only: *"ONLY THE REASON FOR READING MOVES THE PATH"*. It named that as the
++one deviation for Greg to decide. Relayed by the Overseer, 2026-10-01:
++
++> yes, Quiz should definitely adapt heavily based on User-profile and Why-are-you-reading
++>
++> — Greg, 2026-10-01
++
++So both halves of the profile now shape **which parts** the quiz asks about, **what kind** of
++question it sets, and **how it is pitched**. The no-profile case stays as it is.
++
++## What changes
++
++One prompt, in [`src/quiz.ts`](../../src/quiz.ts). No schema, route, client or stamp change: the job
++already carries both halves as one rendered string (`About the reader: …` / `Why they are reading
++this piece: …`, `renderProfile`), and 6Q's plumbing, tests and "not in the stamp, no `profileHash`"
++decisions all stand.
++
++1. **The reader rules leave `QUIZ_SYSTEM` and become `QUIZ_READER_RULES`**, a third system block
++   sent **only when the job carries a profile** (Sol F8: a conditional paragraph still speaks to a
++   model whose condition is absent). It sits after the article's cache breakpoint (`system[0]`), so
++   carrying it or not costs the shared article prefix nothing. `QUIZ_SYSTEM` goes back to its
++   pre-6Q bytes (checked: the source text is identical to `b74507c9^`, and `src/plain-words.ts` has
++   not changed since), so **a no-profile request is byte-for-byte the request every quiz got before
++   2026-09-30** — system and user message both.
++2. **The rules**, for both lines:
++   - **Which parts.** A reason for reading decides most of the path (6Q's rule, kept). A line about
++     who they are moves it too: towards what a person like that would most want from this piece.
++     With both, the reason leads and who they are chooses within it. With only who they are, it
++     leads. The "cover the piece" rule gives way.
++   - **Personalise among what matters** (Sol F1): choose among the consequential parts the argument
++     leans on; a note never turns a detail nothing rests on into a good question. This settles the
++     conflict with *KEEP TO WHAT MATTERS*.
++   - **What kind of question.** Someone applying the piece gets more *how is it done, what does it
++     need, where does it break*; someone weighing it up, more *what is the evidence and how far does
++     it reach*; someone new to the field, more *what is it and why does it matter*.
++   - **Pitch.** A question they could answer from their own knowledge without the piece is left out;
++     fewer setup steps for an expert — **but never a step about what this piece says that a later
++     question leans on** (Sol F1); their field's words unexplained.
++   - **The piece's point stays on the path** — below.
++   - Kept from 6Q: still a path; never changes what the article says; little on what they want →
++     the ordinary path, unannounced; never address the reader or say a note was given.
++   - Removed: *ONLY THE REASON FOR READING MOVES THE PATH*, and the About-only "ordinary path".
++3. **`readerSection`'s reminder in the user message** now says: set the quiz for this reader — aim,
++   kind, pitch, and keep the piece's own point. With no profile it renders nothing.
++4. **Not `PROFILE_RULES`.** It speaks of words spent and length and carries a web-search rule the
++   quiz has no use for; two rules for one thing would disagree.
++5. **No `PROMPT_VERSION` bump**, now recorded beside `PROMPT_VERSION` itself (Sol F9): the change
++   reaches only profiled requests, and a bump would mark every stored no-profile quiz outdated for
++   nothing. A reader picks up the new rules at *Write them again*.
++6. Corrected where they said *About moves only vocabulary* (Sol F9): the `src/quiz.ts` header,
++   [quiz.md](../project/quiz.md), [reader-profile.md](../project/reader-profile.md), the
++   `src/profile.ts` header (the quiz is the one stage that weighs the two halves differently — by
++   their labels, read by the model, never parsed apart), `tests/profile-prompts.test.ts`, and the
++   harness header.
++
++## The balance: a strong goal must not skip the piece's point
++
++The failure Greg named: a reader who says *"I only care about the methods"* gets twenty questions on
++the methods and comes away not knowing what the paper found. The rule, in Sol's F4 shape:
++
++> THE PIECE'S POINT IS STILL ON THE PATH. However narrow what they are after, keep a short, connected
++> run of steps through what the piece as a whole claims and the main thing it rests on — normally
++> three or four steps in a path of twenty, one or two in a short one. The part they came for is
++> understood in the light of the whole, not instead of it. Do not pad the quiz to fit them in.
++
++Passed over: no rule at all, trusting 6Q's "it is still a path" — its setup steps set up the goal,
++not the piece, so they keep the central points in only by accident; and a fixed fraction, which on
++a six-question path is one and a half.
++
++## How we will know it worked
++
++The harness 6Q built, [`evals/quiz-reading-goal.ts`](../../evals/quiz-reading-goal.ts), now records
++**which prompt wrote each run** (git commit, whether `src/quiz.ts` differed from it, a hash of its
++bytes, the model — Sol F7), stores the reference answer for the judge, and gains `blind` (a sheet
++ordered by a sha256 of seed and question, key in its own file, a balance print across the sheet's
++halves) and `score`. The judge's instructions are committed before any run:
++[`evals/quiz-reading-goal-judge.md`](../../evals/quiz-reading-goal-judge.md).
++
++**Article**: `entropy-24-00930-spya-pywwkq` (nine parts; part 7 is *Practical Considerations in
++PID*). **Texts**:
++
++- purpose (6Q's): *"I want to apply this to my own recordings, so I need to know the practical
++  problems: what makes PID hard to use on real data."*
++- **About-A**, an electrophysiologist, explicit about what they know (Sol F3): *"An
++  electrophysiologist who records spiking activity from multi-electrode arrays in cortical slices
++  and cultures. I already know entropy, mutual information and transfer entropy well, but I have
++  never used PID."*
++- **About-B**, a tool author, chosen to pull a different way **within the same goal** (Sol F2):
++  *"A software engineer who writes open-source analysis libraries for neuroscientists and is about to
++  implement PID in one. I know the mathematics of entropy and mutual information, but little
++  neuroscience."*
++
++**Arms, two runs each, all generated today** (Sol F7: fresh old-prompt controls, not 6Q's stored
++runs, which predate provenance and of which `none-1/2` ran on a draft). **Before** — the prompt on
++`dev` now (6Q's), run by putting that `src/quiz.ts` back in the worktree for the old arms and the
++new one back after, the hash recording which: `old-none`, `old-aboutA`, `old-goal`, `old-bothA`
++(About-A + purpose), `old-bothB`. **After** — this change: `new-none`, `new-aboutA`, `new-goal`,
++`new-bothA`, `new-bothB`. Twenty Sonnet quiz runs, about $5.
++
++**Measures**: the free part-7 proxy, and a blind judge — fresh Sonnet subagents, each reading only
++the judge file and its share of the shuffled sheet (all twenty runs' questions, about 380) — giving
++each question **GOAL** (on the purpose), **TOPIC** (`FORMAL` / `DATA` / `FINDINGS` / `FRAMING` /
++`OTHER`), **KIND** (`APPLY` / `APPRAISE` / `FOUNDATION` / `OTHER`), **BACKGROUND** (could About-A
++answer it from what they say they already know) and **CENTRAL** (`OVERALL` / `SUPPORT` / `NONE`).
++The central points are declared from the article's own abstract (`spya-xn9j9k`) and summary
++(`spya-sp50v3`), not from any model's output (Sol F5): **OVERALL** — PID reveals redundant, unique
++and synergistic modes of integration, and the synergy in neural data shows neurons do not simply sum
++their inputs; **SUPPORT** — the patterns of synergy are shaped by network position (rich clubs,
++motifs, clustering) and by behaviour.
++
++**Bars, per run, declared before any run** (Sol F6: integers, against the same-day old prompt's
++spread; n is about 19–20 questions, so one label is 5 points):
++
++1. **No profile unchanged.** Each `new-none` run's GOAL count and part-7 count within the two
++   `old-none` runs' range, widened by 2 questions either side. Each has ≥ 1 OVERALL and ≥ 1 SUPPORT.
++2. **About moves the pitch.** BACKGROUND=`YES` in each `new-aboutA` run at least 2 fewer than the
++   lowest of the four `old-none`/`new-none` runs and of the two `old-aboutA` runs.
++3. **About moves the parts.** `FINDINGS`+`DATA` share in each `new-aboutA` run at least 15 points
++   above the higher `old-aboutA` run. (A prediction about what an electrophysiologist wants, made
++   before seeing anything; if it misses, the note says so.)
++4. **The goal moves the kind.** `APPLY` share in each `new-goal` run at least 20 points above the
++   highest `none` run (old or new).
++5. **The goal is not weaker.** GOAL-on in each `new-goal`, `new-bothA` and `new-bothB` run ≥ 65% — a
++   product floor, named as such, not a statistic — and no more than 2 questions below the lower
++   `old-goal` run.
++6. **The reason leads, About chooses within it.** Among GOAL-on questions, the `FORMAL` share in each
++   `new-bothB` run at least 20 points above that in each `new-bothA` run. Control: the same gap,
++   pooled, under the old prompt (`old-bothB` − `old-bothA`) is smaller.
++7. **The balance.** Each `new-goal`, `new-bothA` and `new-bothB` run has ≥ 3 questions labelled
++   OVERALL or SUPPORT, with at least one of each. The same count is reported for the old goal and
++   both runs, to show whether this was a live failure.
++8. **Read every new question**: still a path, premises still lean, nothing addresses the reader or
++   says a note was given.
++
++If a bar fails, one round of wording, under new arm names, and the note says so either way.
++
++## What the measurement found
++
++Thirty-eight paid runs: ten on the old prompt, ten on round 1 of the new wording, eight on round 2
++(the profiled arms only, because the no-profile request did not change). They are in
++`evals/results/quiz-reading-goal/{old,new,r2}-*/`, each with the hash of the `src/quiz.ts` that
++wrote it. Four blind Sonnet judges labelled them: judges 1 and 2 the twenty round-1 runs (361
++questions, `blind-261001c/`), and judges 3 and 4 all twenty-eight runs together (514 questions,
++`blind-261001c-r2/`), so the old arms were labelled again beside round 2. **The judges agreed with
++each other on 89–100% of labels**, per label and per pair. Each bar was checked per judge by
++[`evals/quiz-reading-goal-261001c-bars.ts`](../../evals/quiz-reading-goal-261001c-bars.ts); the
++outputs are the `bars-*.txt` files beside the labels.
++
++**Round 1** (judges 1 and 2): bar 4 passed under both, and bar 1 under judge 1 (judge 2 put one
++no-profile run one question outside the old spread). Every other bar failed under both. Two
++failures were worth a round of wording:
++
++- **The balance was better but not met.** Under the old prompt, 3 of the 6 goal and both runs had
++  *no* question on the piece's conclusion or its evidence; under round 1, every run had at least
++  one, but typically a single closing question and no evidence.
++- **Two About lines under one goal were not told apart** by the labels.
++
++So round 2 made the balance concrete ("the path ends where the piece ends up … one closing question
++about the conclusion is not enough: ask for the evidence too. Take these steps from setup, not from
++the steps about what they are after"), and split *with both* into its own rule with an example from
++another field (a trial's statistician and its clinician, both reading "for the methods").
++
++**Round 2, the wording that ships** (judges 3 and 4; the numbers agree, judge 3's shown):
++
++| Bar | Result |
++|---|---|
++| 1 No profile unchanged | **pass**, both judges. The request is byte-identical to pre-6Q, and the runs sit with the old ones (on-goal 1–5 of 14–20 against 2–3; part 7: 0–2 against 1). |
++| 2 About moves the pitch (fewer questions the electrophysiologist could answer from what they already know) | **fail**. The measure sits on the floor: judges call 0–6 questions per run of *any* arm background-only, so there is no room for a 2-question drop. |
++| 3 About moves the parts towards findings and data | **fail**. The old prompt's About runs were already at 50–58% (none: 33–50%); round 2 is 47–55%. The prediction was wrong about direction, not only size; see below. |
++| 4 The goal moves the kind of question | **pass**, both judges and both rounds: `APPLY` 53–55% of a goal run, against 7–20% with no profile. (The old prompt already passed this: 50–69%.) |
++| 5 The goal is not weaker (≥ 65% on-goal) | **fails narrowly**: 4 of 6 runs pass under judge 3, 4 of 6 under judge 4; the lowest is 61%. Round 1 was 58–71%; the old prompt 56–81%. |
++| 6 About chooses within the goal (`FORMAL` share among on-goal questions, tool author vs electrophysiologist) | **fail**: no gap under either judge (r2: 57–62% against 60–64%). |
++| 7 The balance (≥ 3 central questions, at least one of each kind) | **fail**: 1–2 per run. **But every run now has at least one, and three of six have both the conclusion and its evidence**, where the old prompt's goal and both runs had none at all in three of six. |
++
++**Read, not counted** (bar 8): no question in any of the 38 runs addresses the reader or says a
++note was given (one "you" in a no-profile reference answer is generic). Reading the two round-2
++*both* runs side by side, the difference the labels did not catch is visible. The electrophysiologist's
++path closes its practical part on **experimental caveats**: how the triad networks were built, and
++whether organotypic cultures generalise to the intact brain. The tool author's spends those steps
++on **the lattice, the property a redundancy function needs for local PID, and the multi-target
++extension**. Both then end on the conclusion and its evidence. `TOPIC` files both under `FORMAL`
++and `DATA`, so the taxonomy, chosen beforehand, is too coarse for this article. Part 7 is twelve
++blocks, and both readers draw on the same small set. Two flaws are of classes the prompt already
++forbids and that the old prompt shows too: a question that says "that redundancy measure" without
++naming it, and one "and"-joined double question.
++
++**Post hoc, and labelled as such:** About-alone does move the quiz, by less than "heavily". Against
++the old prompt's About runs (judge 3), `APPLY` goes from 5 to 7 per run and on-goal from 6 to 8;
++the part-7 proxy went from 1–2 per run to 4–5 in round 1, and back to 2 in round 2, whose About runs spent more steps on findings. The old prompt was already moving further than its
++"vocabulary only" rule said: against no profile, its About runs had half the foundation questions
++(5 against 10).
++
++**The claim, at its right size:** with this wording the quiz still heads for the reader's goal as
++strongly as before (on-goal 61–79%, `APPLY` about half). It no longer drops the piece's conclusion
++under a strong goal, though it gives the conclusion one or two steps rather than three or four. A
++profile moves the quiz further than the old prompt did, but modestly. Two readers with the same goal
++get recognisably different quizzes when read side by side, but not by a margin these labels
++measure. One article, two runs per arm.
++
++## Tests
++
++- `tests/quiz.test.ts`: the reader rules are asked of `QUIZ_READER_RULES` (reason moves most of the
++  path; About moves it too, with kind and pitch; the balance and its scaling; never address); and
++  `QUIZ_SYSTEM` says nothing about a reader. Watched red against 6Q's prompt first.
++- `tests/quiz-step-registration.test.ts`: a no-profile request carries no reader rules; a profiled
++  one carries them as a later, uncached system block. Mutation: always sending the block reds the
++  first.
++- `tests/profile-prompts.test.ts`: the no-profile user message stays byte-equal; an About-only
++  profile now gets "Set the quiz for this reader" and no "ordinary path" (Sol F9).
++- The Postgres route→job test stands unchanged.
++
++## Progress
++
++- 2026-10-01: checked for prior work: `docs/plans/` (6Q's 260930j only), `docs/user-feedback/` (the
++  6Q note, Shipped), `git log -200` (6Q's commits, nothing after), `gjd-remote ls` (the only 6Q
++  session is this one). No 6Q line on `awaiting-approval.md`. Plan written.
++- 2026-10-01: GPT Sol plan review ([prompt](261001c-quiz-profile-and-goal-plan-review-prompt.md),
++  [answer](261001c-quiz-profile-and-goal-plan-review-sol.md); exit 0, file fresh). *Revise before
++  build*, nine findings, all taken: F1 precedence, F2 diagnostic profiles, F3 split labels and an
++  explicit About, F4 the balance's scaling, F5 central points from the abstract and summary, F6
++  integer bars, F7 provenance and same-day old-prompt controls, F8 rules only with a profile, F9 the
++  other stale comments. Plan revised as above.
+diff --git a/docs/plans/261001c-quiz-profile-and-goal-plan-review-prompt.md b/docs/plans/261001c-quiz-profile-and-goal-plan-review-prompt.md
+new file mode 100644
+index 00000000..cb52b8b8
+--- /dev/null
++++ b/docs/plans/261001c-quiz-profile-and-goal-plan-review-prompt.md
+@@ -0,0 +1,11 @@
++Review this plan before it is built: docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md
++
++Context: it reverses one deliberate choice in docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md (read it), on Greg's answer quoted at the top. The code is src/quiz.ts (QUIZ_SYSTEM, the section "IF THE READER HAS SAID WHY THEY ARE READING", renderPrompt, readerSection), src/profile.ts (renderProfile, PROFILE_RULES), tests/quiz.test.ts, tests/profile-prompts.test.ts, evals/quiz-reading-goal.ts and the stored results in evals/results/quiz-reading-goal/ (including blind/). docs/project/prompting-guide.md is how a prompt change is measured here. docs/project/quiz.md is the mode's doc.
++
++Please check, and be concrete (file, line, what goes wrong):
++1. Is the prompt design right: both halves of the profile moving which parts, kind of question and pitch; reason leads, About chooses within it. Any conflict with existing QUIZ_SYSTEM rules (e.g. "Anything answerable without having read the piece", KEEP TO WHAT MATTERS, Cover the piece, the path rules)?
++2. The balance rule against a strong goal skipping the piece's central points: is "three or four of twenty on what the piece as a whole is for" the right shape? Better alternatives?
++3. The eval: arms, controls, blind judge labels (GOAL, FIT, ASSUMED, CENTRAL), the predeclared central points C1-C3, and the bars. Are any bars unfalsifiable, circular, or too easy to pass? Is FIT too subjective to be a measure, and what would be better? Is the comparison with old-prompt arms sound given they ran days apart?
++4. Anything that keeps the no-profile case from staying as it is today.
++5. Anything the plan forgets to update (docs, comments, tests).
++Give a verdict: build as is / revise before build / rethink. Number your findings F1, F2...
+diff --git a/docs/plans/261001c-quiz-profile-and-goal-plan-review-sol.md b/docs/plans/261001c-quiz-profile-and-goal-plan-review-sol.md
+new file mode 100644
+index 00000000..58fad123
+--- /dev/null
++++ b/docs/plans/261001c-quiz-profile-and-goal-plan-review-sol.md
+@@ -0,0 +1,107 @@
++Verdict: **revise before build**. The product direction and basic prompt hierarchy are right; the evaluation cannot yet demonstrate several of the claims it is meant to support.
++
++**F1 — P1: Resolve the priority conflict between personal relevance and “KEEP TO WHAT MATTERS.”**
++
++The proposed instruction selects “what a person like that would most want” ([plan:27](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:27>)), while the existing prompt excludes any detail the argument does not depend on ([src/quiz.ts:746](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/src/quiz.ts:746>)). A personally relevant but peripheral detail leaves the model with contradictory instructions: ignore the profile or violate the importance rule.
++
++Likewise, “fewer setup steps for an expert” must not remove article-specific prerequisites required by the path rules ([src/quiz.ts:606](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/src/quiz.ts:606>)).
++
++Add explicit precedence:
++
++> Personalise among the consequential, article-backed material. A profile never turns trivia into a useful question. Prior knowledge may remove background-only questions, but never an article-specific step a later question depends on.
++
++The existing “answerable without having read the piece” rule otherwise aligns well with the change ([src/quiz.ts:714](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/src/quiz.ts:714>)).
++
++**F2 — P1: The arms cannot show “reason leads; About chooses within it.”**
++
++The About text and goal both point toward applying PID to recordings ([plan:84](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:84>)). A successful `both` arm could therefore be merely two aligned hints. It cannot show that the reason constrained the path and About selected within that constraint. There is also no old-prompt `both` arm.
++
++Use diagnostic profiles that predict different subtopics within the same goal—for example:
++
++- an electrophysiologist already working with continuous recordings;
++- a software/tool author implementing PID.
++
++Both should remain strongly GOAL-on, but select different practical problems. Compare About-fit within the GOAL-on questions, rather than requiring overall FIT to equal the unrestricted About-only arm. The current bar at [plan:120](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:120>) actually works against “reason leads”: restricting the path to the goal may legitimately lower overall About coverage.
++
++**F3 — P1: FIT is too subjective and conflates all three intended effects; question kind is not measured.**
++
++At [plan:98-103](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:98>):
++
++- `FIT` combines part selection, question kind and pitch into one judgment.
++- `ASSUMED` asks a judge to know what this particular neuroscientist could answer from their field. That is not observable from the profile and principally measures question selection, not pitch.
++- Nothing measures the promised application/judgment/foundational question kinds.
++
++Use separate predeclared measures:
++
++- `ABOUT_TARGET`: one of explicitly named subtopics or evidence ranges predicted by the About line.
++- `KIND`: application / appraisal-of-evidence / conceptual-foundation / other.
++- `BACKGROUND_ONLY`: answerable from a list of knowledge explicitly stated in the eval profile.
++- Pitch screens: number of questions spent defining those already-known concepts, and questions that unnecessarily explain their terminology.
++
++For this purpose, make the eval profile explicit about what the reader already knows. “Computational neuroscientist” alone is too underdetermined.
++
++**F4 — P1: The balance rule has the right intent but the wrong scaling shape.**
++
++“Three or four in a quiz of twenty” ([plan:67-70](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:67>)) is liable either to remain three or four in a six-question quiz, overwhelming the goal, or be ignored because it is presented only as an example.
++
++A better instruction is:
++
++> Reserve a short, connected route through the piece’s overall claim and its main support—normally three or four steps in a twenty-question path, one or two in a short path. Do not pad the quiz to reach that number.
++
++“Connected route” matters: three isolated central questions do not necessarily preserve the path.
++
++**F5 — P1: The CENTRAL ground truth and bar do not test that balance rule.**
++
++The central points are derived from where the old no-profile quizzes ended ([plan:103-110](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:103>)). That is circular: the old model output becomes the authority for what the article centrally claims.
++
++Declare them from a human reading of the article’s abstract/conclusion, with supporting block IDs, before generation. C1 appears to be framing, C2 the overall conclusion, and C3 supporting findings; label those roles rather than calling all three equivalent “central points.”
++
++The bar at [plan:121](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:121>) requires only one C1 and one C2 question—two questions, despite the prompt requiring three or four—and never uses C3. It should require:
++
++- the scaled number of CENTRAL questions;
++- coverage of the overall claim and at least one main support;
++- specifically in each new goal and both run.
++
++Clarify “every run in every arm” as well. If it includes the stored old runs, it is already likely to fail: several old About/goal paths do not ask C2 directly.
++
++**F6 — P1: Several bars are vague or easier than the observed noise.**
++
++At [plan:112-123](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md:112>):
++
++- “give or take one run’s wobble” is undefined.
++- FIT merely being above old About can pass by one question.
++- ASSUMED merely being lower can pass by one question.
++- The old goal runs were both 14/19, so calling 65% “74% minus one run’s wobble” is unsupported. It can still be the chosen product floor, but should be named as such.
++- “GOAL share as the goal arm” and “ASSUMED no higher” do not define pooling, per-run behavior, or tolerance.
++
++State each bar as an integer or exact percentage for each run, and require the effect to exceed the old prompt’s run-to-run spread. With only 14–20 questions, one label is already 5–7 points.
++
++**F7 — P1: Reusing the stored arms is not adequately attributable under the prompting guide.**
++
++Temporal separation itself is correct—the guide explicitly asks for before and after on different commits ([prompting-guide.md:117](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/project/prompting-guide.md:117>)). The problem is provenance:
++
++- `ArmFile` stores neither prompt hash, source hash nor generator ([evals/quiz-reading-goal.ts:31](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/evals/quiz-reading-goal.ts:31>)).
++- The old plan records that `none-1/2` used an earlier draft than the other four runs ([260930j:192](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md:192>)).
++- The harness has no reproducible command for producing the shuffled questions/key/judge rubric, although this plan relies on a new four-label blind evaluation.
++
++Before editing the prompt, generate fresh old-prompt controls—including `both`—and record `sourceHash`, model/generator, prompt-source hash and git SHA. Add a seeded blind-export command and commit the judge instructions. The existing runs remain useful historical evidence, but should not be the sole baseline.
++
++**F8 — P1: “No profile stays as it is” is not currently guaranteed.**
++
++The user message remains byte-identical, as tested at [tests/profile-prompts.test.ts:146](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/tests/profile-prompts.test.ts:146>). The complete request does not: rewriting `QUIZ_SYSTEM` changes the second system block on every no-profile call ([src/quiz.ts:1026-1040](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/src/quiz.ts:1026>)). A conditional paragraph can still influence a model when its condition is absent.
++
++If byte-identical no-profile behavior is a hard requirement, append the profile rules only when `profile` exists. This does not sacrifice the article cache: the article is `system[0]` and carries the explicit breakpoint; these rules are in `system[1]`, after it.
++
++If the constant design is retained, narrow the claim to “intended to be unchanged” and strengthen the no-profile evaluation. Matching only part-7 and GOAL shares can miss a large change elsewhere in the path.
++
++**F9 — P2: Several directly false comments/docs are omitted from the update list.**
++
++In addition to the planned `src/quiz.ts` header and `quiz.md` edit:
++
++- [docs/project/reader-profile.md:127-133](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/docs/project/reader-profile.md:127>) explicitly says About changes vocabulary only.
++- [src/profile.ts:4-8](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/src/profile.ts:4>) says downstream has no reason to treat the two halves differently; Quiz now deliberately does, even though they can still travel in one labelled string.
++- [tests/profile-prompts.test.ts:124-130](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/tests/profile-prompts.test.ts:124>) describes only a reading reason moving the path. Add an assertion that an About-only rendered prompt no longer says “ordinary path”; the current marker tests would not catch forgetting the `readerSection` change.
++- [evals/quiz-reading-goal.ts:1-19](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/evals/quiz-reading-goal.ts:1>) describes only the goal experiment, and [line 35](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/evals/quiz-reading-goal.ts:35>) still calls About a control.
++- The contract above `PROMPT_VERSION` says changes to what a question is cause a bump ([src/quiz.ts:156](</home/greg/code/spideryarn2/.claude/worktrees/fb6q2-quiz-profile-and-goal/src/quiz.ts:156>)). Not bumping remains defensible to preserve existing batches, but that exception should be recorded there, not only in the plan.
++
++The exclusion of `PROFILE_RULES`, the existing profile plumbing, and the decision not to alter schema/routes/stamps are otherwise sound.
+\ No newline at end of file
+diff --git a/docs/project/quiz.md b/docs/project/quiz.md
+index 1d986979..8f41cd57 100644
+--- a/docs/project/quiz.md
++++ b/docs/project/quiz.md
+@@ -356,7 +356,7 @@ browser from the levels the page already has. The plan and GPT Sol's six changes
+   reading time off there is no tick-box at all.
+ - The tick-box is per visit, not remembered.
+ 
+-## Shaped by why you are reading
++## Shaped by who you are and why you are reading
+ 
+ Greg, 2026-09-30 (SPIDERYARN-READING2-6Q):
+ 
+@@ -378,12 +378,24 @@ has the same user message byte-for-byte (`tests/profile-prompts.test.ts`); the c
+ instructions now include the conditional goal rules on every call. The plan and its measurement are
+ [260930j](../plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md).
+ 
++6Q kept *About you* to the vocabulary a question assumes. Greg reversed that the next day:
++
++> yes, Quiz should definitely adapt heavily based on User-profile and Why-are-you-reading
++>
++> — Greg, 2026-10-01
++
++So both halves now shape **which parts** the quiz asks about, **what kind** of question it sets
++(someone applying the piece gets more *how is it done, where does it break*), and **how it is
++pitched** (a question the reader could answer from their own field without the piece is left out).
++The reason leads where both are given; *About you* chooses within it. **The counterweight:** however
++narrow the goal, three or four steps of twenty stay on what the piece as a whole is for, so a reader
++who came for one part still leaves knowing what the whole claims. Plan and measurement:
++[261001c](../plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md).
++
+ - **Not the shared profile machinery.** `profileSection` promises the profile changes *"nothing
+-  about its proportions"*, and `PROFILE_RULES` lets it govern what words are spent on; the quiz needs
+-  the first broken for the goal and the second kept from the *About you* line. So it has its own
+-  section and rules in [`src/quiz.ts`](../../src/quiz.ts), and *About you* moves only the vocabulary
+-  a question assumes. The job carries both halves as one string; carrying the purpose alone would be
+-  a second field on every job, and was passed over for v1.
++  about its proportions"*, and `PROFILE_RULES` speaks of words spent and carries rules the quiz has
++  no use for; the quiz needs the proportions to move and a balance rule in its own terms. So it has
++  its own section and rules in [`src/quiz.ts`](../../src/quiz.ts).
+ - **Not in the stamp, and no `profileHash`.** Changing your goal never rewrites a quiz; *Write them
+   again* is a forced run and picks up the goal at the press. A `profileHash` would put the quiz in
+   the *make public* dialog as personalised (`ProfileCarrying`, src/store/pg.ts) though visitors
+diff --git a/docs/project/reader-profile.md b/docs/project/reader-profile.md
+index 5b929ed6..8b1a759b 100644
+--- a/docs/project/reader-profile.md
++++ b/docs/project/reader-profile.md
+@@ -128,9 +128,11 @@ put it near the top with the other framing.
+ SPIDERYARN-READING2-6Q): a reason for reading is meant to change the *proportions* — *"if I've said I
+ want to understand their methods, most of the questions should be about the methods"* — which is
+ what `profileSection`'s reminder and `PROFILE_RULES` both hold the other stages back from. So the
+-quiz carries neither; it has its own section and its own rules, and the *About you* half moves only
+-the vocabulary a question assumes, never which parts it asks about.
+-[quiz.md § Shaped by why you are reading](quiz.md#shaped-by-why-you-are-reading).
++quiz carries neither; it has its own section and its own rules. Since 2026-10-01 both halves move it
++— *About you* as well as the reason — in which parts it asks about, what kind of question, and how
++it is pitched (Greg: *"Quiz should definitely adapt heavily based on User-profile and
++Why-are-you-reading"*).
++[quiz.md § Shaped by who you are and why you are reading](quiz.md#shaped-by-who-you-are-and-why-you-are-reading).
+ 
+ **Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
+ [the one structure](granularity-zoom.md#the-tree) that Structure, the zoom, the summaries and the spine
+diff --git a/evals/quiz-reading-goal-261001c-bars.ts b/evals/quiz-reading-goal-261001c-bars.ts
+new file mode 100644
+index 00000000..e3eaf4f3
+--- /dev/null
++++ b/evals/quiz-reading-goal-261001c-bars.ts
+@@ -0,0 +1,137 @@
++/**
++ * The eight bars of docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md
++ * § How we will know, checked against one judge's labels — run once per judge;
++ * a bar holds only if it holds under both. Bar 8 (reading every question) is a
++ * person's, not this script's.
++ *
++ *   npx tsx evals/quiz-reading-goal-261001c-bars.ts evals/results/quiz-reading-goal/blind-261001c/judge1
++ *   npx tsx evals/quiz-reading-goal-261001c-bars.ts evals/results/quiz-reading-goal/blind-261001c-r2/judge3 r2
++ */
++import fs from "node:fs";
++import path from "node:path";
++
++const SLUG = "entropy-24-00930-spya-pywwkq";
++const RESULTS = path.join(import.meta.dirname, "results", "quiz-reading-goal");
++const dir = process.argv[2];
++if (!dir) throw new Error("name a judge's directory (key.tsv + labels.tsv)");
++/** Which round of wording is "after": `new` (the first) or `r2` (the second). Bar 1 always reads `new-none`. */
++const NEW = process.argv[3] ?? "new";
++
++const rows = (f: string) =>
++  fs.readFileSync(path.join(dir, f), "utf8").trim().split("\n").slice(1).map((l) => l.split("\t").map((c) => c.trim()));
++const armOf = new Map(rows("key.tsv").map((r) => [r[0], r[1]]));
++type Label = { GOAL: string; TOPIC: string; KIND: string; BACKGROUND: string; CENTRAL: string };
++const byArm = new Map<string, Label[]>();
++for (const r of rows("labels.tsv")) {
++  const arm = armOf.get(r[0]);
++  if (!arm) throw new Error(`unknown id ${r[0]}`);
++  const [, GOAL = "", TOPIC = "", KIND = "", BACKGROUND = "", CENTRAL = ""] = r;
++  byArm.set(arm, [...(byArm.get(arm) ?? []), { GOAL, TOPIC, KIND, BACKGROUND, CENTRAL }]);
++}
++const L = (arm: string) => {
++  const l = byArm.get(arm);
++  if (!l) throw new Error(`no labels for ${arm}`);
++  return l;
++};
++const count = (arm: string, f: (x: Label) => boolean) => L(arm).filter(f).length;
++const share = (arm: string, f: (x: Label) => boolean) => (100 * count(arm, f)) / L(arm).length;
++const runs = (p: string) => [`${p}-1`, `${p}-2`];
++const pct = (n: number) => `${Math.round(n)}%`;
++
++/** Part-7 proxy, as `report` counts it. */
++function part7(arm: string): number {
++  const f = JSON.parse(fs.readFileSync(path.join(RESULTS, arm, `${SLUG}.json`), "utf8")) as {
++    order: string[];
++    parts: { range: [string, string] }[];
++    questions: { evidence: string[] }[];
++  };
++  const lo = f.order.indexOf(f.parts[6]!.range[0]);
++  const hi = f.order.indexOf(f.parts[6]!.range[1]);
++  return f.questions.filter((q) => {
++    const inT = q.evidence.filter((id) => {
++      const at = f.order.indexOf(id);
++      return at >= lo && at <= hi;
++    }).length;
++    return inT * 2 > q.evidence.length;
++  }).length;
++}
++
++const verdicts: [string, boolean, string][] = [];
++const bar = (name: string, ok: boolean, detail: string) => verdicts.push([name, ok, detail]);
++const goalOn = (x: Label) => x.GOAL === "ON";
++
++// 1. No profile unchanged.
++{
++  const old = runs("old-none");
++  const g = old.map((a) => count(a, goalOn));
++  const p = old.map(part7);
++  const ok = runs("new-none").every((a) => {
++    const gn = count(a, goalOn);
++    const pn = part7(a);
++    const c = L(a);
++    return (
++      gn >= Math.min(...g) - 2 && gn <= Math.max(...g) + 2 && pn >= Math.min(...p) - 2 && pn <= Math.max(...p) + 2 &&
++      c.some((x) => x.CENTRAL === "OVERALL") && c.some((x) => x.CENTRAL === "SUPPORT")
++    );
++  });
++  const show = (a: string) =>
++    `${a}: GOAL ${count(a, goalOn)}/${L(a).length}, part7 ${part7(a)}, OVERALL ${count(a, (x) => x.CENTRAL === "OVERALL")}, SUPPORT ${count(a, (x) => x.CENTRAL === "SUPPORT")}`;
++  bar("1 no profile unchanged", ok, [...old, ...runs("new-none")].map(show).join("; "));
++}
++// 2. About moves the pitch.
++{
++  const ref = [...runs("old-none"), ...runs("new-none"), ...runs("old-aboutA")];
++  const bg = (a: string) => count(a, (x) => x.BACKGROUND === "YES");
++  const floor = Math.min(...ref.map(bg));
++  const ok = runs(`${NEW}-aboutA`).every((a) => bg(a) <= floor - 2);
++  bar("2 About moves the pitch", ok, [...ref, ...runs(`${NEW}-aboutA`)].map((a) => `${a} ${bg(a)}`).join(", "));
++}
++// 3. About moves the parts.
++{
++  const fd = (x: Label) => x.TOPIC === "FINDINGS" || x.TOPIC === "DATA";
++  const hi = Math.max(...runs("old-aboutA").map((a) => share(a, fd)));
++  const ok = runs(`${NEW}-aboutA`).every((a) => share(a, fd) >= hi + 15);
++  bar("3 About moves the parts", ok, [...runs("old-none"), ...runs("new-none"), ...runs("old-aboutA"), ...runs(`${NEW}-aboutA`)].map((a) => `${a} ${pct(share(a, fd))}`).join(", "));
++}
++// 4. The goal moves the kind.
++{
++  const apply = (x: Label) => x.KIND === "APPLY";
++  const hi = Math.max(...[...runs("old-none"), ...runs("new-none")].map((a) => share(a, apply)));
++  const ok = runs(`${NEW}-goal`).every((a) => share(a, apply) >= hi + 20);
++  bar("4 goal moves the kind", ok, [...runs("old-none"), ...runs("new-none"), ...runs("old-goal"), ...runs(`${NEW}-goal`)].map((a) => `${a} ${pct(share(a, apply))}`).join(", "));
++}
++// 5. The goal is not weaker.
++{
++  const lo = Math.min(...runs("old-goal").map((a) => count(a, goalOn)));
++  const arms = [...runs(`${NEW}-goal`), ...runs(`${NEW}-bothA`), ...runs(`${NEW}-bothB`)];
++  const ok = arms.every((a) => share(a, goalOn) >= 65 && count(a, goalOn) >= lo - 2);
++  bar("5 goal not weaker", ok, [...runs("old-goal"), ...runs("old-bothA"), ...runs("old-bothB"), ...arms].map((a) => `${a} ${count(a, goalOn)}/${L(a).length} ${pct(share(a, goalOn))}`).join(", "));
++}
++// 6. The reason leads, About chooses within it.
++{
++  const formalOfOn = (a: string) => {
++    const on = L(a).filter(goalOn);
++    return on.length ? (100 * on.filter((x) => x.TOPIC === "FORMAL").length) / on.length : 0;
++  };
++  const ok = Math.min(...runs(`${NEW}-bothB`).map(formalOfOn)) >= Math.max(...runs(`${NEW}-bothA`).map(formalOfOn)) + 20;
++  const pooled = (p: string) => {
++    const on = runs(p).flatMap((a) => L(a).filter(goalOn));
++    return (100 * on.filter((x) => x.TOPIC === "FORMAL").length) / on.length;
++  };
++  const gapNew = pooled(`${NEW}-bothB`) - pooled(`${NEW}-bothA`);
++  const gapOld = pooled("old-bothB") - pooled("old-bothA");
++  bar(
++    "6 reason leads, About chooses within",
++    ok && gapNew > gapOld,
++    `FORMAL among GOAL-on: ${["old-bothA", "old-bothB", `${NEW}-bothA`, `${NEW}-bothB`].flatMap(runs).map((a) => `${a} ${pct(formalOfOn(a))}`).join(", ")}; pooled gap new ${pct(gapNew)} vs old ${pct(gapOld)}`,
++  );
++}
++// 7. The balance.
++{
++  const c = (a: string, v: string) => count(a, (x) => x.CENTRAL === v);
++  const arms = [...runs(`${NEW}-goal`), ...runs(`${NEW}-bothA`), ...runs(`${NEW}-bothB`)];
++  const ok = arms.every((a) => c(a, "OVERALL") + c(a, "SUPPORT") >= 3 && c(a, "OVERALL") >= 1 && c(a, "SUPPORT") >= 1);
++  bar("7 the balance", ok, [...runs("old-goal"), ...runs("old-bothA"), ...runs("old-bothB"), ...arms].map((a) => `${a} O${c(a, "OVERALL")}+S${c(a, "SUPPORT")}`).join(", "));
++}
++
++for (const [name, ok, detail] of verdicts) console.log(`${ok ? "PASS" : "FAIL"}  ${name}\n      ${detail}`);
+diff --git a/evals/quiz-reading-goal-261001c-runs.sh b/evals/quiz-reading-goal-261001c-runs.sh
+new file mode 100755
+index 00000000..add92672
+--- /dev/null
++++ b/evals/quiz-reading-goal-261001c-runs.sh
+@@ -0,0 +1,21 @@
++#!/usr/bin/env bash
++# 261001c: generate one prompt's five arms, two runs each, from the repo root. Usage: evals/quiz-reading-goal-261001c-runs.sh old|new
++# "old" was run with dev's src/quiz.ts (6Q) put back in the worktree; each run records the hash.
++set -u
++P=$1
++SLUG=entropy-24-00930-spya-pywwkq
++GOAL="I want to apply this to my own recordings, so I need to know the practical problems: what makes PID hard to use on real data."
++A="An electrophysiologist who records spiking activity from multi-electrode arrays in cortical slices and cultures. I already know entropy, mutual information and transfer entropy well, but I have never used PID."
++B="A software engineer who writes open-source analysis libraries for neuroscientists and is about to implement PID in one. I know the mathematics of entropy and mutual information, but little neuroscience."
++run() { npx tsx evals/quiz-reading-goal.ts generate "$@" $SLUG 2>&1 | grep -v '"level"'; echo "ARM_EXIT=${PIPESTATUS[0]} $2"; }
++# "r2" (the second round of wording) skips the no-profile arm: its request did not change.
++for i in 1 2; do
++  [ "$P" != r2 ] && run --arm $P-none-$i &
++  run --arm $P-aboutA-$i --about "$A" &
++  run --arm $P-goal-$i --purpose "$GOAL" &
++  wait
++  run --arm $P-bothA-$i --about "$A" --purpose "$GOAL" &
++  run --arm $P-bothB-$i --about "$B" --purpose "$GOAL" &
++  wait
++done
++echo ALL_DONE
+diff --git a/evals/quiz-reading-goal-judge.md b/evals/quiz-reading-goal-judge.md
+new file mode 100644
+index 00000000..d413c16f
+--- /dev/null
++++ b/evals/quiz-reading-goal-judge.md
+@@ -0,0 +1,90 @@
++# Judge's instructions — quiz shaped by who is reading, and why
++
++For [`quiz-reading-goal.ts`](quiz-reading-goal.ts) `blind`, plan
++[261001c](../docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md).
++Written before any 261001c run, and handed to the judge word for word.
++
++---
++
++You are labelling quiz questions written about one article: *Revealing the Dynamics of Neural
++Information Processing with Multivariate Information Decomposition* (Newman, Varley et al., Entropy
++2022), a review of partial information decomposition (PID) in neural circuits.
++
++The file `questions.tsv` has one question per row: `id`, an optional `premise` (a sentence shown
++before the question), the `question`, and the `referenceAnswer` its writer would accept. The rows
++come from many different quizzes, mixed together. You do not know which quiz a row came from, and
++you should not try to guess. Label each row on its own.
++
++Write `labels.tsv`, tab-separated, with this header row and then one row per question, every id,
++in the same order:
++
++```
++id	GOAL	TOPIC	KIND	BACKGROUND	CENTRAL
++```
++
++## GOAL — `ON` or `OFF`
++
++Take this reader's reason for reading:
++
++> I want to apply this to my own recordings, so I need to know the practical problems: what makes
++> PID hard to use on real data.
++
++`ON` if answering the question tells that reader something about the practical problems of using
++PID (or the information measures it builds on) on real recorded data: what makes it hard, what it
++needs, what can go wrong, what choices it forces, or how the authors dealt with those in their own
++analyses. `OFF` otherwise, including questions about what the analyses found, unless the question is
++about the difficulty of getting the finding.
++
++## TOPIC — one of `FORMAL`, `DATA`, `FINDINGS`, `FRAMING`, `OTHER`
++
++What the question is mainly about:
++
++- `FORMAL` — PID's mathematics and computation: redundancy functions and the choice between them,
++  the lattice and how the number of terms grows, what has to be supplied to solve the decomposition,
++  local PID, multi-target generalisations, how the terms are computed.
++- `DATA` — getting information measures out of recorded neural data: sampling and the amount of data
++  needed, estimation bias, binning, timescales and delays, how recordings were processed and
++  triads chosen, caveats about recording conditions.
++- `FINDINGS` — what the analyses of recordings showed: where synergy was found, what it went with
++  (rich clubs, connectivity, similarity, timescales, task phase), and what that is taken to mean.
++- `FRAMING` — the concepts the review builds from: what mutual information, transfer entropy,
++  redundancy, unique information and synergy are, and why measuring information transfer is not the
++  same as measuring processing.
++- `OTHER` — anything else.
++
++## KIND — one of `APPLY`, `APPRAISE`, `FOUNDATION`, `OTHER`
++
++- `APPLY` — how a thing is done, what it needs, or where it breaks down in use.
++- `APPRAISE` — what the evidence is, how strong it is, or how far a conclusion reaches.
++- `FOUNDATION` — what something is, or why it matters, conceptually.
++- `OTHER` — none of these, e.g. what a finding was.
++
++## BACKGROUND — `YES` or `NO`
++
++Take this reader:
++
++> An electrophysiologist who records spiking activity from multi-electrode arrays in cortical slices
++> and cultures. I already know entropy, mutual information and transfer entropy well, but I have
++> never used PID.
++
++`YES` if that reader could give the reference answer correctly from what they already know, without
++having read this article. `NO` if it needs something this article says.
++
++## CENTRAL — one of `OVERALL`, `SUPPORT`, `NONE`
++
++The article's own statement of what it is for, from its abstract and its summary:
++
++- `OVERALL` — the review's overall claim: **PID reveals redundant, unique and synergistic modes by
++  which neurons integrate information from multiple sources, and the synergy found in neural data
++  shows that neurons do not simply sum their inputs but are sensitive to particular patterns of
++  them** (abstract, `spya-xn9j9k`; summary, `spya-sp50v3`). Label `OVERALL` a question whose answer
++  is this claim, or the part of it about what synergy shows about neurons.
++- `SUPPORT` — the main thing it rests on: **the patterns of synergistic processing are shaped by
++  where the neurons sit in the network (rich-club membership, motifs, clustering) and by behaviour**
++  (summary, `spya-sp50v3`; the empirical work of section 5). Label `SUPPORT` a question whose answer
++  is one of those empirical relationships.
++- `NONE` — anything else, including definitions (they are `FRAMING`, not central) and practical
++  difficulties.
++
++Label quickly and consistently; when torn between two values, take the one that describes the
++**answer**, not the wording of the question. Do not leave a cell blank.
+diff --git a/evals/quiz-reading-goal.ts b/evals/quiz-reading-goal.ts
+index 88c8361b..85bc5bfd 100644
+--- a/evals/quiz-reading-goal.ts
++++ b/evals/quiz-reading-goal.ts
+@@ -1,46 +1,66 @@
+ /**
+- * **Does a reason for reading move the quiz towards it?**
+- * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md § How we will know.
++ * **Does who is reading, and why, move the quiz towards them?**
++ * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md (the
++ * reason for reading, 6Q) and
++ * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md
++ * (the *About you* line as well, and the balance) — § How we will know, in each.
+  *
+  * ```
+  * npx tsx evals/quiz-reading-goal.ts parts <slug>                                   # free: the parts, numbered
+  * npx tsx evals/quiz-reading-goal.ts generate --arm none-1 <slug>                   # paid
+  * npx tsx evals/quiz-reading-goal.ts generate --arm goal-1 --purpose "…" <slug>     # paid
+- * npx tsx evals/quiz-reading-goal.ts generate --arm about-1 --about "…" <slug>       # paid: the control
++ * npx tsx evals/quiz-reading-goal.ts generate --arm about-1 --about "…" <slug>       # paid
++ * npx tsx evals/quiz-reading-goal.ts generate --arm both-1 --about "…" --purpose "…" <slug>
+  * npx tsx evals/quiz-reading-goal.ts report --parts 2,3 <slug>                      # free
++ * npx tsx evals/quiz-reading-goal.ts blind --seed s --arms a,b,c --out d <slug>     # free: the judge's sheet
++ * npx tsx evals/quiz-reading-goal.ts score --dir d <slug>                           # free: the judge's labels, per arm
+  * ```
+  *
+- * `generate` calls production's own `generateQuiz`, with the purpose rendered
+- * exactly as `resolveProfile` would render it for a reader with no *About you*
+- * box. `report` counts, per arm, the questions whose evidence sits **mostly**
+- * in the named parts (by block position, matched by the part's range), and
+- * prints each question beside the part it draws on — read those, the count is
+- * a prompt to look, not a verdict. Two runs per arm, because one run of an
+- * identical quiz prompt wobbles (docs/project/quiz.md § The rule is counted).
++ * `generate` calls production's own `generateQuiz`, with the profile rendered
++ * exactly as `resolveProfile` would render it, and records which prompt wrote
++ * the run — the git commit, whether `src/quiz.ts` differed from it, and a hash
++ * of that file's bytes — because the before and after arms are separated in
++ * time, not code (docs/project/prompting-guide.md § Measuring a prompt change),
++ * and a stored run that cannot say which prompt wrote it cannot be a baseline
++ * (GPT Sol, 261001c plan review F7). Runs from before 261001c carry none.
++ *
++ * `report` counts, per arm, the questions whose evidence sits **mostly** in the
++ * named parts (by block position, matched by the part's range) — a prompt to
++ * look, not a verdict. `blind` writes every question of the named arms to one
++ * sheet in an order fixed by the seed (a hash of seed and question, never a
++ * float generator: docs/project/prompting-guide.md has the coin that put one arm
++ * on one side 94 times in 95), the key to a separate file, and prints how the
++ * arms fall across the sheet's halves so a lopsided order is seen before anyone
++ * judges it. `score` joins a judge's `labels.tsv` back to the key.
+  *
+  * Reads the article from the local database, read-only. Writes JSON under
+  * `evals/results/quiz-reading-goal/<arm>/`.
+  */
+ 
++import { execFileSync } from "node:child_process";
++import { createHash } from "node:crypto";
+ import fs from "node:fs";
+ import path from "node:path";
+ import { loadEnvLocal } from "../src/env.js";
+ 
+ const OUT = path.join(import.meta.dirname, "results", "quiz-reading-goal");
++const QUIZ_SOURCE = path.join(import.meta.dirname, "..", "src", "quiz.ts");
+ 
+ interface ArmFile {
+   arm: string;
+   slug: string;
+   purpose: string | null;
+-  /** The *About you* box, for the control arm that has one and no purpose. */
++  /** The *About you* box, or null. */
+   about?: string | null;
+   at: string;
++  /** Which prompt wrote it. Absent on runs from before 261001c. */
++  provenance?: { gitHead: string; quizDirty: boolean; quizSourceSha256: string; model: string };
+   /** Block ids in document order, so `report` needs no database. */
+   order: string[];
+   /** Each part's title and first/last block id. */
+   parts: { title: string; range: [string, string] }[];
+   dropped: Record<string, number>;
+-  questions: { premise?: string; question: string; evidence: string[] }[];
++  questions: { premise?: string; question: string; referenceAnswer?: string; evidence: string[] }[];
+ }
+ 
+ async function withArticle<T>(slug: string, fn: (a: import("../src/article-input.js").Article) => Promise<T>) {
+@@ -55,6 +75,16 @@ async function partsOfArticle(article: import("../src/article-input.js").Article
+   return partsOf(article.tree).map((p) => ({ title: p.title, range: p.range as [string, string] }));
+ }
+ 
++function provenanceOf(model: string): NonNullable<ArmFile["provenance"]> {
++  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
++  return {
++    gitHead: git("rev-parse", "HEAD"),
++    quizDirty: git("status", "--porcelain", "--", QUIZ_SOURCE) !== "",
++    quizSourceSha256: createHash("sha256").update(fs.readFileSync(QUIZ_SOURCE)).digest("hex"),
++    model,
++  };
++}
++
+ async function generate(arm: string, purpose: string | null, about: string | null, slug: string): Promise<void> {
+   const out = path.join(OUT, arm, `${slug}.json`);
+   if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
+@@ -70,12 +100,14 @@ async function generate(arm: string, purpose: string | null, about: string | nul
+       purpose,
+       about,
+       at: new Date().toISOString(),
++      provenance: provenanceOf(run.model),
+       order: article.blocks.map((b) => b.id),
+       parts: await partsOfArticle(article),
+       dropped: { ...run.dropped },
+       questions: run.quiz.questions.map((q) => ({
+         ...(q.premise ? { premise: q.premise } : {}),
+         question: q.question,
++        referenceAnswer: q.referenceAnswer,
+         evidence: q.evidence.map((e) => e.blockId),
+       })),
+     };
+@@ -85,6 +117,12 @@ async function generate(arm: string, purpose: string | null, about: string | nul
+   });
+ }
+ 
++function readArm(arm: string, slug: string): ArmFile {
++  const f = path.join(OUT, arm, `${slug}.json`);
++  if (!fs.existsSync(f)) throw new Error(`no run ${path.relative(process.cwd(), f)}`);
++  return JSON.parse(fs.readFileSync(f, "utf8")) as ArmFile;
++}
++
+ /** Which part a block is in, by position — `-1` for one outside every part. */
+ function partOf(file: ArmFile, blockId: string): number {
+   const at = file.order.indexOf(blockId);
+@@ -119,17 +157,102 @@ function report(slug: string, target: number[]): void {
+   }
+ }
+ 
++/** One line of a TSV: tabs and line breaks inside a field become spaces. */
++const tsv = (fields: (string | number)[]) => fields.map((f) => String(f).replace(/[\t\r\n]+/g, " ")).join("\t");
++
++/**
++ * The judge's sheet. Order is a sha256 of the seed and the question's own
++ * coordinates, so it is fixed by the seed and blind to the arm's name only in
++ * the sense that matters — the judge sees neither the arm nor its neighbours'.
++ */
++export function blindOrder<T extends { arm: string; index: number }>(seed: string, items: T[]): T[] {
++  const keyOf = (x: { arm: string; index: number }) =>
++    createHash("sha256").update(`${seed}\u0000${x.arm}\u0000${x.index}`).digest("hex");
++  return [...items].sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : keyOf(a) > keyOf(b) ? 1 : 0));
++}
++
++function blind(slug: string, seed: string, arms: string[], dir: string): void {
++  const items = arms.flatMap((arm) => readArm(arm, slug).questions.map((q, index) => ({ arm, index, q })));
++  const ordered = blindOrder(seed, items);
++  fs.mkdirSync(dir, { recursive: true });
++  const sheet = [tsv(["id", "premise", "question", "referenceAnswer"])];
++  const key = [tsv(["id", "arm", "index"])];
++  for (const [i, x] of ordered.entries()) {
++    const id = i + 1;
++    sheet.push(tsv([id, x.q.premise ?? "", x.q.question, x.q.referenceAnswer ?? ""]));
++    key.push(tsv([id, x.arm, x.index + 1]));
++  }
++  fs.writeFileSync(path.join(dir, "questions.tsv"), `${sheet.join("\n")}\n`);
++  fs.writeFileSync(path.join(dir, "key.tsv"), `${key.join("\n")}\n`);
++  /* The balance check the prompting guide asks for before judging: each arm's
++     questions should fall across both halves of the sheet, not bunch in one. */
++  const half = Math.ceil(ordered.length / 2);
++  console.log(`${ordered.length} questions from ${arms.length} arms → ${dir}`);
++  for (const arm of arms) {
++    const at = ordered.flatMap((x, i) => (x.arm === arm ? [i] : []));
++    console.log(`  ${arm.padEnd(16)} ${at.filter((i) => i < half).length} in the first half, ${at.filter((i) => i >= half).length} in the second`);
++  }
++}
++
++/**
++ * Join `labels.tsv` (`id`, then one column per label, a header row naming them)
++ * to the key, and count each label's values per arm. GOAL-on questions get a
++ * second table of TOPIC, because "the reason leads and who they are chooses
++ * within it" is a claim about the topics *inside* the goal.
++ */
++function score(dir: string): void {
++  const rows = (f: string) =>
++    fs.readFileSync(path.join(dir, f), "utf8").trim().split("\n").map((l) => l.split("\t"));
++  const [keyHead, ...keyRows] = rows("key.tsv");
++  const [labelHead, ...labelRows] = rows("labels.tsv");
++  if (!keyHead || !labelHead) throw new Error("empty key or labels");
++  const armOf = new Map(keyRows.map((r) => [r[0], r[1] ?? "?"]));
++  const columns = labelHead.slice(1);
++  if (labelRows.length !== keyRows.length) {
++    throw new Error(`${labelRows.length} labels for ${keyRows.length} questions — the judge skipped or added some`);
++  }
++  const tally = new Map<string, Map<string, number>>();
++  const bump = (arm: string, k: string) => {
++    const t = tally.get(arm) ?? new Map<string, number>();
++    t.set(k, (t.get(k) ?? 0) + 1);
++    tally.set(arm, t);
++  };
++  for (const r of labelRows) {
++    const arm = armOf.get(r[0]);
++    if (!arm) throw new Error(`label for unknown id ${r[0]}`);
++    bump(arm, "n");
++    const goalAt = columns.indexOf("GOAL");
++    const topicAt = columns.indexOf("TOPIC");
++    for (const [c, name] of columns.entries()) bump(arm, `${name}=${(r[c + 1] ?? "").trim()}`);
++    if (goalAt >= 0 && topicAt >= 0 && r[goalAt + 1]?.trim() === "ON") bump(arm, `GOAL-ON TOPIC=${r[topicAt + 1]?.trim()}`);
++  }
++  for (const arm of [...tally.keys()].sort()) {
++    const t = tally.get(arm)!;
++    const n = t.get("n") ?? 0;
++    const cells = [...t.entries()].filter(([k]) => k !== "n").sort(([a], [b]) => a.localeCompare(b));
++    console.log(`\n${arm} (${n} questions)`);
++    for (const [k, v] of cells) console.log(`  ${k.padEnd(28)} ${String(v).padStart(3)}  ${Math.round((100 * v) / n)}%`);
++  }
++}
++
+ if (import.meta.url === `file://${process.argv[1]}`) {
+   const [cmd, ...rest] = process.argv.slice(2);
++  const FLAGS = ["--arm", "--purpose", "--about", "--parts", "--seed", "--arms", "--out", "--dir"];
+   const flag = (name: string) => {
+     const at = rest.indexOf(name);
+     return at >= 0 ? rest[at + 1] : undefined;
+   };
+-  const named = new Set(["--arm", "--purpose", "--about", "--parts"].flatMap((n) => {
++  const named = new Set(FLAGS.flatMap((n) => {
+     const at = rest.indexOf(n);
+     return at >= 0 ? [at, at + 1] : [];
+   }));
+   const slug = rest.find((_, i) => !named.has(i));
++  if (cmd === "score") {
++    const dir = flag("--dir");
++    if (!dir) throw new Error("score needs --dir <dir>");
++    score(dir);
++    process.exit(0);
++  }
+   if (!slug) throw new Error("name a slug");
+   if (cmd === "parts") {
+     await withArticle(slug, async (article) => {
+@@ -145,7 +268,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
+     const parts = (flag("--parts") ?? "").split(",").map(Number).filter((n) => n > 0);
+     if (parts.length === 0) throw new Error("report needs --parts 1,2");
+     report(slug, parts);
++  } else if (cmd === "blind") {
++    const seed = flag("--seed");
++    const arms = (flag("--arms") ?? "").split(",").filter(Boolean);
++    const out = flag("--out");
++    if (!seed || arms.length === 0 || !out) throw new Error("blind needs --seed, --arms and --out");
++    blind(slug, seed, arms, out);
+   } else {
+-    throw new Error("usage: quiz-reading-goal.ts parts|generate|report …");
++    throw new Error("usage: quiz-reading-goal.ts parts|generate|report|blind|score …");
+   }
+ }
+diff --git a/src/profile.ts b/src/profile.ts
+index 4d928b24..c2f83725 100644
+--- a/src/profile.ts
++++ b/src/profile.ts
+@@ -6,7 +6,10 @@
+  * *this* article, which is not. Nothing downstream is told there were two,
+  * because nothing downstream has a reason to treat them differently — and two
+  * fields threaded through five call sites is ten chances for one of them to
+- * forget the second.
++ * forget the second. Each half keeps its label inside the string, and that is
++ * enough for the one stage that weighs them differently: the quiz lets the
++ * reason lead and *About you* choose within it (src/quiz.ts,
++ * `QUIZ_READER_RULES`) — read off the labels by the model, never parsed apart.
+  *
+  * docs/plans/260826t-reader-profile.md has the design; docs/project/reader-profile.md
+  * is the operating manual once it is built.
+diff --git a/src/quiz.ts b/src/quiz.ts
+index 7fdcac03..3ea1f23c 100644
+--- a/src/quiz.ts
++++ b/src/quiz.ts
+@@ -95,6 +95,14 @@
+  * the shared one promises the profile changes nothing about the article's
+  * proportions and here the proportions are the point.
+  *
++ * 6Q let only the reason for reading move the path and kept *About you* to
++ * vocabulary. Greg reversed that the next day: *"Quiz should definitely adapt
++ * heavily based on User-profile and Why-are-you-reading"* (2026-10-01). Both
++ * halves now move which parts are asked about, what kind of question is set
++ * and how it is pitched, with one counterweight — the piece's own point stays
++ * on the path however narrow the goal.
++ * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
++ *
+  * Three things it deliberately does not do, each Greg's or forced:
+  *
+  * - **Not in the stamp.** Changing your goal does not make a quiz stale or
+@@ -104,12 +112,9 @@
+  *   is derived from every artefact type with one, so the field would put the
+  *   quiz in the owner's *make public* dialog as personalised — about a mode a
+  *   visitor never sees. It arrives with the label that would read it.
+- * - **The whole profile, not the purpose alone.** `Job.profile` is one rendered
+- *   string; carrying the purpose separately is the six touchpoints this
+- *   header used to warn about. The prompt confines the *About the reader* line
+- *   to assumed vocabulary, never which parts it asks about. And not
+- *   `PROFILE_RULES` either: they let the profile govern "which things you spend
+- *   words on", which is exactly what the About line must not do here.
++ * - **Not `PROFILE_RULES`.** They speak of words spent and length, and carry a
++ *   web-search rule the quiz has no use for; the quiz needs the path and the
++ *   balance in its own terms, and two rules for one thing would disagree.
+  *
+  * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
+  */
+@@ -176,6 +181,13 @@ import type {
+  * the piece's takeaways and why they hold; no band, no value. See the header.
+  * Every stored quiz is `outdated` after this, which is right: it is a pool, and
+  * its reader is offered the path.
++ *
++ * **Not bumped for the reader (6Q, 2026-09-30; 261001c, 2026-10-01)**, although
++ * a profiled quiz is a different quiz: the change reaches only requests that
++ * carry a profile, a no-profile request is byte-for-byte what it was, and a
++ * bump would mark every stored quiz outdated — the no-profile ones for nothing.
++ * The profile is not in the stamp either (see the header), so a reader picks up
++ * the new rules at *Write them again*.
+  */
+ export const PROMPT_VERSION = "quiz/5";
+ 
+@@ -795,41 +807,7 @@ gets a short path, and that is a correct answer. Do not pad: a padded question
+ is a question about nothing, which is worse than one fewer step.
+ 
+ Cover the piece. The takeaways usually draw on all of it, so the path should
+-too; do not spend half the steps on its first third. (Unless the reader has
+-said why they are reading — below.)
+-
+-IF THE READER HAS SAID WHY THEY ARE READING
+-
+-Some requests end with a note about the reader: perhaps a line about who they
+-are, perhaps a line saying why they are reading this piece. Most carry neither,
+-and then none of this applies. When there is a reason for reading:
+-
+-- IT DECIDES WHERE THE PATH GOES. Choose the takeaways that matter for that
+-  reason, and spend most of the questions on the parts of the piece that bear on
+-  it. A reader who came for the methods gets a path mostly about the methods,
+-  not an even spread across the piece.
+-- IT IS STILL A PATH. Start with what the piece plainly says and lean each step
+-  on the one before. A few early steps may set up what the later ones need —
+-  what was studied, what the author is arguing against — so that the steps
+-  about the reason have something to lean on.
+-- IT NEVER CHANGES WHAT THE ARTICLE SAYS. Every question is about the subject,
+-  answered by the article, anchored in its words. The reason changes which parts
+-  you ask about, never what the piece says about them.
+-- If the piece has little on the reason, set the path you would have set
+-  anyway, and never say so.
+-- ONLY THE REASON FOR READING MOVES THE PATH. A line about who they are may
+-  change the vocabulary you assume and the least context a question needs to
+-  say what it is asking about — never which parts of the piece you ask about,
+-  which takeaways you head for, and never enough to answer the question. With a
+-  line about who they are and no reason for reading, set the ordinary path.
+-- Never address the reader, and never say or hint that a reason was given — in
+-  a question, a premise or a reference answer. Nothing is asked "because" of it.
+-  The subjects the reason names are ordinary words: use them wherever the
+-  article does.
+-
+-    BAD   QUESTION  Since you came for the methods: how did the authors
+-                    measure synergy?
+-    GOOD  QUESTION  How did the authors measure synergy?
++too; do not spend half the steps on its first third.
+ 
+ ${plainWords("ask", "explain")}
+ 
+@@ -855,6 +833,83 @@ marks, which are curly, or single quotes. A straight double quote inside a
+ string ends the string, and one of them loses the whole batch. Never put a real
+ line break inside a string either.`;
+ 
++/**
++ * The rules for a request that says who is reading, or why — sent as a system
++ * block of their own **only when there is a profile**, so a request without one
++ * is byte-for-byte the request every quiz got before 6Q (GPT Sol, plan review
++ * F8: a conditional paragraph still speaks to a model whose condition is
++ * absent). The block sits after the article's cache breakpoint, so carrying it
++ * or not costs the shared article prefix nothing.
++ *
++ * Greg, 2026-10-01: *"Quiz should definitely adapt heavily based on
++ * User-profile and Why-are-you-reading"* — both lines, which parts, what kind
++ * of question, how it is pitched; with the piece's own point kept on the path.
++ * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
++ */
++export const QUIZ_READER_RULES = `IF THE REQUEST SAYS WHO IS READING, OR WHY
++
++This request ends with a note about the reader: a line about who they are, a
++line saying why they are reading this piece, or both. Set the quiz FOR THIS
++READER, not for everyone. The note shapes three things: which parts of the
++piece you ask about, what kind of question you set, and how you pitch it.
++
++- WHICH PARTS. A reason for reading decides most of the path: choose the
++  takeaways that matter for that reason, and spend most of the questions on the
++  parts of the piece that bear on it. A reader who came for the methods gets a
++  path mostly about the methods, not an even spread across the piece. A line
++  about who they are moves the path too, towards what a person like them would
++  most want from this piece: what bears on their field, their work, what they
++  would do with it. With only who they are, it leads. The rule above about
++  covering the whole piece gives way to this.
++- WITH BOTH, the reason leads and who they are chooses within it: of the parts
++  that bear on the reason, who they are decides which get most of the steps and
++  which come first. Two readers with the same reason and different work should
++  get visibly different quizzes. A trial's statistician and its clinician, both
++  reading "for the methods", are not asked about the same methods: the one
++  about how the analysis was done, the other about who was enrolled and how
++  they were treated.
++- PERSONALISE AMONG WHAT MATTERS. Choose among the consequential parts of the
++  piece, the ones its argument leans on. A note never turns a detail nothing
++  rests on into a good question.
++- WHAT KIND OF QUESTION. Fit what this reader will do with the piece. Someone
++  who will apply it gets more questions about how a thing is done, what it
++  needs and where it breaks; someone weighing it up, more about the evidence
++  and how far it reaches; someone new to the field, more about what things are
++  and why they matter. Whatever the kind, the article answers it.
++- HOW IT IS PITCHED. Assume the background they claim. A question they could
++  answer from their own knowledge without having read the piece tests nothing
++  for them, so leave it out, however useful it would be to somebody else. An
++  expert needs fewer setup steps and a newcomer more and smaller ones — but
++  never drop a step about what THIS piece says that a later question leans on.
++  Use their field's words without explaining them. Never put enough in a
++  question or premise to answer it.
++- THE PIECE'S POINT IS STILL ON THE PATH. However narrow what they are after,
++  the path ends where the piece ends up. Its last steps — normally three or
++  four in a path of twenty, one or two in a short one — are a connected run
++  that asks what the piece as a whole concludes, and the main evidence it gives
++  for that, even when neither is what they came for. One closing question about
++  the conclusion is not enough: ask for the evidence too. Take these steps from
++  setup, not from the steps about what they are after; keep setup to the few
++  steps the later ones need. The part they came for is understood in the light
++  of the whole, not instead of it. Do not pad the quiz to fit them in.
++- IT IS STILL A PATH. Start with what the piece plainly says and lean each step
++  on the one before. A few early steps may set up what the later ones need —
++  what was studied, what the author is arguing against — so that the steps
++  about what they are after have something to lean on.
++- IT NEVER CHANGES WHAT THE ARTICLE SAYS. Every question is about the subject,
++  answered by the article, anchored in its words. The note changes which parts
++  you ask about and how, never what the piece says about them.
++- If the piece has little on what they are after, set the path you would have
++  set anyway, and never say so.
++- Never address the reader, and never say or hint that a note was given — in
++  a question, a premise or a reference answer. Nothing is asked "because" of it.
++  The subjects the note names are ordinary words: use them wherever the
++  article does.
++
++    BAD   QUESTION  Since you came for the methods: how did the authors
++                    measure synergy?
++    GOOD  QUESTION  How did the authors measure synergy?`;
++
+ /**
+  * What the model is shown: the skeleton, then the instruction.
+  *
+@@ -871,9 +926,9 @@ line break inside a string either.`;
+  *
+  * With no profile this varying user message is byte-for-byte what it was before
+  * the reader arrived — Greg's *"the same as today when there isn't"*, which
+- * tests/profile-prompts.test.ts asks of these bytes. The complete request is not
+- * byte-identical: `QUIZ_SYSTEM` now carries the conditional rules above for
+- * every call, so it stays constant across readers.
++ * tests/profile-prompts.test.ts asks of these bytes. Since 261001c so is the
++ * whole request: the reader rules are a system block of their own
++ * (`QUIZ_READER_RULES`), sent only with a profile.
+  */
+ export function renderPrompt(opts: { tree: Tree; profile: string | null }): string {
+   const skeleton = partsOf(opts.tree)
+@@ -889,9 +944,9 @@ ${skeleton}${readerSection(opts.profile)}`;
+ 
+ /**
+  * The profile, for this stage — **not `profileSection`**, whose reminder says
+- * the profile changes nothing about the article's proportions. Here a reason
+- * for reading is meant to change exactly that; the binding rules are in
+- * `QUIZ_SYSTEM` § IF THE READER HAS SAID WHY THEY ARE READING, where the
++ * the profile changes nothing about the article's proportions. Here both
++ * halves are meant to change exactly that; the binding rules are in
++ * `QUIZ_READER_RULES`, a system block sent only with a profile, where the
+  * profile cannot reach them. Empty — not a heading over nothing — when there is
+  * no profile, for the reason `renderProfile` gives.
+  */
+@@ -903,10 +958,11 @@ function readerSection(profile: string | null): string {
+ 
+ ${profile}
+ 
+-If a reason for reading is given above, aim the path at the takeaways that
+-matter for it, and spend most of the questions on the parts of the piece that
+-bear on it; if not, set the ordinary path. Everything is still about what the
+-article says. Do not address the reader and do not mention this.`;
++Set the quiz for this reader: aim the path at what they are after, choose the
++kind of question that fits what they will do with the piece, and pitch it to
++the background they claim — keeping the piece's own point on the path.
++Everything is still about what the article says. Do not address the reader and
++do not mention this.`;
+ }
+ 
+ /**
+@@ -1020,6 +1076,7 @@ export async function generateQuiz(opts: {
+             ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+           },
+           { type: "text" as const, text: QUIZ_SYSTEM },
++          ...(opts.profile ? [{ type: "text" as const, text: QUIZ_READER_RULES }] : []),
+         ],
+         messages: [{ role: "user", content: renderPrompt({ tree, profile: opts.profile ?? null }) }],
+       },
+diff --git a/tests/profile-prompts.test.ts b/tests/profile-prompts.test.ts
+index 0d0791ab..9dcb5363 100644
+--- a/tests/profile-prompts.test.ts
++++ b/tests/profile-prompts.test.ts
+@@ -123,7 +123,8 @@ describe("quotes' prompt", () => {
+ 
+ /**
+  * The quiz joined on 2026-09-30 (SPIDERYARN-READING2-6Q): a reader who has said
+- * why they are reading gets a path that heads for that. It has **its own
++ * why they are reading gets a path that heads for that — and since 2026-10-01
++ * (261001c) a reader who has said who they are, too. It has **its own
+  * section** rather than `profileSection`, because the shared reminder says the
+  * profile changes nothing about the article's proportions and here the
+  * proportions are the point — so the first marker is the quiz's own heading.
+@@ -143,10 +144,20 @@ describe("quiz's prompt", () => {
+     for (const marker of [...QUIZ_MARKERS, "WHO IS READING"]) expect(out).not.toContain(marker);
+   });
+ 
++  it("aims the quiz at an About-only reader too, not the ordinary path", () => {
++    /* Greg, 2026-10-01: *"Quiz should definitely adapt heavily based on
++       User-profile and Why-are-you-reading"* — 6Q's reminder told an About-only
++       reader's request to "set the ordinary path". docs/plans/261001c-…. */
++    const out = render(renderProfile({ profile: "A field ecologist who counts beetles." })!);
++    expect(out).toContain("Set the quiz for this reader");
++    expect(out).not.toContain("ordinary path");
++  });
++
+   it("is byte-for-byte today's user prompt when there is none", () => {
+     /* "The same as today when there isn't" — Greg's words, asked of the bytes.
+        The literal is the varying user message as it stood before the profile
+-       arrived. `QUIZ_SYSTEM` gained conditional rules and is not byte-equal. */
++       arrived. The system part is byte-equal too since 261001c: the reader
++       rules are a block sent only with a profile. */
+     expect(render(null)).toBe(`Set the quiz for this article — up to 20 questions.
+ 
+ === ITS SHAPE ===
+diff --git a/tests/quiz-reading-goal-eval.test.ts b/tests/quiz-reading-goal-eval.test.ts
+new file mode 100644
+index 00000000..3948bc57
+--- /dev/null
++++ b/tests/quiz-reading-goal-eval.test.ts
+@@ -0,0 +1,41 @@
++/**
++ * The blind order in evals/quiz-reading-goal.ts — the one deterministic part of
++ * a paid measurement, and the part docs/project/prompting-guide.md warns about:
++ * a float coin once put the new arm on one side 94 times in 95. Plan:
++ * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
++ */
++import { describe, expect, it } from "vitest";
++import { blindOrder } from "../evals/quiz-reading-goal.js";
++
++const items = (arms: string[], n: number) => arms.flatMap((arm) => Array.from({ length: n }, (_, index) => ({ arm, index })));
++
++describe("the blind order", () => {
++  it("is fixed by its seed, and another seed gives another order", () => {
++    const xs = items(["old-goal-1", "new-goal-1"], 20);
++    expect(blindOrder("s1", xs)).toEqual(blindOrder("s1", xs));
++    expect(blindOrder("s1", xs)).not.toEqual(blindOrder("s2", xs));
++  });
++
++  it("keeps every item, once", () => {
++    const xs = items(["a", "b", "c"], 19);
++    const out = blindOrder("seed", xs);
++    expect(out).toHaveLength(xs.length);
++    expect(new Set(out.map((x) => `${x.arm}/${x.index}`)).size).toBe(xs.length);
++  });
++
++  it("does not bunch one arm into one half of the sheet, over many seeds", () => {
++    /* Two arms of twenty: the first half should hold about ten of each. Across
++       200 seeds the mean share stays near a half and no seed is all-one-side. */
++    const xs = items(["old", "new"], 20);
++    let total = 0;
++    for (let s = 0; s < 200; s++) {
++      const firstHalf = blindOrder(`seed-${s}`, xs).slice(0, 20);
++      const news = firstHalf.filter((x) => x.arm === "new").length;
++      expect(news).toBeGreaterThan(2);
++      expect(news).toBeLessThan(18);
++      total += news;
++    }
++    expect(total / 200).toBeGreaterThan(9);
++    expect(total / 200).toBeLessThan(11);
++  });
++});
+diff --git a/tests/quiz-step-registration.test.ts b/tests/quiz-step-registration.test.ts
+index f33a0dc4..ac3a131d 100644
+--- a/tests/quiz-step-registration.test.ts
++++ b/tests/quiz-step-registration.test.ts
+@@ -85,6 +85,7 @@ import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
+ import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
+ import type { Quiz } from "../src/types.js";
+ import { renderProfile } from "../src/profile.js";
++import { QUIZ_READER_RULES } from "../src/quiz.js";
+ 
+ /* ------------------------------------------------------- the stubbed model -- */
+ 
+@@ -367,6 +368,21 @@ describe("the reader's reason for reading", () => {
+     expect(sent).toHaveLength(1);
+     expect(sent[0]).not.toContain("WHY THIS READER IS HERE");
+     expect(sent[0]).not.toContain("Why they are reading this piece");
++    /* 261001c, GPT Sol's plan review F8: not even the rules for a reader, so a
++       no-profile request is the one every quiz got before 6Q. */
++    expect(sent[0]).not.toContain("IF THE REQUEST SAYS WHO IS READING");
++    const params = JSON.parse(sent[0] ?? "{}") as { system: { text: string }[] };
++    expect(params.system.map((p) => p.text)).not.toContain(QUIZ_READER_RULES);
++  });
++
++  it("brings the reader rules, after the article and uncached, only with a profile", async () => {
++    await runAndWrite(PROFILE);
++    const params = JSON.parse(sent[0] ?? "{}") as {
++      system: { text: string; cache_control?: unknown }[];
++    };
++    const at = params.system.findIndex((p) => p.text === QUIZ_READER_RULES);
++    expect(at).toBeGreaterThan(0);
++    expect(params.system[at]?.cache_control).toBeUndefined();
+   });
+ 
+   it("does not make the quiz stale when it changes — no automatic rewrite", async () => {
+diff --git a/tests/quiz.test.ts b/tests/quiz.test.ts
+index b3f23a34..35e67006 100644
+--- a/tests/quiz.test.ts
++++ b/tests/quiz.test.ts
+@@ -35,6 +35,7 @@ import {
+   MAX_EVIDENCE,
+   MAX_QUESTIONS,
+   PROMPT_VERSION,
++  QUIZ_READER_RULES,
+   QUIZ_SYSTEM,
+   buildQuiz,
+   emptyDropped,
+@@ -652,25 +653,52 @@ describe("the generation prompt", () => {
+     expect(QUIZ_SYSTEM).toContain("KEEP TO WHAT MATTERS");
+   });
+ 
++  it("says nothing about a reader in the constant prompt", () => {
++    /* 261001c, GPT Sol's plan review F8: a conditional paragraph still speaks
++       to a model whose condition is absent, so the reader rules are a block of
++       their own, sent only with a profile (tests/quiz-step-registration.test.ts
++       asks the request). */
++    expect(QUIZ_SYSTEM).not.toMatch(/note about the reader|reason for reading|WHO IS READING/);
++  });
++
+   it("lets a reading reason move most of the path towards its takeaways", () => {
+     /* SPIDERYARN-READING2-6Q. Merely carrying the profile to the request is not
+        the feature: without these rules the model has no instruction to change
+        the proportions, and every plumbing test still passes. */
+-    expect(QUIZ_SYSTEM).toContain("IT DECIDES WHERE THE PATH GOES");
+-    expect(QUIZ_SYSTEM).toMatch(/Choose the takeaways that matter for that\s+reason/);
+-    expect(QUIZ_SYSTEM).toMatch(/spend most of the questions on the parts of the piece that bear on\s+it/);
+-  });
+-
+-  it("does not let About alone move the path", () => {
+-    expect(QUIZ_SYSTEM).toContain("ONLY THE REASON FOR READING MOVES THE PATH");
+-    expect(QUIZ_SYSTEM).toMatch(/line about who they are and no reason for reading, set the ordinary path/);
+-  });
+-
+-  it("keeps the reading reason out of questions, premises and answers", () => {
+-    expect(QUIZ_SYSTEM).toMatch(
+-      /never say or hint that a reason was given — in\s+a question, a premise or a reference answer/i,
++    expect(QUIZ_READER_RULES).toContain("WHICH PARTS");
++    expect(QUIZ_READER_RULES).toMatch(/choose the\s+takeaways that matter for that reason/);
++    expect(QUIZ_READER_RULES).toMatch(/spend most of the questions on the\s+parts of the piece that bear on it/);
++  });
++
++  it("lets who is reading move the path, the kind of question and the pitch", () => {
++    /* Greg, 2026-10-01, reversing 6Q's "About moves only the vocabulary":
++       *"Quiz should definitely adapt heavily based on User-profile and
++       Why-are-you-reading"*. docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md. */
++    expect(QUIZ_READER_RULES).toMatch(/A line\s+about who they are moves the path too/);
++    expect(QUIZ_READER_RULES).toMatch(/the reason leads and who they are chooses within\s+it/);
++    expect(QUIZ_READER_RULES).toMatch(/Two readers with the same reason and different work should\s+get visibly different quizzes/);
++    expect(QUIZ_READER_RULES).toContain("WHAT KIND OF QUESTION");
++    expect(QUIZ_READER_RULES).toContain("HOW IT IS PITCHED");
++    expect(QUIZ_READER_RULES).not.toContain("ONLY THE REASON FOR READING MOVES THE PATH");
++    expect(QUIZ_READER_RULES).not.toMatch(/no reason for reading, set the ordinary path/);
++  });
++
++  it("keeps the piece's own point on the path however narrow the goal", () => {
++    /* The failure Greg's answer invites: a strong goal that skips what the
++       piece is for. */
++    expect(QUIZ_READER_RULES).toContain("THE PIECE'S POINT IS STILL ON THE PATH");
++    expect(QUIZ_READER_RULES).toMatch(/normally three or\s+four in a path of twenty, one or two in a short one/);
++    /* Round 1 of the eval got one closing question and no evidence. */
++    expect(QUIZ_READER_RULES).toContain("ask for the evidence too");
++    expect(QUIZ_READER_RULES).toMatch(/Take these steps from\s+setup, not from the steps about what they are after/);
++    expect(QUIZ_READER_RULES).toContain("Do not pad");
++  });
++
++  it("keeps the note about the reader out of questions, premises and answers", () => {
++    expect(QUIZ_READER_RULES).toMatch(
++      /never say or hint that a note was given — in\s+a question, a premise or a reference answer/i,
+     );
+-    expect(QUIZ_SYSTEM).toContain("Nothing is asked \"because\" of it");
++    expect(QUIZ_READER_RULES).toContain("Nothing is asked \"because\" of it");
+   });
+ 
+   it("asks for no band, no spread and no value any more", () => {

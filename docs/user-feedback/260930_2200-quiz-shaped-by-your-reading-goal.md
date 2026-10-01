@@ -57,3 +57,53 @@ Deferred: a *Written for: …* line in the Quiz band, like Trajectory's *Reading
 when the goal has changed since the questions were written.
 
 Plan: [260930j](../plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md).
+
+## Follow-up, 2026-10-01: About you as well
+
+You answered the deviation above (relayed by the Overseer):
+
+> yes, Quiz should definitely adapt heavily based on User-profile and Why-are-you-reading
+>
+> — Greg, 2026-10-01
+
+**Ending: Shipped as a partial step** — on `dev`, not deployed. The prompt now asks for what you
+said. The measurement shows the goal half working and the balance improved. It does **not yet show
+*About you* moving the quiz heavily.**
+
+What changed:
+
+- **Both halves now steer the quiz.** They decide which parts it asks about, what kind of question
+  it sets (someone applying the piece gets more *how is it done, where does it break*), and how it
+  is pitched (questions the reader could already answer are left out). With both, the reason leads
+  and *About you* chooses within it.
+- **The counterweight against a narrow goal skipping the point.** The last few steps must ask what
+  the piece as a whole concludes and the main evidence for it, taking those steps from setup, not
+  from the goal.
+- **No profile, no change.** A reader with neither box filled gets exactly the request every quiz
+  got before 6Q. The reader rules are now a separate block, sent only when there is a profile.
+
+What the measurement found: 28 paid runs on the PID review paper (old prompt, two rounds of new
+wording), four blind judges who agreed on 89–100% of labels, with the bars written down before any
+run.
+
+- **The goal still steers it as strongly as before**: 61–79% of questions on-goal (old prompt
+  56–81%); about half are *how-to-apply* questions, against 7–20% with no profile.
+- **The balance is better but short of the bar.** On the old prompt, three of six goal runs had no
+  question on the paper's conclusion or its evidence. Now every run has at least one, but one or two
+  such steps rather than the three or four asked for.
+- **About you: not shown.** All three bars for it failed: pitch, which parts, and two readers with
+  the same goal (an electrophysiologist, a software engineer) getting measurably different quizzes.
+  Read side by side, the two do differ (experimental caveats for one, the maths and tools for the
+  other). But two runs a side cannot tell that apart from chance.
+
+Shipped anyway (GPT Sol said *don't ship as the finished thing*; Opus, asked to arbitrate, said
+ship as a partial step) because no reader is worse off, and holding it would have kept the rule you
+overruled.
+
+**Next step, yours to choose:**
+
+1. **A test that could actually see an About effect.** Two or three articles, a newcomer against an
+   expert so the pitch can move, three or four runs each. About 40 runs, $10–15.
+2. **Or take About you as best effort for now**, and let readers' feedback decide.
+
+Plan: [261001c](../plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md).

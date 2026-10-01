@@ -123,7 +123,8 @@ describe("quotes' prompt", () => {
 
 /**
  * The quiz joined on 2026-09-30 (SPIDERYARN-READING2-6Q): a reader who has said
- * why they are reading gets a path that heads for that. It has **its own
+ * why they are reading gets a path that heads for that — and since 2026-10-01
+ * (261001c) a reader who has said who they are, too. It has **its own
  * section** rather than `profileSection`, because the shared reminder says the
  * profile changes nothing about the article's proportions and here the
  * proportions are the point — so the first marker is the quiz's own heading.
@@ -143,10 +144,20 @@ describe("quiz's prompt", () => {
     for (const marker of [...QUIZ_MARKERS, "WHO IS READING"]) expect(out).not.toContain(marker);
   });
 
+  it("aims the quiz at an About-only reader too, not the ordinary path", () => {
+    /* Greg, 2026-10-01: *"Quiz should definitely adapt heavily based on
+       User-profile and Why-are-you-reading"* — 6Q's reminder told an About-only
+       reader's request to "set the ordinary path". docs/plans/261001c-…. */
+    const out = render(renderProfile({ profile: "A field ecologist who counts beetles." })!);
+    expect(out).toContain("Set the quiz for this reader");
+    expect(out).not.toContain("ordinary path");
+  });
+
   it("is byte-for-byte today's user prompt when there is none", () => {
     /* "The same as today when there isn't" — Greg's words, asked of the bytes.
        The literal is the varying user message as it stood before the profile
-       arrived. `QUIZ_SYSTEM` gained conditional rules and is not byte-equal. */
+       arrived. The system part is byte-equal too since 261001c: the reader
+       rules are a block sent only with a profile. */
     expect(render(null)).toBe(`Set the quiz for this article — up to 20 questions.
 
 === ITS SHAPE ===

@@ -1,0 +1,374 @@
+
+new-aboutA-1 (20 questions)
+  BACKGROUND=NO                 18  90%
+  BACKGROUND=YES                 2  10%
+  CENTRAL=NONE                  16  80%
+  CENTRAL=OVERALL                2  10%
+  CENTRAL=SUPPORT                2  10%
+  GOAL-ON TOPIC=DATA             4  20%
+  GOAL-ON TOPIC=FORMAL           6  30%
+  GOAL=OFF                      10  50%
+  GOAL=ON                       10  50%
+  KIND=APPLY                     9  45%
+  KIND=APPRAISE                  2  10%
+  KIND=FOUNDATION                4  20%
+  KIND=OTHER                     5  25%
+  TOPIC=DATA                     4  20%
+  TOPIC=FINDINGS                 6  30%
+  TOPIC=FORMAL                   7  35%
+  TOPIC=FRAMING                  3  15%
+
+new-aboutA-2 (18 questions)
+  BACKGROUND=NO                 15  83%
+  BACKGROUND=YES                 3  17%
+  CENTRAL=NONE                  14  78%
+  CENTRAL=OVERALL                1  6%
+  CENTRAL=SUPPORT                3  17%
+  GOAL-ON TOPIC=DATA             2  11%
+  GOAL-ON TOPIC=FORMAL           5  28%
+  GOAL=OFF                      11  61%
+  GOAL=ON                        7  39%
+  KIND=APPLY                     5  28%
+  KIND=APPRAISE                  2  11%
+  KIND=FOUNDATION                6  33%
+  KIND=OTHER                     5  28%
+  TOPIC=DATA                     2  11%
+  TOPIC=FINDINGS                 6  33%
+  TOPIC=FORMAL                   6  33%
+  TOPIC=FRAMING                  4  22%
+
+new-bothA-1 (19 questions)
+  BACKGROUND=NO                 15  79%
+  BACKGROUND=YES                 4  21%
+  CENTRAL=NONE                  18  95%
+  CENTRAL=SUPPORT                1  5%
+  GOAL-ON TOPIC=DATA             3  16%
+  GOAL-ON TOPIC=FORMAL           8  42%
+  GOAL-ON TOPIC=OTHER            1  5%
+  GOAL=OFF                       7  37%
+  GOAL=ON                       12  63%
+  KIND=APPLY                     9  47%
+  KIND=APPRAISE                  2  11%
+  KIND=FOUNDATION                6  32%
+  KIND=OTHER                     2  11%
+  TOPIC=DATA                     3  16%
+  TOPIC=FINDINGS                 2  11%
+  TOPIC=FORMAL                   8  42%
+  TOPIC=FRAMING                  5  26%
+  TOPIC=OTHER                    1  5%
+
+new-bothA-2 (16 questions)
+  BACKGROUND=NO                 13  81%
+  BACKGROUND=YES                 3  19%
+  CENTRAL=NONE                  15  94%
+  CENTRAL=OVERALL                1  6%
+  GOAL-ON TOPIC=DATA             4  25%
+  GOAL-ON TOPIC=FORMAL           6  38%
+  GOAL-ON TOPIC=OTHER            1  6%
+  GOAL=OFF                       5  31%
+  GOAL=ON                       11  69%
+  KIND=APPLY                     8  50%
+  KIND=APPRAISE                  3  19%
+  KIND=FOUNDATION                3  19%
+  KIND=OTHER                     2  13%
+  TOPIC=DATA                     4  25%
+  TOPIC=FINDINGS                 3  19%
+  TOPIC=FORMAL                   6  38%
+  TOPIC=FRAMING                  2  13%
+  TOPIC=OTHER                    1  6%
+
+new-bothB-1 (17 questions)
+  BACKGROUND=NO                 12  71%
+  BACKGROUND=YES                 5  29%
+  CENTRAL=NONE                  16  94%
+  CENTRAL=OVERALL                1  6%
+  GOAL-ON TOPIC=DATA             3  18%
+  GOAL-ON TOPIC=FORMAL           9  53%
+  GOAL=OFF                       5  29%
+  GOAL=ON                       12  71%
+  KIND=APPLY                     9  53%
+  KIND=APPRAISE                  2  12%
+  KIND=FOUNDATION                6  35%
+  TOPIC=DATA                     3  18%
+  TOPIC=FINDINGS                 1  6%
+  TOPIC=FORMAL                   9  53%
+  TOPIC=FRAMING                  4  24%
+
+new-bothB-2 (20 questions)
+  BACKGROUND=NO                 17  85%
+  BACKGROUND=YES                 3  15%
+  CENTRAL=NONE                  17  85%
+  CENTRAL=OVERALL                1  5%
+  CENTRAL=SUPPORT                2  10%
+  GOAL-ON TOPIC=DATA             5  25%
+  GOAL-ON TOPIC=FORMAL           8  40%
+  GOAL-ON TOPIC=OTHER            1  5%
+  GOAL=OFF                       6  30%
+  GOAL=ON                       14  70%
+  KIND=APPLY                    10  50%
+  KIND=APPRAISE                  3  15%
+  KIND=FOUNDATION                5  25%
+  KIND=OTHER                     2  10%
+  TOPIC=DATA                     5  25%
+  TOPIC=FINDINGS                 3  15%
+  TOPIC=FORMAL                   9  45%
+  TOPIC=FRAMING                  2  10%
+  TOPIC=OTHER                    1  5%
+
+new-goal-1 (19 questions)
+  BACKGROUND=NO                 12  63%
+  BACKGROUND=YES                 7  37%
+  CENTRAL=NONE                  17  89%
+  CENTRAL=OVERALL                1  5%
+  CENTRAL=SUPPORT                1  5%
+  GOAL-ON TOPIC=DATA             4  21%
+  GOAL-ON TOPIC=FORMAL           6  32%
+  GOAL-ON TOPIC=OTHER            1  5%
+  GOAL=OFF                       8  42%
+  GOAL=ON                       11  58%
+  KIND=APPLY                     8  42%
+  KIND=APPRAISE                  3  16%
+  KIND=FOUNDATION                6  32%
+  KIND=OTHER                     2  11%
+  TOPIC=DATA                     4  21%
+  TOPIC=FINDINGS                 2  11%
+  TOPIC=FORMAL                   6  32%
+  TOPIC=FRAMING                  4  21%
+  TOPIC=OTHER                    3  16%
+
+new-goal-2 (16 questions)
+  BACKGROUND=NO                 12  75%
+  BACKGROUND=YES                 4  25%
+  CENTRAL=NONE                  15  94%
+  CENTRAL=OVERALL                1  6%
+  GOAL-ON TOPIC=DATA             4  25%
+  GOAL-ON TOPIC=FORMAL           7  44%
+  GOAL=OFF                       5  31%
+  GOAL=ON                       11  69%
+  KIND=APPLY                     9  56%
+  KIND=APPRAISE                  2  13%
+  KIND=FOUNDATION                5  31%
+  TOPIC=DATA                     4  25%
+  TOPIC=FINDINGS                 1  6%
+  TOPIC=FORMAL                   7  44%
+  TOPIC=FRAMING                  4  25%
+
+new-none-1 (20 questions)
+  BACKGROUND=NO                 17  85%
+  BACKGROUND=YES                 3  15%
+  CENTRAL=NONE                  14  70%
+  CENTRAL=OVERALL                2  10%
+  CENTRAL=SUPPORT                4  20%
+  GOAL-ON TOPIC=DATA             2  10%
+  GOAL-ON TOPIC=FORMAL           3  15%
+  GOAL=OFF                      15  75%
+  GOAL=ON                        5  25%
+  KIND=APPLY                     4  20%
+  KIND=APPRAISE                  3  15%
+  KIND=FOUNDATION                7  35%
+  KIND=OTHER                     6  30%
+  TOPIC=DATA                     2  10%
+  TOPIC=FINDINGS                 8  40%
+  TOPIC=FORMAL                   4  20%
+  TOPIC=FRAMING                  5  25%
+  TOPIC=OTHER                    1  5%
+
+new-none-2 (14 questions)
+  BACKGROUND=NO                 11  79%
+  BACKGROUND=YES                 3  21%
+  CENTRAL=NONE                  10  71%
+  CENTRAL=OVERALL                1  7%
+  CENTRAL=SUPPORT                3  21%
+  GOAL-ON TOPIC=FORMAL           1  7%
+  GOAL=OFF                      13  93%
+  GOAL=ON                        1  7%
+  KIND=APPLY                     1  7%
+  KIND=FOUNDATION                7  50%
+  KIND=OTHER                     6  43%
+  TOPIC=FINDINGS                 5  36%
+  TOPIC=FORMAL                   2  14%
+  TOPIC=FRAMING                  5  36%
+  TOPIC=OTHER                    2  14%
+
+old-aboutA-1 (18 questions)
+  BACKGROUND=NO                 14  78%
+  BACKGROUND=YES                 4  22%
+  CENTRAL=NONE                  14  78%
+  CENTRAL=OVERALL                1  6%
+  CENTRAL=SUPPORT                3  17%
+  GOAL-ON TOPIC=DATA             2  11%
+  GOAL-ON TOPIC=FORMAL           4  22%
+  GOAL=OFF                      12  67%
+  GOAL=ON                        6  33%
+  KIND=APPLY                     4  22%
+  KIND=APPRAISE                  2  11%
+  KIND=FOUNDATION                6  33%
+  KIND=OTHER                     6  33%
+  TOPIC=DATA                     2  11%
+  TOPIC=FINDINGS                 7  39%
+  TOPIC=FORMAL                   4  22%
+  TOPIC=FRAMING                  5  28%
+
+old-aboutA-2 (19 questions)
+  BACKGROUND=NO                 16  84%
+  BACKGROUND=YES                 3  16%
+  CENTRAL=NONE                  15  79%
+  CENTRAL=OVERALL                1  5%
+  CENTRAL=SUPPORT                3  16%
+  GOAL-ON TOPIC=DATA             3  16%
+  GOAL-ON TOPIC=FORMAL           4  21%
+  GOAL=OFF                      12  63%
+  GOAL=ON                        7  37%
+  KIND=APPLY                     4  21%
+  KIND=APPRAISE                  2  11%
+  KIND=FOUNDATION                6  32%
+  KIND=OTHER                     7  37%
+  TOPIC=DATA                     3  16%
+  TOPIC=FINDINGS                 8  42%
+  TOPIC=FORMAL                   4  21%
+  TOPIC=FRAMING                  4  21%
+
+old-bothA-1 (19 questions)
+  BACKGROUND=NO                 17  89%
+  BACKGROUND=YES                 2  11%
+  CENTRAL=NONE                  16  84%
+  CENTRAL=OVERALL                1  5%
+  CENTRAL=SUPPORT                2  11%
+  GOAL-ON TOPIC=DATA             3  16%
+  GOAL-ON TOPIC=FORMAL          10  53%
+  GOAL-ON TOPIC=OTHER            1  5%
+  GOAL=OFF                       5  26%
+  GOAL=ON                       14  74%
+  KIND=APPLY                    11  58%
+  KIND=APPRAISE                  3  16%
+  KIND=FOUNDATION                3  16%
+  KIND=OTHER                     2  11%
+  TOPIC=DATA                     3  16%
+  TOPIC=FINDINGS                 3  16%
+  TOPIC=FORMAL                  10  53%
+  TOPIC=FRAMING                  2  11%
+  TOPIC=OTHER                    1  5%
+
+old-bothA-2 (17 questions)
+  BACKGROUND=NO                 14  82%
+  BACKGROUND=YES                 3  18%
+  CENTRAL=NONE                  17  100%
+  GOAL-ON TOPIC=DATA             4  24%
+  GOAL-ON TOPIC=FORMAL          10  59%
+  GOAL=OFF                       3  18%
+  GOAL=ON                       14  82%
+  KIND=APPLY                    12  71%
+  KIND=APPRAISE                  1  6%
+  KIND=FOUNDATION                4  24%
+  TOPIC=DATA                     4  24%
+  TOPIC=FORMAL                  10  59%
+  TOPIC=FRAMING                  2  12%
+  TOPIC=OTHER                    1  6%
+
+old-bothB-1 (16 questions)
+  BACKGROUND=NO                 12  75%
+  BACKGROUND=YES                 4  25%
+  CENTRAL=NONE                  16  100%
+  GOAL-ON TOPIC=DATA             4  25%
+  GOAL-ON TOPIC=FORMAL           6  38%
+  GOAL-ON TOPIC=OTHER            1  6%
+  GOAL=OFF                       5  31%
+  GOAL=ON                       11  69%
+  KIND=APPLY                     7  44%
+  KIND=APPRAISE                  2  13%
+  KIND=FOUNDATION                7  44%
+  TOPIC=DATA                     4  25%
+  TOPIC=FORMAL                   7  44%
+  TOPIC=FRAMING                  3  19%
+  TOPIC=OTHER                    2  13%
+
+old-bothB-2 (19 questions)
+  BACKGROUND=NO                 14  74%
+  BACKGROUND=YES                 5  26%
+  CENTRAL=NONE                  18  95%
+  CENTRAL=OVERALL                1  5%
+  GOAL-ON TOPIC=DATA             3  16%
+  GOAL-ON TOPIC=FORMAL           9  47%
+  GOAL=OFF                       7  37%
+  GOAL=ON                       12  63%
+  KIND=APPLY                    10  53%
+  KIND=APPRAISE                  2  11%
+  KIND=FOUNDATION                7  37%
+  TOPIC=DATA                     3  16%
+  TOPIC=FINDINGS                 1  5%
+  TOPIC=FORMAL                  11  58%
+  TOPIC=FRAMING                  4  21%
+
+old-goal-1 (20 questions)
+  BACKGROUND=NO                 15  75%
+  BACKGROUND=YES                 5  25%
+  CENTRAL=NONE                  18  90%
+  CENTRAL=OVERALL                1  5%
+  CENTRAL=SUPPORT                1  5%
+  GOAL-ON TOPIC=DATA             4  20%
+  GOAL-ON TOPIC=FORMAL           7  35%
+  GOAL-ON TOPIC=OTHER            1  5%
+  GOAL=OFF                       8  40%
+  GOAL=ON                       12  60%
+  KIND=APPLY                     9  45%
+  KIND=APPRAISE                  3  15%
+  KIND=FOUNDATION                5  25%
+  KIND=OTHER                     3  15%
+  TOPIC=DATA                     4  20%
+  TOPIC=FINDINGS                 4  20%
+  TOPIC=FORMAL                   7  35%
+  TOPIC=FRAMING                  4  20%
+  TOPIC=OTHER                    1  5%
+
+old-goal-2 (16 questions)
+  BACKGROUND=NO                 12  75%
+  BACKGROUND=YES                 4  25%
+  CENTRAL=NONE                  16  100%
+  GOAL-ON TOPIC=DATA             5  31%
+  GOAL-ON TOPIC=FORMAL           7  44%
+  GOAL-ON TOPIC=OTHER            1  6%
+  GOAL=OFF                       3  19%
+  GOAL=ON                       13  81%
+  KIND=APPLY                    10  63%
+  KIND=APPRAISE                  2  13%
+  KIND=FOUNDATION                4  25%
+  TOPIC=DATA                     5  31%
+  TOPIC=FORMAL                   7  44%
+  TOPIC=FRAMING                  3  19%
+  TOPIC=OTHER                    1  6%
+
+old-none-1 (18 questions)
+  BACKGROUND=NO                 14  78%
+  BACKGROUND=YES                 4  22%
+  CENTRAL=NONE                  14  78%
+  CENTRAL=OVERALL                1  6%
+  CENTRAL=SUPPORT                3  17%
+  GOAL-ON TOPIC=FORMAL           3  17%
+  GOAL=OFF                      15  83%
+  GOAL=ON                        3  17%
+  KIND=APPLY                     1  6%
+  KIND=APPRAISE                  1  6%
+  KIND=FOUNDATION               11  61%
+  KIND=OTHER                     5  28%
+  TOPIC=FINDINGS                 6  33%
+  TOPIC=FORMAL                   4  22%
+  TOPIC=FRAMING                  7  39%
+  TOPIC=OTHER                    1  6%
+
+old-none-2 (20 questions)
+  BACKGROUND=NO                 14  70%
+  BACKGROUND=YES                 6  30%
+  CENTRAL=NONE                  16  80%
+  CENTRAL=SUPPORT                4  20%
+  GOAL-ON TOPIC=DATA             1  5%
+  GOAL-ON TOPIC=FORMAL           3  15%
+  GOAL=OFF                      16  80%
+  GOAL=ON                        4  20%
+  KIND=APPLY                     2  10%
+  KIND=FOUNDATION               11  55%
+  KIND=OTHER                     7  35%
+  TOPIC=DATA                     1  5%
+  TOPIC=FINDINGS                 6  30%
+  TOPIC=FORMAL                   3  15%
+  TOPIC=FRAMING                  7  35%
+  TOPIC=OTHER                    3  15%
