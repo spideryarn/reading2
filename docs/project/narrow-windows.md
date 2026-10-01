@@ -107,8 +107,14 @@ Three things worth carrying to whatever is built next:
   times and the compiler checks none of them. **It was six until 2026-09-03**, and the one that went
   is the interesting one — see the paragraph above: a derived breakpoint that is only correct in one
   spine state is not a copy to keep in step, it is a copy to delete.
-- **Structure's switch point is derived the same way, and it is the one band that is not
-  `MODE_MIN`–`MODE_IDEAL` wide.** Its two columns need 17rem of content each, column B's bracket
+- **Every mode's band is one of four shapes**, picked by `bandShapeFor` in
+  [`layout.ts`](../../src/web/layout.ts): **standard** (`MODE_MIN`–`MODE_IDEAL`, 18–25rem), the
+  **roomy** one Summary has since 2026-10-01 (the same, capped at `ROOMY_IDEAL_REM`, 28rem — it only
+  grows once the prose has its minimum, so from about 957px and reaching 448px near 1004px;
+  [summaries.md](summaries.md)), Tweets' **wide** one (`WIDE_SHARE` of the room up to `wideIdeal`, the
+  one band that takes room the prose was defending), and Structure's, below.
+- **Structure's switch point is derived the same way, and its band is the one sized by its
+  content rather than a cap.** Its two columns need 17rem of content each, column B's bracket
   inside its track, a 1rem gutter, the band's padding and border — **609px at a 16px root**, so a
   **1165px window** with the rail, 1153 without. Below that Structure's band is the ordinary one with
   the list face in it; at and above it the band jumps to 609 and grows to 705, while the prose keeps

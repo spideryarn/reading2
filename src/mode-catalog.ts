@@ -281,14 +281,18 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   summary: {
-    description:
-      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
-    how: "The sentences are the tree's own, written when the article was ingested — a shorter summary of the same thing is a different level of the tree, not a second request. Its Simple view is the one part a model writes: a few plain-words paragraphs, written once and kept.",
+    description: "The piece in plain words, at the length you choose — brief, simple or fuller",
+    /* Checked against src/simple-summary.ts: one job writes every level (a
+       call each, side by side) and stores them together, and every paragraph
+       keeps one to three passage ids. Until 2026-10-01 this mode was the
+       tree's gists at Parts or Sections, written at ingest; that outline went
+       (plan 261001p), and Structure is where the gists are drawn now. */
+    how: "A model writes all three lengths in one go, the first time you ask, and they are kept. Each paragraph links to the passages it rests on — the article says it better.",
     /* Both spellings, because the reader's keyboard is not ours to choose.
-       `simple` was here for the plain-words sub-mode (plan 260930i) and opened
-       the outline instead; since 2026-10-01 the bar has a *Summary › Simple*
-       row that goes there (src/web/sub-modes.ts, plan 261001d). */
-    aliases: ["summarise", "summarize", "gist"],
+       `simple` is not here: the bar has a *Summary › Simple* row that goes
+       there (src/web/sub-modes.ts, plan 261001d). `gist` went with the outline
+       on 2026-10-01 — nothing in Summary is a gist any more. */
+    aliases: ["summarise", "summarize"],
     experimental: false,
   },
   diagram: {

@@ -264,7 +264,7 @@ const { OutlinePanel } = await import("../src/web/OutlinePanel.js");
 const { VisitorBand } = await import("../src/web/PublicChrome.js");
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
-const { SummaryPanel } = await import("../src/web/SummaryPanel.js");
+const { VisitorSummaryBand } = await import("../src/web/modes/summary/SummaryMode.js");
 const { TimelinePanel } = await import("../src/web/TimelinePanel.js");
 const { TweetsPanel } = await import("../src/web/Tweets.js");
 const { assignSlots } = await import("../src/web/hit-colours.js");
@@ -1447,14 +1447,16 @@ function mountVisitor(): ReactNode {
   });
 }
 
+/* The visitor's band, so no `useSimple` and no network: the shape is the
+   band's, and the owner's draws the same surface around the same row
+   (SummaryMode.tsx § `SummarySurface`). Under nuqs, which renders no element,
+   so the band is still the whole output. */
 function mountSummary(): ReactNode {
-  return createElement(SummaryPanel, {
-    root: ROOT,
-    deep: 1,
-    onDeep: noop,
-    atRow: 0,
-    onJump: noop,
-  });
+  return createElement(
+    NuqsAdapter,
+    null,
+    createElement(VisitorSummaryBand, { simple: undefined, onJump: noop }),
+  );
 }
 
 function mountGlossary(access: GlossaryAccess): ReactNode {
@@ -1671,14 +1673,16 @@ const VISITOR: BandShape = {
   ],
 };
 
-/* Summary is one of the three bands with no header at all, and `root: null`
-   draws the same two children with a sentence inside the scroller — so the
-   empty tree is not a second shape. */
+/* Summary is one of the three bands with no header at all. Since 2026-10-01
+   (plan 261001p) it is SummaryMode.tsx's own surface rather than
+   SummaryPanel's, with the same three children: the scroller is now
+   SimplePanel's, and with no paragraphs it holds a sentence instead — so the
+   empty level is not a second shape. */
 const SUMMARY: BandShape = {
   className: "mode-band summ has-about",
   label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.summ-controls", "div.summ-scroll"],
+  children: ["button.band-about[aria-expanded,aria-label,type]", "div.summ-controls", "div.summ-scroll.simple-scroll"],
 };
 
 const GLOSSARY_SHAPE: BandShape = {

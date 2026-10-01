@@ -497,6 +497,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * `chat-anchor-route.test.ts`, which is the entry after next, and it reaches
    * what it reaches by the same two doors.
    */
+  /**
+   * **Written 2026-10-01**, `static-only` for the same reason as the entry
+   * after it, whose harness it copies line for line.
+   */
+  "tests/chat-visible-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`visible` at the chat route: what the wire may carry, and the hedged on-screen line the " +
+      "request `converse` builds. Seeds through `scratchArticleInPg`; what it still reaches is the " +
+      "seeder's copy step and the ledger row the stubbed model call records.",
+  },
   "tests/chat-help-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2321,6 +2334,11 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 6 },
   "tests/term-lookup.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 3 },
+  /* Recorded 2026-10-01 (plan 261001p) when its Metadata block gained the
+     file's first mutation; it was a Postgres suite from birth, so "converted"
+     here means "carries evidence", which is what this record checks. */
+  "tests/store-tweets-stale.test.ts":
+    { date: "2026-10-01", stage: "261001p", mutations: 1, blindSpots: 1, blocksWithoutJudgement: 2 },
   "tests/the-query-string-does-not-decide-the-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
   "tests/tweets.test.ts":
@@ -2629,6 +2647,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two

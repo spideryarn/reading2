@@ -61,8 +61,6 @@
 /* ---- the model: everything an AI wrote ----------------------------------- */
 :root[data-voices] :is(
     /* summaries and gists */
-    .summ-text:not(.missing),
-    .summ-question,
     .struct-gist,
     .outln-gist,
     .outln-arc,

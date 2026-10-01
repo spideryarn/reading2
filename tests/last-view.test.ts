@@ -32,15 +32,26 @@ import {
 
 describe("rememberableSearch", () => {
   it("keeps the parameters that say how you are looking at the article", () => {
-    expect(rememberableSearch("?at=spya-tgnssb&mode=summary&deep=2")).toBe(
-      "?at=spya-tgnssb&mode=summary&deep=2",
+    expect(rememberableSearch("?at=spya-tgnssb&mode=summary&summary=fuller")).toBe(
+      "?at=spya-tgnssb&mode=summary&summary=fuller",
     );
+  });
+
+  it("never stores `deep`, but lets an old link carrying it win over a restore", () => {
+    /* `?deep=` was Summary's Parts | Sections until the outline went on
+       2026-10-01 (plan 261001p). Nothing writes it now, so it is never
+       stored — but `/read/x?deep=2` is an address somebody may still open,
+       and it must read as a link, not as a bare address a remembered view
+       could be restored over. GPT Sol's plan review of 261001p, P1. */
+    expect(rememberableSearch("?mode=summary&deep=2")).toBe("?mode=summary");
+    expect(hasArticleState("?deep=2")).toBe(true);
+    expect(restoredHref("/read/x", "?deep=2", "?mode=quotes")).toBe(null);
   });
 
   it("keeps Summary's sub-mode, which only a press on its chip can spend on", () => {
     /* `?summary=simple` restored mounts Simple's read and nothing else: the run
-       is armed by the chip's click (SummaryMode.tsx), never by arrival — so it
-       is a place you were, like `?deep=`. Plan 260930i. */
+       is armed by the slider's press (SummaryMode.tsx), never by arrival — so
+       it is a place you were, like `?at=`. Plan 260930i. */
     expect(rememberableSearch("?mode=summary&summary=simple")).toBe("?mode=summary&summary=simple");
     expect(hasArticleState("?summary=simple")).toBe(true);
   });
@@ -229,8 +240,8 @@ describe("restoredHref", () => {
     // Nothing left worth restoring is the same as nothing stored.
     expect(restoredHref("/read/x", "", "?text=0")).toBe(null);
     // And a parameter that is still remembered rides through untouched.
-    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2&deep=2")).toBe(
-      "/read/x?at=spya-a&deep=2",
+    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2&summary=brief&deep=2")).toBe(
+      "/read/x?at=spya-a&summary=brief",
     );
   });
 

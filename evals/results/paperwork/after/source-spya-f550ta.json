@@ -1,0 +1,247 @@
+{
+  "arm": "after",
+  "slug": "source-spya-f550ta",
+  "at": "2026-10-01T20:12:31.040Z",
+  "sourceSha256": {
+    "hierarchy.ts": "be8ec11b0875a55886eba9ec1b525753ee3627de1e11c2d559e3fbc9cca3a3f9",
+    "simple-summary.ts": "9df064a06be1a86cedaeed7eaa2f67fe73e87d2fe409791e5bbcd2cd9e0f182f",
+    "tweets.ts": "2d98f7c9de54f432e603c2a7e22d361647221d705dcbc305382634981c49edfa",
+    "paperwork.ts": "3eb8b4c90cd68cc9b50412f810f6646c998dbfe9a8e24a7bfe9ff89040da2961"
+  },
+  "versions": {
+    "toc": "toc/10",
+    "tweets": "tweets/6",
+    "simple": "simple-prompt/2"
+  },
+  "gists": [
+    {
+      "depth": 0,
+      "range": "spya-ncu3br..spya-rcbx2w",
+      "title": "Ball Lightning Observed by Trained Witnesses",
+      "gist": "Firsthand reports from scientists and trained professionals can anchor the otherwise anecdotal, theory-starved study of ball lightning.",
+      "question": "ball lightning — why do reports from trained observers matter for an unsolved phenomenon? (a case compilation)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-ncu3br..spya-wtg508",
+      "title": "Front matter and abstract",
+      "gist": "Ball lightning has thousands of eyewitness reports but almost no instrument records and no agreed theory, so this review compiles 41 cases from trained observers, 1868-2020, to guide future fieldwork and theory.",
+      "question": "ball lightning cases — what does compiling scientists' firsthand reports add to an unsolved phenomenon? (a case compilation)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-ncu3br..spya-wz5tp8",
+      "title": "Publication details and authorship",
+      "gist": "The journal, author, affiliation, correspondence details, and submission dates."
+    },
+    {
+      "depth": 2,
+      "range": "spya-wtg508..spya-wtg508",
+      "title": "Abstract",
+      "gist": "Ball lightning has thousands of eyewitness reports but almost no instrument records and no agreed theory, so this review compiles 41 cases from trained observers, 1868-2020, to guide future fieldwork and theory."
+    },
+    {
+      "depth": 1,
+      "range": "spya-duju25..spya-rjnzcc",
+      "title": "1 Historical outline",
+      "gist": "Since Arago coined the term in 1837, ball lightning has produced thousands of anecdotal reports but almost no scientific documentation, leaving it a fragmented, unsolved field.",
+      "question": "ball lightning research — why has it stayed a fragmented, unsolved field despite centuries of sightings? (historical survey)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-duju25..spya-v4ps0c",
+      "title": "Early sightings and naming",
+      "gist": "An 1841 Milan fireball witnessed by a marine painter, later reported through Arago, illustrates how Arago's 1837 coinage of 'ball lightning' named a still-unexplained, randomly occurring luminous phenomenon lasting only seconds."
+    },
+    {
+      "depth": 2,
+      "range": "spya-c4zvkj..spya-rjnzcc",
+      "title": "Scattered literature, little documentation",
+      "gist": "Despite many monographs and thousands of references, lightning experts Rakov and Uman found almost 5000 witness reports but almost no photographic or instrumental evidence, leading Turner to call this a 'fragmented science'."
+    },
+    {
+      "depth": 1,
+      "range": "spya-zbq6a4..spya-nwxrm0",
+      "title": "Collecting scientists' reports",
+      "gist": "Because ball lightning is rarely captured on film, the author gathers published and unpublished reports from scientists and trained professionals, including cases correlated with lightning-detection network data.",
+      "question": "case collection — how can scattered reports from trained observers be assembled into a usable dataset? (a methodology)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-zbq6a4..spya-fj8hm9",
+      "title": "Scope of the review",
+      "gist": "Since direct photographic capture of ball lightning is extremely rare, the author follows prior scholars' approach of prioritizing reports from scientists and trained professionals, compiling 41 cases from 1868-2020 across eight countries without claiming completeness."
+    },
+    {
+      "depth": 2,
+      "range": "spya-nwxrm0..spya-nwxrm0",
+      "title": "Author's prior fieldwork",
+      "gist": "Over 45 years the author collected European ball lightning cases, and a 2018 study correlating 34 events with lightning-location data found an unexpectedly high share of positive strokes and equal numbers of close and distant sightings."
+    },
+    {
+      "depth": 1,
+      "range": "spya-ut726q..spya-weej2g",
+      "title": "Scientists as ball lightning observers",
+      "gist": "Firsthand accounts from physicists, engineers, physicians, and other trained professionals, spanning 1868 to 2002 and including sightings recalled from childhood, describe ball lightning's size, motion, and physical effects in rich detail.",
+      "question": "trained observers — what do scientists themselves report when they encounter ball lightning? (a chronological series of accounts)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-ut726q..spya-ut726q",
+      "title": "Introducing the observer series",
+      "gist": "Before presenting detailed cases, the author notes that oft-repeated claims about famous physicists like Niels Bohr seeing ball lightning are secondhand or undocumented, unlike the verified reports that follow."
+    },
+    {
+      "depth": 2,
+      "range": "spya-jq0hzy..spya-uh4ywe",
+      "title": "3.1 Natural scientists, technical, and medical professionals",
+      "gist": "From an 1868 Vienna sighting by geologist Haidinger through a 2002 California observation by physicist Bychkov, dozens of scientists and engineers describe ball lightning's colors, trajectories, explosions, and occasional physical harm in close detail."
+    },
+    {
+      "depth": 2,
+      "range": "spya-usdfft..spya-weej2g",
+      "title": "3.2 Childhood reports of later natural scientists",
+      "gist": "Four scientists who later studied physics or mathematics recall, often decades afterward, highly specific childhood sightings of ball lightning's shape, color, and motion, suggesting training sharpens recollection though not necessarily perception."
+    },
+    {
+      "depth": 1,
+      "range": "spya-qtga9m..spya-nb4g7h",
+      "title": "Other trained observers",
+      "gist": "Weather observers, coastguards, amateur astronomers, military officers, and executives across a century of sightings add further detailed, professionally trained testimony to the ball lightning case record.",
+      "question": "non-scientist professionals — do trained observers outside the natural sciences also produce credible ball lightning reports? (two professional groups)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-qtga9m..spya-eyhaer",
+      "title": "4.1 Weather observers and coastguards",
+      "gist": "From an 1876 Pikes Peak mountaintop station to a 1994 German weather office, trained meteorological staff and a coastguard repeatedly describe ball lightning during storms, though automating these stations may reduce future sightings."
+    },
+    {
+      "depth": 2,
+      "range": "spya-qtqp22..spya-nb4g7h",
+      "title": "4.2 Amateur astronomers, military, and economic experts",
+      "gist": "Amateur astronomers, an air force colonel, and a company director each describe distinct ball lightning encounters between 1974 and 2020, including one later correlated with a strong positive lightning strike by Austria's detection network."
+    },
+    {
+      "depth": 1,
+      "range": "spya-k02vg9..spya-p9uvh9",
+      "title": "Synopsis of cases",
+      "gist": "A statistical summary of the 41 collected cases shows sightings clustering in Europe during summer storm hours, with object sizes and durations skewed smaller than prior large databases.",
+      "question": "the case sample — what patterns emerge across size, timing, and location when the 41 reports are compared statistically? (a statistical summary)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-k02vg9..spya-a0h7qn",
+      "title": "Where and when cases occurred",
+      "gist": "Most of the 41 reports come from Europe with a few from the US, Spain, and Latvia, spanning 1868-2020 with a peak between 1950 and 2000, concentrated in summer months and afternoon-to-midnight hours matching thunderstorm timing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-hrcct6..spya-p9uvh9",
+      "title": "Size, duration, and physical traits",
+      "gist": "Reported ball sizes and durations skew smaller and shorter than in larger databases, most sightings occur during or near thunderstorms, and effects such as sparks, odors, damage, and even temporary paralysis accompany the described objects."
+    },
+    {
+      "depth": 1,
+      "range": "spya-c2m4vk..spya-djjxkt",
+      "title": "Other influential or notable cases",
+      "gist": "Six widely cited ball lightning cases, from Richmann's 1753 death to modern spectroscopic and triggered-lightning experiments, show how physical evidence and new technology help test theories despite imperfect documentation.",
+      "question": "famous cases — what can well-documented or heavily analyzed incidents add beyond ordinary eyewitness reports? (six notable cases)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-bbtuzu..spya-srxfmn",
+      "title": "Richmann's death and Charcot's patient",
+      "gist": "Georg Richmann's 1753 electrocution, long mythologized as a ball-lightning death, was actually ordinary lightning, while physician Charcot's 1889 patient D-cy offers a well-documented case linking a ball-lightning strike to lasting neurological symptoms."
+    },
+    {
+      "depth": 2,
+      "range": "spya-qxb4e2..spya-dtt3v9",
+      "title": "Dorstone tub and Poughquag window",
+      "gist": "The 1936 Dorstone case let researchers estimate a ball's energy density from boiled water, and a 2008 Poughquag sighting let scientists use glass fluorescence decades later to estimate the object's radiant power."
+    },
+    {
+      "depth": 2,
+      "range": "spya-mbqwhj..spya-djjxkt",
+      "title": "Triggered lightning and field spectroscopy",
+      "gist": "Researchers in Florida triggered lightning onto various materials without producing true ball lightning, while field teams in China and Russia captured spectroscopic and video evidence of real ball-lightning events near power lines."
+    },
+    {
+      "depth": 1,
+      "range": "spya-reyd2w..spya-zz7g2q",
+      "title": "Conclusions",
+      "gist": "Because ball lightning is rare, random, and understudied, progress requires better-coordinated, multidisciplinary documentation of physical-evidence cases to test and evaluate competing theories.",
+      "question": "ball lightning theory — what will it take to move past a fragmented, part-time field of study? (a recommendation)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-reyd2w..spya-yamst5",
+      "title": "Diagnosing a fragmented science",
+      "gist": "Decades of scattered, individualized ball-lightning research, some collecting data, some theorizing, some testing in labs, produced over 16 explanatory frameworks without consensus, leaving the field fragmented as earlier researchers described."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zz7g2q..spya-zz7g2q",
+      "title": "Toward coordinated documentation",
+      "gist": "The author remains optimistic that coordinated online reporting, combined with physical-evidence benchmarks and widespread mobile-phone and webcam footage, can build a systematic database against which ball-lightning theories can be tested."
+    },
+    {
+      "depth": 1,
+      "range": "spya-yp8uzp..spya-rcbx2w",
+      "title": "Data availability and acknowledgements",
+      "gist": "Data availability, competing-interest, acknowledgement, review statements, and the reference list."
+    },
+    {
+      "depth": 2,
+      "range": "spya-yp8uzp..spya-yp8uzp",
+      "title": "Data availability",
+      "gist": "Lists which case reports are published online versus drawn from the author's or Bychkov's private databases."
+    },
+    {
+      "depth": 2,
+      "range": "spya-hmaju2..spya-x4e2cg",
+      "title": "Disclosures and acknowledgements",
+      "gist": "Competing-interest statement, acknowledgements to contributors, and the review statement."
+    },
+    {
+      "depth": 2,
+      "range": "spya-rcbx2w..spya-rcbx2w",
+      "title": "References",
+      "gist": "Bibliography of cited works."
+    }
+  ],
+  "simple": {
+    "brief": [
+      "Ball lightning is a glowing floating ball sometimes seen during thunderstorms. It is still unexplained, because it is rare and almost never caught on camera or instruments. This article collects eyewitness reports from scientists and other trained professionals, since their descriptions might be more careful and useful than ordinary accounts. It gathers 41 such cases from 1868 to 2020, across eight countries.",
+      "The reports describe balls of very different sizes, brightness, speeds, and lifetimes, so no single simple picture fits them all. There is still no agreed scientific theory of what ball lightning actually is. The author concludes that well-documented sightings from trained observers, combined with rare physical evidence, can still help test and improve theories in the future."
+    ],
+    "simple": [
+      "This article is about ball lightning: a glowing, floating ball seen during thunderstorms that lasts only a few seconds and then vanishes. Despite thousands of eyewitness accounts, almost no instrument has ever caught one, and scientists still cannot agree on what it is. The piece gathers eyewitness reports specifically from scientists and other trained professionals, like meteorologists, engineers, and doctors, reasoning that trained observers make better witnesses.",
+      "Because the phenomenon pops up randomly and briefly, it is nearly impossible to study with cameras or instruments, so most evidence is just people's descriptions. The article argues that well-documented reports from trained observers can still be useful: they can guide further fieldwork and help test or rule out different explanations for ball lightning.",
+      "The author pulls together 41 cases from eight countries spanning 1868 to 2020: 20 from previously published sources, 15 from the author's own decades of casework, and 6 from a Russian database. Each case is summarized, covering things like size, how long it lasted, whether it happened during a storm, and any damage or injury caused. Six further especially famous or thoroughly investigated cases, including one involving a death long blamed on ball lightning and a case studied with lightning-location data and spectral cameras, are discussed separately.",
+      "The article concludes that careful case reports from trained observers, combined with rare pieces of physical evidence, can help build a shared body of data. Such a database, the author says, could let researchers properly test and compare the many competing theories of ball lightning, moving the field past its current scattered, piecemeal state. The author also invites any scientists who have seen ball lightning but never reported it to come forward."
+    ],
+    "fuller": [
+      "This article is a review that gathers eyewitness accounts of ball lightning, a strange glowing floating ball sometimes seen during thunderstorms, reported specifically by scientists and other trained professionals like engineers, doctors, and weather observers. It is not a new experiment but a collection and summary of past sightings, built from published sources plus some new ones the author gathered directly.",
+      "Ball lightning has thousands of eyewitness reports but almost no instrument recordings like photos or videos, and scientists still disagree on what causes it. The piece argues that because trained observers are better placed to notice and describe details accurately, their accounts are especially useful for testing ideas about what ball lightning actually is.",
+      "The author compiles 41 cases from eight countries spanning 1868 to 2020: 20 from published sources, 15 from the author's own 45 years of casework, and 6 from a Russian database, plus six especially notable or influential cases such as one involving a melted asphalt patch used to estimate the object's energy. A summary of case details finds the sightings vary enormously in size (1.5 cm to 15 m), how long they lasted (1.5 to 180 seconds), and their link to lightning strikes (73% happened during a storm), making it hard to fit them into one single explanation.",
+      "The author concludes that well-documented reports from trained observers, combined with rare physical evidence like burn marks or video spectra, can help push the field forward and give real tests for theories, rather than leaving it as what one researcher called a \"fragmented science.\" The piece ends by inviting scientists who have seen ball lightning but never reported it to come forward."
+    ]
+  },
+  "tweets": [
+    "With thousands of eyewitness reports but almost no instrument recordings, ball lightning remains unexplained. This review compiles 41 case reports from scientists and trained observers across eight countries, 1868-2020, plus six landmark cases, to see what disciplined testimony can offer the field.",
+    "The term traces to French physicist Francois Arago's 1837 writing. One founding account: in 1841 Milan, a marine painter watched a reddish-yellow fireball drift past a second-floor window during a storm, then explode against a church tower cross.",
+    "Decades of review have found no consensus. A 2003 lightning handbook noted almost 5000 witness reports but 'little, if any, scientific documentation,' concluded several different mechanisms might be at work, and called ball lightning research a 'fragmented science.'",
+    "Direct instrumental capture is extremely rare: one search of about 12,000 photographic records from a US meteor-tracking network over ten years turned up only two probable ball lightning events. This scarcity is why the review turns to trained human witnesses instead.",
+    "The author, a meteorologist and psychologist, has gathered European cases for 45 years. A 2018 project matched 34 central European sightings to lightning-detection data, finding an unexpectedly high share of positive lightning strokes and equal numbers of close and distant events.",
+    "Some oft-repeated scientist sightings turn out to be thin: physicist Niels Bohr's reported sighting comes only second-hand through a colleague, and a report attributed to astronomer Martin Ryle lacked any supporting detail.",
+    "In 1868 Vienna, geologist Wilhelm von Haidinger watched a vivid yellow fireball hover outside his window for 2-3 seconds during a storm, firing red and white rays toward the ground. Two other Vienna residents reported similar glowing spheres the same evening.",
+    "In 1927 Tubingen, physics professor Walther Gerlach timed a luminous ball racing from a lightning strike to a house 1100 meters away by its thunder and later explosion. His math gave a speed of roughly 1200 meters per second, almost four times the speed of sound, yet witnessed as silent.",
+    "Reports span odd settings: a radio astronomer watched a blue-white glowing sphere drift down an aircraft aisle in 1963. In 1965 Russia, a chemist on a river expedition caught air samples from a fireball's smoke trail, finding ozone and nitrogen dioxide 50 to 100 times above normal levels.",
+    "Among childhood sightings later reported by scientists: in 1951 Germany, astrophysicist Axel Wittmann, then a boy, saw a glowing sphere break into smaller spheres that melted patches into the asphalt below, letting him later calculate the plasma's energy density.",
+    "Weather station staff add more cases: an 1876 mountain observatory log describes a ball of lightning passing through a storeroom and woodshed. A century later, a Welsh coastguard watched a bus-sized glowing ball float down a hillside from a storm cloud for seven seconds.",
+    "Across the 41 cases, sizes ranged from 1.5 centimeters to 15 meters and durations from 1.5 to 180 seconds, though most clustered much smaller and shorter. About 73% occurred during an active thunderstorm, and 41% of witnesses saw a lightning strike at the same moment.",
+    "Among six landmark cases: an 18th-century physicist's death, long blamed on ball lightning in popular prints, was actually an ordinary lightning strike. More recent cases include 2012 Chinese spectroscopy footage of a ball forming from a lightning channel, and a 2015 Moscow sighting triangulated from three witnesses' phone videos.",
+    "The review concludes that ball lightning research has stayed scattered and part-time for lack of coordination, funding, and reproducible data. It argues that physical-evidence cases, paired with today's abundant phone and webcam footage, could finally build the systematic database needed to test competing theories."
+  ]
+}

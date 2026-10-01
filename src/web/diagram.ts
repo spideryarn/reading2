@@ -724,8 +724,8 @@ export function wrapText(text: string, maxChars: number, maxLines: number): stri
  * Preorder, and children in the order the tree stores them, which is document
  * order — that is the whole invariant every one of these pictures rests on.
  * A collapsed node keeps its own entry and loses its subtree, which is what
- * makes "I closed this" different from "there is nothing here" (SummaryPanel.tsx
- * § two ways to be hidden).
+ * makes "I closed this" different from "there is nothing here" — the
+ * distinction Summary's outline drew, until it went on 2026-10-01.
  */
 /**
  * The deepest level any picture draws.
@@ -902,9 +902,9 @@ export function paragraphStops(
 /**
  * The deepest node the reader is standing in, or null above the first one.
  *
- * **Deepest, and deepest among the ones actually drawn** — the same rule the
- * summary panel's follow mark uses (docs/project/summaries.md), and for the
- * same reason: marking a part when its section is on screen tells the reader
+ * **Deepest, and deepest among the ones actually drawn** — the rule Summary's
+ * former outline used too, and for the same reason: marking a part when its
+ * section is on screen tells the reader
  * something they already knew. A collapsed node is not drawn, so its children
  * are not candidates, and the mark lands on the collapsed node itself.
  */

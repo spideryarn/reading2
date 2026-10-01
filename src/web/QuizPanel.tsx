@@ -1232,9 +1232,9 @@ function Mark({
         <p className="quiz-reply">
           {/* `CitedText`, not `CitedMarkdown`: the marking prompt asks for plain
               prose paragraphs and forbids lists and headings, so a stray `#` in
-              a sentence about a heading must stay a `#`. The summary panel makes
-              the same call. Links are off — nothing in this prompt governs what
-              a model may link, and an `href` built from model output is
+              a sentence about a heading must stay a `#`. Links are off —
+              nothing in this prompt governs what a model may link, and an
+              `href` built from model output is
               somewhere a hostile page can steer a reader
               (docs/project/security.md).
 

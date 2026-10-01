@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { OK_LINK_PATHS } from "../scripts/changelog/changelog.js";
-import { LAUNCH_VERSION, REPO_URL, parseChangelog } from "../src/changelog.js";
+import { LAUNCH_VERSION, REPO_URL, parseChangelog, parsePending } from "../src/changelog.js";
 import { parseRoute } from "../src/web/router.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -83,6 +83,20 @@ describe("the committed versions.ndjson", () => {
 
   it("has no problems", () => {
     expect(result.problems).toEqual([]);
+  });
+
+  /**
+   * The release about to ship (docs/plans/261001q) is read against this file by
+   * the page, the deploy gate and `promote`. A pending release that does not fit
+   * after the last line would be refused by the gate at deploy time; this says
+   * so at `npm test` instead.
+   */
+  it("is followed by a pending release that fits after its last line, or by none", () => {
+    const pending = parsePending(
+      readFileSync(path.join(REPO, "src/web/changelog-pending.json"), "utf8"),
+      result.versions,
+    );
+    expect(pending.problems).toEqual([]);
   });
 
   it("is not empty or truncated", () => {

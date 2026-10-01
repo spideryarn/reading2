@@ -13,6 +13,8 @@
  * band (`fitMode`). granularity-zoom.md keeps the history of the columns.
  */
 
+import type { Mode } from "../modes.js";
+
 /**
  * The painted width of the rail, in px. Mirrors `--spine-w` in styles.css —
  * and `tests/spine-width.test.ts` is what stops the two drifting, because CSS
@@ -266,13 +268,40 @@ export function wideIdeal(rootFontPx: number): number {
 export const WIDE_SHARE = 0.42;
 
 /**
+ * **The roomy band's ceiling** — the standard band's, a touch higher. Summary's,
+ * since 2026-10-01. Greg (SPIDERYARN-READING2-7Q): *"Make the Summary mode
+ * column ever so slightly wider (if on a wide screen)"*. It still takes only
+ * what the prose leaves above `PROSE_MIN`, so below about 957px it is the
+ * standard band and it reaches 448px near 1004px.
+ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
+ */
+export const ROOMY_IDEAL_REM = 28;
+
+/**
  * **Which band a mode gets.** Every mode's band is `MODE_MIN`–`MODE_IDEAL` wide,
  * except Structure's while its two columns are on screen — see
- * `structureColumnsBand` — and a `"wide"` one, which takes `WIDE_SHARE` of the
+ * `structureColumnsBand` — a `"wide"` one, which takes `WIDE_SHARE` of the
  * room up to `wideIdeal`, and so is the one band that takes room the prose was
- * defending.
+ * defending, and a `"roomy"` one, the standard band up to `ROOMY_IDEAL_REM`.
  */
-export type BandShape = "standard" | "structure" | "wide";
+export type BandShape = "standard" | "structure" | "wide" | "roomy";
+
+/**
+ * **The band each mode gets** — one answer for the live fit and for the
+ * Marginalia press's `notesFit`, which had each written the same ternary.
+ * Structure's two columns want a band of their own width where they fit
+ * (`structureColumnsBand`, docs/plans/260928a-structure-two-columns-readable.md).
+ * Tweets' posts are prose, so theirs may grow to a prose column's measure —
+ * Greg, 2026-09-29: *"It could be quite a wide left-hand column if that will
+ * help to make it be readable."* Summary's paragraphs get a touch more room
+ * (`ROOMY_IDEAL_REM`).
+ */
+export function bandShapeFor(mode: Mode): BandShape {
+  if (mode === "structure") return "structure";
+  if (mode === "tweets") return "wide";
+  if (mode === "summary") return "roomy";
+  return "standard";
+}
 
 /**
  * **Structure's two columns, as widths.** Calculated from rem, because the
@@ -810,6 +839,12 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
   if (bandShape === "structure") {
     const { min, ideal } = structureColumnsBand(rootFontPx);
     if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
+  }
+  /* Floored at `MODE_IDEAL`, as the wide band's cap is: 28rem at a 12px root
+     is 336, and a roomy band must never be the narrower one. */
+  if (bandShape === "roomy") {
+    const ideal = Math.max(MODE_IDEAL, Math.round(ROOMY_IDEAL_REM * rootFontPx));
+    return clamp(avail - PROSE_MIN, MODE_MIN, ideal);
   }
   const standard = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike

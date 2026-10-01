@@ -72,7 +72,7 @@ in our L2 column today, and that is a real gap in what the view tells you.
 → [structure-panel.md](structure-panel.md#what-we-take-from-this)
 
 **Landed in the summary panel** — a paragraph count on every row and a "+N sections" badge on a
-closed one. **Still open in the L2 column itself**, which is where this item was originally aimed and
+closed one; both went with that panel's outline on 2026-10-01. **Still open in the L2 column itself**, which is where this item was originally aimed and
 where the gap is sharpest, since that column is what a reader is looking at while reading.
 → [../summaries.md](../summaries.md)
 

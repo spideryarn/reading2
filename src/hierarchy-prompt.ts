@@ -98,7 +98,14 @@ import type { Block } from "./types.js";
    `plainWords()` from src/plain-words.ts, after OUTPUT so the eval's GISTS and
    QUESTIONS slices are unchanged. `toc/8` had reached main, so this could not
    ride on it. docs/plans/260926a-plainer-summaries-and-glossary.md § Stages 2–3. */
-export const PROMPT_VERSION = "toc/9";
+/* **`toc/10`, 2026-10-01**: SYSTEM gained the paperwork rule,
+   `paperwork("structure")` from src/paperwork.ts, after the plain-words core, so
+   the eval's GISTS and QUESTIONS slices are again unchanged. A range that is only
+   authors, affiliations, acknowledgements, funding or disclosures keeps its node
+   and gets a gist saying what it is, not what it says (Greg,
+   SPIDERYARN-READING2-8M). New articles only, as before.
+   docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md. */
+export const PROMPT_VERSION = "toc/10";
 
 /**
  * How hard the model thinks before it starts writing.

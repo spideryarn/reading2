@@ -117,6 +117,7 @@ import {
 } from "../src/crossrefs.js";
 import {
   inputFingerprint as simpleFingerprint,
+  SIMPLE_PROMPT_VERSION,
   SIMPLE_VERSION,
 } from "../src/simple-summary.js";
 import { PROMPT_VERSION as QUOTES_VERSION } from "../src/quotes.js";
@@ -655,6 +656,8 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     slug: SLUG,
     sourceHash: SIMPLE_SOURCE_HASH,
     version: SIMPLE_VERSION,
+    /* The prompt's own stamp since plan 261001p; the step's stamp compares it. */
+    promptVersion: SIMPLE_PROMPT_VERSION,
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
     profileHash: null,

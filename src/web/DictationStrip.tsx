@@ -39,10 +39,9 @@
  * the timer's `role="timer"` exists exactly so that it *is* exposed while not
  * being announced.
  *
- * **The device's name appears at the moment it is diagnostic and not before.**
- * Nothing on this page used to say which microphone had produced a zero, so a
- * meter reading nothing and a meter pointed at a dead conferencing loopback
- * were the same picture.
+ * **The device's name appears for as long as it is open.** Nothing on this page
+ * used to say which microphone had produced a zero, and moving bars still do
+ * not say whether the browser opened the device the reader meant.
  */
 import { Download, Loader2, Mic, RotateCcw, Square, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -321,20 +320,6 @@ export function DictationStrip({
           {dictation.armed && dictation.startedAt !== null && (
             <Elapsed since={dictation.startedAt} />
           )}
-          {dictation.quiet && dictation.deviceLabel && (
-            <>
-              <span className="prof-mic-device" title={dictation.deviceLabel}>
-                {dictation.deviceLabel}
-              </span>
-              <button
-                type="button"
-                className="prof-mic-change"
-                onClick={() => setPicking((p) => !p)}
-              >
-                Change
-              </button>
-            </>
-          )}
           {/* Outside the live region and hidden from it: the recogniser revises
               this several times a second, and a screen reader re-reading each
               guess is unusable. The confirmed text lands in the box. */}
@@ -343,6 +328,35 @@ export function DictationStrip({
               {dictation.interim}…
             </span>
           )}
+        </p>
+      )}
+
+      {/* **Which microphone, for as long as one is open** — not only once ten
+          quiet seconds have passed. Bars moving prove that *a* microphone hears
+          sound, not that it is the one the reader meant: Greg's Mac listened to
+          something other than his webcam, which was the system input, and the
+          transcriber heard no words (spya-g8byyd, plan 261001q). Its own line,
+          because in the row above it was the one item allowed to shrink, and on
+          a phone it shrank to nothing. "Your choice" comes from the remembered
+          pick, not from the label, which says nothing reliable about it. */}
+      {dictation.armed && dictation.deviceLabel && (
+        <p className="prof-mic-line">
+          <span className="prof-mic-line-key">Microphone:</span>{" "}
+          <span className="prof-mic-device" title={dictation.deviceLabel}>
+            {dictation.deviceLabel}
+          </span>
+          {dictation.deviceId !== null && !dictation.deviceUnavailable && (
+            <span className="prof-mic-chosen"> (your choice)</span>
+          )}{" "}
+          <button
+            type="button"
+            className="prof-mic-change"
+            aria-label={`Change microphone, currently ${dictation.deviceLabel}`}
+            aria-expanded={picking}
+            onClick={() => setPicking((p) => !p)}
+          >
+            Change
+          </button>
         </p>
       )}
 
@@ -369,7 +383,7 @@ export function DictationStrip({
               setPicking(false);
             }}
           >
-            <option value="">The browser's default</option>
+            <option value="">System default</option>
             {devices.map((d) => (
               <option key={d.deviceId} value={d.deviceId}>
                 {d.label}

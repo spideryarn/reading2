@@ -80,7 +80,8 @@ import {
 import {
   inputFingerprint as simpleFingerprint,
   isStale as simpleIsStale,
-  SIMPLE_VERSION,
+  SIMPLE_PROMPT_VERSION,
+  simplePromptVersion,
 } from "../simple-summary.js";
 import {
   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
@@ -151,7 +152,7 @@ import {
    same head (plan 261001b); re-exported for every caller that imports them
    from here. */
 export { citedMetaFingerprintOf, metaFingerprintOf };
-import { isStale as tweetsStale } from "../tweets.js";
+import { isStale as tweetsStale, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../tweets.js";
 import type {
   Arc,
   ArcFound,
@@ -2967,7 +2968,15 @@ const rawPgArticleReader: ArticleReader = {
           /* The cited head since `tweets/5`, which sends `articleWithIds`; a
              thread from before it is judged on the head it was written from
              inside `isStale` (src/tweets.ts § `fingerprintFor`). */
-          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, citedFingerprint));
+          if (!thread || !tree || tweetsStale(thread, blocks, tree, citedFingerprint)) return false;
+          /* **And the prompt and the model**, as every neighbour asks: until
+             2026-10-01 this arm compared only the article, so a `tweets/5`
+             thread was "current" for ever after `tweets/6` and Metadata never
+             offered the rewrite (GPT Sol's plan review of 261001p, P1-5). */
+          return sameStamp(
+            { promptVersion: thread.version, model: thread.generator },
+            { promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL },
+          );
         }
         case "glossary":
           return glossaryIsCurrent(revision.glossary as Glossary | null, articleHash);
@@ -3142,12 +3151,12 @@ const rawPgArticleReader: ArticleReader = {
           return sameStamp(
             {
               inputHash: simple.sourceHash,
-              promptVersion: simple.version,
+              promptVersion: simplePromptVersion(simple),
               model: simple.generator,
             },
             {
               inputHash: simpleFingerprint(blocks, tree, citedFingerprint),
-              promptVersion: SIMPLE_VERSION,
+              promptVersion: SIMPLE_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
@@ -3669,7 +3678,7 @@ const rawPgArticleReader: ArticleReader = {
       stale:
         !tree ||
         simpleIsStale(simpleSummary, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: simpleSummary.version !== SIMPLE_VERSION,
+      outdated: simplePromptVersion(simpleSummary) !== SIMPLE_PROMPT_VERSION,
     };
   },
 

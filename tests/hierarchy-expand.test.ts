@@ -339,9 +339,14 @@ describe("the constants a scoped call is made with", () => {
    *
    * `expand/6`, 2026-09-28: the shared plain-words core, `plainWords()` from
    * src/plain-words.ts, at the prompt's end (plan 260926a § Stage 3).
+   *
+   * `expand/7`, 2026-10-01: the paperwork rule, `paperwork("structure")` from
+   * src/paperwork.ts, after it (plan 261001p).
    */
-  it("is at expand/6, since the prompt carries the shared plain-words core", () => {
-    expect(EXPAND_PROMPT_VERSION).toBe("expand/6");
+  it("is at expand/7, since the prompt carries the paperwork rule", () => {
+    expect(EXPAND_PROMPT_VERSION).toBe("expand/7");
+    expect(EXPAND_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
+    expect(EXPAND_SYSTEM).toContain('Send no "question" on it, at any\ndepth');
   });
 
   /**
@@ -357,8 +362,8 @@ describe("the constants a scoped call is made with", () => {
    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
    */
-  it("stamps toc/9+expand/6, both halves named", () => {
-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/9+expand/6");
+  it("stamps toc/10+expand/7, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/10+expand/7");
   });
 
   /**

@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bandCoversProse,
+  bandShapeFor,
   DEFAULT_ROOT_PX,
   fitView,
   MODE_IDEAL,
@@ -217,5 +218,71 @@ describe("a wide band", () => {
     expect(standard(1440, 20).modeW).toBe(400);
     // The default shape is the standard one.
     expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(400);
+  });
+});
+
+/**
+ * **The roomy band — Summary's, since 2026-10-01.**
+ *
+ * > Make the Summary mode column ever so slightly wider (if on a wide screen)
+ * >
+ * > — Greg, 2026-10-01 (SPIDERYARN-READING2-7Q)
+ *
+ * The standard band with a higher ceiling, 28rem rather than 25rem, and it
+ * still only takes what the prose leaves above `PROSE_MIN` — so it is the
+ * standard band until about 957px and reaches its cap near 1004px.
+ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
+ * Numbers written out, for the reason the wide band's header gives.
+ */
+describe("a roomy band", () => {
+  const roomy = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX, showSpine: boolean | null = null) =>
+    fitView({ windowWidth, modeBand: true, bandShape: "roomy", rootFontPx, showSpine });
+  const standard = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX, showSpine: boolean | null = null) =>
+    fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx, showSpine });
+
+  it("is a touch wider than the standard band on a wide window", () => {
+    expect(roomy(1440).modeW).toBe(448);
+    expect(roomy(1440).widths).toEqual([1440 - SPINE_W - 448]);
+  });
+
+  it("is the standard band where the prose has nothing to spare", () => {
+    // 950 − 12 − 544 = 394, under both ceilings.
+    expect(roomy(950).modeW).toBe(standard(950).modeW);
+    expect(roomy(950).modeW).toBe(394);
+    expect(roomy(390).modeW).toBe(0);
+  });
+
+  it("never comes out narrower than an ordinary band at a small root", () => {
+    // 28rem at a 12px root is 336, under `MODE_IDEAL`.
+    expect(roomy(1440, 12).modeW).toBe(MODE_IDEAL);
+    expect(roomy(1440, 20).modeW).toBe(560);
+  });
+
+  it("holds its invariants at every width, root and rail", () => {
+    for (const root of [9, 12, 16, 20]) {
+      for (const spine of [null, false] as const) {
+        for (let w = 320; w <= 2400; w++) {
+          const f = roomy(w, root, spine);
+          const s = standard(w, root, spine);
+          expect(f.overflowing).toBe(false);
+          if (f.modeW === 0) {
+            expect(s.modeW).toBe(0); // covers exactly where the standard band does
+            continue;
+          }
+          expect(f.modeW).toBeGreaterThanOrEqual(s.modeW);
+          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, 28 * root));
+          expect(f.modeW + (f.widths[0] ?? 0)).toBe(w - (spine === false ? 0 : SPINE_W));
+        }
+      }
+    }
+  });
+});
+
+describe("bandShapeFor", () => {
+  it("gives each mode its band, and Summary the roomy one", () => {
+    expect(bandShapeFor("structure")).toBe("structure");
+    expect(bandShapeFor("tweets")).toBe("wide");
+    expect(bandShapeFor("summary")).toBe("roomy");
+    expect(bandShapeFor("chat")).toBe("standard");
   });
 });

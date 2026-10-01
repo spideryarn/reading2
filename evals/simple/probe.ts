@@ -168,7 +168,7 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
           effort,
           pitch,
           slug,
-          version: simple.SIMPLE_VERSION,
+          version: simple.SIMPLE_PROMPT_VERSION,
           sourceSha256,
           at: new Date().toISOString(),
           bodyWords: body.reduce((n, b) => n + b.words, 0),

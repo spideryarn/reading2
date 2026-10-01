@@ -160,11 +160,11 @@ export interface TreeNode {
    * **One Socratic question the node's prose answers**, on the root and depth-1
    * nodes only, and only where the tree was built after 2026-09-05.
    *
-   * Shown in **Summary mode alone**, under the gist — see
-   * docs/project/summaries.md § Socratic questions. It is a second field rather
-   * than a change to `gist` because the gist is rendered in ten places and is
-   * also fed back to the later structure waves as context; the argument is in
-   * `questionFor` (src/hierarchy.ts) and the plan doc.
+   * Shown in **Marginalia**, beside the first paragraph of each part. It is a
+   * second field rather than a change to `gist` because the gist is rendered in
+   * several places and is also fed back to the later structure waves as
+   * context; the argument is in `questionFor` (src/hierarchy.ts) and the plan
+   * doc.
    *
    * **Absence is ordinary**, unlike a missing `gist`: every tree built before
    * this existed has none, and nothing renders a gap. Do not add it to
@@ -3388,6 +3388,14 @@ export type ThreadKind = "chat" | "remember" | "candidates";
  */
 export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
 
+/**
+ * The most block ids one chat question may say were on screen. A screenful is a
+ * few dozen even of one-line blocks on a tall monitor; this bounds a request,
+ * and the client trims to it rather than having Send refused.
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export const MAX_VISIBLE_BLOCKS = 100;
+
 /** Is this one of the three? Used by both stores' normalisers and by the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
   return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);
@@ -4752,6 +4760,14 @@ export interface SimpleSummary {
    * reaches a visitor (src/public/dto.ts).
    */
   profileHash: string | null;
+  /**
+   * The prompt's own version, `SIMPLE_PROMPT_VERSION` in src/simple-summary.ts,
+   * separate from `version`, which is the stored shape and must match exactly.
+   * **Absent on a row written before 2026-10-01**, which is the first prompt
+   * (`simplePromptVersion` reads it as `simple-prompt/1`): usable, but
+   * outdated. Plan 261001p.
+   */
+  promptVersion?: string;
   /** Every level, always — validation stores all of them or none. */
   levels: Record<SimpleLevel, SimpleParagraph[]>;
   /**
@@ -4881,6 +4897,7 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
     Number.isFinite(simple.elapsedMs) &&
     simple.elapsedMs >= 0 &&
     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    (simple.promptVersion === undefined || (typeof simple.promptVersion === "string" && simple.promptVersion.length > 0)) &&
     isSimpleLevels(simple.levels) &&
     /* Absent is a row from before the guard, or with it off; present must be whole. */
     (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))
