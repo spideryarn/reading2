@@ -44,9 +44,9 @@
  *   run's repairs.
  */
 import { isBodyEvidence, isStructural } from "./block-policy.js";
-import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import type { BuildReport, ModelNode } from "./hierarchy.js";
 import { nameValue } from "./ids.js";
+import { deriveStartRanges, SCOPED_START_POLICY } from "./start-ranges.js";
 import type { Block, Tree, TreeNode } from "./types.js";
 
 /**
@@ -1416,115 +1416,68 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
   const { children, blocks, where, report } = opts;
   const index = opts.index ?? indexBlocks(blocks);
   const [p0, p1] = positions({ range: opts.parent }, index, `The parent at ${where}`);
-
-  /* Planned into a report of its own and merged into the caller's only once the
-     answer has survived every refusal below — see § "The caller's `report`". */
-  const planned: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
-
-  if (children.length === 0) {
-    throw new ExpansionRefused(
-      "not-an-expansion",
-      `The expansion of ${where} proposed no children at all. A node is only expanded because ` +
-        `it needed expanding, so an empty answer is a failed call, not a terminal node.`,
-      planned,
-    );
-  }
-
-  /* Resolve every start before planning any of them, so an invented id fails
-     the whole answer rather than half of it. `planChildRanges` does the same,
-     by returning null for the sibling set. */
-  const claimed: number[] = children.map((child, i) => {
-    const at = index.get(child.start);
-    if (at === undefined) {
-      throw new ExpansionRefused(
-        "invented-start",
-        `Node range not in blocks.json — at ${where} > child ${i + 1}: ` +
-          `start ${nameValue(child.start)}`,
-        planned,
-      );
-    }
-    return at;
+  const result = deriveStartRanges({
+    children,
+    parent: [p0, p1],
+    blocks,
+    index,
+    where,
+    policy: SCOPED_START_POLICY,
   });
-
-  /** The split points, in the model's order: which children survive, and where. */
-  const kept: KeptChild[] = [];
-  for (const [i, at] of claimed.entries()) {
-    /* **Every claim is range-checked, and the first one is not exempt.** The
-       check used to sit below the pin, so the opening claim never reached it —
-       and a first `start` naming a block in a *sibling* section therefore
-       passed all four gates, with that sibling's title, gist and verdict
-       attached to this parent's prose. Nothing distinguishes that from the
-       fault this refusal exists for: an answer about a stretch of the article
-       this call was never shown. The pin below is a rule about the parent's own
-       first block, not a licence to believe a claim from outside it. */
-    if (at < p0 || at > p1) {
-      throw new ExpansionRefused(
-        "outside-parent",
-        `The expansion of ${where} > child ${i + 1} starts at ${nameValue(children[i]!.start)}, ` +
-          `which is outside the parent's range — the parent runs from ` +
-          `${nameValue(opts.parent[0])} to ${nameValue(opts.parent[1])}. A scoped call is shown ` +
-          `its parent's blocks and nothing else, so a start outside them is an answer about a ` +
-          `different stretch of the article.`,
-        planned,
-      );
+  const planned: BuildReport = {
+    repairs: result.repairs,
+    droppedChildren: result.droppedChildren,
+    droppedHeadings: [],
+    collapsedRungs: [],
+    droppedQuestions: [],
+  };
+  if (!result.ok) {
+    switch (result.reason) {
+      case "invented-start":
+        throw new ExpansionRefused(
+          result.reason,
+          `Node range not in blocks.json — at ${where} > child ${result.childIndex + 1}: ` +
+            `start ${nameValue(result.start)}`,
+          planned,
+        );
+      case "outside-parent":
+        throw new ExpansionRefused(
+          result.reason,
+          `The expansion of ${where} > child ${result.childIndex + 1} starts at ` +
+            `${nameValue(result.start)}, which is outside the parent's range — the parent runs from ` +
+            `${nameValue(opts.parent[0])} to ${nameValue(opts.parent[1])}. A scoped call is shown ` +
+            `its parent's blocks and nothing else, so a start outside them is an answer about a ` +
+            `different stretch of the article.`,
+          planned,
+        );
+      case "not-an-expansion":
+        if (result.proposedChildren === 0) {
+          throw new ExpansionRefused(
+            result.reason,
+            `The expansion of ${where} proposed no children at all. A node is only expanded because ` +
+              `it needed expanding, so an empty answer is a failed call, not a terminal node.`,
+            planned,
+          );
+        }
+        throw new ExpansionRefused(
+          result.reason,
+          `The expansion of ${where} came back with ${result.usableChildren} usable child from ` +
+            `${result.proposedChildren} proposed, and ${planned.droppedChildren.length} start(s) that marked ` +
+            `no split point. One child covers its parent's whole range, so the same question would ` +
+            `be asked again one level down and the cascade would run to its depth cap without ` +
+            `dividing anything.`,
+          planned,
+        );
     }
-    const previous = kept.at(-1);
-    if (previous === undefined) {
-      /* **Pinned, not clamped.** The first kept child takes its parent's start
-         whatever it claimed — having first been checked to have claimed
-         *something inside the parent* — because children must cover their
-         parent and nothing else can supply that block. How far in the claim
-         was is not lost: it is the head repair, which `recordBoundaryFaults`
-         measures. */
-      kept.push({ childIndex: i, start: p0 });
-      continue;
-    }
-    if (at <= previous.start) {
-      planned.droppedChildren.push(`${where} > child ${i + 1}`);
-      continue;
-    }
-    kept.push({ childIndex: i, start: at });
   }
 
-  /* **After planning, because the collapse is only visible here.** A proposal
-     of three starts that leaves one kept child is a one-child answer that
-     nothing before this point could have seen. */
-  if (kept.length < MIN_EXPANSION_CHILDREN) {
-    throw new ExpansionRefused(
-      "not-an-expansion",
-      `The expansion of ${where} came back with ${kept.length} usable child from ` +
-        `${children.length} proposed, and ${planned.droppedChildren.length} start(s) that marked ` +
-        `no split point. One child covers its parent's whole range, so the same question would ` +
-        `be asked again one level down and the cascade would run to its depth cap without ` +
-        `dividing anything.`,
-      planned,
-    );
-  }
-
-  /* **Measure first, snap second, build third**, and that order is the whole of
-     it — it is `planChildRanges`'s order, for its reason. `recordBoundaryFaults`
-     compares the model's claims with where the boundary ended up, so running it
-     after the snap would report a phantom fault against a section's own correct
-     start and make the snap invisible in the telemetry that watches it. The snap
-     records its own repair; nothing else measures it. */
-  recordBoundaryFaults(kept, claimed, p0, where, planned);
-  planned.repairs.push(...snapStartsToHeadings(children, kept, blocks, where));
-
-  const built: DerivedChild<C>[] = kept.map((child, k) => {
-    const next = kept[k + 1];
-    const end = next === undefined ? p1 : next.start - 1;
-    const proposed = children[child.childIndex]!;
-    /* In range: `start` is `p0`, a claim checked to be inside [p0, p1], or a snap
-       backwards floored at the previous kept start; `end` is either `p1` or one
-       before a start that was in range. Both index `blocks` because the parent's
-       own range came out of `index`. */
-    /* **The pair is made here or it is not made at all.** `child.childIndex` is
-       the only thing that knows which proposal survived as which node, it is
-       local to this function, and it was thrown away at this line until
-       2026-09-05. See `DerivedChild`. */
+  const built: DerivedChild<C>[] = result.children.map(({ proposed, range }) => {
+    /* The kernel makes the range and proposal a pair while it still knows which
+       child survived. Keeping them together here is the `DerivedChild` contract:
+       a drop can never shift a parallel proposal array onto the wrong node. */
     const node: ModelNode = {
       title: proposed.title,
-      range: [blocks[child.start]!.id, blocks[end]!.id] as [string, string],
+      range,
       /* **Presence, not truthiness.** This said `proposed.gist ? … : …`, and a
          truthiness test on a string deletes `""` — so a field the model *sent*
          vanished between the answer and the tree, in the one place whose whole
@@ -1584,68 +1537,6 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
      and another there. */
   report.droppedQuestions.push(...planned.droppedQuestions);
   return built;
-}
-
-/**
- * **What the answer got wrong, measured against the tiling derived from it.**
- * Separate from the derivation because the plan and the report on the plan are
- * different jobs; nothing here changes what is built.
- *
- * One entry per boundary, never one per child whose range moved — every child's
- * end moves whenever the boundary after it does, and counting children would
- * report one mistake twice.
- *
- * **Measured against the raw claim, never the clamped one.** The clamped value
- * is right for building the tree and wrong for measuring the answer, and this
- * is the number a re-ask would be triggered by and told about. GPT Sol caught
- * `planChildRanges` under-reporting for exactly this reason.
- *
- * The kinds keep their meanings from `PartitionRepair`: the model claimed a
- * boundary *later* than where it ended up, so it left blocks uncovered (`gap`);
- * or earlier, so it claimed blocks belonging to the section before
- * (`overlap`). A boundary the answer got right scores 0 and is not recorded,
- * which is why the guard lives here rather than at each call.
- */
-function recordBoundaryFaults(
-  kept: readonly { childIndex: number; start: number }[],
-  claimed: readonly number[],
-  p0: number,
-  where: string,
-  report: BuildReport,
-): void {
-  const fault = (childIndex: number, at: number, was: number): void => {
-    const size = Math.abs(at - was);
-    if (size === 0) return;
-    report.repairs.push({
-      where: `${where} > child ${childIndex + 1}`,
-      kind: was > at ? "gap" : "overlap",
-      at,
-      size,
-    });
-  };
-
-  /* The node's own start, against what its first child claimed. The first
-     child is pinned here whatever it claimed *inside* the parent, so this is
-     the boundary that absorbs an opening claim which began too late — and the
-     size is how far. Always a `"gap"`, never an `"overlap"`: a claim below the
-     parent's start is refused rather than pinned. */
-  const head = kept[0];
-  if (head !== undefined) fault(head.childIndex, p0, claimed[head.childIndex]!);
-
-  /* Each interior boundary — **and this is structurally zero today**, kept as
-     the standing proof of that rather than as live measurement. There is one
-     claim per boundary, and since a start outside the parent is now refused
-     rather than clamped, a kept later start is exactly what was claimed;
-     everything else either advanced (and was believed) or did not (and was
-     dropped). The day this records something is the day an adjustment crept in
-     between the claim and the split point, which is the thing worth reporting. */
-  for (const child of kept.slice(1)) {
-    fault(child.childIndex, child.start, claimed[child.childIndex]!);
-  }
-
-  /* There is no closing boundary to check: with no end claims, the last child
-     ends at its parent's end by construction, and `"short"` and `"over"` are
-     unreachable. See `normaliseExpansion` § "What it cannot report". */
 }
 
 /* ------------------------------------------------- the tree, backwards */
