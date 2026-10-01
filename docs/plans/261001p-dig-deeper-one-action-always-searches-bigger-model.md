@@ -1,6 +1,6 @@
 # 261001p — *Dig deeper*: one dig-in action, which always searches the web and uses the bigger model
 
-Status: **plan, under review**. Owner: the session in worktree `go-deeper`. Overseer-dispatched from
+Status: **plan reviewed by Sol (build with changes, F1–F10 folded in below); stage 1 building**. Owner: the session in worktree `go-deeper`. Overseer-dispatched from
 a question to Greg ([Q-glossary-web]), not a reader report; the glossary half was raised by
 `spya-puyb6d` and written up in
 [261001_1200](../user-feedback/261001_1200-five-small-tooltips-and-labels.md) as a follow-up.
@@ -26,9 +26,9 @@ a question to Greg ([Q-glossary-web]), not a reader report; the glossary half wa
 Three buttons in three modes are the same gesture — *I have seen this one thing, tell me more* — and
 today they have three names, all on Sonnet, none of which is guaranteed to search. They become one
 action, **Dig deeper**, that (1) always runs a web search, forced by code rather than left to the
-model, (2) always answers on the high-power model (Opus) whatever the article's switch says, and
-(3) shares one implementation, `src/dig-deeper.ts`. Library search is a follow-up, for the reason in
-§ Library search.
+model, (2) always answers on the high-power model (Opus) whatever the article's switch says,
+(3) puts the reader's own best-matching passages from their other articles beside the web's, through
+the library search that already exists, and (4) shares one implementation, `src/dig-deeper.ts`.
 
 ## The survey
 
@@ -97,15 +97,34 @@ two calls:**
    server tool (`max_total_results: 5`). Its prompt is short and article-free: the thing being dug
    into, the article's title, author and date, and the sentence it sits in. The model writes the
    query; we keep the **annotations** (url, title, page text clipped to ~1,500 chars) and the search
-   count from `usage`. **A response with no search in `usage` throws** — a forced search that did not
-   happen is the silent success this file exists to remove, so it fails loudly rather than letting
-   Opus answer from memory under a *from a web search* label.
-2. **The answer** — the mode's existing streamed call, unchanged in shape, with `power: "high"`
-   instead of the article's power, and the sources in **the last user part, after the cache
-   breakpoint**, fenced as untrusted page text (the same rule `investigatePart` uses for a paper).
-   The model keeps its own server tool and may search more. Searches reported = the search step's
-   count + the answer's own; citations = the search step's sources plus any the answer added, deduped
-   by URL, through each mode's existing `safeUrl` filter.
+   count from `usage`. **Success requires `searches !== null && searches > 0`** — an explicit zero,
+   missing usage, or usage with neither field spelling all throw, logging which field was read (Sol
+   F7). A forced search that did not happen is the silent success this file exists to remove, so it
+   fails loudly rather than letting Opus answer from memory under a *from a web search* label. It
+   has its own deadline (an abort signal; `openRouterJson` has none of its own — Sol F8).
+   Its final text is one more thing: **a short keyword query for the reader's library** (quoted
+   phrases, `OR` between alternatives — `websearch_to_tsquery`'s syntax). That query goes to
+   `librarySearch.searchLibrary` with `excludeSlug` (owner-scoped, free, injected so `explain.ts` does
+   not import the store), top 4 passages, each clipped. Best-effort: none found, or an empty query,
+   is fine (Sol F1).
+2. **The answer** — the mode's existing streamed call, unchanged in shape, on **`DIG_DEEPER_MODEL`**:
+   the high-power model's wire id from `src/high-power-model.ts`, used directly rather than through
+   `modelFor(task, "high")`, because a task's environment override wins over power there and would
+   quietly put a Dig deeper answer back on Sonnet (Sol F2). The web results and the library passages
+   go in **the last user part, after the cache breakpoint**, each set inside one `untrusted(...)`
+   region — URL, title and excerpt all, since a page controls its own title (Sol F9) — with the
+   instructions outside it. The model keeps its own server tool and may search more. Searches
+   reported = the search step's count + the answer's own. The library passages are named in the
+   answer by article title (chat's rule); linking to them needs a stored shape and is a follow-up.
+
+**What the sources list means (Sol F4).** The answers are plain text, so we cannot tell which of the
+five results Opus leaned on. Rather than claim it cited all five, the list stays one list — the
+search step's results plus the answer's own annotations, deduped by URL, through each mode's
+`safeUrl` — and its wording changes from *cited N sources* to ***found* N sources** everywhere it
+appears (glossary tooltip, comment badge). That is true of old answers, whose annotations are what
+the model's own search surfaced, and of new ones, with no schema change. Sol proposed two stored
+sets; overruled because the honest wording costs one string and two sets cost a column per mode for
+a distinction a plain-text answer cannot support.
 
 Why the quick tier writes the query: it only writes a search query and reads nothing back; the
 answer that the reader reads is Opus's. Luna is a third of Sonnet's price for the same five sources.
@@ -121,70 +140,68 @@ presses in stage 1.
 
 ## Stages
 
-### Stage 1 — the shared action, on Glossary and comments
+Sol's review moved the allowance into the stage that first exposes a route (F5): each stage below is
+a safe stopping point with its own limit.
 
-- `src/dig-deeper.ts`: `searchFirst`, the `DigFindings` type, `findingsPart` (the text block),
-  `mergeCitations`, `DIG_DEEPER_POWER = "high"`, the shared copy constants for the client.
+### Stage 1 — the shared action, the allowance, on Glossary and comments
+
+- `src/dig-deeper.ts`: `searchFirst` (the forced search + the library query, deadline, witness),
+  `DigFindings`, `findingsPart` (fenced), `DIG_DEEPER_MODEL`, `DIG_DEEPER_RATE_POLICY`, and the copy.
 - `src/models.ts` / `src/ai-call.ts` / `src/cost-categories.ts`: the `dig-deeper-search` task (quick),
-  its `CHAT_REASONING` row and cost category, so the ledger records it with no other work
+  its route, `CHAT_REASONING` row and cost category, so the ledger records it with no other work
   ([cost-tracking.md](../project/cost-tracking.md)).
-- `src/explain.ts`: `deep?: boolean` becomes `dig?: boolean`. When set: run `searchFirst`, force
-  `power` to high, append `findingsPart` + the `DEEP` instruction (reworded: the search has been run
-  for you; use it, search again if it does not settle it) in the last part, raise `max_tokens`. The
-  tool definition and `SYSTEM` stay byte-identical.
-- `term-lookup.ts` `makeLookUpTerm` passes `dig: true`; `routes.ts` `answer()` maps the wire's
-  `deep: true` (unchanged wire field) to `dig: true`.
-- Client: Glossary button → **Dig deeper** / **Digging deeper…** / tooltip; comment button
-  **Search the web** → **Dig deeper**, tooltip likewise. Glossary's wait line keeps *you can carry on
-  reading*.
-- **Tests, red first:**
-  - `tests/dig-deeper.test.ts`: the search request carries `tool_choice: "required"` and the Exa tool
-    (**the one that fails if the search is not forced**); a response with zero searches throws; the
-    findings land after the cache breakpoint and the cached part is byte-identical to a plain explain.
-  - explain with `dig`: model is the high-power model on a standard article; searches = sum;
-    citations merged.
-  - the request snapshot's `deep` case becomes `dig` (hash re-pinned deliberately).
-  - the glossary and comment button copy.
+- `src/explain.ts`: `deep?: boolean` becomes `dig?: DigFindings`-driven: the caller runs `searchFirst`
+  and passes the findings; explain uses `DIG_DEEPER_MODEL`, appends `findingsPart` + the reworded
+  `DEEP` instruction in the last part, and raises `max_tokens` (Opus reasons). The tool definition
+  and `SYSTEM` stay byte-identical.
+- **The allowance (Sol F5):** a `dig-deeper` `RateBucket` (one additive migration widening
+  `rate_limit_events`' bucket check), taken after ownership and input checks, before any mutation,
+  SSE or model call, freed in `finally`; its lease covers the search deadline plus explain's.
+  Proposed: 30 an hour, 100 a day, 2 at a time, global fuse from the measured budget. Comment
+  *first* answers (the tick-box) stay outside it; only Dig deeper presses spend it.
+- `term-lookup.ts` `makeLookUpTerm` and `routes.ts` `answer()` (wire field `deep: true` unchanged)
+  go through it.
+- Client: Glossary button → **Dig deeper** / **Digging deeper…** / tooltip, and **Dig deeper again**
+  under an existing answer, replacing it on success and keeping it on failure (Sol F10). Comment
+  **Search the web** → **Dig deeper**. *cited* → *found* in both tooltips.
+- **Tests, red first:** the search request carries `tool_choice: "required"` and the Exa tool (the
+  one that fails if the search is not forced); zero, missing and unrecognised search counts throw;
+  findings land after the cache breakpoint with the cached part byte-identical to a plain explain;
+  a delimiter in a title stays inside the fence; the model is `DIG_DEEPER_MODEL` on a standard
+  article **with `SPIDERYARN_EXPLAIN_MODEL` set**; the allowance refuses before any call; the
+  request-snapshot `deep` case is re-pinned deliberately; the button copy.
 
 ### Stage 2 — Citations' *Investigate* becomes *Dig deeper*
 
-- `makeInvestigateCitation`: `searchFirst` before the answer (query: the work's title, authors, year
-  and the citing sentence), findings into `investigatePart`, answer on `power: "high"`. *Look it up*
-  and the paper read are unchanged — they identify and read the work; the forced search is the
-  dig-in's.
-- `INVESTIGATE_PRESS_BUDGET_USD` and the global fuse re-derived from measured Opus presses.
+- `makeInvestigateCitation`: `searchFirst` before the answer (its query: the work's title, authors,
+  year and the citing sentence), findings into `investigatePart`. **Every model call in the press
+  that writes something the reader sees moves to `DIG_DEEPER_MODEL`** — the answer, the paper
+  passages and *Look it up*'s verdict (Sol F3); only the Luna search step is not, and it writes
+  nothing the reader reads.
+- `CITATION_INVESTIGATE_VERSION` bumped, with a test that an old-version row no longer attaches
+  (Sol F6); the context hash takes `DIG_DEEPER_MODEL` on both write and read (Sol F2).
+- The existing `citation-investigate` bucket stays (no double charge); its lease adds the search
+  deadline (Sol F8); `INVESTIGATE_PRESS_BUDGET_USD` and the global fuse re-derived from measured Opus
+  presses.
 - Copy: **Investigate** → **Dig deeper**, **Investigate again** → **Dig deeper again**, the footer
-  *Investigated <date> · Investigate again* → *Dug deeper <date> · Dig deeper again*. The tooltip's
-  existing *what* text gains the sentence above.
+  *Investigated <date> · Investigate again* → *Researched <date> · Dig deeper again* (Sol's wording).
 
-### Stage 3 — an allowance for the glossary and comment presses
+### Stage 3 — docs, the browser check, the feedback note
 
-They have **no limit at all** today (glossary.md § *No rate limit, no quota*, raised by Sol on
-2026-09-04 and left as a decision). Moving them to Opus plus a forced search roughly doubles the
-worst case per press, so this is the point to close it with the machinery that already exists:
-a `dig-deeper` `RateBucket` (one additive migration widening `rate_limit_events`' bucket check), a
-`DIG_DEEPER_RATE_POLICY` sized from stage 1's measured cost, taken after the free refusals and
-before the search, as Investigate does. Generous enough that a reader working through a glossary
-never meets it (proposed: 30 an hour, 100 a day, 2 at a time; global fuse from the budget). Comment
-*first* answers (the tick-box) stay outside it; only *Dig deeper* presses spend it.
+`tooltips.md`, `glossary.md` (§ Checking a term on the web, the mock, § No rate limit — now one),
+`comments.md`, `citations.md`, `copy.md`, `high-powered-ai.md` (Dig deeper is always Opus, and is not
+charged as the switch is), `cost-tracking.md` if the new job needs a line; a browser check of each
+changed button; the line in 261001_1200's follow-ups.
 
-### Stage 4 — docs, the browser check, the feedback note
+## Library search — in, best-effort; links are the follow-up
 
-`tooltips.md`, `glossary.md` (§ Checking a term on the web, the mock), `comments.md`,
-`citations.md`, `copy.md`, `high-powered-ai.md` (dig-deeper is always Opus), `cost-tracking.md` if
-the new job needs a line; a browser check of each changed button; the line in
-261001_1200's follow-ups.
-
-## Library search — a follow-up, not this plan
-
-The tool exists: `search_library` in `src/chat-tools.ts` over `librarySearch.searchLibrary`
-(`pgLibrarySearch`, a `tsvector` index, free). It could be called from here. It is left out because
-**it is literal**: [chat-tools.md](../project/chat-tools.md) records it finding 0 of ~85 relevant
-passages over 18 reader-phrased queries, and semantic search over the embeddings is the planned fix.
-Wiring it in now means a prompt section, a way to render a link to a passage in another article in
-three different answer components, and a query per mode — for passages it mostly will not find.
-**Proposed follow-up:** once library search is semantic, `searchFirst` gains a second, free half
-that puts the reader's own best passages beside the web's, named by article title (chat's rule).
+Sol F1: the search exists (`librarySearch.searchLibrary` → `pgLibrarySearch`, a `tsvector` index,
+owner-scoped, free), so it is used, even though it is literal —
+[chat-tools.md](../project/chat-tools.md) records 0 of ~85 relevant passages over 18 reader-phrased
+queries. A glossary term or a cited work's title is the kind of query literal search does find. When
+library search becomes semantic, this seam improves with it. **Not in this plan:** rendering a link
+to the passage in the other article, which needs a stored shape in three places; until then the
+answer names the article by title.
 
 ## The cost line
 
