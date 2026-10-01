@@ -28,7 +28,7 @@
  */
 
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, SimpleLevel } from "../../../types.js";
 import { SIMPLE_LEVELS } from "../../../types.js";
@@ -49,7 +49,7 @@ import { WrittenForYou } from "../../WrittenForYou.js";
  * The outline is drawn from the tree the page already holds; a plain-words
  * level is `OwnerSimple` below, mounted only while one is open, so its GET and
  * its `useAutoRun` owner exist exactly as long as the view does — and stay
- * mounted across a switch between the two levels, which share one artefact.
+ * mounted across a switch between the three levels, which share one artefact.
  *
  * See docs/project/summaries.md.
  */
@@ -237,14 +237,17 @@ export function SummaryControls({
 
      **Armed before the "already there" check**, so touching the level already
      open mints a fresh press — the only way back from a failed read, as
-     QuizPanel.tsx § `RememberSubModeToggle` has it. A drag fires both
-     `change` and `click`; the second arm replaces the first's token, which is
-     one pending press either way. */
+     QuizPanel.tsx § `RememberSubModeToggle` has it. A pointer gesture emits
+     input events and then a click; it arms once on pointer-up and suppresses
+     that trailing click, while keyboard and assistive clicks arm here. */
   const choose = (next: SimpleLevel) => {
     if (slug !== null) armActivation(slug, "simple");
     if (value !== next) onChange(next);
   };
   const at = (input: HTMLInputElement): SimpleLevel => SIMPLE_LEVELS[Number(input.value)] ?? "simple";
+  const pointerActive = useRef(false);
+  const pointerChanged = useRef(false);
+  const suppressClick = useRef(false);
 
   return (
     <>
@@ -274,11 +277,43 @@ export function SummaryControls({
               value={SIMPLE_LEVELS.indexOf(level)}
               aria-label="In plain words: how simple"
               aria-valuetext={`${PLAIN[level].label}${on ? "" : " (not showing)"}`}
-              onChange={(e) => choose(at(e.currentTarget))}
+              onPointerDown={() => {
+                pointerActive.current = true;
+                pointerChanged.current = false;
+                suppressClick.current = false;
+              }}
+              onPointerUp={(e) => {
+                pointerActive.current = false;
+                suppressClick.current = true;
+                if (slug !== null) armActivation(slug, "simple");
+                /* Clicking the resting thumb emits no input event, but still
+                   opens that level (or retries one already open). */
+                if (!pointerChanged.current && value !== at(e.currentTarget)) onChange(at(e.currentTarget));
+              }}
+              onPointerCancel={() => {
+                pointerActive.current = false;
+                pointerChanged.current = false;
+              }}
+              onChange={(e) => {
+                const next = at(e.currentTarget);
+                if (pointerActive.current) {
+                  pointerChanged.current = true;
+                  if (value !== next) onChange(next);
+                } else {
+                  choose(next);
+                }
+              }}
               /* A click on the thumb where it already sits changes nothing, so
                  `change` never fires; this is how the idle slider opens the
                  level it is resting on. */
-              onClick={(e) => choose(at(e.currentTarget))}
+              onClick={(e) => {
+                if (suppressClick.current) {
+                  suppressClick.current = false;
+                  pointerChanged.current = false;
+                  return;
+                }
+                choose(at(e.currentTarget));
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();

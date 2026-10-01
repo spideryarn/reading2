@@ -597,8 +597,8 @@ export function bandTarget(
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
-  /* The literal both plain-words pills arm (SummaryMode.tsx § `SummaryControls`):
-     one job writes both levels, so Fuller arms `simple` too. Sol's plan review
+  /* The literal every plain-words stop arms (SummaryMode.tsx § `SummaryControls`):
+     one job writes all levels, so Fuller arms `simple` too. Sol's plan review
      of 261001b, P1-3. */
   if (mode === "summary") return sub.summary === "gists" ? null : "simple";
   const decision = MODE_TARGET[mode];

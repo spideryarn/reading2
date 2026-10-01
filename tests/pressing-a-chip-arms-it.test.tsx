@@ -302,6 +302,22 @@ describe("Summary's plain-words slider", () => {
     expect(changes).toEqual(["simple"]);
   });
 
+  it("arms once when a pointer move emits both input and click", () => {
+    const changes = mountSummaryControls("gists");
+    const input = slider();
+    act(() => {
+      input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    const armedOnce = pendingActivation(SLUG, "simple");
+    expect(armedOnce).not.toBeNull();
+    act(() => input.click());
+    expect(pendingActivation(SLUG, "simple")).toBe(armedOnce);
+    expect(changes).toEqual(["fuller"]);
+  });
+
   it("arms a fresh press when clicked on the level already showing", () => {
     /* The way back from a failed read (useAutoRun.ts § A failed read is not an
        answer): nothing re-fires without a new nonce. No `onChange`, because

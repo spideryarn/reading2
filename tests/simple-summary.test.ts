@@ -35,6 +35,8 @@ import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 /** One answer for every call, or one per level — told apart by the level's system prompt. */
 let answer: string | Partial<Record<SimpleLevel, string>> = "";
 let stop: string = "end_turn";
+let waitForAbort: SimpleLevel | null = null;
+const abortSettled = new Set<SimpleLevel>();
 const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
 
 const levelOf = (body: unknown): SimpleLevel => {
@@ -58,7 +60,8 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         options: JSON.parse(JSON.stringify(options)),
         aborted: () => signal?.aborted ?? false,
       });
-      const text = answerFor(levelOf(body));
+      const level = levelOf(body);
+      const text = answerFor(level);
       const message = {
         id: "msg_stub",
         type: "message",
@@ -72,7 +75,21 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
       return {
         onText: () => undefined,
         aborted: () => false,
-        finalMessage: () => Promise.resolve(message),
+        finalMessage: () => {
+          if (level !== waitForAbort) return Promise.resolve(message);
+          return new Promise((_, reject) => {
+            const finish = () => {
+              /* Deliberately later than the failing sibling's rejection. A
+                 bare Promise.all returns before this and makes the test red. */
+              setTimeout(() => {
+                abortSettled.add(level);
+                reject(Object.assign(new Error("aborted sibling"), { name: "AbortError" }));
+              }, 0);
+            };
+            if (signal?.aborted) finish();
+            else signal?.addEventListener("abort", finish, { once: true });
+          });
+        },
       };
     },
   };
@@ -81,6 +98,8 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 beforeEach(() => {
   answer = "";
   stop = "end_turn";
+  waitForAbort = null;
+  abortSettled.clear();
   sent.length = 0;
 });
 
@@ -144,7 +163,7 @@ const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
 /* ------------------------------------------------------------ validation -- */
 
 describe("buildSimpleSummary", () => {
-  it("keeps both levels whole, in the model's order, stamped with SIMPLE_VERSION", () => {
+  it("keeps every level whole, in the model's order, stamped with SIMPLE_VERSION", () => {
     const out = build([
       para("It asks whether a model can read.", INTRO.id),
       para("It matters because most knowledge is written.", WHY.id),
@@ -160,7 +179,7 @@ describe("buildSimpleSummary", () => {
     expect(out.version).toBe("simple/2");
     expect(out.sourceHash).toBe("h");
     expect(out.profileHash).toBeNull();
-    expect(SHAPE.simple.ok(out.levels)).toBe(true);
+    expect(SHAPE.simple.ok(out)).toBe(true);
   });
 
   it("records the profile it was written for as its hash, never the words", () => {
@@ -272,21 +291,26 @@ describe("buildSimpleSummary", () => {
 /* --------------------------------------------------- the store boundary -- */
 
 describe("the store boundary", () => {
-  const good = GOOD;
-
   it("refuses a level with the wrong paragraph count, and a missing level", () => {
     const one = [para("Only one.", INTRO.id)];
     const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
-    expect(whyUnusable("simple", { levels: good })).toBeNull();
-    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: one, fuller: FULLER } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: five, fuller: FULLER } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: SIMPLE, fuller: SIMPLE } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: SIMPLE } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { levels: null })).toBe('no usable "levels"');
+    const stored = build(SIMPLE);
+    expect(whyUnusable("simple", stored)).toBeNull();
+    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: one, fuller: FULLER } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: five, fuller: FULLER } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: SIMPLE, fuller: SIMPLE } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: SIMPLE } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: null })).toBe('no usable "levels"');
   });
 
-  it("reads a simple/1 row — one paragraphs list, no levels — as unusable", () => {
-    expect(whyUnusable("simple", { version: "simple/1", paragraphs: SIMPLE })).toBe('no usable "levels"');
+  it("reads every simple/1 row as unusable, even one with valid-looking levels", () => {
+    const stored = build(SIMPLE);
+    expect(whyUnusable("simple", { ...stored, version: "simple/1", paragraphs: SIMPLE })).toBe('no usable "levels"');
+  });
+
+  it("refuses a simple/2 row without its required profile provenance", () => {
+    const { profileHash: _missing, ...malformed } = build(SIMPLE);
+    expect(whyUnusable("simple", malformed)).toBe('no usable "levels"');
   });
 
   it("refuses malformed stored paragraphs and the same word ceiling", () => {
@@ -296,7 +320,7 @@ describe("the store boundary", () => {
       [para("One.", INTRO.id, WHY.id, RESULT.id, METHOD.id), para("Two.", WHY.id)],
       [para(words(SIMPLE_LIMITS.simple.maxWords), INTRO.id), para("One more.", WHY.id)],
     ]) {
-      expect(whyUnusable("simple", { levels: { brief: BRIEF, simple, fuller: FULLER } })).toBe('no usable "levels"');
+      expect(whyUnusable("simple", { ...build(SIMPLE), levels: { brief: BRIEF, simple, fuller: FULLER } })).toBe('no usable "levels"');
     }
   });
 });
@@ -358,11 +382,14 @@ describe("the request", () => {
     expect(out.simpleSummary.levels).toEqual(GOOD);
   });
 
-  it("fails the whole run when one level's call fails, and aborts the other", async () => {
+  it("fails the whole run when one level's call fails, aborts the others, and waits for them to settle", async () => {
+    waitForAbort = "brief";
     answer = { simple: JSON.stringify(answerOf(SIMPLE)), fuller: JSON.stringify(answerOf([para("One.", INTRO.id)])) };
     await expect(run()).rejects.toThrow(/"fuller" paragraphs/);
-    /* The sibling's signal is aborted — the call that succeeded is not left running. */
+    /* The sibling's signal is aborted, and the run did not return while its
+       finalMessage (and therefore its spend record) was still pending. */
     expect(sent.every((c) => c.aborted())).toBe(true);
+    expect(abortSettled).toEqual(new Set(["brief"]));
   });
 
   it("reports what it dropped on the run, and does not store it", async () => {
@@ -484,4 +511,3 @@ describe("the request", () => {
     for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
   });
 });
-

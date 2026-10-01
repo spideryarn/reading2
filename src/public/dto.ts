@@ -89,7 +89,7 @@ import type {
   Tweet,
   TweetThread,
 } from "../types.js";
-import { anchorFields, identifiesOf, isSimpleLevels, readStoredLean } from "../types.js";
+import { anchorFields, identifiesOf, isUsableSimpleSummary, readStoredLean } from "../types.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -1038,7 +1038,7 @@ export function publicArticle(row: {
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
     ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
     ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
-    ...(row.simpleSummary !== null && isSimpleLevels(row.simpleSummary.levels)
+    ...(isUsableSimpleSummary(row.simpleSummary)
       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
       : {}),
     ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),

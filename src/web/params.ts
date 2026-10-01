@@ -1150,7 +1150,7 @@ export const deepParam = createParser<number>({
 
 /**
  * Summary's three views: the tree's gists (the outline, at `?deep=`), or one of
- * the two plain-words levels — `SIMPLE_LEVELS` in src/types.ts, whose names
+ * the three plain-words levels — `SIMPLE_LEVELS` in src/types.ts, whose names
  * are these URL values.
  */
 export const SUMMARY_VIEWS = ["gists", ...SIMPLE_LEVELS] as const;
@@ -1163,7 +1163,7 @@ export function isPlainLevel(view: SummaryView): view is SimpleLevel {
 
 /**
  * Which part of Summary is open — `gists` (the outline; the default, omitted),
- * `simple` or `fuller`, a few short paragraphs in everyday words at two levels
+ * `brief`, `simple` or `fuller`, a few short paragraphs in everyday words at three levels
  * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
  * *Which thing, within this mode*, so the shape of `?remember=` and

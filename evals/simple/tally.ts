@@ -34,6 +34,13 @@ for (const arm of fs.readdirSync(OUT).sort()) {
     rows.push(JSON.parse(fs.readFileSync(path.join(OUT, arm, f), "utf8")) as Row);
   }
 }
+if (rows.length === 0) {
+  throw new Error(
+    prefixes.length > 0
+      ? `No Simple result rows matched: ${prefixes.join(", ")}`
+      : "No Simple result rows were found",
+  );
+}
 for (const r of rows) {
   console.log(
     [

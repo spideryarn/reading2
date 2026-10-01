@@ -28,7 +28,7 @@ import { describe, expect, it } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import { OWNER_MODE_NOTE } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import type { Glossary, PublicArtefacts } from "../src/types.js";
+import type { Glossary, PublicArtefacts, SimpleSummary } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { sharedInventory, type InventoryItem } from "../src/web/shared-inventory.js";
 import { ARTEFACT_KEYS, asPublicArtefacts } from "../src/web/AccessSharing.js";
@@ -586,20 +586,23 @@ describe("what counts as shareable", () => {
         generatedAt: "2020-01-01T00:00:00.000Z",
         elapsedMs: 1,
         profileHash: null,
-        /* Fewer than two paragraphs at either level is not a usable or public Simple. */
+        /* Every level is valid-looking: the old version alone must refuse it. */
         levels: {
           brief: [
             { text: "One.", ids: ["spya-k3m9qt"] },
             { text: "Two.", ids: ["spya-k3m9qt"] },
           ],
-          simple: [],
+          simple: [
+            { text: "One.", ids: ["spya-k3m9qt"] },
+            { text: "Two.", ids: ["spya-k3m9qt"] },
+          ],
           fuller: [
             { text: "One.", ids: ["spya-k3m9qt"] },
             { text: "Two.", ids: ["spya-k3m9qt"] },
             { text: "Three.", ids: ["spya-k3m9qt"] },
           ],
         },
-      },
+      } as unknown as SimpleSummary,
       citations: null,
       debate: null,
       glossary: null,

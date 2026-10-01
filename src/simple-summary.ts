@@ -97,6 +97,7 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import {
+  SIMPLE_ARTIFACT_VERSION,
   SIMPLE_LEVELS,
   SIMPLE_LIMITS,
   SIMPLE_MAX_IDS,
@@ -117,16 +118,16 @@ export { SIMPLE_LEVELS } from "./types.js";
  * pipeline's stamp and the owner's read (src/pipeline.ts, src/store/pg.ts).
  *
  * `simple/2` (2026-10-01) is three levels and the profile. A `simple/1` row has
- * no `levels` and reads as absent (`isSimpleLevels`, src/types.ts).
+ * no `levels` and reads as absent (`isUsableSimpleSummary`, src/types.ts).
  */
-export const SIMPLE_VERSION = "simple/2";
+export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
 
 /** Passages per paragraph. Extra ids are dropped and counted. */
 export const MAX_IDS = SIMPLE_MAX_IDS;
 
 /**
  * One call's answer budget in tokens, sized for the larger level: Fuller's
- * word ceiling (450 words, ~600 tokens at 0.75 words a token, doubled for
+ * word ceiling (480 words, ~640 tokens at 0.75 words a token, nearly doubled for
  * safety), plus three ids and the JSON around each of its paragraphs.
  * Undersizing does not degrade: it throws `truncationFailure` and loses the
  * whole pass.
@@ -477,7 +478,7 @@ interface StampOptions {
 
 /**
  * The artefact, from what the model said at each level plus what we could
- * verify of it. **Every failure throws and writes nothing**, at either level:
+ * verify of it. **Every failure throws and writes nothing**, at every level:
  * no `paragraphs` array, more paragraphs or words than its limits, or fewer
  * paragraphs surviving than its minimum. Every level or none.
  *
@@ -497,7 +498,7 @@ export function buildSimpleSummary(
   return stamped(levels, opts);
 }
 
-/** The stamp around two validated levels. */
+/** The stamp around every validated level. */
 function stamped(levels: Record<SimpleLevel, SimpleParagraph[]>, opts: StampOptions): SimpleSummary {
   return {
     version: SIMPLE_VERSION,
@@ -631,14 +632,31 @@ export async function generateSimpleSummary(opts: {
     return { paragraphs, usage: message.usage };
   };
 
-  const written = await Promise.all(
-    SIMPLE_LEVELS.map((level) =>
-      writeLevel(level).catch((err: unknown) => {
-        sibling.abort();
+  /* `Promise.all` alone returns on the first rejection. That would let the
+     step's spend collector close while the aborted siblings were still
+     settling and recording their cost. Abort on the first failure, but drain
+     every call before returning that first error. */
+  let firstFailure: unknown;
+  let failed = false;
+  const settled = await Promise.allSettled(
+    SIMPLE_LEVELS.map(async (level) => {
+      try {
+        return await writeLevel(level);
+      } catch (err) {
+        if (!failed) {
+          failed = true;
+          firstFailure = err;
+          sibling.abort();
+        }
         throw err;
-      }),
-    ),
+      }
+    }),
   );
+  if (failed) throw firstFailure;
+  const written = settled.map((result) => {
+    if (result.status === "rejected") throw result.reason;
+    return result.value;
+  });
   const levels = Object.fromEntries(SIMPLE_LEVELS.map((level, i) => [level, written[i]!.paragraphs])) as Record<
     SimpleLevel,
     SimpleParagraph[]
@@ -661,7 +679,7 @@ export async function generateSimpleSummary(opts: {
     words: Object.fromEntries(SIMPLE_LEVELS.map((l) => [l, paragraphWords(levels[l])])) as Record<SimpleLevel, number>,
     dropped,
     model: generatorFor(opts.power),
-    /* Summed over both calls. */
+    /* Summed over all three calls. */
     inputTokens: sum((u) => u.input_tokens),
     outputTokens: sum((u) => u.output_tokens),
     cacheReadTokens: sum((u) => u.cache_read_input_tokens),

@@ -60,7 +60,7 @@ import type {
   Tree,
   TweetThread,
 } from "../types.js";
-import { isDebateDocument, isSimpleLevels } from "../types.js";
+import { isDebateDocument, isUsableSimpleSummary } from "../types.js";
 import { sameGenerator } from "../models.js";
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
@@ -418,10 +418,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
   crossrefs: { field: "links", ok: isArray },
-  /* Both levels, each within its limits. `buildSimpleSummary` enforces this on the
-     model's answer; this second check is the store boundary, so a direct or
-     malformed JSONB value cannot make the step report done with an empty band. */
-  simple: { field: "levels", ok: isSimpleLevels },
+  /* The current version and every level within its limits. Whole-document
+     because a `simple/1` row with a hand-added `levels` field is still v1, and
+     must not make the step report done. */
+  simple: { field: "levels", ok: isUsableSimpleSummary, whole: true },
 };
 
 /**

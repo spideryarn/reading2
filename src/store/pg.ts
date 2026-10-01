@@ -190,7 +190,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
-import { isSimpleLevels } from "../types.js";
+import { isUsableSimpleSummary } from "../types.js";
 import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
@@ -2531,10 +2531,13 @@ function personalisedSteps(revision: {
        stamp says whose. Its stored output is public but the stamp is not, and
        an owner about to publish is owed the fact. */
     trajectory: revision.trajectory,
-    /* The eighth, since 2026-10-01: both plain-words levels are pitched at
+    /* The eighth, since 2026-10-01: all plain-words levels are pitched at
        the owner's profile and goal, and a visitor reads the owner's. Plan
        261001b. */
-    simple: revision.simpleSummary,
+    simple:
+      revision.simpleSummary && isUsableSimpleSummary(revision.simpleSummary)
+        ? revision.simpleSummary
+        : null,
   };
   /* `Object.entries` rather than indexing `carriers` by `StepName`, because
      the record is now exactly the artefacts that can be personalised and a
@@ -2592,7 +2595,7 @@ export function shareableArtefacts(revision: {
        malformed band. The owner's inventory must answer the same question or
        it promises that a shared link contains something the link withholds. */
     simpleSummary:
-      revision.simpleSummary && isSimpleLevels(revision.simpleSummary.levels)
+      revision.simpleSummary && isUsableSimpleSummary(revision.simpleSummary)
         ? revision.simpleSummary
         : null,
     citations: revision.citations,
@@ -3205,7 +3208,7 @@ const rawPgArticleReader: ArticleReader = {
           /* The shape guard every other read uses, so Metadata cannot call
              done what the GET and the public page treat as absent (Sol's
              plan review of 261001b, P1-2). */
-          if (!simple || !isSimpleLevels(simple.levels) || !tree || blocks.length === 0) return false;
+          if (!isUsableSimpleSummary(simple) || !tree || blocks.length === 0) return false;
           return sameStamp(
             {
               inputHash: simple.sourceHash,
@@ -3706,9 +3709,9 @@ const rawPgArticleReader: ArticleReader = {
     const found = await currentRevision(slug, "simpleSummary");
     if (!found) throw notFound(slug);
     const simpleSummary = found.revision.simpleSummary as SimpleSummary | null;
-    /* `isSimpleLevels` also turns a `simple/1` row (no `levels`) into this
-       404, so the owner's press writes every level over it. */
-    if (!simpleSummary || !isSimpleLevels(simpleSummary.levels)) {
+    /* The whole-artefact guard turns every `simple/1` row into this 404, even
+       if an imported row happens to carry a valid-looking `levels` field. */
+    if (!isUsableSimpleSummary(simpleSummary)) {
       throw Object.assign(
         new Error(
           `No plain-words summary for "${slug}" yet. Write one with ` +

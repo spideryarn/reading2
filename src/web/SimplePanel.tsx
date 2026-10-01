@@ -56,7 +56,7 @@ export function SimplePanel({
   onJump,
 }: {
   access: SimpleAccess;
-  /** Which of the two levels the row has chosen. */
+  /** Which of the three levels the row has chosen. */
   level: SimpleLevel;
   onJump(id: BlockId): void;
 }) {
@@ -112,8 +112,8 @@ export function SimplePanel({
         <div className="gloss-empty">
           <p>{SIMPLE_NONE_OWNER}</p>
           <p className="gloss-hint">
-            One model pass over the article, about ten seconds. Written once and kept — you will not be
-            asked again unless the article changes.
+            All three levels are written together, usually in under half a minute. Written once and kept —
+            you will not be asked again unless the article changes.
           </p>
           {run("Write it")}
         </div>

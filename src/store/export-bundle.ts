@@ -60,6 +60,7 @@ import {
 import { escapeHtml, normaliseText } from "../html.js";
 import { log } from "../log.js";
 import { articleUrl, isWebUrl } from "../urls.js";
+import { isUsableSimpleSummary } from "../types.js";
 
 const logger = log("store");
 
@@ -847,8 +848,7 @@ function countOf(value: unknown, key: string): number {
 
 /** Simple's `levels` object, structurally, as `countOf` reads everything else. */
 function levelsOf(value: unknown): unknown {
-  if (value === null || typeof value !== "object") return null;
-  return (value as Record<string, unknown>).levels ?? null;
+  return isUsableSimpleSummary(value) ? value.levels : null;
 }
 
 /**

@@ -1708,9 +1708,8 @@ describe("the artefacts a shared link carries", () => {
     expect("simpleSummary" in invalid).toBe(false);
   });
 
-  it("does not publish a simple/1 row, which has one paragraphs list and no levels", () => {
-    const { levels: _gone, ...rest } = SIMPLE;
-    const v1 = { ...rest, version: "simple/1", paragraphs: SIMPLE.levels.simple } as unknown as SimpleSummary;
+  it("does not publish a simple/1 row even when it has valid-looking levels", () => {
+    const v1 = { ...SIMPLE, version: "simple/1", paragraphs: SIMPLE.levels.simple } as unknown as SimpleSummary;
     const invalid = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: v1 });
     expect("simpleSummary" in invalid).toBe(false);
   });

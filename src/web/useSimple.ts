@@ -3,8 +3,8 @@
  * stored paragraphs, whether they still describe the article, and the verbs
  * that write them. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
  *
- * `useFaq`'s shape, because the artefact's contract is the same: one model pass
- * over the article, stored once, replaced on a re-run, and two staleness facts
+ * `useFaq`'s shape, because the artefact's contract is the same: model work over
+ * the article, stored once, replaced on a re-run, and two staleness facts
  * — `stale` (the article moved: the panel says so) and `outdated` (an older
  * prompt: silent). The read half is `GET /api/simple/:slug`; the write half is
  * a job (`steps: ["simple"]`). Ordering is src/web/useOrderedRead.ts's, the job
@@ -12,7 +12,7 @@
  * starts it through src/web/useAutoRun.ts — so this file is only the parse,
  * the 404 branch and the verbs.
  *
- * **Mounted only while Simple is on screen, and only for an owner**
+ * **Mounted only while a plain-words level is on screen, and only for an owner**
  * (modes/summary/SummaryMode.tsx § `OwnerSimple`): `useAutoRun`'s owner must
  * die with the view so a press cannot be spent after the reader has left it,
  * and a visitor reads the paragraphs off the public payload with no hook at all.

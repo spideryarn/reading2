@@ -498,7 +498,7 @@ describe("the bundle is the faithful projection", () => {
   });
 
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a
-     `simple/2` row does not have, and a zero row is dropped — so both levels
+     `simple/2` row does not have, and a zero row is dropped — so every level
      would have vanished from the page while the JSON beside it carried them. */
   it("counts every plain-words level on the page", () => {
     const page = bundled.get("index.html");

@@ -4524,6 +4524,9 @@ export interface SimpleParagraph {
 export const SIMPLE_LEVELS = ["brief", "simple", "fuller"] as const;
 export type SimpleLevel = (typeof SIMPLE_LEVELS)[number];
 
+/** The stored shape's version, beside the guard that decides whether it is usable. */
+export const SIMPLE_ARTIFACT_VERSION = "simple/2";
+
 /** One level's limits — the stored Simple contract, shared by generation and every read boundary. */
 export interface SimpleLevelLimits {
   minParagraphs: number;
@@ -4545,7 +4548,7 @@ export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   fuller: { minParagraphs: 3, maxParagraphs: 5, maxWords: 480 },
 };
 
-/** Passages per paragraph, at either level. */
+/** Passages per paragraph, at every level. */
 export const SIMPLE_MAX_IDS = 3;
 
 /**
@@ -4592,12 +4595,9 @@ export function isSimpleParagraphs(value: unknown, level: SimpleLevel): value is
 }
 
 /**
- * **Is this a usable stored Simple — every level, each within its limits?**
- * The one guard every read boundary uses: the owner's GET, Metadata's *is it
- * done*, the artefact reader and the public projection (Sol's plan review,
- * P1-2). A `simple/1` row — one `paragraphs` list, no `levels` — fails it, so
- * it reads as absent everywhere at once and the next press writes every level
- * over it.
+ * **Are all three stored levels present and within their limits?** The content
+ * half of `isUsableSimpleSummary` below, which is the whole-artefact guard every
+ * read boundary uses (Sol's plan review, P1-2).
  */
 export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, SimpleParagraph[]> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -4607,7 +4607,7 @@ export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, Sim
 
 /** The artefact. The `simple_summary` column on `article_revisions`. */
 export interface SimpleSummary {
-  version: string;
+  version: typeof SIMPLE_ARTIFACT_VERSION;
   generator: string;
   slug: string;
   /**
@@ -4627,6 +4627,33 @@ export interface SimpleSummary {
   profileHash: string | null;
   /** Every level, always — validation stores all of them or none. */
   levels: Record<SimpleLevel, SimpleParagraph[]>;
+}
+
+/**
+ * **Is this a complete, current-shape Simple artefact?** One answer for every
+ * read boundary. Checking `levels` alone is not enough: an imported or edited
+ * `simple/1` row can happen to carry a field with that name and must still read
+ * as absent, while `profileHash` is required provenance in `simple/2`.
+ */
+export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const simple = value as Partial<Record<keyof SimpleSummary, unknown>>;
+  return (
+    simple.version === SIMPLE_ARTIFACT_VERSION &&
+    typeof simple.generator === "string" &&
+    simple.generator.length > 0 &&
+    typeof simple.slug === "string" &&
+    simple.slug.length > 0 &&
+    typeof simple.sourceHash === "string" &&
+    simple.sourceHash.length > 0 &&
+    typeof simple.generatedAt === "string" &&
+    simple.generatedAt.length > 0 &&
+    typeof simple.elapsedMs === "number" &&
+    Number.isFinite(simple.elapsedMs) &&
+    simple.elapsedMs >= 0 &&
+    (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    isSimpleLevels(simple.levels)
+  );
 }
 
 /**

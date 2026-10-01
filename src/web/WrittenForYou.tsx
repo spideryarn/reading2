@@ -48,7 +48,7 @@
  * >
  * > — Greg, 2026-09-29, `[SPIDERYARN-READING2-4G]`
  *
- * **Glossary only**, because the phone-space argument was made about Glossary,
+ * **Originally Glossary only**, because the phone-space argument was made about Glossary,
  * and because an icon alone says less than the words: *older profile* is a
  * fact a reader would otherwise have to guess from a colour. GPT Sol's review
  * of the plan made that point and it holds, so Quotes, Ideas and Tweets keep
