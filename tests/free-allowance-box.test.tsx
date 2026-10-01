@@ -154,6 +154,9 @@ describe("the notice", () => {
   it("shows a gift claimed inside the last week", () => {
     render(gifted(new Date(NOW - 2 * DAY).toISOString()));
     expect(text()).toContain("A gift of 20 articles has been added to your free allowance");
+    expect(host.querySelector("[data-testid=gift-notice-dismiss]")?.getAttribute("aria-label")).toBe(
+      "Dismiss gift of 20 articles notice",
+    );
   });
 
   it(`does not show one claimed more than ${GIFT_NOTICE_DAYS} days ago`, () => {

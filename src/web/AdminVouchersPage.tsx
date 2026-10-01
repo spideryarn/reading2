@@ -17,7 +17,7 @@
  * (newest first, the server's), and a row that turns into a form, which a
  * TanStack cell renderer would make harder to read rather than easier.
  */
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RefreshCw } from "lucide-react";
 
 import { readableDate } from "../billing-plan.js";
@@ -32,7 +32,7 @@ import {
 } from "./useAdminVouchers.js";
 
 const INPUT =
-  "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25";
+  "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25";
 const BUTTON =
   "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50";
 const CELL = "tw:px-3 tw:py-2 tw:align-top tw:first:pl-4 tw:last:pr-4";
@@ -161,7 +161,10 @@ function usage(v: AdminVoucherRow): string {
   if (!c) return "—";
   switch (c.kind) {
     case "free":
-      return `${c.used} used of ${c.limit}, ${c.remaining} left${c.lapsed ? " (back on Free)" : ""}`;
+      return (
+        `${c.used} added; free allowance ${c.limit}; room for ${c.remaining} further private ` +
+        `${c.remaining === 1 ? "article" : "articles"}${c.lapsed ? " (back on Free)" : ""}`
+      );
     case "paid":
       return `On a paid plan (${c.tierId}) — the gift waits until they are on Free`;
     case "unknown":
@@ -176,8 +179,22 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
   const [email, setEmail] = useState(voucher.email);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const firstField = useRef<HTMLInputElement>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
   const unclaimed = voucher.claimedBy === null;
   const revoked = voucher.revokedAt !== null;
+  /* Also changes if a refresh says a waiting voucher was claimed while its
+     editor was open, when the email field gives way to the article field. */
+  const focusDestination = editing ? (unclaimed ? "email" : "articles") : "edit";
+
+  /* The Edit button disappears when the fields arrive. Put focus on the first
+     field rather than leaving a keyboard user on a detached element. */
+  useEffect(() => {
+    if (focusDestination !== "edit") firstField.current?.focus();
+    else if (wasEditing.current) editButton.current?.focus();
+    wasEditing.current = focusDestination !== "edit";
+  }, [focusDestination]);
 
   async function send(patch: VoucherPatchInput): Promise<boolean> {
     setBusy(true);
@@ -221,6 +238,7 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
       <td className={`${CELL} tw:break-all`}>
         {editing && unclaimed ? (
           <input
+            ref={firstField}
             type="email"
             aria-label="Email address"
             enterKeyHint="done"
@@ -236,6 +254,7 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
       <td className={`${CELL} tw:text-right tw:tabular-nums`}>
         {editing ? (
           <input
+            ref={unclaimed ? undefined : firstField}
             type="number"
             aria-label="Articles"
             enterKeyHint="done"
@@ -291,7 +310,7 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
           </form>
         ) : (
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <button type="button" disabled={busy} onClick={startEditing} className={BUTTON}>
+            <button ref={editButton} type="button" disabled={busy} onClick={startEditing} className={BUTTON}>
               Edit
             </button>
             <button

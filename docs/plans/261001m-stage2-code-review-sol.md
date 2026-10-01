@@ -1,0 +1,17 @@
+- **D1 — P1 — FIXED**: Mounting `useBilling()` on the shelf could erase search, sorting, view state, fragments, and router history state when `?checkout=` appeared. It now removes only that parameter. [useBilling.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/useBilling.ts:149), [pricing-page-current-plan.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/tests/pricing-page-current-plan.test.tsx:289)
+
+- **D2 — P1 — FIXED**: An older voucher GET could overwrite the fresh GET following a create/update, making a successful voucher apparently disappear. Reads now have generation guards. [useAdminVouchers.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/useAdminVouchers.ts:52), [admin-vouchers-page.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/tests/admin-vouchers-page.test.tsx:216)
+
+- **D3 — P2 — FIXED**: Admin usage rendered `used of limit`, although the wire lacks the public/high-powered fields needed to know whether those numbers form a ratio. It now presents added, allowance, and server-computed private headroom as separate facts. [AdminVouchersPage.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/AdminVouchersPage.tsx:154)
+
+- **D4 — P2 — FIXED**: Opening and closing inline editing left keyboard focus on removed elements. Focus now moves into the first field and returns to Edit afterward, including a concurrent waiting→claimed transition. [AdminVouchersPage.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/AdminVouchersPage.tsx:182)
+
+- **D5 — P2 — FIXED**: Voucher inputs remained 14px on coarse-pointer devices, triggering iPhone focus zoom. They now use the project’s coarse-pointer 16px rule. [AdminVouchersPage.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/AdminVouchersPage.tsx:34)
+
+- **D6 — P3 — FIXED**: Multiple fresh-gift dismiss buttons all had the accessible name “Dismiss”. Their names now identify the gift notice. [FreeAllowance.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/FreeAllowance.tsx:131)
+
+- **D7 — P3 — FIXED**: Documentation still described duplicated client voucher types after the orchestrator moved them to the shared flat module; related route-count comments were also stale. [admin.md](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/docs/project/admin.md:788), [plan log](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/docs/plans/261001m-gift-vouchers-for-free-articles.md:208), [router.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb-vp4mdn-gift-vouchers/src/web/router.ts:188)
+
+Verification: the requested six test files pass, 51/51; the final admin test rerun passes 7/7; all three underlying TypeScript projects pass; touched-file lint and `git diff --check` pass. Full `npm test` was attempted but could not start because the sandbox could not reach the local Postgres service on port 54362. No files were committed.
+
+Verdict: No P0 issues or unresolved stage-scoped findings remain. The client now preserves one billing request per page without disturbing shelf URL state, handles voucher refresh races, avoids false quota ratios, and meets the reviewed narrow-layout/accessibility requirements.

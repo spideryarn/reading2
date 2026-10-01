@@ -188,9 +188,9 @@ export type Route =
    * The administrator's pages — `/admin` and `/admin/users`. See AdminPage.tsx
    * and docs/project/admin.md.
    *
-   * Two pages as one route with a `page`, exactly as an article's views
+   * Four pages as one route with a `page`, exactly as an article's views
    * are one route with a `view`: they share a heading, a back-link and the
-   * question of who is allowed to see them, and three routes would mean three
+   * question of who is allowed to see them, and four routes would mean four
    * places to answer it.
    *
    * **Parsing this says nothing about being allowed to see it.** The route
@@ -619,7 +619,7 @@ export function carriedSearch(search: string): string {
 
 export const LIBRARY_HREF = "/";
 /**
- * The administrator's index, and the one page under it.
+ * The administrator's index, and the pages under it.
  *
  * Constants rather than strings at the call sites for the reason `CALLBACK_HREF`
  * below is one: the regex in `parseRoute` and the `href` on a link are the two

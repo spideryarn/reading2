@@ -131,7 +131,7 @@ export function FreeAllowanceBox({ plan, now }: { plan: ReaderPlan; now: number 
           <button
             type="button"
             data-testid="gift-notice-dismiss"
-            aria-label="Dismiss"
+            aria-label={`Dismiss gift of ${articles(gift.articles)} notice`}
             title="Dismiss"
             onClick={() => dismiss(gift.noticeKey)}
             className="tw:inline-flex tw:size-7 tw:shrink-0 tw:-my-1 tw:items-center tw:justify-center tw:rounded-md tw:bg-transparent tw:text-muted-foreground tw:hover:bg-highlight/10 tw:hover:text-foreground"

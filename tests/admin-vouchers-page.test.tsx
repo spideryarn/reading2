@@ -28,6 +28,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { AdminVouchersPage } = await import("../src/web/AdminVouchersPage.js");
+const { useAdminVouchers } = await import("../src/web/useAdminVouchers.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -146,7 +147,8 @@ describe("/admin/vouchers", () => {
     const claimed = rowFor("claimed@example.test")?.textContent ?? "";
     expect(claimed).toContain("Claimed by claimed-now@example.test");
     expect(claimed).toContain("21 September 2026");
-    expect(claimed).toMatch(/4 used.*9 left/);
+    expect(claimed).toMatch(/4 added.*free allowance 13.*9 further private articles/);
+    expect(claimed).not.toContain("used of");
     expect(rowFor("revoked@example.test")?.textContent).toContain("Revoked");
   });
 
@@ -177,14 +179,31 @@ describe("/admin/vouchers", () => {
 
   it("lets the address change only while a voucher waits", async () => {
     await mount();
-    await act(async () => buttonIn(rowFor("waiting@example.test"), "Edit")?.click());
-    expect(rowFor("waiting@example.test")?.querySelector('input[type="email"]')).not.toBeNull();
-    await act(async () => buttonIn(rowFor("waiting@example.test"), "Cancel")?.click());
+    const waiting = rowFor("waiting@example.test");
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const email = waiting?.querySelector('input[type="email"]');
+    expect(email).not.toBeNull();
+    expect(document.activeElement).toBe(email);
+    await act(async () => buttonIn(waiting, "Cancel")?.click());
+    expect(document.activeElement).toBe(buttonIn(waiting, "Edit"));
 
     await act(async () => buttonIn(rowFor("claimed@example.test"), "Edit")?.click());
     const editing = rowFor("claimed@example.test");
     expect(editing?.querySelector('input[type="number"]')).not.toBeNull();
     expect(editing?.querySelector('input[type="email"]')).toBeNull();
+  });
+
+  it("keeps every text field at a non-zooming size on a coarse pointer", async () => {
+    await mount();
+    await act(async () => buttonIn(rowFor("waiting@example.test"), "Edit")?.click());
+
+    const fields = [...host.querySelectorAll<HTMLInputElement>('input[type="email"], input[type="number"], input[type="text"]')];
+    expect(fields.length).toBeGreaterThan(0);
+    for (const field of fields) {
+      expect(field.className, field.getAttribute("aria-label") ?? field.id).toContain(
+        "tw:any-pointer-coarse:text-base",
+      );
+    }
   });
 
   it("shows the server's refusal in its own words", async () => {
@@ -193,5 +212,61 @@ describe("/admin/vouchers", () => {
     await act(async () => buttonIn(rowFor("claimed@example.test"), "Revoke")?.click());
     await settle();
     expect(host.textContent).toContain("That voucher has been claimed.");
+  });
+
+  it("does not let an older read overwrite the refresh after a write", async () => {
+    let answerFirstRead: ((response: Response) => void) | null = null;
+    let reads = 0;
+    const fresh = [{ ...VOUCHERS[0], email: "fresh@example.test" }];
+    globalThis.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method === "POST") return Promise.resolve(new Response('{"id":"new"}', { status: 201 }));
+      reads += 1;
+      if (reads === 1) {
+        return new Promise<Response>((resolve) => {
+          answerFirstRead = resolve;
+        });
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ vouchers: fresh }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }) as typeof fetch;
+
+    function Harness() {
+      const state = useAdminVouchers();
+      return (
+        <>
+          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null })}>
+            Create
+          </button>
+          <span>{state.vouchers?.map((voucher) => voucher.email).join(",") ?? "loading"}</span>
+        </>
+      );
+    }
+
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(<Harness />));
+    await settle();
+    expect(reads).toBe(1);
+
+    await act(async () => host.querySelector("button")?.click());
+    await settle();
+    expect(host.textContent).toContain("fresh@example.test");
+
+    await act(async () => {
+      answerFirstRead?.(
+        new Response(JSON.stringify({ vouchers: VOUCHERS }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    });
+    await settle();
+    expect(host.textContent).toContain("fresh@example.test");
   });
 });

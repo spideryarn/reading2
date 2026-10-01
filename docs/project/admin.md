@@ -785,9 +785,9 @@ row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
 Edit offers the address only while the voucher waits, and a save sends only the fields that changed.
 Every write is followed by a fresh read, and a refusal is shown in the server's own words beside the
-row. The wire type is a client copy (`AdminVoucherRow`) because `pg-vouchers.ts` is a server module
-the client may not import, even for a type; moving `AdminVoucher` into a flat shared module would
-remove the copy. `tests/admin-vouchers-page.test.tsx` mounts it.
+row. The wire shape is [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), a flat import-free
+module shared by the store and the client because the browser may not import `pg-vouchers.ts`, even
+for a type. `tests/admin-vouchers-page.test.tsx` mounts it.
 
 ## What it cannot do, and what is not built
 

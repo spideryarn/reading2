@@ -205,12 +205,12 @@ house pattern in database.md (app role only; no anon/authenticated access).
   gifts; Revoke sending the wrong body, the address editable once claimed). Docs: library.md § The
   free-allowance box, admin.md § `/admin/vouchers` (the page), billing.md § What a reader sees.
   What changed from the plan:
-  - **The client carries its own copy of the admin wire type** (`AdminVoucherRow`), because
-    `pg-vouchers.ts` is a server module that tests/client-imports.test.ts refuses even a type import
-    from. Moving `AdminVoucher`/`ClaimantUsage` into a flat shared module is a small server-side
-    follow-up.
+  - The first client cut carried its own copy of the admin wire type because `pg-vouchers.ts` is a
+    server module that `tests/client-imports.test.ts` refuses even a type import from. The stage's
+    final small follow-up moved `AdminVoucher`/`ClaimantUsage` into the flat, import-free
+    `src/admin-vouchers.ts`, so the store and client now share one shape.
   - The `/admin` index's *"Nothing on them can change anything"* now names Gift vouchers as the
     exception.
   - **The box mounts `useBilling` on the shelf**, which also reads `?checkout=` on mount. Stripe
     returns to `/profile`, so nothing sends that parameter to `/`, but if one ever arrived there it
-    would be handled and cleared there.
+    would be handled there and only that parameter would be cleared; the shelf's filters remain.

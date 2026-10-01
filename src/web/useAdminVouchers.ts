@@ -12,7 +12,7 @@
  * claimed voucher's address, a 400 on a typo), whose sentence is the server's
  * own `{ error }` through `readJson`.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -53,20 +53,28 @@ export function useAdminVouchers(): UseAdminVouchers {
   const [vouchers, setVouchers] = useState<AdminVoucherRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /* An initial read can still be in flight when the create form writes. Its
+     older answer must not overwrite the fresh read that follows the write. */
+  const generation = useRef(0);
 
   const reload = useCallback(() => {
+    const mine = ++generation.current;
     setLoading(true);
     return apiFetch(PATH)
       .then((r) => readJson<{ vouchers: AdminVoucherRow[] }>(r))
       .then((body) => {
+        if (mine !== generation.current) return;
         setVouchers(body.vouchers);
         setError(null);
       })
       .catch((e: Error) => {
+        if (mine !== generation.current) return;
         /* The old list stays, and the page says it may be stale. */
         setError(describeFetchFailure(e));
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (mine === generation.current) setLoading(false);
+      });
   }, []);
 
   useEffect(() => void reload(), [reload]);

@@ -286,6 +286,15 @@ const ALICE = "aaaaaaaa-2222-4000-8000-000000000001";
 const BOB = "bbbbbbbb-2222-4000-8000-000000000002";
 
 describe("the pricing page's current-plan line", () => {
+  it("removes only checkout from the address, preserving the page's other state", async () => {
+    history.replaceState({ kept: true }, "", "/pricing?q=needle&checkout=cancelled#plans");
+
+    await show(ALICE, () => FREE);
+
+    expect(`${location.pathname}${location.search}${location.hash}`).toBe("/pricing?q=needle#plans");
+    expect(history.state).toEqual({ kept: true });
+  });
+
   it("tells a signed-in free reader what they are on, in describePlan's words", async () => {
     const page = await show(ALICE, () => FREE);
     /* The exact sentence from src/billing-plan.ts, not a paraphrase: a second

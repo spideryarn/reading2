@@ -193,7 +193,7 @@ describe("/admin still refuses exactly as it did", () => {
 /**
  * **All four lazy variants arrive, through the real loaders.**
  *
- * Since 2026-09-05 `/admin`, its two sub-pages and `/design` are behind
+ * Since 2026-09-05 `/admin`, its sub-pages and `/design` are behind
  * `React.lazy` in App.tsx, and `React.lazy` reads `module.default` — which
  * neither `AdminPage.tsx` nor `DesignPage.tsx` has. A loader written the
  * obvious way (`lazy(() => import("./AdminPage.js"))`) therefore compiles,
@@ -204,7 +204,7 @@ describe("/admin still refuses exactly as it did", () => {
  * the escape hatch instead. The failure surface is tested on its own in
  * tests/lazy-page.test.tsx; here it is only ever the wrong answer.
  */
-describe("the four pages that load on demand", () => {
+describe("the pages that load on demand", () => {
   const variants: [string, string][] = [
     ["/admin", "Admin"],
     ["/admin/users", "Users"],
