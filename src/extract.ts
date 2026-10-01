@@ -697,18 +697,17 @@ function prepareDocument(
   kept: KeptStructure;
 } {
   unhideCollapsedSections(doc);
-  /* **The PDF figure marker, scrubbed on the one path a stranger's markup
-     arrives by.** Nothing on this path ever *writes* one — only `renderHtml`
-     (src/pdf-read.ts) does, and a PDF never comes through here — so this is the
-     namespace's standing obligation with no recogniser behind it: the attribute
-     is ours and therefore forgeable, and unlike our other marks it is
-     deliberately allowed past the sanitiser so it can reach the reading view
-     (src/reserved.ts § `pdfFigure`).
+  /* **The two reserved stamps with no writer on the shipping web path, scrubbed
+     where a stranger's markup arrives.** `pdfFigure` is written only by
+     `renderHtml` (src/pdf-read.ts), and `sourceRef` only by the extraction eval's
+     provenance instrument below. Both are now explicitly allowed through the
+     sanitiser with the rest of the `data-spya-*` namespace, so neither may be
+     left for that later pass to remove.
 
-     A forged one already resolves to nothing, because the ref folds in a raw
+     A forged PDF marker already resolves to nothing, because the ref folds in a raw
      PDF's sha256 and a web article has no raw PDF and therefore no `pdfFigures`
      entry to match. This is belt to that braces, and it is one line. */
-  scrubReserved(doc, [RESERVED_ATTRS.pdfFigure]);
+  scrubReserved(doc, [RESERVED_ATTRS.pdfFigure, RESERVED_ATTRS.sourceRef]);
   /* **The one step that deletes something because of what the publisher called
      it** — other things here remove elements, but only this one does it as a
      policy about furniture. What it may delete, and why that licence is narrow

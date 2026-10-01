@@ -168,9 +168,23 @@ its own jsdom and pins the version, which is a footgun, not a feature, when you 
 
 ### What survives, and what doesn't
 
-Kept, because the reading view needs them: `id` (see below), ordinary `data-*`, prose markup, the
-structures the block splitter looks for (`figure`, `figcaption`, `blockquote`, `pre`, `li`, `table`),
-and inline `<svg>`.
+Kept, because the reading view needs them: `id` (see below), prose markup, the structures the block
+splitter looks for (`figure`, `figcaption`, `blockquote`, `pre`, `li`, `table`), and inline `<svg>`.
+
+**`data-*` attributes and classes are an allowlist**, since 2026-10-01. An article keeps only the
+`data-*` names in `ARTICLE_DATA_ATTRS`: our own `data-spya-*` pipeline namespace
+([`src/reserved.ts`](../../src/reserved.ts)) and the two gwern addresses citations read. It keeps
+only the classes in `ARTICLE_CLASSES` (`pdf-uncertain`), plus Temml's vocabulary on MathML elements.
+Everything else goes, so every marking the reading view adds after the sanitiser is unforgeable,
+including markings that have not been written yet. The one exception is `pdf-uncertain` itself: it
+is presentational, no handler trusts it, and it is accepted on purpose (the comment on
+`ARTICLE_CLASSES` says when that would stop being true). Before that date the policy was a denylist, and
+each new marking had to be added to it by hand. Six versions of the policy were exactly that, and
+the seventh omission was a forgeable preview card
+([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md),
+SPIDERYARN-READING2-5Z). `tests/sanitize-allowlist.test.ts` scans the source spellings by which the
+app names data attributes and classes, including `dataset`, reserved-attribute constants, selectors
+and class APIs, and fails if one survives without being declared.
 
 Removed:
 
@@ -185,7 +199,9 @@ Removed:
   `<svg style="position:fixed;inset:0;width:100vw;height:100vh">` covers the whole reading view and
   takes the clicks. Prose gets its looks from our own stylesheets
   ([design-css-overview.md](design-css-overview.md)), so nothing of value is lost.
-- **the annotation attributes the client owns** — `data-comment`, `data-mark-end`, `data-open`,
+- **the annotation attributes the client owns**, which the allowlist above now covers. They are
+  still forbidden by name as a second line, and the rest of this item is their history:
+  `data-comment`, `data-mark-end`, `data-open`,
   `data-term`, and the `cmt` and `term` classes. [`annotateHtml`](../../src/web/annotate.ts) adds
   these *after* sanitising and the reading view treats them as its own, so an article shipping
   `<mark class="cmt" data-comment="…">` in its source would draw a fake comment in someone else's

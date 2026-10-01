@@ -277,10 +277,14 @@ export function PrivacyPage() {
           {/* Carrying auth mail since 2026-09-29 and missing from this list
               until 2026-09-30, when the server started sending mail of its own
               (docs/plans/260930i). That mail goes to us, not to the reader, and
-              carries an account id, never the address. */}
+              since 2026-10-01 it carries the reader's address, at Greg's
+              request (docs/plans/261001b) — hence the second sentence. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
-            address. Ireland (eu-west-1).
+            address. The first time you use Spideryarn after signing up, and whenever you move to a
+            bigger plan, we also email ourselves a note with your email address and account id (and,
+            for a plan, which ones), so we know who has joined. That note goes through Resend, then
+            our domain’s mail forwarding at Namecheap, to our own inbox. Ireland (eu-west-1).
           </Third>
           <Third name="Vercel" href="https://vercel.com/legal/privacy-policy">
             hosting. The code that answers your requests runs in London; their request logs are kept
@@ -315,10 +319,18 @@ export function PrivacyPage() {
             account id and email address, so that a broken page has a person attached to it. Bug
             reports you file are copied here too.
           </Third>
+          {/* Live since 2026-09-03; until 2026-10-01 this still said "not
+              switched on yet". Checkout and the billing portal are Stripe's own
+              hosted pages. A completed-Checkout webhook can carry the billing
+              details entered there, so the promise below is that we do not keep
+              them, not that they never pass through this server. What we send is
+              in src/billing/checkout.ts; what we retain is in src/db/schema.ts §
+              billing. docs/project/privacy.md § Facts. */}
           <Third name="Stripe" href="https://stripe.com/privacy">
-            payments. <strong className="tw:text-foreground">Not switched on yet</strong> — named
-            here because it is coming. Stripe will handle the card; we will never see it, and this
-            page will say what we do keep before anybody is charged.
+            payments, if you subscribe. You enter your card and billing details on Stripe’s page;
+            we do not keep them. We send Stripe your account id and what you choose to buy. We keep
+            your plan, its allowance and how you have used it; the subscription’s status and dates;
+            and Stripe’s customer and subscription references.
           </Third>
         </ul>
         <p>

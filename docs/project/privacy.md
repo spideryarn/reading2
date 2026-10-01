@@ -51,9 +51,13 @@ Asked, on the day, because none of them could be read off the code:
    being told. What the page rules out instead is the part that would actually offend: selling it,
    publishing it, training on it.
 4. **Facts**: the database is Supabase `eu-west-2` (London); Vercel's functions are pinned to
-   `lhr1` (`vercel.json`). Stripe is named although payments are **not switched on yet** — Greg,
-   *"let's include it anyway, because hopefully it will be soon"* — and the page says out loud that
-   it is off, which is what keeps that honest rather than premature.
+   `lhr1` (`vercel.json`). Stripe was named before payments were live — Greg, *"let's include it
+   anyway, because hopefully it will be soon"* — with the page saying out loud that it was off.
+   Payments went live on 2026-09-03 ([billing.md](billing.md)) and the page went on saying "not
+   switched on yet" until 2026-10-01 (Greg: *"fix"*). The replacement distinguishes details entered
+   on Stripe's hosted pages from what we retain, and names the account id and purchase information
+   we send. The sources of truth are `src/billing/checkout.ts`, `src/billing/webhook.ts` and the
+   billing tables in `src/db/schema.ts`; changing any of those means re-reading the Stripe entry.
 
 ## What the cross-family review changed, and what is still open
 
@@ -433,6 +437,19 @@ already on the page — so the page names the model and what it is shown, in the
 and `LAST_UPDATED` moved. The scores it returns are stored against the reader
 (`shelf_topic_scores`), deleted with the account, and never logged; nor are the titles, gists or
 profile it was sent. It runs only for the shelf's owner — the public shelf gets no topics at all.
+
+## The admin's sign-up and upgrade notices carry the address
+
+**Added 2026-10-01**, at Greg's request
+([261001b](../plans/261001b-admin-sign-up-email-carries-the-address.md)): the notice the server
+mails us on a reader's first authenticated request, and on each upgrade, now carries their email
+address as well as their account id and, for an upgrade, the plan names. It was left out on
+2026-09-30 because each copy — Resend's log, Namecheap's forwarding of `hello@`, and the inbox it
+lands in — is one more place an erasure has to reach; that is still true, so the Resend entry on the
+page says what the note carries and the route it takes, and `tests/privacy-page.test.ts` holds the
+sentence. Namecheap is named there but not added to the subprocessor list: it already forwards
+every mail a reader sends `hello@`, and this is the first time the page has said so.
+[email.md](email.md) owns the mechanics.
 
 ## What is pinned by a test, and what is not
 

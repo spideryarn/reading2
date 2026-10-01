@@ -69,6 +69,15 @@ export function isWebUrl(value: string): boolean {
 export const PUBLIC_ORIGIN = "https://www.spideryarn.com";
 
 /**
+ * **The admin page that lists every account.** One spelling for both sides:
+ * the client's router links it as `ADMIN_USERS_HREF`, and the mail that tells
+ * the admin somebody signed up or upgraded (src/arrivals.ts,
+ * src/billing/sync.ts) links `ADMIN_USERS_URL`.
+ */
+export const ADMIN_USERS_PATH = "/admin/users";
+export const ADMIN_USERS_URL = `${PUBLIC_ORIGIN}${ADMIN_USERS_PATH}`;
+
+/**
  * **Where this article lives on Spideryarn** — the link back, from anywhere.
  *
  * One function rather than the same template written at each site, because

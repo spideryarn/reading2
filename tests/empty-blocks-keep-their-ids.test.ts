@@ -294,16 +294,17 @@ describe("a text-less block with markup in it mints rather than guessing", () =>
   });
 
   /**
-   * **The same argument as the SVG, one step less obvious.** `class` and
-   * `data-*` survive the sanitiser, so `<hr class="section-break">` is not the
-   * same rule as a plain `<hr>` — it is drawn differently. The key carries the
+   * **The same argument as the SVG, one step less obvious.** Attributes that
+   * survive the sanitiser make two rules unlike: `<hr title="section-break">` is
+   * not the same rule as `<hr title="thin">`. (This used `class` until the
+   * sanitiser stopped keeping a publisher's classes on 2026-10-01 — 261001a.) The key carries the
    * attributes (sorted, minus `id`) so that reordering two unlike rules mints
    * instead of trading their ids.
    */
-  it("does not treat two <hr>s with different classes as interchangeable", () => {
+  it("does not treat two <hr>s with different attributes as interchangeable", () => {
     const rules = (body: string) => `<article><h1>Rules</h1>${body}</article>`;
     const doc = rules(
-      `<p>One paragraph.</p><hr class="section-break"><p>Two.</p><hr class="thin"><p>Three.</p>`,
+      `<p>One paragraph.</p><hr title="section-break"><p>Two.</p><hr title="thin"><p>Three.</p>`,
     );
     const first = splitIntoBlocks(doc);
     const section = first.blocks.find((b) => b.html.includes("section-break"))!.id;
@@ -311,7 +312,7 @@ describe("a text-less block with markup in it mints rather than guessing", () =>
     expect(section).not.toBe(thin);
 
     const swapped = rules(
-      `<p>One paragraph.</p><hr class="thin"><p>Two.</p><hr class="section-break"><p>Three.</p>`,
+      `<p>One paragraph.</p><hr title="thin"><p>Two.</p><hr title="section-break"><p>Three.</p>`,
     );
     const second = resplit(swapped, first.blocks);
     // Each rule keeps its own id, because the key knows they are not alike.
@@ -395,12 +396,12 @@ describe("a text-less block with markup in it mints rather than guessing", () =>
    * **The attribute list is JSON, not `name=value` joined by a space**, for the
    * reason `keyOf` gives about every other key in this file: a delimiter a page
    * can write into an attribute value is not a delimiter. These two rules spell
-   * the same joined string — `class=a data-x=b` — and are not the same rule.
+   * the same joined string — `title=a lang=b` — and are not the same rule.
    */
   it("does not let one attribute value spell another rule's attribute list", () => {
     const rules = (body: string) => `<article><h1>Rules</h1>${body}</article>`;
-    const one = `<hr class="a data-x=b">`;
-    const two = `<hr class="a" data-x="b">`;
+    const one = `<hr title="a lang=b">`;
+    const two = `<hr title="a" lang="b">`;
     const first = splitIntoBlocks(rules(`<p>Prose one.</p>${one}<p>Prose two.</p>${two}`));
     const ids = first.blocks.filter((b) => b.tag === "hr").map((b) => b.id);
     const second = resplit(rules(`<p>Prose one.</p>${two}<p>Prose two.</p>${one}`), first.blocks);

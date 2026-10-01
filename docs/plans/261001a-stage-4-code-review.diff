@@ -1,0 +1,372 @@
+diff --git a/docs/project/citations.md b/docs/project/citations.md
+index 82551004..b2134196 100644
+--- a/docs/project/citations.md
++++ b/docs/project/citations.md
+@@ -100,6 +100,18 @@ yet. No list, a scan or an unreadable document never fails the step; the step's
+ **An HTML bibliography's entry is its block's text**, when the block is `role: "reference"` and no
+ other work claims it — a shared footnote would show one work its neighbour's venue.
+ 
++**A PDF entry's DOI or arXiv id is the row's link** ([261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
++stage 4). The entry code split is the article's own text, so it joins rule 1 of `linkFor` as a
++bibliography block does: exactly one DOI, or no DOI and exactly one arXiv id, gives `doi.org` or
++`arxiv.org/abs` with the same `doi` / `arxiv` `linkFrom`. `entryIdentifiers` reads the entry
++conservatively, because the line break is now a space: a DOI ending in `-`, `/` or `_` takes the next
++run as its continuation; one followed by a lowercase-or-digit run (`j.cell. 2020.01.001`), or an
++arXiv id followed by a digit, might have been cut, so the row keeps its search. A hyphen before a
++lowercase letter was already joined by `dehyphenate`, and taken as the typesetter's. The link is read
++from the whole entry, not the stored 400-character cut. **A row whose search becomes a DOI keeps its
++id** on the re-run — its old `workKey` is tried when its new `doi:` key finds nothing, only while
++this run has one row with that `workKey` — so its *Look it up*, find and investigation stay with it.
++
+ **Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
+ the article's own reference list, which we have not looked up; the prose hover card shows the entry
+ in full, since a card is what a finger gets. `entry` is owner-only: `publicCitedWork` does not name
+@@ -422,7 +434,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
+ button on the hover card and the threshold reveal it would need; marking every occurrence of a
+ mention in its block rather than only an unambiguous one; joining the citation section to the *link*
+ and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
+-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; a DOI or arXiv id in a PDF's entry used as the row's link; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
++the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+ 
+ ## The code
+ 
+diff --git a/src/citations.ts b/src/citations.ts
+index 2e6cb9ce..f0d1566e 100644
+--- a/src/citations.ts
++++ b/src/citations.ts
+@@ -554,7 +554,9 @@ function readDraft(
+      claim must not merge otherwise-unrelated rows merely because both named
+      the same number. */
+   const entryNumber = located === null ? null : claimedEntryNumber(w.entry);
+-  const entry = located === null ? undefined : capEntry(listed!);
++  /* Uncapped while a draft, so `linkFor` can read a DOI at the end of a long
++     entry; capped where the row is written (`buildCitations`). */
++  const entry = located === null ? undefined : listed!;
+   const fields = located ?? said;
+   const authors = fields.authors ?? "";
+   const year = fields.year ?? "";
+@@ -711,6 +713,68 @@ export function identifiersIn(strings: readonly string[]): { dois: string[]; arx
+   return { dois: [...dois.values()], arxivs: [...arxivs] };
+ }
+ 
++/** A DOI's characters, anchored — the continuation `entryIdentifiers` may append. */
++const DOI_CHARS = /^[^\s"'<>?#]+/;
++/** `DOI`, but letting the suffix be empty: a line may break straight after the slash. */
++const DOI_OPEN = /\b(10\.\d{4,9}\/[^\s"'<>?#]*)/gi;
++
++/**
++ * **Every DOI and arXiv id in a PDF reference-list entry**, or `"unreadable"`
++ * when one is there but its end cannot be told (plan 261001a stage 4).
++ *
++ * The entry is the text layer's lines joined and whitespace-collapsed
++ * (`numberedEntries` in src/citation-reference-list.ts), so a line break is
++ * now a single space, and `dehyphenate` has already joined `neu-\nron` (a
++ * lowercase letter after the hyphen) into `neuron`. That join is taken as the
++ * typesetter's; a DOI whose own hyphen fell there loses it, and nothing in the
++ * text can say so — stage 5's title check against the registry is the guard.
++ * What is left to judge:
++ *
++ * - **A DOI that ends in `-`, `/` or `_` before a space** cannot have ended
++ *   there — `10.1111/j.1467- 9280…`, `10.1038/ s41586-…` — so the next run of
++ *   characters is its continuation, and is joined on.
++ * - **A DOI followed by a space and a lowercase-or-digit run with no colon**
++ *   (`10.1016/j.cell. 2020.01.001`) may have been cut by the line break or may
++ *   have ended: no way to tell, so the entry is `"unreadable"` and its row keeps
++ *   its search. A capital after it (`… Accessed`), a bracket, a comma, or a
++ *   colon-bearing token (`arXiv:…`, `https://…`) is a DOI that ended; a
++ *   trailing sentence period is stripped (`trimDoi`).
++ * - **An arXiv id followed by a digit**, with or without a space between, was
++ *   cut short, and is `"unreadable"` likewise.
++ *
++ * A wrong identifier is worse than a search, so every doubt gives up.
++ */
++export function entryIdentifiers(entry: string): { dois: string[]; arxivs: string[] } | "unreadable" {
++  const dois = new Map<string, string>();
++  for (const m of entry.matchAll(DOI_OPEN)) {
++    let raw = m[1] ?? "";
++    let end = (m.index ?? 0) + m[0].length;
++    for (;;) {
++      if (!/[-/_]$/.test(raw)) break;
++      const next = /^\s(?=\S)/.test(entry.slice(end)) ? DOI_CHARS.exec(entry.slice(end + 1)) : null;
++      if (!next) break;
++      raw += next[0];
++      end += 1 + next[0].length;
++    }
++    const doi = trimDoi(raw);
++    if (!doi || doi.endsWith("/")) continue;
++    const tail = raw.slice(doi.length);
++    if ((tail === "" || tail === ".") && /^\s[\p{Ll}\d][^\s:]*(?=\s|$)/u.test(entry.slice(end))) {
++      return "unreadable";
++    }
++    dois.set(doi.toLowerCase(), doi);
++  }
++  const arxivs = new Set<string>();
++  for (const pattern of [ARXIV_URL, ARXIV_TEXT]) {
++    for (const m of entry.matchAll(pattern)) {
++      if (!m[1]) continue;
++      if (/^\s?\d/.test(entry.slice((m.index ?? 0) + m[0].length))) return "unreadable";
++      arxivs.add(m[1].toLowerCase());
++    }
++  }
++  return { dois: [...dois.values()], arxivs: [...arxivs] };
++}
++
+ /** An anchor in a block that points off the page. */
+ export interface Anchor {
+   href: string;
+@@ -941,7 +1005,8 @@ function fromAnchor(anchor: Anchor): { url: string; linkFrom: CitationLinkFrom }
+  * failing that the note blocks among its mentions (a work found only inside a
+  * footnote has its entry there).
+  *
+- * 1. **Exactly one DOI** in the entry's text and hrefs → `doi.org`.
++ * 1. **Exactly one DOI** in the entry's text and hrefs → `doi.org`. A PDF's
++ *    reference-list entry counts as entry text (`entryIdentifiers`).
+  * 2. **No DOI and exactly one arXiv id** → `arxiv.org/abs`.
+  *    Both only when **no other work in this run shares that entry block**:
+  *    a gwern note naming three papers holds three identifiers, or one paper's
+@@ -966,9 +1031,18 @@ export function linkFor(
+   const entry = entryBlocks(draft, byId);
+ 
+   const alone = entry.every((b) => (claims.get(b.id) ?? 0) <= 1);
+-  if (alone && entry.length > 0) {
+-    const strings = entry.flatMap((b) => [b.text, ...anchorsOf(b.html).flatMap((a) => a.urls)]);
+-    const { dois, arxivs } = identifiersIn(strings);
++  /* A PDF's reference-list entry (plan 261001a stage 4): code split it from the
++     article's own text layer and `verifyEntry` paired it by number, so it is
++     the entry as much as a bibliography block is, and joins rule 1's strings.
++     Only one numbered entry reaches a work (`mergeInto` refuses two), so it is
++     never shared. `draft.entry` here is only ever that entry: a bibliography
++     block's text is attached after the link (`withBlockEntry`). */
++  const listed = draft.entryNumber !== undefined && draft.entry ? entryIdentifiers(draft.entry) : null;
++  if (listed !== "unreadable" && ((alone && entry.length > 0) || listed !== null)) {
++    const strings = alone ? entry.flatMap((b) => [b.text, ...anchorsOf(b.html).flatMap((a) => a.urls)]) : [];
++    const fromBlocks = identifiersIn(strings);
++    const dois = distinct([...fromBlocks.dois, ...(listed?.dois ?? [])]);
++    const arxivs = distinct([...fromBlocks.arxivs, ...(listed?.arxivs ?? [])]);
+     if (dois.length === 1 && dois[0]) return { url: doiUrl(dois[0]), linkFrom: "doi" };
+     if (dois.length === 0 && arxivs.length === 1 && arxivs[0]) {
+       return { url: arxivUrl(arxivs[0]), linkFrom: "arxiv" };
+@@ -988,6 +1062,13 @@ export function linkFor(
+   return { url: scholarUrl(draft.title, draft.authors), linkFrom: "search" };
+ }
+ 
++/** Identifiers once each, compared as `identifiersIn` does — case-insensitively. */
++function distinct(ids: readonly string[]): string[] {
++  const out = new Map<string, string>();
++  for (const id of ids) if (!out.has(id.toLowerCase())) out.set(id.toLowerCase(), id);
++  return [...out.values()];
++}
++
+ /** Rule 4: the one anchor in the mention blocks that IS a mention's own words, or nothing. */
+ function mentionAnchor(draft: Draft, byId: ReadonlyMap<string, Block>): Anchor | null {
+   const spoken: Anchor[] = [];
+@@ -1318,19 +1399,37 @@ export function buildCitations(
+      would both claim the old id. */
+   const keyed = works.map((w) => {
+     const { idKey, workKey } = keysOf({ ...w.draft, url: w.url, linkFrom: w.linkFrom });
+-    return { ...w, key: idKey ?? workKey };
++    return { ...w, key: idKey ?? workKey, idKey, workKey };
+   });
+   const counts = new Map<string, number>();
+   for (const w of keyed) counts.set(w.key, (counts.get(w.key) ?? 0) + 1);
++  const workCounts = new Map<string, number>();
++  for (const w of keyed) workCounts.set(w.workKey, (workCounts.get(w.workKey) ?? 0) + 1);
+   const taken = new Set<string>(opts.inherit?.values() ?? []);
++  /* **A work whose link improved keeps its id** (plan 261001a stage 4). A row
++     that was a Scholar search last run was keyed by its `workKey`; if this run
++     reads a DOI for it — a PDF entry's, now that those are read — its key is
++     `doi:…` and the lookup by key misses, which would orphan its stage-3 find,
++     lookup and investigation. So an identifier-keyed row with no id by its own
++     key takes the id its `workKey` had, when that `workKey` is this run's only
++     one. That one count is the whole guard: any other row that could claim the
++     same old id — by key or by this fallback — would share the `workKey`. The
++     reverse, a DOI row falling back to a search, keys nothing new and mints,
++     as before. */
++  const inheritedBy = (w: (typeof keyed)[number]): string | undefined => {
++    const own = counts.get(w.key) === 1 ? opts.inherit?.get(w.key) : undefined;
++    if (own !== undefined || w.idKey === null || workCounts.get(w.workKey) !== 1) return own;
++    return opts.inherit?.get(w.workKey);
++  };
+ 
+   const citations: CitedWork[] = keyed.map((w) => {
+-    const old = counts.get(w.key) === 1 ? opts.inherit?.get(w.key) : undefined;
+-    const { entryNumber: _entryNumber, ...draft } = w.draft;
++    const old = inheritedBy(w);
++    const { entryNumber: _entryNumber, entry, ...draft } = w.draft;
+     return {
+       id: old ?? mintUniqueId(taken),
+       key: w.key,
+       ...draft,
++      ...(entry ? { entry: capEntry(entry) } : {}),
+       ...placesOf(draft, blocks, position, markers),
+       url: w.url,
+       linkFrom: w.linkFrom,
+diff --git a/tests/citations.test.ts b/tests/citations.test.ts
+index dea61b5d..0c072a11 100644
+--- a/tests/citations.test.ts
++++ b/tests/citations.test.ts
+@@ -46,6 +46,7 @@ import {
+   buildCitations,
+   type Draft,
+   emptyDrops,
++  ENTRY_CAP,
+   markerNumbers,
+   generateCitations,
+   idsByKey,
+@@ -58,7 +59,7 @@ import {
+   systemPrompt,
+ } from "../src/citations.js";
+ import { plainWords } from "../src/plain-words.js";
+-import type { NumberedReferenceList } from "../src/citation-reference-list.js";
++import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
+ import type { Block, Tree } from "../src/types.js";
+ 
+ function block(id: string, text: string, over: Partial<Block> = {}): Block {
+@@ -873,6 +874,147 @@ describe("an entry in a PDF's reference list", () => {
+   });
+ });
+ 
++/* ------------------------------------ a PDF entry's DOI or arXiv id --
++   Plan 261001a stage 4: the entry code split from the PDF's text layer is the
++   article's own text, so a unique DOI or arXiv id in it is the row's link, by
++   the same rule as a bibliography block's. */
++describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
++  const CHEN =
++    "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals. Nat. Neurosci. 20, 115–125";
++  const BODY = [block("spya-b00001", "People recall TV episodes [8] and narratives [7,9] in detail.")];
++  const chen = {
++    title: "Shared memories reveal shared structure in neural activity across individuals",
++    authors: "Chen et al.",
++    year: "2017",
++    why: "Evidence that recall of a TV episode is shared across people.",
++    ...scored,
++    mentions: [{ block: "spya-b00001", quote: "TV episodes [8]" }],
++    entry: 8,
++  };
++  function run(entry8: string, inherit: Map<string, string> | null = null) {
++    return buildCitations(
++      { capped: false, works: [chen] },
++      {
++        power: "standard",
++        slug: "t",
++        blocks: BODY,
++        sourceHash: "h.h",
++        elapsedMs: 1,
++        inherit,
++        drops: emptyDrops(),
++        scores: noScoreDrops(),
++        referenceList: { entries: new Map([[8, entry8]]) },
++      },
++    );
++  }
++  const linkOf = (entry8: string) => {
++    const row = run(entry8).citations[0]!;
++    return { url: row.url, linkFrom: row.linkFrom };
++  };
++  /* Through the real splitter, so the line join and the dehyphenation are its own. */
++  const entryFromLines = (...tail: string[]) =>
++    referenceListFrom([
++      "References",
++      ...[1, 2, 3, 4, 5, 6, 7].map((n) => `${n}. Filler, A. (2000) Filler work number ${n}. J. Filler 1, 1–2`),
++      "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals.",
++      ...tail,
++    ])!.entries.get(8)!;
++
++  it("one DOI in the entry becomes doi.org, its trailing period left off", () => {
++    expect(linkOf(`${CHEN}. doi:10.1038/nn.4450.`)).toEqual({
++      url: "https://doi.org/10.1038/nn.4450",
++      linkFrom: "doi",
++    });
++    expect(linkOf(`${CHEN}. https://doi.org/10.1038/nn.4450`).url).toBe("https://doi.org/10.1038/nn.4450");
++  });
++
++  it("one arXiv id, either shape, becomes arxiv.org/abs", () => {
++    expect(linkOf(`${CHEN}. arXiv:1706.03762v5.`)).toEqual({
++      url: "https://arxiv.org/abs/1706.03762",
++      linkFrom: "arxiv",
++    });
++    expect(linkOf(`${CHEN}. arXiv:hep-th/9711200`).url).toBe("https://arxiv.org/abs/hep-th/9711200");
++  });
++
++  it("an entry with no identifier keeps its Scholar search", () => {
++    expect(linkOf(CHEN)).toEqual({ url: expect.stringContaining("scholar.google.com"), linkFrom: "search" });
++  });
++
++  it("two different DOIs in one entry are ambiguous, and keep the search", () => {
++    expect(linkOf(`${CHEN}. doi:10.1038/nn.4450; erratum doi:10.1038/nn.9999.`).linkFrom).toBe("search");
++  });
++
++  it("joins a DOI the line broke at a hyphen, whichever way the entry was dehyphenated", () => {
++    /* A digit after the hyphen: `dehyphenate` leaves it, and the break is a space. */
++    const digit = entryFromLines("Psychol. Sci. 18, 1–9. doi:10.1111/j.1467-", "9280.2007.01934.x.");
++    expect(digit).toContain("j.1467- 9280");
++    expect(linkOf(digit).url).toBe("https://doi.org/10.1111/j.1467-9280.2007.01934.x");
++    /* A lowercase letter after it: `dehyphenate` joins the word itself. */
++    const letter = entryFromLines("Neuron 95, 1–9. doi:10.1016/j.neu-", "ron.2017.06.041.");
++    expect(linkOf(letter).url).toBe("https://doi.org/10.1016/j.neuron.2017.06.041");
++    /* After a slash: a DOI cannot end in `/`. */
++    expect(linkOf(`${CHEN}. doi:10.1038/ s41586-020-2649-2.`).url).toBe("https://doi.org/10.1038/s41586-020-2649-2");
++  });
++
++  it("a DOI or arXiv id whose end the line break hides keeps the search, rather than a cut-short link", () => {
++    expect(linkOf(`${CHEN}. doi:10.1016/j.cell. 2020.01.001`).linkFrom).toBe("search");
++    expect(linkOf(`${CHEN}. arXiv:2001.0836 1`).linkFrom).toBe("search");
++    /* …but a DOI followed by a capital, or by another colon-bearing token, ended. */
++    expect(linkOf(`${CHEN}. doi:10.1038/nn.4450. Accessed 2020`).linkFrom).toBe("doi");
++  });
++
++  it("reads a DOI past the stored entry's cap, and still stores the entry capped", () => {
++    const long = `${CHEN}. ${"Extra matter. ".repeat(30)}doi:10.1038/nn.4450`;
++    expect(long.length).toBeGreaterThan(ENTRY_CAP);
++    const row = run(long).citations[0]!;
++    expect(row.url).toBe("https://doi.org/10.1038/nn.4450");
++    expect(row.entry).toHaveLength(ENTRY_CAP);
++  });
++
++  it("a row whose search becomes a DOI on a re-run keeps its id", () => {
++    const before = run(CHEN);
++    expect(before.citations[0]!.linkFrom).toBe("search");
++    const after = run(`${CHEN}. doi:10.1038/nn.4450`, idsByKey(before)).citations[0]!;
++    expect(after.key).toBe("doi:10.1038/nn.4450");
++    expect(after.id).toBe(before.citations[0]!.id);
++  });
++
++  it("…but not when two rows this run share that work's title, author and year", () => {
++    const before = run(CHEN);
++    const inherit = idsByKey(before);
++    const out = buildCitations(
++      {
++        capped: false,
++        works: [
++          chen,
++          { ...chen, entry: 9, mentions: [{ block: "spya-b00001", quote: "narratives [7,9]" }] },
++        ],
++      },
++      {
++        power: "standard",
++        slug: "t",
++        blocks: BODY,
++        sourceHash: "h.h",
++        elapsedMs: 1,
++        inherit,
++        drops: emptyDrops(),
++        scores: noScoreDrops(),
++        referenceList: {
++          entries: new Map([
++            [8, `${CHEN}. doi:10.1038/nn.4450`],
++            [9, `${CHEN.replace("8.", "9.")}. doi:10.1038/nn.9999`],
++          ]),
++        },
++      },
++    );
++    /* Two DOI rows, one old search id: neither can say it is the one. */
++    expect(out.citations.map((c) => c.linkFrom)).toEqual(["doi", "doi"]);
++    const ids = out.citations.map((c) => c.id);
++    expect(new Set(ids).size).toBe(2);
++    expect(ids).not.toContain(before.citations[0]!.id);
++  });
++});
++
+ describe("numbered cites", () => {
+   it("reads the numbers a bracketed cite names", () => {
+     expect([...markerNumbers(["TV episodes [8]"])]).toEqual([8]);

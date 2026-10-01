@@ -465,8 +465,11 @@ type NoteFields = Pick<Block, "role" | "treatment" | "noteId">;
  * `scrubReserved` takes every copy off before a single one of ours is written,
  * and it runs unconditionally, before the "no candidates" early return. So the
  * rule stage 3 depends on is that **`splitIntoBlocks` is only ever handed HTML
- * that has been through `canonicaliseNotes`** — which today is the whole of
- * `runExtract`, its only production caller. `NOTE_ID_PATTERN` is the belt: a
+ * whose note stamps we wrote** — through `canonicaliseNotes` on the web path
+ * (`runExtract`), or by `renderHtml` in src/pdf-read.ts, which builds a PDF's
+ * HTML itself out of escaped model text and so has nothing arriving that could
+ * carry a stamp (since 2026-09-30, docs/plans/260930k-pdf-footnotes-shown-and-linked.md).
+ * Those two are its only production callers. `NOTE_ID_PATTERN` is the belt: a
  * value that is not the ten hex digits stage 2 mints is not carried, so nothing
  * a page wrote can reach blocks.json, Postgres or the public payload as an id.
  *
@@ -1163,9 +1166,9 @@ function carryOverIds(
  * different documents — `sanitizeInPlace` replaces `innerHTML`, so every node
  * is re-parsed and nothing can be remembered across it by identity.
  *
- * Hence an attribute, which is text and does survive. DOMPurify keeps `data-*`
- * by default, and keeps these in the very cases the `id` itself is deleted
- * (see stampAuthorAnchors).
+ * Hence an attribute, which is text and does survive. The shared sanitiser's
+ * `ARTICLE_DATA_ATTRS` explicitly keeps these two stamps, including in the very
+ * cases where DOMPurify deletes the `id` itself (see `stampAuthorAnchors`).
  *
  * **Two of them, because `id` and `<a name>` are not equal claims.** The HTML
  * spec resolves a fragment by looking at every `id` in the document *first* and
@@ -1552,9 +1555,9 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       gistable,
       ...(note ? { note } : {}),
       ...(context ? { context } : {}),
-      /* Read from `el`, which is still in the document: the note stamps are
-         `data-*`, so neither the sanitiser nor `scrubStamps` (which only takes
-         WAS_ID/WAS_NAME off) has touched them. */
+      /* Read from `el`, which is still in the document: the note stamps are in
+         the sanitiser's explicit `ARTICLE_DATA_ATTRS`, and `scrubStamps` takes
+         only WAS_ID/WAS_NAME off. */
       ...noteFieldsFor(el),
     };
   });

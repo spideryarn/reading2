@@ -9,11 +9,12 @@
  *
  * ## Why a nonce, and why the target never comes from the DOM
  *
- * An article's own HTML can carry any class and any `data-*` attribute the
- * sanitiser does not forbid, and `data-xref` is not forbidden yet — reserving
- * it at ingress is a defence edit left for Greg (the plan's § Left for Greg).
- * So the DOM cannot be trusted to say either *this is a cross-reference* or
- * *it goes there*. The nonce answers the first: it is random per page load,
+ * Since 2026-10-01 the sanitiser drops every `data-*` and class an article
+ * brings except the few it declares, so a stored `mark.xref[data-xref]` cannot
+ * arrive from the source any more (src/sanitize-policy.ts, 261001a). This module
+ * does not lean on that. It stays the second line, on the argument that the DOM
+ * should not be trusted to say either *this is a cross-reference* or *it goes
+ * there*. The nonce answers the first: it is random per page load,
  * lives only in this module, and is never stored or sent anywhere, so markup
  * written before this page loaded cannot know it. The artefact answers the
  * second: `to` is read from the links array by index, never from an attribute.

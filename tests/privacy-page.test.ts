@@ -113,6 +113,18 @@ describe("the privacy page", () => {
     expect(prose).not.toContain("never carries is the text of the article");
   });
 
+  it("says the admin is emailed each new reader's address, and the route it takes", () => {
+    /* Plan 261001b: the sign-up and upgrade notices carry the address since
+       2026-10-01. Each copy is one more place an erasure has to reach, so the
+       page has to keep saying so for as long as src/arrivals.ts sends it. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("The first time you use Spideryarn after signing up");
+    expect(prose).toContain("whenever you move to a bigger plan");
+    expect(prose).toContain("we also email ourselves a note with your email address and account id");
+    expect(prose).toContain("for a plan, which ones");
+    expect(prose).toContain("That note goes through Resend, then our domain’s mail forwarding at Namecheap");
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

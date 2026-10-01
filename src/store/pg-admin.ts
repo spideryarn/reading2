@@ -86,7 +86,7 @@ import { allAccountSnapshots, entitlementFromRow, isPublicPrice } from "./pg-bil
 import type { AccountSnapshot } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import type { AccountRow } from "./account-row.js";
-import { gotruePages, listAccounts } from "./admin-accounts.js";
+import { authAdminEndpoint, gotruePages, listAccounts } from "./admin-accounts.js";
 import {
   type OwnerSpend,
   currentUtcMonth,
@@ -96,7 +96,6 @@ import type { AdminUser } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
-import { projectMismatch } from "./blobs.js";
 import {
   listFeedbackAcrossOwners,
   readFeedbackAcrossOwners,
@@ -560,29 +559,12 @@ export function adminQueries(db: Db) {
 /* ------------------------------------------------------------ the store --- */
 
 /**
- * Where the accounts come from, and the one thing that must be true of it.
- *
- * **The Auth project and the database must be the same project.** They are
- * chosen by two independent environment variables, and nothing else compares
- * them: point `SUPABASE_URL` at one project while `DATABASE_URL` names another
- * and this page lists the accounts of one and the articles of the other, giving
- * every person a row of zeros. Nothing errors. `projectMismatch` in blobs.ts is
- * the same check for the same reason on the Storage pair, and this reuses it
- * rather than growing a second opinion about what a project ref is.
+ * Where the accounts come from. The configuration and the same-project check
+ * are `authAdminEndpoint`'s (admin-accounts.ts), shared with the upgrade
+ * notice's one-account lookup since 2026-10-01.
  */
 function accountSource(): ReturnType<typeof gotruePages> {
-  const url = process.env.SUPABASE_URL?.trim();
-  /* `.trim()` on both, and empty is not configured: a `.env` line left as
-     `SUPABASE_SERVICE_ROLE_KEY=` gives a string that authenticates nothing. */
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) {
-    throw new Error(
-      "the admin page needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY: the accounts live in " +
-        "the Auth service, not in a table this server can read. See src/store/admin-accounts.ts.",
-    );
-  }
-  const mismatch = projectMismatch(process.env.DATABASE_URL, url);
-  if (mismatch) throw new Error(`the admin page would mix two projects: ${mismatch}`);
+  const { url, key } = authAdminEndpoint();
   return gotruePages(url, key);
 }
 

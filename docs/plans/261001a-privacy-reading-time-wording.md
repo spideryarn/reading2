@@ -50,3 +50,31 @@ but the next mode that reads the totals makes the page wrong again, and Greg pre
 
 No test pins this sentence (`grep` over `tests/` for its phrases finds nothing);
 `tests/privacy-page.test.ts` and the other page tests run as the gate. One GPT Sol review of the diff.
+
+## Folded in: the Stripe line (2026-10-01, ~00:15)
+
+Relayed by the Overseer in the same job. The Stripe entry under *Who else handles it* still said
+payments were *"Not switched on yet"* and promised the page *"will say what we do keep before
+anybody is charged"*. Payments went live on 2026-09-03 ([billing.md](../project/billing.md)), so
+the line was false and the promise was never kept. Greg: *"fix"*.
+
+The line now says three things, each checked in the code:
+
+- **Card and billing details are entered on Stripe's page, and we do not keep them.** Checkout and
+  the billing portal are hosted sessions (`stripe.checkout.sessions.create` and
+  `stripe.billingPortal.sessions.create` in `src/billing/checkout.ts`). The stronger first draft —
+  *"we never see them"* — was false: the signed `checkout.session.completed` webhook reaches our
+  server with the Checkout Session, whose `customer_details` can include the name, email, address
+  and tax ids entered there. `src/billing/webhook.ts` reads the body in memory, takes the customer id
+  from it and does not persist it; its logs name event, customer, owner and status, never the body.
+- **We send Stripe an account id and what the reader chooses to buy.** The customer metadata carries
+  `owner_id`; the Checkout Session also carries that id as `client_reference_id`, sends the chosen
+  price and optional currency, and puts `owner_id` and the tier in subscription metadata. We send no
+  account email, name or article data.
+- **What we keep**: `billing_accounts` holds the Stripe customer and subscription ids, price, status,
+  period and cancellation dates, an allowance adjustment, live/test mode and sync timestamps.
+  `ingest_events` is the lasting usage ledger, including released attempts; `billing_tiers` and
+  `billing_tier_prices` hold the shared plan catalogue rather than a reader's details. There is no
+  webhook-event table and the payload is not written to logs or Sentry.
+
+`LAST_UPDATED` was already 1 October from the change above. No test pins the Stripe wording.
