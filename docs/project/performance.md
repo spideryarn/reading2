@@ -1,5 +1,7 @@
 # What the page costs, and how to find out
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 *Started as "what the page costs when nobody is touching it", which is still the first question it
 answers — but a reader complained about **scrolling** on 2026-08-27, so it now covers what an
 interaction costs too, and how to measure either without fooling yourself. If you are here to run

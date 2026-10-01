@@ -110,6 +110,30 @@ uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
   shows the credits figure separately for that reason
   ([ai-gateway.md § What it cost](ai-gateway.md#what-it-cost)).
 
+## Spend that keeps going
+
+The ledger tells you what was spent; it does not stop a call that should never have been made. Three
+times, money (or its serverless cousin, invocations) kept leaving after the reason for it had gone,
+and each looked healthy row by row:
+
+- **One step bought eleven times, every row `ok`.** Saving a server file restarted the dev server
+  mid-step, the fresh module copy had forgotten the job was claimed, and the same eight-minute call
+  started again: $5.43 on one step. It looked like a truncation retry loop and was neither.
+  [260902c](../postmortems/260902c-the-truncation-retry-cost-storm.md).
+- **An eval that noticed its evidence was lost, and kept buying.** A $40.90 harness recorded each
+  failure and printed it, but the noticing and the stopping were at different levels of the
+  machine, so six fixes each left the level below open. What would have caught all six at once was
+  a one-table inventory of where money leaves the run and what can stop it there.
+  [260905d](../postmortems/260905d-the-run-kept-buying-after-it-knew-the-answer-was-incomplete.md).
+- **A poll that every reader paid for at rest.** Reading job state meant subscribing to the job
+  engine, and subscribing meant polling every eight seconds, so an owner's reading view made about
+  450 requests an hour with nothing running. The "costs nothing at rest" budget had been kept by
+  comments at the call sites that remembered it.
+  [260912a](../postmortems/260912a-a-budget-a-comment-keeps-is-spent-by-the-next-call-site.md).
+
+The first and third were invisible in the per-call figures, because every call in them was
+individually correct.
+
 ## The route table says where the article is
 
 Every row of `AUTH_ROUTES` ([`src/routes.ts`](../../src/routes.ts)), exact and pattern alike,

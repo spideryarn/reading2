@@ -1,5 +1,7 @@
 # Remember mode — say what you took from it, and find out
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **Built 2026-08-27, and named *Remember* since 2026-09-01** — the rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
 types — about what they got from the article, and the model helps them find where their account and

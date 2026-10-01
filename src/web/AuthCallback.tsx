@@ -95,6 +95,8 @@ function describe(params: URLSearchParams): string | null {
   return authProviderRefused(code).message;
 }
 
+const AUTH_SLOW = "Signing in is taking longer than it should. Try again. [auth-slow]";
+
 export function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
   /* A password-recovery link: show SetNewPassword instead of moving on. */
@@ -132,18 +134,39 @@ export function AuthCallback() {
       navigate(back ?? LIBRARY_HREF, { replace: true });
     };
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const stopDeadline = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    };
+
+    /**
+     * **The one way this page fails**, and the only caller of `setError`.
+     *
+     * Every failure **consumes the stored destination even though we are not
+     * going there**: auth-return.ts promises a failed sign-in does not survive to
+     * redirect the next one. Until 2026-10-01 each failure path did that itself,
+     * and three of them — `[auth-slow]`, `[auth-nosession]`, `[auth-finish]` —
+     * did not; GPT Sol found it reviewing 261001i's plan, and Greg approved the
+     * fix. One exit means a fourth failure cannot forget it.
+     * tests/auth-callback.test.ts pins that `setError` is called only here.
+     */
+    const fail = (message: string, options: { signedIn?: boolean } = {}) => {
+      stopDeadline();
+      clearParams();
+      takeReturn(CALLBACK_HREF);
+      if (options.signedIn) setSignedIn(true);
+      setError(message);
+    };
+
     if (said || !hasCode) {
       /* Google said no, or somebody arrived at this address with nothing on it.
          Either way there is nothing to wait for. */
-      clearParams();
-      if (said) {
-        setError(said);
-        /* **Consume the stored destination even though we are not going there.**
-           auth-return.ts promises a failed sign-in does not survive to redirect
-           the next one, and leaving it here on the denial path would have made
-           that promise false. GPT Sol, 2026-08-27. */
-        takeReturn(CALLBACK_HREF);
-      } else leave();
+      if (said) fail(said);
+      else {
+        clearParams();
+        leave();
+      }
       return;
     }
 
@@ -151,14 +174,9 @@ export function AuthCallback() {
        happened, with a deadline — `getSession()` resolves once initialisation
        has settled, whichever way it settled. */
     const DEADLINE = Symbol("auth callback deadline");
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const deadline = new Promise<typeof DEADLINE>((resolve) => {
       timer = setTimeout(() => resolve(DEADLINE), DEADLINE_MS);
     });
-    const stopDeadline = () => {
-      if (timer !== null) clearTimeout(timer);
-      timer = null;
-    };
 
     /* **`initialize()`, not `getSession()`** — and the difference is a wrong
        answer rather than a slow one.
@@ -178,20 +196,17 @@ export function AuthCallback() {
       const initialized = await Promise.race([supabase.auth.initialize(), deadline]);
       if (!live) return;
       if (initialized === DEADLINE) {
-        clearParams();
-        setError("Signing in is taking longer than it should. Try again. [auth-slow]");
+        fail(AUTH_SLOW);
         return;
       }
-      clearParams();
       if (initialized.error) {
         /* The commonest real cause is a PKCE verifier that is not in this
            browser — the reader started the sign-in somewhere else, or cleared
            their storage in between. */
-        stopDeadline();
-        setError(AUTH_EXCHANGE_FAILED.message);
-        takeReturn(CALLBACK_HREF);
+        fail(AUTH_EXCHANGE_FAILED.message);
         return;
       }
+      clearParams();
 
       /* `getSession()` can itself refresh a near-expiry token. Keep it inside
          the same deadline rather than opening an unbounded gap between the
@@ -199,12 +214,11 @@ export function AuthCallback() {
       const got = await Promise.race([supabase.auth.getSession(), deadline]);
       if (!live) return;
       if (got === DEADLINE) {
-        setError("Signing in is taking longer than it should. Try again. [auth-slow]");
+        fail(AUTH_SLOW);
         return;
       }
       if (!got.data.session) {
-        stopDeadline();
-        setError("That sign-in did not produce a session. Try again. [auth-nosession]");
+        fail("That sign-in did not produce a session. Try again. [auth-nosession]");
         return;
       }
 
@@ -223,25 +237,22 @@ export function AuthCallback() {
         leave();
         return;
       }
-      /* Consumed and ignored on both remaining paths: after a new password the
-         reader goes to their shelf, and an unanswered question goes nowhere.
-         Left here, it would redirect the next sign-in — the hole auth-return.ts
-         was reviewed for. */
-      takeReturn(CALLBACK_HREF);
-      if (kind === "recovery") setRecovery(true);
-      else {
+      if (kind === "recovery") {
+        /* Consumed and ignored: after a new password the reader goes to their
+           shelf. Left here, it would redirect the next sign-in — the hole
+           auth-return.ts was reviewed for. */
+        takeReturn(CALLBACK_HREF);
+        setRecovery(true);
+      } else {
         /* The SDK promises the event, so its absence is not evidence of an
            ordinary sign-in, and guessing would break the email's promise.
            GPT Sol, plan review, finding 2. */
-        setSignedIn(true);
-        setError(AUTH_KIND_UNKNOWN.message);
+        fail(AUTH_KIND_UNKNOWN.message, { signedIn: true });
       }
     })()
       .catch(() => {
         if (!live) return;
-        stopDeadline();
-        clearParams();
-        setError("Something went wrong finishing your sign-in. Try again. [auth-finish]");
+        fail("Something went wrong finishing your sign-in. Try again. [auth-finish]");
       });
 
     return () => {

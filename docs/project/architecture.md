@@ -16,11 +16,48 @@ From the brief (Greg, 2026-08-24), verbatim:
 > down to a paragraph level. And then we'll add a bunch of other readability — not readability,
 > like reading assistant functionality as well.
 
-So: a pipeline of small, independently runnable stages, each writing JSON to disk, feeding a simple
-server and a React client. (*Independently cacheable* was the intent and is not yet the fact — two
-stages of seven cache on a content hash, the rest on a file existing. See
-[database.md](database.md#the-filesystem-era-files-under-dataslug).) "It can be a simple one at first" is a design
-constraint, not an apology — keep it boring while the ideas are still moving.
+So: a pipeline of small, independently runnable stages, each writing its product into the store
+(Postgres since 2026-09-05 — [§ Storage](#storage)), feeding a simple server and a React client.
+(*Independently cacheable* was the intent and is not true of every stage: which steps cache on a
+content hash is whichever declare a `stamp()` in [`src/pipeline.ts`](../../src/pipeline.ts) §
+`STEPS`, and the ones that do not are named in [§ Conventions](#conventions).) "It can be a simple
+one at first" is a design constraint, not an apology — keep it boring while the ideas are still
+moving.
+
+## The docs
+
+One line each on when you would open it. The pipeline's stages come first, then the calls to models,
+then where the data lives.
+
+- **[block-ids.md](block-ids.md)** — before touching anything that resolves, mints or compares a
+  block id: the format, how ids survive re-extraction, and the one way to get a range check silently
+  wrong.
+- **[fetching.md](fetching.md)** — stage 1: a URL fails to fetch, or fetches something that is not
+  what it looks like, or you are changing what we ask other people's servers for.
+- **[content-extraction.md](content-extraction.md)** — stage 2 for a web page: Readability dropped
+  or kept the wrong part of an article. (A PDF is the other extractor, in
+  [260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).)
+- **[hierarchy.md](hierarchy.md)** — stage 4: the tree, its gists and the paragraph labels, and why
+  labels are a separate step that a plain add does not run.
+- **[article-images.md](article-images.md)** — stage 4.5: an article's figures are missing, broken
+  or still hotlinked, or you are changing how we fetch and host them.
+- **[ingest-queue.md](ingest-queue.md)** — a job is stuck, skipped a step or ran one twice; or you
+  are adding a step, since the queue is how every stage runs.
+- **[ai-gateway.md](ai-gateway.md)** — before writing any code that calls a model: the two wires,
+  which provider each job is pinned to, how a stream's ending is judged, and the things on that path
+  that fail without saying so.
+- **[cost-tracking.md](cost-tracking.md)** — a new piece of AI work, to get its cost recorded
+  without extra plumbing; or a figure on the metadata or admin page looks wrong.
+- **[prompt-caching.md](prompt-caching.md)** — a stage's bill went up, or you are changing what
+  comes before the article in a prompt: the caches that stop us paying for the article twice.
+- **[prompting-guide.md](prompting-guide.md)** — writing or changing a prompt that puts words in
+  front of a reader: the shared plain-words rule, and how to measure the change.
+- **[email.md](email.md)** — anything that sends mail, or auth mail that did not arrive.
+- **[database.md](database.md)** — the operating manual for Postgres: migrations, which database a
+  command really reaches, checkpoints, and the traps that have each cost a day.
+- **[sql.md](sql.md)** — adding a column or a table: the shape we want the schema to have.
+- **[export.md](export.md)** — a reader's data leaving: the per-article zip, and the `db:export`
+  rollback that shares its queries.
 
 ## Pipeline
 
@@ -28,8 +65,8 @@ constraint, not an apology — keep it boring while the ideas are still moving.
   URL
    │
    ▼
- ┌──────────┐   raw.html OR raw.pdf, and raw.json saying which
- │ 1 fetch  │──────────────►  data/<slug>/raw.{html,pdf} + raw.json
+ ┌──────────┐   the page OR the PDF, and a manifest saying which
+ │ 1 fetch  │──────────────►  raw
  └──────────┘
    │
    ▼
@@ -38,13 +75,13 @@ constraint, not an apology — keep it boring while the ideas are still moving.
  │          │          CHECKED against the PDF's own text layer, per page
  │          │          (260826c-pdf-ingestion.md; the branch is on raw.json, never
  │          │           on the URL)
- │          │──────────────►  data/<slug>/article.html   + meta.json
+ │          │──────────────►  extractedHtml + meta
  └──────────┘                 (title, byline, siteName, lang, url)
    │
    ▼
  ┌──────────┐   SANITIZE (security.md), split into blocks, assign STABLE
  │ 3 blocks │   RANDOM IDS (block-ids.md)
- │          │──────────────►  data/<slug>/blocks.json
+ │          │──────────────►  blocks + stampedHtml
  └──────────┘                 [{id:"spya-k3m9qt", tag, kind, level?, text,
    │                            words, html, gistable, note?,
    │                            role?, treatment?, noteId?}]  — array order
@@ -53,22 +90,32 @@ constraint, not an apology — keep it boring while the ideas are still moving.
    ├─────────────────────┐
    ▼                     ▼
  ┌──────────┐        ┌──────────────┐
- │ 4 hier-  │        │ 5 summarize  │   gist per node, bottom-up
- │ archy    │───────►│              │──►  data/<slug>/tree.json
- └──────────┘        └──────────────┘
-   │
+ │ 4 hier-  │        │ 5 summarize  │   gist per node, bottom-up — asked
+ │ archy    │───────►│              │──►  for in the same call as 4, not a
+ └──────────┘        └──────────────┘     step of its own:  tree (+ labels,
+   │                                       an empty manifest until 4b)
    ▼
  ┌──────────┐   the navLabel on every paragraph, in parallel batches.
  │ 4b labels│   NOT run by a plain add: it was 79.5-92% of stage 4's wall
  │          │   clock, so it is bought later by a free successor job
- │          │──────────────►  labels.json + tree.json (labels merged in)
+ │          │──────────────►  labels + tree (labels merged in)
  └──────────┘
+   │
+   ▼
+   assets (4.5), then the modes' own steps — most only when asked for
    │
    ▼
  ┌──────────┐
  │ 6 serve  │  Node server + React client
  └──────────┘
 ```
+
+This is the front of the pipeline, not all of it. The whole list of steps, in the order they run,
+is [`src/step-order.ts`](../../src/step-order.ts) § `STEP_ORDER`; what each one writes is its
+`produces` in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`, and the names on the arrows
+above are those artefact kinds ([`src/store/artifacts.ts`](../../src/store/artifacts.ts) §
+`ArtifactKind`). Every step writes into a draft revision in the store, not into files —
+[§ Storage](#storage).
 
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
@@ -123,6 +170,10 @@ those fields yet; the predicates that will are the next stage.
 Several agents work this repo in parallel. Stay in your stage; communicate through the JSON
 artefacts on disk, not by reaching into another stage's code.
 
+The Artefact column keeps the file names these had before 2026-09-05. Each is now an artefact kind
+on the article's revision in the store (`src/store/artifacts.ts` § `ArtifactKind`), and later steps
+than the ones below are in `src/step-order.ts` § `STEP_ORDER`.
+
 | # | Stage | Owner | Artefact |
 |---|-------|-------|----------|
 | 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
@@ -144,10 +195,12 @@ Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs wit
 since the hierarchy is the first thing that has to address blocks and would otherwise be built on someone else's
 assumptions about what a block is.
 
-Current code: [`src/extract.ts`](../../src/extract.ts) (documented in
-[content-extraction.md](content-extraction.md)) does fetch + Readability + a standalone HTML page in
-one script, writing to `output/`. That's the prototype stages 1–2 are growing out of; the
-standalone-HTML output becomes a debug view once the server exists.
+Current code: stage 1 is [`src/fetch.ts`](../../src/fetch.ts) and stage 2 is
+[`src/extract.ts`](../../src/extract.ts) (documented in [content-extraction.md](content-extraction.md)),
+which returns its two artefacts and writes neither — the store puts them on the revision. The command
+lines (`npm run ingest`, `npm run extract`, …) are all [`scripts/stage.ts`](../../scripts/stage.ts),
+which drives the queue ([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)).
+Until 2026-09-05 `src/extract.ts` also fetched the page and wrote a standalone HTML file to `output/`.
 
 **The queue is stage 6's, but the stages are not.** [`src/pipeline.ts`](../../src/pipeline.ts) calls
 each stage through the function that stage exports, and the stages that still have a command line
@@ -282,8 +335,8 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - API is thin: `GET /api/article/<slug>` returns `meta + blocks + tree`. The client has everything
   it needs for every zoom level in one payload; zooming must never hit the network. `GET /api/library`
   returns one small record per article for the homepage — [library.md](library.md). The comment
-  endpoints ([comments.md](comments.md)) and the six job endpoints
-  ([ingest-queue.md](ingest-queue.md)) are the rest. All of them live in
+  endpoints ([comments.md](comments.md)), the job endpoints
+  ([ingest-queue.md](ingest-queue.md)) and each mode's own are the rest. All of them live in
   [`src/routes.ts`](../../src/routes.ts), which is the connect-shaped wrapper a standalone server
   would mount unchanged.
 - **`src/store/pg.ts`, reached through `src/store/index.ts`, is the seam the database lives behind.**
@@ -297,15 +350,19 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   [original-version/overview.md](original-version/overview.md). Plain CSS variables, adopt or remap as you like;
   Spideryarn orange `#DB8A45` is the accent, on a dark-only palette — see
   [web-client.md](web-client.md).
-- **The queue runs in the server process** ([`src/jobs.ts`](../../src/jobs.ts), p-queue, concurrency
-  1). `POST /api/jobs` returns 202 with a receipt and the browser polls; nothing long-running happens
+- **The queue runs in the server process** ([`src/jobs.ts`](../../src/jobs.ts)). Since 2026-08-27 it
+  is a claim on a row of the `jobs` table rather than p-queue, and how many jobs may run at once is
+  `src/jobs.ts` § `DEFAULT_JOB_CONCURRENCY` ([ingest-queue.md](ingest-queue.md)). `POST /api/jobs` returns 202 with a receipt and the browser polls; nothing long-running happens
   inside a request handler. Job records survive a restart, and anything left `running` by a dead
   process is turned into a visible error rather than a spinner that never stops — the same argument
   `sweepOrphaned` makes for comments.
-- LLM calls happen in the pipeline, not in request handlers — with **two deliberate exceptions**,
-  [`src/explain.ts`](../../src/explain.ts) and [`src/converse.ts`](../../src/converse.ts) (chat,
-  added 2026-08-25 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md)). Both take input that does not exist
-  until the reader produces it, so there is nothing to precompute; chat additionally *streams*,
+- LLM calls happen in the pipeline, not in request handlers — with **deliberate exceptions**, the
+  first two of which were [`src/explain.ts`](../../src/explain.ts) and
+  [`src/converse.ts`](../../src/converse.ts) (chat, added 2026-08-25 —
+  [260826a-chat-mode.md](../plans/260826a-chat-mode.md)). There are more now — search, the referee
+  runs, quiz marking among them — and the current set is the callers of `openRouterStream` and
+  `openRouterJson` in [`src/ai-call.ts`](../../src/ai-call.ts). The first two took input that does
+  not exist until the reader produces it, so there is nothing to precompute; chat additionally *streams*,
   which is the first response in this app that is not a single JSON body. A reader's text selection
   cannot be precomputed or
   cached on a content hash, because it does not exist until they make it. See
@@ -317,6 +374,48 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   [ai-gateway.md](ai-gateway.md). Before writing any Anthropic SDK code, load the `claude-api`
   skill for current model ids and parameters.
 
+## Shared code (server) <a id="shared-code-server"></a>
+
+Only the helpers that more than one area uses, or that somebody has already written a second copy
+of. The client's list is [web-client.md § Shared code (client)](web-client.md#shared-code-client).
+
+- **`src/ai-call.ts` § `openRouterJson` / `openRouterStream`** (and `openRouterImage`,
+  `openRouterTranscription`) — any paid call on the chat wire. It meters and records the cost; a
+  `fetch` to a provider would do neither ([ai-gateway.md](ai-gateway.md)).
+- **`src/messages-stream.ts` § `streamMessage`, `wasRefused`** — a pipeline stage on the Messages
+  wire. Each stage still writes the same sequence around it — progress line, `finalMessage()`,
+  refusal, truncation, text, JSON — copied from a neighbour; there is no helper for that sequence
+  yet.
+- **`src/stream-run.ts` § `runStream`** — a streamed answer a reader is waiting for: the deadline,
+  the stall clock, and the verdict on how the stream ended. Most streaming routes predate it and
+  hand-roll the same loop; [comments.md § streaming](comments.md#streaming) says which are copies.
+- **`src/ai-call.ts` § `classifyEnd`** — deciding whether a stream finished or merely stopped
+  ([ai-gateway.md § How a stream ends](ai-gateway.md#stream-end)).
+- **`src/routes.ts` § `sse`** — writing server-sent events from a route, with the heartbeat.
+- **`src/parse-json.ts` § `parseJsonAnswer`** — a model's JSON answer, fences and trailing commas
+  included. **`src/anthropic-call.ts` § `anthropicCallFailed`** — an SDK error turned into a stage
+  failure.
+- **`src/concurrency.ts` § `allOrStop`, `WidthGate`, `sleepUnlessAborted`** — several paid calls at
+  once with a way to stop the rest, an adaptive width limit, and a wait that an abort ends.
+  `src/labels.ts` still exports an older `allOrStop` with a different contract, and `src/pdf-read.ts`
+  and `src/embeddings.ts` each have their own abortable sleep (the embeddings one resolves on abort
+  rather than rejecting).
+- **`src/ai-call.ts` § `retryAfterMs`** — a `Retry-After` header. `src/fetch.ts` has a second parser
+  that disagrees with it about zero and decimals.
+- **`src/source-hash.ts` § `hashBlocks`, `articleFingerprint` and its siblings, `checkpointKey`** —
+  the content hash a step caches on ([§ Conventions](#conventions)).
+- **`src/html.ts` § `escapeHtml`, `plainTitle`** — untrusted text becoming markup. `src/pdf-read.ts`
+  still has a private `escapeHtml` that misses `'`.
+- **`src/after-response.ts` § `afterResponse`** — work that must outlive the response on a
+  serverless host.
+- **`src/process-state.ts` § `processSingleton`** — process-wide state that must survive Vite
+  re-evaluating a module ([§ Conventions](#conventions)).
+- **`src/ai-spend.ts` § `recordSpend`; `src/cli-ledger.ts` § `withLedger`** — a cost row written by
+  hand, and a command line that spends ([cost-tracking.md](cost-tracking.md)).
+- **`src/log.ts` § `log`, `errorFields`, `since`; `src/messages.ts`** — server logging
+  ([logging.md](logging.md)) and the sentences a reader sees when something fails
+  ([copy.md](copy.md)).
+
 ## Conventions
 
 - TypeScript, ESM (`"type": "module"`), strict mode — see [`tsconfig.json`](../../tsconfig.json).
@@ -327,16 +426,14 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   until 2026-09-01, and it was a second path to the same place — the queue's is the one that
   exercises the store writes.
 - **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
-  do it has been said three different ways in this repo — "two of seven" in `AGENTS.md`, "seven
-  stages do it" here — and neither was right. Counted from
-  [`src/pipeline.ts`](../../src/pipeline.ts) on 2026-09-06, by the predicate *the step declares a
-  `stamp()` that `stepIsDone` compares against what the store holds*: **eleven of the fifteen in
-  `STEP_ORDER`** —
-  `labels`, `assets`, and the nine model modes `arc`, `tweets`, `glossary`, `quotes`, `ideas`,
-  `timeline`, `quiz`, `sketch`, `illustrated`. Copy *their* choice of hash input rather than only the
+  do it has been said in prose several ways in this repo, each a count copied out of the code, and
+  none stayed right. The answer is in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`: a step
+  caches on a hash when it declares a `stamp()` that `stepIsDone` compares against what the store
+  holds — every step in [`src/step-order.ts`](../../src/step-order.ts) § `STEP_ORDER` except the
+  four in the next bullet. Copy *their* choice of hash input rather than only the
   idea: a
-  fingerprint covers **everything the stage's prompt reads**, which for the nine is the blocks, the
-  tree and the head — and there are two head functions because there are two heads
+  fingerprint covers **everything the stage's prompt reads**, which for the article-reading model
+  steps is the blocks, the tree and the head — and there is one head function per head
   ([`src/source-hash.ts`](../../src/source-hash.ts)) — and for `assets` the blocks alone, because it
   has no prompt.
   [database.md](database.md#the-filesystem-era-files-under-dataslug).
@@ -394,7 +491,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - **Every prompt that writes words for a reader** takes the one shared plain-words rule:
   [prompting-guide.md](prompting-guide.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through
-  OpenRouter, why the seven pipeline stages kept Anthropic's Messages protocol instead of being
+  OpenRouter, why the pipeline stages kept Anthropic's Messages protocol instead of being
   translated into OpenAI's shape, and the four things on that path that fail without saying so.
 - **What each call cost, and how a new feature gets that tracked without anyone remembering to** —
   the three rules, the article figure on the metadata page, and the paid check:
@@ -406,10 +503,10 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - **`output/` is generated and not in version control**, alongside `data/`. Both are rebuilt by
   running the pipeline, so a fresh clone starts with neither and the test article above has to be
   fetched again. One consequence is worth stating plainly, because it is the sort of thing nothing
-  reports: `output/<slug>.blocks.json` is where stage 3 keeps its ids, so the **only** block ids
-  under version control are the ones in [`example/`](../../example/README.md). Ids for a real
-  article live on the machine that generated them and nowhere else — see
-  [block-ids.md](block-ids.md).
+  reports: the **only** block ids under version control are the ones in
+  [`example/`](../../example/README.md). Ids for a real article live in the `blocks` artefact in
+  whichever database ingested it (`output/<slug>.blocks.json` until 2026-09-05) and nowhere else —
+  see [block-ids.md](block-ids.md).
 
 ### Adding an artefact-backed mode
 

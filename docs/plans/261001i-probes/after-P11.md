@@ -1,0 +1,36 @@
+# P11 (after) — signed-out visitor sees Ideas' stored list
+
+## 1. Docs opened, in order
+1. `CLAUDE.md` (AGENTS.md) — signpost; pointed to reading-view-overview and ideas.md. Helped.
+2. `docs/project/ideas.md` — very helpful: states "A visitor to a public article sees a stored list (`VisitorIdeasBand`, from the page's payload) and can never start one", and names `POLICY` / `REVISION_READ_POLICY`.
+3. `docs/project/public-shelf.md` — mostly the listing; its pointer to the `/api/public/` read path was useful, otherwise not needed.
+4. `docs/project/new-mode.md` § Where else to look — gave the two decision points (client `POLICY`, server `REVISION_READ_POLICY`) and the rule's source plan (`260929c`, which I did not open per the brief).
+
+## 2. Code files you would edit
+Likely none: the code shows this is already built. I would verify, and edit only what a gap test shows missing:
+- `src/web/visitor.ts` (`POLICY`, ideas entry is `{ kind: "artefact", key: "ideas" }`)
+- `src/store/pg.ts` (`REVISION_READ_POLICY`, `ideas` reader grants)
+- `src/public/dto.ts` (`publicIdeas`, `Ideas` in the payload)
+- `src/web/modes/ideas/IdeasMode.tsx` (`VisitorIdeasBand`)
+
+## 3. Existing helpers/components to reuse
+- `src/web/modes/ideas/IdeasMode.tsx` § `VisitorIdeasBand`, `useIdeasMode`
+- `src/public/dto.ts` § `publicIdeas`
+- `src/web/visitor.ts` § `POLICY`
+- `src/store/pg.ts` § `REVISION_READ_POLICY`
+No new helper needed.
+
+## 4. Rules/policies
+- Visitor sees what is already stored and never starts a paid call (`new-mode.md`, security-map).
+- Public DTOs are rebuilt field by field, no widened owner types (`public-shelf.md`, security-map).
+- Test first, repro red; run `npm test` and `npm run typecheck`; lint touched files (CLAUDE.md).
+- Existing tests to extend: `tests/public-dto.test.ts`, `tests/public-reads.test.ts`, `tests/visitor-gaps.test.ts`, `tests/public-network-trace.test.tsx`.
+- Plan doc, GPT Sol review before commit, worktree, push to `dev` (CLAUDE.md).
+- Real data: read-only on prod.
+
+## 5. Where you got lost
+- The task reads as unbuilt, but docs and code say it exists (the answers likely live in the barred `2609/2610` plans). Nothing in the docs says plainly "done on date X"; I inferred it from code.
+- Did not find a doc listing which modes a visitor gets, in one table (only `POLICY` in code).
+
+## 6. Confidence
+6/10 — I could not see what remains broken or missing without the barred plans; verification approach is solid.

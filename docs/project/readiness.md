@@ -71,6 +71,23 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
 
+## Three ways it nearly lied, caught in review
+
+The periodic runner (`scripts/readiness-loop.ts`, which keeps dev's checks fresh without anyone
+asking) was reviewed three times on 2026-09-09 before it ran, and each review found it could
+report a state it had not established. Each is a class worth recognising in anything that keeps
+derived state up to date:
+
+- **Recovery keyed to a change, not to the state.** Reinstalling only when a merge touched the
+  lockfile meant a failed `npm ci` was never retried, because the next tick saw no new diff.
+  [260909a](../postmortems/260909a-a-recovery-loop-remembered-the-transition-not-the-state.md).
+- **A printed sentence treated as proof.** Output beginning `NO TESTS RAN…` was taken to mean "the
+  suite refused to start" and overrode the exit code, but any test or log could print those words.
+  [260909b](../postmortems/260909b-an-unauthenticated-diagnostic-sentence-became-control-flow.md).
+- **Exit 0 treated as "the artefact is fresh".** An inherited `npm_config_dry_run=true` made `npm ci`
+  succeed without installing, and a stale `dist/index.html` was accepted because it existed.
+  [260909c](../postmortems/260909c-artifact-provenance-after-successful-commands.md).
+
 ## Not built
 
 **Triggering a run from the page.** Greg asked for it; it needs a catalogue entry on the dashboard's

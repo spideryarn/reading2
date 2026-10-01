@@ -1,5 +1,7 @@
 # Setup and dev commands
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 **New here? The quickstart below is the whole of it** — an empty checkout to an app you are signed
 into. Everything after it is depth: what each secret is for, which model does
 which job, how to run one pipeline stage on its own. You do not need any of that to start.
@@ -311,17 +313,25 @@ drifted a version behind.
 | **PDF figure locator** | Gemini 3 Flash — `google/gemini-3-flash-preview` | OpenRouter, not a tier — `PDF_FIGURE_LOCATOR_MODEL`. Asked only about a figure the other routes refused ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md) § Stage 2) |
 | **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. The one job not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 
+**This table names the models; it is not the inventory, and it has fallen behind before.** The
+lists that cannot drift are in [`src/models.ts`](../../src/models.ts): `TASK_TIER` for which job is
+on which tier, and `NON_TASK_MODELS` for every model on no tier — which includes the shelf-topics
+scorer, `SHELF_TOPICS_MODEL`, missing from this table until 2026-10-01. Two more live outside that
+file: `IMAGE_MODEL` in [`src/illustrated.ts`](../../src/illustrated.ts) draws Illustrated's
+pictures, and `LIVE_MODEL` in [`src/live.ts`](../../src/live.ts) is live conversation's realtime
+model, the one call that does not go through OpenRouter ([ai-gateway.md](ai-gateway.md)).
+
 **One article can move up a tier.** High-powered AI swaps the capable tier's Sonnet 5 for Opus 5.5
 (`anthropic/claude-opus-5.5`, stamped `claude-opus-5-5`) for that article's capable-tier calls only —
 [high-powered-ai.md](high-powered-ai.md).
 
-**Every one of those goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
+**Every one of those in the table goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
 whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol
 the request is written in — and that axis has its own doc: [ai-gateway.md](ai-gateway.md). The short
-version is that the seven pipeline stages speak Anthropic's Messages shape
-([`src/messages-stream.ts`](../../src/messages-stream.ts)) and everything else speaks OpenAI's
-chat/completions shape ([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)), both to
-OpenRouter.
+version is that `PIPELINE_TASKS` names the article-reading tasks on Anthropic's Messages shape
+([`src/messages-stream.ts`](../../src/messages-stream.ts)); the pipeline's `debate` and
+`pdf-frontmatter` tasks, like the request-path calls, speak OpenAI's chat/completions shape
+([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)). Both go to OpenRouter.
 
 ### Three spellings, and only one of them is a name
 
@@ -357,8 +367,9 @@ file gets to choose between them**:
 
 `wireFor` was `providerFor` and answered `"anthropic"` or `"openrouter"` until 2026-08-27. The
 function did not disappear when the vendor split did, because the question it was really answering —
-*what does this request look like?* — is still a live one. `Provider` is now a type with exactly one
-member, which is the decision written down where somebody will trip over it rather than an oversight.
+*what does this request look like?* — is still a live one. `Provider` had exactly one member from
+then until 2026-09-02, when `"openai"` arrived for live conversation alone — see `Provider` in
+`src/models.ts`.
 
 **There is exactly one public task-level model function**, and that is deliberate. There used to be
 two — `modelFor` and `modelForOpenRouter` — one of which knew which wire a task was on and one of
@@ -412,8 +423,9 @@ project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.t
 ([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
 caller.
 
-**Every job is on the capable tier except three.** The quick tier is about a tenth the price, and all
-of its jobs were **written for it** rather than moved onto it: `link-summary` — how a hovered link's
+**Every job is on the capable tier except the ones `TASK_TIER` marks `quick`.** The quick tier is
+about a tenth the price, and all of its jobs were **written for it** rather than moved onto it:
+`link-summary` — how a hovered link's
 destination stands to the piece being read
 ([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05,
 `quiz-verdict` — whether the reader got a question right, judged from the finished mark and shown to
@@ -433,13 +445,13 @@ evidence from one job, not a general fact.
 **Changing a row is not the whole of moving a job**, and the file carries the list: the completion
 ceilings were sized for a model that does not spend a reasoning allocation out of them, the
 web-search cap is one only Anthropic honours, and a truncated answer is stored here as a finished
-one. The seven pipeline stages cannot move by that table at all, and setting one of them to `quick`
+one. The pipeline stages cannot move by that table at all, and setting one of them to `quick`
 makes the app refuse to start rather than pretend it worked.
 
 **The reason that guard exists shifted on 2026-08-27, and the guard did not.** It used to be a
 *vendor* fact: those stages went to `api.anthropic.com`, and Luna is not there. Now everything is
 OpenRouter, and what still separates them is the **wire** — they speak Anthropic's Messages shape,
-and all seven send `thinking: { type: "adaptive" }`, which the chat/completions shape has no
+and every one sends `thinking: { type: "adaptive" }`, which the chat/completions shape has no
 equivalent for at all ([ai-gateway.md § Why the stages were not translated](ai-gateway.md#why-the-stages-were-not-translated)).
 So moving one to the quick tier still means moving it to the other wire first, and that is still a
 rewrite of the call rather than a config change. The error the guard throws was worded for the old
@@ -492,12 +504,16 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_CITATIONS_FIND_MODEL` | Citations mode's *Look it up* (was *Find it*), the one call with web search for a cited work: picks which result, if any, is its own page, and reads that result's search extract ([citations.md](citations.md#look-it-up-on-the-web)); inside *Investigate*, the call that picks the cited paper's checked passages uses this same model |
 | `SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL` | The same search for an uploaded paper itself, once, to guess where it lives on the web ([ingest-queue.md](ingest-queue.md#a-guessed-web-address-looked-for-once)) |
 | `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Investigate*: one streamed answer about one cited work, written with a few web searches over the whole article (explain's tier) |
-| `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — the other quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
+| `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
+| `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
+| `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
 | `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
-| `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
+| `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once |
 
-`MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
-copy is why two rows were missing until 2026-09-01: `quiz-mark` had been added at the quiz stage and
+`MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies — read it
+there when it matters, because the copy has missed rows more than once (the latest two,
+`SPIDERYARN_PDF_FRONTMATTER_MODEL` and `SPIDERYARN_DEBATE_MODEL`, were added on 2026-10-01). The copy
+is why two rows were missing until 2026-09-01: `quiz-mark` had been added at the quiz stage and
 `referee-mirror` an hour before this line was written, and neither arrival touched the table. A
 variable that exists and is not written down here reads as a variable that does not exist, so the
 rule is the one this repo already keeps — when you add a row there, add it here in the same change.

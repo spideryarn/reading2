@@ -1,5 +1,7 @@
 # Supabase, running locally
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 **A whole Supabase stack in Docker on this laptop, and nothing else.** No cloud project, no
 `supabase link`, no remote credentials — the CLI mints its own keys and the database is a container.
 Set up 2026-08-25.

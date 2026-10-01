@@ -1,0 +1,42 @@
+# P05 (after): tooltip with keyboard shortcut on Quotes mode's copy button
+
+## 1. Docs opened, in order
+- `AGENTS.md` / CLAUDE.md (in context) - pointed to reading-view-overview, tooltips.md, keyboard.md; helped.
+- `docs/project/reading-view-overview.md` (grep) - found the quotes.md and tooltips.md lines; helped.
+- `docs/project/tooltips.md` - very helpful: Tooltip/ControlTip/TipNote, `keepSide`, `aria-disabled`, and the rule "A shortcut is named on its card".
+- `docs/project/quotes.md` (grep) - key finding: "No copy button" is listed under what is not built, and points at the private `CopyButton` in `src/web/Tweets.tsx`.
+- `docs/project/keyboard.md` (head, grep) - points back to tooltips.md for the shortcut rule; says up/down belong to the article.
+- `docs/project/new-mode.md` (grep) - card-on-the-button rules; mostly not applicable.
+
+## 2. Code files you would edit
+- `src/web/QuotesPanel.tsx` (add the button per row or a panel-level one, wrapped in Tooltip)
+- Possibly a keydown handler near the panel (a new copy shortcut); `src/web/key-chord.ts` for guards
+- New test, modelled on `tests/tweets-copy-icons.test.tsx`; `docs/project/quotes.md` (delete the "No copy button" bullet) and tooltips.md's shortcut list
+
+## 3. Existing helpers/components/functions you would reuse
+- `src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`, `TooltipGroup`
+- `src/web/Tweets.tsx` § `CopyButton` (private; I would extract and export it rather than write a second one, since a second copy is what the repo warns against)
+- `src/web/key-chord.ts` § `isTyping`, `isModChord`
+- `src/web/ChatPanel.tsx` (~line 2117) § Send button Tooltip + ControlTip as the model for the shortcut-in-card wording
+- `src/web/QuotesPanel.tsx` § existing `Tooltip` usage (~line 1078), the controlled-ⓘ idiom
+- No new helper needed beyond maybe the extraction above.
+
+## 4. Rules/policies you would follow
+- Shortcut named on its card, in prose, plus say when the key does not work (tooltips.md § A shortcut is named on its card).
+- ControlTip: first sentence guessable, second unguessable; no restating the label (tooltips.md).
+- `Tooltip.tsx`, never a `title=` attribute (quotes.md, tooltips.md).
+- Touch: copy is harmless so a tap copies at once, with no reveal-then-commit (touch.md, via the Tweets CopyButton comment).
+- Key guards: no modifier, no auto-repeat, not while typing (keyboard.md, key-chord.ts). Up/down are reserved for the article.
+- Failing test first; `npm test`, `npm run typecheck`, lint on touched files (CLAUDE.md).
+- Plan doc under `docs/plans/` and a GPT Sol review before committing (CLAUDE.md).
+- Work in a worktree; commit own files by name; push to `dev`.
+- Copy rules: "no price in a card" (new-mode.md) is not relevant here.
+
+## 5. Where you got lost
+- The task premise is false: Quotes mode has no copy button today (quotes.md "What is not built"; grep of QuotesPanel.tsx found nothing). "The copy button" does not exist, and nor does any copy shortcut.
+- So the task is really "build the copy button, decide what it copies, invent a shortcut, then tooltip it". quotes.md flags the open product decision (quote only, quote plus citation, or deep link); I would ask Greg rather than choose.
+- tooltips.md says there is no `keys` prop and shortcuts live in sentences. No central shortcut registry exists to pick a free key from. I only partly checked for conflicts with keynav.ts and the Dock.
+- I did not read QuotesPanel.tsx row layout in depth, so where the button goes is a guess.
+
+## 6. Confidence
+6/10

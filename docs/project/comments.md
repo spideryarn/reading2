@@ -1,5 +1,7 @@
 # Comments — the reader's mark on a passage
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 Select a sentence and it is **yours**: bookmarked, with a note on it if you want one, and an
 answer from the model only if you ask for one. Saving costs nothing.
 
@@ -543,6 +545,23 @@ project:
 - `sse(res)` in [`src/routes.ts`](../../src/routes.ts) — the frame writer and its headers, including
   why the disconnect listener is on the **response** and not the request.
 - [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) — the client's reader loop.
+
+Two shared shells have since been built on those pieces:
+
+- **Server: [`src/stream-run.ts`](../../src/stream-run.ts) § `runStream`** — one streamed call from
+  the clocks to the verdict: the deadline, the stall clock, the `openRouterStream` loop, citations,
+  usage and `classifyEnd`. What an ending *means* stays with the caller. `explainStream` and
+  Citations' *Investigate* ([`src/citation-investigate.ts`](../../src/citation-investigate.ts)) run on
+  it.
+- **Client: [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) § `readAnswerStream`** — `begin`,
+  `delta`s, then exactly one `done` or `error`, with a body that simply stops treated as a failure.
+  The glossary and Citations read their answers through it.
+
+The hand-rolled loops in [`src/search.ts`](../../src/search.ts) and the referee runners
+(`src/referee-claims-run.ts`, `src/referee-criteria-run.ts`, `src/referee-mirror.ts`), and the
+client hooks that loop over `readEvents` themselves, are older copies of the same shape. Some of
+them carry structured items rather than text deltas, which is a real difference —
+[`src/ai-call.ts`](../../src/ai-call.ts)'s header names `search`'s strict JSON read as one.
 
 `explain()` did not become a second implementation: `explainStream` is the only one, and `explain`
 drains it. No request handler uses the drain since 2026-09-10, when the glossary's two lookups — its
