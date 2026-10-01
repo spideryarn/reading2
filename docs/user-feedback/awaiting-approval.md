@@ -63,9 +63,16 @@ paragraph is the part still worth acting on.
 > human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
 > to live somewhere the deploy path executes.
 
-| report | the decision left | where it is set out |
-|---|---|---|
-| [5K](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-5K) — feedback from people other than you: eligible bugs fixed, visible behaviour changes and nuanced suggestions brought to you, minor clear-cut suggestions built, abuse attempts listed above | Whether admin trust should now wait on the report's `feedback` row in Postgres, not only the Sentry issue. A forged admin report used to buy at most a push to `dev`; since the Overseer deploys `dev` (2026-09-29) it can reach production. The run could not read production to check, and did not change the rule. | [note](260929_2025-feedback-from-other-people-trust-tiers.md) · [plan 260930a § For Greg](../plans/260930a-feedback-from-others-trust-tiers.md#for-greg) |
+The table that stood here is empty. 5P came off on 2026-10-01, and 5Q's line above with it, when
+Greg's answers were built under
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
+5K came off the same day (below).
+
+**The 5K row came off on 2026-10-01.** Greg answered it himself that day, asking that agents tell
+*"definitively/confidently/unfakeably"* which reports are his. Admin trust now waits on the
+production `feedback` row, through `scripts/feedback-reporter.ts`:
+[261001a](../plans/261001a-unfakeable-admin-feedback-reports.md), on `dev` as `5170b6e8` and
+`de9b5f8e`. Removed by the feedback sweep.
 
 **Six rows came off this table on 2026-09-17**, because Greg had already answered them on 2026-09-11
 and they were still sitting here as though he had not: the dictation privacy wording, the Socratic
