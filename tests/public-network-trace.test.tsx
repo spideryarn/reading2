@@ -1653,7 +1653,7 @@ describe("a signed-out browser on a shared document", () => {
     await open("?mode=glossary");
     expect(host.textContent).toContain(PUBLIC_TERM);
     for (const control of [
-      "Check the web",
+      "Dig deeper",
       "Find more",
       "Start again",
       "Find the terms",
@@ -2335,7 +2335,7 @@ describe("a signed-out browser on a shared document", () => {
    * **Opening one gives the answer and none of the verbs.**
    *
    * The dialog is where every owner capability lives — edit, delete, retry,
-   * "search the web", the follow-up composer — and `CommentAccess`'s visitor
+   * "dig deeper", the follow-up composer — and `CommentAccess`'s visitor
    * arm carries none of them. Asserted by *label*, because that is what a
    * reader would press; a query on a class name would pass over a button whose
    * text changed.
@@ -2344,7 +2344,7 @@ describe("a signed-out browser on a shared document", () => {
     await open("?panel=questions&note=spya-cmt23z");
 
     expect(host.textContent, "the answer").toContain(PUBLIC_ANSWER);
-    for (const verb of ["Delete", "Try again", "Search the web"]) {
+    for (const verb of ["Delete", "Try again", "Dig deeper"]) {
       const found = [...host.querySelectorAll("button")].some(
         (b) => (b.textContent ?? "").trim() === verb,
       );

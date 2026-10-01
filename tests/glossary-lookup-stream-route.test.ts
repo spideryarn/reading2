@@ -1,6 +1,6 @@
 /**
- * **An entry's *Check the web* streams its answer, and only an answer that
- * was saved is ever called done.** `POST /api/glossary/:slug/:id/lookup`, at
+ * **An entry's *Dig deeper* (was *Check the web*) streams its answer, and only
+ * an answer that was saved is ever called done.** `POST /api/glossary/:slug/:id/lookup`, at
  * the route — cluster E stage 2,
  * docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  *
@@ -25,6 +25,12 @@
  * 6. **Refusals stay JSON before a header**, and a request costs one call.
  *
  * Harness from tests/glossary-asked-term-stream-route.test.ts.
+ *
+ * **Every press now runs *Dig deeper*'s forced search first** (plan 261001p) —
+ * one non-streamed call before the streamed answer these cases are about. The
+ * stubs below answer it with one search and no pages (`digSearch`), so the
+ * provider under test is still the answer's, and "one call" still means one
+ * answer. tests/dig-deeper.test.ts holds the search itself.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -57,6 +63,22 @@ let doomed: ScratchArticle | undefined;
 
 const realFetch = globalThis.fetch;
 const noModel = (() => Promise.reject(new Error("no model in tests"))) as unknown as typeof fetch;
+
+/** Is this request *Dig deeper*'s forced search, rather than the answer? */
+const isDigSearch = (init?: RequestInit) =>
+  typeof init?.body === "string" && init.body.includes('"tool_choice":"required"');
+
+/** The forced search, answered: one search reported, no pages, a one-word library query. */
+const digSearch = () =>
+  Promise.resolve(
+    new Response(
+      JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: "word", annotations: [] } }],
+        usage: { server_tool_use_details: { web_search_requests: 1 } },
+      }),
+      { status: 200 },
+    ),
+  );
 
 /**
  * Add one entry named after a whole word from the article's first paragraph,
@@ -136,6 +158,7 @@ function heldProvider(first: string) {
     }
   };
   globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    if (isDigSearch(init)) return digSearch();
     calls += 1;
     sent = init?.signal ?? undefined;
     return Promise.resolve({
@@ -312,14 +335,16 @@ describe("a lookup that did not finish stores nothing", () => {
 
   it("ends in `error` when the provider refuses before its first word", async () => {
     const before = (await storedEntry(SLUG))?.lookup?.answer;
-    globalThis.fetch = (() =>
-      Promise.resolve({
-        ok: false,
-        status: 429,
-        headers: new Headers(),
-        text: () => Promise.resolve("rate limited"),
-        body: null,
-      } as unknown as Response)) as unknown as typeof fetch;
+    globalThis.fetch = ((_url: string, init?: RequestInit) =>
+      isDigSearch(init)
+        ? digSearch()
+        : Promise.resolve({
+            ok: false,
+            status: 429,
+            headers: new Headers(),
+            text: () => Promise.resolve("rate limited"),
+            body: null,
+          } as unknown as Response)) as unknown as typeof fetch;
     const call = serve("POST", lookupUrl(SLUG));
     await handleApi(call.req, call.res, acceptAny);
 

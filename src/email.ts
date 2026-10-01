@@ -22,11 +22,14 @@
  *   something private in either; the log line carries a label naming the kind
  *   of mail instead.
  *
- * Plain text only, for now: admin mail does not need HTML, and an HTML
- * template can arrive with the first reader-facing email that does.
+ * Plain text by default. A caller may add an `html` part — the first was the
+ * gift voucher's email to its recipient (src/store/pg-voucher-emails.ts) — and
+ * an `idempotencyKey`, sent as Resend's `Idempotency-Key` header: Resend keeps a
+ * key for 24 hours and answers a repeat with the first result instead of
+ * sending again, which is what lets a stored delivery be retried at most once.
  */
 
-import { errorFields, log } from "./log.js";
+import { log } from "./log.js";
 
 const logger = log("email");
 
@@ -50,6 +53,10 @@ export interface Email {
   readonly to: string;
   readonly subject: string;
   readonly text: string;
+  /** An HTML part beside the text. Optional; admin mail does without. */
+  readonly html?: string;
+  /** Sent as `Idempotency-Key`. One per delivery, never per attempt. */
+  readonly idempotencyKey?: string;
 }
 
 /**
@@ -59,11 +66,66 @@ export interface Email {
  */
 export type SkipReason = "not production" | "no RESEND_API_KEY";
 
+/**
+ * **The error names Resend documents**, and the only part of a failed
+ * response's body that is kept. https://resend.com/docs/api-reference/errors.
+ * A list rather than "whatever `name` says": the body is the provider's, and a
+ * validation message can echo a recipient or a submitted field, so only a
+ * string we already knew can pass through to a log line or a stored detail.
+ */
+export const RESEND_ERROR_NAMES = [
+  "validation_error",
+  "missing_required_field",
+  "invalid_parameter",
+  "invalid_attachment",
+  "invalid_from_address",
+  "invalid_access",
+  "invalid_region",
+  "invalid_api_key",
+  "restricted_api_key",
+  "missing_api_key",
+  "not_found",
+  "method_not_allowed",
+  "rate_limit_exceeded",
+  "daily_quota_exceeded",
+  "monthly_quota_exceeded",
+  "security_error",
+  "application_error",
+  "internal_server_error",
+  "invalid_idempotency_key",
+  /* Six more on https://resend.com/docs/api-reference/errors, checked 2026-10-01. */
+  "email_above_quota",
+  "invalid_permission",
+  "suspended_api_key",
+  "resource_locked",
+  "missing_required_parameter",
+  "service_unavailable",
+  /** The same key with a different request: the caller broke its own rule. */
+  "invalid_idempotent_request",
+  /** The same key, twice at once: safe to retry later. */
+  "concurrent_idempotent_requests",
+] as const;
+export type ResendErrorName = (typeof RESEND_ERROR_NAMES)[number];
+
+function resendErrorName(body: unknown): ResendErrorName | undefined {
+  if (body === null || typeof body !== "object") return undefined;
+  const name = (body as { name?: unknown }).name;
+  return (RESEND_ERROR_NAMES as readonly unknown[]).includes(name) ? (name as ResendErrorName) : undefined;
+}
+
 export type SendResult =
   | { readonly kind: "sent"; readonly id: string | null }
   /** Deliberately not sent: not production, or no key. Not an error. */
   | { readonly kind: "skipped"; readonly reason: SkipReason }
-  | { readonly kind: "failed"; readonly reason: string };
+  | {
+      readonly kind: "failed";
+      /** A status code or an error name, plus an allowlisted Resend name — never a body or an address. */
+      readonly reason: string;
+      /** The request threw, so Resend may have accepted it before the connection failed. */
+      readonly ambiguous?: true;
+      /** Present only when Resend answered with a name on `RESEND_ERROR_NAMES`. */
+      readonly providerError?: ResendErrorName;
+    };
 
 /**
  * **A seam, for tests.** The default is the real thing, so forgetting to inject
@@ -107,8 +169,16 @@ function whyNotSend(env: EmailEnv): SkipReason | null {
   return null;
 }
 
+/** Error classes fetch/AbortSignal may produce; anything else is withheld. */
+const SAFE_SEND_ERROR_NAMES = new Set(["Error", "TypeError", "AbortError", "TimeoutError", "NetworkError", "FetchError"]);
+
+function sendErrorName(err: unknown): string {
+  return err instanceof Error && SAFE_SEND_ERROR_NAMES.has(err.name) ? err.name : "unknown error";
+}
+
 /**
- * Send one plain-text email through Resend. **Never throws.**
+ * Send one email through Resend — plain text, with an HTML part if given.
+ * **Never throws.**
  *
  * `label` names the kind of mail for the log line — "admin: sign-up", say — so
  * a failure can be found without the log ever holding the recipient's address
@@ -131,29 +201,49 @@ export async function sendEmail(email: Email, label: string, deps: EmailDeps = {
       headers: {
         authorization: `Bearer ${env.RESEND_API_KEY}`,
         "content-type": "application/json",
+        ...(email.idempotencyKey === undefined ? {} : { "idempotency-key": email.idempotencyKey }),
       },
-      body: JSON.stringify({ from: FROM, to: [email.to], subject: email.subject, text: email.text }),
+      body: JSON.stringify({
+        from: FROM,
+        to: [email.to],
+        subject: email.subject,
+        text: email.text,
+        ...(email.html === undefined ? {} : { html: email.html }),
+      }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
 
     if (!response.ok) {
-      /* Provider validation messages can echo a recipient or submitted field.
-         The status is enough to diagnose the class without breaking this
-         module's rule that neither recipient nor message reaches a log. Still
-         consume the body so fetch can release its connection. */
-      await response.text().catch(() => "");
-      const reason = `Resend answered ${response.status}`;
-      logger.error({ label, status: response.status }, "sending email failed");
-      return { kind: "failed", reason };
+      /* Provider validation messages can echo a recipient or submitted field,
+         so the body is read for one thing — an error `name` on the allowlist
+         above — and the rest is dropped unlogged. Reading it also lets fetch
+         release its connection. */
+      const raw = await response.text().catch(() => "");
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = null;
+      }
+      const providerError = resendErrorName(parsed);
+      const reason = `Resend answered ${response.status}${providerError ? ` ${providerError}` : ""}`;
+      logger.error({ label, status: response.status, providerError }, "sending email failed");
+      return providerError ? { kind: "failed", reason, providerError } : { kind: "failed", reason };
     }
 
     const body = (await response.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" ? body.id : null;
-    logger.info({ label, id }, "sent email");
+    /* `id` is returned to callers, but the provider's response body is not a
+       log field: only values we wrote ourselves cross that boundary. */
+    logger.info({ label }, "sent email");
     return { kind: "sent", id };
   } catch (err) {
-    logger.error({ label, ...errorFields(err) }, "sending email failed");
-    return { kind: "failed", reason: err instanceof Error ? err.name : "unknown error" };
+    /* A fetch implementation may put request data in its error message. The
+       recipient and body are deliberately in that request, so keep only the
+       error's class in both the log and the stored SendResult. */
+    const error = sendErrorName(err);
+    logger.error({ label, error }, "sending email failed");
+    return { kind: "failed", reason: error, ambiguous: true };
   }
 }
 

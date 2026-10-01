@@ -334,28 +334,6 @@ export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", 
 
 export const glossaryLookupStore: GlossaryLookupStore = guarded("lookups", pgGlossaryLookupStore);
 
-/**
- * Checking one term on the web.
- *
- * **Not an adapter method**, and that is the point of the move. A lookup reads
- * the glossary, the blocks and the meta, calls `explain`, and stores one
- * answer; only the last of those differs between the stores, and the first
- * three are the seams above. So it is built here out of the parts rather than
- * written twice — two copies of the 404 / 403 / 409 rules and the `safeUrl`
- * filter is the divergence this whole seam exists to make impossible.
- * src/term-lookup.ts.
- *
- * **No `assertWritable` since 2026-09-05.** It was the one genuinely file-shaped
- * piece: the filesystem could reach the committed `example/` article, which
- * nobody owns, so it needed a 403 that Postgres does not — there is no such
- * article in the database at all. The seam in src/term-lookup.ts stays optional
- * for the next store-shaped 403; nothing supplies one.
- */
-export const lookUpTerm = makeLookUpTerm({
-  reader,
-  lookups: glossaryLookupStore,
-});
-
 export const citationFindStore: CitationFindStore = guarded("citation-finds", pgCitationFindStore);
 
 /** Seconds spent per block — the spine's and gutter's reading-time layer. */
@@ -364,14 +342,14 @@ export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgRead
 /**
  * Explaining a term the reader typed into the glossary's box.
  *
- * **The same parts as `lookUpTerm` above, minus the store**, because nothing is
+ * **The same parts as `lookUpTerm` below, minus the store**, because nothing is
  * saved — src/types.ts § `AskedTermAnswer` has the three reasons, the sharpest
  * being that the glossary blob is published with a shared article. So there is
  * no `lookups` seam here and no second copy of the anchor rule: both verbs are
  * built from `anchorIn` in src/term-lookup.ts, which is the whole argument for
  * that file existing.
  *
- * No `assertWritable`, for the same reason as its neighbour above.
+ * No `assertWritable`, for the same reason as `lookUpTerm` below.
  */
 export const askAboutTerm = makeAskAboutTerm({
   reader,
@@ -537,6 +515,32 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
   "fetch-allowance",
   pgFetchAllowanceStore,
 );
+
+/**
+ * *Dig deeper* into one glossary term (was *Check the web*, plan 261001p).
+ *
+ * **Not an adapter method**, and that is the point of the move. A lookup reads
+ * the glossary, the blocks and the meta, calls `explain`, and stores one
+ * answer; only the last of those differs between the stores, and the first
+ * three are the seams above. So it is built here out of the parts rather than
+ * written twice — two copies of the 404 / 403 / 409 rules and the `safeUrl`
+ * filter is the divergence this whole seam exists to make impossible.
+ * src/term-lookup.ts.
+ *
+ * **No `assertWritable` since 2026-09-05.** It was the one genuinely file-shaped
+ * piece: the filesystem could reach the committed `example/` article, which
+ * nobody owns, so it needed a 403 that Postgres does not — there is no such
+ * article in the database at all. The seam in src/term-lookup.ts stays optional
+ * for the next store-shaped 403; nothing supplies one.
+ */
+export const lookUpTerm = makeLookUpTerm({
+  reader,
+  lookups: glossaryLookupStore,
+  /* Below `fetchAllowanceStore` and `librarySearch`, because both are read
+     when this line runs. */
+  allowance: fetchAllowanceStore,
+  library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
+});
 
 /**
  * Citations mode's *Find it*: one web-search call for one cited work, kept only when
