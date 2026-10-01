@@ -154,7 +154,7 @@ reach Postgres (its third P3); the five scoped suites were re-run outside it, 11
 
 ## Status
 
-**Shipped to `dev`, not deployed** (2026-10-01).
+**Shipped to `dev`, not deployed** (2026-10-01): 5ea78053 and 7be9de08, merged as c3305f1b.
 
 - **Browser check** (Playwright, a dev server of this worktree on local Postgres, four seeded
   `bc261001i-` articles, removed afterwards): a DOI work whose copy is the reader's own archived

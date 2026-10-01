@@ -37,7 +37,7 @@ visitor to a public article, for archived articles, and using the copy here as t
 up* / *Investigate* read instead of a search extract.
 
 **Follow-up, 2026-10-01** ([261001i](../plans/261001i-already-in-spideryarn-on-the-hover-card-archived-and-uploaded.md),
-on `dev`, not deployed): the link is now on **the hover card in the prose** too; **your archived
+on `dev` as 5ea78053 and 7be9de08, not deployed): the link is now on **the hover card in the prose** too; **your archived
 articles** count, with the line saying *In your library · archived* so you do not look for it on the
 shelf; and **an uploaded PDF** matches by the DOI or arXiv id we found for it, said as ours in the
 tooltip. Still not done: a visitor's view, and reading the copy here in *Look it up* /
