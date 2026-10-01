@@ -25,6 +25,11 @@ in this directory records which, and the line comes off.
   article, keeping unread PDFs, and minimal-only batches first ·
   [261001m § Questions for Greg](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md) ·
   [note](260930_0721-bulk-import-of-many-papers-cheaply.md)
+- 2026-10-01 · no Sentry issue (Overseer-dispatched) · show each Simple level once it has passed its
+  check: out of budget except by streaming `advance`, which reaches only the tab running the job.
+  Keep as built, or accept that trade-off? ·
+  [261001o](../plans/261001o-summaries-show-each-level-when-checked.md) ·
+  [note](261001_1716-summaries-show-each-level-when-checked.md)
 
 ## Attempted abuse, not yet seen by Greg
 

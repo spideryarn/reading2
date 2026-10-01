@@ -1,4 +1,4 @@
--- a9: a7 redone after GPT Sol's plan review (docs/plans/261001o-plan-review-sol.md, F1/F2/F6).
+-- a9: a7 redone after GPT Sol's plan review (docs/plans/261001o-cross-mode-cache-plan-review-sol.md, F1/F2/F6).
 --  * 'always' charges the write premium on EVERY cold call in a group — what option B's
 --    "claim, mark, write" actually does — not only on a chain head whose follower is known to come
 --    (the oracle a7 used).

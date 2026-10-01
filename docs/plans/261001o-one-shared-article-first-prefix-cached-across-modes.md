@@ -258,7 +258,7 @@ The stages, so they can be reviewed now:
 ## Review
 
 GPT Sol, plan review, 2026-10-01, read-only:
-[261001o-plan-review-sol.md](261001o-plan-review-sol.md). Verdict **reframe**, no P0. Every
+[261001o-cross-mode-cache-plan-review-sol.md](261001o-cross-mode-cache-plan-review-sol.md). Verdict **reframe**, no P0. Every
 finding was checked and taken:
 
 - **F1, the 6% priced perfect foresight.** a9 re-runs the numbers with every cold call paying the

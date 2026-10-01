@@ -728,6 +728,10 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
   went on 2026-09-13 there is no way to ask for a plain artefact at all short of emptying both boxes;
   storing both copies is
   [deferred with reasons](../plans/260826t-reader-profile.md#storing-both-copies-is-deferred-and-the-deferral-now-has-teeth).
+- **A public article shows the owner's personalised artefacts.** A shared version written for
+  nobody, with the owner's personalisation as a separate layer on top, was designed and part-built,
+  and Greg deferred it as *someday maybe* on 2026-10-01: personal value comes first —
+  [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md).
 - **Two tabs.** Last write wins, which is what `shelf.json` already does.
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —
   though the Postgres half is keyed by `owner_id` from the start.

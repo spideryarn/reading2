@@ -1,19 +1,12 @@
-# Review request: plan 261001o (one shared article-first prefix cached across modes)
+You are reviewing a small plan before it is built. Read-only: do not edit files.
 
-You are GPT Sol, reviewing read-only. Repo root is the current directory.
+Plan: docs/plans/261001o-route-the-cheap-model-metadata-spike-through-the-gateway.md
+The file it fixes: evals/pdf/minimal-metadata/cheap-model-spike.mts (currently a raw fetch to OpenRouter; tests/no-undeclared-spend.test.ts flags it).
+The plan whose spike this is: docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md (see the "cheap model on the text of pages 1-2" bullet for its recorded figures).
+Relevant code: src/ai-call.ts (openRouterJson, outgoing, CHAT_REASONING's `eval` row, AI_JOB_ROUTE's `eval` row, Meter.saw and BYOK handling), src/spend-declarations.ts, evals/declared-spend.ts (observe.openRouter), evals/extraction/tidy.mts and evals/shelf-topics/run-arms.ts (existing seam users), src/cli-ledger.ts (withLedger).
 
-Read, in order:
-1. docs/plans/261001o-one-shared-article-first-prefix-cached-across-modes.md (the plan)
-2. docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md (the measurement)
-3. The queries a1.sql–a8.sql in that folder and their verbatim output, results.txt (production, read-only, last 30 days)
-4. The previous sweep it follows: docs/plans/261001l-prompt-caching-across-every-call.md (especially § What the review changed — your own earlier findings F1–F6) and docs/research/261001a-prompt-caching-production-audit/README.md
-5. Code: src/models.ts (STAGE_EFFORT, ARTICLE_RENDERER), src/pipeline.ts (sharesArticleCache, cacheArticleForStep), src/article-prompt.ts, src/illustrated.ts (~line 1040), src/hierarchy-prompt.ts (renderBlocks, EFFORT), src/messages-stream.ts (MeteredCall.onStart), src/jobs.ts, web/auto-modes.ts, src/pricing.ts.
-
-Questions, in priority order:
-1. **Are the numbers right?** Check the SQL logic in a5–a8 against the README's claims: the 0.35 tokens/char P, the oracle premium accounting, the per-grouping table, the input/output/thinking split, and the per-article distribution. Is anything double-counted, mis-partitioned (e.g. the lag/lead window), or wrongly excluded? Is the conclusion "ceiling ~16% of a normal article's Claude cost, ~8% at today's efforts, ~6% plumbing-only" supported? Is thinking really ~25%?
-2. **Is the answer to Greg's question ("is the article first in every full-article prompt?") accurate** call site by call site?
-3. **Option B's design** (durable prefix record keyed by sha256(model, effort, article block bytes); warm/writing/claim; wait on onStart; 20 s claim expiry; always-mark within compatible groups). Does it actually solve your 261001l F2/F3 objections (no readiness signal; two leaders; warm cache whose writer finished; sticky routing)? Races? Where exactly in the code would the seam go, and does message_start on OpenRouter's Messages wire reliably arrive before the cache is readable? Is there a simpler design that captures most of the 6%?
-4. **The recommendation order** (thinking eval first, then B, E with B, C conditional, not D). Is D's rejection argument sound (glossary at high: +4,558 output tokens ≈ 4.6¢ vs ~3¢ saved)? Is E (1h TTL for long articles only) argued from one outlier article — say so if that's too thin.
-5. Anything the plan claims that the code contradicts.
-
-Answer with numbered findings, each tagged P0/P1/P2 with file:line evidence, and end with a one-line verdict (approve / approve with changes / reframe). Do not edit files.
+Questions:
+1. Is the plan's choice (the seam with job "eval", losing reasoning effort low) right, versus a declared metered bypass that keeps effort low? Check the plan's two claims behind it yourself: (a) outgoing() strips a caller's `reasoning` for the `eval` row; (b) observe.openRouter in the declared path would record a BYOK call as cost 0 with a provider cost source, while the seam's Meter records the upstream figure.
+2. Will the `eval` route's provider block (require_parameters: true, allow_fallbacks: false) plus response_format json_object route for openai/gpt-5.6-luna? Is there evidence in the repo either way?
+3. Anything else the rewritten script must keep or must not do (e.g. a ledger needing a database, loadEnvLocal, BYOK cost reporting in its printed total).
+Reply with numbered findings, each with severity (P0-P3) and evidence (file:line). Keep it short.

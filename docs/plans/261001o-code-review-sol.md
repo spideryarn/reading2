@@ -1,0 +1,5 @@
+1. **P3 — [261001o-route-the-cheap-model-metadata-spike-through-the-gateway.md:23](/home/greg/code/spideryarn2/.claude/worktrees/fix-spend-guard-cheap-model-spike/docs/plans/261001o-route-the-cheap-model-metadata-spike-through-the-gateway.md:23)** — Reasoning was not literally the only wire-level change: the `eval` seam also applies its provider-routing policy. I corrected the wording and documented that behavior.
+
+No other findings. The spend fix correctly uses the seam—not a declaration—and reports BYOK upstream cost honestly. The sign-in selector targets the shared form’s submit button in either tab state; no script or test still assumes a collapsed form.
+
+47 relevant sign-in tests passed. The paid spike was not run. The two git-dependent tests could not be rerun here because subprocess git was denied with `EPERM`; supplied evidence covers them. No commit made.
