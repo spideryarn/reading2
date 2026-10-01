@@ -124,11 +124,12 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           </Portrait>
         </div>
         <div className="site-bento site-reveal tw:mt-4">
-          {/* Greg, 2026-08-26, the summary request, and 2026-08-31 ("just
-              keeping 'Gist' only is sufficient"). Summary mode, src/modes.ts. */}
+          {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
+              levels; 2026-10-01, the outline removed (spya-b3ggv4, plan 261001p).
+              Summary mode, src/web/modes/summary/SummaryMode.tsx. */}
           <Tile name="Summary." span="wide">
-            One sentence on every part of the piece, and every section of every part, as deep as you
-            ask — beside the prose, never instead of it.
+            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
+            passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Plain mode: the article alone, with the band closed. */}
           <Tile name="Or just the article." span="wide">

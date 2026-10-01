@@ -1309,7 +1309,7 @@ export function onAddressChange(listener: () => void): () => void {
  * subscribed to nothing is not woken at all.
  *
  * That was invisible until `TableView` was memoised. Ten reading parameters are
- * owned by child components — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`,
+ * owned by child components — `rank`, `bar`, `run`, `conf`, `summary`, `diagram`,
  * `dx`, `dhue`, `referee`, `remember` — and a change to any of them re-renders
  * only that child. `blockHref` reads the query to build 551 permalinks, and it
  * used to get away with it because `?at=` re-rendered the whole reading view

@@ -65,7 +65,7 @@ export interface GraphNode {
   part: number;
   startRow: number;
   endRow: number;
-  /** How many blocks — the unit the summary panel's `¶` badge counts. */
+  /** How many blocks this structural node contains. */
   blocks: number;
   /** How many **words**. The honest measure of "how much of the piece". */
   words: number;

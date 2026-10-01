@@ -1,7 +1,7 @@
 # Hierarchy
 
 Pipeline stage 4 — `hierarchy`, `npm run hierarchy -- <slug> [--force]`. Builds the nested structure that Structure,
-Summary, the Spine and the rest render. (The step keeps its name; the Hierarchy *mode* — gist columns
+Marginalia, the Spine and the rest render. (The step keeps its name; the Hierarchy *mode* — gist columns
 beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
@@ -1216,6 +1216,141 @@ Structural failures exit non-zero; editorial ones (label lengths, a title ending
 gistable leaf with no label) print as warnings and do not fail the run. The check is cheap and it is
 the only thing standing between a plausible-looking sidebar and one that silently drops a paragraph.
 
+## The question under the claim
+
+**Added 2026-09-05**, from SPIDERYARN-READING2-1V. Greg:
+
+> Tweak the prompt that generates the Summary mode to be a bit more in the form of Socratic
+> questions that encourage the reader to read the actual text to get the full answers
+>
+> — Greg, 2026-09-05
+
+So the root and each of its parts carry a second field beside the gist, **`TreeNode.question`**,
+written by the same stage-4 call. Summary's outline drew it in place of the gist (`question ??
+gist`) from that day until the outline was removed on 2026-10-01
+([summaries.md § History](summaries.md#history-the-outline-2026-08-26-to-2026-10-01)); Marginalia
+reads it now (the comment on `marginalia` in [`src/mode-catalog.ts`](../../src/mode-catalog.ts)),
+which is why it is still generated.
+
+### Why it is a second field rather than a different gist
+
+The request as worded could not be carried out, because the sentence Summary drew was the **`gist`**
+this stage writes, and the gist is rendered in many other places — Structure, the spine tooltips, the
+masthead, the shelf card on [the library](library.md) and [the public shelf](public-shelf.md), the
+outline rows, the diagram cards. Worse, **it is also an input**: `chainRung` in
+[`hierarchy-expand.ts`](../../src/hierarchy-expand.ts) feeds ancestor gists back to the later
+structure waves as context, so a gist bent towards questions would degrade the trees the cascade
+goes on to build. One prompt edit, many regressions. So the question is its own field, and a shelf
+card still says what the article claims.
+
+### The shape it has, since `toc/7`
+
+Greg drew it himself, in the same brief, and the wording that ships is the one that reproduced his
+drawing almost verbatim without being shown it:
+
+> Computational functionalism - why isn't computation sufficient for consciousness? (4 arguments)
+>
+> — Greg, 2026-09-05
+
+So a question is **`<topic> — <question>? (<shape hint>)`**: the topic in the author's own term, a
+question that **presupposes where the section lands** (*"why isn't computation sufficient"* carries
+the claim; *"is computation sufficient?"* hides it), and a bracketed hint giving the **shape** of
+the answer and never its content — a count or a kind, and never this node's child count, which is a
+different number. Where a section does not land — it weighs, describes, or leaves the matter open —
+the hint says so instead: *"(two options weighed)"*, *"(no settled answer)"*.
+
+**This replaced the first wording on 2026-09-07**, and the first wording is why. It asked for the
+question *"this node's text answers and its gist does NOT"* — an instruction to strip out everything
+the gist carried, whose only honest output is a bare why-question. Four candidate rewordings were
+built into an eval and measured over seven real articles;
+[`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
+separate them, and the code change this one needed. Production shipped that V4 block byte-for-byte
+at `toc/7`; `toc/8` replaced only its final plain-words bullet, and a test asserts that exact
+relationship so neither the measured block nor production can drift quietly.
+
+The cost, named rather than discovered: **these lines are nearly twice as long** — a median of 18
+words against the old 10 — while the same brief also asked for simpler language and a briefer
+top-level line. [260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md)
+is where that tension sits, unresolved.
+
+### Plain words, since `toc/8`
+
+**Added 2026-09-26**, from SPIDERYARN-READING2-44. Greg:
+
+> we want the summaries to really use simpler language, because half the problem is we may not know
+> what the jargon means
+>
+> — Greg, 2026-09-26
+
+The gist kept "the article's own words for the things it names", which let every term of art through
+unexplained. It now keeps the name as a handhold but has to make the sentence understandable to a
+reader who does not know it, and plainer means equally specific —
+[prompting-guide.md](prompting-guide.md) has the rule, and
+[260926a](../plans/260926a-plainer-summaries-and-glossary.md) the measurement. The QUESTIONS block
+changed in one bullet: the topic keeps the author's term, and the question after it must make sense
+to a reader who does not know it. It was left alone at first, and a blind read found the depth-1
+questions no plainer that way; the rest of the block is still the V4 the eval measured. New articles
+only ([below](#prompt-versions)).
+
+**One line of production code moved with it.** The hint follows the question mark, so `questionFor`
+— which appends a `?` to anything not ending in one — would have stored *"…(4 arguments)?"*. It now
+treats a `?` followed by nothing but one short bracketed hint as a finished line, and `bareWords`
+strips that bracket **before** the terminal punctuation so the gist-echo check still catches a gist
+re-asked in the new shape. Both halves are held by `tests/summaries-eval.test.ts`.
+
+### Root and parts, and it is enforced rather than requested
+
+The prompt asks for a question on the root and on each depth-1 node only;
+[`questionFor`](../../src/hierarchy.ts) drops any written deeper. One per section on a fifty-section
+article is noise, and a scope the code holds is a fact rather than a hope.
+
+### Punctuation is normalised, never read for meaning
+
+Measured on the first real toc/5 run — noema, 141 blocks, 2026-09-05: six questions, none written
+deeper than a part, and **one of the six came back with no `?`**, so a missing mark is added rather
+than treated as a fault.
+
+The first version of that rule also *dropped* anything ending in `.` as a statement, and GPT Sol
+killed it: a full stop is not evidence of mood. *"How did this affect the U.S."* is a question that
+rule discarded invisibly, while a real statement without a mark sailed through. So the rule is
+syntactic and does one thing — append the mark — and the failure the prompt actually names, *"never
+the gist with a question mark on it"*, is caught by **comparing the question with the gist**,
+ignoring case and punctuation.
+
+### Three ways a part ends up with no question
+
+All of them benign absence rather than breakage; a fourth was closed on 2026-09-07. They are not
+equally visible.
+
+- **A rung that restated its parent** is spliced away ([above](#restated-rung)) and its children come
+  up in its place carrying none. Those children were at depth 2 when the model wrote them, and
+  nothing asks a question at depth 2 — that would be the noise `MAX_QUESTION_DEPTH` exists to
+  prevent, and filling it in afterwards would be a second model call. It is **counted**:
+  `BuildReport.droppedQuestions` is every question that was *written and then discarded*, this case
+  included.
+- **An expansion was asked for a question and did not write one.** The closed fourth case is why
+  this one exists: `EXPAND_SYSTEM` has its own QUESTIONS block (V4's shape since `expand/4`, plus
+  `toc/8`'s plain-words bullet), and the request marks each target `ASK QUESTION ON CHILDREN` or
+  `OMIT QUESTION` — per target, because one call batches parents at different depths. Only the
+  children of the whole work are asked. But **the request asks; it does not insist**: an answer
+  without a question for one of its children is accepted as it stands, and that child keeps its gist
+  and no question. It is **counted, and by name**: `DeepenStats.missingQuestions` lists the
+  positions, deliberately not the same number as `droppedQuestions`, because *the model wrote one and
+  the tree threw it away* and *the model wrote none* have different fixes.
+- **Wave 1 wrote none for that part.** The structure call is asked for questions too, and a part it
+  simply left without one keeps its gist. This is the case **nothing counts** — `droppedQuestions`
+  only fires where a question existed to be dropped, and `missingQuestions` only covers children an
+  expansion request marked. So a wave-1 omission is invisible in every number we keep
+  ([silent-success.md](../reusable/silent-success.md)). If it ever matters, it needs a counter of its
+  own.
+
+So a mixed set — a question on one part, only a gist on its neighbour — is not evidence of any one of
+these. Absence is ordinary: every article whose hierarchy predates 2026-09-05 has no question
+anywhere, and the stage is cached on a content hash of the request, so **no existing article grows a
+question on its own**. Getting them means `npm run hierarchy -- <slug> --force`, at roughly the cost
+of a structure call per article. Unlike a missing *gist*, a missing question draws nothing on screen,
+and the asymmetry is deliberate — the comment on `question` in [`types.ts`](../../src/types.ts).
+
 ## A new prompt reaches new articles only, and that is the decision <a id="prompt-versions"></a>
 
 **Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports only
@@ -1231,11 +1366,11 @@ lines longer, plainer words) turned out to be invisible on everything he had alr
 
 **`toc/7` on 2026-09-07 is the same answer a second time, and the second one is louder**, because
 that bump changed what a Socratic question *looks like* — from a bare *"why does X?"* to
-`<topic> — <question>? (<shape hint>)`, which since report 24 is the only line a Summary row draws.
+`<topic> — <question>? (<shape hint>)`, which was then the only line a Summary row drew.
 So a reader's older articles keep questions in a shape nothing else in the library still writes, and
 **nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and debate, the tree
 has no `outdated` chip to show them, because it has no staleness mechanism at all.
-[summaries.md § The shape it has](summaries.md) is what changed.
+[§ The shape it has](#the-shape-it-has-since-toc7) is what changed.
 
 **`toc/8` on 2026-09-26 is the third** — plainer gists, from Greg's own report — and the same
 answer applies: an article already read keeps its jargon until its stage is re-run.

@@ -297,7 +297,7 @@ export function SearchPanel({
   return (
     <ModeSurface label="Search this article" feature="srch" mode="search">
       {/* **No head slot, and therefore no title row**, for the reason
-          SummaryPanel.tsx gives at length: it said the mode's own name and the
+          SummaryMode.tsx § `SummarySurface` gives at length: it said the mode's own name and the
           Dock is already saying it (Greg, 2026-09-05). The search box below is
           the mode, and it explains itself better than a word above it did. The
           `label` above — `aria-label` on the `<aside>` — names the region. */}

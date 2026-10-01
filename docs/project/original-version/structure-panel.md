@@ -163,7 +163,9 @@ Concretely, three things worth doing here:
 ### Where they landed, 2026-08-26
 
 Points 1 and 2 both shipped in the **summary mode** ([../summaries.md](../summaries.md)), and point 3
-is still true and still defended.
+is still true and still defended. **That outline was removed on 2026-10-01** (Structure draws the
+same tree), so what follows is a record; the design is in
+[../summaries.md § History](../summaries.md#history-the-outline-2026-08-26-to-2026-10-01).
 
 - The paragraph count on every row is "how much is under this" — `18¶`, from the same range the
   panel already resolves. The "+N sections" badge is here too, capped at `99+` and suppressed at

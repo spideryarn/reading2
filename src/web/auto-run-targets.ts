@@ -70,7 +70,7 @@ type StepAutoRunTarget = StepTarget<
   | "tweets"
   /* The second half of Remember: the questions the piece asks you back. */
   | "quiz"
-  /* Summary's plain-words sub-mode, armed by its Simple chip —
+  /* Summary's plain-words work, armed by its slider or either end button —
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   | "simple"
 >;

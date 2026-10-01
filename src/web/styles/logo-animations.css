@@ -289,6 +289,12 @@
      2.6Hz — the tired micro-interaction this entry was written to avoid. */
   animation-delay: calc(var(--i) * 34ms);
 }
+/* The hover flourish loops while the pointer stays. The loader must eventually
+   remove its class, so there it runs exactly twice and then rests; the track's
+   3106ms hold includes the last letter's 306ms stagger. */
+.logo-loader.spya-pluck .logo-letter {
+  animation-iteration-count: 2;
+}
 /* A plucked string does not send a bump along its length; it oscillates about
    rest on *both* sides and decays. Five swings of falling height at a half
    period of about 160ms — a tremble rather than a bounce — then 530ms of rest

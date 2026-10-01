@@ -113,10 +113,8 @@ interface Ctx {
 /**
  * A whole answer, with its blocks drawn as well as its marks.
  *
- * Chat's, and only chat's. The summary prompt asks for plain sentences and gets
- * them, and a summary is dense enough that a stray `#` becoming a heading would
- * be worse than a stray `#` — so summaries use `CitedText`, which reads the same
- * marks and refuses the same structure.
+ * Chat and Candidates use this structured shape. Quiz marking is one run of
+ * prose, so it uses `CitedText` instead.
  */
 export function CitedMarkdown(props: Props): ReactElement {
   return <Drawn {...props} flat={false} />;
@@ -125,8 +123,8 @@ export function CitedMarkdown(props: Props): ReactElement {
 /**
  * One run of model prose: the marks and the citation chips, and **no structure**.
  *
- * The summary panel's, where the text sits inside a `<p>` that is already
- * `white-space: pre-wrap`, so paragraphs are blank lines rather than elements.
+ * The Quiz reply's, where the text sits inside a `<p>` that is already
+ * `white-space: pre-wrap`, so model newlines remain line breaks.
  *
  * A block that is not a paragraph is drawn as **the characters the model wrote**
  * — see `drawBlock`. That is the one behaviour here worth being deliberate
@@ -242,8 +240,8 @@ const MAX_DEPTH = 12;
  * A run of blocks.
  *
  * In flat mode the blank line goes **between** them and not after each, which
- * is a sentence's worth of care for a reason: `.summ-text` is `pre-wrap`, so a
- * trailing `\n\n` is a visible empty line under every summary in the panel.
+ * is a sentence's worth of care for a reason: `.quiz-reply` is `pre-wrap`, so a
+ * trailing `\n\n` is a visible empty line under every marked answer.
  * The first version of this appended one and seven older tests in
  * chat-web-links-render.test.tsx went red on the whitespace — which is exactly
  * what they were for.
@@ -308,11 +306,12 @@ function drawBlock(node: RootContent, ctx: Ctx, flat: boolean, depth = 0): React
   if (node.type === "paragraph") {
     const inner = inline(node.children, ctx);
     /* In flat mode a paragraph is its own contents; the blank line between one
-       paragraph and the next is `drawBlocks`'s, which is what `.summ-text`'s
-       `pre-wrap` has always shown. */
+       paragraph and the next is `drawBlocks`'s, which `.quiz-reply`'s
+       `pre-wrap` shows. */
     return flat ? inner : <p>{inner}</p>;
   }
-  // Structure is chat's. A summary shows the characters instead — see CitedText.
+  // Structured blocks are for Chat and Candidates. A Quiz mark shows the
+  // model's characters instead — see CitedText.
   if (flat) return sourceOf(node, ctx);
 
   switch (node.type) {
