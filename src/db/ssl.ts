@@ -18,6 +18,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { parse as parseConnectionString } from "pg-connection-string";
+
 /**
  * Supabase's CA certificate, downloaded from the dashboard
  * (Settings → Database → SSL Configuration) and committed. Deliberately NOT
@@ -27,7 +29,17 @@ import path from "node:path";
  */
 const DEFAULT_CA_PATH = path.resolve(import.meta.dirname, "../../certs/supabase-ca.crt");
 
-/** What `pg` wants in its `ssl` option, in the three shapes we ever produce. */
+/**
+ * What `pg` wants in its `ssl` option, in the two shapes we ever produce.
+ *
+ * There used to be a third, `encrypted-unverified` — encrypted, but any
+ * certificate accepted — returned against the remote when the CA file was
+ * missing. It defeats machine-in-the-middle protection **while looking exactly
+ * like a secure connection**, and the runtime only logged a warning. Since
+ * 2026-10-01 the remote is verified or refused, so the shape is gone and the
+ * compiler holds every caller to that —
+ * docs/plans/261001j-refuse-unverified-tls-to-the-remote-database.md.
+ */
 export type SslDecision =
   | {
       /** Local container: no certificate exists, so requiring TLS fails. */
@@ -36,22 +48,38 @@ export type SslDecision =
       readonly why: string;
     }
   | {
-      /** Encrypted *and* we know who we are talking to. The goal. */
+      /** Encrypted *and* we know who we are talking to. The only remote answer. */
       readonly mode: "verified";
       readonly ssl: { readonly rejectUnauthorized: true; readonly ca: string };
       readonly why: string;
-    }
-  | {
-      /**
-       * Encrypted, but any certificate is accepted. Defeats machine-in-the-
-       * middle protection **while looking exactly like a secure connection**,
-       * which is why this is a distinct mode rather than a flag — a caller has
-       * to handle the case by name to end up here.
-       */
-      readonly mode: "encrypted-unverified";
-      readonly ssl: { readonly rejectUnauthorized: false };
-      readonly why: string;
     };
+
+/**
+ * Query-string keys that take TLS out of `sslDecisionFor`'s hands.
+ *
+ * `pg` merges the parsed connection string **over** the config it is given,
+ * and `pg-connection-string` builds a fresh `ssl` object whenever the URL
+ * carries `sslmode`, `sslrootcert`, `sslcert` or `sslkey` (`ssl=` and
+ * `sslnegotiation=direct` set it too). So the CA decided here is dropped while
+ * the decision still says "verified" — and `?sslmode=no-verify` or
+ * `?ssl=no-verify` turns verification off outright. `uselibpqcompat` changes
+ * what the others mean. Measured against the installed pg, not argued:
+ * tests/db-ssl.test.ts.
+ *
+ * Refused as a class rather than sorted into safe and unsafe, because which of
+ * them is safe is pg-connection-string's to change between versions. The list
+ * is complete for 2.14.0; a spelling a later version adds is caught by asking
+ * that parser directly, in `sslDecisionFor`.
+ */
+export const TLS_URL_KEYS = [
+  "ssl",
+  "sslmode",
+  "sslrootcert",
+  "sslcert",
+  "sslkey",
+  "sslnegotiation",
+  "uselibpqcompat",
+] as const;
 
 /**
  * Is this URL pointing at the Docker stack on this laptop?
@@ -148,9 +176,9 @@ export function withoutPassword(connection: string): string | undefined {
 }
 
 /**
- * Injection points, and they exist for one reason: the **unverified** branch is
- * the dangerous one, and it can only be reached when the committed certificate
- * is absent. A test cannot delete a committed file, so without these the one
+ * Injection points, and they exist for one reason: the **refusal** for a
+ * missing certificate can only be reached when the committed certificate is
+ * absent. A test cannot delete a committed file, so without these the one
  * branch worth guarding is the one branch nothing covers.
  *
  * Production passes neither.
@@ -168,9 +196,12 @@ export interface SslOptions {
  * with an error that reads like a credentials problem. Hence this is keyed off
  * `isLocalDatabaseUrl` rather than off a flag someone has to remember.
  *
- * Throws when `PGSSLROOTCERT` names a file that is not there: an explicitly
- * configured certificate that silently degrades to unverified is the worst of
- * both worlds — you asked for verification and got a warning you will not read.
+ * **Against the remote it verifies or it throws** — Greg approved that on
+ * 2026-10-01, "as long as the cure isn't worse than the disease". Three
+ * refusals, each saying what to do: the URL carries a key from
+ * {@link TLS_URL_KEYS}; `PGSSLROOTCERT` names a file that is not there; there
+ * is no certificate at all. An encrypted-but-unverified connection is the one
+ * outcome nobody would notice, so it is never returned. Local is untouched.
  */
 export function sslDecisionFor(url: string, options: SslOptions = {}): SslDecision {
   if (isLocalDatabaseUrl(url)) {
@@ -179,6 +210,43 @@ export function sslDecisionFor(url: string, options: SslOptions = {}): SslDecisi
       ssl: false,
       why: "local Postgres is a container with no certificate",
     };
+  }
+
+  /* `isLocalDatabaseUrl` has already said no to anything unparsable, so a
+     throw here would be a URL that parsed a moment ago; fail closed anyway. */
+  let query: URLSearchParams;
+  try {
+    query = new URL(url).searchParams;
+  } catch {
+    throw new Error("Refusing to connect: DATABASE_URL does not parse as a URL, so its TLS settings cannot be read.");
+  }
+  const overrides = TLS_URL_KEYS.filter((key) => query.has(key));
+  if (overrides.length > 0) {
+    throw new Error(
+      `Refusing to connect to the remote database: DATABASE_URL carries ${overrides.join(", ")}, ` +
+        "which pg lets override the verified TLS settings — and some values turn certificate " +
+        `checking off while looking secure. Remove ${overrides.length === 1 ? "it" : "them"} from the URL; ` +
+        "certs/supabase-ca.crt is what verifies the server. See docs/project/database.md.",
+    );
+  }
+
+  /* The list above is complete for pg-connection-string 2.14.0, and only for
+     that. So ask the parser `pg` itself uses as well: if it produces an `ssl`
+     value from this URL, that value would replace ours, whatever the key was
+     called. Second, because the list gives the better message, and because
+     parsing a URL that names a certificate file reads the file. */
+  let parsedSsl: unknown;
+  try {
+    parsedSsl = parseConnectionString(url).ssl;
+  } catch {
+    throw new Error("Refusing to connect: pg cannot parse DATABASE_URL, so its TLS settings cannot be read.");
+  }
+  if (parsedSsl !== undefined) {
+    throw new Error(
+      "Refusing to connect to the remote database: DATABASE_URL carries a setting that pg turns into " +
+        "TLS options, which would override the verified ones. Remove it from the URL's query string; " +
+        "certs/supabase-ca.crt is what verifies the server. See docs/project/database.md.",
+    );
   }
 
   const configured = options.configuredCaPath ?? process.env.PGSSLROOTCERT;
@@ -196,12 +264,10 @@ export function sslDecisionFor(url: string, options: SslOptions = {}): SslDecisi
     throw new Error(`PGSSLROOTCERT is set but there is no file at ${caPath}`);
   }
 
-  return {
-    mode: "encrypted-unverified",
-    ssl: { rejectUnauthorized: false },
-    why:
-      `no CA certificate at ${DEFAULT_CA_PATH} — the connection is encrypted ` +
-      "but the server is not verified. Download it from the Supabase dashboard " +
-      "(Settings → Database → SSL Configuration).",
-  };
+  throw new Error(
+    `Refusing to connect to the remote database without verifying it: there is no CA certificate at ${caPath}. ` +
+      "It is committed as certs/supabase-ca.crt — restore it from git, or download it from the Supabase " +
+      "dashboard (Settings → Database → SSL Configuration), or point PGSSLROOTCERT at a copy. " +
+      "On Vercel, vercel.json's includeFiles must ship certs/**. See certs/README.md.",
+  );
 }

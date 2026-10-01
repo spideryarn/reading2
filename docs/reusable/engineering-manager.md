@@ -194,6 +194,13 @@ the machinery is still open now.
 ## Along the way
 
 - **Docs.** Update them in the same stage as the change, and write a doc where one is missing.
+  **Fix any doc you find out of date, even one your change did not touch.** Greg, 2026-10-01:
+  *"You always have my permission and encouragement to fix docs that are out of date - let's aim to
+  always be doing that in the background (with GPT review to ensure our changes are correct)."* Put
+  the fix in the stage's Sol review, so a second family checks the new wording against the code. A
+  doc whose wording is a rule still goes through
+  [edit-important-docs.md](edit-important-docs.md) when the fix changes what the rule *says*. A fix
+  that only makes the doc match the code is covered by this permission.
 - **Tests.** Write the failing test before the fix; a test that was never red proves nothing. Then
   mutate the finished code at the end of the stage and check the suite notices — red-first only tests
   the diff ([silent-success.md](silent-success.md)).

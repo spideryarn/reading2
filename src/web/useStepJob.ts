@@ -41,7 +41,7 @@
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
  *
  * **The fifteenth is a dozen mounts rather than one**, and it is the first caller
- * that is not a mode's own panel: Metadata's *Re-run AI processing* section puts
+ * that is not a mode's own panel: Metadata's *AI processing* section puts
  * a row per offered step on screen at once
  * (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
  * A component per row rather than a loop of hooks, for the ordinary reason —

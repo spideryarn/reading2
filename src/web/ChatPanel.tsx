@@ -1836,6 +1836,44 @@ function Answer({
   );
 }
 
+/**
+ * **The card on Remember's *Reply* picker** — what each of the four stances
+ * gets you. Greg, 2026-09-29 (`spya-xunuum`): *"In Remember mode, add a tooltip
+ * (e.g. on "Reply") to explain the dropdown with the various response types."*
+ *
+ * Each line is the stance's paragraph in `REMEMBER_SYSTEM` (src/converse.ts),
+ * said from the reader's side, and the table in docs/project/remember-mode.md
+ * § The four stances. The last line is the one rule nothing on screen hints at:
+ * the reader's own words outrank the stance (rule 2 of that prompt), so a
+ * Socratic or Signposts reader is never stuck being asked.
+ *
+ * A native `title` stood here and went with this: two cards on one control.
+ * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 1.
+ */
+function StanceTip() {
+  return (
+    <>
+      <div className="tip-soon-head">Reply</div>
+      <p>How the next answer is pitched.</p>
+      <p>
+        <strong>Balanced</strong> — answers plainly when your words show you are stuck; asks only
+        when the gap is clear and small.
+      </p>
+      <p>
+        <strong>Respond</strong> — says plainly where your account and the article differ, quoting
+        it.
+      </p>
+      <p>
+        <strong>Socratic</strong> — asks one question, with a hint and a passage to look at.
+      </p>
+      <p>
+        <strong>Signposts</strong> — points to three or four passages worth re-reading, with only a
+        few words about each.
+      </p>
+      <p className="tip-soon-how">Whichever you pick, a direct question or "just tell me" gets a plain answer.</p>
+    </>
+  );
+}
 
 /**
  * The box you type into.
@@ -2192,18 +2230,22 @@ export function Composer({
            window. */
         <label className="chat-stance">
           <span className="chat-stance-label">Reply</span>
-          <select
-            value={stance}
-            disabled={busy}
-            onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => onStance(e.target.value as RememberStance)}
-            title="How much the answer should say"
-          >
-            <option value="balanced">Balanced</option>
-            <option value="respond">Respond</option>
-            <option value="socratic">Socratic</option>
-            <option value="signposts">Signposts</option>
-          </select>
+          {/* **The card is on the select, not the label**: `Tooltip` puts its
+              `aria-describedby` on its own child, and the select is the
+              control a screen reader lands on. GPT Sol, plan review. */}
+          <Tooltip placement="top" keepSide className="tip-soon" content={<StanceTip />}>
+            <select
+              value={stance}
+              disabled={busy}
+              onKeyDown={(e) => e.stopPropagation()}
+              onChange={(e) => onStance(e.target.value as RememberStance)}
+            >
+              <option value="balanced">Balanced</option>
+              <option value="respond">Respond</option>
+              <option value="socratic">Socratic</option>
+              <option value="signposts">Signposts</option>
+            </select>
+          </Tooltip>
         </label>
       )}
       <DictationStrip dictation={dictate.dictation} />

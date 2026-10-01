@@ -100,7 +100,7 @@ export function ShelfControls({
 
   return (
     <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
-      <SortChips table={table} order={chipOrder} />
+      <SortChips table={table} order={chipOrder} labelHidden />
 
       {/* `flex-wrap` since 2026-09-28: with Columns beside the view switch the
           group is four controls, and at phone width a group that cannot wrap

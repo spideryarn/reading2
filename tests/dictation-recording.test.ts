@@ -694,6 +694,9 @@ describe("the audio it keeps", () => {
     expect(h.get().recording).not.toBeNull();
     act(() => h.get().clearRecording());
     expect(h.get().recording).toBeNull();
+    /* And the sentence pointing at it goes too: "the audio is below" over no
+       audio is a sentence about nothing. Plan 261001k. */
+    expect(h.get().error).toBeNull();
     h.unmount();
   });
 
@@ -708,5 +711,127 @@ describe("the audio it keeps", () => {
       await vi.advanceTimersByTimeAsync(20);
     });
     expect(recorders[0]?.state).toBe("inactive");
+  });
+});
+
+
+/**
+ * **A message about a dictation goes when the thing it was about is finished.**
+ *
+ * Feedback report SPIDERYARN-READING2-7Z, Greg, 2026-10-01: *"I submitted the
+ * feedback report by typing, then reopened the Feedback modal again later, and
+ * it was still showing that same message every time!"* The Feedback dialog is
+ * mounted for the life of the page, so its dictation's `[mic-silent]` outlived
+ * the report. `dismiss(artifact)` is what the dialog calls when a report is
+ * filed — and only for the artifact it saw when Send was pressed, because a
+ * send can land after the reader has started something newer. GPT Sol's plan
+ * review, F1. Plan docs/plans/261001k-dictation-silent-mic-warning-and-a-message-that-goes.md.
+ */
+describe("dismissing what the last dictation left", () => {
+  async function silentDictation(h: ReturnType<typeof drive>) {
+    transcriptReply = "";
+    await pressAndOpen(h);
+    recorders.at(-1)?.emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    act(() => h.get().toggle());
+    await act(async () => {
+      latest().onend?.();
+      await vi.advanceTimersByTimeAsync(20);
+    });
+  }
+
+  it("clears a [mic-silent] and its audio", async () => {
+    const h = drive();
+    await silentDictation(h);
+    expect(h.get().error).toMatch(/\[mic-silent\]/);
+    expect(h.get().recording).not.toBeNull();
+    const seen = h.get().artifact();
+    act(() => h.get().dismiss(seen));
+    expect(h.get().error).toBeNull();
+    expect(h.get().recording).toBeNull();
+    h.unmount();
+  });
+
+  it("leaves alone a message about a newer dictation", async () => {
+    const h = drive();
+    await silentDictation(h);
+    const seen = h.get().artifact();
+    /* The reader tries again while the send is away, and that one ends with a
+       message of its own. Which message does not matter; that it survives does. */
+    vi.setSystemTime(new Date("2026-08-27T14:33:00"));
+    await silentDictation(h);
+    const newer = h.get().error;
+    expect(newer).not.toBeNull();
+    act(() => h.get().dismiss(seen));
+    expect(h.get().error, "a late send wiped a newer message").toBe(newer);
+    h.unmount();
+  });
+
+  it("does nothing while the microphone is on", async () => {
+    const h = drive();
+    await pressAndOpen(h);
+    const seen = h.get().artifact();
+    act(() => h.get().dismiss(seen));
+    expect(h.get().armed).toBe(true);
+    expect(h.get().phase).toBe("listening");
+    h.unmount();
+  });
+
+  it("does nothing in the render gap after a microphone starts", () => {
+    const h = drive();
+    act(() => {
+      h.get().toggle();
+      /* `start` has moved the artifact and installed the Session, but React has
+         not rendered `phase: opening` yet. A phase ref alone still says idle. */
+      h.get().dismiss(h.get().artifact());
+    });
+    expect(h.get().armed, "dismiss hid a live opening session").toBe(true);
+    expect(h.get().phase).toBe("opening");
+    h.unmount();
+  });
+
+  it("does nothing in the render gap after a Retry starts", async () => {
+    transcribeFails = true;
+    const h = drive();
+    await pressAndOpen(h);
+    recorders.at(-1)?.emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await settle();
+    expect(h.get().canRetry).toBe(true);
+
+    /* Keep this retry genuinely in flight while the synchronous render gap is
+       inspected. A response here would test completion timing instead. */
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+    act(() => {
+      h.get().retry();
+      /* As above: the request ref is live before `phase` has rendered. */
+      h.get().dismiss(h.get().artifact());
+    });
+    expect(h.get().transcribing, "dismiss cancelled a retry before its render").toBe(true);
+    expect(h.get().recording).not.toBeNull();
+    h.unmount();
+  });
+
+  it("can dismiss a retry after that retry has finished", async () => {
+    transcribeFails = true;
+    const h = drive();
+    await pressAndOpen(h);
+    recorders.at(-1)?.emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await settle();
+    expect(h.get().canRetry).toBe(true);
+
+    act(() => h.get().retry());
+    await settle();
+    expect(h.get().phase).toBe("idle");
+    const seen = h.get().artifact();
+    act(() => h.get().dismiss(seen));
+    expect(h.get().error).toBeNull();
+    expect(h.get().recording).toBeNull();
+    h.unmount();
   });
 });

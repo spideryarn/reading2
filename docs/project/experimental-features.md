@@ -210,9 +210,10 @@ anything a model wrote in Courier, anything the reader typed in Arial. Greg aske
 and Courier summaries are a lot to hand every paying reader as an experiment.
 [typography.md § A face per voice](typography.md#a-face-per-voice-experimental-since-2026-10-01).
 
-**And one control on the Metadata page: *Start this article again*** — a block inside *Re-run AI
-processing* since 2026-09-29 rather than a section of its own (a reset, and optionally
-the modes made again), since 2026-09-28. It re-reads the article with today's pipeline, so a
+**And one control on the Metadata page: *Start this article again*** — a block inside *AI
+processing* rather than a section of its own: a reset, and optionally the modes made again. The
+control has been behind the switch since 2026-09-28 and joined this section — then called *Re-run
+AI processing* — on 2026-09-29. It re-reads the article with today's pipeline, so a
 paragraph whose text comes out different — mostly maths in articles added before maths was drawn —
 detaches any comment on it, and pressing it with the extras ticked spends a model call per mode. That
 earns a trial before everybody has the button; the route itself is not gated.

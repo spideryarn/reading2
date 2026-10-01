@@ -22,10 +22,10 @@
  * ## Shut once, shut on the next paper
  *
  * The bit lives in `localStorage` — src/web/referee-card.ts carries the whole
- * argument for that, including the distinction against
- * docs/project/url-state.md, which this is the second exception to. The header's
- * "How this works" button flips the same bit, so dismissing and reopening are
- * one thing rather than two discoveries.
+ * argument for why it is browser state rather than URL state under
+ * docs/project/url-state.md. The header's "How this works" button flips the
+ * same bit, so dismissing and reopening are one thing rather than two
+ * discoveries.
  *
  * **Not a dialog.** No focus trap, no backdrop, no `role="dialog"`: it is a
  * paragraph of explanation in the flow of the panel, and a referee who tabs

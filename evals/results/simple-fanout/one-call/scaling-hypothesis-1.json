@@ -1,0 +1,142 @@
+{
+ "arm": "one-call",
+ "slug": "scaling-hypothesis",
+ "run": 1,
+ "at": "2026-10-01T10:34:32.175Z",
+ "wallMs": 124668,
+ "costUsd": 0.249461,
+ "calls": [
+  {
+   "levels": [
+    "fuller",
+    "simple",
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 117804,
+   "doneMs": 124642,
+   "input": 5373,
+   "cacheRead": 0,
+   "cacheWrite": 26870,
+   "output": 17154
+  }
+ ],
+ "levels": {
+  "simple": {
+   "ok": true,
+   "words": 192,
+   "paragraphs": 4,
+   "readyMs": 122817,
+   "check": "passed",
+   "flags": 0
+  },
+  "brief": {
+   "ok": true,
+   "words": 98,
+   "paragraphs": 3,
+   "readyMs": 124642,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 269,
+   "paragraphs": 5,
+   "readyMs": 119773,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 15681,
+ "text": {
+  "brief": [
+   {
+    "text": "This piece is about GPT-3, a giant text-predicting computer program from 2020. It is far bigger than earlier versions. It surprised everyone by learning new tasks just from a few examples.",
+    "ids": [
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters because making the program bigger did not stop working, as many expected. The author thinks bigger computer programs, with no special tricks, might lead to real intelligence.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z"
+    ]
+   },
+   {
+    "text": "A key finding is that GPT-3 learned how to learn new tasks on the spot, just from examples. The author says this is a sign. In computer learning, things often get easier, not harder, as they grow bigger.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-sfkxh8"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This piece is about GPT-3, a huge computer program from 2020 that predicts text. It is much bigger than its predecessor, GPT-2. Even though it only learned to guess the next bit of text, it picked up surprising new abilities. It learned to follow instructions and tackle new tasks from just a few examples.",
+    "ids": [
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters because making the program bigger did not stop working, as many expected. The author says this points to the scaling hypothesis. This is the idea that making neural networks much bigger could lead to real intelligence, without any clever new trick.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z"
+    ]
+   },
+   {
+    "text": "A big idea here is meta-learning: GPT-3 learned how to learn new tasks on the spot, just from a few examples. The author calls this a 'blessing of scale'. In deep learning, hard problems can get easier, not harder, once models and data grow huge enough.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-sfkxh8"
+    ]
+   },
+   {
+    "text": "The piece also explains why just predicting text can teach so much. To keep improving, a model must learn grammar, facts, and even reasoning, since those are what's left to learn. The author adds that most experts kept predicting this scaling would stop working — and kept being wrong.",
+    "ids": [
+     "spya-ce0ts7",
+     "spya-n4zu5k",
+     "spya-b93jbz"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This piece is an essay about GPT-3, a huge language-prediction program released in 2020, and what it reveals about the scaling hypothesis. Though trained only to guess the next bit of text, GPT-3 — far larger than GPT-2 — learned to follow instructions and tackle new tasks from a few examples.",
+    "ids": [
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters, the piece says, because the bigger model did not hit the wall of diminishing returns many expected. It suggests even larger models are possible, and that such models could become key building blocks for future AI. The author calls this the scaling hypothesis: intelligence may be simple learning rules run at huge scale.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z"
+    ]
+   },
+   {
+    "text": "A key finding is meta-learning: GPT-3 did not just memorize facts, it learned how to learn new tasks on the spot, from examples in its prompt. The author links this to what he calls 'blessings of scale' — in deep learning, hard problems can become easier than easy ones once models and data grow large enough.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-sfkxh8"
+    ]
+   },
+   {
+    "text": "The piece also lays out the 'pretraining thesis'. To keep improving, a model must learn grammar, facts, and eventually reasoning and common sense — since these are what's left once easy patterns run out. It compares GPT-3's error rate on this task to a human one, calling the gap the deepest, most human-like bits.",
+    "ids": [
+     "spya-ce0ts7",
+     "spya-n4zu5k",
+     "spya-nhgv5g"
+    ]
+   },
+   {
+    "text": "Finally, the author argues that most AI experts kept predicting scaling would stop working, and were proven wrong each time. A few long-dismissed researchers, who believed bigger models and more compute would keep improving, turned out right instead. He warns that calm, confident reassurance from experts should not be trusted on its own.",
+    "ids": [
+     "spya-b93jbz",
+     "spya-m9r8zx"
+    ]
+   }
+  ]
+ }
+}

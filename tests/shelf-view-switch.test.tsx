@@ -171,3 +171,16 @@ describe("the cards/table switch", () => {
     expect(onView).not.toHaveBeenCalled();
   });
 });
+
+describe("the sort chips' label", () => {
+  /* Greg, 2026-09-29 (`spya-tw6zxw`): *"get rid of the "Sort" text at the
+     beginning of the row"*. Gone from the screen on the shelf, still the
+     group's name to a screen reader. Admin's row keeps it visible — that is
+     `SortChips`'s default, and nothing here changes it. */
+  it("names the group without drawing the word", () => {
+    render("cards");
+    const legend = host.querySelector("fieldset > legend");
+    expect(legend?.textContent).toBe("Sort");
+    expect(legend?.className).toBe("tw:sr-only");
+  });
+});

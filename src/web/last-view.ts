@@ -18,7 +18,7 @@
  * address. No server, no schema, no sync, and per-device by construction, which
  * is what Greg said was fine.
  *
- * ## Why this is `localStorage` when url-state.md says nothing is
+ * ## Why this is `localStorage` when url-state.md keeps view state in the URL
  *
  * That rule is about the **source of truth**: while you are looking at an
  * article the URL is the only thing that knows where you are, and a second
@@ -26,8 +26,8 @@
  * no such store. What is kept here is a *copy of an address you have already
  * left*, read exactly once — before anything paints — to decide which address
  * you arrive at. From that moment the URL is the only writer, exactly as
- * before. Same shape as referee-card.ts, install-hint.ts and mic-devices.ts,
- * which are the other three exceptions and all say the same thing.
+ * before. Same shape as the other per-browser keys url-state.md lists, such as
+ * referee-card.ts, install-hint.ts and mic-devices.ts.
  *
  * ## What is remembered, and what is deliberately not
  *

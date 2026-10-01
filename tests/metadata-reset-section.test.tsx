@@ -349,12 +349,13 @@ describe("the Start this article again section", () => {
     expect(card()).toBeTruthy();
     const order = sections();
     /* Inside *Re-run AI processing* since 2026-09-29, not a section of its
-       own — docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+       own — docs/plans/260929b-one-place-to-re-run-ai-processing.md. That
+       section is *AI processing* since 2026-10-01 (`spya-qgh5ta`). */
     expect(order).not.toContain("Start this article again");
     expect(card()?.closest("[data-section]")?.getAttribute("data-section")).toBe(
-      "Re-run AI processing",
+      "AI processing",
     );
-    expect(order.indexOf("Re-run AI processing")).toBe(order.indexOf("Archive this article") - 1);
+    expect(order.indexOf("AI processing")).toBe(order.indexOf("Archive this article") - 1);
   });
 
   /**

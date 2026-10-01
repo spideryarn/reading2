@@ -696,7 +696,7 @@ Not every variable is required, deliberately. `breaks: null` means one of two th
 
 - **Nothing needs it.** `LOG_LEVEL` has a default in [`src/log.ts`](../../src/log.ts).
 - **Something else already says it better.** A missing `DATABASE_URL` is reported by the `ssl` block
-  with its reason attached; a missing `PGSSLROOTCERT` surfaces as `TLS mode is …, not verified`,
+  with its reason attached; a missing CA surfaces as `ssl.error` plus a `TLS refused` warning,
   which is the truer statement, since the certificate can also be present and unused. `EXPECTED` has
   had no entry for `SPIDERYARN_STORE` since 2026-09-05, and there is nothing left to report about it
   at all since 2026-09-06.
@@ -844,16 +844,18 @@ that way.
 [`src/db/ssl.ts`](../../src/db/ssl.ts) finds the CA certificate by walking up
 from `src/db/`. In production that file is **bundled**, so `import.meta.dirname`
 is the bundle's directory and the walk lands somewhere else — which does not
-error. It degrades to `encrypted-unverified`: still encrypted, no longer checking
-who it is talking to, and identical from the outside. Hence `PGSSLROOTCERT` is
-set explicitly, which makes a missing certificate throw instead, and hence
-`/api/health` reports the mode.
+error. It used to degrade to `encrypted-unverified`: still encrypted, no longer
+checking who it is talking to, and identical from the outside. Hence
+`PGSSLROOTCERT` is set explicitly, and hence `/api/health` reports the mode.
+Since 2026-10-01 a missing certificate is refused outright, with or without it —
+[security.md § verified or refused](security.md#database-tls).
 
 There is a second way to lose the same guarantee, found by GPT Sol in review:
 `pg` **discards** an explicit `ssl` object if the connection string carries
-`sslmode`, `sslrootcert`, `sslcert` or `sslkey`. The CA is then loaded, reported
-as verified, and not used. `/api/health` warns when `DATABASE_URL` carries any of
-them; keep them out of it.
+`sslmode`, `sslrootcert`, `sslcert` or `sslkey` (or `ssl`, `sslnegotiation`).
+The CA is then loaded, reported as verified, and not used. Since 2026-10-01
+`sslDecisionFor` refuses a remote `DATABASE_URL` carrying any of them, and
+`/api/health` shows the refusal; keep them out of it.
 
 ### The request body
 

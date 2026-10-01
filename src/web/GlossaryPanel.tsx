@@ -1829,7 +1829,7 @@ function Looked({
  * checked" distinction honest, and that distinction is the one thing here that
  * a rewrite has already had to fix once.
  */
-function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
+export function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
   const sources = lookup.citations.filter((c) => isWebUrl(c.url));
 
   return (
@@ -1839,23 +1839,32 @@ function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
           `searches: 0` — a real answer, and a memory one. Heading that
           "checked" and admitting otherwise in a tooltip is a provenance claim
           the reader has to hover to disprove, which is the same shape as the
-          warning badge this panel spent a rewrite removing. Found in review. */}
+          warning badge this panel spent a rewrite removing. Found in review.
+
+          **In plain words since 2026-10-01.** It said *checked* or *asked, not
+          checked*, and Greg (`spya-puyb6d`): *"I didn't understand what asked
+          not checked means."* Same two facts, said as where the words came
+          from, the register of *in this piece* and *background* beside it.
+          docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 4. */}
       <p className="gloss-part-label">
-        {lookup.searches > 0 ? "checked" : "asked, not checked"}
+        {lookup.searches > 0 ? "from a web search" : "no web search — from the model's own knowledge"}
         <Tooltip
           content={
             lookup.searches > 0 ? (
               <>
                 <strong>Searched the web.</strong> {lookup.searches}{" "}
                 {lookup.searches === 1 ? "search" : "searches"} on{" "}
-                {new Date(lookup.at).toLocaleDateString()}, by {lookup.model}. The sources below are
-                what it cited.
+                {new Date(lookup.at).toLocaleDateString()}, by {lookup.model}.{" "}
+                {sources.length > 0
+                  ? "The sources below are what it cited."
+                  : "It cited no sources, so there are none to link to."}
               </>
             ) : (
               <>
-                <strong>No web search.</strong> {lookup.model} judged it already knew, on{" "}
-                {new Date(lookup.at).toLocaleDateString()}. It decides per question, so this is a
-                choice rather than a setting — and it means this answer is memory too.
+                <strong>No web search.</strong> On {new Date(lookup.at).toLocaleDateString()},{" "}
+                {lookup.model} decided it could answer without searching, so this is what it
+                already knew, and there are no sources to link to. It decides that for each
+                question.
               </>
             )
           }

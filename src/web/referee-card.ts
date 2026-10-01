@@ -7,11 +7,12 @@
  * 3); a referee who has read it once should not meet it on every paper, and the
  * button in the mode header brings it back.
  *
- * ## Why this is `localStorage` when the band's own docstring says that is banned
+ * ## Why this is `localStorage` and not the URL
  *
- * `RefereeBand` in src/web/App.tsx said `localStorage` was "banned outright",
- * citing docs/project/url-state.md, and that was the flat version of a real
- * rule rather than the rule. The distinction the rule is actually drawing:
+ * docs/project/url-state.md keeps view state in the URL and allows browser
+ * storage only sparingly, for a stated reason. This is the reason. (The
+ * referee band's docstring once called `localStorage` "banned outright"; that
+ * was the flat version of the rule.) The distinction the rule draws:
  *
  * - **View state — *how you are looking at an article* — goes in the URL.**
  *   Which mode is open, which criteria are ticked, which ramp. Every one of
@@ -22,9 +23,9 @@
  *   would be pasting your own reading history at them. `?how=0` in every
  *   address a referee copies is noise about them, not about the paper.
  *
- * `InstallHint` is the same shape and is already the exception
- * (src/web/install-hint.ts); this is the second, and it is the same kind of
- * thing rather than a new kind. The two places that would otherwise hold it are
+ * `InstallHint` is the same shape (src/web/install-hint.ts), and url-state.md
+ * lists the other per-browser keys; this is the same kind of thing rather
+ * than a new kind. The two places that would otherwise hold it are
  * both worse: the URL for the reason above, and a reader-profile column is a
  * migration for a checkbox.
  *

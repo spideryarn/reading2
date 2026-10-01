@@ -420,6 +420,23 @@ describe("the environment a deployment needs", () => {
     expect(said).toMatch(/upload|blob|bytes/i);
   });
 
+  /* Since 2026-10-01 a remote URL that would let pg override the CA is refused
+     by `sslDecisionFor`, not merely warned about here — docs/plans/261001j. The
+     refusal has to reach the page, or a deployment that cannot reach its
+     database looks like one with a TLS footnote. */
+  it("reports a TLS refusal as an error and a warning, naming the key", async () => {
+    completeEnv();
+    const clean = await call("GET");
+    expect(warningsFrom(clean).join(" ")).not.toMatch(/TLS/);
+
+    vi.stubEnv("DATABASE_URL", "postgres://u:p@db.example.com:5432/postgres?sslmode=no-verify");
+    const answer = await call("GET");
+
+    expect((answer.body.ssl as { error?: string }).error).toMatch(/Refusing[\s\S]*sslmode/);
+    expect(warningsFrom(answer).join(" ")).toMatch(/TLS refused/);
+    expect(answer.body.ok).toBe(false);
+  });
+
   /**
    * **The half-configured deployment, which is the shape that has bitten.**
    * Production ran with neither Stripe variable set on 2026-09-03, and

@@ -16,16 +16,17 @@ beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mod
 is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
 
-The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
-of compression, down the page for position and across for detail. Read that first.
+One of the features the app is for is the article at several levels of compression — the tree in
+**[granularity-zoom.md](granularity-zoom.md)**, which [Structure](structure.md) now draws. It is one
+of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 
 ## True across the whole view
 
 - **Text is addressed by block id, never by pixel offset or CSS selector** — scroll position, deep
   links, marks, citations, search hits. **[block-ids.md](block-ids.md)** has the format and the one
   way to get range checks silently wrong.
-- **View state lives in the URL** — not `useState`, not `localStorage`. See
-  [url-state.md](url-state.md).
+- **View state lives in the URL** — not `useState`, and browser storage only sparingly, for a
+  stated reason. See [url-state.md](url-state.md).
 - **Stream any model call a person is waiting on**; the plumbing is shared, so a streaming endpoint
   is a generator and a route. [comments.md § streaming](comments.md#streaming) has the two
   invariants a stream needs and a single response does not.
