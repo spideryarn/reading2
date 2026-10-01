@@ -35,7 +35,6 @@
 import type { ReactNode } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
-import type { ReactNode } from "react";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
