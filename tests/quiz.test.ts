@@ -35,6 +35,7 @@ import {
   MAX_EVIDENCE,
   MAX_QUESTIONS,
   PROMPT_VERSION,
+  QUIZ_READER_RULES,
   QUIZ_SYSTEM,
   buildQuiz,
   emptyDropped,
@@ -652,25 +653,48 @@ describe("the generation prompt", () => {
     expect(QUIZ_SYSTEM).toContain("KEEP TO WHAT MATTERS");
   });
 
+  it("says nothing about a reader in the constant prompt", () => {
+    /* 261001c, GPT Sol's plan review F8: a conditional paragraph still speaks
+       to a model whose condition is absent, so the reader rules are a block of
+       their own, sent only with a profile (tests/quiz-step-registration.test.ts
+       asks the request). */
+    expect(QUIZ_SYSTEM).not.toMatch(/note about the reader|reason for reading|WHO IS READING/);
+  });
+
   it("lets a reading reason move most of the path towards its takeaways", () => {
     /* SPIDERYARN-READING2-6Q. Merely carrying the profile to the request is not
        the feature: without these rules the model has no instruction to change
        the proportions, and every plumbing test still passes. */
-    expect(QUIZ_SYSTEM).toContain("IT DECIDES WHERE THE PATH GOES");
-    expect(QUIZ_SYSTEM).toMatch(/Choose the takeaways that matter for that\s+reason/);
-    expect(QUIZ_SYSTEM).toMatch(/spend most of the questions on the parts of the piece that bear on\s+it/);
+    expect(QUIZ_READER_RULES).toContain("WHICH PARTS");
+    expect(QUIZ_READER_RULES).toMatch(/choose the\s+takeaways that matter for that reason/);
+    expect(QUIZ_READER_RULES).toMatch(/spend most of the questions on the\s+parts of the piece that bear on it/);
   });
 
-  it("does not let About alone move the path", () => {
-    expect(QUIZ_SYSTEM).toContain("ONLY THE REASON FOR READING MOVES THE PATH");
-    expect(QUIZ_SYSTEM).toMatch(/line about who they are and no reason for reading, set the ordinary path/);
+  it("lets who is reading move the path, the kind of question and the pitch", () => {
+    /* Greg, 2026-10-01, reversing 6Q's "About moves only the vocabulary":
+       *"Quiz should definitely adapt heavily based on User-profile and
+       Why-are-you-reading"*. docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md. */
+    expect(QUIZ_READER_RULES).toMatch(/A line\s+about who they are moves the path too/);
+    expect(QUIZ_READER_RULES).toMatch(/the reason leads and who they are chooses within\s+it/);
+    expect(QUIZ_READER_RULES).toContain("WHAT KIND OF QUESTION");
+    expect(QUIZ_READER_RULES).toContain("HOW IT IS PITCHED");
+    expect(QUIZ_READER_RULES).not.toContain("ONLY THE REASON FOR READING MOVES THE PATH");
+    expect(QUIZ_READER_RULES).not.toMatch(/no reason for reading, set the ordinary path/);
   });
 
-  it("keeps the reading reason out of questions, premises and answers", () => {
-    expect(QUIZ_SYSTEM).toMatch(
-      /never say or hint that a reason was given — in\s+a question, a premise or a reference answer/i,
+  it("keeps the piece's own point on the path however narrow the goal", () => {
+    /* The failure Greg's answer invites: a strong goal that skips what the
+       piece is for. */
+    expect(QUIZ_READER_RULES).toContain("THE PIECE'S POINT IS STILL ON THE PATH");
+    expect(QUIZ_READER_RULES).toMatch(/normally three or four steps in a\s+path of twenty, one or two in a short one/);
+    expect(QUIZ_READER_RULES).toContain("Do not pad");
+  });
+
+  it("keeps the note about the reader out of questions, premises and answers", () => {
+    expect(QUIZ_READER_RULES).toMatch(
+      /never say or hint that a note was given — in\s+a question, a premise or a reference answer/i,
     );
-    expect(QUIZ_SYSTEM).toContain("Nothing is asked \"because\" of it");
+    expect(QUIZ_READER_RULES).toContain("Nothing is asked \"because\" of it");
   });
 
   it("asks for no band, no spread and no value any more", () => {

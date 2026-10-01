@@ -95,6 +95,14 @@
  * the shared one promises the profile changes nothing about the article's
  * proportions and here the proportions are the point.
  *
+ * 6Q let only the reason for reading move the path and kept *About you* to
+ * vocabulary. Greg reversed that the next day: *"Quiz should definitely adapt
+ * heavily based on User-profile and Why-are-you-reading"* (2026-10-01). Both
+ * halves now move which parts are asked about, what kind of question is set
+ * and how it is pitched, with one counterweight — the piece's own point stays
+ * on the path however narrow the goal.
+ * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
+ *
  * Three things it deliberately does not do, each Greg's or forced:
  *
  * - **Not in the stamp.** Changing your goal does not make a quiz stale or
@@ -104,12 +112,9 @@
  *   is derived from every artefact type with one, so the field would put the
  *   quiz in the owner's *make public* dialog as personalised — about a mode a
  *   visitor never sees. It arrives with the label that would read it.
- * - **The whole profile, not the purpose alone.** `Job.profile` is one rendered
- *   string; carrying the purpose separately is the six touchpoints this
- *   header used to warn about. The prompt confines the *About the reader* line
- *   to assumed vocabulary, never which parts it asks about. And not
- *   `PROFILE_RULES` either: they let the profile govern "which things you spend
- *   words on", which is exactly what the About line must not do here.
+ * - **Not `PROFILE_RULES`.** They speak of words spent and length, and carry a
+ *   web-search rule the quiz has no use for; the quiz needs the path and the
+ *   balance in its own terms, and two rules for one thing would disagree.
  *
  * docs/plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md.
  */
@@ -176,6 +181,13 @@ import type {
  * the piece's takeaways and why they hold; no band, no value. See the header.
  * Every stored quiz is `outdated` after this, which is right: it is a pool, and
  * its reader is offered the path.
+ *
+ * **Not bumped for the reader (6Q, 2026-09-30; 261001c, 2026-10-01)**, although
+ * a profiled quiz is a different quiz: the change reaches only requests that
+ * carry a profile, a no-profile request is byte-for-byte what it was, and a
+ * bump would mark every stored quiz outdated — the no-profile ones for nothing.
+ * The profile is not in the stamp either (see the header), so a reader picks up
+ * the new rules at *Write them again*.
  */
 export const PROMPT_VERSION = "quiz/5";
 
@@ -795,41 +807,7 @@ gets a short path, and that is a correct answer. Do not pad: a padded question
 is a question about nothing, which is worse than one fewer step.
 
 Cover the piece. The takeaways usually draw on all of it, so the path should
-too; do not spend half the steps on its first third. (Unless the reader has
-said why they are reading — below.)
-
-IF THE READER HAS SAID WHY THEY ARE READING
-
-Some requests end with a note about the reader: perhaps a line about who they
-are, perhaps a line saying why they are reading this piece. Most carry neither,
-and then none of this applies. When there is a reason for reading:
-
-- IT DECIDES WHERE THE PATH GOES. Choose the takeaways that matter for that
-  reason, and spend most of the questions on the parts of the piece that bear on
-  it. A reader who came for the methods gets a path mostly about the methods,
-  not an even spread across the piece.
-- IT IS STILL A PATH. Start with what the piece plainly says and lean each step
-  on the one before. A few early steps may set up what the later ones need —
-  what was studied, what the author is arguing against — so that the steps
-  about the reason have something to lean on.
-- IT NEVER CHANGES WHAT THE ARTICLE SAYS. Every question is about the subject,
-  answered by the article, anchored in its words. The reason changes which parts
-  you ask about, never what the piece says about them.
-- If the piece has little on the reason, set the path you would have set
-  anyway, and never say so.
-- ONLY THE REASON FOR READING MOVES THE PATH. A line about who they are may
-  change the vocabulary you assume and the least context a question needs to
-  say what it is asking about — never which parts of the piece you ask about,
-  which takeaways you head for, and never enough to answer the question. With a
-  line about who they are and no reason for reading, set the ordinary path.
-- Never address the reader, and never say or hint that a reason was given — in
-  a question, a premise or a reference answer. Nothing is asked "because" of it.
-  The subjects the reason names are ordinary words: use them wherever the
-  article does.
-
-    BAD   QUESTION  Since you came for the methods: how did the authors
-                    measure synergy?
-    GOOD  QUESTION  How did the authors measure synergy?
+too; do not spend half the steps on its first third.
 
 ${plainWords("ask", "explain")}
 
@@ -856,6 +834,74 @@ string ends the string, and one of them loses the whole batch. Never put a real
 line break inside a string either.`;
 
 /**
+ * The rules for a request that says who is reading, or why — sent as a system
+ * block of their own **only when there is a profile**, so a request without one
+ * is byte-for-byte the request every quiz got before 6Q (GPT Sol, plan review
+ * F8: a conditional paragraph still speaks to a model whose condition is
+ * absent). The block sits after the article's cache breakpoint, so carrying it
+ * or not costs the shared article prefix nothing.
+ *
+ * Greg, 2026-10-01: *"Quiz should definitely adapt heavily based on
+ * User-profile and Why-are-you-reading"* — both lines, which parts, what kind
+ * of question, how it is pitched; with the piece's own point kept on the path.
+ * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
+ */
+export const QUIZ_READER_RULES = `IF THE REQUEST SAYS WHO IS READING, OR WHY
+
+This request ends with a note about the reader: a line about who they are, a
+line saying why they are reading this piece, or both. Set the quiz FOR THIS
+READER, not for everyone. The note shapes three things: which parts of the
+piece you ask about, what kind of question you set, and how you pitch it.
+
+- WHICH PARTS. A reason for reading decides most of the path: choose the
+  takeaways that matter for that reason, and spend most of the questions on the
+  parts of the piece that bear on it. A reader who came for the methods gets a
+  path mostly about the methods, not an even spread across the piece. A line
+  about who they are moves the path too, towards what a person like them would
+  most want from this piece: what bears on their field, their work, what they
+  would do with it. With both, the reason leads and who they are chooses within
+  it. With only who they are, it leads. The rule above about covering the whole
+  piece gives way to this.
+- PERSONALISE AMONG WHAT MATTERS. Choose among the consequential parts of the
+  piece, the ones its argument leans on. A note never turns a detail nothing
+  rests on into a good question.
+- WHAT KIND OF QUESTION. Fit what this reader will do with the piece. Someone
+  who will apply it gets more questions about how a thing is done, what it
+  needs and where it breaks; someone weighing it up, more about the evidence
+  and how far it reaches; someone new to the field, more about what things are
+  and why they matter. Whatever the kind, the article answers it.
+- HOW IT IS PITCHED. Assume the background they claim. A question they could
+  answer from their own knowledge without having read the piece tests nothing
+  for them, so leave it out, however useful it would be to somebody else. An
+  expert needs fewer setup steps and a newcomer more and smaller ones — but
+  never drop a step about what THIS piece says that a later question leans on.
+  Use their field's words without explaining them. Never put enough in a
+  question or premise to answer it.
+- THE PIECE'S POINT IS STILL ON THE PATH. However narrow what they are after,
+  keep a short, connected run of steps through what the piece as a whole
+  claims and the main thing it rests on — normally three or four steps in a
+  path of twenty, one or two in a short one. The part they came for is
+  understood in the light of the whole, not instead of it. Do not pad the
+  quiz to fit them in.
+- IT IS STILL A PATH. Start with what the piece plainly says and lean each step
+  on the one before. A few early steps may set up what the later ones need —
+  what was studied, what the author is arguing against — so that the steps
+  about what they are after have something to lean on.
+- IT NEVER CHANGES WHAT THE ARTICLE SAYS. Every question is about the subject,
+  answered by the article, anchored in its words. The note changes which parts
+  you ask about and how, never what the piece says about them.
+- If the piece has little on what they are after, set the path you would have
+  set anyway, and never say so.
+- Never address the reader, and never say or hint that a note was given — in
+  a question, a premise or a reference answer. Nothing is asked "because" of it.
+  The subjects the note names are ordinary words: use them wherever the
+  article does.
+
+    BAD   QUESTION  Since you came for the methods: how did the authors
+                    measure synergy?
+    GOOD  QUESTION  How did the authors measure synergy?`;
+
+/**
  * What the model is shown: the skeleton, then the instruction.
  *
  * The skeleton before the full text, in the order `arc`, `glossary`, `ideas`
@@ -871,9 +917,9 @@ line break inside a string either.`;
  *
  * With no profile this varying user message is byte-for-byte what it was before
  * the reader arrived — Greg's *"the same as today when there isn't"*, which
- * tests/profile-prompts.test.ts asks of these bytes. The complete request is not
- * byte-identical: `QUIZ_SYSTEM` now carries the conditional rules above for
- * every call, so it stays constant across readers.
+ * tests/profile-prompts.test.ts asks of these bytes. Since 261001c so is the
+ * whole request: the reader rules are a system block of their own
+ * (`QUIZ_READER_RULES`), sent only with a profile.
  */
 export function renderPrompt(opts: { tree: Tree; profile: string | null }): string {
   const skeleton = partsOf(opts.tree)
@@ -889,9 +935,9 @@ ${skeleton}${readerSection(opts.profile)}`;
 
 /**
  * The profile, for this stage — **not `profileSection`**, whose reminder says
- * the profile changes nothing about the article's proportions. Here a reason
- * for reading is meant to change exactly that; the binding rules are in
- * `QUIZ_SYSTEM` § IF THE READER HAS SAID WHY THEY ARE READING, where the
+ * the profile changes nothing about the article's proportions. Here both
+ * halves are meant to change exactly that; the binding rules are in
+ * `QUIZ_READER_RULES`, a system block sent only with a profile, where the
  * profile cannot reach them. Empty — not a heading over nothing — when there is
  * no profile, for the reason `renderProfile` gives.
  */
@@ -903,10 +949,11 @@ function readerSection(profile: string | null): string {
 
 ${profile}
 
-If a reason for reading is given above, aim the path at the takeaways that
-matter for it, and spend most of the questions on the parts of the piece that
-bear on it; if not, set the ordinary path. Everything is still about what the
-article says. Do not address the reader and do not mention this.`;
+Set the quiz for this reader: aim the path at what they are after, choose the
+kind of question that fits what they will do with the piece, and pitch it to
+the background they claim — keeping the piece's own point on the path.
+Everything is still about what the article says. Do not address the reader and
+do not mention this.`;
 }
 
 /**
@@ -1020,6 +1067,7 @@ export async function generateQuiz(opts: {
             ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
           },
           { type: "text" as const, text: QUIZ_SYSTEM },
+          ...(opts.profile ? [{ type: "text" as const, text: QUIZ_READER_RULES }] : []),
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, profile: opts.profile ?? null }) }],
       },

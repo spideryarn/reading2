@@ -1,0 +1,344 @@
+{
+  "arm": "new-goal-1",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": "I want to apply this to my own recordings, so I need to know the practical problems: what makes PID hard to use on real data.",
+  "about": null,
+  "at": "2026-10-01T01:11:35.487Z",
+  "provenance": {
+    "gitHead": "c64700b6a34af3d4096b1c2e399187951e48f07f",
+    "quizDirty": true,
+    "quizSourceSha256": "953ae95d9946f0b9e74ceef0117df4e9b9b3ae8eb75f66a564f31cd7262badd0",
+    "model": "claude-sonnet-5"
+  },
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 2,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 1,
+    "gaps": 1
+  },
+  "questions": [
+    {
+      "question": "What were the two key historical limitations that hindered the study of neural information processing?",
+      "referenceAnswer": "A lack of appropriate data, since analyzing synergistic dynamics requires large amounts of data to infer multivariate dependence, and a lack of appropriate analytical approaches to extract insights from recordings.",
+      "evidence": [
+        "spya-s9kmxa",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "Those two limitations were data availability and lack of analytical approaches.",
+      "question": "What recent technological development has mainly resolved the data limitation?",
+      "referenceAnswer": "New electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution.",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "question": "What does mutual information measure when comparing the spiking of two neurons?",
+      "referenceAnswer": "It measures the statistical dependence between the two neurons' activity, essentially a nonlinear correlation, but it is undirected and does not capture time-ordered information transfer.",
+      "evidence": [
+        "spya-f6sbgx",
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information is undirected and cannot capture directional transfer.",
+      "question": "What does transfer entropy add that mutual information lacks?",
+      "referenceAnswer": "Transfer entropy quantifies how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already predicts, making it a directional measure of effective connectivity rather than just functional connectivity.",
+      "evidence": [
+        "spya-p4pyuy",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Transfer entropy tracks directional flow of information from source to target.",
+      "question": "Why is information transfer alone considered insufficient for understanding information processing?",
+      "referenceAnswer": "Because it only captures the overall flow of information through the system and cannot reveal how different streams of information interact or how neurons produce novel or modified information from combining multiple sources.",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Transfer entropy cannot show how two sources' inputs combine to produce new information.",
+      "question": "In the two-source case, what three components does PID decompose the information about a target into?",
+      "referenceAnswer": "Redundant information (learnable from either source alone), unique information (learnable only from one particular source), and synergistic information (learnable only from the joint states of both sources together).",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "For two sources, PID splits information into redundancy, two unique terms, and synergy.",
+      "question": "Why is the two-source PID problem described as 'underdetermined' in practice?",
+      "referenceAnswer": "Because there are only three known mutual information equations but four unknown partial information terms, so one of the unknowns (typically a redundancy measure) must be defined before the other three can be derived.",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "Solving even the two-source case requires first choosing a redundancy function since Shannon theory gives no unique answer.",
+      "question": "How does the complexity of the PID problem change when there are three or more parent sources instead of two?",
+      "referenceAnswer": "The system of equations becomes even less constrained, since the number of distinct partial information atoms grows much faster than the number of known mutual information terms, requiring the more elaborate partial information lattice machinery to solve.",
+      "evidence": [
+        "spya-q9gytb"
+      ]
+    },
+    {
+      "premise": "With three or more sources the needed redundancy function becomes even more central and harder to pin down.",
+      "question": "Why is there no single agreed-upon redundancy measure to use in PID analyses?",
+      "referenceAnswer": "Classical Shannon information theory provides no unique solution for redundancy, and all proposed measures have their own trade-offs, such as being restricted to a fixed number of sources, working only for discrete data, or requiring arbitrary thresholds.",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "Different redundancy measures have different restrictions, including on data type.",
+      "question": "How does whether recorded data is continuous or discrete limit which redundancy function can be applied?",
+      "referenceAnswer": "Measures like Imin, I-BROJA, and Isx only work for discrete variables, while measures like the minimum mutual information or Gaussian dependency decomposition are suited to Gaussian continuous data, so non-normal continuous signals such as LFPs have no well-suited measure without compromises.",
+      "evidence": [
+        "spya-uktkdy",
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "Non-normal continuous data forces a choice between Gaussian methods or discretizing the data.",
+      "question": "What risk does the article warn about if continuous data is discretized into too many bins before applying PID?",
+      "referenceAnswer": "Using too many bins expands the joint probability space beyond what available data can reliably estimate, causing undersampling and finite-size effects, so bin counts should be kept low, ideally binarized.",
+      "evidence": [
+        "spya-uktkdy"
+      ]
+    },
+    {
+      "premise": "Too many bins blow up the joint probability space that must be estimated.",
+      "question": "Why does the number of interacting variables being analyzed create a general sample-size problem for PID?",
+      "referenceAnswer": "A k-dimensional joint probability distribution must be constructed, and for binary neurons there are 2^k possible state combinations, so as k grows large there is rarely enough data to robustly estimate the probability of every configuration, risking undersampling and finite-size effects.",
+      "evidence": [
+        "spya-tz99zn"
+      ]
+    },
+    {
+      "premise": "Growing the number of variables k makes the needed joint probability distribution increasingly hard to estimate from limited data.",
+      "question": "Beyond sample size, what scalability problem arises in the PID lattice itself when a target has more than a couple of parent sources?",
+      "referenceAnswer": "The number of distinct partial information atoms is given by the Dedekind number for that many parents, which grows explosively, so even six parent neurons produce over 7.8 million atoms, most of them uninterpretable, making a full decomposition for realistic numbers of inputs intractable.",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    },
+    {
+      "question": "What bias does naive probability estimation from finite data introduce into entropy and mutual information calculations?",
+      "referenceAnswer": "The plug-in estimator for Shannon entropy consistently underestimates true entropy and so overestimates mutual information, meaning even two uncorrelated processes can appear to show nonzero mutual information.",
+      "evidence": [
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "question": "What caveat does the article raise about using bivariate transfer entropy to build the effective networks from which triads are selected for PID?",
+      "referenceAnswer": "Bivariate transfer entropy analyses are known to overestimate the significance of bivariate connections, which could inflate the effective network used to identify triads for PID.",
+      "evidence": [
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "question": "What key difference distinguishes the DIT toolbox from IDTxl in how each handles data?",
+      "referenceAnswer": "DIT operates on already-constructed joint probability distributions, so a user analyzing time series must infer that distribution 'by hand' first, whereas IDTxl works directly on time series data and includes its own PID solvers along with transfer entropy inference algorithms.",
+      "evidence": [
+        "spya-cqrzab",
+        "spya-ng5zs5"
+      ]
+    },
+    {
+      "question": "Beyond estimation and software issues, what broader interpretive limitation does the article emphasize about PID results from neural data?",
+      "referenceAnswer": "PID reveals statistical dependencies like synergy but does not by itself give a mechanistic explanation of why particular neurons end up synergy-dominated or redundancy-dominated.",
+      "evidence": [
+        "spya-spdx0y"
+      ]
+    },
+    {
+      "premise": "Despite these practical hurdles, studies still applied PID successfully to real recordings.",
+      "question": "What network properties were found to be reliably associated with greater synergistic integration in those empirical studies?",
+      "referenceAnswer": "Synergy was higher in triads located within rich clubs, correlated with the strength of feedforward connections, and increased with more recurrent connections between source neurons, while feedback connections were not reliably related to synergy.",
+      "evidence": [
+        "spya-fud8q3",
+        "spya-kqkb58",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "premise": "Synergy reliably concentrates in richly connected, recurrent, and correlated parts of neural circuits.",
+      "question": "Putting these findings together, what does the article conclude synergy reveals about how individual neurons compute?",
+      "referenceAnswer": "It shows that neurons do not simply sum their inputs but are sensitive to the particular joint patterns of incoming activity, a genuine form of information processing whose prevalence depends on the neuron's local network environment and the behavioral state of the organism.",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    }
+  ]
+}

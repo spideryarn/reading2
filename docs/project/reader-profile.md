@@ -128,9 +128,11 @@ put it near the top with the other framing.
 SPIDERYARN-READING2-6Q): a reason for reading is meant to change the *proportions* — *"if I've said I
 want to understand their methods, most of the questions should be about the methods"* — which is
 what `profileSection`'s reminder and `PROFILE_RULES` both hold the other stages back from. So the
-quiz carries neither; it has its own section and its own rules, and the *About you* half moves only
-the vocabulary a question assumes, never which parts it asks about.
-[quiz.md § Shaped by why you are reading](quiz.md#shaped-by-why-you-are-reading).
+quiz carries neither; it has its own section and its own rules. Since 2026-10-01 both halves move it
+— *About you* as well as the reason — in which parts it asks about, what kind of question, and how
+it is pitched (Greg: *"Quiz should definitely adapt heavily based on User-profile and
+Why-are-you-reading"*).
+[quiz.md § Shaped by who you are and why you are reading](quiz.md#shaped-by-who-you-are-and-why-you-are-reading).
 
 **Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
 [the one structure](granularity-zoom.md#the-tree) that Structure, the zoom, the summaries and the spine

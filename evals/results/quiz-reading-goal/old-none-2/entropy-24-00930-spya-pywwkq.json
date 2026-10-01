@@ -1,0 +1,354 @@
+{
+  "arm": "old-none-2",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": null,
+  "about": null,
+  "at": "2026-10-01T01:07:53.128Z",
+  "provenance": {
+    "gitHead": "c64700b6a34af3d4096b1c2e399187951e48f07f",
+    "quizDirty": false,
+    "quizSourceSha256": "a7664c56d329f67aeb3625189c9d822c06a1f5730d51b23cc6565e3ee7b3dacd",
+    "model": "claude-sonnet-5"
+  },
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "questions": [
+    {
+      "question": "What two historical limitations hindered the study of information processing in neural circuits?",
+      "referenceAnswer": "There was a lack of enough recorded data from many neurons at once to infer complex multi-neuron dependencies, and a lack of analytical tools able to turn such recordings into interpretable insights.",
+      "evidence": [
+        "spya-s9kmxa",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "The first limitation was a lack of enough recorded data to infer multi-neuron dependencies.",
+      "question": "What development has largely addressed this lack-of-data limitation in recent years?",
+      "referenceAnswer": "New electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond resolution.",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "question": "What does mutual information measure between two neurons' spiking activity?",
+      "referenceAnswer": "It measures the statistical dependence between their activity patterns, a kind of nonlinear correlation, but it is undirected and does not show which neuron's activity came first or caused the other's.",
+      "evidence": [
+        "spya-f6sbgx",
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "premise": "Mutual information is undirected and cannot show information transfer between neurons.",
+      "question": "What does transfer entropy measure that mutual information does not?",
+      "referenceAnswer": "Transfer entropy measures directional, 'effective' connectivity: how much a source neuron's past activity reduces uncertainty about a target neuron's future, beyond what the target's own past already explains, giving a measure of information propagation or flow.",
+      "evidence": [
+        "spya-p4pyuy",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Transfer entropy measures directional information flow from one source neuron to a target.",
+      "question": "Why is tracking information transfer like this not enough to reveal neural information processing itself?",
+      "referenceAnswer": "Because it only shows flow from a single source to a target and cannot reveal how multiple incoming streams of information interact or combine to produce new or modified information.",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "Information transfer alone cannot show how multiple inputs combine to produce new information.",
+      "question": "What did Williams and Beer's partial information decomposition (PID) framework make it possible to do with the joint mutual information from multiple sources about a target?",
+      "referenceAnswer": "It made it possible to algebraically break the total joint mutual information down into separate contributions from the individual sources and their combinations, rather than leaving it as one undivided quantity.",
+      "evidence": [
+        "spya-t02v4p"
+      ]
+    },
+    {
+      "premise": "PID breaks the joint mutual information from multiple sources into separate contributions.",
+      "question": "What does it mean, in PID terms, when the joint mutual information from all sources is greater than the sum of each source's individual mutual information with the target?",
+      "referenceAnswer": "It means there is synergistic information: information about the target that only shows up when the sources are considered jointly, not disclosed by any single source alone, reflecting an integrating computation.",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "Synergy occurs when the whole (joint information) exceeds the sum of the individual sources' information.",
+      "question": "What does it mean when the whole is instead less than the sum of the individual sources' information?",
+      "referenceAnswer": "It means there is redundant information: the same information about the target is carried by more than one source and gets double-counted when the individual contributions are simply added up.",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "question": "In the simplest two-source case, what four non-overlapping components does PID split the joint information about a target into?",
+      "referenceAnswer": "Redundant information shared by both sources, the information unique to each of the two sources individually, and synergistic information available only from the joint state of both sources together.",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "The two-source case has four components: redundancy, two unique terms, and synergy.",
+      "question": "Why can't these four components be uniquely solved for using only classical Shannon information theory?",
+      "referenceAnswer": "Because the available equations only give three known mutual information values while there are four unknown partial information terms, so the system is underdetermined and an additional redundancy measure must be chosen to pin down the rest.",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "With two sources, choosing a redundancy measure lets the other three PID terms be computed.",
+      "question": "What extra mathematical structure does PID require once there are three or more parent sources instead of two?",
+      "referenceAnswer": "A partial information lattice built from all combinations of sources, together with a redundancy function and a recursive procedure (Mobius inversion), because the number of distinct information components grows much faster than the number of known mutual information values.",
+      "evidence": [
+        "spya-q9gytb"
+      ]
+    },
+    {
+      "question": "In the in vitro cortical culture study, how did the researchers build the networks they applied PID to?",
+      "referenceAnswer": "They recorded hundreds of neurons from mouse cortical slice cultures on multielectrode arrays, used transfer entropy to build an effective (directed) network of the microcircuit, and then identified triads of two source neurons both connecting to a common target neuron.",
+      "evidence": [
+        "spya-sw5ukx",
+        "spya-sw5ukx"
+      ]
+    },
+    {
+      "premise": "Triads were built from pairs of source neurons feeding into a common target neuron via effective connections.",
+      "question": "What relationship was found between the strength of feedforward transfer entropy into a triad and the synergy of that triad?",
+      "referenceAnswer": "Synergy was strongly positively correlated with feedforward transfer entropy across recordings, and synergy was reliably about a quarter of the transfer entropy value for a given triad.",
+      "evidence": [
+        "spya-kqkb58",
+        "spya-kqkb58"
+      ]
+    },
+    {
+      "premise": "Synergy was strongly tied to how much information propagated feedforward into a triad.",
+      "question": "This suggested that densely-connected 'rich club' neurons might be hubs of processing. What is a rich club, in these networks?",
+      "referenceAnswer": "A rich club is the set of best-connected neurons in the network that are mutually interconnected with each other more densely than would be expected by chance, and that collectively propagate most of the information in the circuit.",
+      "evidence": [
+        "spya-bftp48",
+        "spya-bftp48"
+      ]
+    },
+    {
+      "premise": "A rich club is a densely interconnected set of neurons that propagate most of a network's information.",
+      "question": "What did PID reveal about synergy in triads located inside versus outside the rich club?",
+      "referenceAnswer": "Rich club triads had about 2.7 times more synergy than triads outside the rich club, and even though rich club neurons made up less than 40% of all neurons, their triads accounted for roughly 88% of the network's total synergy.",
+      "evidence": [
+        "spya-fud8q3",
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "question": "How did the number of recurrent connections between the two source neurons of a triad relate to its synergy?",
+      "referenceAnswer": "Triads with more recurrent connections between the two source neurons had greater synergy; triads with two recurrent connections and no feedback connections had about 50% more synergy than the simplest triads with none.",
+      "evidence": [
+        "spya-sd9fzd",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "premise": "More recurrent connections between the two source neurons increased a triad's synergy.",
+      "question": "How did feedback connections (from the target neuron back to the sources) relate to synergy, by contrast?",
+      "referenceAnswer": "Feedback connections were less predictive of synergy overall and, where they had any effect, tended to correlate with reduced rather than increased synergy.",
+      "evidence": [
+        "spya-sd9fzd",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "question": "How did synergy relate to the similarity (mutual information) between the two source neurons' spiking at short, synaptic timescales versus longer timescales?",
+      "referenceAnswer": "At short, synaptic timescales, greater similarity between source neurons' spiking was associated with greater synergy, but across longer timescales synergy only rose up to a peak (around 7% of the maximum possible similarity) and then declined, even as redundancy kept rising with similarity.",
+      "evidence": [
+        "spya-hkhpex",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "question": "In the study of macaques performing a motor task, what happened to the balance of redundant versus synergistic information during movement execution (reach-and-grasp)?",
+      "referenceAnswer": "The relative amount of redundant information increased dramatically during movement execution, which the authors interpreted as the brain duplicating the 'move' signal many times over to ensure reliable transmission to distant muscles.",
+      "evidence": [
+        "spya-t8fayf",
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "question": "What is the main scalability problem that limits applying a complete PID to neurons receiving inputs from many parent neurons?",
+      "referenceAnswer": "The number of distinct information components grows explosively with the number of parent sources (following the Dedekind numbers), so that even six parent neurons already produce over 7.8 million components, making a full decomposition intractable for neurons with many real-world inputs.",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    }
+  ]
+}

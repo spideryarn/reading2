@@ -1,0 +1,346 @@
+{
+  "arm": "new-none-1",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "purpose": null,
+  "about": null,
+  "at": "2026-10-01T01:10:58.731Z",
+  "provenance": {
+    "gitHead": "c64700b6a34af3d4096b1c2e399187951e48f07f",
+    "quizDirty": true,
+    "quizSourceSha256": "953ae95d9946f0b9e74ceef0117df4e9b9b3ae8eb75f66a564f31cd7262badd0",
+    "model": "claude-sonnet-5"
+  },
+  "order": [
+    "spya-ekjksy",
+    "spya-edcccm",
+    "spya-mt3bd6",
+    "spya-xn9j9k",
+    "spya-y66sc5",
+    "spya-yb735k",
+    "spya-rxcze4",
+    "spya-fmdncw",
+    "spya-s9kmxa",
+    "spya-gzwbsr",
+    "spya-ygkzd8",
+    "spya-t4pc0p",
+    "spya-ds7nxh",
+    "spya-qxggyj",
+    "spya-rsnjdm",
+    "spya-bdrp5d",
+    "spya-mx45r0",
+    "spya-qjdbvj",
+    "spya-f6sbgx",
+    "spya-p4pyuy",
+    "spya-dhy39x",
+    "spya-s0db2g",
+    "spya-u5ra3d",
+    "spya-wer4cd",
+    "spya-u0wm5e",
+    "spya-crsey4",
+    "spya-euzn9r",
+    "spya-h5dz45",
+    "spya-e94ury",
+    "spya-pjdgu6",
+    "spya-t02v4p",
+    "spya-q09pga",
+    "spya-y7wdb7",
+    "spya-q2b0e5",
+    "spya-h5jzvm",
+    "spya-k29rg5",
+    "spya-bgsd4n",
+    "spya-q9gytb",
+    "spya-k378fv",
+    "spya-pvavq4",
+    "spya-t8mg0s",
+    "spya-fe63d8",
+    "spya-t0bbpb",
+    "spya-m37w5y",
+    "spya-aft2rx",
+    "spya-atvpm9",
+    "spya-d2quz5",
+    "spya-rc76qn",
+    "spya-cc282b",
+    "spya-dk32tp",
+    "spya-sw5ukx",
+    "spya-tfcqnh",
+    "spya-kqkb58",
+    "spya-urrypy",
+    "spya-e3ghxj",
+    "spya-bftp48",
+    "spya-fud8q3",
+    "spya-akxt70",
+    "spya-p8by2y",
+    "spya-xs5660",
+    "spya-sd9fzd",
+    "spya-zfs2z7",
+    "spya-hkhpex",
+    "spya-ybmve2",
+    "spya-cs9fdy",
+    "spya-vjzxxm",
+    "spya-j4cy9j",
+    "spya-aqcngt",
+    "spya-wr7f6y",
+    "spya-t8fayf",
+    "spya-b32ecw",
+    "spya-kmgwhs",
+    "spya-uktkdy",
+    "spya-tz99zn",
+    "spya-rf4pp0",
+    "spya-cqrzab",
+    "spya-ng5zs5",
+    "spya-cwsuea",
+    "spya-h6h922",
+    "spya-spdx0y",
+    "spya-djfyag",
+    "spya-aby2dp",
+    "spya-qa7gt2",
+    "spya-zz5xxs",
+    "spya-wbm9cf",
+    "spya-z39m3x",
+    "spya-j6s6fp",
+    "spya-mgsce6",
+    "spya-mczhkp",
+    "spya-ckpq7e",
+    "spya-xn6y4f",
+    "spya-cds6mm",
+    "spya-rc5z33",
+    "spya-sp50v3",
+    "spya-xxjenw",
+    "spya-r2n8q4",
+    "spya-w58dm6",
+    "spya-pnjdke",
+    "spya-gajhn8"
+  ],
+  "parts": [
+    {
+      "title": "Front Matter",
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ]
+    },
+    {
+      "title": "1. Introduction",
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "title": "2. Tracking Information in Neural Circuits",
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "title": "3. Information Processing in Neural Circuits",
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "title": "4. PID: Partial Information Decomposition",
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "title": "5. PID in Action",
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ]
+    },
+    {
+      "title": "6. Practical Considerations in PID",
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "title": "7. Future Directions",
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ]
+    },
+    {
+      "title": "8. Summary and Closing Matter",
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ]
+    }
+  ],
+  "dropped": {
+    "unknownIds": 0,
+    "unquoted": 0,
+    "truncated": 0,
+    "overCap": 0,
+    "malformed": 0,
+    "duplicate": 0,
+    "unanchored": 0,
+    "gaps": 0
+  },
+  "questions": [
+    {
+      "question": "According to the article, what were the two historical limitations that hindered the study of information processing in neural circuits?",
+      "referenceAnswer": "There was a lack of enough recorded data from many neurons at once, and a lack of analytical approaches able to turn that data into interpretable insights.",
+      "evidence": [
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "premise": "New recording technologies have eased the data limitation, but extracting insight from the resulting recordings still requires the right analytic approach.",
+      "question": "What is the name of the information-theoretic framework the article focuses on as the main tool for addressing this remaining analytic limitation?",
+      "referenceAnswer": "Partial information decomposition (PID).",
+      "evidence": [
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "question": "What is the key difference between what mutual information measures between two neurons and what transfer entropy measures?",
+      "referenceAnswer": "Mutual information is an undirected measure of dependence between two neurons' activity (like functional connectivity), while transfer entropy measures how much a source neuron's past activity reduces uncertainty about a target neuron's future activity beyond what the target's own past already explains, capturing directed information flow (effective connectivity).",
+      "evidence": [
+        "spya-f6sbgx",
+        "spya-p4pyuy"
+      ]
+    },
+    {
+      "premise": "Transfer entropy tracks how information flows from a source neuron's past to a target neuron's future.",
+      "question": "Why does the article say that measuring information transfer alone is not enough to understand neural information processing?",
+      "referenceAnswer": "Information transfer only shows the overall flow of information through the system; it cannot reveal how multiple streams of information interact or how a neuron combines inputs from several sources to produce information that is not reducible to any single source.",
+      "evidence": [
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "premise": "To capture how sources combine, the article turns to partial information decomposition, which splits the joint information two source neurons provide about a target into separate components.",
+      "question": "What are the three types of components that partial information decomposition splits joint information into, for two source neurons and one target?",
+      "referenceAnswer": "Redundant information (disclosed by either source alone), unique information (disclosed only by one specific source), and synergistic information (disclosed only by the joint, combined state of both sources together).",
+      "evidence": [
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "premise": "Synergy is the information about a target that can only be learned from the joint, combined state of its two sources together, not from either alone.",
+      "question": "What does the presence of synergy in a system imply about how the target neuron is relating to its inputs, according to the article?",
+      "referenceAnswer": "It implies that the target neuron is performing a kind of integrating computation on its inputs jointly, combining them in a way not reducible to summing each input's individual contribution — also referred to as 'information modification'.",
+      "evidence": [
+        "spya-e94ury"
+      ]
+    },
+    {
+      "premise": "With two sources and one target, there are four unknown partial information quantities (redundant, two uniques, synergistic) but only three known mutual information values to solve for them.",
+      "question": "Given this mismatch between unknowns and known equations, how does the article say this underdetermined problem gets resolved in practice?",
+      "referenceAnswer": "Researchers must define a measure of redundancy, since classical Shannon theory provides no unique solution; once redundancy is defined, the other three terms (the two unique informations and synergy) follow automatically from the equations.",
+      "evidence": [
+        "spya-bgsd4n"
+      ]
+    },
+    {
+      "premise": "A chosen measure of redundancy is what makes it possible to solve for all the partial information terms.",
+      "question": "Which redundancy measure does the article say was used by the majority of the empirical studies discussed, despite having been criticized for unintuitive behavior?",
+      "referenceAnswer": "The original Imin measure proposed by Williams and Beer.",
+      "evidence": [
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "premise": "Rich clubs are the densely interconnected, best-connected sets of neurons in a network that also carry a disproportionate share of information flow.",
+      "question": "In the cortical culture studies, how did the average synergy of triads located inside rich clubs compare to that of triads outside rich clubs?",
+      "referenceAnswer": "Triads inside rich clubs had about 2.7 times as much synergy as triads outside rich clubs, and despite making up less than 40% of neurons, rich club triads accounted for roughly 88% of the network-wide synergy.",
+      "evidence": [
+        "spya-fud8q3",
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "premise": "In three-neuron triads, connections can be feedforward (sources to target), feedback (target back to sources), or recurrent (between the two sources).",
+      "question": "How did recurrent and feedback connections, respectively, relate to the amount of synergy in a triad?",
+      "referenceAnswer": "More recurrent connections between the source neurons were linked to greater synergy, while feedback connections from the target back to the sources tended to be linked to somewhat reduced synergy rather than increased synergy.",
+      "evidence": [
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "premise": "Rich club triads tend to have strong feedforward connections and also extra recurrent connections among sources.",
+      "question": "At short, synaptic-range timescales, how did synergy relate to the similarity (mutual information) between the two source neurons' activity?",
+      "referenceAnswer": "At short timescales, the greater the mutual information between the two source neurons, the greater the synergy, with synergy increasing as source similarity increased.",
+      "evidence": [
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "premise": "At short, synaptic-range timescales, more similar source activity produced more synergy.",
+      "question": "What happened to synergy when the researchers extended the analysis to much longer timescales, well past the point where source similarity kept rising?",
+      "referenceAnswer": "Synergy only increased up to a point: it peaked when the sources' mutual information reached about 7% of its maximum possible value, and beyond that level, as similarity kept rising, synergy actually began to decrease.",
+      "evidence": [
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "premise": "Beyond the peak, rising similarity between sources no longer raised synergy.",
+      "question": "What did the redundancy measurements reveal about why synergy decreased at longer timescales and higher source similarity?",
+      "referenceAnswer": "Redundancy was positively related to mutual information at all timescales, and this relationship grew steeper at longer timescales, suggesting that once converging information becomes similar enough, it increasingly becomes redundant rather than synergistic, which suppresses the overall synergistic output.",
+      "evidence": [
+        "spya-cs9fdy"
+      ]
+    },
+    {
+      "question": "In the behaving-primate study, how did the balance between synergy and redundancy change during the movement execution phase of the task compared to other phases?",
+      "referenceAnswer": "While overall brain activity was generally dominated by synergy, the relative amount of redundant information increased dramatically during movement execution (the reach-and-grasp action).",
+      "evidence": [
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "premise": "Redundancy rose sharply during the reach-and-grasp movement phase.",
+      "question": "How did the article interpret this rise in redundancy during movement execution?",
+      "referenceAnswer": "It was interpreted as a response to the practical need to send a reliable 'move' signal to distant muscles: duplicating the signal many times over (redundancy) helps ensure high-fidelity transmission and minimizes the risk that a single corrupted signal would cause erroneous behavior.",
+      "evidence": [
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "question": "What caveat does the article raise about the transfer entropy networks used to select triads for the cortical culture PID studies?",
+      "referenceAnswer": "The functional networks were built using bivariate transfer entropy analyses, which have been shown to overestimate the significance of bivariate connections.",
+      "evidence": [
+        "spya-j4cy9j"
+      ]
+    },
+    {
+      "question": "Why does the article say that a 'complete' partial information decomposition becomes intractable for neurons with many inputs?",
+      "referenceAnswer": "The number of distinct partial information atoms grows according to the Dedekind numbers, which explode extremely fast with the number of parent neurons — for example, six parents already produce over 7.8 million atoms — making a full decomposition computationally and interpretively intractable for realistic numbers of inputs.",
+      "evidence": [
+        "spya-aby2dp"
+      ]
+    },
+    {
+      "question": "What general estimation problem affects PID and other information-theoretic analyses when applied to finite datasets?",
+      "referenceAnswer": "Naive plug-in estimators of entropy from finite data tend to underestimate true entropy and overestimate mutual information, meaning even uncorrelated processes can appear to show nonzero mutual information, so care must be taken with null-model comparisons and understanding estimator limitations.",
+      "evidence": [
+        "spya-qa7gt2"
+      ]
+    },
+    {
+      "premise": "Classic PID decomposes expected information averaged over an entire probability distribution of states.",
+      "question": "What new kind of analysis does local PID make possible for neural recordings?",
+      "referenceAnswer": "Local PID allows the redundant, unique, and synergistic information measures to be computed for each individual moment or configuration rather than only as an average, enabling construction of a time-resolved 'informational time series' showing how information-sharing modes change over time.",
+      "evidence": [
+        "spya-mczhkp"
+      ]
+    },
+    {
+      "question": "What overall conclusion about how neurons compute does the article draw from the existence of synergy in empirical neural data?",
+      "referenceAnswer": "The existence of synergy shows that neurons do not simply sum their inputs and fire based on the total, as a basic threshold model would predict, but are instead sensitive to the particular patterns of incoming stimuli, and this synergistic processing is shaped by the neuron's local network environment and the organism's behavioral state.",
+      "evidence": [
+        "spya-sp50v3"
+      ]
+    }
+  ]
+}
