@@ -4871,6 +4871,76 @@ export const billingAccounts = spideryarn.table(
 );
 
 /**
+ * **A gift of extra free articles, addressed to an email** — created by the
+ * administrator at `/admin/vouchers`, and bound to an account the first time a
+ * signed-in reader with that *confirmed* address asks for their plan.
+ * docs/plans/261001m-gift-vouchers-for-free-articles.md, and
+ * docs/project/billing.md § *Gift vouchers*.
+ *
+ * **The address is only how it finds its owner; `claimed_by` is who owns it.**
+ * Once claimed it belongs to the account, not the address — an address can
+ * change and an id cannot, the same reasoning as admin.md § *Who the
+ * administrator is*. An address with no account yet simply waits.
+ *
+ * **It raises the Free allowance only**: `entitlementFromRow`
+ * (src/store/pg-billing.ts) adds the claimed, unrevoked sum to every Free
+ * answer and to none of the paid ones. A lapsed reader is on Free, so they get
+ * it back.
+ *
+ * Nothing a reader sends writes here except the claim, which can only stamp the
+ * caller's own id onto a voucher already addressed to the caller's confirmed
+ * address (src/store/pg-vouchers.ts). Every other write is under
+ * `/api/admin/vouchers`, behind the admin namespace gate.
+ *
+ * No hard delete: a revoked voucher stays as a record (`revoked_at`), and
+ * restoring it is clearing that column.
+ */
+export const billingVouchers = spideryarn.table(
+  "billing_vouchers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Stored normalised — trimmed and lower-cased — and compared the same way. */
+    email: text("email").notNull(),
+    /** Whole articles, never half-units: it is added to an `Articles` limit. */
+    articles: integer("articles").notNull(),
+    /** The administrator's private note. Never sent to the reader. */
+    note: text("note"),
+    createdAt: createdAt(),
+    /** The administrator who made it. A plain uuid, like every admin id. */
+    createdBy: uuid("created_by").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * The account that claimed it. **References the billing anchor, not
+     * `auth.users`**: the claim inserts that anchor first, in the same
+     * transaction, so a claimed voucher always has a row for the locked
+     * admission path to find (GPT Sol, plan review F6).
+     */
+    claimedBy: uuid("claimed_by").references(() => billingAccounts.ownerId, { onDelete: "restrict" }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    /** Revoked, and when. Null is live. Restoring clears it. */
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    /* Normalised on write, so the claim's `email = $1` is one comparison rather
+       than a `lower()` on both sides that one future writer forgets. */
+    check(
+      "billing_vouchers_email_normalised",
+      sql`${t.email} = lower(btrim(${t.email})) and ${t.email} like '%_@_%'`,
+    ),
+    /* Bounded, because this is the one number in the table that raises what a
+       free account may spend. The route validates the same range. */
+    check("billing_vouchers_articles_range", sql`${t.articles} between 1 and 1000`),
+    check("billing_vouchers_note_length", sql`${t.note} is null or char_length(${t.note}) <= 500`),
+    /* A claim is an account and a moment, or neither. */
+    check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),
+    /* The claim's lookup: an unclaimed voucher by address. */
+    index("billing_vouchers_unclaimed_email").on(t.email).where(sql`${t.claimedBy} is null`),
+    /* The entitlement's sum: one claimant's vouchers. */
+    index("billing_vouchers_claimed_by").on(t.claimedBy),
+  ],
+);
+
+/**
  * **Every new ingest an owner is charged for, reserved before it runs and
  * settled when it ends** — and, since 2026-09-30, every High-powered AI upgrade,
  * born settled (`kind`). One row per *attempt to spend* — not per article, and

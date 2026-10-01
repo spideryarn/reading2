@@ -256,6 +256,7 @@ describe("what a billing row is offered, end to end through the decision", () =>
       stripeCustomerId: "cus_1",
       quotaLimitDelta: null,
       quotaPeriodStart: null,
+      voucherArticles: 0,
       ...over,
     };
   }

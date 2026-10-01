@@ -254,6 +254,8 @@ describe("GET /api/billing/usage", () => {
       /* No High-powered AI upgrades counted (260930k). */
       highPower: 0,
       atLimit: false,
+      /* The whole allowance is still ahead of them (`privateHeadroom`). */
+      remaining: FREE_LIFETIME_INGESTS,
     });
     /* Nothing to manage: the Stripe customer that would hold a billing history
        is created by the first checkout, and the Portal route refuses without
@@ -282,6 +284,8 @@ describe("GET /api/billing/usage", () => {
       sharedHalfPrice: 0,
       highPower: 0,
       atLimit: true,
+      /* Further private articles: none, from the wall's own arithmetic. */
+      remaining: 0,
     });
   });
 

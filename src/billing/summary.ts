@@ -24,8 +24,16 @@
  *
  * It is a **GET**, unlike the three routes in checkout.ts, and the difference is
  * the rule those state: those are POSTs because each *creates a Stripe object*.
- * This creates nothing, touches no network, and only reads our own tables — so a
- * prefetch or a reload of it costs nothing and means nothing.
+ * This function creates nothing, touches no network, and only reads our own
+ * tables — so a prefetch or a reload of it costs nothing and means nothing.
+ *
+ * **The route does one write before it calls this, on purpose**: it claims any
+ * gift voucher waiting for the reader's confirmed address (`claimVouchersFor`,
+ * ../store/pg-vouchers.ts). That is idempotent — a voucher is claimed by exactly
+ * one statement, and a second call finds nothing waiting — and it costs a network
+ * call to the Auth service only when a voucher actually matches, which is almost
+ * never. The response is `private, no-store` because of it.
+ * docs/plans/261001m-gift-vouchers-for-free-articles.md (F5).
  *
  * ## It never resyncs from Stripe
  *
@@ -51,6 +59,7 @@ import {
 } from "../store/pg-billing.js";
 import type { BillingRow, Stale } from "../store/pg-billing.js";
 import { allTiers } from "../store/pg-tiers.js";
+import { giftsFor } from "../store/pg-vouchers.js";
 import { planEndsAt } from "../billing-plan.js";
 import type { BillingSummary, Purchase, ReaderPlan, TierOffer } from "../billing-plan.js";
 import { budgetFor, privateHeadroom } from "./half-units.js";
@@ -252,19 +261,29 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     });
   }
 
+  /* **Gift vouchers, on both Free arms and only when there are some** — absent
+     rather than empty, so no surface can mention a voucher to a reader without
+     one. `entitlement.limit` already includes them (`freeEntitlement`,
+     ../store/pg-billing.ts); this is the list the copy says them from. */
+  const [firstGift, ...moreGifts] = await giftsFor(ownerId);
+  const gifts = firstGift ? { gifts: [firstGift, ...moreGifts] as const } : {};
+  /* Further private articles — the wall's own answer, never `limit − used`. */
+  const remaining = privateHeadroom(halfUnitsUsed(usage), budgetFor(entitlement.limit));
+
   if (hasLapsed(row)) {
     /* **No `used` on this arm**, so the page cannot print "40 of 3" — see
        src/billing-plan.ts. `remaining` is clamped at zero rather than going negative, which
        is the same number said the way round that stays true. */
     return summary({
       kind: "lapsed",
+      ...gifts,
       limit: entitlement.limit,
       /* **Further private articles, which is the wall's own answer** rather than
          `limit - used`: the two are no longer two ends of one ratio now that a
          public ingest costs half. `privateHeadroom` argues that its division is
          exact, and it can never exceed the limit, which is what this arm of the
          union exists to guarantee. */
-      remaining: privateHeadroom(halfUnitsUsed(usage), budgetFor(entitlement.limit)),
+      remaining,
     });
   }
 
@@ -281,6 +300,8 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     kind: "free",
     limit: entitlement.limit,
     ...counted,
+    remaining,
     ...(sharingMakesRoom ? { sharingMakesRoom: true as const } : {}),
+    ...gifts,
   });
 }

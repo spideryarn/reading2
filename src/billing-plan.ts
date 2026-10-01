@@ -52,6 +52,22 @@ export interface TierOffer {
 }
 
 /**
+ * **One gift voucher this reader holds** — claimed, and not revoked.
+ * docs/project/billing.md § *Gift vouchers*.
+ *
+ * The articles it adds and when it was claimed, and nothing else: the
+ * administrator's note, who made it and the address it was sent to never leave
+ * the admin routes. `noticeKey` is opaque — the homepage keys the dismissal of
+ * its *a gift has been added* line on it, and it grants nothing.
+ */
+export interface Gift {
+  readonly articles: number;
+  /** ISO. The notice is driven by this persisted date, never by "this request claimed". */
+  readonly claimedAt: string;
+  readonly noticeKey: string;
+}
+
+/**
  * What this reader's allowance is right now.
  *
  * A discriminated union rather than a bag of optionals, for the reason
@@ -139,6 +155,18 @@ export type ReaderPlan =
        * only when `atLimit` is true. GPT Sol, 2026-09-05.
        */
       readonly sharingMakesRoom?: true;
+      /**
+       * **Further private articles the wall would admit** — the server's
+       * `privateHeadroom`, as the lapsed arm has. Never `limit − used`, which
+       * stopped being an answer when a public article began to cost half
+       * (GPT Sol, plan review F3).
+       */
+      readonly remaining: number;
+      /**
+       * **The gift vouchers inside `limit`** — absent when there are none, so no
+       * surface can mention vouchers to a reader who has not been given one.
+       */
+      readonly gifts?: readonly [Gift, ...Gift[]];
     }
   /**
    * Had a subscription; does not have an entitled one. See the header.
@@ -146,8 +174,16 @@ export type ReaderPlan =
    * `remaining` is a count of **further private articles**, which is exactly the
    * wall's own answer rather than a rounded ratio — `privateHeadroom` in
    * src/billing/half-units.ts says why the division in it is exact.
+   *
+   * `gifts` as on `free`: a lapsed reader is back on Free, so the gift counts
+   * again (F4), and it is absent when there are none.
    */
-  | { readonly kind: "lapsed"; readonly limit: number; readonly remaining: number }
+  | {
+      readonly kind: "lapsed";
+      readonly limit: number;
+      readonly remaining: number;
+      readonly gifts?: readonly [Gift, ...Gift[]];
+    }
   | {
       readonly kind: "paid";
       readonly tierId: string;
@@ -532,6 +568,24 @@ function howTheyStand(plan: {
 }
 
 /**
+ * **"3 free + 20 from a gift"** — what a gifted allowance is made of, or null
+ * when there are no gifts.
+ *
+ * Exported so the homepage box says it in the same words. The base is the
+ * limit less the gifts rather than a constant this file would have to import:
+ * the server added the two, so taking one back out cannot disagree with it —
+ * except across a read that raced an administrator's edit, when the base comes
+ * out negative and nothing is said rather than a wrong sum.
+ */
+export function giftMakeup(limit: number, gifts: readonly Gift[] | undefined): string | null {
+  if (!gifts || gifts.length === 0) return null;
+  const gifted = gifts.reduce((sum, gift) => sum + gift.articles, 0);
+  const base = limit - gifted;
+  if (base < 0) return null;
+  return `${base} free + ${gifted} from ${gifts.length === 1 ? "a gift" : "gifts"}`;
+}
+
+/**
  * The free account's two shapes, lifted out of `describePlan` so that the switch
  * stays a switch — this is the only arm with three decisions in it.
  */
@@ -551,9 +605,13 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
      three, or six unshared ones outside it — the second form states the count
      and the allowance as two facts rather than as a fraction that would read as
      arithmetic going wrong. Neither form divides anything: see the header. */
+  /* **A gifted allowance says what it is made of**, so 23 never appears as a
+     free tier nobody else has. Absent gifts, nothing changes. */
+  const makeup = giftMakeup(plan.limit, plan.gifts);
+  const madeOf = makeup === null ? "" : ` (${makeup})`;
   if (isRatio(plan)) {
     return {
-      headline: `Free — ${plan.used} of ${plan.limit} articles used`,
+      headline: `Free — ${plan.used} of ${plan.limit} articles used${madeOf}`,
       detail: plan.atLimit
         ? "That is the whole free allowance, which is a lifetime one rather than a monthly " +
           `one. ${wayOut}Everything you have added stays exactly where it is, and reading ` +
@@ -563,7 +621,7 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
     };
   }
   return {
-    headline: `Free — ${articleCount(plan.used)} added, on an allowance of ${plan.limit}`,
+    headline: `Free — ${articleCount(plan.used)} added, on an allowance of ${plan.limit}${madeOf}`,
     detail:
       howTheyStand(plan) +
       (plan.atLimit
@@ -573,6 +631,31 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
         : "The allowance is for the lifetime of the account rather than per month. " +
           "Reading is never limited."),
   };
+}
+
+/**
+ * The lapsed reader's words. **No `used`, and no ratio wider than the limit.**
+ * See the header: this is the one rendering the policy would otherwise make look
+ * like a bug. A gift, when there is one, is named as part of the allowance.
+ */
+function lapsedCopy(plan: Extract<ReaderPlan, { kind: "lapsed" }>): PlanCopy {
+  const makeup = giftMakeup(plan.limit, plan.gifts);
+  const ofWhat = makeup === null ? "" : ` of ${makeup}`;
+  return plan.remaining > 0
+    ? {
+        headline: "Your plan has ended",
+        detail:
+          `You are back on the free allowance${ofWhat}, with ${plan.remaining} of ${plan.limit} ` +
+          "left. Everything you added while subscribed is still here, and reading is " +
+          "unaffected — resubscribing is what adds more.",
+      }
+    : {
+        headline: "Your plan has ended",
+        detail:
+          `The free allowance${ofWhat} is already spent, so no more articles can be added. ` +
+          "Everything you have added is still here and reading is unaffected — resubscribing is " +
+          "what adds more.",
+      };
 }
 
 export function describePlan(plan: ReaderPlan): PlanCopy {
@@ -599,23 +682,7 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
     case "free":
       return freeCopy(plan);
     case "lapsed":
-      /* **No `used`, and no ratio wider than the limit.** See the header: this
-         is the one rendering the policy would otherwise make look like a bug. */
-      return plan.remaining > 0
-        ? {
-            headline: "Your plan has ended",
-            detail:
-              `You are back on the free allowance, with ${plan.remaining} of ${plan.limit} ` +
-              "left. Everything you added while subscribed is still here, and reading is " +
-              "unaffected — resubscribing is what adds more.",
-          }
-        : {
-            headline: "Your plan has ended",
-            detail:
-              "The free allowance is already spent, so no more articles can be added. Everything " +
-              "you have added is still here and reading is unaffected — resubscribing is what " +
-              "adds more.",
-          };
+      return lapsedCopy(plan);
     case "paid": {
       /* **The ending, when there is one, and the renewal otherwise** — two
          different dates asked of two different fields, so a plan that ends

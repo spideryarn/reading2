@@ -2569,6 +2569,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      its oracle is the ledger's rows. */
   "tests/reader-arrivals.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
+  /* 261001m: gift vouchers. `pgReady`, its own seeded owners minted per run,
+     and the Auth lookup replaced — nothing reaches GoTrue, so the private
+     clone is enough. */
+  "tests/billing-vouchers.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",

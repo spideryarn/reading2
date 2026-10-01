@@ -127,7 +127,7 @@ const RESEARCHER_OFFER = {
 
 /** A free account with one of its three articles gone. */
 const FREE: BillingSummary = {
-  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false },
+  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false, remaining: 2 },
   manageable: false,
   purchase: { kind: "checkout", tiers: [READER_OFFER, RESEARCHER_OFFER] },
 };

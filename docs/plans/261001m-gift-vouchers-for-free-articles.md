@@ -168,3 +168,27 @@ house pattern in database.md (app role only; no anon/authenticated access).
     nothing) for dismissal.
   - **F6 (P2)** `claimed_by` references `billing_accounts(owner_id)`; the anchor is inserted first.
   - **F7 (P2)** Greg's full text is now above rather than elided.
+- 2026-10-01: **stage 1 (server) landed.** `billing_vouchers` (migration
+  `20261001143300_billing_vouchers`, additive; applied locally), `src/store/pg-vouchers.ts` (claim,
+  `giftsFor`, admin list/create/update, strict body parsers), `confirmedAccountEmail` beside
+  `accountEmail` in `admin-accounts.ts` (one shared fetch, still never throws), `voucherArticles` on
+  `BillingRow` and `freeEntitlement` for every Free return, `ReaderPlan` `gifts` on `free` and
+  `lapsed` plus a server-computed `remaining` on `free`, `giftMakeup` for the copy, the claim in
+  `GET /api/billing/usage` (`private, no-store`), and the three `/api/admin/vouchers` rows. Tests:
+  `tests/billing-vouchers.test.ts` (22) and three copy cases in `tests/billing-plan.test.ts`, each
+  watched red under a mutation of the code it guards (bonus never added; sum uncast; lock and read
+  in one statement; `updateVoucher` without the billing lock; the claim trusting an unconfirmed
+  address; the gate skipping `vouchers`; the makeup dropped from the copy). Docs: billing.md
+  § Gift vouchers, admin.md § `/admin/vouchers`. What changed from the plan:
+  - **`lockBillingAccount` now locks with a bare `select owner_id … for update` and reads the
+    columns in a second statement** — the F2 shape applied to the shared helper, so the visibility
+    switch and the shelf's delete pay one extra small read.
+  - **Changing a claimed voucher re-reads after locking and retries** if a claim landed between the
+    unlocked read and the voucher lock, so the billing lock is always taken first; nothing unclaims,
+    so a second attempt always settles it.
+  - **A note is capped at 500 characters in the table too**, not only at the route; and the address
+    check is `like '%_@_%'`, slightly stricter than the plan's `'%@%'`.
+  - **The admin list asks the Auth service for each claimant's current address** (`accountEmail`,
+    once per claimant) — a network call per claimant on every load of an admin-only page.
+  - `noticeKey` is the voucher id, as F5 allows; the plan's earlier line that the id never leaves the
+    admin routes is superseded by F5.
