@@ -15,6 +15,7 @@ inventing a process.
 | [gjdutils-instructions.md](gjdutils-instructions.md) | **start here** — the index of Greg's instruction library, copied and uncopied |
 | [engineering-manager.md](engineering-manager.md) | a job too big for one sitting — cut it into stages that each end committable, and hand the work to subagents |
 | [documentation-policy.md](documentation-policy.md) | **what a doc is for** — intent and signposts rather than descriptions of code, one home per fact, and who each kind of doc is written for |
+| [signposting-and-single-source-of-truth.md](signposting-and-single-source-of-truth.md) | before copying a fact, count or helper into a second place, or when you have found two copies |
 | [capture-sounding-board-conversation.md](capture-sounding-board-conversation.md) | writing a conversation up as a document: quote Greg verbatim, synthesise the rest |
 | [write-deep-dive-as-doc.md](write-deep-dive-as-doc.md) | researching a topic and writing it up as a reference doc with its sources attached |
 | [third-party-library-selection.md](third-party-library-selection.md) | picking a dependency — favour long-lived, heavily-documented ones, then write the decision down |

@@ -14,10 +14,13 @@
  * No database needed.
  */
 
+import { readFileSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
+import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 const LOCAL = "postgresql://postgres:postgres@127.0.0.1:54362/postgres";
 const REMOTE = "postgresql://postgres.abc:pw@aws-0-eu-west-2.pooler.supabase.com:5432/postgres";
@@ -86,14 +89,6 @@ describe("sslDecisionFor", () => {
     expect(decision.mode === "verified" && decision.ssl.ca).toContain("BEGIN CERTIFICATE");
   });
 
-  it("falls back to encrypted-but-unverified when there is no certificate at all", () => {
-    const decision = sslDecisionFor(REMOTE, { defaultCaPath: MISSING });
-    expect(decision.mode).toBe("encrypted-unverified");
-    expect(decision.ssl).toMatchObject({ rejectUnauthorized: false });
-    // The caller has to be able to say what is wrong, or the warning is noise.
-    expect(decision.why).toContain("not verified");
-  });
-
   it("throws rather than degrading when PGSSLROOTCERT names a file that is not there", () => {
     // Asking for verification and silently not getting it is worse than either
     // outcome on its own: you believe you are covered. An explicit path that
@@ -143,5 +138,341 @@ describe("a host override in the query string", () => {
   it("still accepts an ordinary local URL with harmless parameters", () => {
     expect(isLocalDatabaseUrl("postgres://u:p@127.0.0.1:54362/db?sslmode=disable")).toBe(true);
     expect(isLocalDatabaseUrl("postgres://u:p@127.0.0.1:54362/db")).toBe(true);
+  });
+});
+
+/**
+ * **What `pg` actually does with the decision**, asked of `pg` itself rather
+ * than of our reading of it. `pg` merges the parsed connection string OVER the
+ * config it is handed, and pg-connection-string replaces the whole `ssl` object
+ * when the URL carries any TLS setting — so `?sslmode=no-verify` or
+ * `?ssl=no-verify` turns verification off while this module reports
+ * "verified". These measure the socket's options, not the decision's label.
+ * docs/plans/261001j-refuse-unverified-tls-to-the-remote-database.md.
+ */
+const require = createRequire(import.meta.url);
+const ConnectionParameters = require("pg/lib/connection-parameters") as new (config: object) => {
+  ssl: unknown;
+};
+
+/** The `ssl` option the socket would get, given a URL and our decision for it. */
+function effectiveSsl(url: string, ssl: unknown): unknown {
+  return new ConnectionParameters({ connectionString: url, ssl }).ssl;
+}
+
+function identifierName(node: AstNode | undefined): string | undefined {
+  return node?.type === "Identifier" ? (node.name as string) : undefined;
+}
+
+function propertyName(node: AstNode | undefined): string | undefined {
+  if (node?.type === "Identifier") return node.name as string;
+  if (node?.type === "StringLiteral") return node.value as string;
+  return undefined;
+}
+
+function unwrapExpression(node: AstNode | undefined): AstNode | undefined {
+  let current = node;
+  while (
+    current &&
+    (current.type === "TSAsExpression" ||
+      current.type === "TSTypeAssertion" ||
+      current.type === "TSNonNullExpression" ||
+      current.type === "ParenthesizedExpression" ||
+      current.type === "AwaitExpression")
+  ) {
+    current = (current.expression ?? current.argument) as AstNode | undefined;
+  }
+  return current;
+}
+
+function importedModule(node: AstNode | undefined): string | undefined {
+  const current = unwrapExpression(node);
+  if (!current) return undefined;
+  if (current.type === "CallExpression") {
+    const callee = current.callee as AstNode | undefined;
+    const argument = (current.arguments as AstNode[] | undefined)?.[0];
+    if (callee?.type === "Import" && argument?.type === "StringLiteral") {
+      return argument.value as string;
+    }
+    if (
+      callee?.type === "Identifier" &&
+      callee.name === "require" &&
+      argument?.type === "StringLiteral"
+    ) {
+      return argument.value as string;
+    }
+  }
+  if (current.type === "ImportExpression") {
+    const source = current.source as AstNode | undefined;
+    if (source?.type === "StringLiteral") return source.value as string;
+  }
+  if (current.type === "MemberExpression" && propertyName(current.property as AstNode) === "default") {
+    return importedModule(current.object as AstNode | undefined);
+  }
+  return undefined;
+}
+
+function callName(node: AstNode | undefined): string | undefined {
+  const current = unwrapExpression(node);
+  if (current?.type !== "CallExpression") return undefined;
+  return identifierName(unwrapExpression(current.callee as AstNode | undefined));
+}
+
+function memberParts(node: AstNode | undefined): string[] | undefined {
+  const current = unwrapExpression(node);
+  if (!current) return undefined;
+  if (current.type === "Identifier") return [current.name as string];
+  if (current.type !== "MemberExpression") return undefined;
+  const object = memberParts(current.object as AstNode | undefined);
+  const property = propertyName(current.property as AstNode | undefined);
+  return object && property ? [...object, property] : undefined;
+}
+
+interface ConstructorScan {
+  seen: number;
+  unguarded: string[];
+}
+
+interface ConstructorBindings {
+  pgConstructors: Set<string>;
+  pgNamespaces: Set<string>;
+  sslDecisionFunctions: Set<string>;
+  sslDecisions: Set<string>;
+}
+
+function sourceFilesUnder(root: string, directory: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
+    const relative = path.posix.join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...sourceFilesUnder(root, relative));
+    else if (entry.isFile() && /\.(?:[cm]?[jt]s|tsx)$/.test(entry.name)) found.push(relative);
+  }
+  return found;
+}
+
+function collectImportBindings(node: AstNode, bindings: ConstructorBindings): void {
+  const module = (node.source as AstNode | undefined)?.value;
+  for (const specifier of (node.specifiers as AstNode[] | undefined) ?? []) {
+    const local = identifierName(specifier.local as AstNode | undefined);
+    if (!local || specifier.importKind === "type") continue;
+    if (module === "pg") {
+      if (specifier.type === "ImportDefaultSpecifier" || specifier.type === "ImportNamespaceSpecifier") {
+        bindings.pgNamespaces.add(local);
+      } else if (
+        specifier.type === "ImportSpecifier" &&
+        ["Pool", "Client"].includes(propertyName(specifier.imported as AstNode | undefined) ?? "")
+      ) {
+        bindings.pgConstructors.add(local);
+      }
+    }
+    if (
+      typeof module === "string" &&
+      (/(?:^|\/)db\/ssl\.(?:js|ts)$/.test(module) || module === "./ssl.js") &&
+      specifier.type === "ImportSpecifier" &&
+      propertyName(specifier.imported as AstNode | undefined) === "sslDecisionFor"
+    ) {
+      bindings.sslDecisionFunctions.add(local);
+    }
+  }
+}
+
+function collectVariableBindings(node: AstNode, bindings: ConstructorBindings): void {
+  const module = importedModule(node.init as AstNode | undefined);
+  if (module === "pg" && (node.id as AstNode | undefined)?.type === "ObjectPattern") {
+    for (const property of ((node.id as AstNode).properties as AstNode[] | undefined) ?? []) {
+      if (property.type !== "ObjectProperty") continue;
+      if (!["Pool", "Client"].includes(propertyName(property.key as AstNode | undefined) ?? "")) continue;
+      const imported = identifierName(property.value as AstNode | undefined);
+      if (imported) bindings.pgConstructors.add(imported);
+    }
+  }
+  const local = identifierName(node.id as AstNode | undefined);
+  if (!local) return;
+  if (module === "pg") bindings.pgNamespaces.add(local);
+  if (bindings.sslDecisionFunctions.has(callName(node.init as AstNode | undefined) ?? "")) {
+    bindings.sslDecisions.add(local);
+  }
+}
+
+/**
+ * Find every constructor whose identity comes from `pg`, including renamed
+ * named imports, namespace/default imports, and the dynamic-default import used
+ * by db-reown. A regex over `new Pool(` cannot know any of those identities.
+ */
+function scanPgConstructors(file: string, source: string): ConstructorScan {
+  const ast = parseSource(source);
+  const bindings: ConstructorBindings = {
+    pgConstructors: new Set(),
+    pgNamespaces: new Set(),
+    sslDecisionFunctions: new Set(),
+    sslDecisions: new Set(),
+  };
+
+  walkAst(ast.program, (node) => {
+    if (node.type === "ImportDeclaration") collectImportBindings(node, bindings);
+    else if (node.type === "VariableDeclarator") collectVariableBindings(node, bindings);
+  });
+
+  const unguarded: string[] = (ast.errors ?? []).map(
+    (error) => `${file}:${error.loc?.line ?? 0} (source did not parse)`,
+  );
+  let seen = 0;
+  walkAst(ast.program, (node) => {
+    if (node.type !== "NewExpression") return;
+    const callee = unwrapExpression(node.callee as AstNode | undefined);
+    const direct = identifierName(callee);
+    const member = memberParts(callee);
+    const isPgConstructor =
+      (direct !== undefined && bindings.pgConstructors.has(direct)) ||
+      (member?.length === 2 &&
+        bindings.pgNamespaces.has(member[0] ?? "") &&
+        (member[1] === "Pool" || member[1] === "Client"));
+    if (!isPgConstructor) return;
+    seen += 1;
+
+    const argument = unwrapExpression((node.arguments as AstNode[] | undefined)?.[0]);
+    let guarded = false;
+    if (argument?.type === "ObjectExpression") {
+      const sslProperty = ((argument.properties as AstNode[] | undefined) ?? []).find(
+        (property) =>
+          (property.type === "ObjectProperty" || property.type === "ObjectMethod") &&
+          propertyName(property.key as AstNode | undefined) === "ssl",
+      );
+      const value = unwrapExpression(sslProperty?.value as AstNode | undefined);
+      const sslObject =
+        value?.type === "MemberExpression" && propertyName(value.property as AstNode | undefined) === "ssl"
+          ? unwrapExpression(value.object as AstNode | undefined)
+          : undefined;
+      guarded =
+        (sslObject?.type === "Identifier" && bindings.sslDecisions.has(sslObject.name as string)) ||
+        bindings.sslDecisionFunctions.has(callName(sslObject) ?? "");
+    }
+
+    /* feedback-reporter first turns the URL into a config in
+       `productionConnection`, whose unit tests assert its verified `ssl`, and
+       then hands that exact config to Client. Keep this one named exception;
+       accepting arbitrary config variables would let a Pool built from a
+       variable go green without proving what that variable contains. (Worded
+       without the call itself: tests/store-migration-registry.test.ts reads
+       this continuation line as code and would ask for a database lane.) */
+    if (
+      file === "scripts/feedback-reporter.ts" &&
+      member?.[1] === "Client" &&
+      memberParts(argument)?.join(".") === "connection.config"
+    ) {
+      guarded = true;
+    }
+
+    if (!guarded) unguarded.push(`${file}:${lineOf(node)}`);
+  });
+
+  return { seen, unguarded };
+}
+
+describe("the remote is verified or refused, never quietly unverified", () => {
+  it("hands pg our CA with verification on, for a plain remote URL", () => {
+    const decision = sslDecisionFor(REMOTE, { defaultCaPath: REAL_CA });
+    const used = effectiveSsl(REMOTE, decision.ssl) as { rejectUnauthorized?: boolean; ca?: string };
+    expect(used.rejectUnauthorized).toBe(true);
+    expect(used.ca).toContain("BEGIN CERTIFICATE");
+  });
+
+  /* The paths, established against pg: each of these, left in the URL, takes
+     the socket's TLS settings out of our hands. Some turn verification off
+     outright (no-verify, prefer, libpq-compat require); the rest drop our CA
+     and fall back to Node's public roots, which Supabase's private root is not
+     in. Refused as a class rather than sorted into safe and unsafe, because the
+     sorting is pg-connection-string's to change between versions. */
+  it.each([
+    ["sslmode=no-verify"],
+    ["sslmode=disable"],
+    ["sslmode=prefer"],
+    ["sslmode=require"],
+    ["uselibpqcompat=true&sslmode=require"],
+    ["ssl=no-verify"],
+    ["ssl=0"],
+    ["ssl=true"],
+    [`sslrootcert=${REAL_CA}`],
+    [`sslcert=${REAL_CA}`],
+    [`sslkey=${REAL_CA}`],
+    ["sslnegotiation=direct"],
+  ])("refuses a remote URL carrying %s", (query) => {
+    const url = `${REMOTE}?${query}`;
+    // The path is real: pg would not use the CA we decided on.
+    const used = effectiveSsl(url, { rejectUnauthorized: true, ca: "OUR-CA" });
+    expect(typeof used === "object" && (used as { ca?: string } | null)?.ca === "OUR-CA").toBe(false);
+    // And it is refused, naming the setting and what to do about it.
+    const key = query.split("=")[0] ?? "";
+    expect(() => sslDecisionFor(url, { defaultCaPath: REAL_CA })).toThrow(
+      new RegExp(`${key}[\\s\\S]*remove`, "i"),
+    );
+  });
+
+  it("is not fooled by a percent-encoded key or the other scheme", () => {
+    // URLSearchParams decodes key names, and so does pg-connection-string, so
+    // `%73slmode` is `sslmode` to both. GPT Sol, plan review.
+    expect(() => sslDecisionFor(`${REMOTE}?%73slmode=no-verify`, { defaultCaPath: REAL_CA })).toThrow(
+      /sslmode/,
+    );
+    const otherScheme = REMOTE.replace(/^postgresql:/, "postgres:");
+    expect(sslDecisionFor(otherScheme, { defaultCaPath: REAL_CA }).mode).toBe("verified");
+    expect(() => sslDecisionFor(`${otherScheme}?ssl=no-verify`, { defaultCaPath: REAL_CA })).toThrow(/ssl/);
+  });
+
+  /* The refusal only guards connections that ask it. A Pool or Client built
+     without `sslDecisionFor` takes pg's defaults instead — PGSSLMODE and the
+     URL's own TLS keys — so every constructor in the shipped code and scripts
+     must pass its answer. Four did not, found by GPT Sol in plan review. */
+  it("is asked by every pg connection in src/ and scripts/", () => {
+    const root = path.resolve(import.meta.dirname, "..");
+    const files = [...sourceFilesUnder(root, "src"), ...sourceFilesUnder(root, "scripts")];
+    const unguarded: string[] = [];
+    let seen = 0;
+    for (const file of files) {
+      const result = scanPgConstructors(file, readFileSync(path.join(root, file), "utf8"));
+      seen += result.seen;
+      unguarded.push(...result.unguarded);
+    }
+    expect(seen).toBeGreaterThan(10); // positive control: the scan finds constructors at all
+    expect(unguarded).toEqual([]);
+  });
+
+  it("the constructor scan sees aliases, namespaces, config variables, and fake ssl", () => {
+    const fixtures = [
+      `import { Pool as DatabasePool } from "pg";
+       import { sslDecisionFor as decide } from "../src/db/ssl.js";
+       const decision = decide(url);
+       new DatabasePool({ connectionString: url, ssl: decision.ssl });`,
+      `import postgres from "pg";
+       const config = { connectionString: url };
+       new postgres.Pool(config);`,
+      `import * as postgres from "pg";
+       new postgres.Client({ connectionString: url, ssl: false });`,
+      `const { Pool: DatabasePool } = require("pg");
+       new DatabasePool({ connectionString: url });`,
+    ];
+    expect(scanPgConstructors("src/fixture.ts", fixtures[0] ?? "")).toEqual({ seen: 1, unguarded: [] });
+    expect(scanPgConstructors("src/fixture.ts", fixtures[1] ?? "").unguarded).toEqual([
+      "src/fixture.ts:3",
+    ]);
+    expect(scanPgConstructors("src/fixture.ts", fixtures[2] ?? "").unguarded).toEqual([
+      "src/fixture.ts:2",
+    ]);
+    expect(scanPgConstructors("src/fixture.ts", fixtures[3] ?? "").unguarded).toEqual([
+      "src/fixture.ts:2",
+    ]);
+  });
+
+  it("refuses the remote when there is no certificate, rather than encrypting unverified", () => {
+    expect(() => sslDecisionFor(REMOTE, { defaultCaPath: MISSING })).toThrow(
+      /refusing[\s\S]*supabase-ca\.crt/i,
+    );
+  });
+
+  it("leaves local alone, TLS settings in the URL included", () => {
+    // Local development stays exactly as it was: the container has no
+    // certificate, and what a local URL says about TLS is its own business.
+    expect(sslDecisionFor(LOCAL, { defaultCaPath: MISSING }).mode).toBe("disabled");
+    expect(sslDecisionFor(`${LOCAL}?sslmode=disable`, { defaultCaPath: MISSING }).mode).toBe("disabled");
   });
 });

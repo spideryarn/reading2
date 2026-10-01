@@ -194,6 +194,39 @@ describe("streamMessage — the recording lifecycle", () => {
     else process.env.OPENROUTER_API_KEY = savedKey;
   });
 
+  /* Plan 261001j: the moment a cache this call writes becomes readable is
+     `message_start`, which arrives before any thinking or text. A staggered
+     fan-out starts its siblings here; on the first text it would wait out the
+     whole of this call's thinking. */
+  it("says when the stream has begun, once, before any text", async () => {
+    const t = stubTransport(cannedStream());
+    try {
+      const seen: string[] = [];
+      const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
+      call.onStart(() => seen.push("start"));
+      call.onText((delta) => seen.push(`text:${delta}`));
+      await call.finalMessage();
+      expect(seen).toEqual(["start", "text:ok"]);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("does not let a throwing start listener break the SDK stream", async () => {
+    const t = stubTransport(cannedStream());
+    try {
+      const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
+      call.onStart(() => {
+        throw new Error("listener exploded");
+      });
+      await expect(call.finalMessage()).resolves.toMatchObject({
+        content: [{ type: "text", text: "ok" }],
+      });
+    } finally {
+      t.restore();
+    }
+  });
+
   it("records exactly one call, with the cost that was on the wire", async () => {
     const t = stubTransport(cannedStream());
     try {

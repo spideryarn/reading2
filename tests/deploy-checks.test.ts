@@ -53,6 +53,7 @@ import {
   type VercelDeployment,
   postApplyProblems,
 } from "../scripts/deploy-checks.js";
+import { sslDecisionFor } from "../src/db/ssl.js";
 
 const SHA = "1f032e20f723883f4eecd218b06701c754d320a5";
 const OLD = "d5a9d513a6d298147c81938873096dbad09e6d26";
@@ -509,12 +510,19 @@ describe("migratorUrlFrom", () => {
   });
 
   /* `pg` DISCARDS an explicit ssl object if the connection string carries any
-     of these, so the CA is loaded, reported as verified, and not used. */
-  it("strips the ssl parameters that would silently disable verification", () => {
-    const url = migratorUrlFrom(`${APP}?sslmode=require&sslrootcert=/tmp/x`, "pw");
-    expect(url).not.toContain("sslmode");
-    expect(url).not.toContain("sslrootcert");
-  });
+     of these, so the CA is loaded, reported as verified, and not used. This
+     used to strip four of them — silently repairing `sslmode=no-verify` while
+     `ssl=no-verify` went through. Since 2026-10-01 they are kept, so that
+     `sslDecisionFor` refuses every spelling the same way, before `npm run
+     deploy` connects. docs/plans/261001j. */
+  it.each(["sslmode=no-verify", "ssl=no-verify", "sslrootcert=/tmp/x"])(
+    "keeps %s, so the migration is refused rather than quietly repaired",
+    (query) => {
+      const url = migratorUrlFrom(`${APP}?${query}`, "pw");
+      expect(new URL(url).search).toBe(`?${query}`);
+      expect(() => sslDecisionFor(url)).toThrow(/Refusing/);
+    },
+  );
 });
 
 /* ------------------------------------------------------------------ */

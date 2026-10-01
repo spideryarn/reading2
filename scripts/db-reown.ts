@@ -104,7 +104,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
-import { isLocalDatabaseUrl, withoutPassword } from "../src/db/ssl.js";
+import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { refuseUnlessOurDatabase } from "./db-reown-rules.js";
@@ -200,7 +200,7 @@ const notOurs = refuseUnlessOurDatabase(url, parseStatusEnv(statusEnv), withoutP
 if (notOurs) die(notOurs);
 
 const pg = (await import("pg")).default;
-const client = new pg.Client({ connectionString: url });
+const client = new pg.Client({ connectionString: url, ssl: sslDecisionFor(url).ssl });
 await client.connect();
 
 /** Every base table in `spideryarn` with an `owner_id`. */

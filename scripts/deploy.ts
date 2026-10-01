@@ -455,14 +455,19 @@ async function preflight(): Promise<string> {
   const local = envFile(path.join(ROOT, ".env.local")).DATABASE_URL;
   let reachable = false;
   if (local) {
-    const pool = new Pool({ connectionString: local, max: 1, connectionTimeoutMillis: 5000 });
+    /* `ssl` from `sslDecisionFor` like every other connection: `disabled` for
+       the container, and verified-or-refused if .env.local ever names the
+       remote. Left undefined, pg would read PGSSLMODE and the URL's own TLS
+       keys instead (docs/plans/261001j). */
+    let pool: Pool | undefined;
     try {
+      pool = new Pool({ connectionString: local, max: 1, connectionTimeoutMillis: 5000, ssl: sslDecisionFor(local).ssl });
       await pool.query("select 1");
       reachable = true;
     } catch {
       /* reported below */
     } finally {
-      await pool.end().catch(() => {});
+      await pool?.end().catch(() => {});
     }
   }
   gate("local database is up", reachable, () =>

@@ -1,0 +1,138 @@
+{
+ "arm": "one-call",
+ "slug": "scaling-hypothesis",
+ "run": 2,
+ "at": "2026-10-01T10:36:42.221Z",
+ "wallMs": 37903,
+ "costUsd": 0.05656,
+ "calls": [
+  {
+   "levels": [
+    "fuller",
+    "simple",
+    "brief"
+   ],
+   "startMs": 1,
+   "firstTextMs": 30529,
+   "doneMs": 37862,
+   "input": 5373,
+   "cacheRead": 26870,
+   "cacheWrite": 0,
+   "output": 4044
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 80,
+   "paragraphs": 3,
+   "readyMs": 37862,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 257,
+   "paragraphs": 4,
+   "readyMs": 32978,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 173,
+   "paragraphs": 4,
+   "readyMs": 36072,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 2651,
+ "text": {
+  "brief": [
+   {
+    "text": "This piece is about GPT-3, a huge AI program from 2020. It argues that making AI bigger, with more data and computing power, makes it smarter in surprising ways.",
+    "ids": [
+     "spya-suzdvz",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters because GPT-3 learned new tasks from just a few examples, without being built to. The author says even bigger, smarter AI models may come soon.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-khnsat"
+    ]
+   },
+   {
+    "text": "A key idea is the \"blessings of scale\": for this kind of AI, hard problems get easier as programs and data grow, not harder.",
+    "ids": [
+     "spya-sfkxh8"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This is about GPT-3, a huge AI language program released in 2020. It argues that making AI programs much bigger, with much more data and computing power, makes them smarter in surprising ways.",
+    "ids": [
+     "spya-suzdvz",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters because GPT-3 learned to follow instructions and do new tasks from just a few examples, something its smaller predecessor could not do. The author says GPT-3's cost is still small for big organizations, so even bigger, smarter AI models may be coming soon.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-khnsat"
+    ]
+   },
+   {
+    "text": "A key idea is the \"blessings of scale\": in this kind of AI training, hard problems get easier, not harder, as programs and data grow bigger. The author thinks this happens because a huge program holds many possible shortcut answers, but with enough size and data, answers that truly understand the problem win out instead.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-grkhs8"
+    ]
+   },
+   {
+    "text": "The piece also notes that a few researchers predicted this kind of progress decades ago, based on how fast computers were improving, while most experts said it would not work. The author argues those experts have mostly turned out wrong.",
+    "ids": [
+     "spya-ad5qgy",
+     "spya-m9r8zx"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This piece is about GPT-3, a very large AI language model released in 2020, and what its abilities suggest about the future of artificial intelligence. It argues for the \"scaling hypothesis\": the idea that making neural networks (brain-inspired computer programs) much bigger, with much more data and computing power, makes them more capable in ways nobody specifically designed.",
+    "ids": [
+     "spya-suzdvz",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "The author says this matters because GPT-3, unlike its predecessor GPT-2, learned to follow instructions and pick up new tasks from just a few examples, a skill called meta-learning (learning how to learn), without being built for it. GPT-3's training was still cheap compared to large government or corporate budgets, so far bigger and more capable models seem possible soon, yet most AI labs do not treat this as urgent.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-khnsat",
+     "spya-rbx2kz"
+    ]
+   },
+   {
+    "text": "A key idea is the \"blessings of scale\": in deep learning (training large networks on data), hard problems tend to get easier, not harder, as networks and data grow, unlike most research. The author suggests this happens because a big network holds many smaller possible solutions at once; simple shortcuts win early in training, but with enough size and data, solutions that truly generalize eventually win out instead.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-ypbup8",
+     "spya-grkhs8"
+    ]
+   },
+   {
+    "text": "Another idea, the \"pretraining thesis,\" holds that predicting text well enough eventually requires real understanding, since later gains need grasping things like cause and effect and common sense, not just spelling. The piece also notes that researchers like Hans Moravec predicted this scale of progress decades ago from computing-power trends, while most experts dismissed it as a dead end—and were wrong.",
+    "ids": [
+     "spya-ce0ts7",
+     "spya-rjwfkb",
+     "spya-ad5qgy"
+    ]
+   }
+  ]
+ }
+}

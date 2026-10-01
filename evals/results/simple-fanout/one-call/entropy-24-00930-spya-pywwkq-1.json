@@ -1,0 +1,141 @@
+{
+ "arm": "one-call",
+ "slug": "entropy-24-00930-spya-pywwkq",
+ "run": 1,
+ "at": "2026-10-01T10:28:25.170Z",
+ "wallMs": 43202,
+ "costUsd": 0.0626858,
+ "calls": [
+  {
+   "levels": [
+    "fuller",
+    "simple",
+    "brief"
+   ],
+   "startMs": 2,
+   "firstTextMs": 35712,
+   "doneMs": 43173,
+   "input": 5374,
+   "cacheRead": 18489,
+   "cacheWrite": 0,
+   "output": 4824
+  }
+ ],
+ "levels": {
+  "simple": {
+   "ok": true,
+   "words": 157,
+   "paragraphs": 4,
+   "readyMs": 41627,
+   "check": "passed",
+   "flags": 0
+  },
+  "brief": {
+   "ok": true,
+   "words": 76,
+   "paragraphs": 3,
+   "readyMs": 43173,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 252,
+   "paragraphs": 5,
+   "readyMs": 38861,
+   "check": "flagged",
+   "flags": 1
+  }
+ },
+ "reasoningTokens": 3456,
+ "text": {
+  "brief": [
+   {
+    "text": "This article is about how brains process information. It describes a method called partial information decomposition, or PID, used to study neurons.",
+    "ids": [
+     "spya-xn9j9k"
+    ]
+   },
+   {
+    "text": "Brains turn signals into behavior, but how neurons do this is unclear. New tools like PID help scientists study how neurons work together.",
+    "ids": [
+     "spya-rxcze4"
+    ]
+   },
+   {
+    "text": "PID splits shared information into three types: repeated, unique, and synergistic (only seen when combining inputs). The most connected neurons showed much more synergistic activity, suggesting they do more real computing.",
+    "ids": [
+     "spya-h5jzvm",
+     "spya-fud8q3"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This article reviews how scientists study the way brains handle information. It explains a method called partial information decomposition (PID), which shows how neurons—brain cells—combine signals from different sources.",
+    "ids": [
+     "spya-xn9j9k"
+    ]
+   },
+   {
+    "text": "Brains turn incoming signals into behavior, but how neurons do this is still unclear. New recording tools and PID now let researchers study how many neurons work together to process information.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-s9kmxa"
+    ]
+   },
+   {
+    "text": "PID splits information shared between neurons into three kinds: redundant (repeated by more than one neuron), unique (from just one), and synergistic (only seen when combining inputs). Synergistic information is treated as a sign that a neuron is really computing something, not just adding up its inputs.",
+    "ids": [
+     "spya-h5jzvm",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "In recordings from mouse brain tissue, the most connected neurons ('rich clubs') showed about 2.7 times more synergy than others, making up about 88% of all synergy despite being under 40% of neurons. Synergy was also higher when input signals were only somewhat alike, not too similar or too different.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-ybmve2"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This article is a review about how brains handle information. It focuses on a tool called partial information decomposition (PID), which breaks apart how groups of neurons—brain cells—combine signals from multiple sources.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "Brains take in signals and use them to produce adaptive behavior, but how neurons transform that information is poorly understood. Until recently, this research was held back by too little data from recording many neurons at once, and by a lack of tools to make sense of that data.",
+    "ids": [
+     "spya-rxcze4",
+     "spya-s9kmxa"
+    ]
+   },
+   {
+    "text": "PID splits the information that two or more \"parent\" neurons give about a \"target\" neuron's activity into separate parts: redundant information, available from either parent alone; unique information, available from only one parent; and synergistic information, visible only when looking at both parents together. Synergy is treated as a sign of real computation, combining inputs into something new rather than just adding them up.",
+    "ids": [
+     "spya-h5jzvm",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "Recording hundreds of neurons in mouse brain tissue grown in dishes, the authors found that neurons in \"rich clubs\"—the most densely connected neurons—showed about 2.7 times more synergy than other neurons, and accounted for roughly 88% of all synergy despite being under 40% of neurons. Synergy also rose with more connections between the two source neurons, and peaked when their inputs were only moderately similar (about 7% of maximum similarity), falling when inputs grew more alike.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-ybmve2"
+    ]
+   },
+   {
+    "text": "In monkeys doing a behavioral task, synergy shifted with each task stage—rising sharply in one brain region during movement—suggesting synergy reflects both a neuron's local network setting and current behavioral demands.",
+    "ids": [
+     "spya-t8fayf",
+     "spya-b32ecw"
+    ]
+   }
+  ]
+ }
+}

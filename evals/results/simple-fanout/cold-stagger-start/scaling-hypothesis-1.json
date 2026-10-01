@@ -1,0 +1,165 @@
+{
+ "arm": "stagger-start",
+ "cold": true,
+ "slug": "scaling-hypothesis",
+ "run": 1,
+ "at": "2026-10-01T10:46:03.778Z",
+ "wallMs": 19843,
+ "costUsd": 0.127124,
+ "calls": [
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 1,
+   "firstTextMs": 13698,
+   "doneMs": 17862,
+   "input": 1859,
+   "cacheRead": 0,
+   "cacheWrite": 26900,
+   "output": 1519
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 4349,
+   "firstTextMs": 15608,
+   "doneMs": 19835,
+   "input": 1804,
+   "cacheRead": 26900,
+   "cacheWrite": 0,
+   "output": 1376
+  },
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 4350,
+   "firstTextMs": 14260,
+   "doneMs": 15908,
+   "input": 1854,
+   "cacheRead": 26900,
+   "cacheWrite": 0,
+   "output": 913
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 121,
+   "paragraphs": 3,
+   "readyMs": 15908,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 225,
+   "paragraphs": 4,
+   "readyMs": 19835,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 257,
+   "paragraphs": 4,
+   "readyMs": 17862,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 2156,
+ "text": {
+  "brief": [
+   {
+    "text": "This piece is about GPT-3, a huge computer program that predicts text, built by OpenAI. It asks a big question: does just making AI programs bigger make them smarter, without needing clever new designs?",
+    "ids": [
+     "spya-suzdvz",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters because GPT-3 surprised almost everyone. It didn't just get slightly better at old tasks. It learned to follow instructions and solve brand-new puzzles after seeing just a few examples, something nobody specifically trained it to do.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c"
+    ]
+   },
+   {
+    "text": "The author calls this the scaling hypothesis: keep making networks bigger, feed them more data and computing power, and new abilities keep appearing on their own. The piece argues this could be a real path toward much more powerful, humanlike AI, even though many experts doubted it would work.",
+    "ids": [
+     "spya-ag750z",
+     "spya-sfkxh8",
+     "spya-emqjaa"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This piece is an essay about GPT-3, a huge text-prediction computer program released in 2020, and an idea called the scaling hypothesis. That idea says making neural networks (programs loosely modeled on brain cells) much bigger, fed more data and more computing power, is itself the path toward very capable AI.",
+    "ids": [
+     "spya-dfggb3",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "It matters because GPT-3 used an old, simple design, yet it learned to follow instructions and pick up new tasks from just a few examples, something the smaller GPT-2 could not do. The author argues this \"meta-learning\" (learning how to learn new tasks) appeared on its own, without being specially designed in, just from making the model so large.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-fvqe70",
+     "spya-ypbup8"
+    ]
+   },
+   {
+    "text": "The essay calls this pattern the \"blessings of scale\": problems that are hard for small models get easier, not harder, as models grow, unlike most research where big things are harder. It also explains the \"pretraining thesis\": a model trained only to predict the next word in text must, to keep improving, end up learning facts, logic, and common sense, because only real understanding removes the last and hardest bits of prediction error.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-kmyg3w",
+     "spya-g3b5y7"
+    ]
+   },
+   {
+    "text": "The author also criticizes AI experts who confidently said this kind of progress could not happen, noting that almost none have admitted they were wrong, and argues that labs and companies who doubt scaling risk falling behind those who commit to it.",
+    "ids": [
+     "spya-m9r8zx",
+     "spya-arrq35"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This piece is about GPT-3, a huge language model (a program trained just to predict the next word in text) released by OpenAI in 2020. It argues for the \"scaling hypothesis\": the idea that making neural networks (computing systems loosely modeled on brain cells) much bigger, fed more data and more computing power, is enough by itself to make them far more capable.",
+    "ids": [
+     "spya-dfggb3",
+     "spya-suzdvz",
+     "spya-ewxv9q"
+    ]
+   },
+   {
+    "text": "This matters, the author says, because GPT-3 did not just know more facts than earlier models. It showed meta-learning: learning to follow new instructions and solve new tasks from just a few examples, without being specially trained to do so. This suggests unsupervised learning (training on raw, unlabeled data) could become essential to future AI, and that experts confidently dismissing scaling may be wrong.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c"
+    ]
+   },
+   {
+    "text": "A key idea is the \"blessings of scale\": hard problems get easier, not harder, as models grow bigger, the reverse of what you'd expect. The author's explanation is that a big model contains many smaller sub-models at once; as training goes on, sub-models that merely memorize fall behind sub-models that find genuine, general patterns, because only general patterns can handle truly huge amounts of varied data.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-grkhs8",
+     "spya-uknzzk"
+    ]
+   },
+   {
+    "text": "Relatedly, the \"pretraining thesis\" holds that predicting text keeps forcing a model toward deeper understanding: once easy patterns like spelling and word frequency are used up, only real-world reasoning can shrink the remaining errors further. The author argues most AI labs like DeepMind or Google Brain do not fully believe this, which is why only OpenAI has bet heavily on simply scaling models up.",
+    "ids": [
+     "spya-n4zu5k",
+     "spya-kmyg3w",
+     "spya-vr9q2p"
+    ]
+   }
+  ]
+ }
+}

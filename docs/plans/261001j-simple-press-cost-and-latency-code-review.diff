@@ -1,0 +1,851 @@
+diff --git a/docs/plans/261001j-simple-press-cost-and-latency.md b/docs/plans/261001j-simple-press-cost-and-latency.md
+new file mode 100644
+index 00000000..dea64562
+--- /dev/null
++++ b/docs/plans/261001j-simple-press-cost-and-latency.md
+@@ -0,0 +1,150 @@
++# One Simple press, one article cache: Fuller first, the other two once it has begun
++
++**Status as of 2026-10-01:** spiked and measured; built (the stagger and `MeteredCall.onStart`).
++Streaming to the reader is not built; it is a decision for Greg, with numbers, in § Streaming.
++
++Part of [summaries.md § Simple](../project/summaries.md#simple-a-plain-words-orientation). The
++Overseer's second stage of the 261001i session, from Greg:
++
++> re Simple summary cost. Yes, we definitely want to reduce costs, and should be using
++> prompt-caching where you can. And perhaps generate all 3 of those summaries at the same time with
++> one call (probably most complex first)? I suppose the only downside to doing that is latency. I
++> don't suppose we could stream the output? If that's more complicated than it's worth, maybe
++> generating all 3 at the same time, but with prompt caching is the way to go? Use your judgment
++> (and perhaps run spikes) to trade off cost, latency, complexity, etc and look for a
++> best-of-all-worlds.
++>
++> — Greg, 2026-10-01
++
++## The finding that decides most of it
++
++**A lone Simple press cached nothing.** Each of its three calls (Brief, Simple, Fuller) sends the
++whole article, about 18,500 tokens on the PID paper. The article is marked for caching only when
++`cacheArticleForStep` sees another step in the same job sharing it, and Simple's own three calls do
++not count. So a press paid for the article three times. Marking it is not enough on its own either:
++three calls fired together each pay the 1.25x cache *write*, because an entry cannot be read until
++the request writing it has begun ([prompt-caching.md § What breaks a cache](../project/prompt-caching.md#what-breaks-a-cache),
++point 4). Measured below: marked-and-together is the most expensive arm.
++
++## What was measured
++
++[`evals/simple/fanout-spike.ts`](../../evals/simple/fanout-spike.ts) builds each arm from production's
++own pieces: the level prompts, the article rendering, `streamMessage`, `buildLevel` and the fidelity
++checker. Each press is three levels at `high`, no profile, no retries, run one at a time. The
++articles are the PID paper (3 runs) and two controls, Olah's *A4* and Gwern's *Scaling Hypothesis*
++(2 runs each): 7 presses an arm, $5.4 in all.
++
++**Cold, or the numbers lie.** The first batch's cached arms mostly read a cache an earlier run had
++left, and looked cheaper than they are. The second batch opens every press with its own one-line
++marker, so no press can read another's cache. Only the cold arms count below; the warm ones are in
++the results directory and the report, labelled.
++
++| arm (7 presses each) | $ a press | first level ready, median | all three, median · worst | valid | flagged by the guard |
++|---|---:|---:|---:|---:|---:|
++| **today**: three together, nothing marked | 0.142 | 7.4 s | 14.2 s · 18.2 s | 21/21 | 5/21 |
++| three together, article marked | 0.172 | 6.3 s | 12.3 s · 40.6 s | 21/21 | 4/21 |
++| staggered on Fuller's first text | 0.088 | 10.5 s | 17.0 s · 28.8 s | 21/21 | 4/21 |
++| **staggered on Fuller's stream start** | **0.090** | 10.8 s | **16.2 s · 20.3 s** | 21/21 | 5/21 |
++| one call for all three (warm cache) | 0.112 | 40.7 s | 45.6 s · 133 s | 21/21 | 1/21 |
++
++Times exclude the guard, which adds one quick check (3.5–5 s) after each level in every arm alike.
++"Ready" is when that level's text is complete.
++
++- **One call for all three is out**, on latency, as 261001b found for two: reasoning rose from about
++  1,100 tokens a press to 4,300, and the wait to 17–133 s. Streaming it would not help: nothing is
++  visible while it thinks, and the first level was complete only 4–5 s before the last.
++- **Marking without staggering costs more than doing nothing**: three cache writes, no reads.
++- **Staggering cuts a press by about 37%** ($0.142 → $0.090), for about 2 s more median wait. The
++  two later calls read the whole article from the cache in every cold press.
++- **Start versus text** came out close, because on this route `message_start` arrives late: 3–7 s
++  in, usually just before the first text. Seven presses an arm cannot tell the two apart (the worst
++  cases, 20.3 s and 28.8 s, are as likely noise as anything). Start is the trigger because it is
++  mechanically never later than the first text, and it is the earliest point the cache can be read.
++- **Quality does not move.** Every level of every arm was valid, and the guard flagged a similar
++  share (4–5 of 21, nearly all on the PID paper, as 261001h predicts). The per-level prompts are
++  unchanged; only what is cached changes.
++
++**One real press through production** after building it (`evals/simple/probe.ts`, arm
++`high-none-stagger1`): Fuller wrote the cache, the other two started 4.9 s later and read all 18,489
++article tokens, and so did both retries (Brief after a flag, Simple after failing validation). The
++first three calls cost $0.090, as the spike said; the retries took the press to $0.122.
++
++## What is built
++
++- **`src/simple-summary.ts`**: when the article clears the model's cache floor (`underCacheFloor`),
++  the article is marked, `FIRST_LEVEL` (Fuller, the slowest to write) is asked first, and Brief and
++  Simple wait until its stream begins. If its call ends without beginning, they go then. If it
++  *fails* before beginning, the press is lost anyway, so they wait for the abort instead of opening
++  two billed calls into it (Sol's plan review, P1; the first build let them). Below the floor
++  nothing can be cached, so the three go together, unmarked, as before.
++- **A job that already marks the article** (`cacheArticle`, when another step shares it) still
++  staggers. If an earlier step, FAQ say, has already warmed the cache, that costs the 3–7 s wait
++  for nothing. Ordinary presses run Simple alone, so this is left as it is; skipping the stagger
++  needs knowing the cache is warm, which `cacheArticleForStep`'s own comment explains nobody can.
++- **`MeteredCall.onStart`** in `src/messages-stream.ts`: once, on `message_start`. Additive, no
++  other caller changed. The Overseer agreed it before it was written.
++- Retries — the guard's and validation's — read the same cache at a tenth of the price, once
++  something has written it.
++
++**Passed over:** a separate tiny "warm-up" call to write the cache before all three (an extra call and
++ledger row for the same saving), and changing which level goes first by what the reader pressed (the
++press stores all three before anything is shown, so order only moves the total, and the slowest
++first keeps it lowest).
++
++## Streaming — for Greg
++
++CLAUDE.md says to stream any call a reader waits on, and Greg asked. Simple does not stream today:
++a press runs as a job and the panel shows the three levels when the job has stored them (260930i §
++*A departure from CLAUDE.md*). **The new fidelity guard is the complication.** It reads a level only
++once it is complete, and a flag rewrites the level. How often: on the PID paper a third of levels
++were flagged, with at least one flag in 5 of 6 presses (261001h); on the two controls, about one
++level in fifty.
++
++**The wait, measured** (cold, staggered; medians; the check adds about 4 s to each level):
++
++| | Brief | Simple (the default) | Fuller | all three |
++|---|---:|---:|---:|---:|
++| text complete, today's three-together | 7.4 s | 9.9 s | 13.7 s | 14.2 s |
++| text complete, staggered | 11.8 s | 16.2 s | 13.2 s | 16.2 s |
++| … and checked, no retry | ~16 s | ~20 s | ~17 s | ~20 s |
++| one real press with two retries (PID paper) | | | | 37 s |
++
++So a press with no retry shows its words at about 20 s, and on the PID paper, where most presses
++have a retry, 30–40 s is normal: a retry is another writer call (5–14 s) and another check.
++
++```
++1. no streaming (built):
++   press ── Fuller ─┬─ Brief, Simple ── checks ── [retry, check] ── all three shown
++                    └ cache                        ~20 s, ~30-40 s with a retry
++
++2. stream the words as written:
++   press ── first words ~6-10 s ── level complete ── check ── flagged? ── rewritten in place
++                                                              1 in 3 levels on the PID paper
++
++3. show each level once it has passed its check:
++   press ── the reader's level first ── checked ── shown ── the other two follow
++            nothing shown is ever taken back
++```
++
++1. **No streaming (built).** About 20 s to the first words with no retry, 30–40 s with one. Nothing
++   shown is ever replaced. No more work.
++2. **Stream the words.** First words at about 6–10 s. But on the papers the guard exists for, one
++   level in three would be visibly rewritten under the reader, or shown unchecked. It also needs a
++   streaming route beside the job and a client to read it: days, not lines.
++3. **Show each level once it has passed its check.** Only worth building with the reader's chosen
++   level asked *first* (and the stagger on it), which changes `FIRST_LEVEL` from a constant to the
++   press's choice. The default Simple level would then be ready at about 14 s rather than 20 with no
++   retry, and nothing is ever taken back. It needs the job to publish a level at a time and the
++   panel to show a partly written press: smaller than 2, still a client change.
++
++**Recommendation: 1 now, 3 if the wait proves too long in use.** 2 buys the most seconds, but on
++exactly the papers where the guard matters it would show a reader a claim and then take it back.
++
++## Reviews
++
++- Plan: [261001j-simple-press-cost-and-latency-plan-review-sol.md](261001j-simple-press-cost-and-latency-plan-review-sol.md).
++  No P0; "revise, keep the core choice". Taken: P1, a first call that fails before it begins no
++  longer lets the other two open billed calls (with a test that saw it happen); P1, the streaming
++  section's flag rate, retry case and per-level times corrected, and option 3 tied to asking the
++  reader's level first; P2, no tail claim for start over text; P2, cache reads are a tenth of the
++  price, not free. Noted, not changed: P2, a job with an already-warm cache still staggers.
+diff --git a/docs/project/summaries.md b/docs/project/summaries.md
+index 4d35bad0..e5946557 100644
+--- a/docs/project/summaries.md
++++ b/docs/project/summaries.md
+@@ -666,9 +666,15 @@ is said in the slider's card, not in a line under the paragraphs (below).
+   profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
+   visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
+   for the owner's profile.
+-- **One press writes all three**: one model call per level, run side by side, all or none stored; a
+-  level whose answer fails validation is asked once more on its own. A
+-  `simple/1` row reads as absent and the next press replaces it.
++- **One press writes all three**: one model call per level, all or none stored; a level whose answer
++  fails validation is asked once more on its own. A `simple/1` row reads as absent and the next press
++  replaces it.
++- **The three share one cached copy of the article** (since 2026-10-01): Fuller is asked first with
++  the article marked, and Brief and Simple start once its stream has begun, so they read the cache
++  instead of paying for the article again. About 37% cheaper a press for about 2 s more wait; one
++  call for all three was measured and is far slower. Below the cache floor they run together, as
++  before. [261001j](../plans/261001j-simple-press-cost-and-latency.md), which also holds the
++  streaming question for Greg.
+ - **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
+   `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
+   the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
+diff --git a/evals/simple/fanout-spike.ts b/evals/simple/fanout-spike.ts
+new file mode 100644
+index 00000000..be5f1f6c
+--- /dev/null
++++ b/evals/simple/fanout-spike.ts
+@@ -0,0 +1,342 @@
++/**
++ * **Simple's cost spike: how should one press's three levels share the
++ * article?** — docs/plans/261001j-simple-press-cost-and-latency.md.
++ *
++ *   npx tsx evals/simple/fanout-spike.ts <arm> <runs> <slug>...     # paid
++ *   npx tsx evals/simple/fanout-spike.ts report                      # free
++ *
++ * Arms, each a whole press of three levels at `high` effort, no profile:
++ *
++ * - `parallel`        — today: three calls at once, no cache marker.
++ * - `parallel-marked` — three at once with the article marked: the fan-out
++ *                       the caching doc says pays three writes.
++ * - `stagger-text`    — marked; Fuller first, the other two once its first
++ *                       text arrives (all `MeteredCall` exposes today).
++ * - `stagger-start`   — marked; the other two once Fuller's stream has begun
++ *                       (`message_start`). Needs `onStart` on `MeteredCall`;
++ *                       refuses to run without it.
++ * - `one-call`        — one call writing all three, Fuller → Simple → Brief,
++ *                       streamed; the time each level's JSON is complete is
++ *                       recorded, which is when it could first be shown.
++ *
++ * Built from production's own pieces — the level prompts, the article
++ * rendering, `streamMessage`, `buildLevel` and the fidelity checker — so
++ * nothing in `src/` changes to measure it. No retries: a level that fails
++ * validation is recorded as failed, because the failure rate is a result.
++ * Every call is an `ai_calls` row with an `eval` scope. Runs go one at a time,
++ * so the latencies are not measuring each other.
++ *
++ * Output: `evals/results/simple-fanout/<arm>/<slug>-<n>.json`.
++ */
++import fs from "node:fs";
++import path from "node:path";
++import { randomUUID } from "node:crypto";
++
++import { loadEnvLocal } from "../../src/env.js";
++
++const REPO = path.join(import.meta.dirname, "..", "..");
++const OUT = path.join(REPO, "evals", "results", "simple-fanout");
++const LEVELS = ["brief", "simple", "fuller"] as const;
++type Level = (typeof LEVELS)[number];
++const ARMS = ["parallel", "parallel-marked", "stagger-text", "stagger-start", "one-call"] as const;
++type Arm = (typeof ARMS)[number];
++
++interface CallTiming {
++  levels: Level[];
++  startMs: number;
++  firstTextMs: number | null;
++  doneMs: number;
++  input: number;
++  cacheRead: number;
++  cacheWrite: number;
++  output: number;
++}
++interface LevelResult {
++  ok: boolean;
++  error?: string;
++  words?: number;
++  paragraphs?: number;
++  /** When this level's text was complete, from the press's start. */
++  readyMs: number | null;
++  check?: string;
++  flags?: number;
++}
++interface RunFile {
++  arm: Arm;
++  cold: boolean;
++  slug: string;
++  run: number;
++  at: string;
++  wallMs: number;
++  costUsd: number | null;
++  calls: CallTiming[];
++  levels: Partial<Record<Level, LevelResult>>;
++  reasoningTokens: number | null;
++  /** The paragraphs, for reading. */
++  text: Partial<Record<Level, unknown>>;
++}
++
++async function runArm(arm: Arm, runs: number, slugs: string[], cold: boolean): Promise<void> {
++  /* `--cold`: every press opens with its own marker, so no press can read a
++     cache an earlier one left (the first batch's marked arms mostly did). */
++  const dirName = cold ? `cold-${arm}` : arm;
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
++  const { loadArticle } = await import("../../src/store/index.js");
++  const simple = await import("../../src/simple-summary.js");
++  const { articleWithIds } = await import("../../src/article-prompt.js");
++  const { isBodyEvidence } = await import("../../src/block-policy.js");
++  const { streamMessage } = await import("../../src/messages-stream.js");
++  const { effortFor } = await import("../../src/models.js");
++  const { budgetFor } = await import("../../src/token-budget.js");
++  const { parseJsonAnswer } = await import("../../src/parse-json.js");
++  const { checkLevel } = await import("../../src/simple-check.js");
++  const { collectSpend } = await import("../../src/ai-spend.js");
++  const { costStore } = await import("../../src/store/ai-calls.js");
++  const { closeDb } = await import("../../src/db/client.js");
++  fs.mkdirSync(path.join(OUT, dirName), { recursive: true });
++
++  await runAsOwner(environmentOwnerId(), async () => {
++    for (const slug of slugs) {
++      const article = await loadArticle(slug);
++      const evidence = article.blocks.filter(isBodyEvidence);
++      const evidenceIds = new Set(evidence.map((b) => b.id as string));
++      const textOf = new Map(evidence.map((b) => [b.id as string, b.text]));
++      const meta = article.meta ?? ({ title: slug } as never);
++      const articleText = articleWithIds(meta, evidence);
++      const user = simple.renderPrompt(null);
++      const marked = arm !== "parallel";
++
++      for (let n = 1; n <= runs; n++) {
++        const out = path.join(OUT, dirName, `${slug}-${n}.json`);
++        if (fs.existsSync(out)) {
++          console.log(`skip ${path.relative(REPO, out)}`);
++          continue;
++        }
++        const nonce = `press ${randomUUID()}`;
++        const t0 = Date.now();
++        const at = () => Date.now() - t0;
++        const calls: CallTiming[] = [];
++        const raws: Partial<Record<Level, string>> = {};
++        const ready: Partial<Record<Level, number>> = {};
++        let reasoning: number | null = 0;
++        let costUsd: number | null = null;
++
++        const ask = (system: string, levels: Level[], maxTokens: number, onDelta?: (all: string) => void) => {
++          const timing: CallTiming = { levels, startMs: at(), firstTextMs: null, doneMs: 0, input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
++          calls.push(timing);
++          const call = streamMessage(
++            "simple",
++            {
++              max_tokens: maxTokens,
++              thinking: { type: "adaptive" },
++              output_config: { effort: effortFor("simple") },
++              system: [
++                ...(cold ? [{ type: "text" as const, text: nonce }] : []),
++                { type: "text" as const, text: articleText, ...(marked ? { cache_control: { type: "ephemeral" as const } } : {}) },
++                { type: "text" as const, text: system },
++              ],
++              messages: [{ role: "user", content: user }],
++            },
++            { power: "standard" },
++          );
++          let all = "";
++          const started = new Promise<void>((resolve) => {
++            const withStart = call as unknown as { onStart?: (l: () => void) => void };
++            if (arm === "stagger-start") {
++              if (!withStart.onStart) throw new Error("stagger-start needs MeteredCall.onStart");
++              withStart.onStart(() => resolve());
++            }
++            call.onText((d) => {
++              if (timing.firstTextMs === null) {
++                timing.firstTextMs = at();
++                if (arm !== "stagger-start") resolve();
++              }
++              all += d;
++              onDelta?.(all);
++            });
++          });
++          const done = call.finalMessage().then((m) => {
++            timing.doneMs = at();
++            timing.input = m.usage.input_tokens;
++            timing.cacheRead = m.usage.cache_read_input_tokens ?? 0;
++            timing.cacheWrite = m.usage.cache_creation_input_tokens ?? 0;
++            timing.output = m.usage.output_tokens;
++            return m.content.map((b) => (b.type === "text" ? b.text : "")).join("");
++          });
++          return { started, done };
++        };
++
++        const perLevelBudget = budgetFor("simple", simple.ANSWER_TOKENS);
++        const press = async () => {
++          if (arm === "one-call") {
++            const order: Level[] = ["fuller", "simple", "brief"];
++            const system = oneCallSystem(simple.SIMPLE_SYSTEMS);
++            const { done } = ask(system, order, budgetFor("simple", simple.ANSWER_TOKENS * 3), (all) => {
++              /* A level is ready when the next level's key has begun, or the answer has ended. */
++              for (let i = 0; i < order.length - 1; i++) {
++                const lvl = order[i]!;
++                if (ready[lvl] === undefined && all.includes(`"${order[i + 1]}"`)) ready[lvl] = at();
++              }
++            });
++            const raw = await done;
++            ready.brief ??= at();
++            for (const l of order) ready[l] ??= at();
++            let parsed: Record<string, unknown> = {};
++            try {
++              parsed = parseJsonAnswer<Record<string, unknown>>(raw, "one-call answer");
++            } catch {
++              /* left empty: every level fails validation below */
++            }
++            for (const l of order) raws[l] = JSON.stringify(parsed[l] ?? null);
++            return;
++          }
++          const one = (level: Level) =>
++            ask(simple.SIMPLE_SYSTEMS[level], [level], perLevelBudget).done.then((raw) => {
++              raws[level] = raw;
++              ready[level] = at();
++            });
++          if (arm === "parallel" || arm === "parallel-marked") {
++            await Promise.all(LEVELS.map(one));
++            return;
++          }
++          /* Staggered: Fuller (the slowest) first; the others when it has begun. */
++          const first = ask(simple.SIMPLE_SYSTEMS.fuller, ["fuller"], perLevelBudget);
++          const fullerDone = first.done.then((raw) => {
++            raws.fuller = raw;
++            ready.fuller = at();
++          });
++          await first.started;
++          await Promise.all([fullerDone, one("simple"), one("brief")]);
++        };
++
++        let levels: RunFile["levels"] = {};
++        const text: RunFile["text"] = {};
++        try {
++          await collectSpend(press, {
++            attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
++            sink: (row) => costStore.record(row),
++            onDone: (report) => {
++              let nanos = 0;
++              let priced = true;
++              for (const c of report.calls) {
++                const cost = c.cost as { source: string; costNanos?: number; computedCostNanos?: number };
++                const v = cost.source === "provider" ? cost.costNanos : cost.source === "computed" ? cost.computedCostNanos : undefined;
++                if (v === undefined) priced = false;
++                else nanos += v;
++                reasoning = c.reasoningTokens === null || reasoning === null ? null : reasoning + c.reasoningTokens;
++              }
++              costUsd = priced ? nanos / 1e9 : null;
++            },
++          });
++        } catch (err) {
++          levels = { brief: { ok: false, error: `press: ${String(err).slice(0, 200)}`, readyMs: null } };
++        }
++        const wallMs = at();
++
++        /* Validate and check each level, outside the timed press (the guard's own
++           latency is measured in 261001h and 261001i). */
++        await Promise.all(
++          LEVELS.map(async (level) => {
++            if (levels[level]) return;
++            const raw = raws[level];
++            if (raw === undefined) {
++              levels[level] = { ok: false, error: "no answer", readyMs: null };
++              return;
++            }
++            try {
++              const paragraphs = simple.buildLevel(parseJsonAnswer<unknown>(raw, level), level, evidenceIds, simple.emptyDropped());
++              text[level] = paragraphs;
++              const checked = await checkLevel(paragraphs, textOf);
++              levels[level] = {
++                ok: true,
++                words: simple.paragraphWords(paragraphs),
++                paragraphs: paragraphs.length,
++                readyMs: ready[level] ?? null,
++                check: checked.outcome.kind === "failed" ? `failed:${checked.outcome.failure}` : checked.outcome.kind,
++                flags: checked.outcome.kind === "flagged" ? checked.outcome.flags.length : 0,
++              };
++            } catch (err) {
++              levels[level] = { ok: false, error: String(err).slice(0, 200), readyMs: ready[level] ?? null };
++            }
++          }),
++        );
++        const file: RunFile = { arm, cold, slug, run: n, at: new Date(t0).toISOString(), wallMs, costUsd, calls, levels, reasoningTokens: reasoning, text };
++        fs.writeFileSync(out, `${JSON.stringify(file, null, 1)}\n`);
++        const firstReady = Math.min(...LEVELS.map((l) => levels[l]?.readyMs ?? Infinity));
++        console.log(
++          `${arm} ${slug} #${n}: $${(costUsd as number | null)?.toFixed(4) ?? "?"}, first level ${(firstReady / 1000).toFixed(1)}s, all ${(wallMs / 1000).toFixed(1)}s, ` +
++            `cache read ${calls.map((c) => c.cacheRead).join("/")}, write ${calls.map((c) => c.cacheWrite).join("/")}, ` +
++            LEVELS.map((l) => `${l}:${levels[l]?.ok ? levels[l]?.check : "FAIL"}`).join(" "),
++        );
++      }
++    }
++  });
++  await closeDb();
++}
++
++/** The three level prompts as one, each version's spec under its name, and one JSON shape out. */
++function oneCallSystem(systems: Record<Level, string>): string {
++  const spec = (level: Level) => (systems[level].split("\n\nOUTPUT\n\n")[0] ?? "").trim();
++  return `You will write THREE versions of the same orientation, each to its own specification below, in this order: "fuller", then "simple", then "brief". Each version stands alone: none refers to another.
++
++=== VERSION "fuller" ===
++
++${spec("fuller")}
++
++=== VERSION "simple" ===
++
++${spec("simple")}
++
++=== VERSION "brief" ===
++
++${spec("brief")}
++
++OUTPUT
++
++JSON only, no prose, no code fence, the three versions in this order:
++
++{"fuller": {"paragraphs": [{"text": "...", "ids": ["spya-k3m9qt"]}]},
++ "simple": {"paragraphs": [...]},
++ "brief": {"paragraphs": [...]}}
++
++Plain text in "text": no markdown, no bullet points, no headings. Never put a
++real line break inside a string, and escape any straight double quote as \\".`;
++}
++
++function report(): void {
++  const rows: string[] = ["| arm | runs | $ / press | first level s (median) | all s (median, max) | cache read / write tokens | valid levels | flagged levels | reasoning tok (median) |", "|---|---:|---:|---:|---:|---|---:|---:|---:|"];
++  const med = (xs: number[]) => {
++    const s = [...xs].sort((a, b) => a - b);
++    return s.length === 0 ? NaN : s.length % 2 ? s[(s.length - 1) / 2]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
++  };
++  for (const arm of [...ARMS, ...ARMS.map((a) => `cold-${a}`)]) {
++    const dir = path.join(OUT, arm);
++    if (!fs.existsSync(dir)) continue;
++    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as RunFile);
++    if (files.length === 0) continue;
++    const costs = files.map((f) => f.costUsd).filter((c): c is number => c !== null);
++    const first = files.map((f) => Math.min(...LEVELS.map((l) => f.levels[l]?.readyMs ?? Infinity)) / 1000);
++    const all = files.map((f) => f.wallMs / 1000);
++    const read = files.reduce((n, f) => n + f.calls.reduce((m, c) => m + c.cacheRead, 0), 0);
++    const write = files.reduce((n, f) => n + f.calls.reduce((m, c) => m + c.cacheWrite, 0), 0);
++    const valid = files.reduce((n, f) => n + LEVELS.filter((l) => f.levels[l]?.ok).length, 0);
++    const flagged = files.reduce((n, f) => n + LEVELS.filter((l) => f.levels[l]?.check === "flagged").length, 0);
++    const reasoning = files.map((f) => f.reasoningTokens).filter((r): r is number => r !== null);
++    rows.push(
++      `| ${arm} | ${files.length} | ${(costs.reduce((a, b) => a + b, 0) / Math.max(costs.length, 1)).toFixed(4)} | ${med(first).toFixed(1)} | ${med(all).toFixed(1)}, ${Math.max(...all).toFixed(1)} | ${Math.round(read / files.length)} / ${Math.round(write / files.length)} per press | ${valid} / ${files.length * 3} | ${flagged} | ${Math.round(med(reasoning))} |`,
++    );
++  }
++  console.log(rows.join("\n"));
++}
++
++const [cmd, runsArg, ...slugs] = process.argv.slice(2);
++if (cmd === "report") report();
++else if ((ARMS as readonly string[]).includes(cmd ?? "") && Number(runsArg) > 0 && slugs.length > 0) {
++  const cold = slugs.includes("--cold");
++  await runArm(cmd as Arm, Number(runsArg), slugs.filter((x) => x !== "--cold"), cold);
++}
++else {
++  console.error(`usage: fanout-spike.ts <${ARMS.join("|")}> <runs> <slug>... | report`);
++  process.exit(1);
++}
+diff --git a/src/messages-stream.ts b/src/messages-stream.ts
+index 40eac1a0..498afac0 100644
+--- a/src/messages-stream.ts
++++ b/src/messages-stream.ts
+@@ -392,6 +392,14 @@ export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
+ export interface MeteredCall {
+   /** Progress, exactly as `stream.on("text", …)` gave it. */
+   onText: (listener: (delta: string) => void) => void;
++  /**
++   * Once, when the response has begun (`message_start`) — before any thinking
++   * or text, and the moment a prompt cache this request writes becomes
++   * readable by another. Never, if the call fails before it begins; a caller
++   * waiting on it must also wait on `finalMessage()`. Simple's staggered
++   * fan-out starts its other levels here (plan 261001j).
++   */
++  onStart: (listener: () => void) => void;
+   /** `stream.finalMessage()`, plus the spend record. The only way to get the answer. */
+   finalMessage: () => Promise<Anthropic.Message>;
+   /** Whether the stream ended because somebody aborted it. */
+@@ -569,6 +577,14 @@ export function streamMessage(
+     onText: (listener) => {
+       stream.on("text", listener);
+     },
++    onStart: (listener) => {
++      let fired = false;
++      stream.on("streamEvent", (event: { type: string }) => {
++        if (fired || event.type !== "message_start") return;
++        fired = true;
++        listener();
++      });
++    },
+     finalMessage,
+     aborted: () => stream.aborted,
+   };
+diff --git a/src/simple-summary.ts b/src/simple-summary.ts
+index 989e41ea..41c8818a 100644
+--- a/src/simple-summary.ts
++++ b/src/simple-summary.ts
+@@ -80,7 +80,7 @@ import { createHash } from "node:crypto";
+ 
+ import type Anthropic from "@anthropic-ai/sdk";
+ import type { Article } from "./article-input.js";
+-import { articleWithIds } from "./article-prompt.js";
++import { articleWithIds, underCacheFloor } from "./article-prompt.js";
+ import { anthropicCallFailed } from "./anthropic-call.js";
+ import { isBodyEvidence } from "./block-policy.js";
+ import { stageFailure } from "./job-failure.js";
+@@ -130,6 +130,14 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
+ /** Passages per paragraph. Extra ids are dropped and counted. */
+ export const MAX_IDS = SIMPLE_MAX_IDS;
+ 
++/**
++ * **The level asked first, with the others waiting until its stream has begun**
++ * — so it writes the article's cache entry and they read it (plan 261001j).
++ * Fuller, because it is the longest to write: starting it first keeps the
++ * press's wait closest to the unstaggered one.
++ */
++export const FIRST_LEVEL: SimpleLevel = "fuller";
++
+ /** Asks per level: the first, and one more if its answer fails validation (`writeLevel`). */
+ export const LEVEL_ATTEMPTS = 2;
+ 
+@@ -619,6 +627,26 @@ export async function generateSimpleSummary(opts: {
+   const started = Date.now();
+   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
+   const article = articleWithIds(meta, evidence);
++
++  /* **One cache for the press's three calls** (plan 261001j). Fired together,
++     three calls each pay the article in full — or, if it is marked, each pay
++     the 1.25x cache write, because an entry cannot be read until the request
++     writing it has begun (docs/project/prompt-caching.md § What breaks a
++     cache, 4). So the article is marked, `FIRST_LEVEL` goes first, and the
++     other two wait for its stream to begin: measured on three articles from
++     cold, $0.142 a press became $0.090, for about two seconds more wait (16.2 s
++     median against 14.2). Below the cache floor nothing can be cached, so
++     the three go together, unmarked, as before. */
++  const stagger = !underCacheFloor(article, modelFor("simple", opts.power));
++  const markArticle = opts.cacheArticle === true || stagger;
++  /* How the first level's first call got going: its stream began; it ended
++     without saying so; or it failed before it began. Settled once, so a call
++     that never begins never strands the others. */
++  type FirstCall = "started" | "ended" | "failed";
++  let begun: (how: FirstCall) => void = () => {};
++  const firstBegun = new Promise<FirstCall>((resolve) => {
++    begun = resolve;
++  });
+   const user = renderPrompt(opts.profile);
+   const dropped = emptyDropped();
+ 
+@@ -627,6 +655,10 @@ export async function generateSimpleSummary(opts: {
+      list nobody will keep. The job's own signal still stops all of them. */
+   const sibling = new AbortController();
+   const signal = opts.signal ? AbortSignal.any([opts.signal, sibling.signal]) : sibling.signal;
++  const untilAborted = new Promise<void>((resolve) => {
++    if (signal.aborted) resolve();
++    else signal.addEventListener("abort", () => resolve(), { once: true });
++  });
+ 
+   let chars = 0;
+   let last = 0;
+@@ -658,7 +690,7 @@ export async function generateSimpleSummary(opts: {
+             {
+               type: "text" as const,
+               text: article,
+-              ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
++              ...(markArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+             },
+             { type: "text" as const, text: SIMPLE_SYSTEMS[level] },
+           ],
+@@ -671,12 +703,15 @@ export async function generateSimpleSummary(opts: {
+       );
+       writerCalls += 1;
+       call.onText(onText);
++      if (level === FIRST_LEVEL) call.onStart(() => begun("started"));
+       /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
+          is what records what this call cost. src/messages-stream.ts. */
+       message = await call.finalMessage();
+     } catch (err) {
++      if (level === FIRST_LEVEL) begun("failed");
+       throw anthropicCallFailed(err);
+     }
++    if (level === FIRST_LEVEL) begun("ended");
+     if (wasRefused(message)) {
+       return {
+         failure: stageFailure(MODEL_REFUSED, {
+@@ -742,6 +777,14 @@ export async function generateSimpleSummary(opts: {
+         flags: flagged.flags,
+       });
+     };
++    if (stagger && level !== FIRST_LEVEL) {
++      /* A first call that failed before it began fails the press (its first
++         attempt has no flagged fallback), and the abort follows a few ticks
++         later. Wait for it rather than opening two calls into it — they would
++         be billed (Sol's plan review, P1). */
++      if ((await firstBegun) === "failed") await untilAborted;
++      signal.throwIfAborted();
++    }
+     for (let attempt = 1; ; attempt += 1) {
+       let raw: string;
+       try {
+diff --git a/tests/messages-stream.test.ts b/tests/messages-stream.test.ts
+index d5be2520..9475f7ab 100644
+--- a/tests/messages-stream.test.ts
++++ b/tests/messages-stream.test.ts
+@@ -194,6 +194,24 @@ describe("streamMessage — the recording lifecycle", () => {
+     else process.env.OPENROUTER_API_KEY = savedKey;
+   });
+ 
++  /* Plan 261001j: the moment a cache this call writes becomes readable is
++     `message_start`, which arrives before any thinking or text. A staggered
++     fan-out starts its siblings here; on the first text it would wait out the
++     whole of this call's thinking. */
++  it("says when the stream has begun, once, before any text", async () => {
++    const t = stubTransport(cannedStream());
++    try {
++      const seen: string[] = [];
++      const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
++      call.onStart(() => seen.push("start"));
++      call.onText((delta) => seen.push(`text:${delta}`));
++      await call.finalMessage();
++      expect(seen).toEqual(["start", "text:ok"]);
++    } finally {
++      t.restore();
++    }
++  });
++
+   it("records exactly one call, with the cost that was on the wire", async () => {
+     const t = stubTransport(cannedStream());
+     try {
+diff --git a/tests/meta-fallback-fingerprint.test.ts b/tests/meta-fallback-fingerprint.test.ts
+index f318209b..4f935e92 100644
+--- a/tests/meta-fallback-fingerprint.test.ts
++++ b/tests/meta-fallback-fingerprint.test.ts
+@@ -100,6 +100,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+       };
+       return {
+         onText: () => undefined,
++        onStart: () => undefined,
+         aborted: () => false,
+         finalMessage: () => Promise.resolve(message),
+       };
+diff --git a/tests/simple-summary.test.ts b/tests/simple-summary.test.ts
+index b64d2211..27c6db5b 100644
+--- a/tests/simple-summary.test.ts
++++ b/tests/simple-summary.test.ts
+@@ -43,6 +43,13 @@ import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
+ let answer: string | Partial<Record<SimpleLevel, string | string[]>> = "";
+ let stop: string = "end_turn";
+ let waitForAbort: SimpleLevel | null = null;
++/** When the stub streams "begin" (plan 261001j), and whether they ever do. */
++let startGate: Promise<void> = Promise.resolve();
++let neverStart = false;
++/** A level whose call fails outright, before its stream begins. */
++let failCall: SimpleLevel | null = null;
++/** When every stub call answers. */
++let finalGate: Promise<void> = Promise.resolve();
+ const abortSettled = new Set<SimpleLevel>();
+ const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
+ 
+@@ -86,9 +93,16 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+       };
+       return {
+         onText: () => undefined,
++        /* The stream "begins" when the gate opens; `neverStart` is a call that
++           fails before it begins, so the hook never fires. */
++        onStart: (listener: () => void) => {
++          if (neverStart) return;
++          void startGate.then(listener);
++        },
+         aborted: () => false,
+         finalMessage: () => {
+-          if (level !== waitForAbort) return Promise.resolve(message);
++          if (level === failCall) return Promise.reject(new Error("upstream 502"));
++          if (level !== waitForAbort) return finalGate.then(() => message);
+           return new Promise((_, reject) => {
+             const finish = () => {
+               /* Deliberately later than the failing sibling's rejection. A
+@@ -153,6 +167,10 @@ beforeEach(() => {
+   answer = "";
+   stop = "end_turn";
+   waitForAbort = null;
++  startGate = Promise.resolve();
++  neverStart = false;
++  failCall = null;
++  finalGate = Promise.resolve();
+   abortSettled.clear();
+   sent.length = 0;
+ });
+@@ -815,6 +833,83 @@ describe("the fidelity guard (plan 261001i)", () => {
+   });
+ });
+ 
++/* ------------------------------------------------- one cache, three levels -- */
++
++describe("the staggered fan-out (plan 261001j)", () => {
++  /* The same ids as the small fixture, with enough words to clear the cache floor. */
++  const FILLER = Array.from({ length: 400 }, (_, i) => `word${i}`).join(" ");
++  const LONG = BLOCKS.map((b) => (b.treatment === "supplement" ? b : { ...b, text: `${b.text} ${FILLER}` }));
++  const run = (blocks: Block[], extra: { cacheArticle?: boolean } = {}) =>
++    generateSimpleSummary({ power: "standard", article: { ...example, slug: "simple-test", blocks }, profile: null, guard: false, ...extra });
++  const marked = (i: number) =>
++    "cache_control" in ((sent[i]?.body as { system?: Record<string, unknown>[] } | undefined)?.system?.[0] ?? {});
++  const tick = () => new Promise((r) => setTimeout(r, 0));
++  const gate = () => {
++    let open = () => {};
++    const promise = new Promise<void>((r) => {
++      open = r;
++    });
++    return { promise, open };
++  };
++  beforeEach(() => {
++    answer = {};
++  });
++
++  it("on a long article, writes Fuller first with the article marked, and the others once it has begun", async () => {
++    const start = gate();
++    const final = gate();
++    startGate = start.promise;
++    finalGate = final.promise;
++    const pending = run(LONG);
++    await tick();
++    expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
++    start.open();
++    await tick();
++    expect(sent.map((c) => levelOf(c.body)).sort()).toEqual(["brief", "fuller", "simple"]);
++    final.open();
++    const out = await pending;
++    expect([0, 1, 2].map(marked)).toEqual([true, true, true]);
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
++  });
++
++  it("does not leave the others waiting when the first never says it has begun", async () => {
++    neverStart = true;
++    const out = await run(LONG);
++    expect(sent).toHaveLength(3);
++    expect(out.simpleSummary.levels.fuller).toEqual(FULLER);
++  });
++
++  /* Sol's plan review, P1: the wait used to end on the failure itself, and the
++     other two could open (billable) calls before the press was aborted. */
++  it("opens no other call when the first call fails before it begins", async () => {
++    neverStart = true;
++    failCall = "fuller";
++    await expect(run(LONG)).rejects.toThrow();
++    await tick();
++    expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
++  });
++
++  it("fails as before, without hanging, when the first fails before it begins", async () => {
++    neverStart = true;
++    answer = { fuller: ["{ not json", "{ still not json"] };
++    await expect(run(LONG)).rejects.toThrow();
++  });
++
++  it("below the cache floor, asks all three at once and marks nothing — there is no cache to share", async () => {
++    startGate = gate().promise;
++    const pending = run(BLOCKS);
++    await tick();
++    expect(sent).toHaveLength(3);
++    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
++    await pending;
++  });
++
++  it("still marks a short article when the job says another step shares it, as before", async () => {
++    await run(BLOCKS, { cacheArticle: true });
++    expect([0, 1, 2].map(marked)).toEqual([true, true, true]);
++  });
++});
++
+ describe("parseCheckVerdicts", () => {
+   it("reads one verdict per paragraph, in order, and the reason for a flag", () => {
+     expect(parseCheckVerdicts(verdicts("ok", "contradicts", "ok"), 3)).toEqual([
+diff --git a/tests/stage-stamp-agreement.test.ts b/tests/stage-stamp-agreement.test.ts
+index 9b332142..70428af5 100644
+--- a/tests/stage-stamp-agreement.test.ts
++++ b/tests/stage-stamp-agreement.test.ts
+@@ -136,6 +136,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+       };
+       return {
+         onText: () => undefined,
++        onStart: () => undefined,
+         aborted: () => false,
+         finalMessage: () => Promise.resolve(message),
+       };
