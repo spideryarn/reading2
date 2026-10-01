@@ -3,7 +3,7 @@
  * as the client reads and writes it (docs/project/reader-profile.md).
  *
  * One module because there are now three places that touch it — the Metadata
- * page's box, the add page's box, and Trajectory's line — and two copies of a
+ * page's box, the add page's box, and Skim's line — and two copies of a
  * `PATCH` are two places to forget `forgetSummaries`.
  * docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md.
  */
@@ -53,7 +53,7 @@ export type PurposeRead =
   | { state: "ready"; purpose: string | null; purposeFailed: boolean }
   | { state: "failed" };
 
-/** Read the purpose for `slug`, once per slug. For Trajectory's line (stage 2). */
+/** Read the purpose for `slug`, once per slug. For Skim's line (stage 2). */
 export function usePurpose(slug: string): PurposeRead {
   const [read, setRead] = useState<PurposeRead>({ state: "loading" });
   /* A generation rather than a `live` boolean, for StrictMode — ProfilePanel's

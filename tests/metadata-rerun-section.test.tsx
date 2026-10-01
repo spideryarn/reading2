@@ -559,16 +559,16 @@ describe("the AI processing section", () => {
     expect(text).not.toMatch(/[$£€]\s?\d/);
   });
 
-  it("says Trajectory needs Quotes before anything is pressed", async () => {
+  it("says Skim needs Quotes before anything is pressed", async () => {
     await open();
-    expect(row("trajectory")?.textContent).toContain(
+    expect(row("skim")?.textContent).toContain(
       "Needs Quotes first; without them it stops before any model call",
     );
   });
 
-  it("puts a note on the glossary, sketch, debate and trajectory rows and on no other", async () => {
+  it("puts a note on the glossary, sketch, debate and skim rows and on no other", async () => {
     await open();
-    const noted = new Set(["glossary", "sketch", "debate", "trajectory"]);
+    const noted = new Set(["glossary", "sketch", "debate", "skim"]);
     for (const step of METADATA_RERUN_STEPS) {
       expect(
         host.querySelector(`#rerun-note-${step}`) !== null,

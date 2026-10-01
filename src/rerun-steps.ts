@@ -64,7 +64,7 @@ import type { StepName } from "./types.js";
 /**
  * The list, in `STEP_ORDER`'s order so the page's rows read down the pipeline.
  *
- * **`trajectory` joined on 2026-09-29**, when the modes lost their standing
+ * **`skim` joined on 2026-09-29**, when the modes lost their standing
  * redo buttons and Metadata became the one place to ask for one
  * (docs/plans/260929b-one-place-to-re-run-ai-processing.md). The three answers:
  * one metered call (Quotes and Ideas are not named, so they do not run); it
@@ -104,7 +104,7 @@ export const METADATA_RERUN_STEPS = [
   "quiz",
   "faq",
   "sketch",
-  "trajectory",
+  "skim",
   "debate",
   "citations",
   /* **Joined on 2026-09-30 with the step**, the one way to make cross-references

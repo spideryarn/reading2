@@ -1,7 +1,7 @@
 /**
  * **Where am I in the article**, drawn — the rows `whereRows` (src/web/where.ts)
  * builds, as a compact indented outline for a tooltip. One component so every
- * place that asks "where is this" answers the same way: Trajectory's position
+ * place that asks "where is this" answers the same way: Skim's position
  * marks now, and the spine's band cards once they have a bounded, node-based
  * version (plan 260929f § Deferred, Sol F1–F2).
  *

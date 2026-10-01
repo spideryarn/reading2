@@ -8,8 +8,8 @@
  * next to Debate and Reviewer. Move Timeline further right. Move Trajectory one
  * further left, before Quotes. Move Chat right, just before Recall. Move FAQ
  * and Search a little bit further left. Add subtle vertical separator lines
- * between groups of related modes."* Reviewer is Referee and Recall is
- * Remember. How each sentence was read, and the one move he did not ask for
+ * between groups of related modes."* Reviewer is Referee, Recall is
+ * Remember and Trajectory is Skim (since 2026-10-01). How each sentence was read, and the one move he did not ask for
  * (Diagram, into the shape run), is
  * docs/plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md § 1.
  *
@@ -33,7 +33,7 @@ const RUNS = [
      — another shape of the whole piece, beside Summary. Greg did not place it
      by hand. */
   ["structure", "summary", "tweets", "diagram"],
-  ["trajectory", "quotes", "faq", "glossary", "ideas", "timeline"],
+  ["skim", "quotes", "faq", "glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],
   ["search", "chat", "remember"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
@@ -65,7 +65,7 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary, Tweets | Trajectory, Quotes, Glossary, Ideas | Search, Chat:
+    /* Structure, Summary, Tweets | Skim, Quotes, Glossary, Ideas | Search, Chat:
        the critical run is hidden whole, so no line is left for it. */
     const drawn = visibleModes(false, undefined);
     expect(drawn.map((m) => m.mode)).toEqual([
@@ -73,14 +73,14 @@ describe("the mode bar's order", () => {
       "structure",
       "summary",
       "tweets",
-      "trajectory",
+      "skim",
       "quotes",
       "glossary",
       "ideas",
       "search",
       "chat",
     ]);
-    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "trajectory", "search"].sort());
+    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "skim", "search"].sort());
   });
 
   it("gives a retained experimental mode its own line when it is alone in its run", () => {

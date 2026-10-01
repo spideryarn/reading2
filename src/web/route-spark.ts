@@ -1,6 +1,6 @@
 /**
  * **The route as a sparkline** — the geometry of the small line in
- * Trajectory's head that replaced "Stop k of N". Greg, SPIDERYARN-READING2-5C:
+ * Skim's head that replaced "Stop k of N". Greg, SPIDERYARN-READING2-5C:
  * *"a kind of sparkline that shows how we are going to move through the
  * position of the document … if there were little sort of dots along the way,
  * that would give us a clear indication of how many steps and how far through

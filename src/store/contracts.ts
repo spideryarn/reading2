@@ -94,7 +94,7 @@ import type {
   FaqFound,
   CrossrefsFound,
   SimpleSummaryFound,
-  TrajectoryFound,
+  SkimFound,
   TimelineFound,
   ThreadFound,
   ThreadKind,
@@ -310,7 +310,7 @@ export interface ArticleReader {
    * is no public twin.
    * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
    */
-  loadTrajectory(slug: string): Promise<TrajectoryFound>;
+  loadSkim(slug: string): Promise<SkimFound>;
 
   /**
    * What the rest of the web says about this piece, plus whether the artefact

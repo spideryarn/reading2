@@ -181,7 +181,7 @@ is a column rather than something in the browser's `localStorage`.
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
 them on 2026-09-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
-out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Trajectory came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
+out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
 cannot be added without somebody deciding which side of the line it is on.
@@ -294,23 +294,23 @@ rather than a reason to hide the mode. Pressing the button starts a paid run, th
 and Ideas, so this is a third default-visible mode that spends on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
 
-**Trajectory left the table on 2026-09-28, the day it arrived.** Greg:
+**Skim (then called Trajectory) left the table on 2026-09-28, the day it arrived.** Greg:
 
 > And take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features.
 >
 > — Greg, 2026-09-28
 
-Quotes was already out (above), so only Trajectory moved. What the switch had gated is the mode's
+Quotes was already out (above), so only Skim moved. What the switch had gated is the mode's
 button in the Dock and its row in the command bar — nothing else. **Owner-only is a separate rule
-and it stays**: `POLICY.trajectory` is `owners-only` ([`visitor.ts`](../../src/web/visitor.ts)), the
-generated Trajectory panel is mounted only for an article's owner, and the job route resolves the
+and it stays**: `POLICY.skim` is `owners-only` ([`visitor.ts`](../../src/web/visitor.ts)), the
+generated Skim panel is mounted only for an article's owner, and the job route resolves the
 article through the signed-in owner, so a visitor on a shared link or the public shelf sees the
 explanatory band and can start nothing. What changed is for owners with the switch off: they now
 see the button, and
 pressing it starts a paid run — the route (about two cents), with the Quotes chosen first when there
 are none or they are stale, as Glossary, Ideas and Quotes already do on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`). Its unmeasured-prompt caveat has
-not gone away; [trajectory.md](trajectory.md) keeps it as a Question for Greg.
+not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
 ## The one thing that is gated below mode level
 

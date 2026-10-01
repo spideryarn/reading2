@@ -105,7 +105,7 @@ describe("an article", () => {
       debate: "Debate",
       citations: "Citations",
       faq: "FAQ",
-      trajectory: "Trajectory",
+      skim: "Skim",
       tweets: "Tweets",
       marginalia: "Marginalia",
     };

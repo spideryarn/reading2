@@ -5,7 +5,7 @@
  *
  * Three things are worth pinning. Which steps the box queues, since the list is
  * derived and a mode moving in or out of the experimental switch changes it
- * silently. That they are created **one after another**, because Trajectory
+ * silently. That they are created **one after another**, because Skim
  * only waits for Quotes and Ideas if its job is younger than theirs. And that
  * the page queues them on `done` only when the box is ticked, and opens the
  * article either way.
@@ -80,7 +80,7 @@ const { modeStep } = await import("../src/web/activation.js");
  * The order `queueAutoModes` posts in: the jobs that read nothing first, then
  * the rest. It was also `autoModeRequests()`'s own order until `crossrefs`
  * (plan 260930f) joined — last in `STEP_ORDER`, and reading nothing, so it is
- * posted before Trajectory though it sorts after it.
+ * posted before Skim though it sorts after it.
  */
 const postingOrder = (): StepName[][] => {
   const requests = autoModeRequests();
@@ -94,13 +94,13 @@ describe("which steps the box queues", () => {
        started or stopped making something. That may be right — then change
        this line, and the price in the plan. `crossrefs` is no mode: it is
        added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3. */
-    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "trajectory", "crossrefs"]);
+    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "skim", "crossrefs"]);
   });
 
-  it("puts Trajectory after Quotes and Ideas, which it reads", () => {
+  it("puts Skim after Quotes and Ideas, which it reads", () => {
     const steps = autoModeSteps();
-    expect(steps.indexOf("trajectory")).toBeGreaterThan(steps.indexOf("quotes"));
-    expect(steps.indexOf("trajectory")).toBeGreaterThan(steps.indexOf("ideas"));
+    expect(steps.indexOf("skim")).toBeGreaterThan(steps.indexOf("quotes"));
+    expect(steps.indexOf("skim")).toBeGreaterThan(steps.indexOf("ideas"));
   });
 
   it("takes nothing from behind the experimental switch", () => {
@@ -111,7 +111,7 @@ describe("which steps the box queues", () => {
   });
 
   it("names them to the reader", () => {
-    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas and Trajectory");
+    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas and Skim");
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });
@@ -121,11 +121,11 @@ describe("queueAutoModes", () => {
     runs.length = 0;
   });
 
-  it("gives Trajectory's job the shape its panel posts when both prerequisites are absent", () => {
-    /* The panel posts `[...precededBy, "trajectory"]` (useStepJob.ts). With
+  it("gives Skim's job the shape its panel posts when both prerequisites are absent", () => {
+    /* The panel posts `[...precededBy, "skim"]` (useStepJob.ts). With
        neither prerequisite present this is the same work key; after one becomes
        ready the panel may post a narrower row, which serialises behind this job
-       and skips rather than paying for Trajectory twice. Carrying both here is
+       and skips rather than paying for Skim twice. Carrying both here is
        what keeps a job that lands first from refusing for want of Quotes (Sol
        P1). */
     expect(autoModeRequests()).toEqual([
@@ -133,7 +133,7 @@ describe("queueAutoModes", () => {
       ["glossary"],
       ["quotes"],
       ["ideas"],
-      ["quotes", "ideas", "trajectory"],
+      ["quotes", "ideas", "skim"],
       ["crossrefs"],
     ]);
   });
@@ -146,11 +146,11 @@ describe("queueAutoModes", () => {
     }
   });
 
-  it("posts the ones that read nothing first, and Trajectory only after they have answered", async () => {
+  it("posts the ones that read nothing first, and Skim only after they have answered", async () => {
     const answered: StepName[][] = [];
-    let trajectoryPostedAfter: number | null = null;
+    let skimPostedAfter: number | null = null;
     const run: UseJobs["run"] = async (request) => {
-      if (request.steps.includes("trajectory")) trajectoryPostedAfter = answered.length;
+      if (request.steps.includes("skim")) skimPostedAfter = answered.length;
       await new Promise((resolve) => setTimeout(resolve, 1));
       answered.push(request.steps);
       return null;
@@ -158,7 +158,7 @@ describe("queueAutoModes", () => {
     await queueAutoModes(run, "an-article");
     expect(answered).toHaveLength(6);
     /* The four modes that read nothing, and `crossrefs`, which reads nothing either. */
-    expect(trajectoryPostedAfter, "Trajectory was posted before the other five had answered").toBe(5);
+    expect(skimPostedAfter, "Skim was posted before the other five had answered").toBe(5);
   });
 
   it("carries on past one that throws", async () => {

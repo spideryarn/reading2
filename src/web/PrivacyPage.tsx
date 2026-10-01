@@ -462,7 +462,7 @@ export function PrivacyPage() {
           in, and it is listed publicly where somebody who was never sent the link can find it —
           that is what the setting is for. They get the article, its outline, summaries (the plain-words
           Simple one included) and arc, the
-          glossary, the ideas, the quotes, the timeline, the trajectory, the FAQ, the list of works
+          glossary, the ideas, the quotes, the timeline, the Skim route, the FAQ, the list of works
           it cites, what the web says about it (the Debate), its stored Sketch drawing and the thread,
           some of which
           the model wrote knowing what your profile says about you, even though the profile itself

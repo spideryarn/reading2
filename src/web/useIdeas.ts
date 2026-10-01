@@ -114,7 +114,7 @@ export interface UseIdeas {
  * **The read alone** — `GET /api/ideas/:slug` and what it said, and no job
  * machinery at all: no `useStepJob`, no `useAutoRun`, no verb that spends.
  *
- * Split out for Trajectory's stop card (Sol F22), which shows ideas that
+ * Split out for Skim's stop card (Sol F22), which shows ideas that
  * already exist and must never be the reason one is written. With the mode
  * hook that promise held only because `useAutoRun` does not fire for another
  * mode's activation; here it holds because there is nothing to fire.

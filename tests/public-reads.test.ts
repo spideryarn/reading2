@@ -172,7 +172,7 @@ describe("the public revision read", () => {
       "quotes",
       "tweets",
       "timeline",
-      "trajectory",
+      "skim",
       "faq",
       "citations",
       "debate",

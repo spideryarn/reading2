@@ -298,7 +298,7 @@ export function QuizPanel({
   onJump(id: BlockId): void;
   /**
    * **Hands `Reader` the ← / → handler**, or `null` on unmount — the
-   * `horizontal` argument of `useArrowNav` (keynav.ts), as Trajectory's
+   * `horizontal` argument of `useArrowNav` (keynav.ts), as Skim's
    * `onControl` does. Absent in a test that is not about the keys.
    */
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
@@ -720,7 +720,7 @@ export function QuizPanel({
    * act; a stray key is not. A failed or unfinished mark is not a mark.
    *
    * `false` is "took nothing", and `useArrowNav` then leaves the key with the
-   * browser — the ends of the path do not wrap, as Trajectory's do not.
+   * browser — the ends of the path do not wrap, as Skim's do not.
    *
    * Read through a ref, so `Reader` is handed one stable function for the life
    * of the panel and a quiz render does not re-render the reading view.

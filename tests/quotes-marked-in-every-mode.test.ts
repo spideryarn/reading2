@@ -87,7 +87,7 @@ function slots(overrides: Partial<PassageSlots> = {}): PassageSlots {
     timeline: EMPTY,
     referee: EMPTY,
     search: { found: [HEDGED], openKey: null },
-    trajectory: EMPTY,
+    skim: EMPTY,
     ...overrides,
   };
 }
@@ -115,12 +115,12 @@ describe("the quotes are marked wherever the reader is standing", () => {
     expect(proseFound(active.found, QUOTED)).toBe(QUOTED);
   });
 
-  it("does not double Trajectory's stop, which is one of the quotes' own marks", () => {
-    /* `resolveTrajectoryStop` hands back the quote's `Found` itself, so the
+  it("does not double Skim's stop, which is one of the quotes' own marks", () => {
+    /* `resolveSkimStop` hands back the quote's `Found` itself, so the
        stop is the same object as one of the quotes — and it must be drawn once,
        with the quotes' array coming back unchanged for `hitMarks`' cache. */
     const stop = QUOTED[1]!;
-    const active = selectPassages("trajectory", slots({ trajectory: { found: [stop], openKey: stop.key } }));
+    const active = selectPassages("skim", slots({ skim: { found: [stop], openKey: stop.key } }));
     expect(proseFound(active.found, QUOTED)).toBe(QUOTED);
   });
 

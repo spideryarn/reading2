@@ -160,7 +160,7 @@ export const STEP_ORDER = [
      never makes a job run the steps between.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts).
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  "trajectory",
+  "skim",
   /* **Last, and it depends on nothing in this list.** Every other name here
      reads an artefact something before it wrote; this one goes to the open web
      and comes back with pages that answer the piece. It is last because it has

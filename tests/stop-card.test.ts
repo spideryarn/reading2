@@ -12,7 +12,7 @@
  * § Stage 3 in detail, and its revision after Sol's review (F19, F20, F23).
  */
 import { describe, expect, it } from "vitest";
-import type { Block, BlockId, Faq, Glossary, GlossaryEntry, Ideas, Timeline } from "../src/types.js";
+import type { Block, BlockId, Glossary, GlossaryEntry, Ideas, Timeline } from "../src/types.js";
 import { cardIsEmpty, type CardSources, gatherStopCard, modeForCardTarget } from "../src/web/stop-card.js";
 
 /* Real-shaped ids: the alphabet has no `1`, `i`, `l` or `o`. */
@@ -50,7 +50,6 @@ const glossaryOf = (entries: GlossaryEntry[]): Glossary =>
 const NONE: CardSources = {
   glossary: { value: null, stale: false },
   ideas: { value: null, stale: false },
-  faq: { value: null, stale: false },
   timeline: { value: null, stale: false },
 };
 
@@ -140,7 +139,7 @@ describe("also at stop k (F20)", () => {
   });
 });
 
-describe("ideas, the FAQ and the timeline, by block id", () => {
+describe("ideas and the timeline, by block id", () => {
   const ideas = {
     ideas: [
       {
@@ -155,12 +154,6 @@ describe("ideas, the FAQ and the timeline, by block id", () => {
       { id: "spya-id3def", name: "Elsewhere", occurrences: [{ blockId: B[3]!, quote: "c", reasoning: "r" }] },
     ],
   } as unknown as Ideas;
-  const faq = {
-    questions: [
-      { id: "q1", question: "How was synergy measured?", passages: [{ blockId: B[1]!, quote: "q", start: 0 }] },
-      { id: "q2", question: "Elsewhere?", passages: [{ blockId: B[2]!, quote: "q", start: 0 }] },
-    ],
-  } as unknown as Faq;
   const timeline = {
     events: [
       { id: "spya-ev2abc", label: "Recordings made", occurrences: [{ blockId: B[1]!, quote: "e", start: 0 }] },
@@ -171,7 +164,6 @@ describe("ideas, the FAQ and the timeline, by block id", () => {
   const fresh: CardSources = {
     glossary: { value: null, stale: false },
     ideas: { value: ideas, stale: false },
-    faq: { value: faq, stale: false },
     timeline: { value: timeline, stale: false },
   };
 
@@ -179,80 +171,31 @@ describe("ideas, the FAQ and the timeline, by block id", () => {
     const card = gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: fresh });
     expect(card.ideas.map(({ id, name }) => ({ id, name }))).toEqual([{ id: "spya-id2abc", name: "Synergy is not redundancy" }]);
     expect(card.ideas[0]!.statement).toBe("The pair carries information neither does alone.");
-    expect(card.questions.map(({ id, question }) => ({ id, question }))).toEqual([
-      { id: "q1", question: "How was synergy measured?" },
-    ]);
-    /* Every passage FAQ pairs with it, this block's included (Sol F3); no tree, no place. */
-    expect(card.questions[0]!.passages.length).toBeGreaterThan(0);
-    expect(card.questions[0]!.passages.map((p) => p.start)).toEqual(
-      fresh.faq.value!.questions[0]!.passages.map((p) => p.start),
-    );
-    expect(card.questions[0]!.passages.every((p) => p.place === null)).toBe(true);
-    const placed = gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: fresh, placeOf: () => "Results" });
-    expect(placed.questions[0]!.passages.every((p) => p.place === "Results")).toBe(true);
     expect(card.events).toEqual([{ id: "spya-ev2abc", label: "Recordings made" }]);
     expect(cardIsEmpty(card)).toBe(false);
-  });
-
-  it("marks a FAQ passage as the stop's own only when the words match, not the block alone (Sol F3)", () => {
-    const long = "Synergy was measured with partial information decomposition over triads";
-    const withQuote = (passage: string): CardSources => ({
-      ...fresh,
-      faq: {
-        value: { questions: [{ id: "q1", question: "How?", passages: [{ blockId: B[1]!, quote: passage, start: 0 }] }] } as unknown as Faq,
-        stale: false,
-      },
-    });
-    const at = (
-      passage: string,
-      quote: { text: string; start?: number } | null,
-      blockId = B[1]!,
-      passageStart = 0,
-    ) => {
-      const sources = withQuote(passage);
-      sources.faq.value!.questions[0]!.passages[0]!.start = passageStart;
-      return gatherStopCard({ blockId, blocks, route: [blockId], sources, quote }).questions[0]?.passages[0]?.here;
-    };
-    /* The same words, with quotation marks, case and spacing aside. */
-    expect(at(long, { text: `“${long.toUpperCase()}”` })).toBe(true);
-    /* The FAQ passage is all visible inside the longer stop quote. */
-    expect(at(long, { text: `${long}, and then compared across networks.` })).toBe(true);
-    /* A longer FAQ passage must not be hidden behind a shorter stop quote. */
-    expect(at(`${long}, and then compared across networks.`, { text: long })).toBe(false);
-    /* Stored offsets distinguish repeated copies of the same words in one block. */
-    expect(at(long, { text: long, start: 100 }, B[1]!, 0)).toBe(false);
-    expect(at(long, { text: long, start: 0 }, B[1]!, 0)).toBe(true);
-    /* A few words inside a long quote are a different passage. */
-    expect(at("Synergy was measured", { text: `${long}.` })).toBe(false);
-    expect(at(long, { text: "something else entirely" })).toBe(false);
-    expect(at(long, null)).toBe(false);
   });
 
   it("leaves out every cluster whose artefact is stale (F19)", () => {
     const stale: CardSources = {
       glossary: { value: null, stale: false },
       ideas: { value: ideas, stale: true },
-      faq: { value: faq, stale: true },
       timeline: { value: timeline, stale: true },
     };
     const card = gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: stale });
-    expect([card.ideas, card.questions, card.events]).toEqual([[], [], []]);
+    expect([card.ideas, card.events]).toEqual([[], []]);
     expect(cardIsEmpty(card)).toBe(true);
   });
 
   it("is empty when nothing exists, and for a block no artefact touches", () => {
     expect(cardIsEmpty(gatherStopCard({ blockId: B[1]!, blocks, route: [B[1]!], sources: NONE }))).toBe(true);
-    expect(cardIsEmpty(gatherStopCard({ blockId: B[2]!, blocks, route: [B[2]!], sources: { ...fresh, faq: NONE.faq } }))).toBe(
-      true,
-    );
+    expect(cardIsEmpty(gatherStopCard({ blockId: B[2]!, blocks, route: [B[2]!], sources: fresh }))).toBe(true);
   });
 });
 
 describe("where a card link goes (Sol, plan 260929f F8)", () => {
-  it("sends each kind to its own mode — FAQ to FAQ, not to Timeline's switch", () => {
+  it("sends each kind to its own mode", () => {
     expect(modeForCardTarget({ kind: "term", id: "t" })).toBe("glossary");
     expect(modeForCardTarget({ kind: "idea", id: "i" })).toBe("ideas");
     expect(modeForCardTarget({ kind: "event", id: "e" })).toBe("timeline");
-    expect(modeForCardTarget({ kind: "faq" })).toBe("faq");
   });
 });

@@ -378,6 +378,21 @@ describe("Marginalia's old name", () => {
   });
 });
 
+describe("Skim's old name", () => {
+  /* The mode was called Trajectory until 2026-10-01 (plan 261001r), and Greg
+     asked for the old word to keep finding it. */
+  it.each(["trajectory", "traj"])("selects Skim from %j", (query) => {
+    const onMode = vi.fn();
+    reading({ onMode, experimental: EXPERIMENTAL_ON, drawer: A_DRAWER });
+    openBar();
+    type(query);
+
+    expect(selected()).toBe("Skim");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("skim");
+  });
+});
+
 describe("a query that matches nothing", () => {
   /**
    * **Exactly this sentence and nothing beside it**, which is Greg's answer 3
@@ -573,7 +588,7 @@ const GENERATES: Record<Mode, boolean> = {
   diagram: true,
   citations: true,
   faq: true,
-  trajectory: true,
+  skim: true,
   /* A mode since 2026-09-29, and it spends: the band writes the thread on
      arrival when there is none (useTweets.ts § `useAutoRunOnArrival`). The
      marker it wore as a page row is now the mode row's. */

@@ -1200,13 +1200,13 @@ export interface QuotesResponse {
   profileChanged: boolean;
 }
 
-/* ------------------------------------------------------------- trajectory --
+/* ------------------------------------------------------------- skim --
    A route through the article's Quotes, walked at three depths — the
-   `trajectory` column on `article_revisions`. docs/project/trajectory.md is the
+   `skim` column on `article_revisions`. docs/project/skim.md is the
    vision; docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
    is the build.
 
-   Here rather than in src/trajectory.ts for the reason `Quiz` and `Faq` are:
+   Here rather than in src/skim.ts for the reason `Quiz` and `Faq` are:
    the panel needs the shape and `src/web/` may import only the pure leaves.
 
    **No block ids anywhere in it.** A stop names a quote, and the quote holds
@@ -1215,16 +1215,16 @@ export interface QuotesResponse {
 
 /**
  * The pass a stop belongs to. **The model plans the passes as nesting** (depth
- * *d* covering every stop with `depth ≤ d`, which is what `Trajectory.visible`
+ * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
  * counts); **the reader walks each pass as only its own stops** — plan 260929e,
- * src/web/trajectory-route.ts.
+ * src/web/skim-route.ts.
  */
-export type TrajectoryDepth = 1 | 2 | 3;
+export type SkimDepth = 1 | 2 | 3;
 
-export interface TrajectoryStop {
+export interface SkimStop {
   /** An id in the Quotes artefact. The stop's passage is that quote's block. */
   quoteId: string;
-  depth: TrajectoryDepth;
+  depth: SkimDepth;
   /**
    * **Routes written before `trajectory/5` only**: what the passage *does*, at
    * most 80 characters. The prompt no longer asks for it and every new stop's
@@ -1234,7 +1234,7 @@ export interface TrajectoryStop {
   role: string | null;
   /**
    * What to **look for** in this passage — an instruction or a question, never
-   * what it found — at most `MAX_CUE_CHARS` (src/trajectory.ts). Context-free
+   * what it found — at most `MAX_CUE_CHARS` (src/skim.ts). Context-free
    * on purpose: a reader can reach a stop from anywhere, so it never says how
    * this stop follows another (Sol F18). `null` when the model's was missing,
    * empty or over-long, and the stop is kept (F8, F25). **Absent** on routes
@@ -1248,7 +1248,7 @@ export interface TrajectoryStop {
  * a quote or a role. A dropped stop looks exactly like one the model never
  * offered, which is why they ride on the artefact and in the log.
  */
-export interface TrajectoryDrops {
+export interface SkimDrops {
   /**
    * Usable Quotes omitted before the call because a higher-priority quote
    * shares their block.
@@ -1278,30 +1278,30 @@ export interface TrajectoryDrops {
   overCap: number;
 }
 
-/** The artefact. The `trajectory` column on `article_revisions`. */
-export interface Trajectory {
+/** The artefact. The `skim` column on `article_revisions`. */
+export interface Skim {
   version: string;
   generator: string;
   slug: string;
   /**
-   * **The input hash** — `trajectoryInputHash` in src/trajectory.ts, over
+   * **The input hash** — `skimInputHash` in src/skim.ts, over
    * exactly what the prompt rendered, plus the quote id each Q-label resolves
    * to: the offered quotes' section paths, priorities, words and Idea
    * associations, the Ideas (or `null` for none), and the top-level outline.
    * Spelled `sourceHash` because that is the name `stampOf` reads
    * (src/store/artifacts.ts); it is not a hash of the article. Routes before
    * `trajectory/7` hold the old quotes-only hash, which never matches;
-   * `loadTrajectory` reports them outdated, not stale.
+   * `loadSkim` reports them outdated, not stale.
    */
   sourceHash: string;
   /**
    * The rendered profile's hash, or `null` for none. **In the stamp**, and
    * compared more strictly than every other artefact's: none → some is stale
-   * here. src/trajectory.ts § `routeProfileIsStale`.
+   * here. src/skim.ts § `routeProfileIsStale`.
    */
   profileHash: string | null;
-  /** **The array order is the route.** Each pass walks its own stops in this order (see `TrajectoryDepth`). */
-  stops: TrajectoryStop[];
+  /** **The array order is the route.** Each pass walks its own stops in this order (see `SkimDepth`). */
+  stops: SkimStop[];
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
    * and validated. Growing, by construction. Not what the band counts: it counts each pass's own.
@@ -1312,14 +1312,14 @@ export interface Trajectory {
    * unusable ones were removed.
    */
   offered: number;
-  dropped: TrajectoryDrops;
+  dropped: SkimDrops;
   generatedAt: string;
   elapsedMs: number;
 }
 
-/** `GET /api/trajectory/:slug`. */
-export interface TrajectoryResponse {
-  trajectory: Trajectory;
+/** `GET /api/skim/:slug`. */
+export interface SkimResponse {
+  skim: Skim;
   /**
    * What the route was planned from has changed underneath it — the Quotes
    * (*Find more* added some, or they were chosen again), the Ideas (found
@@ -1342,7 +1342,7 @@ export interface TrajectoryResponse {
 }
 
 /** As `QuotesFound`: everything but the one question about the reader. */
-export type TrajectoryFound = Omit<TrajectoryResponse, "profileChanged">;
+export type SkimFound = Omit<SkimResponse, "profileChanged">;
 
 /**
  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
@@ -2358,13 +2358,13 @@ export interface PublicArtefacts {
    */
   sketch: boolean;
   /**
-   * **The eighth, since 2026-09-29** — a stored Trajectory route. It was
+   * **The eighth, since 2026-09-29** — a stored Skim route. It was
    * `owners-only` for the cost of *planning* one, which a visitor was never
    * going to pay; reading one is a column on the row the public read already
    * fetches. SPIDERYARN-READING2-56,
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  trajectory: boolean;
+  skim: boolean;
   /**
    * **The ninth, since 2026-09-29** — a stored FAQ. `owners-only` until then
    * for the cost of *asking* for one; showing one is a column on the row the
@@ -2914,7 +2914,7 @@ export type StepName =
      Its input is another step's artefact, like `illustrated`: it reads the
      stored Quotes and never the article's prose, so it is in no cached prefix
      and is not an `ArticleStage`. */
-  | "trajectory"
+  | "skim"
   | "ideas"
   /* When the things the piece narrates happened, and how sure it is —
      docs/project/timeline.md. Beside `ideas` because the two send byte-identical

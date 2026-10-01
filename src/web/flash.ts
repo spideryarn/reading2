@@ -10,10 +10,10 @@
  * a place they chose to leave. The plan's Sol F7,
  * docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md.
  *
- * **The named exception is Trajectory** (src/web/modes/trajectory/TrajectoryMode.tsx),
+ * **The named exception is Skim** (src/web/modes/skim/SkimMode.tsx),
  * which flashes on every step — ‹ ›, ← →, the door, going round again — and on
  * a `?stop=` deep link. The rule above is about stepping to the *adjacent*
- * item; a Trajectory route is out of paper order, so each step lands anywhere
+ * item; a Skim route is out of paper order, so each step lands anywhere
  * in the article and is a jump in all but name. Greg asked for a flash on
  * every step, 2026-09-28 — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § 5a. It flashes the same way `beginJump` does, when the scroll settles.
@@ -21,7 +21,7 @@
  * **What flashes is the verbatim cell**, `td.text`, never the gist columns: the
  * question is which paragraph, and the gist column already marks the current
  * row its own way. With the prose column off (`?text=0`) there is nothing to
- * flash and nothing is kept for later. **Trajectory narrows it to the quote's
+ * flash and nothing is kept for later. **Skim narrows it to the quote's
  * own words** (`FlashTarget.passage`, plan 260928a § 7b), because its stop is
  * a quote rather than a paragraph; every other caller washes the cell.
  *
@@ -63,7 +63,7 @@ const ALL = [MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL, ELEMENT_MOVING, ELEME
 /**
  * **What to wash inside the block.** Omitted, the whole prose cell — every
  * caller but one. `passage` is a Found key (search-hits.ts § `Found.key`), the
- * id annotate.ts writes into each `mark.hit`'s `data-hit`: Trajectory passes
+ * id annotate.ts writes into each `mark.hit`'s `data-hit`: Skim passes
  * its stop's quote so the flash lands on the words it is taking you to, not
  * the paragraph around them (Greg, 2026-09-28; plan 260928a § 7b). A passage
  * that is not drawn — the quote not marked yet, or its text no longer found —

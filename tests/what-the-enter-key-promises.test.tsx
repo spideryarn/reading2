@@ -104,10 +104,10 @@ const PROMISES: Record<string, string> = {
   "CriteriaPanel.tsx › crit-text": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
   "ProfileBox.tsx › prof-box-input": "newline",
-  /* Why you are reading, asked on the add page and in Trajectory (plan 260930e).
+  /* Why you are reading, asked on the add page and in Skim (plan 260930e).
      Multi-line; ⌘/Ctrl+Enter is the add page's save, never plain Enter. */
   "AddPage.tsx › add-purpose": "newline",
-  "TrajectoryPurpose.tsx › traj-purpose-input": "newline",
+  "SkimPurpose.tsx › skim-purpose-input": "newline",
   "QuizPanel.tsx › Your answer": "newline",
 };
 

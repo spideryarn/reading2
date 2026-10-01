@@ -373,10 +373,10 @@
 /* **A band that has stepped aside.** `band-away` is written by `Reader` beside
    `band-covers`, only while that is on, after a reader follows a passage link
    out of the band — any mode's since 2026-09-29 (Reader.tsx § `bandJump`),
-   Trajectory's stops since the day before: the band is lying over the whole
+   Skim's stops since the day before: the band is lying over the whole
    article, and what they asked for is in the article. So the band stops
    painting and the prose is the page again; "↩ back to ⟨mode⟩"
-   (BandBackChip.tsx) offers the band back, as do Trajectory's door and
+   (BandBackChip.tsx) offers the band back, as do Skim's door and
    pressing the mode in the Dock (Reader.tsx § `bandAway`).
    docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
 

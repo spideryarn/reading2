@@ -59,7 +59,7 @@ describe("the steps the Metadata page will re-run", () => {
       "quiz",
       "faq",
       "sketch",
-      "trajectory",
+      "skim",
       "debate",
       "citations",
       /* Plan 260930f, 2026-09-30: the one way to make cross-references for an

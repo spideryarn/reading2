@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * **A read hook reads, and that is all it does** — `useIdeasRead`, `useFaqRead`
- * and `useTimelineRead`, split out of their mode hooks for Trajectory's stop
+ * **A read hook reads, and that is all it does** — `useIdeasRead` and
+ * `useTimelineRead`, split out of their mode hooks for Skim's stop
  * card (Sol F22, docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Revised after GPT Sol's stage-3 plan review).
  *
@@ -86,7 +86,8 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { useIdeas, useIdeasRead } = await import("../src/web/useIdeas.js");
-const { useFaq, useFaqRead } = await import("../src/web/useFaq.js");
+const faqHooks = await import("../src/web/useFaq.js");
+const { useFaq } = faqHooks;
 const { useTimeline, useTimelineRead } = await import("../src/web/useTimeline.js");
 
 let host: HTMLDivElement;
@@ -123,7 +124,6 @@ const jobRequests = () => asked.filter((r) => r.url.startsWith("/api/jobs"));
 
 const READS = [
   ["ideas", useIdeasRead],
-  ["faq", useFaqRead],
   ["timeline", useTimelineRead],
 ] as const;
 
@@ -138,19 +138,10 @@ describe("the read hooks start no job", () => {
   }
 
   it("each reads what is there, with its freshness", async () => {
-    present = new Set(["ideas", "faq", "timeline"]);
+    present = new Set(["ideas", "timeline"]);
     await mount(useIdeasRead, "ideas");
     const ideas = seen.ideas as ReturnType<typeof useIdeasRead>;
     expect([ideas.status, ideas.stale, ideas.ideas?.ideas[0]?.name]).toEqual(["ready", true, "An idea"]);
-
-    await mount(useFaqRead, "faq");
-    const faq = seen.faq as ReturnType<typeof useFaqRead>;
-    expect([faq.status, faq.stale, faq.outdated, faq.faq?.questions[0]?.question]).toEqual([
-      "ready",
-      false,
-      true,
-      "Why?",
-    ]);
 
     await mount(useTimelineRead, "timeline");
     const timeline = seen.timeline as ReturnType<typeof useTimelineRead>;
@@ -162,7 +153,6 @@ describe("the read hooks start no job", () => {
 describe("the positive control: a mode hook can reach the queue, and a read hook has no way to", () => {
   const MODES = [
     ["ideas", useIdeas, useIdeasRead],
-    ["faq", useFaq, useFaqRead],
     ["timeline", useTimeline, useTimelineRead],
   ] as const;
   for (const [kind, useMode, useRead] of MODES) {
@@ -179,4 +169,21 @@ describe("the positive control: a mode hook can reach the queue, and a read hook
       for (const verb of ["ensure", "regenerate", "cancel", "job"]) expect(read).not.toHaveProperty(verb);
     });
   }
+
+  it("FAQ keeps its mode hook, but not the read-only hook that existed only for Skim's removed snippets", async () => {
+    present = new Set(["faq"]);
+    await mount(useFaq, "faq");
+    const mode = seen.faq as ReturnType<typeof useFaq>;
+    expect([mode.status, mode.stale, mode.outdated, mode.faq?.questions[0]?.question]).toEqual([
+      "ready",
+      false,
+      true,
+      "Why?",
+    ]);
+    await act(async () => {
+      await mode.ensure().catch(() => undefined);
+    });
+    expect(jobRequests().some((r) => r.method === "POST")).toBe(true);
+    expect(faqHooks).not.toHaveProperty("useFaqRead");
+  });
 });

@@ -100,7 +100,7 @@ import type {
   SearchRun,
   SimpleSummary,
   Timeline,
-  Trajectory,
+  Skim,
   TweetThread,
 } from "../src/types.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
@@ -281,7 +281,7 @@ const CITATION_TITLE = "Elements of Episodic Memory";
 const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
 /* The current stop's role — drawn on the current row only, so a panel that
    drew the stepper and no rows would not satisfy it. */
-const TRAJECTORY_ROLE = "Where the chapter turns";
+const SKIM_ROLE = "Where the chapter turns";
 /* A post's own words — the numbered list's content, not the counts line or
    *Copy the thread*, which a thread of any posts would draw alike. */
 const TWEET_POST = "The rig came first; the theory of what it measured came later.";
@@ -478,13 +478,13 @@ const FAQ: Faq = {
 };
 
 /* One stop, on the one quote above — a route is quote ids and nothing else. */
-const TRAJECTORY: Trajectory = {
+const SKIM: Skim = {
   version: "test",
   generator: "test",
   slug: SLUG,
   sourceHash: "hash",
   profileHash: null,
-  stops: [{ quoteId: "spya-qte234", depth: 1, role: TRAJECTORY_ROLE }],
+  stops: [{ quoteId: "spya-qte234", depth: 1, role: SKIM_ROLE }],
   visible: [1, 1, 1],
   offered: 1,
   dropped: { unknownQuote: 0, duplicate: 0, sameBlock: 0, malformed: 0, badRole: 0, overCap: 0, collapsed: 0 },
@@ -754,7 +754,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   debate: true,
   citations: true,
   faq: true,
-  trajectory: true,
+  skim: true,
   sketch: true,
   illustrated: true,
   tweets: true,
@@ -793,9 +793,9 @@ function artefact(url: string): Response | null {
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/tweets/"))
     return has ? json({ thread: THREAD, stale: false, profileChanged: false }) : GONE();
-  if (url.startsWith("/api/trajectory/"))
+  if (url.startsWith("/api/skim/"))
     return has
-      ? json({ trajectory: TRAJECTORY, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 })
+      ? json({ skim: SKIM, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 })
       : GONE();
   if (url.startsWith("/api/sketch/"))
     return has || sketchDrawn
@@ -1197,8 +1197,8 @@ const SPENDS: Record<Mode, Spend> = {
   /* **Three steps, and the first two are the point**: with no Quotes the
      route has nothing to order, and since stage 6 of plan 260928a it plans
      around the Ideas, so the one press asks for both first in the same job
-     (`precededBy`, src/web/useTrajectory.ts). Phase A serves neither. */
-  trajectory: { kind: "posts", steps: ["quotes", "ideas", "trajectory"] },
+     (`precededBy`, src/web/useSkim.ts). Phase A serves neither. */
+  skim: { kind: "posts", steps: ["quotes", "ideas", "skim"] },
   /* One model pass over the article — and the one mode that writes on
      *arrival* as well as on a press, by Greg's 2026-09-12 word (useTweets.ts §
      `useAutoRunOnArrival`). What a press must post is the same one step. */
@@ -1457,7 +1457,7 @@ const DRAWS: Record<Mode, Draws> = {
      foot's sentences, which are constants a panel with no rows still draws. */
   citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE, about: "corner" },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
-  trajectory: { kind: "band", where: ".mode-band.trajectory", says: TRAJECTORY_ROLE, about: "corner" },
+  skim: { kind: "band", where: ".mode-band.skim", says: SKIM_ROLE, about: "corner" },
   /* A post's own words, off the thread in the payload. `.tweets` and not
      `.gloss`: the panel's feature string is `"gloss tweets"`, so `.gloss` alone
      would also match Glossary's band. */

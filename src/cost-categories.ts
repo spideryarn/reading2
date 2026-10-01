@@ -186,7 +186,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   simple: "step-driven",
   /* Simple's fidelity guard, made inside the `simple` step's collector. */
   "simple-check": "step-driven",
-  trajectory: "step-driven",
+  skim: "step-driven",
   debate: "step-driven",
   citations: "step-driven",
   /* Three tasks a reader waits on with the page open. */
@@ -286,6 +286,23 @@ function dispositionOf(job: string): JobDisposition | null {
     : null;
 }
 
+/**
+ * **Names that were renamed, not split**, and the name each row is classified
+ * under. Unlike `summarise` above — split into two stages, so no one successor
+ * is true — a rename is the same call under a new word, and the ledger is
+ * append-only, so its old rows keep the old word for ever.
+ *
+ * `trajectory` was the Skim mode's job and step name until 2026-10-01 (plan
+ * 261001r).
+ */
+const RENAMED: Readonly<Record<string, string>> = {
+  trajectory: "skim",
+};
+
+function renamed(name: string): string {
+  return Object.hasOwn(RENAMED, name) ? (RENAMED[name] ?? name) : name;
+}
+
 const DEFAULT_STEPS: ReadonlySet<string> = new Set<string>(DEFAULT_INGEST_STEPS);
 const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);
 
@@ -303,7 +320,13 @@ const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);
  * the interactive bucket — the one category whose figure it would dominate and
  * the one distinction the whole live-metering stage exists to make.
  */
-export function costCategoryOf(facts: CategoryFacts): CostCategory {
+export function costCategoryOf(raw: CategoryFacts): CostCategory {
+  /* A renamed job or step reads as its new name — `RENAMED` above. */
+  const facts: CategoryFacts = {
+    scopeKind: raw.scopeKind,
+    job: renamed(raw.job),
+    stepName: raw.stepName === null ? null : renamed(raw.stepName),
+  };
   if (facts.scopeKind === "eval" || facts.scopeKind === "cli") return "non-product";
   /* `null` for a job no longer in `AiJob` — `summarise`, `summary` and the other
      names the ledger still holds from before a rename. Those keep the old

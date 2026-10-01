@@ -69,7 +69,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
-  trajectory: false,
+  skim: false,
   faq: false,
   simpleSummary: false,
   citations: false,
@@ -83,7 +83,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
-  trajectory: true,
+  skim: true,
   faq: true,
   simpleSummary: true,
   citations: true,
@@ -118,7 +118,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     ideas: built === "ideas",
     timeline: built === "timeline",
     sketch: built === "sketch",
-    trajectory: built === "trajectory",
+    skim: built === "skim",
     faq: built === "faq",
     simpleSummary: built === "simpleSummary",
     citations: built === "citations",
@@ -359,19 +359,19 @@ describe("what a visitor is told, mode by mode", () => {
        `OWNERS_ONLY` below, each with its reason. */
     /* `citations` joined on 2026-09-11, owners-only for Debate's reason, and
        `faq` on 2026-09-16 for the same one. **Both left on 2026-09-29** with
-       `trajectory` below: a stored FAQ and a stored list ride the public
+       `skim` below: a stored FAQ and a stored list ride the public
        payload now, each with its flag (plan 260929c stages 2 and 3,
        src/web/visitor.ts § POLICY.faq and § POLICY.citations). */
-    /* `trajectory` joined on 2026-09-28, owners-only for the same reason, and
+    /* `skim` joined on 2026-09-28, owners-only for the same reason, and
        **left on 2026-09-29** the way `timeline` did: a stored route is on the
        public payload now, with a `PublicArtefacts` flag to drop out on
-       (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.trajectory,
+       (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.skim,
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md). */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
       ["chat", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "ideas", "quotes", "timeline", "trajectory", "faq", "citations", "debate"] as const) {
+    for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "citations", "debate"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -395,7 +395,7 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "timeline" ||
         /* An artefact mode since 2026-09-29, like the timeline: the stored
            route rides on the payload (SPIDERYARN-READING2-56). */
-        mode === "trajectory" ||
+        mode === "skim" ||
         /* And the FAQ and the Citations list, the same day, the same way
            (plan 260929c stages 2 and 3). */
         mode === "faq" ||
@@ -521,7 +521,7 @@ describe("what the payload says it has", () => {
       quotes: false,
       timeline: false,
       sketch: false,
-      trajectory: false,
+      skim: false,
       faq: false,
       simpleSummary: false,
       citations: false,

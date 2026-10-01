@@ -164,8 +164,8 @@ export function ModeSurface({
    *
    * **Seven panels want it, not four**: `.gloss-foot`, `.ideas-again`,
    * `.quotes-foot`, `.tl-again`, and — missed by the first inventory and by the
-   * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`, plus Trajectory's
-   * `.traj-foot`. All are direct
+   * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`, plus Skim's
+   * `.skim-foot`. All are direct
    * children sitting after the scrolling child, and `debate.css` says of
    * `.dbt-again` in as many words: "Pinned under the scroller rather than at the
    * end of it, like `.tl-again`". GPT Sol F22, 2026-09-06. Four of those —
